@@ -44,6 +44,8 @@ pub(crate) use self::grouping::get_grouped_results_with_validation;
 #[allow(unused_imports)]
 pub(crate) use self::grouping::get_grouped_results_with_validation_and_query;
 #[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_validation_query_and_root_files;
+#[allow(unused_imports)]
 pub use self::loader::{read_scripts, read_scripts_report};
 pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
@@ -56,8 +58,9 @@ pub use self::search::{
 #[allow(unused_imports)]
 pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
-    FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptIssueMatch,
-    ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
+    FallbackConfig, FallbackMatch, FileMatch, MatchIndices, Script, ScriptContentMatch,
+    ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult,
+    SkillMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

@@ -79,6 +79,7 @@ impl ScriptListApp {
                                     ),
                                 );
                                 app.computed_filter_text = latest.clone();
+                                app.maybe_start_root_file_search(&latest, cx);
                                 app.reconcile_script_list_after_filter_change(
                                     "filter_coalesced",
                                     cx,
@@ -172,6 +173,7 @@ impl ScriptListApp {
 
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
+        self.maybe_start_root_file_search(&text, cx);
         self.reconcile_script_list_after_filter_change("set_filter_text_immediate", cx);
 
         // Update fallback state immediately based on filter results

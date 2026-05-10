@@ -2513,26 +2513,12 @@ impl ScriptListApp {
                     selected_value,
                 ) = match &self.current_view {
                     AppView::ScriptList => {
-                        let filtered_len = self.filtered_results().len();
-                        let selected_value = if self.selected_index < filtered_len {
-                            self.filtered_results()
-                                .get(self.selected_index)
-                                .map(|r| match r {
-                                    scripts::SearchResult::Script(m) => m.script.name.clone(),
-                                    scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
-                                    scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
-                                    scripts::SearchResult::App(m) => m.app.name.clone(),
-                                    scripts::SearchResult::Window(m) => m.window.title.clone(),
-                                    scripts::SearchResult::Agent(m) => m.agent.name.clone(),
-                                    scripts::SearchResult::Skill(m) => m.skill.title.clone(),
-                                    scripts::SearchResult::Fallback(m) => {
-                                        m.fallback.display_label()
-                                    }
-                                    scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
-                                })
-                        } else {
-                            None
-                        };
+                        self.get_grouped_results_cached();
+                        let (visible_rows, selected_row_index) =
+                            self.script_list_visible_row_labels_from_cache();
+                        let filtered_len = visible_rows.len();
+                        let selected_value =
+                            selected_row_index.and_then(|index| visible_rows.get(index).cloned());
                         (
                             "none".to_string(),
                             None,
@@ -3772,6 +3758,9 @@ impl ScriptListApp {
                     }
                     _ => {
                         // Main window or no target — use existing collector.
+                        if matches!(self.current_view, AppView::ScriptList) {
+                            self.get_grouped_results_cached();
+                        }
                         let outcome = self.collect_visible_elements(max_elements, cx);
                         crate::windows::automation_surface_collector::SurfaceElementSnapshot {
                             total_count: outcome.total_count,

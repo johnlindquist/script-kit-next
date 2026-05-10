@@ -1332,29 +1332,53 @@ impl ScriptListApp {
         (elements, total_count)
     }
 
+    pub(crate) fn script_list_result_label(result: &scripts::SearchResult) -> String {
+        match result {
+            scripts::SearchResult::Script(m) => m.script.name.clone(),
+            scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
+            scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
+            scripts::SearchResult::App(m) => m.app.name.clone(),
+            scripts::SearchResult::Window(m) => m.window.title.clone(),
+            scripts::SearchResult::File(m) => m.file.name.clone(),
+            scripts::SearchResult::Agent(m) => m.agent.name.clone(),
+            scripts::SearchResult::Skill(m) => m.skill.title.clone(),
+            scripts::SearchResult::Fallback(m) => m.fallback.display_label(),
+            scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
+        }
+    }
+
+    pub(crate) fn script_list_visible_row_labels_from_cache(&self) -> (Vec<String>, Option<usize>) {
+        let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
+        let selected_grouped_index =
+            crate::list_item::coerce_selection(&grouped_items, self.selected_index);
+        let mut selected_row_index = None;
+        let mut row_names = Vec::new();
+
+        for (grouped_index, item) in grouped_items.iter().enumerate() {
+            let crate::list_item::GroupedListItem::Item(result_idx) = item else {
+                continue;
+            };
+            let Some(result) = flat_results.get(*result_idx) else {
+                continue;
+            };
+            if Some(grouped_index) == selected_grouped_index {
+                selected_row_index = Some(row_names.len());
+            }
+            row_names.push(Self::script_list_result_label(result));
+        }
+
+        (row_names, selected_row_index)
+    }
+
     fn collect_script_list_elements(&self, limit: usize) -> (Vec<protocol::ElementInfo>, usize) {
-        let row_names: Vec<String> = self
-            .filtered_results()
-            .into_iter()
-            .map(|result| match result {
-                scripts::SearchResult::Script(m) => m.script.name.clone(),
-                scripts::SearchResult::Scriptlet(m) => m.scriptlet.name.clone(),
-                scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
-                scripts::SearchResult::App(m) => m.app.name.clone(),
-                scripts::SearchResult::Window(m) => m.window.title.clone(),
-                scripts::SearchResult::Agent(m) => m.agent.name.clone(),
-                scripts::SearchResult::Skill(m) => m.skill.title.clone(),
-                scripts::SearchResult::Fallback(m) => m.fallback.display_label(),
-                scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
-            })
-            .collect();
+        let (row_names, selected_row_index) = self.script_list_visible_row_labels_from_cache();
 
         let (elements, total_count) = self.collect_named_rows(
             "filter",
             self.filter_text.clone(),
             "results",
             &row_names,
-            self.selected_index,
+            selected_row_index.unwrap_or(usize::MAX),
             limit,
         );
 

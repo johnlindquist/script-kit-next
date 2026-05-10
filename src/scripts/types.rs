@@ -242,7 +242,14 @@ pub struct FallbackMatch {
     pub score: i32,
 }
 
-/// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, Agent, or Fallback
+/// Represents a scored local file result surfaced in root launcher search.
+#[derive(Clone, Debug)]
+pub struct FileMatch {
+    pub file: crate::file_search::FileResult,
+    pub score: i32,
+}
+
+/// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, File, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SearchResult {
@@ -253,6 +260,8 @@ pub enum SearchResult {
     BuiltIn(BuiltInMatch),
     App(AppMatch),
     Window(WindowMatch),
+    /// Local file result appended from the root launcher file-search source.
+    File(FileMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
     /// Agent results are actively filtered out of search/grouping/selection.
     /// ACP agent catalog and provider selection remain intact in `src/ai/acp/`.
@@ -283,6 +292,7 @@ impl SearchResult {
             SearchResult::BuiltIn(bm) => &bm.entry.name,
             SearchResult::App(am) => &am.app.name,
             SearchResult::Window(wm) => &wm.window.title,
+            SearchResult::File(fm) => &fm.file.name,
             SearchResult::Agent(am) => &am.agent.name,
             SearchResult::Fallback(fm) => fm.fallback.name(),
             SearchResult::ScriptIssue(issue) => &issue.title,
@@ -304,6 +314,7 @@ impl SearchResult {
             SearchResult::BuiltIn(bm) => Some(&bm.entry.description),
             SearchResult::App(am) => am.app.path.to_str(),
             SearchResult::Window(wm) => Some(&wm.window.app),
+            SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
             SearchResult::Fallback(fm) => Some(fm.fallback.description()),
             SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
@@ -319,6 +330,7 @@ impl SearchResult {
             SearchResult::BuiltIn(bm) => bm.score,
             SearchResult::App(am) => am.score,
             SearchResult::Window(wm) => wm.score,
+            SearchResult::File(fm) => fm.score,
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
@@ -334,6 +346,7 @@ impl SearchResult {
             SearchResult::BuiltIn(_) => "Built-in",
             SearchResult::App(_) => "App",
             SearchResult::Window(_) => "Window",
+            SearchResult::File(_) => "File",
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
@@ -360,6 +373,7 @@ impl SearchResult {
                         format!("app/{}", am.app.name.to_lowercase().replace(' ', "-"))
                     }),
             ),
+            SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::ScriptIssue(_) => None,
@@ -402,6 +416,7 @@ impl SearchResult {
             SearchResult::BuiltIn(_) => ("Command", 0x34D399), // Emerald-400
             SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
+            SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
             SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
             SearchResult::ScriptIssue(_) => ("Issues", 0xEF4444), // Red-500
@@ -442,6 +457,7 @@ impl SearchResult {
                 }
             }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
+            SearchResult::File(_) => Some("Files"),
             SearchResult::ScriptIssue(_) => None,
             _ => None,
         }
@@ -486,6 +502,13 @@ impl SearchResult {
             SearchResult::BuiltIn(bm) => bm.entry.default_action_text(),
             SearchResult::App(_) => "Launch App",
             SearchResult::Window(_) => "Switch to Window",
+            SearchResult::File(fm) => {
+                if fm.file.file_type == crate::file_search::FileType::Directory {
+                    "Open Folder"
+                } else {
+                    "Open File"
+                }
+            }
             SearchResult::Agent(_) => {
                 // Suppressed: agents are not launchable from the main menu
                 "Agent (suppressed)"
@@ -595,5 +618,55 @@ impl FallbackConfig {
             label: self.label_template.replace("{input}", input),
             label_template: self.label_template.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{FileMatch, SearchResult};
+    use crate::file_search::{FileResult, FileType};
+
+    fn file_result(file_type: FileType) -> FileResult {
+        FileResult {
+            path: "/Users/example/Desktop/fix spelling.png".to_string(),
+            name: "fix spelling.png".to_string(),
+            size: 0,
+            modified: 0,
+            file_type,
+        }
+    }
+
+    #[test]
+    fn file_search_result_exposes_launcher_metadata() {
+        let result = SearchResult::File(FileMatch {
+            file: file_result(FileType::Image),
+            score: 42,
+        });
+
+        assert_eq!(result.name(), "fix spelling.png");
+        assert_eq!(
+            result.description(),
+            Some("/Users/example/Desktop/fix spelling.png")
+        );
+        assert_eq!(result.score(), 42);
+        assert_eq!(result.type_label(), "File");
+        assert_eq!(
+            result.launcher_command_id(),
+            Some("file//Users/example/Desktop/fix spelling.png".to_string())
+        );
+        assert_eq!(result.history_result_key(), result.launcher_command_id());
+        assert_eq!(result.type_tag_info(), ("File", 0x60A5FA));
+        assert_eq!(result.source_name(), Some("Files"));
+        assert_eq!(result.get_default_action_text(), "Open File");
+    }
+
+    #[test]
+    fn file_search_result_labels_directories_as_folders() {
+        let result = SearchResult::File(FileMatch {
+            file: file_result(FileType::Directory),
+            score: 1,
+        });
+
+        assert_eq!(result.get_default_action_text(), "Open Folder");
     }
 }

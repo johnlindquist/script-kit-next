@@ -316,6 +316,16 @@ struct ScriptListApp {
     cached_browser_history: Vec<browser_history::BrowserHistoryEntry>,
     /// Cached file results for FileSearchView (avoids cloning per frame)
     cached_file_results: Vec<file_search::FileResult>,
+    /// Latest capped Spotlight results appended to eligible root launcher searches.
+    root_file_results: Vec<file_search::FileResult>,
+    /// Query currently backing `root_file_results`.
+    root_file_search_query: String,
+    /// Generation counter used to ignore stale root file search batches.
+    root_file_search_generation: u64,
+    /// Cancel token for in-flight root file search.
+    root_file_search_cancel: Option<file_search::CancelToken>,
+    /// True while a root file search task is collecting its one stable batch.
+    root_file_search_loading: bool,
     /// Cached process list for ProcessManagerView (avoids cloning per frame)
     cached_processes: Vec<crate::process_manager::ProcessInfo>,
     /// Background refresh task for ProcessManagerView (dropped on view change)

@@ -190,12 +190,20 @@ impl ScriptListApp {
             return;
         }
 
-        if let Some(invocation) = self.menu_syntax_mode.command_for(&self.filter_text).cloned() {
+        if let Some(invocation) = self
+            .menu_syntax_mode
+            .command_for(&self.filter_text)
+            .cloned()
+        {
             self.execute_menu_syntax_command_invocation(invocation, cx);
             return;
         }
 
-        if let Some(invocation) = self.menu_syntax_mode.capture_for(&self.filter_text).cloned() {
+        if let Some(invocation) = self
+            .menu_syntax_mode
+            .capture_for(&self.filter_text)
+            .cloned()
+        {
             let mut handlers =
                 crate::menu_syntax::rank_scripts_handling_capture(&self.scripts, &invocation);
             if let Some(script) = handlers.drain(..).next() {
@@ -214,7 +222,11 @@ impl ScriptListApp {
             .menu_syntax_mode
             .capture_composer_owns_input_for(&self.filter_text)
         {
-            self.show_hud("Type something to capture".to_string(), Some(HUD_MEDIUM_MS), cx);
+            self.show_hud(
+                "Type something to capture".to_string(),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
             return;
         }
 
@@ -236,9 +248,9 @@ impl ScriptListApp {
         // selected visual row into the flat result backing store.
         self.get_grouped_results_cached();
 
-        if let Some((resolved_index, idx)) =
-            self.main_menu_result_caches
-                .flat_result_index_for_coerced_grouped_selection(self.selected_index)
+        if let Some((resolved_index, idx)) = self
+            .main_menu_result_caches
+            .flat_result_index_for_coerced_grouped_selection(self.selected_index)
         {
             if resolved_index != self.selected_index {
                 self.selected_index = resolved_index;
@@ -314,6 +326,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
+                    scripts::SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
@@ -421,6 +434,22 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Window(window_match) => {
                         self.execute_window_focus(&window_match.window, cx);
+                    }
+                    scripts::SearchResult::File(file_match) => {
+                        let path = file_match.file.path.clone();
+                        if let Err(error) = crate::file_search::open_file(&path) {
+                            logging::log(
+                                "ROOT_FILE_SEARCH",
+                                &format!("failed_to_open path={} error={}", path, error),
+                            );
+                            self.show_hud(
+                                format!("Failed to open {}", file_match.file.name),
+                                Some(HUD_MEDIUM_MS),
+                                cx,
+                            );
+                            return;
+                        }
+                        self.close_and_reset_window(cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged

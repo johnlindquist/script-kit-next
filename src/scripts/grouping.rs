@@ -348,6 +348,82 @@ pub(crate) fn get_grouped_results_with_validation_and_query(
     (grouped, flat_results)
 }
 
+#[instrument(level = "debug", skip_all, fields(filter_len = filter_text.len()))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    skills: &[Arc<PluginSkill>],
+    frecency_store: &FrecencyStore,
+    filter_text: &str,
+    suggested_config: &SuggestedConfig,
+    menu_bar_items: &[MenuBarItem],
+    menu_bar_bundle_id: Option<&str>,
+    input_history: Option<&crate::input_history::InputHistory>,
+    validation: Option<&ValidationReport>,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    root_file_results: &[crate::file_search::FileResult],
+) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
+    let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
+        scripts,
+        scriptlets,
+        builtins,
+        apps,
+        skills,
+        frecency_store,
+        filter_text,
+        suggested_config,
+        menu_bar_items,
+        menu_bar_bundle_id,
+        input_history,
+        validation,
+        advanced_query,
+    );
+
+    append_root_file_section(
+        &mut grouped,
+        &mut flat_results,
+        root_file_results,
+        filter_text,
+        frecency_store,
+        advanced_query,
+    );
+
+    (grouped, flat_results)
+}
+
+fn append_root_file_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    root_file_results: &[crate::file_search::FileResult],
+    filter_text: &str,
+    frecency_store: &FrecencyStore,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+) {
+    if advanced_query.is_some() || !crate::file_search::should_search_root_files(filter_text) {
+        return;
+    }
+
+    let files = crate::file_search::rank_root_file_results(
+        root_file_results,
+        filter_text,
+        crate::file_search::ROOT_FILE_RENDER_LIMIT,
+        |key| frecency_store.get_score(key),
+    );
+    if files.is_empty() {
+        return;
+    }
+
+    grouped.push(GroupedListItem::SectionHeader("Files".to_string(), None));
+    for file_match in files {
+        let idx = flat_results.len();
+        flat_results.push(SearchResult::File(file_match));
+        grouped.push(GroupedListItem::Item(idx));
+    }
+}
+
 /// Incomplete menu-syntax hint row.
 ///
 /// Returns a single non-selectable `GroupedListItem::SectionHeader(hint, None)`
@@ -454,6 +530,7 @@ fn advanced_query_rejects_issue(
 #[cfg(test)]
 mod advanced_query_tests {
     use super::*;
+    use crate::file_search::{FileResult, FileType};
     use crate::menu_syntax::{parse, AdvancedQuery, MenuSyntaxParse};
     use crate::scripts::types::MatchIndices;
 
@@ -568,6 +645,95 @@ mod advanced_query_tests {
         // to avoid spinning up a full frecency/scripts fixture.
         let query = advanced_query_from(":type:script something");
         assert!(advanced_query_rejects_issue(Some(&query)));
+    }
+
+    fn root_file(path: &str, name: &str) -> FileResult {
+        FileResult {
+            path: path.to_string(),
+            name: name.to_string(),
+            size: 0,
+            modified: 0,
+            file_type: FileType::Document,
+        }
+    }
+
+    #[test]
+    fn root_file_rows_append_files_section_for_eligible_search() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/fix spelling.png",
+            "fix spelling.png",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "fix",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            &root_files,
+        );
+
+        assert!(
+            grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")),
+            "eligible root queries should append a Files section"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/fix spelling.png"
+            )),
+            "Files section should point at the ranked root file row"
+        );
+    }
+
+    #[test]
+    fn root_file_rows_do_not_append_for_advanced_queries() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/fix spelling.png",
+            "fix spelling.png",
+        )];
+        let query = advanced_query_from(":type:file fix");
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "fix",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            Some(&query),
+            &root_files,
+        );
+
+        assert!(
+            !grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")),
+            "advanced query mode should not mix in root Spotlight file rows"
+        );
+        assert!(
+            flat.iter()
+                .all(|result| !matches!(result, SearchResult::File(_))),
+            "advanced query mode should not append file results"
+        );
     }
 }
 

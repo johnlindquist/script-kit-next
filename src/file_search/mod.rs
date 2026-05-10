@@ -126,6 +126,12 @@ pub const DEFAULT_SEARCH_LIMIT: usize = 500;
 /// Default cache limit for directory listing (fast operation, can handle more)
 /// Directory listing is cheaper than mdfind search (single readdir vs many stat calls)
 pub const DEFAULT_CACHE_LIMIT: usize = 2000;
+/// Maximum Spotlight results collected for root launcher file rows.
+pub const ROOT_FILE_SOURCE_LIMIT: usize = 24;
+/// Maximum root launcher file rows rendered under the Files section.
+pub const ROOT_FILE_RENDER_LIMIT: usize = 6;
+/// Minimum visible query length before root launcher file search starts.
+pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
 /// Check if the query looks like an advanced mdfind query (with operators)
 /// If so, pass it through directly; otherwise wrap as filename query
 pub(crate) fn looks_like_advanced_mdquery(q: &str) -> bool {
@@ -152,6 +158,14 @@ fn build_mdquery(user_query: &str) -> String {
     }
     let escaped = escape_md_string(q);
     format!(r#"kMDItemFSName == "*{}*"c"#, escaped)
+}
+
+/// Returns true when the root launcher should ask Spotlight for file rows.
+pub fn should_search_root_files(query: &str) -> bool {
+    let q = query.trim();
+    q.chars().count() >= ROOT_FILE_MIN_QUERY_CHARS
+        && !looks_like_advanced_mdquery(q)
+        && !is_directory_path(q)
 }
 // NOTE: escape_query() was removed because:
 // 1. It was unused dead code
@@ -231,12 +245,61 @@ pub use directory::{
     parent_dir_display, parse_directory_path, shorten_path, ParsedDirPath,
 };
 pub use mdfind::{
-    new_cancel_token, search_files, search_files_streaming, CancelToken, SearchEvent,
+    new_cancel_token, search_files, search_files_streaming, search_files_streaming_with_options,
+    CancelToken, SearchEvent, SearchFilesStreamingOptions,
 };
 pub use os_open::{
     duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,
     prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
 };
+
+/// Rank a bounded batch of Spotlight results for display in root launcher search.
+pub fn rank_root_file_results(
+    results: &[FileResult],
+    query: &str,
+    limit: usize,
+    frecency_score: impl Fn(&str) -> f64,
+) -> Vec<crate::scripts::FileMatch> {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+
+    let mut nucleo = crate::scripts::NucleoCtx::new(&q);
+    let mut seen = std::collections::HashSet::new();
+    let mut ranked: Vec<_> = results
+        .iter()
+        .filter(|file| seen.insert(file.path.clone()))
+        .filter(|file| file.file_type != FileType::Application)
+        .filter_map(|file| {
+            let score = nucleo
+                .score(&file.name)
+                .or_else(|| nucleo.score(&file.path))?;
+            let name_lc = file.name.to_lowercase();
+            let exact_bonus = if name_lc == q { 3_000 } else { 0 };
+            let prefix_bonus = if name_lc.starts_with(&q) { 1_000 } else { 0 };
+            let frecency_bonus =
+                (frecency_score(&format!("file/{}", file.path)) * 100.0).min(500.0) as i32;
+
+            Some(crate::scripts::FileMatch {
+                file: file.clone(),
+                score: (score.min(10_000) as i32)
+                    .saturating_add(exact_bonus)
+                    .saturating_add(prefix_bonus)
+                    .saturating_add(frecency_bonus),
+            })
+        })
+        .collect();
+
+    ranked.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| a.file.name.cmp(&b.file.name))
+            .then_with(|| a.file.path.cmp(&b.file.path))
+    });
+    ranked.truncate(limit);
+    ranked
+}
 
 /// Payload for file drag-out from the mini explorer.
 ///
@@ -537,6 +600,78 @@ mod tests {
     fn test_build_mdquery_trims_whitespace() {
         let query = build_mdquery("  hello  ");
         assert_eq!(query, r#"kMDItemFSName == "*hello*"c"#);
+    }
+
+    #[test]
+    fn root_file_search_requires_simple_name_queries() {
+        assert!(!should_search_root_files(""));
+        assert!(!should_search_root_files("ab"));
+        assert!(should_search_root_files("abc"));
+        assert!(should_search_root_files("  abc  "));
+        assert!(!should_search_root_files("/Users/example"));
+        assert!(!should_search_root_files("~/Documents"));
+        assert!(!should_search_root_files("kMDItemFSName == 'notes.txt'"));
+    }
+
+    fn file(path: &str, name: &str, file_type: FileType) -> FileResult {
+        FileResult {
+            path: path.to_string(),
+            name: name.to_string(),
+            size: 0,
+            modified: 0,
+            file_type,
+        }
+    }
+
+    #[test]
+    fn root_file_ranking_caps_dedupes_and_skips_apps() {
+        let results = vec![
+            file("/tmp/fix.txt", "fix.txt", FileType::Document),
+            file("/tmp/fix.txt", "fix duplicate.txt", FileType::Document),
+            file("/Applications/Fix.app", "Fix.app", FileType::Application),
+            file("/tmp/fix-notes.md", "fix-notes.md", FileType::Document),
+            file("/tmp/prefix-fix.md", "prefix-fix.md", FileType::Document),
+        ];
+
+        let ranked = rank_root_file_results(&results, "fix", 2, |_| 0.0);
+
+        assert_eq!(ranked.len(), 2, "render limit should cap root rows");
+        assert!(
+            ranked
+                .iter()
+                .all(|entry| entry.file.file_type != FileType::Application),
+            "root search should not duplicate app launcher results"
+        );
+        assert_eq!(
+            ranked
+                .iter()
+                .filter(|entry| entry.file.path == "/tmp/fix.txt")
+                .count(),
+            1,
+            "duplicate Spotlight paths should collapse to one row"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_applies_frecency_to_close_matches() {
+        let results = vec![
+            file("/tmp/fix-alpha.txt", "fix-alpha.txt", FileType::Document),
+            file("/tmp/fix-beta.txt", "fix-beta.txt", FileType::Document),
+        ];
+
+        let ranked = rank_root_file_results(&results, "fix", 2, |key| {
+            if key == "file//tmp/fix-beta.txt" {
+                10.0
+            } else {
+                0.0
+            }
+        });
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.path.as_str()),
+            Some("/tmp/fix-beta.txt"),
+            "frecency should break close root-file ranking ties"
+        );
     }
     // ========================================================================
     // File Type Detection Tests

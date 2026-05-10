@@ -43,6 +43,7 @@ pub fn extract_path_for_reveal(
         None => Err(PathExtractionError::NoSelection),
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
+        Some(SearchResult::File(m)) => Ok(PathBuf::from(&m.file.path)),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
         Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
@@ -71,6 +72,7 @@ pub fn extract_path_for_copy(
         None => Err(PathExtractionError::NoSelection),
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
+        Some(SearchResult::File(m)) => Ok(PathBuf::from(&m.file.path)),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
         Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
@@ -102,6 +104,7 @@ pub fn extract_path_for_quick_terminal(
         None => Err(PathExtractionError::NoSelection),
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
+        Some(SearchResult::File(m)) => Ok(PathBuf::from(&m.file.path)),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
         Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(m)) => m
@@ -163,6 +166,9 @@ pub fn extract_path_for_edit(
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
         Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
+        Some(SearchResult::File(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit files from root search"),
+        )),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit scriptlets"),
         )),

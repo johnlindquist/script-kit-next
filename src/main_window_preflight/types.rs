@@ -13,6 +13,7 @@ pub(crate) enum MainWindowPreflightActionKind {
     RunCommand,
     LaunchApp,
     SwitchWindow,
+    OpenFile,
     RunAgent,
     RunFallback,
     OpenSkill,
