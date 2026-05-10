@@ -34,6 +34,7 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,",
         "pub list_candidate: Option<WindowListCandidateV1>,",
         "pub capture_selection_candidate: Option<WindowCaptureSelectionCandidateV1>,",
+        "pub enumeration_context: Option<WindowEnumerationContextV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
@@ -44,6 +45,13 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub enum WindowListDisqualificationReason",
         "pub struct WindowListThresholdsV1",
         "pub fn window_list_candidate_v1(",
+        "pub struct WindowEnumerationContextV1",
+        "pub enum WindowEnumerationMode",
+        "pub enum WindowEnumerationCoverageStatus",
+        "pub enum WindowEnumerationDesktopElementPolicy",
+        "pub struct WindowEnumerationRawOptionsV1",
+        "pub struct WindowEnumerationObservationInputV1",
+        "pub fn window_enumeration_context_v1(",
         "pub struct WindowCaptureSelectionCandidateV1",
         "pub enum WindowCaptureSelectionCandidateStatus",
         "pub enum WindowCaptureSelectionDisqualificationReason",
@@ -179,6 +187,53 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         );
     }
 
+    let enumeration_helper_body =
+        extract_function_body(&module, "pub fn window_enumeration_context_v1(");
+    for needle in [
+        "source: \"coreGraphicsWindowList\"",
+        "mode: WindowEnumerationMode::OnScreenOnly",
+        "relative_to_window: input.relative_to_window",
+        "option_on_screen_only: input.option_on_screen_only",
+        "option_all: input.option_all",
+        "option_exclude_desktop_elements: input.option_exclude_desktop_elements",
+        "WindowEnumerationCoverageStatus::NotEnumerated",
+        "WindowEnumerationDesktopElementPolicy::NotExcludedByOption",
+    ] {
+        assert!(
+            enumeration_helper_body.contains(needle),
+            "enumeration context helper must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "CoreGraphics",
+        "CGWindowListCopyWindowInfo",
+        "CGWindowListCreateImage",
+        "ScreenCaptureKit",
+        "NSWorkspace",
+        "AppKit",
+        "objc::",
+        "request_accessibility_permission",
+        "capture_targeted_screenshot",
+        "focus",
+        "activate",
+        "launch",
+        "quit",
+        "hide",
+        "move",
+        "resize",
+        "click",
+        "press",
+        "execute",
+        "dedup",
+        "remove(",
+        "sort",
+    ] {
+        assert!(
+            !enumeration_helper_body.contains(forbidden),
+            "enumeration context helper must stay metadata-only; found {forbidden}"
+        );
+    }
+
     let selection_helper_body =
         extract_function_body(&module, "pub fn window_capture_selection_candidates_v1(");
     let selection_item_helper_body =
@@ -245,6 +300,12 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "let alpha = cf_number_f64(dict_ref, &k_window_alpha);",
         "let sharing_state = cf_number_i64(dict_ref, &k_window_sharing_state);",
         "computer_use_window_observation_v1(&bounds, is_on_screen, layer, alpha, sharing_state)",
+        "observation.enumeration_context = Some(window_enumeration_context_v1(",
+        "WindowEnumerationObservationInputV1",
+        "option_on_screen_only: true",
+        "option_all: false",
+        "option_exclude_desktop_elements: false",
+        "relative_to_window: K_CG_NULL_WINDOW_ID",
         "observation: Some(observation)",
     ] {
         assert!(
@@ -556,6 +617,17 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "excludedFromWindowsMenu",
         "listCandidate",
         "captureSelectionCandidate",
+        "enumerationContext",
+        "onScreenOnly",
+        "relativeToWindow",
+        "rawOptions",
+        "optionOnScreenOnly",
+        "optionAll",
+        "optionExcludeDesktopElements",
+        "offscreenCoverage",
+        "notEnumerated",
+        "desktopElementPolicy",
+        "notExcludedByOption",
         "captureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy",
         "duplicateWindow",
         "emptyTitleAmongMultipleCandidates",
