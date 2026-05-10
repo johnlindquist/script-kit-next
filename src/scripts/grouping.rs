@@ -416,12 +416,28 @@ fn append_root_file_section(
         return;
     }
 
-    grouped.push(GroupedListItem::SectionHeader("Files".to_string(), None));
+    let insertion_index = grouped
+        .iter()
+        .position(|item| match item {
+            GroupedListItem::Item(result_idx) => matches!(
+                flat_results.get(*result_idx),
+                Some(SearchResult::Fallback(_))
+            ),
+            GroupedListItem::SectionHeader(label, None) => {
+                label.starts_with("Use \"") && label.ends_with("\" with...")
+            }
+            GroupedListItem::SectionHeader(_, Some(_)) => false,
+        })
+        .unwrap_or(grouped.len());
+
+    let mut file_group = Vec::with_capacity(files.len() + 1);
+    file_group.push(GroupedListItem::SectionHeader("Files".to_string(), None));
     for file_match in files {
         let idx = flat_results.len();
         flat_results.push(SearchResult::File(file_match));
-        grouped.push(GroupedListItem::Item(idx));
+        file_group.push(GroupedListItem::Item(idx));
     }
+    grouped.splice(insertion_index..insertion_index, file_group);
 }
 
 /// Incomplete menu-syntax hint row.
@@ -694,6 +710,58 @@ mod advanced_query_tests {
                 SearchResult::File(file) if file.file.path == "/Users/example/Desktop/fix spelling.png"
             )),
             "Files section should point at the ranked root file row"
+        );
+    }
+
+    #[test]
+    fn root_file_rows_precede_fallback_rows_for_file_only_search() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/unique report name.pdf",
+            "unique report name.pdf",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "unique report name",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            &root_files,
+        );
+
+        let file_grouped_index = grouped
+            .iter()
+            .position(|item| {
+                matches!(
+                    item,
+                    GroupedListItem::Item(idx)
+                        if matches!(flat.get(*idx), Some(SearchResult::File(_)))
+                )
+            })
+            .expect("file result should be grouped");
+        let fallback_grouped_index = grouped
+            .iter()
+            .position(|item| {
+                matches!(
+                    item,
+                    GroupedListItem::Item(idx)
+                        if matches!(flat.get(*idx), Some(SearchResult::Fallback(_)))
+                )
+            })
+            .expect("fallback result should still be grouped");
+
+        assert!(
+            file_grouped_index < fallback_grouped_index,
+            "root file results should appear before fallback actions so Enter opens the file first"
         );
     }
 
