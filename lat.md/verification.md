@@ -64,7 +64,19 @@ Checks must prove that Browser Tabs and Browser History foreground search only f
 
 Use `cargo test --test source_audits root_unified_passive_snapshot_contract -- --nocapture` with the browser-tabs, browser-history, and root-stability audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof should use preflight/state receipts rather than screenshots.
 
-ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests. The critical regression guard is that adding a second passive source cannot split the Files section or its Search Files continuation row.
+## Root Unified Search Config Parity
+
+Root unified-search source additions must keep user controls, defaults, docs, and audits in lockstep.
+
+Each root source listed in `UnifiedSearchConfig` needs a Rust config struct, default constants, a section-options accessor with clamps or an explicit promotion policy, a `config.ts` schema interface, a grouping append function, a source-audit module, and a verification section. This parity guard should run before adding new passive sources so slower providers cannot enter the root menu without the controls and proofs that prevent ranking or target-shift regressions.
+
+Use `cargo test --test source_audits root_unified_config_schema_parity_contract -- --nocapture`, the source-specific root unified-search audit, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof is unnecessary for parity-only edits, but behavior changes still need the relevant state-first proof.
+
+## Root Unified Search ACP History
+
+ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests.
+
+The critical regression guard is that adding a second passive source cannot split the Files section or its Search Files continuation row.
 
 Use `cargo test --test source_audits root_unified_acp_history_contract -- --nocapture` with the root file source audit, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 

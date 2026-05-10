@@ -131,6 +131,9 @@ mod root_unified_search_stability_contract;
 #[path = "source_audits/root_unified_passive_snapshot_contract.rs"]
 mod root_unified_passive_snapshot_contract;
 
+#[path = "source_audits/root_unified_config_schema_parity_contract.rs"]
+mod root_unified_config_schema_parity_contract;
+
 #[path = "source_audits/root_unified_browser_history_contract.rs"]
 mod root_unified_browser_history_contract;
 
