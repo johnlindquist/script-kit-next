@@ -1286,6 +1286,86 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_global_multiword_recent_seed_uses_filename_tokens() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/client-design-notes.md",
+            "client-design-notes.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "client notes",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+            )),
+            "multi-word recent seeds should render in the loading Files section"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/client-design-notes.md"
+            )),
+            "ordered multi-word filename tokens should seed non-empty global root file results"
+        );
+    }
+
+    #[test]
+    fn root_global_multiword_strong_match_promotes_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/client-design-notes.md",
+                "client-design-notes.md",
+            ),
+            score: 100,
+        }];
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design notes",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_multiword_mid_token_match_does_not_promote() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/redesign-notes.md",
+                "redesign-notes.md",
+            ),
+            score: 100,
+        }];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design notes",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
     fn root_global_mid_token_contains_does_not_promote_files_section() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file(

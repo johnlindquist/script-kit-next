@@ -400,7 +400,8 @@ mod tests {
 
         assert!(
             file_search_production.contains("contains_at_root_file_token_boundary(name, query)")
-                && file_search_production.contains("contains_at_root_file_token_boundary(name, &query)")
+                && file_search_production
+                    .contains("fn root_file_name_token_matches_single_term(")
                 && file_search_production
                     .contains("root_file_name_token_matches_query(name, query)"),
             "ranking, promotion, and recent seed gates should all share the developer filename token helper"
@@ -433,6 +434,56 @@ mod tests {
                 "developer filename token matching must not start providers: {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn root_global_multiword_provider_and_token_gate_stay_shared() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let root_production = production_source(&root_source);
+        let root_normalized = root_production
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            file_search_production.contains("pub fn root_file_provider_query_for_user_query(")
+                && file_search_production.contains("fn root_file_query_terms(")
+                && file_search_production.contains("root_file_text_matches_terms_in_order")
+                && file_search_production
+                    .contains("root_file_name_token_matches_single_term(name, &terms[0])"),
+            "root file token matching should share one query-term parser across single and multi-word gates"
+        );
+        assert!(
+            root_normalized.contains("root_file_provider_query_for_user_query(&query)")
+                && root_normalized.contains("search_files_streaming_with_options( &provider_query,"),
+            "root global provider search should expand safe multi-word filename queries before launching Spotlight"
+        );
+
+        let promote_helper = grouping_production
+            .split("fn root_file_section_should_promote(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn root_file_section_insertion_index(")
+                    .next()
+            })
+            .expect("root file promotion helper should be present");
+        assert!(
+            promote_helper
+                .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
+            "multi-word promotion should continue to use the shared filename-token gate"
+        );
+        assert!(
+            file_search_production.contains("root_file_name_token_matches_query(name, query)"),
+            "recent seeds should continue to delegate to the shared filename-token gate"
+        );
     }
 
     #[test]

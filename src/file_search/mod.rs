@@ -175,6 +175,38 @@ fn build_mdquery(user_query: &str) -> String {
     format!(r#"kMDItemFSName == "*{}*"c"#, escaped)
 }
 
+/// Build the provider query used by root-launcher global file search.
+///
+/// Plain single-term queries keep the existing literal filename contains shape.
+/// Safe multi-word queries keep that phrase branch and add an all-terms filename
+/// branch so Spotlight can recall separator-token files such as
+/// `client-design-notes.md` for `design notes`.
+pub fn root_file_provider_query_for_user_query(user_query: &str) -> String {
+    let q = user_query.trim();
+    if looks_like_advanced_mdquery(q) {
+        return q.to_string();
+    }
+
+    let terms = root_file_query_terms(q);
+    if terms.len() < 2 || terms.iter().any(|term| term.chars().count() < 2) {
+        return q.to_string();
+    }
+
+    let phrase = escape_md_string(q);
+    let mut terms_query = String::new();
+    for (idx, term) in terms.iter().enumerate() {
+        if idx > 0 {
+            terms_query.push_str(" && ");
+        }
+        terms_query.push_str(&format!(
+            r#"kMDItemFSName == "*{}*"c"#,
+            escape_md_string(term)
+        ));
+    }
+
+    format!(r#"(kMDItemFSName == "*{}*"c || ({}))"#, phrase, terms_query)
+}
+
 /// Returns true when the root launcher should ask Spotlight for file rows.
 pub fn should_search_root_files(query: &str) -> bool {
     let q = query.trim();
@@ -422,15 +454,7 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
     if name_lc.starts_with(query) || stem_lc.starts_with(query) {
         return 5;
     }
-    if contains_at_root_file_token_boundary(name, query)
-        || contains_at_root_file_token_boundary(
-            Path::new(name)
-                .file_stem()
-                .and_then(|stem| stem.to_str())
-                .unwrap_or(name),
-            query,
-        )
-    {
+    if root_file_name_token_matches_query(name, query) {
         return 4;
     }
     if name_lc.contains(query) || stem_lc.contains(query) {
@@ -444,7 +468,38 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
 
 /// Return true when a root file query is a high-confidence filename-token match.
 pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
-    let query = query.trim().to_lowercase();
+    let terms = root_file_query_terms(query);
+    if terms.is_empty() {
+        return false;
+    }
+
+    if terms.len() == 1 {
+        return root_file_name_token_matches_single_term(name, &terms[0]);
+    }
+
+    if terms.iter().any(|term| term.chars().count() < 2) {
+        return false;
+    }
+
+    let stem = Path::new(name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name);
+
+    root_file_text_matches_terms_in_order(name, &terms)
+        || root_file_text_matches_terms_in_order(stem, &terms)
+}
+
+fn root_file_query_terms(query: &str) -> Vec<String> {
+    query
+        .split_whitespace()
+        .map(str::trim)
+        .filter(|term| !term.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+fn root_file_name_token_matches_single_term(name: &str, query: &str) -> bool {
     if query.is_empty() {
         return false;
     }
@@ -458,16 +513,43 @@ pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
 
     name_lc == query
         || stem_lc == query
-        || name_lc.starts_with(&query)
-        || stem_lc.starts_with(&query)
-        || contains_at_root_file_token_boundary(name, &query)
+        || name_lc.starts_with(query)
+        || stem_lc.starts_with(query)
+        || contains_at_root_file_token_boundary(name, query)
         || contains_at_root_file_token_boundary(
             Path::new(name)
                 .file_stem()
                 .and_then(|stem| stem.to_str())
                 .unwrap_or(name),
-            &query,
+            query,
         )
+}
+
+fn root_file_text_matches_terms_in_order(text: &str, terms: &[String]) -> bool {
+    let text_lc = text.to_lowercase();
+    let mut search_start = 0;
+
+    for term in terms {
+        let Some(idx) = find_next_root_file_token_match(text, &text_lc, term, search_start) else {
+            return false;
+        };
+        search_start = idx.saturating_add(term.len());
+    }
+
+    true
+}
+
+fn find_next_root_file_token_match(
+    text: &str,
+    text_lc: &str,
+    term: &str,
+    search_start: usize,
+) -> Option<usize> {
+    text_lc
+        .get(search_start..)?
+        .match_indices(term)
+        .map(|(offset, _)| search_start + offset)
+        .find(|idx| is_root_file_token_boundary_at(text, *idx))
 }
 
 /// Return true when a root recent-file seed is a high-confidence filename-side match.
@@ -914,6 +996,24 @@ mod tests {
     }
 
     #[test]
+    fn root_file_provider_query_expands_safe_multiword_filename_queries() {
+        let query = root_file_provider_query_for_user_query("design notes");
+        assert_eq!(
+            query,
+            r#"(kMDItemFSName == "*design notes*"c || (kMDItemFSName == "*design*"c && kMDItemFSName == "*notes*"c))"#
+        );
+    }
+
+    #[test]
+    fn root_file_provider_query_does_not_expand_one_character_terms() {
+        assert_eq!(root_file_provider_query_for_user_query("a b"), "a b");
+        assert_eq!(
+            root_file_provider_query_for_user_query("q report"),
+            "q report"
+        );
+    }
+
+    #[test]
     fn root_file_search_requires_simple_name_queries() {
         assert!(!should_search_root_files(""));
         assert!(!should_search_root_files("ab"));
@@ -988,6 +1088,54 @@ mod tests {
             "server"
         ));
         assert!(!root_file_name_token_matches_query("notes.md", ""));
+    }
+
+    #[test]
+    fn root_file_name_token_match_accepts_multiword_separator_tokens() {
+        assert!(root_file_name_token_matches_query(
+            "design-notes.md",
+            "design notes"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "client-design-notes.md",
+            "design notes"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "client-design-notes.md",
+            "client notes"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "2026-q2-report.xlsx",
+            "q2 report"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "root-file-search.md",
+            "root file search"
+        ));
+    }
+
+    #[test]
+    fn root_file_name_token_match_rejects_multiword_mid_token_matches() {
+        assert!(!root_file_name_token_matches_query(
+            "redesign-notes.md",
+            "design notes"
+        ));
+        assert!(!root_file_name_token_matches_query(
+            "client-denotes.md",
+            "design notes"
+        ));
+        assert!(!root_file_name_token_matches_query(
+            "myq2report.xlsx",
+            "q2 report"
+        ));
+    }
+
+    #[test]
+    fn root_file_name_token_match_rejects_unordered_multiword_queries() {
+        assert!(!root_file_name_token_matches_query(
+            "client-design-notes.md",
+            "notes design"
+        ));
     }
 
     fn file(path: &str, name: &str, file_type: FileType) -> FileResult {
