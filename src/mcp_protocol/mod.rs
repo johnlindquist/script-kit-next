@@ -699,6 +699,10 @@ mod tests {
             "Should include computer/list_windows"
         );
         assert!(
+            tool_names.contains(&"computer/list_screens"),
+            "Should include computer/list_screens"
+        );
+        assert!(
             tool_names.contains(&"computer/list_permissions"),
             "Should include computer/list_permissions"
         );
@@ -835,6 +839,36 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(text)?;
         assert_eq!(value["schemaVersion"], serde_json::json!(1));
         assert!(value["permissions"].is_array());
+        Ok(())
+    }
+
+    #[test]
+    fn test_tools_call_computer_list_screens_does_not_require_runtime() -> anyhow::Result<()> {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(46),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/list_screens",
+                "arguments": {}
+            }),
+        };
+
+        let response = handle_tools_call_with_runtime(request, &[], None);
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(result.get("isError"), None);
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert!(value["screens"].is_array());
         Ok(())
     }
 

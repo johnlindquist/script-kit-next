@@ -9,13 +9,17 @@ use crate::computer_use::runtime_bridge::{
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
-use crate::protocol::{AutomationWindowInfo, AUTOMATION_WINDOW_SCHEMA_VERSION};
+use crate::protocol::{
+    AutomationWindowInfo, DisplayInfo, TargetWindowBounds, AUTOMATION_WINDOW_SCHEMA_VERSION,
+};
 use serde_json::Value;
 
 pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
+pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
+const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_PERMISSIONS_SCHEMA_VERSION: u32 = 1;
 
 pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
@@ -32,6 +36,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List registered Script Kit automation windows without interacting with them."
                 .to_string(),
             input_schema: computer_list_windows_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_SCREENS_TOOL.to_string(),
+            description: "List attached screens/displays without moving windows, changing screen placement, or requesting permissions."
+                .to_string(),
+            input_schema: computer_list_screens_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_PERMISSIONS_TOOL.to_string(),
@@ -54,6 +64,7 @@ pub fn handle_computer_use_tool_call(
     match name {
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
+        COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
             "unknown_tool",
@@ -73,6 +84,17 @@ struct ComputerUseListWindowsResult {
     windows: Vec<AutomationWindowInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     focused_window_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListScreensArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListScreensResult {
+    schema_version: u32,
+    screens: Vec<DisplayInfo>,
 }
 
 #[derive(serde::Deserialize)]
@@ -130,6 +152,21 @@ fn handle_list_windows(arguments: &Value) -> ToolResult {
     })
 }
 
+fn handle_list_screens(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseListScreensArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    match list_screens() {
+        Ok(screens) => json_tool_result(&ComputerUseListScreensResult {
+            schema_version: COMPUTER_SCREENS_SCHEMA_VERSION,
+            screens,
+        }),
+        Err(error) => error_result("screen_list_failed", &error),
+    }
+}
+
 fn handle_list_permissions(arguments: &Value) -> ToolResult {
     let _args: ComputerUseListPermissionsArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
@@ -170,6 +207,69 @@ fn permission_status(
         granted,
         status,
     }
+}
+
+#[cfg(target_os = "macos")]
+fn list_screens() -> Result<Vec<DisplayInfo>, String> {
+    use core_graphics::display::CGDisplay;
+
+    const MACOS_MENU_BAR_HEIGHT: i32 = 24;
+
+    let display_ids =
+        CGDisplay::active_displays().map_err(|_| "Failed to get active displays".to_string())?;
+    let main_display_id = CGDisplay::main().id;
+    let mut screens = Vec::with_capacity(display_ids.len());
+
+    for (index, display_id) in display_ids.iter().copied().enumerate() {
+        let display = CGDisplay::new(display_id);
+        let bounds = display.bounds();
+        let visible_y = bounds.origin.y as i32 + MACOS_MENU_BAR_HEIGHT;
+        let visible_height =
+            (bounds.size.height as u32).saturating_sub(MACOS_MENU_BAR_HEIGHT as u32);
+
+        screens.push(DisplayInfo {
+            display_id,
+            name: format!("Display {}", index + 1),
+            is_primary: display_id == main_display_id,
+            bounds: TargetWindowBounds {
+                x: bounds.origin.x as i32,
+                y: bounds.origin.y as i32,
+                width: bounds.size.width as u32,
+                height: bounds.size.height as u32,
+            },
+            visible_bounds: TargetWindowBounds {
+                x: bounds.origin.x as i32,
+                y: visible_y,
+                width: bounds.size.width as u32,
+                height: visible_height,
+            },
+            scale_factor: None,
+        });
+    }
+
+    Ok(screens)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn list_screens() -> Result<Vec<DisplayInfo>, String> {
+    Ok(vec![DisplayInfo {
+        display_id: 0,
+        name: "Primary Display".to_string(),
+        is_primary: true,
+        bounds: TargetWindowBounds {
+            x: 0,
+            y: 0,
+            width: 1920,
+            height: 1080,
+        },
+        visible_bounds: TargetWindowBounds {
+            x: 0,
+            y: 24,
+            width: 1920,
+            height: 1056,
+        },
+        scale_factor: Some(1.0),
+    }])
 }
 
 fn runtime_error_result(args: &ComputerUseSeeArgs, error: ComputerUseRuntimeError) -> ToolResult {
@@ -300,6 +400,14 @@ fn computer_list_windows_input_schema() -> Value {
     })
 }
 
+fn computer_list_screens_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_list_permissions_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -370,6 +478,7 @@ mod tests {
             vec![
                 COMPUTER_SEE_TOOL.to_string(),
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
+                COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
         );
@@ -418,6 +527,28 @@ mod tests {
             .into_iter()
             .find(|tool| tool.name == COMPUTER_LIST_PERMISSIONS_TOOL)
             .expect("computer/list_permissions tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_list_screens_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_SCREENS_TOOL)
+            .expect("computer/list_screens tool");
 
         assert_eq!(
             tool.input_schema
@@ -523,6 +654,18 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_screens_rejects_bad_arguments() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_SCREENS_TOOL,
+            &serde_json::json!({ "move": true }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
     fn computer_list_windows_returns_registry_snapshot_without_runtime() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -608,5 +751,30 @@ mod tests {
         );
         assert!(!result.content[0].text.contains("requestAccessibility"));
         assert!(!result.content[0].text.contains("openSettings"));
+    }
+
+    #[test]
+    fn computer_list_screens_returns_screen_snapshot_without_runtime() {
+        let result =
+            handle_computer_use_tool_call(COMPUTER_LIST_SCREENS_TOOL, &serde_json::json!({}), None);
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_screens json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_SCREENS_SCHEMA_VERSION)
+        );
+
+        let screens = value["screens"].as_array().expect("screens array");
+        for screen in screens {
+            assert!(screen["displayId"].is_number());
+            assert!(screen["name"].is_string());
+            assert!(screen["isPrimary"].is_boolean());
+            assert!(screen["bounds"]["width"].is_number());
+            assert!(screen["bounds"]["height"].is_number());
+            assert!(screen["visibleBounds"]["width"].is_number());
+            assert!(screen["visibleBounds"]["height"].is_number());
+        }
     }
 }
