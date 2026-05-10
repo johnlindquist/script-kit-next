@@ -548,15 +548,6 @@ app.run(move |cx: &mut App| {
                         });
                         let _ = response_tx.send(result);
                     }
-                    crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRequest::ListTrayMenu {
-                        response_tx,
-                        ..
-                    } => {
-                        let result = cx.update(|_| {
-                            crate::computer_use::gpui_runtime_bridge::list_tray_menu_on_gpui_thread()
-                        });
-                        let _ = response_tx.send(result);
-                    }
                 }
             }
         })

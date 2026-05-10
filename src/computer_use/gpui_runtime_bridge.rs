@@ -3,7 +3,6 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::protocol::AutomationInspectSnapshot;
-use crate::tray::TrayMenuObservation;
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::RwLock;
 use std::time::Duration;
@@ -23,10 +22,6 @@ pub enum GpuiComputerUseRequest {
         request_id: String,
         request: ComputerUseListAppsRequest,
         response_tx: SyncSender<Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>>,
-    },
-    ListTrayMenu {
-        request_id: String,
-        response_tx: SyncSender<Result<TrayMenuObservation, ComputerUseRuntimeError>>,
     },
 }
 
@@ -66,15 +61,6 @@ impl GpuiComputerUseRequest {
         result: Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>,
     ) {
         if let Self::ListRunningApps { response_tx, .. } = self {
-            let _ = response_tx.send(result);
-        }
-    }
-
-    pub fn respond_list_tray_menu(
-        self,
-        result: Result<TrayMenuObservation, ComputerUseRuntimeError>,
-    ) {
-        if let Self::ListTrayMenu { response_tx, .. } = self {
             let _ = response_tx.send(result);
         }
     }
@@ -132,32 +118,6 @@ impl ComputerUseRuntimeBridge for GpuiComputerUseRuntimeBridge {
             .recv_timeout(self.timeout)
             .map_err(|_| ComputerUseRuntimeError::Timeout)?
     }
-
-    fn list_tray_menu(&self) -> Result<TrayMenuObservation, ComputerUseRuntimeError> {
-        let sender = self
-            .sender
-            .read()
-            .ok()
-            .and_then(|guard| guard.clone())
-            .ok_or(ComputerUseRuntimeError::Unavailable)?;
-
-        let request_id = format!("mcp-computer-list-tray-menu:{}", uuid::Uuid::new_v4());
-        let (response_tx, response_rx) = mpsc::sync_channel(1);
-        sender
-            .try_send(GpuiComputerUseRequest::ListTrayMenu {
-                request_id,
-                response_tx,
-            })
-            .map_err(|_| ComputerUseRuntimeError::Unavailable)?;
-
-        response_rx
-            .recv_timeout(self.timeout)
-            .map_err(|_| ComputerUseRuntimeError::Timeout)?
-    }
-}
-
-pub fn list_tray_menu_on_gpui_thread() -> Result<TrayMenuObservation, ComputerUseRuntimeError> {
-    Ok(crate::tray::current_tray_menu_observation_snapshot())
 }
 
 #[cfg(target_os = "macos")]
