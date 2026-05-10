@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const CLI_PATH = new URL("./config-cli.ts", import.meta.url).pathname;
 
@@ -22,6 +25,22 @@ async function runValidateChange(
   return {
     exitCode,
     stdout: JSON.parse(stdoutText),
+    stderrText: stderrText.trim(),
+  };
+}
+
+async function runCli(args: string[], env: Record<string, string> = {}) {
+  const proc = Bun.spawn(["bun", CLI_PATH, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+    env: { ...process.env, ...env },
+  });
+  const stdoutText = await new Response(proc.stdout).text();
+  const stderrText = await new Response(proc.stderr).text();
+  const exitCode = await proc.exited;
+  return {
+    exitCode,
+    stdout: stdoutText.trim() ? JSON.parse(stdoutText) : null,
     stderrText: stderrText.trim(),
   };
 }
@@ -165,5 +184,75 @@ describe("config-cli validate-change command id contract", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout.data.valid).toBe(true);
     expect(result.stderrText).toContain('"event":"validate_change_command_id_list"');
+  });
+});
+
+describe("config-cli command shortcut writers", () => {
+  it("sets command shortcuts through config.ts commands", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kit-config-cli-"));
+    const configPath = join(dir, "config.ts");
+    writeFileSync(
+      configPath,
+      `import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" }
+} satisfies Config;
+`,
+    );
+
+    try {
+      const result = await runCli(
+        [
+          "set-command-shortcut",
+          "script/main:do-in-current-app",
+          "1",
+          "true",
+          "false",
+          "false",
+          "false",
+        ],
+        { SCRIPT_KIT_CONFIG_PATH: configPath },
+      );
+
+      expect(result.exitCode).toBe(0);
+      const content = readFileSync(configPath, "utf8");
+      expect(content).toContain('"script/main:do-in-current-app"');
+      expect(content).toContain('"key":"Digit1"');
+      expect(content).toContain('"modifiers":["meta"]');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes only shortcut fields and preserves command flags", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kit-config-cli-"));
+    const configPath = join(dir, "config.ts");
+    writeFileSync(
+      configPath,
+      `import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+  commands: {
+    "builtin/clipboard-history": { shortcut: {"modifiers":["meta"],"key":"KeyV"}, hidden: true },
+  },
+} satisfies Config;
+`,
+    );
+
+    try {
+      const result = await runCli(
+        ["remove-command-shortcut", "builtin/clipboard-history"],
+        { SCRIPT_KIT_CONFIG_PATH: configPath },
+      );
+
+      expect(result.exitCode).toBe(0);
+      const content = readFileSync(configPath, "utf8");
+      expect(content).toContain('"builtin/clipboard-history": { hidden: true }');
+      expect(content).not.toContain("shortcut");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

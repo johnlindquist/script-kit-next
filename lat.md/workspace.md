@@ -9,6 +9,7 @@ These facts describe the durable workspace layout and the config surfaces inside
 - `scripts/config-schema.ts` is the authoritative reference for modifying `~/.scriptkit/config.ts`.
 - The plugin container is `~/.scriptkit/plugins/`; `main/` is the default personal plugin and `scriptkit/` owns the bundled skill set.
 - `~/.scriptkit/config.ts` owns hotkeys, command overrides, runtime preferences, and Claude Code or ACP-related settings.
+- `config.ts.commands[commandId].shortcut` is the durable shortcut override source; script and scriptlet metadata remain inline defaults, and `shortcuts.json` is legacy-only.
 - `~/.scriptkit/theme.json` is the user-owned theme override surface.
 - The app seeds and repairs the workspace structure from `src/setup/mod.rs`, including bundled verb-named skills, example skills, config or theme templates, ACP agent catalog files, and legacy `~/.kenv` migration.
 - MCP token and discovery metadata live at `~/.scriptkit/agent-token` and `~/.scriptkit/server.json`.
@@ -40,6 +41,7 @@ These pages cover the scripting, built-in, and distribution contracts tied to th
 - [scripting](./scripting.md)
 - [builtins](./builtins.md)
 - [distribution](./distribution.md)
+- [shortcuts](./shortcuts.md)
 
 ## Workspace Layout
 

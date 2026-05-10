@@ -10,7 +10,7 @@ use global_hotkey::{
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use uuid::Uuid;
@@ -748,7 +748,7 @@ pub fn get_registered_hotkeys() -> Vec<(String, u32)> {
         .collect()
 }
 // =============================================================================
-// Dynamic shortcut registration (for shortcuts.json overrides)
+// Dynamic shortcut registration (for config-backed runtime updates)
 // =============================================================================
 
 /// Register a shortcut dynamically for a command (scriptlet, builtin, app).
@@ -1300,46 +1300,10 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);
         }
 
-        // Register script shortcuts
-        let mut script_count = 0;
-
-        let all_scripts = scripts::read_scripts();
-        for script in &all_scripts {
-            if let Some(ref shortcut) = script.shortcut {
-                let path = script.path.to_string_lossy().to_string();
-                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &script.name)
-                    .is_some()
-                {
-                    script_count += 1;
-                }
-            }
-        }
-
-        let all_scriptlets = scripts::load_scriptlets();
-        for scriptlet in &all_scriptlets {
-            if let Some(ref shortcut) = scriptlet.shortcut {
-                let path = scriptlet
-                    .file_path
-                    .clone()
-                    .unwrap_or_else(|| scriptlet.name.clone());
-                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &scriptlet.name)
-                    .is_some()
-                {
-                    script_count += 1;
-                }
-            }
-        }
-
-        logging::log(
-            "HOTKEY",
-            &format!("Registered {} script/scriptlet shortcuts", script_count),
-        );
-
         // Track which command IDs have been registered to avoid duplicates
-        let mut registered_commands: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
+        let mut registered_commands: HashSet<String> = HashSet::new();
 
-        // Priority 1: Load shortcuts from config.ts commands field (highest priority)
+        // Priority 1: Load command shortcuts from config.ts.
         let mut config_count = 0;
         if let Some(commands) = &config.commands {
             for (command_id, cmd_config) in commands {
@@ -1369,50 +1333,49 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             }
         }
 
-        // Priority 2: Load user shortcut overrides from shortcuts.json
-        // (skips commands already registered from config.ts)
-        let mut override_count = 0;
-        match crate::shortcuts::load_shortcut_overrides() {
-            Ok(overrides) => {
-                for (command_id, shortcut) in overrides {
-                    // Skip if already registered from config.ts
-                    if registered_commands.contains(&command_id) {
-                        logging::log(
-                            "HOTKEY",
-                            &format!(
-                                "Skipping shortcuts.json entry for '{}' (config.ts takes priority)",
-                                command_id
-                            ),
-                        );
-                        continue;
-                    }
+        // Priority 2: Register inline script/scriptlet metadata shortcuts only
+        // when config.ts does not override the same launcher command.
+        let mut script_count = 0;
 
-                    let shortcut_str = shortcut.to_canonical_string();
-                    if register_script_hotkey_internal(
-                        &manager_guard,
-                        &command_id,
-                        &shortcut_str,
-                        &command_id,
-                    )
+        let all_scripts = scripts::read_scripts();
+        for script in &all_scripts {
+            if let Some(ref shortcut) = script.shortcut {
+                let command_id = script.launcher_command_id();
+                if registered_commands.contains(&command_id) {
+                    continue;
+                }
+                let path = script.path.to_string_lossy().to_string();
+                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &script.name)
                     .is_some()
-                    {
-                        override_count += 1;
-                    }
+                {
+                    script_count += 1;
                 }
-                if override_count > 0 {
-                    logging::log(
-                        "HOTKEY",
-                        &format!(
-                            "Registered {} user shortcut overrides from shortcuts.json",
-                            override_count
-                        ),
-                    );
-                }
-            }
-            Err(e) => {
-                logging::log("HOTKEY", &format!("Failed to load shortcuts.json: {}", e));
             }
         }
+
+        let all_scriptlets = scripts::load_scriptlets();
+        for scriptlet in &all_scriptlets {
+            if let Some(ref shortcut) = scriptlet.shortcut {
+                let command_id = scriptlet.launcher_command_id();
+                if registered_commands.contains(&command_id) {
+                    continue;
+                }
+                let path = scriptlet
+                    .file_path
+                    .clone()
+                    .unwrap_or_else(|| scriptlet.name.clone());
+                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &scriptlet.name)
+                    .is_some()
+                {
+                    script_count += 1;
+                }
+            }
+        }
+
+        logging::log(
+            "HOTKEY",
+            &format!("Registered {} script/scriptlet shortcuts", script_count),
+        );
 
         // Log routing table summary
         {

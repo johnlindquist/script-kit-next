@@ -21,7 +21,7 @@ fn shortcut_actions_open_recorder_for_non_scripts() {
 }
 
 #[test]
-fn shortcut_actions_open_editor_for_scripts() {
+fn shortcut_actions_use_launcher_command_ids() {
     let content = super::read_all_handle_action_sources();
 
     let shortcut_pos = content
@@ -30,8 +30,8 @@ fn shortcut_actions_open_editor_for_scripts() {
     let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
-        block.contains("edit_script(") && block.contains("SearchResult::Script("),
-        "Shortcut actions should open the editor for Script items (shortcut is in file comment)"
+        block.contains("result.launcher_command_id()"),
+        "Shortcut actions should resolve command IDs through SearchResult::launcher_command_id"
     );
 }
 
@@ -83,8 +83,8 @@ fn remove_shortcut_calls_persistence_and_shows_hud() {
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("remove_shortcut_override("),
-        "remove_shortcut should call remove_shortcut_override for persistence"
+        block.contains("remove_config_command_shortcut("),
+        "remove_shortcut should remove command shortcuts through config.ts"
     );
     assert!(
         block.contains("Shortcut removed"),

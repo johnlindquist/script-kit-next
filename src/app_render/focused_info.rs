@@ -997,11 +997,11 @@ impl ScriptListApp {
                 // Pre-compute launcher command ID and override lookups before the match
                 // to avoid partial-move borrow issues within match arms.
                 let launcher_cmd_id = result.launcher_command_id();
-                let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
                 let alias_overrides = crate::aliases::get_cached_alias_overrides();
                 let override_shortcut = launcher_cmd_id
                     .as_ref()
-                    .and_then(|id| shortcut_overrides.get(id).map(|s| s.to_string()));
+                    .and_then(|id| self.config.get_command_shortcut(id))
+                    .map(|hotkey| hotkey.to_display_string());
                 let override_alias = launcher_cmd_id
                     .as_ref()
                     .and_then(|id| alias_overrides.get(id).cloned());

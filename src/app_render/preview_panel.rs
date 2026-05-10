@@ -119,16 +119,9 @@ impl ScriptListApp {
         } else {
             selected_result.as_ref().and_then(|result| {
                 Self::get_command_id_for_result(result).and_then(|command_id| {
-                    // First check config.ts commands
-                    if let Some(hotkey) = self.config.get_command_shortcut(&command_id) {
-                        return Some(hotkey.to_display_string());
-                    }
-                    // Then check shortcut overrides file (where ShortcutRecorder saves)
-                    let overrides = crate::shortcuts::get_cached_shortcut_overrides();
-                    if let Some(shortcut) = overrides.get(&command_id) {
-                        return Some(shortcut.to_string());
-                    }
-                    None
+                    self.config
+                        .get_command_shortcut(&command_id)
+                        .map(|hotkey| hotkey.to_display_string())
                 })
             })
         };
