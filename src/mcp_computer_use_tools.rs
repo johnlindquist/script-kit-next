@@ -32,6 +32,7 @@ pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_GET_MENU_ITEM_TOOL: &str = "computer/get_menu_item";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_GET_TRAY_MENU_ITEM_TOOL: &str = "computer/get_tray_menu_item";
+pub const COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL: &str = "computer/get_tray_menu_item_by_id";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_GET_SCREEN_TOOL: &str = "computer/get_screen";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
@@ -125,6 +126,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_get_tray_menu_item_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL.to_string(),
+            description: "Return one Script Kit tray menu item by stable tray item id without opening the menu, clicking status items, invoking actions, or requesting permissions."
+                .to_string(),
+            input_schema: computer_get_tray_menu_item_by_id_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_LIST_SCREENS_TOOL.to_string(),
             description: "List attached screens/displays without moving windows, changing screen placement, or requesting permissions."
                 .to_string(),
@@ -174,6 +181,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_MENU_ITEM_TOOL => handle_get_menu_item(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
         COMPUTER_GET_TRAY_MENU_ITEM_TOOL => handle_get_tray_menu_item(arguments),
+        COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL => handle_get_tray_menu_item_by_id(arguments),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_GET_SCREEN_TOOL => handle_get_screen(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
@@ -347,6 +355,12 @@ struct ComputerUseGetTrayMenuItemArgs {
     item_index: usize,
 }
 
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetTrayMenuItemByIdArgs {
+    id: String,
+}
+
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ComputerUseListMenusResult {
@@ -409,6 +423,22 @@ struct ComputerUseGetTrayMenuItemResult {
     owner: crate::tray::TrayMenuOwnerObservation,
     section_index: usize,
     item_index: usize,
+    section: Option<ComputerUseTrayMenuSectionSummary>,
+    item: Option<crate::tray::TrayMenuItemObservation>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetTrayMenuItemByIdResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    owner: crate::tray::TrayMenuOwnerObservation,
+    id: String,
+    section_index: Option<usize>,
+    item_index: Option<usize>,
     section: Option<ComputerUseTrayMenuSectionSummary>,
     item: Option<crate::tray::TrayMenuItemObservation>,
     warnings: Vec<String>,
@@ -867,6 +897,65 @@ fn handle_get_tray_menu_item(arguments: &Value) -> ToolResult {
         section_index: args.section_index,
         item_index: args.item_index,
         section: section_summary,
+        item,
+        warnings,
+    })
+}
+
+fn handle_get_tray_menu_item_by_id(arguments: &Value) -> ToolResult {
+    let args: ComputerUseGetTrayMenuItemByIdArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    if args.id.is_empty() {
+        return error_result(
+            "invalid_arguments",
+            "id must be a non-empty tray menu item id",
+        );
+    }
+
+    let snapshot = crate::tray::current_tray_menu_observation_snapshot();
+    let mut found = None;
+    'sections: for (section_index, section) in snapshot.sections.iter().enumerate() {
+        for (item_index, item) in section.items.iter().enumerate() {
+            if item.id == args.id {
+                found = Some((
+                    section_index,
+                    item_index,
+                    computer_use_tray_menu_section_summary(section),
+                    item.clone(),
+                ));
+                break 'sections;
+            }
+        }
+    }
+
+    let mut warnings = snapshot.warnings;
+    let (status, section_index, item_index, section, item) = match found {
+        Some((section_index, item_index, section, item)) => (
+            "found",
+            Some(section_index),
+            Some(item_index),
+            Some(section),
+            Some(item),
+        ),
+        None => {
+            warnings.push(format!("tray menu item id {} was not found", args.id));
+            ("notFound", None, None, None, None)
+        }
+    };
+
+    json_tool_result(&ComputerUseGetTrayMenuItemByIdResult {
+        schema_version: 1,
+        source: "scriptKitTrayMenuModel",
+        scope: "ownTrayMenuItemId",
+        status,
+        owner: snapshot.owner,
+        id: args.id,
+        section_index,
+        item_index,
+        section,
         item,
         warnings,
     })
@@ -1346,6 +1435,21 @@ fn computer_get_tray_menu_item_input_schema() -> Value {
     })
 }
 
+fn computer_get_tray_menu_item_by_id_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Stable tray menu item id from computer/list_tray_menu."
+            }
+        },
+        "required": ["id"]
+    })
+}
+
 fn computer_list_screens_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1568,6 +1672,7 @@ mod tests {
                 COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_GET_TRAY_MENU_ITEM_TOOL.to_string(),
+                COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_GET_SCREEN_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string(),
@@ -1956,6 +2061,37 @@ mod tests {
         assert_eq!(
             tool.input_schema.get("required"),
             Some(&serde_json::json!(["sectionIndex", "itemIndex"]))
+        );
+    }
+
+    #[test]
+    fn computer_get_tray_menu_item_by_id_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL)
+            .expect("computer/get_tray_menu_item_by_id tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        let id_schema = properties.get("id").expect("id property");
+        assert_eq!(
+            id_schema.get("type").and_then(Value::as_str),
+            Some("string")
+        );
+        assert_eq!(id_schema.get("minLength").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["id"]))
         );
     }
 
@@ -2736,6 +2872,32 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_tray_menu_item_by_id_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "id": "" }),
+            serde_json::json!({ "id": 123 }),
+            serde_json::json!({ "id": "tray.open_script_kit", "click": true }),
+            serde_json::json!({ "id": "tray.open_script_kit", "press": true }),
+            serde_json::json!({ "id": "tray.open_script_kit", "execute": true }),
+            serde_json::json!({ "id": "tray.open_script_kit", "open": true }),
+            serde_json::json!({ "id": "tray.open_script_kit", "refresh": true }),
+            serde_json::json!({ "id": "tray.open_script_kit", "includeGlobalStatusItems": true }),
+        ] {
+            let result = handle_computer_use_tool_call(
+                COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL,
+                &arguments,
+                None,
+            );
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_screens_rejects_bad_arguments() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_SCREENS_TOOL,
@@ -3344,6 +3506,80 @@ mod tests {
             serde_json::from_str(&result.content[0].text).expect("valid get_tray_menu_item json");
         assert_eq!(value["source"], "scriptKitTrayMenuModel");
         assert_eq!(value["scope"], "ownTrayMenuSectionItemIndex");
+    }
+
+    #[test]
+    fn computer_get_tray_menu_item_by_id_returns_item_by_id() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL,
+            &serde_json::json!({ "id": "tray.open_script_kit" }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_tray_menu_item_by_id json");
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["scope"], "ownTrayMenuItemId");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["owner"]["scope"], "ownTrayMenuOnly");
+        assert_eq!(value["id"], "tray.open_script_kit");
+        assert_eq!(value["sectionIndex"], 0);
+        assert_eq!(value["itemIndex"], 0);
+        assert_eq!(value["section"]["id"], "open");
+        assert_eq!(value["section"]["label"], "Open");
+        assert!(value["section"]["itemCount"]
+            .as_u64()
+            .is_some_and(|count| count > 0));
+        assert_eq!(value["item"]["id"], "tray.open_script_kit");
+        assert_eq!(value["item"]["title"], "Open Script Kit");
+        assert!(value["warnings"].is_array());
+
+        for forbidden in ["\"click\"", "\"press\"", "\"execute\"", "\"action\""] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_tray_menu_item_by_id result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_get_tray_menu_item_by_id_returns_not_found() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL,
+            &serde_json::json!({ "id": "__missing_tray_item_id__" }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_tray_menu_item_by_id json");
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["scope"], "ownTrayMenuItemId");
+        assert_eq!(value["status"], "notFound");
+        assert_eq!(value["id"], "__missing_tray_item_id__");
+        assert!(value["sectionIndex"].is_null());
+        assert!(value["itemIndex"].is_null());
+        assert!(value["section"].is_null());
+        assert!(value["item"].is_null());
+        assert!(value["warnings"].is_array());
+    }
+
+    #[test]
+    fn computer_get_tray_menu_item_by_id_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL,
+            &serde_json::json!({ "id": "tray.open_script_kit" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_tray_menu_item_by_id json");
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["scope"], "ownTrayMenuItemId");
     }
 
     #[test]
