@@ -268,6 +268,12 @@ pub fn list_automation_windows() -> Vec<AutomationWindowInfo> {
     windows
 }
 
+/// Return a snapshot of a registered automation window by its stable ID.
+pub fn automation_window_by_id(id: &str) -> Option<AutomationWindowInfo> {
+    let state = AUTOMATION_WINDOWS.lock();
+    state.windows.get(id).cloned()
+}
+
 /// Return the stable ID of whichever window is currently marked focused,
 /// or `None` if no window has `focused == true`.
 pub fn focused_automation_window_id() -> Option<String> {
