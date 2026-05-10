@@ -4,8 +4,9 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::window_observation::{
-    computer_use_window_observation_v1, window_duplicate_groups_v1, window_title_fallbacks_v1,
-    WindowDuplicateObservationInputV1, WindowTitleFallbackObservationInputV1,
+    computer_use_window_observation_v1, window_duplicate_groups_v1, window_own_process_policy_v1,
+    window_title_fallbacks_v1, WindowDuplicateObservationInputV1,
+    WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
@@ -344,8 +345,18 @@ fn core_graphics_windows_for_pid(
         let layer = cf_number_i64(dict_ref, &k_window_layer).unwrap_or(0);
         let alpha = cf_number_f64(dict_ref, &k_window_alpha);
         let sharing_state = cf_number_i64(dict_ref, &k_window_sharing_state);
-        let observation =
+        let is_current_process_window = u32::try_from(pid).ok() == Some(std::process::id());
+        let own_process_window_policy = window_own_process_policy_v1(
+            is_current_process_window,
+            if is_current_process_window {
+                ns_window_is_excluded_from_windows_menu(native_window_id)
+            } else {
+                None
+            },
+        );
+        let mut observation =
             computer_use_window_observation_v1(&bounds, is_on_screen, layer, alpha, sharing_state);
+        observation.own_process_window_policy = own_process_window_policy;
 
         windows.push(ComputerUseAppWindowInfo {
             native_window_id,
@@ -404,6 +415,28 @@ fn core_graphics_windows_for_pid(
     }
 
     Ok(windows)
+}
+
+#[cfg(target_os = "macos")]
+fn ns_window_is_excluded_from_windows_menu(native_window_id: u32) -> Option<bool> {
+    use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let window_number = native_window_id as isize;
+    unsafe {
+        let app: *mut Object = msg_send![class!(NSApplication), sharedApplication];
+        if app.is_null() {
+            return None;
+        }
+
+        let window: *mut Object = msg_send![app, windowWithWindowNumber: window_number];
+        if window.is_null() {
+            return None;
+        }
+
+        let is_excluded: bool = msg_send![window, isExcludedFromWindowsMenu];
+        Some(is_excluded)
+    }
 }
 
 #[cfg(target_os = "macos")]

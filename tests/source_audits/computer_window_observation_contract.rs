@@ -31,6 +31,7 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "#[serde(skip_serializing_if = \"Option::is_none\")]",
         "pub duplicate_group: Option<WindowDuplicateGroupV1>,",
         "pub title_fallback: Option<WindowTitleFallbackV1>,",
+        "pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
@@ -46,6 +47,9 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub enum WindowTitleFallbackSelectionBasis",
         "pub struct WindowTitleFallbackObservationInputV1",
         "pub fn window_title_fallbacks_v1(",
+        "pub struct WindowOwnProcessPolicyV1",
+        "pub enum WindowOwnProcessPolicyStatus",
+        "pub fn window_own_process_policy_v1(",
         "pub const COMPUTER_USE_WINDOW_OBSERVATION_SCHEMA_VERSION: u32 = 1;",
         "pub const WINDOW_CAPTURE_REQUIRED_LAYER: i64 = 0;",
         "pub const WINDOW_CAPTURE_MIN_ALPHA: f64 = 0.01;",
@@ -99,6 +103,9 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "execute",
         "request_accessibility_permission",
         "capture_targeted_screenshot",
+        "WindowOwnProcessPolicy",
+        "own_process",
+        "is_excluded_from_windows_menu",
     ] {
         assert!(
             !helper_body.contains(forbidden),
@@ -209,6 +216,44 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         );
     }
 
+    let own_policy_body = extract_function_body(&module, "pub fn window_own_process_policy_v1(");
+    for needle in [
+        "if !is_current_process_window",
+        "WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu",
+        "WindowOwnProcessPolicyStatus::IncludedInWindowsMenu",
+        "WindowOwnProcessPolicyStatus::Unknown",
+        "source: \"nsWindow\"",
+        "is_excluded_from_windows_menu",
+    ] {
+        assert!(
+            own_policy_body.contains(needle),
+            "own-process policy helper must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "CoreGraphics",
+        "CGWindowListCopyWindowInfo",
+        "NSWorkspace",
+        "AppKit",
+        "objc::",
+        "focus",
+        "activate",
+        "launch",
+        "quit",
+        "hide",
+        "move",
+        "resize",
+        "click",
+        "press",
+        "execute",
+        "capture",
+    ] {
+        assert!(
+            !own_policy_body.contains(forbidden),
+            "own-process policy helper must stay pure/read-only; found {forbidden}"
+        );
+    }
+
     for needle in [
         "let duplicate_groups = window_duplicate_groups_v1(",
         ".iter()",
@@ -246,10 +291,52 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "title fallback must be computed after duplicate-group annotation"
     );
 
+    for needle in [
+        "let is_current_process_window = u32::try_from(pid).ok() == Some(std::process::id());",
+        "let own_process_window_policy = window_own_process_policy_v1(",
+        "if is_current_process_window",
+        "ns_window_is_excluded_from_windows_menu(native_window_id)",
+        "observation.own_process_window_policy = own_process_window_policy;",
+        "fn ns_window_is_excluded_from_windows_menu(native_window_id: u32) -> Option<bool>",
+        "windowWithWindowNumber: window_number",
+        "isExcludedFromWindowsMenu",
+    ] {
+        assert!(
+            bridge.contains(needle),
+            "CoreGraphics bridge must annotate own-process policy behind a current-process guard: {needle}"
+        );
+    }
+    let ns_policy_helper_body =
+        extract_function_body(&bridge, "fn ns_window_is_excluded_from_windows_menu(");
+    for forbidden in [
+        "focus",
+        "activate",
+        "launch",
+        "quit",
+        "hide",
+        "move",
+        "resize",
+        "click",
+        "press",
+        "execute",
+        "capture",
+        "CGWindowListCreateImage",
+        "ScreenCaptureKit",
+    ] {
+        assert!(
+            !ns_policy_helper_body.contains(forbidden),
+            "NSWindow policy helper must stay read-only; found {forbidden}"
+        );
+    }
+
     assert!(
         !mcp_tools.contains("COMPUTER_WINDOW_OBSERVATION_TOOL")
             && !mcp_tools.contains("handle_window_observation"),
         "window observation is an additive nested contract, not a new MCP action tool"
+    );
+    assert!(
+        !runtime.contains("own_process_window_policy"),
+        "own-process policy must not add a ComputerUseRuntimeBridge trait method"
     );
     assert!(
         mcp_tools.contains("bundleIdChanged for pid"),
@@ -269,6 +356,10 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "emptyTitleSoleCandidate",
         "emptyTitleAmongMultipleCandidates",
         "preferNonEmptyTitleThenAllowEmptyOnlyIfSoleCandidate",
+        "ownProcessWindowPolicy",
+        "isExcludedFromWindowsMenu",
+        "includedInWindowsMenu",
+        "excludedFromWindowsMenu",
         "layerNonZero",
         "alphaTooLow",
         "sharingStateNone",

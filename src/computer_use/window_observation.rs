@@ -20,6 +20,8 @@ pub struct ComputerUseWindowObservationV1 {
     pub duplicate_group: Option<WindowDuplicateGroupV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title_fallback: Option<WindowTitleFallbackV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -124,6 +126,22 @@ pub struct WindowTitleFallbackObservationInputV1 {
     pub duplicate_group_status: Option<WindowDuplicateGroupStatus>,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowOwnProcessPolicyV1 {
+    pub source: &'static str,
+    pub status: WindowOwnProcessPolicyStatus,
+    pub is_excluded_from_windows_menu: Option<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowOwnProcessPolicyStatus {
+    IncludedInWindowsMenu,
+    ExcludedFromWindowsMenu,
+    Unknown,
+}
+
 pub fn computer_use_window_observation_v1(
     bounds: &TargetWindowBounds,
     is_on_screen: bool,
@@ -152,6 +170,7 @@ pub fn computer_use_window_observation_v1(
         ),
         duplicate_group: None,
         title_fallback: None,
+        own_process_window_policy: None,
     }
 }
 
@@ -283,6 +302,27 @@ impl WindowTitleFallbackObservationInputV1 {
         self.capture_candidate_status == WindowCaptureCandidateStatus::Candidate
             && self.duplicate_group_status != Some(WindowDuplicateGroupStatus::Duplicate)
     }
+}
+
+pub fn window_own_process_policy_v1(
+    is_current_process_window: bool,
+    is_excluded_from_windows_menu: Option<bool>,
+) -> Option<WindowOwnProcessPolicyV1> {
+    if !is_current_process_window {
+        return None;
+    }
+
+    let status = match is_excluded_from_windows_menu {
+        Some(true) => WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu,
+        Some(false) => WindowOwnProcessPolicyStatus::IncludedInWindowsMenu,
+        None => WindowOwnProcessPolicyStatus::Unknown,
+    };
+
+    Some(WindowOwnProcessPolicyV1 {
+        source: "nsWindow",
+        status,
+        is_excluded_from_windows_menu,
+    })
 }
 
 #[cfg(test)]
@@ -606,6 +646,60 @@ mod tests {
             fallbacks[2].as_ref().map(|fallback| &fallback.status),
             Some(&WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
         );
+    }
+
+    #[test]
+    fn own_process_window_policy_omits_non_current_process_windows() {
+        assert_eq!(window_own_process_policy_v1(false, Some(true)), None);
+    }
+
+    #[test]
+    fn own_process_window_policy_marks_excluded_windows() {
+        let policy = window_own_process_policy_v1(true, Some(true)).expect("policy");
+
+        assert_eq!(
+            policy.status,
+            WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu
+        );
+        assert_eq!(policy.is_excluded_from_windows_menu, Some(true));
+    }
+
+    #[test]
+    fn own_process_window_policy_marks_included_windows() {
+        let policy = window_own_process_policy_v1(true, Some(false)).expect("policy");
+
+        assert_eq!(
+            policy.status,
+            WindowOwnProcessPolicyStatus::IncludedInWindowsMenu
+        );
+        assert_eq!(policy.is_excluded_from_windows_menu, Some(false));
+    }
+
+    #[test]
+    fn own_process_window_policy_marks_unknown_when_nswindow_lookup_fails() {
+        let policy = window_own_process_policy_v1(true, None).expect("policy");
+
+        assert_eq!(policy.status, WindowOwnProcessPolicyStatus::Unknown);
+        assert_eq!(policy.is_excluded_from_windows_menu, None);
+    }
+
+    #[test]
+    fn window_observation_initializes_own_process_policy_as_none() {
+        assert_eq!(
+            computer_use_window_observation_v1(&bounds(120, 90), true, 0, Some(1.0), Some(1))
+                .own_process_window_policy,
+            None
+        );
+    }
+
+    #[test]
+    fn own_process_window_policy_serializes_camel_case_contract() {
+        let policy = window_own_process_policy_v1(true, Some(true)).expect("policy");
+        let serialized = serde_json::to_value(policy).expect("serialize policy");
+
+        assert_eq!(serialized["source"], "nsWindow");
+        assert_eq!(serialized["status"], "excludedFromWindowsMenu");
+        assert_eq!(serialized["isExcludedFromWindowsMenu"], true);
     }
 
     fn duplicate_input(
