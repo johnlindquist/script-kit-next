@@ -422,9 +422,43 @@ mod tests {
         assert!(
             production.contains("root_recent_file_results")
                 && production.contains("merge_root_global_file_results_with_recent(")
+                && production.contains("root_file_name_seed_matches_query")
                 && production.contains("RootFileSectionMode::DirectoryBrowse"),
-            "root grouping should pass recent files into global ranking without changing directory browse mode"
+            "root grouping should pass filename-matching recent files into global ranking without changing directory browse mode"
         );
+    }
+
+    #[test]
+    fn root_global_recent_file_seed_filters_path_only_matches() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let production = production_source(&grouping_source);
+        let helper = production
+            .split("fn merge_root_global_file_results_with_recent(")
+            .nth(1)
+            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .expect("recent merge helper should be present");
+
+        assert!(
+            helper.contains("filter_text: &str")
+                && helper.contains("provider_results")
+                && helper.contains("recent_results")
+                && helper.contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
+            "recent root file seeds should be filtered by filename-side query matches while provider rows stay unfiltered"
+        );
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !helper.contains(forbidden),
+                "recent seed filename filter must not start providers: {forbidden}"
+            );
+        }
     }
 
     #[test]
