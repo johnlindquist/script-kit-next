@@ -197,18 +197,56 @@ pub fn root_file_provider_query_for_user_query(user_query: &str) -> String {
     }
 
     let phrase = escape_md_string(q);
-    let mut terms_query = String::new();
-    for (idx, term) in terms.iter().enumerate() {
-        if idx > 0 {
-            terms_query.push_str(" && ");
-        }
-        terms_query.push_str(&format!(
-            r#"kMDItemFSName == "*{}*"c"#,
-            escape_md_string(term)
-        ));
+    let filename_terms_query = terms
+        .iter()
+        .map(|term| format!(r#"kMDItemFSName == "*{}*"c"#, escape_md_string(term)))
+        .collect::<Vec<_>>()
+        .join(" && ");
+
+    let mut branches = vec![
+        format!(r#"kMDItemFSName == "*{}*"c"#, phrase),
+        format!("({})", filename_terms_query),
+    ];
+    branches.extend(root_file_path_context_mdquery_branches(&terms));
+
+    format!("({})", branches.join(" || "))
+}
+
+fn root_file_filename_terms_are_safe_for_provider(terms: &[String]) -> bool {
+    !terms.is_empty() && terms.iter().all(|term| term.chars().count() >= 2)
+}
+
+fn root_file_path_context_mdquery_branches(terms: &[String]) -> Vec<String> {
+    if terms.len() < 2 || terms.len() > ROOT_FILE_PATH_CONTEXT_MAX_TERMS {
+        return Vec::new();
     }
 
-    format!(r#"(kMDItemFSName == "*{}*"c || ({}))"#, phrase, terms_query)
+    let mut branches = Vec::new();
+    for split in 1..terms.len() {
+        let (parent_terms, filename_terms) = terms.split_at(split);
+        if parent_terms
+            .iter()
+            .any(|term| !root_file_query_has_safe_global_length(term))
+            || !root_file_filename_terms_are_safe_for_provider(filename_terms)
+        {
+            continue;
+        }
+
+        let mut parts = Vec::with_capacity(terms.len());
+        parts.extend(
+            parent_terms
+                .iter()
+                .map(|term| format!(r#"kMDItemPath == "*{}*"c"#, escape_md_string(term))),
+        );
+        parts.extend(
+            filename_terms
+                .iter()
+                .map(|term| format!(r#"kMDItemFSName == "*{}*"c"#, escape_md_string(term))),
+        );
+        branches.push(format!("({})", parts.join(" && ")));
+    }
+
+    branches
 }
 
 /// Returns true when the root launcher should ask Spotlight for file rows.
@@ -477,6 +515,8 @@ pub fn root_directory_file_matches(
 }
 
 const ROOT_FILE_TEXT_TIER_MULTIPLIER: i32 = 20_000;
+const ROOT_FILE_PATH_CONTEXT_TIER: i32 = 3;
+const ROOT_FILE_PATH_CONTEXT_MAX_TERMS: usize = 4;
 
 fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) -> i32 {
     let name_lc = name.to_lowercase();
@@ -507,6 +547,10 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
 /// Return true when a root file query is a high-confidence filename-token match.
 pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
     let terms = root_file_query_terms(query);
+    root_file_filename_terms_match(name, &terms)
+}
+
+fn root_file_filename_terms_match(name: &str, terms: &[String]) -> bool {
     if terms.is_empty() {
         return false;
     }
@@ -526,6 +570,39 @@ pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
 
     root_file_text_matches_terms_in_order(name, &terms)
         || root_file_text_matches_terms_in_order(stem, &terms)
+}
+
+fn root_file_path_context_matches_query(file: &FileResult, query: &str) -> bool {
+    let terms = root_file_query_terms(query);
+    if terms.len() < 2 || terms.len() > ROOT_FILE_PATH_CONTEXT_MAX_TERMS {
+        return false;
+    }
+
+    let Some(parent_path) = Path::new(&file.path)
+        .parent()
+        .and_then(|parent| parent.to_str())
+    else {
+        return false;
+    };
+
+    for split in 1..terms.len() {
+        let (parent_terms, filename_terms) = terms.split_at(split);
+        if parent_terms
+            .iter()
+            .any(|term| !root_file_query_has_safe_global_length(term))
+            || filename_terms.iter().any(|term| term.chars().count() < 2)
+        {
+            continue;
+        }
+
+        if root_file_text_matches_terms_in_order(parent_path, parent_terms)
+            && root_file_filename_terms_match(&file.name, filename_terms)
+        {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn root_file_query_terms(query: &str) -> Vec<String> {
@@ -672,7 +749,13 @@ pub fn rank_root_file_results(
                 Some(score) => (score, true),
                 None => (nucleo.score(&file.path)?, false),
             };
-            let text_tier = root_file_name_relevance_tier(&file.name, &q, name_matched);
+            let text_tier = root_file_name_relevance_tier(&file.name, &q, name_matched).max(
+                if root_file_path_context_matches_query(file, &q) {
+                    ROOT_FILE_PATH_CONTEXT_TIER
+                } else {
+                    0
+                },
+            );
             let frecency_bonus =
                 (frecency_score(&format!("file/{}", file.path)) * 100.0).min(500.0) as i32;
 
@@ -1059,7 +1142,39 @@ mod tests {
         let query = root_file_provider_query_for_user_query("design notes");
         assert_eq!(
             query,
-            r#"(kMDItemFSName == "*design notes*"c || (kMDItemFSName == "*design*"c && kMDItemFSName == "*notes*"c))"#
+            r#"(kMDItemFSName == "*design notes*"c || (kMDItemFSName == "*design*"c && kMDItemFSName == "*notes*"c) || (kMDItemPath == "*design*"c && kMDItemFSName == "*notes*"c))"#
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_provider_query_adds_safe_directory_filename_branches() {
+        let query = root_file_provider_query_for_user_query("src root file");
+        assert!(
+            query.contains(
+                r#"kMDItemFSName == "*src*"c && kMDItemFSName == "*root*"c && kMDItemFSName == "*file*"c"#
+            ),
+            "all-terms filename branch should remain"
+        );
+        assert!(
+            query.contains(
+                r#"kMDItemPath == "*src*"c && kMDItemFSName == "*root*"c && kMDItemFSName == "*file*"c"#
+            ),
+            "provider should retrieve files whose leading terms are directory context"
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_provider_query_rejects_short_plain_parent_terms() {
+        let query = root_file_provider_query_for_user_query("ai readme");
+        assert!(
+            !query.contains("kMDItemPath"),
+            "plain two-letter parent context should not create noisy path-provider branches"
+        );
+
+        let digit_query = root_file_provider_query_for_user_query("q2 readme");
+        assert!(
+            digit_query.contains(r#"kMDItemPath == "*q2*"c && kMDItemFSName == "*readme*"c"#),
+            "short digit tokens should remain eligible as directory context"
         );
     }
 
@@ -1556,6 +1671,90 @@ mod tests {
             ranked.first().map(|entry| entry.file.name.as_str()),
             Some("fnl-notes.md"),
             "fuzzy filename match should beat a path-only match"
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_ranking_prefers_directory_context_over_path_only() {
+        let results = vec![
+            file("/tmp/docs/README.md", "README.md", FileType::Document),
+            file(
+                "/tmp/docs/readme/archive.txt",
+                "archive.txt",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "docs readme", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.path.as_str()),
+            Some("/tmp/docs/README.md"),
+            "directory-context filename matches should beat path-only matches"
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_ranking_supports_filename_suffix_terms() {
+        let results = vec![
+            file(
+                "/tmp/src/app_impl/root_file_search.rs",
+                "root_file_search.rs",
+                FileType::File,
+            ),
+            file(
+                "/tmp/src/root/file/archive.txt",
+                "archive.txt",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "src root file", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("root_file_search.rs"),
+            "directory context should let remaining query terms match filename tokens in order"
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_ranking_preserves_filename_first() {
+        let results = vec![
+            file("/tmp/docs/README.md", "README.md", FileType::Document),
+            file(
+                "/tmp/other/docs-readme.md",
+                "docs-readme.md",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "docs readme", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("docs-readme.md"),
+            "filename multi-word token matches should stay above directory-context matches"
+        );
+    }
+
+    #[test]
+    fn root_file_path_context_ranking_requires_ordered_parent_then_filename() {
+        let results = vec![
+            file("/tmp/docs/README.md", "README.md", FileType::Document),
+            file(
+                "/tmp/other/readme-docs.md",
+                "readme-docs.md",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "readme docs", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("readme-docs.md"),
+            "directory context should not promote reversed parent/filename term order"
         );
     }
     // ========================================================================
