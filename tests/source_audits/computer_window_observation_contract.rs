@@ -32,11 +32,17 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub duplicate_group: Option<WindowDuplicateGroupV1>,",
         "pub title_fallback: Option<WindowTitleFallbackV1>,",
         "pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,",
+        "pub list_candidate: Option<WindowListCandidateV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
         "pub enum WindowDisqualificationReason",
         "pub struct WindowCaptureThresholdsV1",
+        "pub struct WindowListCandidateV1",
+        "pub enum WindowListCandidateStatus",
+        "pub enum WindowListDisqualificationReason",
+        "pub struct WindowListThresholdsV1",
+        "pub fn window_list_candidate_v1(",
         "pub struct WindowDuplicateGroupV1",
         "pub enum WindowDuplicateGroupStatus",
         "pub enum WindowDuplicateSelectionBasis",
@@ -55,6 +61,10 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub const WINDOW_CAPTURE_MIN_ALPHA: f64 = 0.01;",
         "pub const WINDOW_CAPTURE_MIN_WIDTH: u32 = 120;",
         "pub const WINDOW_CAPTURE_MIN_HEIGHT: u32 = 90;",
+        "pub const WINDOW_LIST_REQUIRED_LAYER: i64 = 0;",
+        "pub const WINDOW_LIST_MIN_ALPHA: f64 = 0.0;",
+        "pub const WINDOW_LIST_MIN_WIDTH: u32 = 60;",
+        "pub const WINDOW_LIST_MIN_HEIGHT: u32 = 60;",
     ] {
         assert!(
             module.contains(needle),
@@ -110,6 +120,55 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         assert!(
             !helper_body.contains(forbidden),
             "capture candidate helper must stay pure/read-only; found {forbidden}"
+        );
+    }
+
+    let list_helper_body = extract_function_body(&module, "pub fn window_list_candidate_v1(");
+    for needle in [
+        "layer != WINDOW_LIST_REQUIRED_LAYER",
+        "WindowListDisqualificationReason::LayerNonZero",
+        "value <= WINDOW_LIST_MIN_ALPHA",
+        "WindowListDisqualificationReason::AlphaTooLow",
+        "bounds.width < WINDOW_LIST_MIN_WIDTH || bounds.height < WINDOW_LIST_MIN_HEIGHT",
+        "WindowListDisqualificationReason::TooSmall",
+        "Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu)",
+        "WindowListDisqualificationReason::OwnProcessExcludedFromWindowsMenu",
+        "alpha.is_none()",
+        "WindowListDisqualificationReason::MetadataIncomplete",
+        "WindowListCandidateStatus::Candidate",
+        "WindowListCandidateStatus::Disqualified",
+        "WindowListCandidateStatus::Unknown",
+    ] {
+        assert!(
+            list_helper_body.contains(needle),
+            "list candidate helper must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "sharingStateNone",
+        "notOnScreen",
+        "CGWindowListCopyWindowInfo",
+        "CGWindowListCreateImage",
+        "ScreenCaptureKit",
+        "request_accessibility_permission",
+        "capture_targeted_screenshot",
+        "focus",
+        "activate",
+        "launch",
+        "quit",
+        "hide",
+        "move",
+        "resize",
+        "click",
+        "press",
+        "execute",
+        "dedup",
+        "remove(",
+        "sort",
+    ] {
+        assert!(
+            !list_helper_body.contains(forbidden),
+            "list candidate helper must stay metadata-only; found {forbidden}"
         );
     }
 
@@ -297,6 +356,10 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "if is_current_process_window",
         "ns_window_is_excluded_from_windows_menu(native_window_id)",
         "observation.own_process_window_policy = own_process_window_policy;",
+        "let own_process_window_policy_status = observation",
+        ".own_process_window_policy",
+        ".map(|policy| policy.status.clone())",
+        "observation.list_candidate = Some(window_list_candidate_v1(",
         "fn ns_window_is_excluded_from_windows_menu(native_window_id: u32) -> Option<bool>",
         "windowWithWindowNumber: window_number",
         "isExcludedFromWindowsMenu",
@@ -306,6 +369,23 @@ fn computer_window_observation_is_additive_read_only_metadata() {
             "CoreGraphics bridge must annotate own-process policy behind a current-process guard: {needle}"
         );
     }
+    assert!(
+        bridge
+            .find("observation.own_process_window_policy = own_process_window_policy;")
+            .expect("own-process policy assignment")
+            < bridge
+                .find("observation.list_candidate = Some(window_list_candidate_v1(")
+                .expect("list candidate assignment"),
+        "list candidate must be computed after own-process policy is attached"
+    );
+    assert!(
+        bridge.contains("CGWindowListCopyWindowInfo(K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY, K_CG_NULL_WINDOW_ID)"),
+        "native window enumeration must remain on-screen-only for this metadata slice"
+    );
+    assert!(
+        !bridge.contains("K_CG_WINDOW_LIST_OPTION_ALL"),
+        "list candidate metadata must not widen CoreGraphics enumeration"
+    );
     let ns_policy_helper_body =
         extract_function_body(&bridge, "fn ns_window_is_excluded_from_windows_menu(");
     for forbidden in [
@@ -360,6 +440,14 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "isExcludedFromWindowsMenu",
         "includedInWindowsMenu",
         "excludedFromWindowsMenu",
+        "listCandidate",
+        "ownProcessExcludedFromWindowsMenu",
+        "requiredLayer:0",
+        "minAlpha:0.0",
+        "minWidth:60",
+        "minHeight:60",
+        "looser than captureCandidate",
+        "does not require shareability or on-screen status",
         "layerNonZero",
         "alphaTooLow",
         "sharingStateNone",
@@ -367,6 +455,7 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "tooSmall",
         "metadataIncomplete",
         "diagnostic only",
+        "do not deduplicate, filter, select, capture",
     ] {
         assert!(
             protocol.contains(needle),
