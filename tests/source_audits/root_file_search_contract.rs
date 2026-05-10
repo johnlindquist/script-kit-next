@@ -219,9 +219,78 @@ mod tests {
             "Files section should render real file rows, then the handoff row, before the group is inserted ahead of fallbacks"
         );
         assert!(
-            append_source.contains("let handoff = root_file_search_handoff_result(filter_text);")
+            append_source
+                .contains("let handoff = root_file_search_handoff_result(filter_text, mode);")
                 && append_source.contains("files.is_empty() && handoff.is_none()"),
             "Files section should still appear with the handoff row when Spotlight returns zero file rows"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_provider_stays_in_app_layer() {
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            root_source.contains("RootFileSearchRequest::DirectoryBrowse")
+                && root_source.contains("list_directory_with_options(")
+                && root_source.contains("ROOT_FILE_BROWSE_SOURCE_LIMIT"),
+            "root directory browsing should collect directory rows in the root file app/provider layer"
+        );
+        assert!(
+            grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
+                && grouping_production.contains("root_directory_file_matches(")
+                && grouping_production.contains("ROOT_FILE_BROWSE_RENDER_LIMIT"),
+            "grouping should render already-collected directory rows without starting providers"
+        );
+        for forbidden in ["std::fs::read_dir", "list_directory_with_options("] {
+            assert!(
+                !grouping_production.contains(forbidden),
+                "grouping should not start directory providers directly: {forbidden}"
+            );
+        }
+        assert!(
+            filtering_source.contains("self.root_file_search_mode")
+                && filtering_source.contains("&self.root_file_results"),
+            "filtering cache should pass the root file source mode alongside collected rows"
+        );
+    }
+
+    #[test]
+    fn root_directory_tab_navigation_precedes_plain_tab_acp_routing() {
+        for path in [
+            "src/app_impl/startup.rs",
+            "src/app_impl/startup_new_tab.rs",
+            "src/main_entry/runtime_stdin_match_simulate_key.rs",
+            "src/main_entry/app_run_setup.rs",
+        ] {
+            let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("read {path}"));
+            let nav_offset = source
+                .find("try_navigate_root_file_directory_with_tab")
+                .unwrap_or_else(|| panic!("{path} should route root file directory Tab"));
+            let acp_offset = source
+                .find("try_route_plain_tab_to_acp_context_capture")
+                .unwrap_or_else(|| panic!("{path} should still preserve ACP Tab routing"));
+
+            assert!(
+                nav_offset < acp_offset,
+                "{path} should try root directory navigation before plain Tab ACP routing"
+            );
+        }
+
+        let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        assert!(
+            selection_source.contains("pub(crate) fn try_navigate_root_file_directory_with_tab")
+                && selection_source.contains("selected_root_directory_query_owned")
+                && selection_source.contains("root_file_parent_query_for_filter")
+                && selection_source.contains("set_filter_text_immediate"),
+            "ScriptList Tab navigation should be centralized in selection_fallback.rs"
         );
     }
 
@@ -583,9 +652,11 @@ mod tests {
     }
 
     #[test]
-    fn root_launcher_does_not_browse_directories_inline() {
+    fn root_launcher_directory_browse_does_not_open_dedicated_file_search_directly() {
         let source = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("read src/render_script_list/mod.rs");
+        let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
 
         assert!(
             !source.contains("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID"),
@@ -594,6 +665,11 @@ mod tests {
         assert!(
             !source.contains("open_file_search("),
             "ScriptList render/key handling should not directly open File Search for root folder rows"
+        );
+        assert!(
+            selection_source.contains("try_navigate_root_file_directory_with_tab")
+                && selection_source.contains("set_filter_text_immediate"),
+            "root directory Tab should update the ScriptList query inline instead of opening dedicated File Search"
         );
     }
 }

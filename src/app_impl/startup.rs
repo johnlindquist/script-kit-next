@@ -596,6 +596,7 @@ impl ScriptListApp {
             cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
             root_file_results: Vec::new(),
+            root_file_search_mode: None,
             root_recent_file_results: Vec::new(),
             root_recent_file_revision: u64::MAX,
             root_file_search_query: String::new(),
@@ -1072,6 +1073,15 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && this.try_navigate_root_file_directory_with_tab(
+                                    has_shift, window, cx,
+                                )
+                            {
+                                cx.stop_propagation();
+                                return;
                             }
 
                             if matches!(this.current_view, AppView::ScriptList)

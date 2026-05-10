@@ -184,6 +184,15 @@
                             }
 
                             if matches!(this.current_view, AppView::ScriptList)
+                                && this.try_navigate_root_file_directory_with_tab(
+                                    has_shift, window, cx,
+                                )
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && this.try_route_plain_tab_to_acp_context_capture(cx)
                             {

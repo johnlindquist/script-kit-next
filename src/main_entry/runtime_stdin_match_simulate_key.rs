@@ -104,10 +104,19 @@
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    let _ = view
-                                                        .try_route_plain_tab_to_acp_context_capture(
-                                                            ctx,
+                                                    if view.try_navigate_root_file_directory_with_tab(
+                                                        has_shift, window, ctx,
+                                                    ) {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - navigate root directory file row",
                                                         );
+                                                    } else if !has_shift {
+                                                        let _ = view
+                                                            .try_route_plain_tab_to_acp_context_capture(
+                                                                ctx,
+                                                            );
+                                                    }
                                                 }
                                                 "up" | "arrowup" => {
                                                     if view.main_menu_fallback_state.move_up() {
@@ -134,10 +143,19 @@
                                         } else {
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    let _ = view
-                                                        .try_route_plain_tab_to_acp_context_capture(
-                                                            ctx,
+                                                    if view.try_navigate_root_file_directory_with_tab(
+                                                        has_shift, window, ctx,
+                                                    ) {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - navigate root directory file row",
                                                         );
+                                                    } else if !has_shift {
+                                                        let _ = view
+                                                            .try_route_plain_tab_to_acp_context_capture(
+                                                                ctx,
+                                                            );
+                                                    }
                                                 }
                                                 "up" | "arrowup" => {
                                                     // Use move_selection_up to properly skip section headers

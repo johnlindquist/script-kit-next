@@ -526,6 +526,11 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn selected_root_directory_query_owned(&mut self) -> Option<String> {
+        let file = self.selected_root_file_result_owned()?;
+        Self::root_file_search_in_folder_query(&file)
+    }
+
     pub(crate) fn execute_root_file_open(
         &mut self,
         file: &crate::file_search::FileResult,
@@ -560,6 +565,43 @@ impl ScriptListApp {
             return None;
         }
         crate::file_search::parent_folder_search_query(&file.path)
+    }
+
+    pub(crate) fn root_file_parent_query_for_filter(filter_text: &str) -> Option<String> {
+        if !crate::file_search::looks_like_root_directory_browse_query(filter_text) {
+            return None;
+        }
+
+        let parsed = crate::file_search::parse_directory_path(filter_text)?;
+        if parsed.filter.is_some() {
+            Some(parsed.directory)
+        } else {
+            crate::file_search::parent_dir_display(&parsed.directory)
+        }
+    }
+
+    pub(crate) fn try_navigate_root_file_directory_with_tab(
+        &mut self,
+        has_shift: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList) || self.show_actions_popup {
+            return false;
+        }
+
+        let next_query = if has_shift {
+            Self::root_file_parent_query_for_filter(&self.filter_text)
+        } else {
+            self.selected_root_directory_query_owned()
+        };
+
+        let Some(next_query) = next_query else {
+            return false;
+        };
+
+        self.set_filter_text_immediate(next_query, window, cx);
+        true
     }
 
     pub(crate) fn execute_root_file_action(
@@ -1044,5 +1086,28 @@ mod tests {
             ScriptListApp::root_file_browse_parent_folder_query(&file),
             None
         );
+    }
+
+    #[test]
+    fn root_file_parent_query_for_filter_accepts_directory_browse_queries() {
+        let base = std::env::temp_dir().join(format!(
+            "script-kit-root-parent-test-{}",
+            std::process::id()
+        ));
+        let nested = base.join("example-folder");
+        std::fs::create_dir_all(&nested).expect("create nested temp directory");
+        let nested_query = format!("{}/", nested.display());
+
+        assert_eq!(
+            ScriptListApp::root_file_parent_query_for_filter(&nested_query),
+            Some(format!("{}/", base.display()))
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn root_file_parent_query_for_filter_rejects_plain_search_queries() {
+        assert_eq!(ScriptListApp::root_file_parent_query_for_filter("fix"), None);
     }
 }
