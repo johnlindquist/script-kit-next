@@ -1,5 +1,5 @@
-use super::*;
 use super::source_classification::{build_tab_ai_apply_back_hint, detect_tab_ai_source_type};
+use super::*;
 
 impl ScriptListApp {
     /// Stage synchronous context parts onto the ACP thread/view immediately
