@@ -7,6 +7,8 @@
  * Usage:
  *   bun scripts/config-cli.ts get [key]        - Read value(s)
  *   bun scripts/config-cli.ts set <key> <value> - Modify a value
+ *   bun scripts/config-cli.ts set-command-shortcut <command_id> <key> <cmd> <ctrl> <alt> <shift>
+ *   bun scripts/config-cli.ts remove-command-shortcut <command_id>
  *   bun scripts/config-cli.ts list             - Show all options with values
  *   bun scripts/config-cli.ts validate         - Check if config is valid
  *   bun scripts/config-cli.ts reset [key]      - Restore default(s)
@@ -50,6 +52,11 @@ type KeyCode =
   | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
   | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
   | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
+  | "Tab" | "Escape" | "Backspace" | "Delete"
+  | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
+  | "Home" | "End" | "PageUp" | "PageDown" | "Insert"
+  | "Quote" | "Backslash" | "BracketLeft" | "BracketRight"
+  | "Minus" | "Equal" | "Backquote"
   | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
   | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
 
@@ -736,7 +743,8 @@ const CONFIG_SCHEMA: ConfigOption[] = [
 // Utilities
 // =============================================================================
 
-const CONFIG_PATH = path.join(os.homedir(), '.scriptkit', 'config.ts');
+const CONFIG_PATH = process.env.SCRIPT_KIT_CONFIG_PATH
+  || path.join(os.homedir(), '.scriptkit', 'config.ts');
 
 interface Result<T> {
   success: boolean;
@@ -1203,6 +1211,197 @@ function resetConfigValue(key: string): void {
   }
 }
 
+function normalizeShortcutKey(key: string): KeyCode {
+  const trimmed = key.trim();
+  if (/^[a-z]$/i.test(trimmed)) {
+    return `Key${trimmed.toUpperCase()}` as KeyCode;
+  }
+  if (/^[0-9]$/.test(trimmed)) {
+    return `Digit${trimmed}` as KeyCode;
+  }
+
+  const lower = trimmed.toLowerCase();
+  const aliases: Record<string, KeyCode> = {
+    space: "Space",
+    enter: "Enter",
+    return: "Enter",
+    tab: "Tab",
+    escape: "Escape",
+    esc: "Escape",
+    backspace: "Backspace",
+    delete: "Delete",
+    del: "Delete",
+    up: "ArrowUp",
+    arrowup: "ArrowUp",
+    down: "ArrowDown",
+    arrowdown: "ArrowDown",
+    left: "ArrowLeft",
+    arrowleft: "ArrowLeft",
+    right: "ArrowRight",
+    arrowright: "ArrowRight",
+    home: "Home",
+    end: "End",
+    pageup: "PageUp",
+    pgup: "PageUp",
+    pagedown: "PageDown",
+    pgdn: "PageDown",
+    insert: "Insert",
+    semicolon: "Semicolon",
+    ";": "Semicolon",
+    comma: "Comma",
+    ",": "Comma",
+    period: "Period",
+    ".": "Period",
+    slash: "Slash",
+    "/": "Slash",
+    quote: "Quote",
+    "'": "Quote",
+    backslash: "Backslash",
+    "\\": "Backslash",
+    bracketleft: "BracketLeft",
+    "[": "BracketLeft",
+    bracketright: "BracketRight",
+    "]": "BracketRight",
+    minus: "Minus",
+    "-": "Minus",
+    equal: "Equal",
+    "=": "Equal",
+    backquote: "Backquote",
+    "`": "Backquote",
+  };
+
+  if (aliases[lower]) {
+    return aliases[lower];
+  }
+  if (/^f([1-9]|1[0-2])$/i.test(trimmed)) {
+    return trimmed.toUpperCase() as KeyCode;
+  }
+
+  const validKeys = new Set<string>([
+    "KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG",
+    "KeyH", "KeyI", "KeyJ", "KeyK", "KeyL", "KeyM", "KeyN",
+    "KeyO", "KeyP", "KeyQ", "KeyR", "KeyS", "KeyT", "KeyU",
+    "KeyV", "KeyW", "KeyX", "KeyY", "KeyZ",
+    "Digit0", "Digit1", "Digit2", "Digit3", "Digit4",
+    "Digit5", "Digit6", "Digit7", "Digit8", "Digit9",
+    "Space", "Enter", "Semicolon", "Comma", "Period", "Slash",
+    "Tab", "Escape", "Backspace", "Delete",
+    "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+    "Home", "End", "PageUp", "PageDown", "Insert",
+    "Quote", "Backslash", "BracketLeft", "BracketRight",
+    "Minus", "Equal", "Backquote",
+    "F1", "F2", "F3", "F4", "F5", "F6",
+    "F7", "F8", "F9", "F10", "F11", "F12",
+  ]);
+
+  if (validKeys.has(trimmed)) {
+    return trimmed as KeyCode;
+  }
+
+  throw new Error(`Invalid shortcut key: ${key}`);
+}
+
+function findCommandsPropertyRange(content: string): [number, number] | null {
+  const match = content.match(/(^|\n)([ \t]*)commands\s*:\s*\{/);
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  const start = match.index + match[1].length;
+  const openBrace = content.indexOf("{", start);
+  let depth = 0;
+  let inString: string | null = null;
+  let escaped = false;
+
+  for (let i = openBrace; i < content.length; i++) {
+    const char = content[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === inString) {
+        inString = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === "`") {
+      inString = char;
+      continue;
+    }
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        let end = i + 1;
+        while (content[end] === " " || content[end] === "\t") end += 1;
+        if (content[end] === ",") end += 1;
+        return [start, end];
+      }
+    }
+  }
+
+  return null;
+}
+
+function formatCommandConfig(config: CommandConfig): string {
+  const fields: string[] = [];
+  if (config.shortcut) {
+    fields.push(`shortcut: ${JSON.stringify(config.shortcut)}`);
+  }
+  if (config.hidden !== undefined) {
+    fields.push(`hidden: ${JSON.stringify(config.hidden)}`);
+  }
+  if (config.confirmationRequired !== undefined) {
+    fields.push(`confirmationRequired: ${JSON.stringify(config.confirmationRequired)}`);
+  }
+  return `{ ${fields.join(", ")} }`;
+}
+
+function formatCommandsProperty(commands: Record<string, CommandConfig>): string {
+  const entries = Object.entries(commands).sort(([a], [b]) => a.localeCompare(b));
+  if (entries.length === 0) {
+    return "";
+  }
+  const lines = entries.map(
+    ([commandId, commandConfig]) =>
+      `    ${JSON.stringify(commandId)}: ${formatCommandConfig(commandConfig)},`,
+  );
+  return `  commands: {\n${lines.join("\n")}\n  },`;
+}
+
+function writeCommandsConfig(commands: Record<string, CommandConfig>): void {
+  let content = readConfigFile() ?? createDefaultConfig();
+  const formatted = formatCommandsProperty(commands);
+  const range = findCommandsPropertyRange(content);
+
+  if (range) {
+    const prefix = content.slice(0, range[0]);
+    const suffix = content.slice(range[1]);
+    content = formatted
+      ? `${prefix}${formatted}${suffix}`
+      : `${prefix}${suffix.replace(/^\n?/, "")}`;
+  } else if (formatted) {
+    const insertRegex = /(\s*)(})\s*(satisfies|as)\s+Config/;
+    const match = content.match(insertRegex);
+    if (!match) {
+      throw new Error("Could not find config export object terminator");
+    }
+    const beforeClose = content.slice(0, content.indexOf(match[0]));
+    const needsComma = !beforeClose.trimEnd().endsWith(",") && !beforeClose.trimEnd().endsWith("{");
+    content = content.replace(insertRegex, `${needsComma ? "," : ""}\n${formatted}\n$2 $3 Config`);
+  }
+
+  writeConfigFile(content);
+}
+
+async function getMutableCommandsConfig(): Promise<Record<string, CommandConfig>> {
+  const config = await loadConfig();
+  return { ...(config?.commands ?? {}) };
+}
+
 // =============================================================================
 // Commands
 // =============================================================================
@@ -1274,6 +1473,90 @@ async function cmdSet(key: string, value: string): Promise<void> {
   } catch (e) {
     error(e instanceof Error ? e.message : String(e));
   }
+}
+
+async function cmdSetCommandShortcut(args: string[]): Promise<void> {
+  const [commandId, key, cmdStr, ctrlStr, altStr, shiftStr, ...rest] = args;
+  if (!commandId || !key || cmdStr === undefined || ctrlStr === undefined || altStr === undefined || shiftStr === undefined) {
+    error("Usage: bun scripts/config-cli.ts set-command-shortcut <command_id> <key> <cmd> <ctrl> <alt> <shift> [--skip-existing]");
+  }
+
+  const shortcut: HotkeyConfig = {
+    key: normalizeShortcutKey(key),
+    modifiers: [
+      cmdStr === "true" ? "meta" : undefined,
+      ctrlStr === "true" ? "ctrl" : undefined,
+      altStr === "true" ? "alt" : undefined,
+      shiftStr === "true" ? "shift" : undefined,
+    ].filter(Boolean) as KeyModifier[],
+  };
+
+  const validation = validateCommandConfigValue({
+    shortcut,
+  }, `commands.${commandId}`);
+  if (validation.length > 0) {
+    error(validation.map((entry) => entry.message).join("; "));
+  }
+
+  const commands = await getMutableCommandsConfig();
+  const existing = commands[commandId] ?? {};
+  if (rest.includes("--skip-existing") && existing.shortcut) {
+    success({
+      commandId,
+      skipped: true,
+      shortcut: existing.shortcut,
+      message: `Skipped ${commandId}; config.ts already has a shortcut`,
+    });
+    return;
+  }
+
+  commands[commandId] = {
+    ...existing,
+    shortcut,
+  };
+  writeCommandsConfig(commands);
+
+  success({
+    commandId,
+    shortcut,
+    message: `Successfully set shortcut for ${commandId}`,
+  });
+}
+
+async function cmdRemoveCommandShortcut(commandId: string): Promise<void> {
+  if (!commandId) {
+    error("Usage: bun scripts/config-cli.ts remove-command-shortcut <command_id>");
+  }
+
+  const commands = await getMutableCommandsConfig();
+  const existing = commands[commandId];
+  if (!existing || !existing.shortcut) {
+    success({
+      commandId,
+      removed: false,
+      message: `No shortcut configured for ${commandId}`,
+    });
+    return;
+  }
+
+  const next: CommandConfig = { ...existing };
+  delete next.shortcut;
+  if (
+    next.hidden === undefined &&
+    next.confirmationRequired === undefined
+  ) {
+    delete commands[commandId];
+  } else {
+    commands[commandId] = next;
+  }
+
+  writeCommandsConfig(commands);
+
+  success({
+    commandId,
+    removed: true,
+    message: `Successfully removed shortcut for ${commandId}`,
+  });
 }
 
 async function cmdList(): Promise<void> {
@@ -1570,6 +1853,10 @@ USAGE:
 COMMANDS:
   get [key]           Read a config value (or all values if no key specified)
   set <key> <value>   Set a config value
+  set-command-shortcut <command_id> <key> <cmd> <ctrl> <alt> <shift>
+                      Set a launcher command shortcut in config.ts
+  remove-command-shortcut <command_id>
+                      Remove only the shortcut field from a launcher command
   list                List all available config options with current values
   validate            Validate the current config file
   reset [key]         Reset a config value to default (or all values if no key)
@@ -1593,6 +1880,12 @@ EXAMPLES:
 
   # Disable clipboard history
   bun scripts/config-cli.ts set builtIns.clipboardHistory false
+
+  # Set a command shortcut
+  bun scripts/config-cli.ts set-command-shortcut builtin/clipboard-history KeyV true false false true
+
+  # Remove only a command shortcut, preserving hidden/confirmation fields
+  bun scripts/config-cli.ts remove-command-shortcut builtin/clipboard-history
 
   # List all available options
   bun scripts/config-cli.ts list
@@ -1640,6 +1933,12 @@ async function main(): Promise<void> {
       break;
     case 'set':
       await cmdSet(args[1], args[2]);
+      break;
+    case 'set-command-shortcut':
+      await cmdSetCommandShortcut(args.slice(1));
+      break;
+    case 'remove-command-shortcut':
+      await cmdRemoveCommandShortcut(args[1]);
       break;
     case 'list':
       await cmdList();

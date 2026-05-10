@@ -299,7 +299,7 @@
         }).detach();
 
         // Script/Scriptlet/App hotkey listener - event-driven via async_channel
-        // Handles shortcuts from shortcuts.json for scriptlets, builtins, and apps
+        // Handles config.ts and metadata shortcuts for scriptlets, builtins, and apps
         let app_entity_for_scripts = app_entity.clone();
         let window_for_scripts = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {

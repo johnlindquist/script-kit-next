@@ -16,6 +16,95 @@ static SHORTCUT_RECORDER_WINDOW: OnceLock<
     Mutex<Option<WindowHandle<ShortcutRecorderPopupWindow>>>,
 > = OnceLock::new();
 
+fn shortcut_config_script_path(script_name: &str) -> anyhow::Result<std::path::PathBuf> {
+    let home_dir = std::env::var("HOME").unwrap_or_default();
+    let sdk_path = std::path::PathBuf::from(home_dir)
+        .join(".scriptkit")
+        .join("sdk")
+        .join(script_name);
+
+    if sdk_path.exists() {
+        return Ok(sdk_path);
+    }
+
+    let dev_path = std::env::current_dir()?.join("scripts").join(script_name);
+    if dev_path.exists() {
+        return Ok(dev_path);
+    }
+
+    Err(anyhow::anyhow!(
+        "Could not find {} in .scriptkit/sdk or repo scripts/",
+        script_name
+    ))
+}
+
+fn shortcut_config_bun_path() -> String {
+    crate::config::load_config()
+        .bun_path
+        .as_ref()
+        .filter(|path| std::path::Path::new(path.as_str()).exists())
+        .cloned()
+        .unwrap_or_else(|| "bun".to_string())
+}
+
+impl ScriptListApp {
+    pub(crate) fn write_config_command_shortcut(
+        &self,
+        command_id: &str,
+        key: &str,
+        cmd: bool,
+        ctrl: bool,
+        alt: bool,
+        shift: bool,
+    ) -> anyhow::Result<()> {
+        let script_path = shortcut_config_script_path("update-config-shortcut.ts")?;
+        let output = std::process::Command::new(shortcut_config_bun_path())
+            .arg(script_path)
+            .arg(command_id)
+            .arg(key)
+            .arg(cmd.to_string())
+            .arg(ctrl.to_string())
+            .arg(alt.to_string())
+            .arg(shift.to_string())
+            .output()?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Err(anyhow::anyhow!(
+                "config shortcut update failed: {}{}",
+                stderr.trim(),
+                stdout.trim()
+            ))
+        }
+    }
+
+    pub(crate) fn remove_config_command_shortcut(
+        &self,
+        command_id: &str,
+    ) -> anyhow::Result<()> {
+        let script_path = shortcut_config_script_path("remove-config-shortcut.ts")?;
+        let output = std::process::Command::new(shortcut_config_bun_path())
+            .arg(script_path)
+            .arg(command_id)
+            .output()?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Err(anyhow::anyhow!(
+                "config shortcut removal failed: {}{}",
+                stderr.trim(),
+                stdout.trim()
+            ))
+        }
+    }
+}
+
 struct ShortcutRecorderPopupWindow {
     recorder: Entity<crate::components::shortcut_recorder::ShortcutRecorder>,
     app: WeakEntity<ScriptListApp>,
@@ -455,8 +544,7 @@ export default {
         self.shortcut_recorder_entity = None;
 
         // Close actions popup if open
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.clear_actions_popup_state();
 
         let app = cx.entity().downgrade();
         let theme = std::sync::Arc::clone(&self.theme);
@@ -668,7 +756,7 @@ export default {
 
     /// Handle saving a shortcut from the recorder.
     ///
-    /// This saves the shortcut to ~/.scriptkit/shortcuts.json and updates the registry.
+    /// This saves the shortcut to config.ts and updates the live hotkey registry.
     pub(crate) fn handle_shortcut_save(
         &mut self,
         recorded: &crate::components::shortcut_recorder::RecordedShortcut,
@@ -703,22 +791,27 @@ export default {
             ),
         );
 
-        // Save to persistence
-        match crate::shortcuts::save_shortcut_override(&command_id, &shortcut) {
+        let recorded_key = recorded.key.clone().unwrap_or_default();
+
+        // Save to config.ts via the same CLI path used by script-side tooling.
+        match self.write_config_command_shortcut(
+            &command_id,
+            &recorded_key,
+            recorded.cmd,
+            recorded.ctrl,
+            recorded.alt,
+            recorded.shift,
+        ) {
             Ok(()) => {
-                logging::log("SHORTCUT", "Shortcut saved to shortcuts.json");
+                logging::log("SHORTCUT", "Shortcut saved to config.ts commands");
 
                 // Register the hotkey immediately so it works without restart
                 let shortcut_str = shortcut.to_canonical_string();
-                match crate::hotkeys::register_dynamic_shortcut(
-                    &command_id,
-                    &shortcut_str,
-                    &command_name,
-                ) {
-                    Ok(id) => {
+                match crate::hotkeys::update_script_hotkey(&command_id, None, Some(&shortcut_str)) {
+                    Ok(()) => {
                         logging::log(
                             "SHORTCUT",
-                            &format!("Registered hotkey immediately (id: {})", id),
+                            "Registered config shortcut immediately",
                         );
                         self.show_hud(
                             format!("Shortcut set: {} (active now)", shortcut.display()),

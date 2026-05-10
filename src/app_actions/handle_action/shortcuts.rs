@@ -75,13 +75,14 @@ impl ScriptListApp {
                             item_type = result.type_label(),
                             "launcher_shortcut_remove_requested"
                         );
-                        // Remove the shortcut override from persistence
-                        match crate::shortcuts::remove_shortcut_override(&command_id) {
+                        // Remove only the config.ts command shortcut, preserving other command fields.
+                        match self.remove_config_command_shortcut(&command_id) {
                             Ok(()) => {
+                                let _ = crate::hotkeys::unregister_dynamic_shortcut(&command_id);
                                 tracing::info!(
                                     category = "SHORTCUT",
                                     command_id = %command_id,
-                                    "Removed shortcut override"
+                                    "Removed config shortcut"
                                 );
                                 self.show_hud(
                                     "Shortcut removed".to_string(),

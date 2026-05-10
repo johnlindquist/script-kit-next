@@ -348,22 +348,8 @@ impl SearchResult {
     /// Skills and windows return `None` (non-bindable).
     pub fn launcher_command_id(&self) -> Option<String> {
         match self {
-            SearchResult::Script(sm) => {
-                let owner = if sm.script.plugin_id.is_empty() {
-                    sm.script.kit_name.as_deref().unwrap_or("main")
-                } else {
-                    sm.script.plugin_id.as_str()
-                };
-                Some(format!("script/{}:{}", owner, sm.script.name))
-            }
-            SearchResult::Scriptlet(sm) => {
-                let owner = if sm.scriptlet.plugin_id.is_empty() {
-                    sm.scriptlet.group.as_deref().unwrap_or("main")
-                } else {
-                    sm.scriptlet.plugin_id.as_str()
-                };
-                Some(format!("scriptlet/{}:{}", owner, sm.scriptlet.name))
-            }
+            SearchResult::Script(sm) => Some(sm.script.launcher_command_id()),
+            SearchResult::Scriptlet(sm) => Some(sm.scriptlet.launcher_command_id()),
             SearchResult::BuiltIn(bm) => Some(bm.entry.id.clone()),
             SearchResult::App(am) => Some(
                 am.app
@@ -514,6 +500,30 @@ impl SearchResult {
             }
             SearchResult::ScriptIssue(_) => "Inspect Issues",
         }
+    }
+}
+
+impl Script {
+    /// Returns the plugin-qualified command ID used by launcher config entries.
+    pub fn launcher_command_id(&self) -> String {
+        let owner = if self.plugin_id.is_empty() {
+            self.kit_name.as_deref().unwrap_or("main")
+        } else {
+            self.plugin_id.as_str()
+        };
+        format!("script/{}:{}", owner, self.name)
+    }
+}
+
+impl Scriptlet {
+    /// Returns the plugin-qualified command ID used by launcher config entries.
+    pub fn launcher_command_id(&self) -> String {
+        let owner = if self.plugin_id.is_empty() {
+            self.group.as_deref().unwrap_or("main")
+        } else {
+            self.plugin_id.as_str()
+        };
+        format!("scriptlet/{}:{}", owner, self.name)
     }
 }
 

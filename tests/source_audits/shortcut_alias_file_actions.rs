@@ -27,30 +27,19 @@ fn shortcut_add_and_update_actions_are_handled() {
 fn shortcut_add_opens_recorder_for_non_script_types() {
     let actions = super::read_all_handle_action_sources();
 
-    // Scriptlets, BuiltIns, and Apps should open the shortcut recorder
     assert!(
-        actions.contains("self.show_shortcut_recorder(command_id, command_name, cx)"),
-        "Expected shortcut actions to use show_shortcut_recorder for non-script types"
-    );
-
-    // Verify recorder is called for multiple item types (at least 3 calls for scriptlet/builtin/app)
-    let recorder_calls = count_occurrences(&actions, "self.show_shortcut_recorder(");
-    assert!(
-        recorder_calls >= 3,
-        "Expected show_shortcut_recorder to be called for at least scriptlet, builtin, and app types (found {recorder_calls} calls)"
+        actions.contains("self.show_shortcut_recorder(command_id, command_name, window, cx)"),
+        "Expected shortcut actions to use show_shortcut_recorder for bindable launcher results"
     );
 }
 
 #[test]
-fn shortcut_add_opens_editor_for_scripts_and_agents() {
+fn shortcut_add_uses_launcher_command_ids() {
     let actions = super::read_all_handle_action_sources();
 
-    // The configure_shortcut/add_shortcut/update_shortcut block should call edit_script
-    // for Script and Agent types
     assert!(
-        actions.contains("self.edit_script(&m.script.path)")
-            && actions.contains("self.edit_script(&m.agent.path)"),
-        "Expected shortcut actions to open editor for Script and Agent types"
+        actions.contains("result.launcher_command_id()"),
+        "Expected shortcut actions to resolve command IDs through SearchResult::launcher_command_id"
     );
 }
 
@@ -90,8 +79,8 @@ fn shortcut_remove_calls_persistence_layer() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("crate::shortcuts::remove_shortcut_override(&command_id)"),
-        "Expected remove_shortcut to call shortcuts::remove_shortcut_override"
+        actions.contains("remove_config_command_shortcut(&command_id)"),
+        "Expected remove_shortcut to remove shortcuts from config.ts"
     );
 }
 
@@ -140,18 +129,9 @@ fn shortcut_remove_rejects_unsupported_window_type() {
 fn shortcut_remove_builds_command_id_for_all_supported_types() {
     let actions = super::read_all_handle_action_sources();
 
-    // The remove_shortcut block should build command_id for script, scriptlet, builtin, app, agent, fallback
-    for prefix in &["script/", "scriptlet/", "app/", "agent/", "fallback/"] {
-        assert!(
-            actions.contains(&format!("format!(\"{}\"", prefix))
-                || actions.contains("format!(\"{}\", ")
-                || actions.contains(prefix),
-            "Expected remove_shortcut to build command_id with prefix '{prefix}'"
-        );
-    }
     assert!(
-        actions.contains("Some(m.entry.id.clone())"),
-        "Expected remove_shortcut to use builtin entry ids directly for builtins"
+        actions.contains("result.launcher_command_id()"),
+        "Expected remove_shortcut to resolve command IDs through SearchResult::launcher_command_id"
     );
 }
 
@@ -292,29 +272,9 @@ fn alias_remove_rejects_unsupported_window_type() {
 fn shortcut_and_alias_use_consistent_command_id_formats() {
     let actions = super::read_all_handle_action_sources();
 
-    // Both shortcut and alias handlers should use the same format patterns
-    // Verify "script/", "scriptlet/", "builtin/", "app/", "agent/", "fallback/" prefixes
-    // appear in both the shortcut and alias sections
-
-    // Count format! calls with these prefixes - should be at least 2 of each
-    // (one in shortcut handler, one in alias handler)
-    for prefix in &[
-        "\"script/{}\"",
-        "\"scriptlet/{}\"",
-        "\"app/{}\"",
-        "\"agent/{}\"",
-        "\"fallback/{}\"",
-    ] {
-        let count = count_occurrences(&actions, prefix);
-        assert!(
-            count >= 2,
-            "Expected command_id format '{prefix}' to appear in both shortcut and alias handlers (found {count})"
-        );
-    }
-    let builtin_id_count = count_occurrences(&actions, "m.entry.id.clone()");
     assert!(
-        builtin_id_count >= 4,
-        "Expected builtins to use entry.id.clone() consistently in shortcut and alias handlers (found {builtin_id_count})"
+        count_occurrences(&actions, ".launcher_command_id()") >= 4,
+        "Expected shortcut and alias handlers to share SearchResult::launcher_command_id"
     );
 }
 
