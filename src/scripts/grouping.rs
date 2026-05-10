@@ -1641,6 +1641,57 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_global_file_rows_exclude_app_bundle_contents() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![
+            root_file_with_type(
+                "/Applications/Zed.app/Contents/Info.plist",
+                "Info.plist",
+                FileType::Document,
+            ),
+            root_file_with_type(
+                "/Users/example/Desktop/zed-notes.md",
+                "zed-notes.md",
+                FileType::Document,
+            ),
+        ];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "zed",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+        );
+
+        let rendered_files = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.path.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered_files,
+            vec!["/Users/example/Desktop/zed-notes.md"],
+            "global root Files should not render files nested inside .app bundles"
+        );
+    }
+
+    #[test]
     fn root_global_app_bundle_filter_keeps_search_files_handoff() {
         let frecency_store = FrecencyStore::new();
         let root_files = vec![root_file_with_type(
@@ -1688,6 +1739,44 @@ mod advanced_query_tests {
                 SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"zed\""
             )),
             "app-bundle filtering should not remove the full File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_keeps_app_bundle_contents_for_explicit_paths() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file_with_type(
+            "/Applications/Zed.app/Contents/Info.plist",
+            "Info.plist",
+            FileType::Document,
+        )];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "/Applications/Zed.app/Contents/",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            false,
+            &root_files,
+            &[],
+        );
+
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Applications/Zed.app/Contents/Info.plist"
+            )),
+            "explicit directory browse should still render already-collected direct children inside .app bundles"
         );
     }
 
