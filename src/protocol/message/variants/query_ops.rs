@@ -84,6 +84,20 @@ macro_rules! protocol_message_variants_query_ops {
         /// Prompt ID if active
         #[serde(rename = "promptId", skip_serializing_if = "Option::is_none")]
         prompt_id: Option<String>,
+        /// Active launcher surface contract for main-window state receipts.
+        #[serde(
+            rename = "surfaceContract",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        surface_contract: Option<crate::protocol::LauncherSurfaceContractSnapshot>,
+        /// Active overlay/popup launcher contract when one is attached to the host view.
+        #[serde(
+            rename = "activePopupContract",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        active_popup_contract: Option<crate::protocol::LauncherSurfaceContractSnapshot>,
         /// Placeholder text if applicable
         #[serde(skip_serializing_if = "Option::is_none")]
         placeholder: Option<String>,
