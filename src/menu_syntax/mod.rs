@@ -35,26 +35,15 @@ pub mod templates;
 pub mod trigger_picker;
 pub mod trigger_picker_keys;
 
-pub use action_effects::{apply_safe_effect, ActionEffect};
 pub use actions::{
-    current_actions as current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionKind,
-    MenuSyntaxActionState,
-};
-pub use ai::{
-    capture_request as capture_ai_request, missing_required_labels,
-    parse_response as parse_ai_response, AiParseError, DatePhraseHint, MenuSyntaxAiRequest,
-    MenuSyntaxAiResponse, MenuSyntaxAiState,
+    current_actions as current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionState,
 };
 #[allow(unused_imports)]
 pub use artifacts::{
     read_all_artifacts, read_jsonl_artifact, read_payload_dir, CaptureArtifact,
     CaptureArtifactKind, ReadArtifactReport,
 };
-pub use capture::{parse_capture, CaptureParse};
-pub use capture_gate::{
-    decide_capture_gate, decide_capture_gate_for_script, resolve_capture_schema_for_script,
-    resolve_capture_schema_for_target, CaptureGateDecision,
-};
+pub use capture_gate::{decide_capture_gate_for_script, CaptureGateDecision};
 #[allow(unused_imports)]
 pub use capture_history_picker::{
     build_history_picker_snapshot, build_history_picker_snapshot_with_overrides,
@@ -62,19 +51,11 @@ pub use capture_history_picker::{
     snapshot_from_filter_text_with_overrides, HistoryPickerKind, HistoryPickerRow,
     HistoryPickerSnapshot,
 };
-pub use capture_schema::{
-    builtin_schema, builtin_target_slugs, validate as validate_capture_payload, CaptureFieldSchema,
-    FieldRequirement, ValidationResult,
-};
+pub use capture_schema::builtin_schema;
 pub use command::{
     command_head_matches, command_slug, script_command_head, scriptlet_command_head,
 };
-pub use date::{
-    normalize_smart_quotes, parse_date_phrase_result, resolve_capture_dates,
-    resolve_capture_dates_with_accepts, resolve_date_phrase, DateGranularity, DateParseResult,
-    MenuSyntaxClock, RecurrenceFrequency, RecurrenceWeekday, ResolvedCaptureInvocation,
-    ResolvedDate, ResolvedDuration, ResolvedRecurrence, UnresolvedDate,
-};
+pub use date::MenuSyntaxClock;
 #[allow(unused_imports)]
 pub use doctor::{
     validate as doctor_validate, validate_at_path as doctor_validate_at_path, DoctorIssue,
@@ -82,14 +63,12 @@ pub use doctor::{
 };
 pub use execute::{
     build_capture_payload, command_env, payload_env, write_payload_tempfile, MenuSyntaxHandlerKind,
-    MenuSyntaxHandlerRef, MenuSyntaxPayload, MENU_SYNTAX_PAYLOAD_SCHEMA_ID,
-    MENU_SYNTAX_PAYLOAD_VERSION,
+    MenuSyntaxHandlerRef,
 };
 pub use filter::{
     apply_advanced_query, capture_accepts_for_target_from_scripts, first_command_head_for_script,
     first_concrete_capture_target_for_script, matches_predicate,
-    registered_capture_targets_from_scripts, result_kind, script_command_schema_for,
-    script_handles_capture, script_menu_syntax_specs, scripts_handling_capture,
+    registered_capture_targets_from_scripts, script_menu_syntax_specs,
 };
 #[allow(unused_imports)]
 pub use fragments::{MenuSyntaxFragment, MenuSyntaxFragmentRole, MenuSyntaxFragmentStatus};
@@ -118,22 +97,10 @@ pub use main_hint::{
     MenuSyntaxMainHintContext, MenuSyntaxMainHintKind, MenuSyntaxMainHintRow,
     MenuSyntaxMainHintSnapshot, MenuSyntaxMainHintTone,
 };
-pub use metadata::{
-    dynamic_capture_schema_from_spec, handler_specs_from_extra_map, handler_specs_from_value,
-    handler_specs_from_yaml_like_string, parse_field_requirement_token,
-};
 pub use mode::{
-    capture_body_boundary_has_started, capture_body_boundary_has_started_with_targets,
-    free_text_for_search, input_spans_for_input, input_spans_for_input_with_targets,
-    prefix_span_for_input, prefix_span_for_input_with_targets, MenuSyntaxInputSpan, MenuSyntaxMode,
+    free_text_for_search, input_spans_for_input_with_targets, prefix_span_for_input, MenuSyntaxMode,
 };
-pub use parse::{parse, MenuSyntaxParse};
-pub use payload::{
-    is_known_capture_target, AdvancedQuery, ArgvInvocation, ArtifactKind, CaptureAlias,
-    CaptureInvocation, CommandArgSpec, CommandFlagSpec, DatePhrase, DateRole, IncompleteKind,
-    IncompleteSyntax, MenuSyntaxHandlerSpec, Predicate, ShortcutPredicate, KNOWN_CAPTURE_TARGETS,
-};
-pub use query::parse_advanced_query;
+pub use payload::{AdvancedQuery, ArgvInvocation, CaptureInvocation, MenuSyntaxHandlerSpec};
 pub use quote::quote_for_filter_value;
 #[allow(unused_imports)]
 pub use retention::{
@@ -146,13 +113,10 @@ pub use schema_overrides::{
 };
 #[allow(unused_imports)]
 pub use skill::{skill_specs_from_value, SkillSpec};
-pub use templates::render_capture_handler_template;
 pub use trigger_picker::{
-    build_trigger_picker_snapshot, create_capture_handler_scaffold,
-    nearest_capture_target_for_slug, registered_capture_targets,
-    resolve_capture_handler_destination, CaptureHandlerScaffoldEffects, CreatedCaptureHandler,
-    OsCaptureHandlerScaffoldEffects, TriggerPickerAction, TriggerPickerContext, TriggerPickerMode,
-    TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot,
+    build_trigger_picker_snapshot, create_capture_handler_scaffold, CaptureHandlerScaffoldEffects,
+    TriggerPickerContext, TriggerPickerMode, TriggerPickerRow, TriggerPickerRowKind,
+    TriggerPickerSnapshot,
 };
 #[allow(unused_imports)]
 pub use trigger_picker_keys::{

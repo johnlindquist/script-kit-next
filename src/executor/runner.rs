@@ -604,27 +604,6 @@ fn run_fallback_chain<T>(
     None
 }
 
-/// Execute a script with bidirectional JSONL communication, passing `extra_env`
-/// pairs into the spawned process in addition to the normal allowlisted
-/// environment. Used by the menu-syntax capture path to inject the
-/// `KIT_MENU_SYNTAX*` env contract without changing
-/// [`SAFE_SCRIPT_ENV_VARS`].
-#[instrument(skip_all, fields(script_path = %path.display(), extra_env_keys = extra_env.len()))]
-pub fn execute_script_interactive_with_env(
-    path: &Path,
-    extra_env: Vec<(String, String)>,
-) -> Result<ScriptSession, String> {
-    execute_script_interactive_impl(path, extra_env, Vec::new())
-}
-
-#[instrument(skip_all, fields(script_path = %path.display(), argv_count = argv.len()))]
-pub fn execute_script_interactive_with_args(
-    path: &Path,
-    argv: Vec<String>,
-) -> Result<ScriptSession, String> {
-    execute_script_interactive_impl(path, Vec::new(), argv)
-}
-
 #[instrument(skip_all, fields(script_path = %path.display(), extra_env_keys = extra_env.len(), argv_count = argv.len()))]
 pub fn execute_script_interactive_with_env_and_args(
     path: &Path,
@@ -632,12 +611,6 @@ pub fn execute_script_interactive_with_env_and_args(
     argv: Vec<String>,
 ) -> Result<ScriptSession, String> {
     execute_script_interactive_impl(path, extra_env, argv)
-}
-
-/// Execute a script with bidirectional JSONL communication
-#[instrument(skip_all, fields(script_path = %path.display()))]
-pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> {
-    execute_script_interactive_impl(path, Vec::new(), Vec::new())
 }
 
 fn execute_script_interactive_impl(
