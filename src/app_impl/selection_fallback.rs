@@ -1107,7 +1107,27 @@ mod tests {
     }
 
     #[test]
+    fn root_file_parent_query_for_filter_clears_child_fragment_first() {
+        let base = std::env::temp_dir().join(format!(
+            "script-kit-root-filter-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&base).expect("create temp directory");
+        let filtered_query = format!("{}/al", base.display());
+
+        assert_eq!(
+            ScriptListApp::root_file_parent_query_for_filter(&filtered_query),
+            Some(format!("{}/", base.display()))
+        );
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
     fn root_file_parent_query_for_filter_rejects_plain_search_queries() {
-        assert_eq!(ScriptListApp::root_file_parent_query_for_filter("fix"), None);
+        assert_eq!(
+            ScriptListApp::root_file_parent_query_for_filter("fix"),
+            None
+        );
     }
 }

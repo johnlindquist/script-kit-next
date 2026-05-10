@@ -191,12 +191,28 @@ pub fn should_search_root_files(query: &str) -> bool {
 pub fn looks_like_root_directory_browse_query(query: &str) -> bool {
     let q = query.trim();
     !q.is_empty()
-        && q.ends_with('/')
         && (q.starts_with('/')
+            || q == "~"
             || q.starts_with("~/")
             || q.starts_with("./")
             || q.starts_with("../"))
         && !looks_like_advanced_mdquery(q)
+}
+
+/// Return the folder portion of a root directory-browse query without reading the filesystem.
+pub fn root_directory_query_base(query: &str) -> Option<String> {
+    let q = query.trim();
+    if !looks_like_root_directory_browse_query(q) {
+        return None;
+    }
+    if q == "~" || q == "~/" {
+        return Some("~/".to_string());
+    }
+    if q.ends_with('/') {
+        return Some(q.to_string());
+    }
+    let last_slash = q.rfind('/')?;
+    Some(q[..=last_slash].to_string())
 }
 
 /// Returns the root file section mode implied by a query's syntax.
@@ -323,20 +339,62 @@ pub fn file_result_from_existing_path(path: &str) -> Option<FileResult> {
     })
 }
 
-/// Convert directory browse results into root-launcher file matches without fuzzy ranking.
+/// Convert directory browse results into root-launcher file matches.
 pub fn root_directory_file_matches(
     results: &[FileResult],
+    child_filter: Option<&str>,
     limit: usize,
 ) -> Vec<crate::scripts::FileMatch> {
-    results
+    let filter = child_filter
+        .map(str::trim)
+        .filter(|filter| !filter.is_empty());
+
+    let Some(filter) = filter else {
+        return results
+            .iter()
+            .take(limit)
+            .enumerate()
+            .map(|(rank, file)| crate::scripts::FileMatch {
+                file: file.clone(),
+                score: i32::MAX.saturating_sub(rank as i32),
+            })
+            .collect();
+    };
+
+    let q = filter.to_lowercase();
+    let mut nucleo = crate::scripts::NucleoCtx::new(&q);
+    let mut ranked: Vec<_> = results
         .iter()
-        .take(limit)
-        .enumerate()
-        .map(|(rank, file)| crate::scripts::FileMatch {
-            file: file.clone(),
-            score: i32::MAX.saturating_sub(rank as i32),
+        .filter_map(|file| {
+            let stem = Path::new(&file.name)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or(&file.name);
+            let name_score = nucleo.score(&file.name);
+            let stem_score = nucleo.score(stem);
+            let score = name_score.max(stem_score)?;
+            let text_tier = root_file_name_relevance_tier(&file.name, &q, true);
+            if text_tier < 3 {
+                return None;
+            }
+
+            Some(crate::scripts::FileMatch {
+                file: file.clone(),
+                score: text_tier
+                    .saturating_mul(ROOT_FILE_TEXT_TIER_MULTIPLIER)
+                    .saturating_add(score.min(10_000) as i32),
+            })
         })
-        .collect()
+        .collect();
+
+    ranked.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| a.file.name.cmp(&b.file.name))
+            .then_with(|| a.file.path.cmp(&b.file.path))
+    });
+    ranked.truncate(limit);
+    ranked
 }
 
 const ROOT_FILE_TEXT_TIER_MULTIPLIER: i32 = 20_000;
@@ -794,6 +852,92 @@ mod tests {
             modified: 0,
             file_type,
         }
+    }
+
+    #[test]
+    fn root_directory_browse_query_accepts_child_fragments() {
+        assert_eq!(
+            root_file_section_mode_for_query("~/dev/"),
+            Some(RootFileSectionMode::DirectoryBrowse)
+        );
+        assert_eq!(
+            root_file_section_mode_for_query("~/dev/al"),
+            Some(RootFileSectionMode::DirectoryBrowse)
+        );
+        assert_eq!(
+            root_directory_query_base("~/dev/al"),
+            Some("~/dev/".to_string())
+        );
+        assert_eq!(
+            root_file_section_mode_for_query("fix"),
+            Some(RootFileSectionMode::GlobalQuery)
+        );
+    }
+
+    #[test]
+    fn root_directory_file_matches_preserves_provider_order_without_filter() {
+        let results = vec![
+            file("/tmp/beta.txt", "beta.txt", FileType::Document),
+            file("/tmp/alpha.txt", "alpha.txt", FileType::Document),
+        ];
+
+        let matches = root_directory_file_matches(&results, None, 10);
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|entry| entry.file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["beta.txt", "alpha.txt"]
+        );
+    }
+
+    #[test]
+    fn root_directory_file_matches_filters_by_child_name() {
+        let results = vec![
+            file("/tmp/beta-notes.md", "beta-notes.md", FileType::Document),
+            file("/tmp/beta-folder", "beta-folder", FileType::Directory),
+            file(
+                "/tmp/alpha-report.md",
+                "alpha-report.md",
+                FileType::Document,
+            ),
+            file("/tmp/alpha-folder", "alpha-folder", FileType::Directory),
+        ];
+
+        let matches = root_directory_file_matches(&results, Some("al"), 10);
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|entry| entry.file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha-folder", "alpha-report.md"],
+            "child-fragment filtering should match and rank direct child names only"
+        );
+    }
+
+    #[test]
+    fn root_directory_file_matches_does_not_score_parent_paths() {
+        let results = vec![
+            file(
+                "/tmp/alpha-parent/report.md",
+                "report.md",
+                FileType::Document,
+            ),
+            file("/tmp/other/alpha.md", "alpha.md", FileType::Document),
+        ];
+
+        let matches = root_directory_file_matches(&results, Some("alpha"), 10);
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|entry| entry.file.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["alpha.md"],
+            "directory child filtering should not match text that appears only in the parent path"
+        );
     }
 
     #[test]
