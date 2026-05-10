@@ -586,6 +586,21 @@
                                         return;
                                     }
 
+                                    let menu_syntax_owns_main_list =
+                                        this.menu_syntax_trigger_popup_state.owns_main_list()
+                                            || this
+                                                .menu_syntax_mode
+                                                .capture_composer_owns_input_for(&this.filter_text)
+                                            || this
+                                                .menu_syntax_mode
+                                                .command_owns_input_for(&this.filter_text);
+                                    if menu_syntax_owns_main_list && (is_up || is_down) {
+                                        this.scroll_menu_syntax_main_hint(if is_down { 1.0 } else { -1.0 });
+                                        cx.notify();
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // Main menu: handle list navigation + input history
                                     const HISTORY: &str = "HISTORY";
                                     if is_up {

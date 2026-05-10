@@ -46,7 +46,9 @@
             bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
             suppress_filter_events: false,
+            pending_programmatic_filter_echo: None,
             pending_filter_sync: false,
+            history_filter_render_pending: None,
             pending_placeholder: None,
             last_output: None,
             focus_handle: cx.focus_handle(),
@@ -68,9 +70,14 @@
             response_sender: Some(default_response_sender.clone()),
             default_response_sender: Some(default_response_sender),
             // Variable-height list state for main menu (section headers at 24px, items at 48px)
-            // Start with 0 items, will be reset when grouped_items changes
-            // .measure_all() ensures all items are measured upfront for correct scroll height
-            main_list_state: ListState::new(0, ListAlignment::Top, px(100.)).measure_all(),
+            // Start with 0 items; filter replacement installs a fresh state without measuring all rows.
+            main_list_state: ListState::new(
+                0,
+                ListAlignment::Top,
+                px(crate::list_item::effective_average_item_height_for_scroll()),
+            ),
+            main_list_row_generation: 0,
+            menu_syntax_main_hint_scroll_handle: ScrollHandle::new(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),

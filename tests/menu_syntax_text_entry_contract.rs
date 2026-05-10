@@ -49,6 +49,44 @@ fn capture_composer_renders_hint_surface_instead_of_empty_state() {
 }
 
 #[test]
+fn menu_syntax_hint_surface_has_dedicated_scroll_and_arrow_routing() {
+    let render = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
+    let app_state = fs::read_to_string("src/main_sections/app_state.rs")
+        .expect("Failed to read src/main_sections/app_state.rs");
+    let arrow = fs::read_to_string("src/app_impl/startup_new_arrow.rs")
+        .expect("Failed to read src/app_impl/startup_new_arrow.rs");
+    let main_hint = fs::read_to_string("src/app_impl/menu_syntax_main_hint.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_main_hint.rs");
+
+    assert!(
+        app_state.contains("menu_syntax_main_hint_scroll_handle: ScrollHandle"),
+        "the read-only menu syntax panel needs a dedicated free-scroll handle, separate from selectable lists"
+    );
+    assert!(
+        render.contains("fn render_menu_syntax_main_hint(")
+            && render.contains("scroll_handle: &ScrollHandle")
+            && render.contains(".track_scroll(scroll_handle)")
+            && render.contains(".overflow_y_scroll()")
+            && render.contains("ScrollableElement::vertical_scrollbar"),
+        "the menu syntax hint panel must scroll when its content is taller than the main list area"
+    );
+    assert!(
+        main_hint.contains("fn scroll_menu_syntax_main_hint(&mut self, direction: f32)")
+            && main_hint.contains("menu_syntax_main_hint_scroll_handle")
+            && main_hint.contains("FREE_SCROLL_LINE_DELTA_PX"),
+        "keyboard scroll should use the same free-scroll handle as the rendered hint panel"
+    );
+    assert!(
+        arrow.contains("let menu_syntax_owns_main_list =")
+            && arrow.contains("capture_composer_owns_input_for(&this.filter_text)")
+            && arrow.contains("command_owns_input_for(&this.filter_text)")
+            && arrow.contains("this.scroll_menu_syntax_main_hint(if is_down { 1.0 } else { -1.0 });"),
+        "ScriptList Up/Down should scroll the owned menu syntax panel before normal history/list navigation"
+    );
+}
+
+#[test]
 fn live_menu_syntax_ownership_bypasses_debounced_grouped_cache() {
     let source = fs::read_to_string("src/app_impl/filtering_cache.rs")
         .expect("Failed to read src/app_impl/filtering_cache.rs");

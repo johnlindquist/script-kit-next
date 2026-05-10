@@ -394,6 +394,8 @@ struct ScriptListApp {
     main_list_state: ListState,
     /// Generation bumped when filter replacement changes row identity without relying on full measurement.
     main_list_row_generation: u64,
+    // Free-scroll handle for the read-only menu syntax hint panel rendered in the main list area.
+    menu_syntax_main_hint_scroll_handle: ScrollHandle,
     // Scroll handle for uniform_list (still used for backward compat in some views)
     list_scroll_handle: UniformListScrollHandle,
     // P0: Scroll handle for virtualized arg prompt choices
