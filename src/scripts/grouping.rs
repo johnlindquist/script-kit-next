@@ -392,6 +392,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         root_file_search_mode,
         root_file_search_loading,
         root_file_results,
+        root_recent_file_results,
         filter_text,
         frecency_store,
         advanced_query,
@@ -464,6 +465,7 @@ fn append_root_file_section(
     root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
     root_file_search_loading: bool,
     root_file_results: &[crate::file_search::FileResult],
+    root_recent_file_results: &[crate::file_search::FileResult],
     filter_text: &str,
     frecency_store: &FrecencyStore,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
@@ -477,8 +479,12 @@ fn append_root_file_section(
 
     let files = match mode {
         crate::file_search::RootFileSectionMode::GlobalQuery => {
-            crate::file_search::rank_root_file_results(
+            let merged = merge_root_global_file_results_with_recent(
                 root_file_results,
+                root_recent_file_results,
+            );
+            crate::file_search::rank_root_file_results(
+                &merged,
                 filter_text,
                 crate::file_search::ROOT_FILE_RENDER_LIMIT,
                 |key| frecency_store.get_score(key),
@@ -528,6 +534,22 @@ fn append_root_file_section(
         file_group.push(GroupedListItem::Item(idx));
     }
     grouped.splice(insertion_index..insertion_index, file_group);
+}
+
+fn merge_root_global_file_results_with_recent(
+    provider_results: &[crate::file_search::FileResult],
+    recent_results: &[crate::file_search::FileResult],
+) -> Vec<crate::file_search::FileResult> {
+    let mut seen = std::collections::HashSet::new();
+    let mut merged = Vec::with_capacity(provider_results.len() + recent_results.len());
+
+    for file in provider_results.iter().chain(recent_results.iter()) {
+        if seen.insert(file.path.clone()) {
+            merged.push(file.clone());
+        }
+    }
+
+    merged
 }
 
 fn root_file_section_title(
@@ -866,6 +888,99 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_global_file_rows_seed_matching_recent_files_while_provider_loading() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files · Searching...")),
+            "global root search should keep the loading Files header while recent seeds render"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/design-notes.md"
+            )),
+            "matching recent files should seed non-empty global root file results before provider rows arrive"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"design\""
+            )),
+            "seeded global file rows should keep the full File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_global_file_rows_dedupe_provider_and_recent_by_path() {
+        let frecency_store = FrecencyStore::new();
+        let shared = root_file("/Users/example/Desktop/design-notes.md", "design-notes.md");
+        let provider_files = vec![shared.clone()];
+        let recent_files = vec![shared];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &provider_files,
+            &recent_files,
+        );
+
+        let duplicate_count = flat
+            .iter()
+            .filter(|result| {
+                matches!(
+                    result,
+                    SearchResult::File(file) if file.file.path == "/Users/example/Desktop/design-notes.md"
+                )
+            })
+            .count();
+
+        assert_eq!(
+            duplicate_count, 1,
+            "provider and recent rows with the same full path should render once"
+        );
+    }
+
+    #[test]
     fn root_file_rows_precede_fallback_rows_for_file_only_search() {
         let frecency_store = FrecencyStore::new();
         let root_files = vec![root_file(
@@ -1013,6 +1128,50 @@ mod advanced_query_tests {
                 SearchResult::Fallback(fallback) if fallback.display_label() == "Open File Search in \"~/dev\""
             )),
             "directory browse should append a folder-scoped File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_does_not_mix_recent_files() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file("/Users/example/dev/design.md", "design.md")];
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "~/dev/design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            true,
+            &root_files,
+            &recent_files,
+        );
+
+        let rendered_paths = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.path.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered_paths,
+            vec!["/Users/example/dev/design.md"],
+            "directory browse should render direct children only and ignore recent file seeds"
         );
     }
 

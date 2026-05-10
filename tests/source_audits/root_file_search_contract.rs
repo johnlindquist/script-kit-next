@@ -354,6 +354,51 @@ mod tests {
     }
 
     #[test]
+    fn root_global_recent_file_seed_stays_grouping_only() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let production = production_source(&grouping_source);
+        let helper = production
+            .split("fn merge_root_global_file_results_with_recent(")
+            .nth(1)
+            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .expect("recent merge helper should be present");
+
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !helper.contains(forbidden),
+                "recent seed merge must not start providers: {forbidden}"
+            );
+        }
+        assert!(
+            production.contains("root_recent_file_results")
+                && production.contains("merge_root_global_file_results_with_recent(")
+                && production.contains("RootFileSectionMode::DirectoryBrowse"),
+            "root grouping should pass recent files into global ranking without changing directory browse mode"
+        );
+    }
+
+    #[test]
+    fn nonempty_global_root_search_refreshes_recent_file_snapshot() {
+        let source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("RootFileSectionMode::GlobalQuery")
+                && normalized.contains("self.refresh_root_recent_file_results();"),
+            "non-empty global root file search should refresh the frecency-backed recent file snapshot"
+        );
+    }
+
+    #[test]
     fn root_file_direct_shortcuts_route_through_shared_action_executor() {
         let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
             .expect("read src/app_impl/selection_fallback.rs");
