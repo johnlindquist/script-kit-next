@@ -1,38 +1,38 @@
 ---
-name: lat-md
+name: launcher-surface-contracts
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  AppView, SurfaceKind, surfaceContract, current_view transitions, render dispatch, native footer identity, generated surface matrices, and semantic surface re-keying.
 ---
 
-# lat.md knowledge graph
+# Launcher Surface Contracts
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns launcher surface contracts and routing identity for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- AppView, SurfaceKind, surfaceContract, current_view transitions, render dispatch, native footer identity, generated surface matrices, and semantic surface re-keying.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for individual row projection or ACP thread internals; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/surfaces.md`
+- `lat.md/architecture.md`
+- `docs/ai/contracts/surface-contracts.json`
+- `.agents/subagents/launcher-surface-contracts-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/main_sections/app_view_state.rs, src/main_sections/render_impl.rs, src/app_impl/automation_surface.rs, docs/ai/contracts/`
+- launcher surface contracts and routing identity.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +67,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+bun scripts/generate-surface-contracts.ts --check; cargo surface tests; lat check
 ```
 
 ## Adjacent Skills

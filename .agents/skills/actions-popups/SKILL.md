@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: actions-popups
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Cmd+K, actions dialog, action sections, PromptPopup, confirm popup, attached popup, popup registry, popup resize/focus, and action execution routing.
 ---
 
-# lat.md knowledge graph
+# Actions Popups
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns actions dialog and popup behavior for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Cmd+K, actions dialog, action sections, PromptPopup, confirm popup, attached popup, popup registry, popup resize/focus, and action execution routing.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for host-specific row data or ACP slash picker internals; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/surfaces.md`
+- `lat.md/automation.md`
+- `.agents/subagents/actions-popups-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/actions/, src/app_impl/actions_dialog.rs, src/app_impl/actions_toggle.rs, src/render_builtins/actions.rs, src/confirm/`
+- actions dialog and popup behavior.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+actions popup tests; attached popup getElements proof; lat check
 ```
 
 ## Adjacent Skills

@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: protocol-automation
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Stdin JSON, ExternalCommand, protocol messages, getState, getElements, waitFor, batch, automation windows, parse receipts, and target identity.
 ---
 
-# lat.md knowledge graph
+# Protocol Automation
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns automation protocol and state receipts for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Stdin JSON, ExternalCommand, protocol messages, getState, getElements, waitFor, batch, automation windows, parse receipts, and target identity.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for feature UI semantics outside receipt contracts; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/protocol.md`
+- `lat.md/automation.md`
+- `.agents/subagents/protocol-automation-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/protocol/, src/stdin_commands/, src/main_entry/, scripts/agentic/`
+- automation protocol and state receipts.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+protocol/source tests; typed RPC receipts; lat check
 ```
 
 ## Adjacent Skills

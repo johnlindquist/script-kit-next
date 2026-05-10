@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: platform-windowing-macos
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  macOS panels/windows, tray icon, global hotkeys, screenshot capture, focus/activation, accessibility, selected text, browser tabs system APIs, and launch-at-login behavior.
 ---
 
-# lat.md knowledge graph
+# Platform Windowing macOS
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns macOS platform integration for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- macOS panels/windows, tray icon, global hotkeys, screenshot capture, focus/activation, accessibility, selected text, browser tabs system APIs, and launch-at-login behavior.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for surface row projection or ACP state; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/windowing.md`
+- `lat.md/tray-menu.md`
+- `.agents/subagents/platform-windowing-macos-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/platform/, src/windows/, src/window_manager/, src/window_orchestrator/, src/tray/, src/hotkeys/, src/browser_tabs.rs`
+- macOS platform integration.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+platform/source tests; exact-window receipts or screenshot proof when needed; lat check
 ```
 
 ## Adjacent Skills

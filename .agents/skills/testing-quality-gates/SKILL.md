@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: testing-quality-gates
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Test selection, source-contract tests, smoke tests, SDK tests, cargo/bun gates, CI-style verification, and completion evidence.
 ---
 
-# lat.md knowledge graph
+# Testing Quality Gates
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns narrow build and test gate selection for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Test selection, source-contract tests, smoke tests, SDK tests, cargo/bun gates, CI-style verification, and completion evidence.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for live UI runtime proof without test changes; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/verification.md`
+- `.claude/skills/script-kit-testing/SKILL.md`
+- `.agents/subagents/testing-quality-gates-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `tests/, tests/smoke/, tests/sdk/, Makefile, Cargo.toml, package.json`
+- narrow build and test gate selection.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+cargo check or narrow cargo/bun test; lat check
 ```
 
 ## Adjacent Skills

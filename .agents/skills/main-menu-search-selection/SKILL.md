@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: main-menu-search-selection
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Main launcher, ScriptList filtering, fuzzy/grouped results, fallback commands, selected row resolution, result caches, and launcher info panel.
 ---
 
-# lat.md knowledge graph
+# Main Menu Search Selection
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns main menu search and selection state for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Main launcher, ScriptList filtering, fuzzy/grouped results, fallback commands, selected row resolution, result caches, and launcher info panel.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for built-in subview filtering or execution after selection; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/architecture.md`
+- `lat.md/surfaces.md`
+- `.agents/subagents/main-menu-search-selection-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/main_sections/, src/render_script_list/, src/scripts/search/, src/main_window_preflight/`
+- main menu search and selection state.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+main menu cache/fallback tests; surface state proof; lat check
 ```
 
 ## Adjacent Skills
