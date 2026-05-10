@@ -34,6 +34,7 @@ pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_GET_SCREEN_TOOL: &str = "computer/get_screen";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
+pub const COMPUTER_GET_PERMISSION_TOOL: &str = "computer/get_permission";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_APP_WINDOWS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_FRONTMOST_APP_SCHEMA_VERSION: u32 = 1;
@@ -134,6 +135,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
                 .to_string(),
             input_schema: computer_list_permissions_input_schema(),
         },
+        ToolDefinition {
+            name: COMPUTER_GET_PERMISSION_TOOL.to_string(),
+            description: "Return one read-only macOS permission status by permission id without requesting permissions, opening settings, synthesizing events, or mutating app/window state."
+                .to_string(),
+            input_schema: computer_get_permission_input_schema(),
+        },
     ]
 }
 
@@ -162,6 +169,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_GET_SCREEN_TOOL => handle_get_screen(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
+        COMPUTER_GET_PERMISSION_TOOL => handle_get_permission(arguments),
         _ => error_result(
             "unknown_tool",
             &format!("Unknown computer-use tool: {name}"),
@@ -413,6 +421,23 @@ struct ComputerUseListPermissionsArgs {}
 struct ComputerUseListPermissionsResult {
     schema_version: u32,
     permissions: Vec<ComputerUsePermissionStatus>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetPermissionArgs {
+    id: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetPermissionResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    permission: Option<ComputerUsePermissionStatus>,
+    warnings: Vec<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -843,24 +868,53 @@ fn handle_list_permissions(arguments: &Value) -> ToolResult {
 
     json_tool_result(&ComputerUseListPermissionsResult {
         schema_version: COMPUTER_PERMISSIONS_SCHEMA_VERSION,
-        permissions: vec![
-            permission_status(
-                "accessibility",
-                "Accessibility",
-                Some(crate::permissions_wizard::check_accessibility_permission()),
-            ),
-            permission_status(
-                "screenRecording",
-                "Screen Recording",
-                crate::platform::screen_capture_access_preflight(),
-            ),
-            permission_status(
-                "eventSynthesizing",
-                "Event Synthesizing",
-                crate::platform::event_synthesizing_access_preflight(),
-            ),
-        ],
+        permissions: computer_use_permission_statuses(),
     })
+}
+
+fn handle_get_permission(arguments: &Value) -> ToolResult {
+    let args: ComputerUseGetPermissionArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let permission = computer_use_permission_statuses()
+        .into_iter()
+        .find(|permission| permission.id == args.id);
+    let status = if permission.is_some() {
+        "found"
+    } else {
+        "notFound"
+    };
+
+    json_tool_result(&ComputerUseGetPermissionResult {
+        schema_version: COMPUTER_PERMISSIONS_SCHEMA_VERSION,
+        source: "macosPermissionPreflight",
+        scope: "permissionId",
+        status,
+        permission,
+        warnings: Vec::new(),
+    })
+}
+
+fn computer_use_permission_statuses() -> Vec<ComputerUsePermissionStatus> {
+    vec![
+        permission_status(
+            "accessibility",
+            "Accessibility",
+            Some(crate::permissions_wizard::check_accessibility_permission()),
+        ),
+        permission_status(
+            "screenRecording",
+            "Screen Recording",
+            crate::platform::screen_capture_access_preflight(),
+        ),
+        permission_status(
+            "eventSynthesizing",
+            "Event Synthesizing",
+            crate::platform::event_synthesizing_access_preflight(),
+        ),
+    ]
 }
 
 fn permission_status(
@@ -1219,6 +1273,21 @@ fn computer_list_permissions_input_schema() -> Value {
     })
 }
 
+fn computer_get_permission_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "id": {
+                "type": "string",
+                "enum": ["accessibility", "screenRecording", "eventSynthesizing"],
+                "description": "Permission id from computer/list_permissions."
+            }
+        },
+        "required": ["id"]
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1396,7 +1465,8 @@ mod tests {
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_GET_SCREEN_TOOL.to_string(),
-                COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
+                COMPUTER_LIST_PERMISSIONS_TOOL.to_string(),
+                COMPUTER_GET_PERMISSION_TOOL.to_string()
             ]
         );
     }
@@ -1770,6 +1840,47 @@ mod tests {
                 .and_then(Value::as_object)
                 .map(|properties| properties.is_empty()),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_get_permission_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_PERMISSION_TOOL)
+            .expect("computer/get_permission tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        let id_schema = properties.get("id").expect("id schema");
+        assert_eq!(
+            id_schema.get("type").and_then(Value::as_str),
+            Some("string")
+        );
+        assert_eq!(
+            id_schema.get("enum").and_then(Value::as_array).cloned(),
+            Some(vec![
+                serde_json::json!("accessibility"),
+                serde_json::json!("screenRecording"),
+                serde_json::json!("eventSynthesizing"),
+            ])
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("required")
+                .and_then(Value::as_array)
+                .cloned(),
+            Some(vec![serde_json::json!("id")])
         );
     }
 
@@ -2439,6 +2550,28 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_permission_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "id": 123 }),
+            serde_json::json!({ "id": "screenRecording", "request": true }),
+            serde_json::json!({ "id": "screenRecording", "grant": true }),
+            serde_json::json!({ "id": "screenRecording", "openSettings": true }),
+            serde_json::json!({ "id": "screenRecording", "click": true }),
+            serde_json::json!({ "id": "screenRecording", "press": true }),
+            serde_json::json!({ "id": "screenRecording", "execute": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_GET_PERMISSION_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_screens_rejects_bad_arguments() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_SCREENS_TOOL,
@@ -3017,6 +3150,80 @@ mod tests {
         assert!(!result.content[0].text.contains("\"execute\""));
         assert!(!result.content[0].text.contains("\"click\""));
         assert!(!result.content[0].text.contains("\"press\""));
+    }
+
+    #[test]
+    fn computer_get_permission_returns_permission_by_id_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_PERMISSION_TOOL,
+            &serde_json::json!({ "id": "screenRecording" }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_permission json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_PERMISSIONS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "macosPermissionPreflight");
+        assert_eq!(value["scope"], "permissionId");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["permission"]["id"], "screenRecording");
+        assert_eq!(value["permission"]["name"], "Screen Recording");
+        assert!(
+            value["permission"]["status"] == "granted"
+                || value["permission"]["status"] == "notGranted"
+                || value["permission"]["status"] == "unknown"
+        );
+        assert!(value["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .is_empty());
+        assert!(!result.content[0].text.contains("requestAccessibility"));
+        assert!(!result.content[0].text.contains("requestEventSynthesizing"));
+        assert!(!result.content[0].text.contains("grantInstructions"));
+        assert!(!result.content[0].text.contains("openSettings"));
+        assert!(!result.content[0].text.contains("\"execute\""));
+        assert!(!result.content[0].text.contains("\"click\""));
+        assert!(!result.content[0].text.contains("\"press\""));
+    }
+
+    #[test]
+    fn computer_get_permission_returns_not_found_for_unknown_id_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_PERMISSION_TOOL,
+            &serde_json::json!({ "id": "unknownPermission" }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_permission json");
+        assert_eq!(value["source"], "macosPermissionPreflight");
+        assert_eq!(value["scope"], "permissionId");
+        assert_eq!(value["status"], "notFound");
+        assert!(value["permission"].is_null());
+        assert!(value["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .is_empty());
+    }
+
+    #[test]
+    fn computer_get_permission_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_PERMISSION_TOOL,
+            &serde_json::json!({ "id": "unknownPermission" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_permission json");
+        assert_eq!(value["status"], "notFound");
     }
 
     #[test]
