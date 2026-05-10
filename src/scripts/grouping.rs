@@ -535,8 +535,8 @@ fn root_file_section_should_promote(
         return false;
     }
 
-    let query = filter_text.trim().to_lowercase();
-    if query.len() < 3 {
+    let query = filter_text.trim();
+    if query.chars().count() < crate::file_search::ROOT_FILE_MIN_QUERY_CHARS {
         return false;
     }
 
@@ -544,17 +544,7 @@ fn root_file_section_should_promote(
         return false;
     };
 
-    let name = first_file.file.name.to_lowercase();
-    let stem = std::path::Path::new(&first_file.file.name)
-        .file_stem()
-        .and_then(|stem| stem.to_str())
-        .map(str::to_lowercase);
-
-    name == query
-        || name.starts_with(&query)
-        || stem
-            .as_deref()
-            .is_some_and(|stem| stem == query || stem.starts_with(&query))
+    crate::file_search::root_file_name_token_matches_query(&first_file.file.name, query)
 }
 
 fn root_file_section_insertion_index(
@@ -1166,6 +1156,40 @@ mod advanced_query_tests {
 
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFileSectionMode::DirectoryBrowse,
+            "design",
+            &files,
+        ));
+    }
+
+    #[test]
+    fn root_global_boundary_filename_token_match_promotes_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/client-design-notes.md",
+                "client-design-notes.md",
+            ),
+            score: 100,
+        }];
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design",
+            &files,
+        ));
+    }
+
+    #[test]
+    fn root_global_mid_token_contains_does_not_promote_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/redesign-notes.md",
+                "redesign-notes.md",
+            ),
+            score: 100,
+        }];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
         ));

@@ -306,9 +306,11 @@ mod tests {
         assert!(
             helper.contains("RootFileSectionMode::GlobalQuery")
                 && helper.contains("filter_text.trim()")
-                && helper.contains("file_stem()")
-                && helper.contains("files.first()"),
-            "root file promotion should depend on a strong global filename/stem match"
+                && helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && helper.contains("files.first()")
+                && helper
+                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
+            "root file promotion should depend on the shared strong global filename-token match"
         );
         assert!(
             production.contains("root_file_section_insertion_index(grouped, flat_results, promote)")
@@ -325,6 +327,54 @@ mod tests {
         ] {
             assert!(
                 !helper.contains(forbidden),
+                "root file promotion must not start providers: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_global_promotion_and_recent_seeds_share_filename_token_gate() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            file_search_production.contains("pub fn root_file_name_token_matches_query(")
+                && file_search_production.contains("root_file_name_seed_matches_query")
+                && file_search_production
+                    .contains("root_file_name_token_matches_query(name, query)"),
+            "recent seed eligibility should delegate to the shared filename-token gate"
+        );
+
+        let promote_helper = grouping_production
+            .split("fn root_file_section_should_promote(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn root_file_section_insertion_index(")
+                    .next()
+            })
+            .expect("root file promotion helper should be present");
+        assert!(
+            promote_helper.contains("RootFileSectionMode::GlobalQuery")
+                && promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && promote_helper
+                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
+            "promotion should use the same filename-token gate as recent seeds"
+        );
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !promote_helper.contains(forbidden),
                 "root file promotion must not start providers: {forbidden}"
             );
         }
