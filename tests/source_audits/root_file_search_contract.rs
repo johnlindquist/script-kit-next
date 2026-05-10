@@ -101,6 +101,33 @@ mod tests {
     }
 
     #[test]
+    fn root_global_file_search_publishes_partial_batches_before_done() {
+        let source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("let publish_partial_results = matches!(&request, RootFileSearchRequest::GlobalQuery { .. });"),
+            "root global file search should opt into partial publishing explicitly"
+        );
+        assert!(
+            normalized.contains("Ok(crate::file_search::SearchEvent::Result(result)) =>")
+                && normalized.contains("app.apply_root_file_search_results_for_generation( generation, snapshot, true, false, cx, );"),
+            "global root file results should publish a loading=true partial batch before Done"
+        );
+        assert!(
+            normalized.contains("Ok(crate::file_search::SearchEvent::Done) => break")
+                && normalized.contains("app.apply_root_file_search_results_for_generation( generation, batch, false, true, cx, );"),
+            "final root file update should mark loading=false and clear the cancel token"
+        );
+        assert!(
+            normalized.contains("publish_partial_results &&")
+                && normalized.contains("RootFileSearchRequest::DirectoryBrowse"),
+            "partial publishing should stay gated to GlobalQuery so directory browsing remains final-only"
+        );
+    }
+
+    #[test]
     fn root_file_ranking_stays_local_and_does_not_start_searches() {
         let source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
