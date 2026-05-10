@@ -236,6 +236,19 @@ pub fn should_search_root_files(query: &str) -> bool {
 /// directory browsing and dedicated File Search can still render them.
 pub fn root_global_file_result_is_eligible(file: &FileResult) -> bool {
     file.file_type != FileType::Application
+        && !path_contains_application_bundle_component(&file.path)
+}
+
+fn path_contains_application_bundle_component(path: &str) -> bool {
+    Path::new(path).components().any(|component| {
+        let std::path::Component::Normal(name) = component else {
+            return false;
+        };
+        Path::new(name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+    })
 }
 
 /// Returns true when the root launcher query is syntactically a directory browse.
@@ -1355,6 +1368,25 @@ mod tests {
             1,
             "duplicate Spotlight paths should collapse to one row"
         );
+    }
+
+    #[test]
+    fn root_global_file_result_eligibility_rejects_app_bundle_contents() {
+        assert!(!root_global_file_result_is_eligible(&file(
+            "/Applications/Zed.app/Contents/Info.plist",
+            "Info.plist",
+            FileType::Document,
+        )));
+        assert!(!root_global_file_result_is_eligible(&file(
+            "/Applications/ZED.APP/Contents/Resources/icon.png",
+            "icon.png",
+            FileType::Image,
+        )));
+        assert!(root_global_file_result_is_eligible(&file(
+            "/Users/example/Documents/Zed Notes/Info.plist",
+            "Info.plist",
+            FileType::Document,
+        )));
     }
 
     #[test]
