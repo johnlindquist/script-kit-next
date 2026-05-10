@@ -29,6 +29,7 @@ pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
+pub const COMPUTER_LIST_MENU_ITEM_PATHS_TOOL: &str = "computer/list_menu_item_paths";
 pub const COMPUTER_GET_MENU_ITEM_TOOL: &str = "computer/get_menu_item";
 pub const COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL: &str = "computer/get_menu_item_by_index_path";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
@@ -109,6 +110,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_list_menus_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_LIST_MENU_ITEM_PATHS_TOOL.to_string(),
+            description: "List flattened cached menu item paths and zero-based index paths without refreshing menus, focusing apps, clicking, or requesting permissions."
+                .to_string(),
+            input_schema: computer_list_menu_item_paths_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
             description: "Return one cached menu item by exact title path without refreshing menus, focusing apps, clicking, or requesting permissions."
                 .to_string(),
@@ -185,6 +192,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
+        COMPUTER_LIST_MENU_ITEM_PATHS_TOOL => handle_list_menu_item_paths(arguments),
         COMPUTER_GET_MENU_ITEM_TOOL => handle_get_menu_item(arguments),
         COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL => handle_get_menu_item_by_index_path(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
@@ -348,6 +356,10 @@ struct ComputerUseListMenusArgs {}
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ComputerUseListMenuItemPathsArgs {}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ComputerUseGetMenuItemArgs {
     path: Vec<String>,
 }
@@ -384,6 +396,31 @@ struct ComputerUseListMenusResult {
     cache: ComputerUseMenuCache,
     menus: Vec<ComputerUseMenuItem>,
     warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListMenuItemPathsResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseMenuApp>,
+    cache: ComputerUseMenuCache,
+    items: Vec<ComputerUseMenuItemPath>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseMenuItemPath {
+    index_path: Vec<usize>,
+    path: Vec<String>,
+    title: String,
+    enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shortcut: Option<String>,
+    child_count: usize,
 }
 
 #[derive(serde::Serialize)]
@@ -830,6 +867,51 @@ fn handle_list_menus(arguments: &Value) -> ToolResult {
     })
 }
 
+fn handle_list_menu_item_paths(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseListMenuItemPathsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let snapshot = get_cached_menu_snapshot();
+    let app = snapshot.app.map(|app| ComputerUseMenuApp {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+        name: app.name,
+        window_title: app.window_title,
+    });
+    let status = if app.is_none() {
+        "noTrackedApp"
+    } else if snapshot.items.is_empty() {
+        "noCachedMenus"
+    } else {
+        "listed"
+    };
+    let mut items = Vec::new();
+    if status == "listed" {
+        flatten_cached_menu_item_paths(
+            &snapshot.items,
+            &mut Vec::new(),
+            &mut Vec::new(),
+            &mut items,
+        );
+    }
+
+    json_tool_result(&ComputerUseListMenuItemPathsResult {
+        schema_version: COMPUTER_MENUS_SCHEMA_VERSION,
+        source: "frontmostAppTrackerCache",
+        scope: "cachedMenuItemPaths",
+        status,
+        app,
+        cache: ComputerUseMenuCache {
+            status: snapshot.status.as_str(),
+            is_fetching: snapshot.is_fetching,
+        },
+        items,
+        warnings: Vec::new(),
+    })
+}
+
 fn handle_get_menu_item(arguments: &Value) -> ToolResult {
     let args: ComputerUseGetMenuItemArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
@@ -1082,6 +1164,32 @@ fn find_cached_menu_item_by_index_path<'a>(
         let (found, mut path) = find_cached_menu_item_by_index_path(&item.children, tail)?;
         path.insert(0, item.title.clone());
         Some((found, path))
+    }
+}
+
+fn flatten_cached_menu_item_paths(
+    items: &[MenuBarItem],
+    title_prefix: &mut Vec<String>,
+    index_prefix: &mut Vec<usize>,
+    out: &mut Vec<ComputerUseMenuItemPath>,
+) {
+    for (index, item) in items.iter().enumerate() {
+        title_prefix.push(item.title.clone());
+        index_prefix.push(index);
+        out.push(ComputerUseMenuItemPath {
+            index_path: index_prefix.clone(),
+            path: title_prefix.clone(),
+            title: item.title.clone(),
+            enabled: item.enabled,
+            shortcut: item
+                .shortcut
+                .as_ref()
+                .map(|shortcut| shortcut.to_display_string()),
+            child_count: item.children.len(),
+        });
+        flatten_cached_menu_item_paths(&item.children, title_prefix, index_prefix, out);
+        index_prefix.pop();
+        title_prefix.pop();
     }
 }
 
@@ -1497,6 +1605,14 @@ fn computer_list_menus_input_schema() -> Value {
     })
 }
 
+fn computer_list_menu_item_paths_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_get_menu_item_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1528,7 +1644,7 @@ fn computer_get_menu_item_by_index_path_input_schema() -> Value {
                     "type": "integer",
                     "minimum": 0
                 },
-                "description": "Zero-based recursive index path into computer/list_menus output, e.g. [0, 2, 1]. Call computer/list_menus first."
+                "description": "Zero-based recursive index path. Use indexPath from computer/list_menu_item_paths, or derive the same position from computer/list_menus."
             }
         },
         "required": ["indexPath"]
@@ -1789,6 +1905,7 @@ mod tests {
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
+                COMPUTER_LIST_MENU_ITEM_PATHS_TOOL.to_string(),
                 COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
                 COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
@@ -2059,6 +2176,28 @@ mod tests {
             .into_iter()
             .find(|tool| tool.name == COMPUTER_LIST_MENUS_TOOL)
             .expect("computer/list_menus tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_list_menu_item_paths_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_MENU_ITEM_PATHS_TOOL)
+            .expect("computer/list_menu_item_paths tool");
 
         assert_eq!(
             tool.input_schema
@@ -2950,6 +3089,30 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_menu_item_paths_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!({ "path": ["File"] }),
+            serde_json::json!({ "indexPath": [0] }),
+            serde_json::json!({ "pid": 123 }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            serde_json::json!({ "refresh": true }),
+            serde_json::json!({ "focus": true }),
+            serde_json::json!({ "activate": true }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "press": true }),
+            serde_json::json!({ "execute": true }),
+            serde_json::json!({ "includeDisabled": true }),
+            serde_json::json!({ "includeGlobalStatusItems": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_LIST_MENU_ITEM_PATHS_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_get_menu_item_by_index_path_rejects_bad_arguments() {
         for arguments in [
             serde_json::json!(null),
@@ -3460,6 +3623,64 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_menu_item_paths_returns_cached_snapshot_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_MENU_ITEM_PATHS_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_menu_item_paths json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_MENUS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuItemPaths");
+        assert!(
+            value["status"] == "listed"
+                || value["status"] == "noTrackedApp"
+                || value["status"] == "noCachedMenus"
+        );
+        assert!(value["cache"]["status"].is_string());
+        assert!(value["cache"]["isFetching"].is_boolean());
+        assert!(value["items"].is_array());
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/list_menu_item_paths result must not expose menu action handles; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_list_menu_item_paths_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_MENU_ITEM_PATHS_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_menu_item_paths json");
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuItemPaths");
+    }
+
+    #[test]
     fn computer_get_menu_item_returns_cache_snapshot_without_runtime() {
         let result = handle_computer_use_tool_call(
             COMPUTER_GET_MENU_ITEM_TOOL,
@@ -3683,6 +3904,67 @@ mod tests {
         let found = find_cached_menu_item_by_index_path(&items, &[]);
 
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn flatten_cached_menu_item_paths_preserves_preorder_and_index_paths() {
+        let items = vec![
+            test_menu_item(
+                "File",
+                vec![
+                    test_menu_item("New", vec![test_menu_item("Project", vec![])]),
+                    test_menu_item("Open", vec![]),
+                ],
+            ),
+            test_menu_item("Edit", vec![]),
+        ];
+        let mut flattened = Vec::new();
+
+        flatten_cached_menu_item_paths(&items, &mut Vec::new(), &mut Vec::new(), &mut flattened);
+
+        assert_eq!(flattened.len(), 5);
+        assert_eq!(flattened[0].title, "File");
+        assert_eq!(flattened[0].path, vec!["File"]);
+        assert_eq!(flattened[0].index_path, vec![0]);
+        assert_eq!(flattened[0].child_count, 2);
+        assert_eq!(flattened[1].title, "New");
+        assert_eq!(flattened[1].path, vec!["File", "New"]);
+        assert_eq!(flattened[1].index_path, vec![0, 0]);
+        assert_eq!(flattened[2].title, "Project");
+        assert_eq!(flattened[2].path, vec!["File", "New", "Project"]);
+        assert_eq!(flattened[2].index_path, vec![0, 0, 0]);
+        assert_eq!(flattened[3].title, "Open");
+        assert_eq!(flattened[3].path, vec!["File", "Open"]);
+        assert_eq!(flattened[3].index_path, vec![0, 1]);
+        assert_eq!(flattened[4].title, "Edit");
+        assert_eq!(flattened[4].path, vec!["Edit"]);
+        assert_eq!(flattened[4].index_path, vec![1]);
+    }
+
+    #[test]
+    fn flatten_cached_menu_item_paths_round_trips_through_index_lookup() {
+        let items = vec![
+            test_menu_item(
+                "File",
+                vec![
+                    test_menu_item("New", vec![test_menu_item("Project", vec![])]),
+                    test_menu_item("Open", vec![]),
+                ],
+            ),
+            test_menu_item("Edit", vec![test_menu_item("Undo", vec![])]),
+        ];
+        let mut flattened = Vec::new();
+
+        flatten_cached_menu_item_paths(&items, &mut Vec::new(), &mut Vec::new(), &mut flattened);
+
+        for flattened_item in flattened {
+            let (found, resolved_path) =
+                find_cached_menu_item_by_index_path(&items, &flattened_item.index_path)
+                    .expect("flattened index path resolves");
+
+            assert_eq!(found.title, flattened_item.title);
+            assert_eq!(resolved_path, flattened_item.path);
+        }
     }
 
     fn test_menu_item(title: &str, children: Vec<MenuBarItem>) -> MenuBarItem {
