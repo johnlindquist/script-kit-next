@@ -1345,6 +1345,8 @@ mod tests {
 
     #[test]
     fn root_recent_files_hydrate_from_frecency_in_app_layer() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
             .expect("read src/app_impl/root_file_search.rs");
         let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
@@ -1356,17 +1358,54 @@ mod tests {
             .join(" ");
 
         assert!(
+            file_search_source.contains("ROOT_FILE_RECENT_RENDER_LIMIT")
+                && file_search_source.contains("ROOT_FILE_RECENT_SEED_LIMIT")
+                && file_search_source.contains("ROOT_FILE_RECENT_HYDRATE_LIMIT"),
+            "root recent files should separate visible render cap from searchable seed pool"
+        );
+        assert!(
             root_normalized
-                .contains("top_file_paths(crate::file_search::ROOT_FILE_RECENT_LIMIT * 3)")
+                .contains("top_file_paths(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT)")
                 && root_normalized.contains("file_result_from_existing_path(&path)")
+                && root_normalized.contains("take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)")
                 && root_normalized.contains("self.root_recent_file_results = hydrated"),
-            "recent root files should hydrate known frecency paths in the app layer"
+            "recent root files should hydrate known frecency paths into a deeper seed pool in the app layer"
         );
         assert!(
             filtering_normalized.contains("RootFileSectionMode::GlobalQuery")
                 && filtering_normalized.contains("self.refresh_root_recent_file_results();")
                 && filtering_normalized.contains("&self.root_recent_file_results"),
             "empty and non-empty global root grouping should refresh and pass recent file rows explicitly"
+        );
+    }
+
+    #[test]
+    fn root_recent_file_seed_pool_exceeds_empty_render_cap() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let production = production_source(&grouping_source);
+        let recent_source = production
+            .split("fn append_recent_root_file_section(")
+            .nth(1)
+            .and_then(|section| section.split("fn append_root_file_section(").next())
+            .expect("append_recent_root_file_section source should be present");
+        let merge_helper = production
+            .split("fn merge_root_global_file_results_with_recent(")
+            .nth(1)
+            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .expect("merge_root_global_file_results_with_recent source should be present");
+
+        assert!(
+            recent_source.contains("take(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT)"),
+            "empty-root Recent Files should stay visually capped even when the cached seed pool is deeper"
+        );
+        assert!(
+            !merge_helper.contains("ROOT_FILE_RECENT_RENDER_LIMIT"),
+            "non-empty global recent seeds should search the deeper recent pool, not just visible empty-root rows"
+        );
+        assert!(
+            merge_helper.contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
+            "non-empty global recent seeds should keep filename-token eligibility"
         );
     }
 

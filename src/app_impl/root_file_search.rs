@@ -39,7 +39,7 @@ impl ScriptListApp {
         let mut seen = std::collections::HashSet::new();
         let mut hydrated: Vec<_> = self
             .frecency_store
-            .top_file_paths(crate::file_search::ROOT_FILE_RECENT_LIMIT * 3)
+            .top_file_paths(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT)
             .into_iter()
             .filter_map(|(path, score)| {
                 if !seen.insert(path.clone()) {
@@ -60,7 +60,7 @@ impl ScriptListApp {
 
         self.root_recent_file_results = hydrated
             .into_iter()
-            .take(crate::file_search::ROOT_FILE_RECENT_LIMIT)
+            .take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)
             .map(|(file, _)| file)
             .collect();
         self.root_recent_file_revision = revision;
