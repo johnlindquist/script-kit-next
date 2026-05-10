@@ -132,8 +132,21 @@ pub const ROOT_FILE_SOURCE_LIMIT: usize = 24;
 pub const ROOT_FILE_RENDER_LIMIT: usize = 6;
 /// Maximum frecency-backed recent file rows rendered on the empty root launcher.
 pub const ROOT_FILE_RECENT_LIMIT: usize = ROOT_FILE_RENDER_LIMIT;
+/// Maximum directory children collected for root launcher directory browsing.
+pub const ROOT_FILE_BROWSE_SOURCE_LIMIT: usize = 96;
+/// Maximum directory children rendered for root launcher directory browsing.
+pub const ROOT_FILE_BROWSE_RENDER_LIMIT: usize = 12;
 /// Minimum visible query length before root launcher file search starts.
 pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
+
+/// Which source currently backs the root launcher's `Files` section.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootFileSectionMode {
+    /// Global filename search backed by Spotlight.
+    GlobalQuery,
+    /// Direct child listing for an explicit directory path query.
+    DirectoryBrowse,
+}
 /// Check if the query looks like an advanced mdfind query (with operators)
 /// If so, pass it through directly; otherwise wrap as filename query
 pub(crate) fn looks_like_advanced_mdquery(q: &str) -> bool {
@@ -168,6 +181,33 @@ pub fn should_search_root_files(query: &str) -> bool {
     q.chars().count() >= ROOT_FILE_MIN_QUERY_CHARS
         && !looks_like_advanced_mdquery(q)
         && !is_directory_path(q)
+}
+
+/// Returns true when the root launcher query is syntactically a directory browse.
+///
+/// This is intentionally syntax-only so grouping/ranking code can decide layout
+/// without touching the filesystem. Provider code still validates existence via
+/// `parse_directory_path` before collecting rows.
+pub fn looks_like_root_directory_browse_query(query: &str) -> bool {
+    let q = query.trim();
+    !q.is_empty()
+        && q.ends_with('/')
+        && (q.starts_with('/')
+            || q.starts_with("~/")
+            || q.starts_with("./")
+            || q.starts_with("../"))
+        && !looks_like_advanced_mdquery(q)
+}
+
+/// Returns the root file section mode implied by a query's syntax.
+pub fn root_file_section_mode_for_query(query: &str) -> Option<RootFileSectionMode> {
+    if should_search_root_files(query) {
+        Some(RootFileSectionMode::GlobalQuery)
+    } else if looks_like_root_directory_browse_query(query) {
+        Some(RootFileSectionMode::DirectoryBrowse)
+    } else {
+        None
+    }
 }
 // NOTE: escape_query() was removed because:
 // 1. It was unused dead code
@@ -281,6 +321,22 @@ pub fn file_result_from_existing_path(path: &str) -> Option<FileResult> {
         modified: metadata.modified,
         file_type: metadata.file_type,
     })
+}
+
+/// Convert directory browse results into root-launcher file matches without fuzzy ranking.
+pub fn root_directory_file_matches(
+    results: &[FileResult],
+    limit: usize,
+) -> Vec<crate::scripts::FileMatch> {
+    results
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(rank, file)| crate::scripts::FileMatch {
+            file: file.clone(),
+            score: i32::MAX.saturating_sub(rank as i32),
+        })
+        .collect()
 }
 
 const ROOT_FILE_TEXT_TIER_MULTIPLIER: i32 = 20_000;

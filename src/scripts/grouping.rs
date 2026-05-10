@@ -365,6 +365,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
     input_history: Option<&crate::input_history::InputHistory>,
     validation: Option<&ValidationReport>,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
@@ -387,6 +388,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
     append_root_file_section(
         &mut grouped,
         &mut flat_results,
+        root_file_search_mode,
         root_file_results,
         filter_text,
         frecency_store,
@@ -457,22 +459,36 @@ fn append_recent_root_file_section(
 fn append_root_file_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
+    root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
     root_file_results: &[crate::file_search::FileResult],
     filter_text: &str,
     frecency_store: &FrecencyStore,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
 ) {
-    if advanced_query.is_some() || !crate::file_search::should_search_root_files(filter_text) {
+    let Some(mode) = root_file_search_mode else {
+        return;
+    };
+    if advanced_query.is_some() {
         return;
     }
 
-    let files = crate::file_search::rank_root_file_results(
-        root_file_results,
-        filter_text,
-        crate::file_search::ROOT_FILE_RENDER_LIMIT,
-        |key| frecency_store.get_score(key),
-    );
-    let handoff = root_file_search_handoff_result(filter_text);
+    let files = match mode {
+        crate::file_search::RootFileSectionMode::GlobalQuery => {
+            crate::file_search::rank_root_file_results(
+                root_file_results,
+                filter_text,
+                crate::file_search::ROOT_FILE_RENDER_LIMIT,
+                |key| frecency_store.get_score(key),
+            )
+        }
+        crate::file_search::RootFileSectionMode::DirectoryBrowse => {
+            crate::file_search::root_directory_file_matches(
+                root_file_results,
+                crate::file_search::ROOT_FILE_BROWSE_RENDER_LIMIT,
+            )
+        }
+    };
+    let handoff = root_file_search_handoff_result(filter_text, mode);
     if files.is_empty() && handoff.is_none() {
         return;
     }
@@ -506,9 +522,12 @@ fn append_root_file_section(
     grouped.splice(insertion_index..insertion_index, file_group);
 }
 
-fn root_file_search_handoff_result(filter_text: &str) -> Option<SearchResult> {
+fn root_file_search_handoff_result(
+    filter_text: &str,
+    mode: crate::file_search::RootFileSectionMode,
+) -> Option<SearchResult> {
     let query = filter_text.trim();
-    if !crate::file_search::should_search_root_files(query) {
+    if crate::file_search::root_file_section_mode_for_query(query) != Some(mode) {
         return None;
     }
 
@@ -516,12 +535,23 @@ fn root_file_search_handoff_result(filter_text: &str) -> Option<SearchResult> {
         .into_iter()
         .find(|fallback| fallback.id == crate::fallbacks::builtins::SEARCH_FILES_FALLBACK_ID)?;
 
+    let (title, subtitle) = match mode {
+        crate::file_search::RootFileSectionMode::GlobalQuery => (
+            format!("Search Files for \"{query}\""),
+            "Open full File Search".to_string(),
+        ),
+        crate::file_search::RootFileSectionMode::DirectoryBrowse => {
+            let label = crate::file_search::shorten_path(query.trim_end_matches('/'));
+            (
+                format!("Open File Search in \"{label}\""),
+                "Browse the full folder".to_string(),
+            )
+        }
+    };
+
     Some(SearchResult::Fallback(
         FallbackMatch::new(crate::fallbacks::FallbackItem::Builtin(fallback), 0)
-            .with_display_overrides(
-                format!("Search Files for \"{query}\""),
-                "Open full File Search",
-            ),
+            .with_display_overrides(title, subtitle),
     ))
 }
 
@@ -749,12 +779,16 @@ mod advanced_query_tests {
     }
 
     fn root_file(path: &str, name: &str) -> FileResult {
+        root_file_with_type(path, name, FileType::Document)
+    }
+
+    fn root_file_with_type(path: &str, name: &str, file_type: FileType) -> FileResult {
         FileResult {
             path: path.to_string(),
             name: name.to_string(),
             size: 0,
             modified: 0,
-            file_type: FileType::Document,
+            file_type,
         }
     }
 
@@ -780,6 +814,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             &root_files,
             &[],
         );
@@ -821,6 +856,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             &root_files,
             &[],
         );
@@ -875,6 +911,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(&query),
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             &root_files,
             &[],
         );
@@ -889,6 +926,109 @@ mod advanced_query_tests {
             flat.iter()
                 .all(|result| !matches!(result, SearchResult::File(_))),
             "advanced query mode should not append file results"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_rows_append_files_section_for_path_query() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![
+            root_file_with_type("/Users/example/dev/app", "app", FileType::Directory),
+            root_file_with_type(
+                "/Users/example/dev/Zed.app",
+                "Zed.app",
+                FileType::Application,
+            ),
+        ];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "~/dev/",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            &root_files,
+            &[],
+        );
+
+        assert!(
+            grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")),
+            "directory path queries should append a Files section"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/dev/Zed.app"
+            )),
+            "directory browse should render provider-ordered rows, including app bundles"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Open File Search in \"~/dev\""
+            )),
+            "directory browse should append a folder-scoped File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_rows_use_provider_order_without_fuzzy_filtering() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![
+            root_file_with_type(
+                "/Users/example/dev/beta.txt",
+                "beta.txt",
+                FileType::Document,
+            ),
+            root_file_with_type(
+                "/Users/example/dev/alpha.txt",
+                "alpha.txt",
+                FileType::Document,
+            ),
+        ];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "~/dev/",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            &root_files,
+            &[],
+        );
+
+        let rendered_files = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered_files,
+            vec!["beta.txt", "alpha.txt"],
+            "directory browse should preserve provider order instead of fuzzy re-ranking"
         );
     }
 
@@ -910,6 +1050,7 @@ mod advanced_query_tests {
             "",
             &SuggestedConfig::default(),
             &[],
+            None,
             None,
             None,
             None,
@@ -986,6 +1127,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            None,
             &[],
             &recent_files,
         );
@@ -1026,6 +1168,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(&query),
+            None,
             &[],
             &recent_files,
         );
@@ -1061,6 +1204,7 @@ mod advanced_query_tests {
             "",
             &SuggestedConfig::default(),
             &[],
+            None,
             None,
             None,
             None,
