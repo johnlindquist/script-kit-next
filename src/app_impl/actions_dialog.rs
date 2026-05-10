@@ -153,8 +153,9 @@ impl ScriptListApp {
                     && matches!(host, ActionsDialogHost::MainList)
                     && crate::action_helpers::is_root_file_action_id(&action_id)
                 {
-                    self.selected_root_file_result_owned()
-                        .or_else(|| self.pending_root_file_actions_file.clone())
+                    self.pending_root_file_actions_file
+                        .clone()
+                        .or_else(|| self.selected_root_file_result_owned())
                 } else {
                     None
                 };
@@ -199,12 +200,15 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
-                if let Some(file) = self
-                    .selected_root_file_result_owned()
-                    .or_else(|| self.pending_root_file_actions_file.clone())
-                {
-                    if self.execute_root_file_action(&action_id, &file, window, cx) {
-                        return;
+                if crate::action_helpers::is_root_file_action_id(&action_id) {
+                    if let Some(file) = self
+                        .pending_root_file_actions_file
+                        .clone()
+                        .or_else(|| self.selected_root_file_result_owned())
+                    {
+                        if self.execute_root_file_action(&action_id, &file, window, cx) {
+                            return;
+                        }
                     }
                 }
                 self.handle_action(action_id, window, cx);
@@ -824,6 +828,12 @@ impl ScriptListApp {
         self.actions_dialog = None;
     }
 
+    pub(crate) fn clear_actions_context_for_host(&mut self, host: ActionsDialogHost) {
+        if matches!(host, ActionsDialogHost::MainList) {
+            self.pending_root_file_actions_file = None;
+        }
+    }
+
     /// Mark the shared actions popup as closed.
     ///
     /// This is the mutation owner for the popup-open flag and close timestamp.
@@ -891,9 +901,7 @@ impl ScriptListApp {
         }
 
         self.request_focus_restore_for_actions_host(host);
-        if matches!(host, ActionsDialogHost::MainList) {
-            self.pending_root_file_actions_file = None;
-        }
+        self.clear_actions_context_for_host(host);
 
         // Apply restored focus immediately rather than deferring to next render.
         // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).

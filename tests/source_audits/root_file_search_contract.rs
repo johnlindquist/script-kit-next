@@ -190,10 +190,38 @@ mod tests {
             actions_dialog_normalized.contains(
                 "let root_file_context = if should_close && matches!(host, ActionsDialogHost::MainList) && crate::action_helpers::is_root_file_action_id(&action_id)"
             ) && actions_dialog_normalized.contains(
-                ".selected_root_file_result_owned() .or_else(|| self.pending_root_file_actions_file.clone())"
+                "self.pending_root_file_actions_file .clone() .or_else(|| self.selected_root_file_result_owned())"
             ) && actions_dialog_normalized
-                .contains("self.pending_root_file_actions_file = None;"),
+                .contains("self.clear_actions_context_for_host(host);"),
             "root file action activation should capture context before close and clear it on MainList close"
+        );
+    }
+
+    #[test]
+    fn root_file_actions_prefer_captured_file_over_live_selection() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("read src/app_impl/actions_dialog.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains(
+                "if crate::action_helpers::is_root_file_action_id(&action_id) { if let Some(file) = self .pending_root_file_actions_file .clone() .or_else(|| self.selected_root_file_result_owned())"
+            ),
+            "root file action execution should prefer the captured file over the current live selection"
+        );
+    }
+
+    #[test]
+    fn root_file_actions_context_cleared_by_detached_on_close() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("read src/app_impl/actions_toggle.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains(
+                "app.mark_actions_popup_closed(); app.clear_actions_context_for_host(host); app.mark_filter_resync_after_actions_if_needed();"
+            ),
+            "detached actions-window on_close should clear any captured MainList root-file context"
         );
     }
 

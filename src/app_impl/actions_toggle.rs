@@ -236,6 +236,7 @@ impl ScriptListApp {
                             && !crate::platform::is_main_window_focused();
 
                     app.mark_actions_popup_closed();
+                    app.clear_actions_context_for_host(host);
                     app.mark_filter_resync_after_actions_if_needed();
                     app.pop_focus_overlay(cx);
 
