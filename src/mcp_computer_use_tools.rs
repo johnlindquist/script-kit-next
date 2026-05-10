@@ -26,6 +26,8 @@ pub const COMPUTER_GET_FOCUSED_WINDOW_TOOL: &str = "computer/get_focused_window"
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
 pub const COMPUTER_GET_APP_TOOL: &str = "computer/get_app";
 pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
+pub const COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL: &str =
+    "computer/list_app_windows_by_bundle_id";
 pub const COMPUTER_LIST_NATIVE_WINDOWS_TOOL: &str = "computer/list_native_windows";
 pub const COMPUTER_GET_NATIVE_WINDOW_TOOL: &str = "computer/get_native_window";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
@@ -99,6 +101,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List native windows for one running GUI application by PID without focusing, moving, resizing, or capturing screenshots."
                 .to_string(),
             input_schema: computer_list_app_windows_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL.to_string(),
+            description: "List native windows for every running GUI application matching an exact bundle id without focusing, activating, launching, quitting, hiding, moving, resizing, capturing screenshots, or sending input."
+                .to_string(),
+            input_schema: computer_list_app_windows_by_bundle_id_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
@@ -228,6 +236,9 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_GET_APP_TOOL => handle_get_app(arguments, runtime),
         COMPUTER_LIST_APP_WINDOWS_TOOL => handle_list_app_windows(arguments, runtime),
+        COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL => {
+            handle_list_app_windows_by_bundle_id(arguments, runtime)
+        }
         COMPUTER_LIST_NATIVE_WINDOWS_TOOL => handle_list_native_windows(arguments, runtime),
         COMPUTER_GET_NATIVE_WINDOW_TOOL => handle_get_native_window(arguments, runtime),
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
@@ -353,6 +364,26 @@ struct ComputerUseListAppWindowsResult {
     status: &'static str,
     app: Option<ComputerUseRunningAppInfo>,
     windows: Vec<ComputerUseAppWindowInfo>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ComputerUseListAppWindowsByBundleIdArgs {
+    bundle_id: String,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListAppWindowsByBundleIdResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    bundle_id: String,
+    app_count: usize,
+    window_count: usize,
+    apps: Vec<ComputerUseNativeWindowsForApp>,
     warnings: Vec<String>,
 }
 
@@ -921,6 +952,105 @@ fn handle_list_app_windows(
         }),
         Err(error) => error_result(error.error_code(), &error.message()),
     }
+}
+
+fn handle_list_app_windows_by_bundle_id(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseListAppWindowsByBundleIdArgs =
+        match serde_json::from_value(arguments.clone()) {
+            Ok(args) => args,
+            Err(error) => return error_result("invalid_arguments", &error.to_string()),
+        };
+
+    if args.bundle_id.is_empty() {
+        return error_result("invalid_arguments", "bundleId must not be empty");
+    }
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/list_app_windows_by_bundle_id requires the live GPUI runtime bridge to enumerate app windows safely",
+        );
+    };
+
+    let apps_snapshot = match runtime.list_running_apps(ComputerUseListAppsRequest {
+        include_hidden: true,
+        include_background: true,
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return error_result(error.error_code(), &error.message()),
+    };
+
+    let matching_apps: Vec<ComputerUseRunningAppInfo> = apps_snapshot
+        .apps
+        .into_iter()
+        .filter(|app| app.bundle_id.as_deref() == Some(args.bundle_id.as_str()))
+        .collect();
+
+    if matching_apps.is_empty() {
+        return json_tool_result(&ComputerUseListAppWindowsByBundleIdResult {
+            schema_version: COMPUTER_APP_WINDOWS_SCHEMA_VERSION,
+            source: "nsWorkspaceRunningApplications+coreGraphicsWindowList",
+            scope: "runningAppBundleId",
+            status: "notFound",
+            bundle_id: args.bundle_id,
+            app_count: 0,
+            window_count: 0,
+            apps: Vec::new(),
+            warnings: Vec::new(),
+        });
+    }
+
+    let mut app_groups = Vec::new();
+    let mut warnings = Vec::new();
+    let mut partial = false;
+    let mut window_count = 0usize;
+
+    for app in matching_apps {
+        match runtime.list_app_windows(ComputerUseListAppWindowsRequest { pid: app.pid }) {
+            Ok(snapshot) => {
+                let status = if snapshot.app.is_some() {
+                    "listed"
+                } else {
+                    partial = true;
+                    "appNotFound"
+                };
+                window_count += snapshot.windows.len();
+
+                app_groups.push(ComputerUseNativeWindowsForApp {
+                    app,
+                    status,
+                    windows: snapshot.windows,
+                    warnings: snapshot.warnings,
+                });
+            }
+            Err(error) => {
+                partial = true;
+                let warning = format!("windowListFailed for pid {}: {}", app.pid, error.message());
+                warnings.push(warning.clone());
+                app_groups.push(ComputerUseNativeWindowsForApp {
+                    app,
+                    status: "windowListFailed",
+                    windows: Vec::new(),
+                    warnings: vec![warning],
+                });
+            }
+        }
+    }
+
+    json_tool_result(&ComputerUseListAppWindowsByBundleIdResult {
+        schema_version: COMPUTER_APP_WINDOWS_SCHEMA_VERSION,
+        source: "nsWorkspaceRunningApplications+coreGraphicsWindowList",
+        scope: "runningAppBundleId",
+        status: if partial { "partial" } else { "listed" },
+        bundle_id: args.bundle_id,
+        app_count: app_groups.len(),
+        window_count,
+        apps: app_groups,
+        warnings,
+    })
 }
 
 fn handle_list_native_windows(
@@ -2112,6 +2242,21 @@ fn computer_list_app_windows_input_schema() -> Value {
     })
 }
 
+fn computer_list_app_windows_by_bundle_id_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "bundleId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Exact bundle identifier for a currently running GUI application, e.g. com.apple.Terminal."
+            }
+        },
+        "required": ["bundleId"]
+    })
+}
+
 fn computer_list_native_windows_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -2617,6 +2762,139 @@ mod tests {
         }
     }
 
+    struct BundleIdAppWindowsRuntime {
+        fail_apps: bool,
+        fail_pid: Option<i32>,
+        missing_pid: Option<i32>,
+    }
+
+    impl ComputerUseRuntimeBridge for BundleIdAppWindowsRuntime {
+        fn inspect_automation_window(
+            &self,
+            _request: ComputerUseInspectRequest,
+        ) -> Result<AutomationInspectSnapshot, ComputerUseRuntimeError> {
+            panic!("computer/list_app_windows_by_bundle_id must not inspect automation windows")
+        }
+
+        fn list_running_apps(
+            &self,
+            request: ComputerUseListAppsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            if self.fail_apps {
+                return Err(ComputerUseRuntimeError::Failed(
+                    "failed to list running apps".to_string(),
+                ));
+            }
+
+            assert!(request.include_hidden);
+            assert!(request.include_background);
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                    apps: vec![
+                        ComputerUseRunningAppInfo {
+                            pid: 101,
+                            bundle_id: Some("com.apple.Terminal".to_string()),
+                            name: "Terminal".to_string(),
+                            is_active: true,
+                            is_hidden: false,
+                            activation_policy: "regular".to_string(),
+                        },
+                        ComputerUseRunningAppInfo {
+                            pid: 202,
+                            bundle_id: Some("com.apple.TextEdit".to_string()),
+                            name: "TextEdit".to_string(),
+                            is_active: false,
+                            is_hidden: false,
+                            activation_policy: "regular".to_string(),
+                        },
+                        ComputerUseRunningAppInfo {
+                            pid: 303,
+                            bundle_id: Some("com.apple.Terminal".to_string()),
+                            name: "Terminal Helper".to_string(),
+                            is_active: false,
+                            is_hidden: true,
+                            activation_policy: "accessory".to_string(),
+                        },
+                    ],
+                    frontmost_pid: Some(101),
+                },
+            )
+        }
+
+        fn list_app_windows(
+            &self,
+            request: ComputerUseListAppWindowsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert_ne!(
+                request.pid, 202,
+                "bundle-id lookup must not enumerate windows for non-matching bundle ids"
+            );
+
+            if self.fail_pid == Some(request.pid) {
+                return Err(ComputerUseRuntimeError::Failed(format!(
+                    "failed to list windows for pid {}",
+                    request.pid
+                )));
+            }
+
+            if self.missing_pid == Some(request.pid) {
+                return Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                        app: None,
+                        windows: Vec::new(),
+                        warnings: Vec::new(),
+                    },
+                );
+            }
+
+            let (app, windows, warnings) = match request.pid {
+                101 => (
+                    ComputerUseRunningAppInfo {
+                        pid: 101,
+                        bundle_id: Some("com.apple.Terminal".to_string()),
+                        name: "Terminal".to_string(),
+                        is_active: true,
+                        is_hidden: false,
+                        activation_policy: "regular".to_string(),
+                    },
+                    vec![
+                        test_native_window(98765, 0, "Terminal"),
+                        test_native_window(98766, 1, "Terminal Settings"),
+                    ],
+                    vec!["ignored offscreen windows".to_string()],
+                ),
+                303 => (
+                    ComputerUseRunningAppInfo {
+                        pid: 303,
+                        bundle_id: Some("com.apple.Terminal".to_string()),
+                        name: "Terminal Helper".to_string(),
+                        is_active: false,
+                        is_hidden: true,
+                        activation_policy: "accessory".to_string(),
+                    },
+                    vec![test_native_window(98767, 0, "Terminal Helper")],
+                    Vec::new(),
+                ),
+                other => panic!("unexpected list_app_windows pid {other}"),
+            };
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                    app: Some(app),
+                    windows,
+                    warnings,
+                },
+            )
+        }
+    }
+
     struct NativeWindowLookupRuntime {
         fail_apps: bool,
         fail_pid: Option<i32>,
@@ -2935,6 +3213,7 @@ mod tests {
                 COMPUTER_LIST_APPS_TOOL.to_string(),
                 COMPUTER_GET_APP_TOOL.to_string(),
                 COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
+                COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL.to_string(),
                 COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
@@ -3130,6 +3409,37 @@ mod tests {
         assert_eq!(
             tool.input_schema.get("required"),
             Some(&serde_json::json!(["pid"]))
+        );
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL)
+            .expect("computer/list_app_windows_by_bundle_id tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        let bundle_id = properties.get("bundleId").expect("bundleId schema");
+        assert_eq!(
+            bundle_id.get("type").and_then(Value::as_str),
+            Some("string")
+        );
+        assert_eq!(bundle_id.get("minLength").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["bundleId"]))
         );
     }
 
@@ -3771,6 +4081,18 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_app_windows_by_bundle_id_without_runtime_returns_tool_error() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
     fn computer_list_native_windows_without_runtime_returns_tool_error() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_NATIVE_WINDOWS_TOOL,
@@ -4238,6 +4560,47 @@ mod tests {
         ] {
             let result =
                 handle_computer_use_tool_call(COMPUTER_LIST_APP_WINDOWS_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "bundleId": "" }),
+            serde_json::json!({ "bundleId": 101 }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "pid": 101 }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "includeHidden": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "includeBackground": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "focus": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "activate": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "launch": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "quit": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "hide": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "move": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "resize": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "setBounds": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "screenshot": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "capture": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "click": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "press": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "execute": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "AXPress": true }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "input": "x" }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "typeText": "x" }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "key": "Enter" }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal", "includeGlobalStatusItems": true }),
+        ] {
+            let result = handle_computer_use_tool_call(
+                COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+                &arguments,
+                None,
+            );
 
             assert_eq!(result.is_error, Some(true));
             assert!(result.content[0].text.contains("invalid_arguments"));
@@ -5004,6 +5367,168 @@ mod tests {
                 "computer/list_app_windows result must not expose executable fields; found {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_returns_grouped_windows() {
+        let runtime = BundleIdAppWindowsRuntime {
+            fail_apps: false,
+            fail_pid: None,
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid list_app_windows_by_bundle_id json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_APP_WINDOWS_SCHEMA_VERSION)
+        );
+        assert_eq!(
+            value["source"],
+            "nsWorkspaceRunningApplications+coreGraphicsWindowList"
+        );
+        assert_eq!(value["scope"], "runningAppBundleId");
+        assert_eq!(value["status"], "listed");
+        assert_eq!(value["bundleId"], "com.apple.Terminal");
+        assert_eq!(value["appCount"], 2);
+        assert_eq!(value["windowCount"], 3);
+        assert_eq!(value["apps"][0]["app"]["pid"], 101);
+        assert_eq!(value["apps"][0]["status"], "listed");
+        assert_eq!(value["apps"][0]["windows"][0]["nativeWindowId"], 98765);
+        assert_eq!(
+            value["apps"][0]["warnings"],
+            serde_json::json!(["ignored offscreen windows"])
+        );
+        assert_eq!(value["apps"][1]["app"]["pid"], 303);
+        assert_eq!(value["apps"][1]["status"], "listed");
+        assert_eq!(value["apps"][1]["windows"][0]["nativeWindowId"], 98767);
+        assert!(value["warnings"].as_array().unwrap().is_empty());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+            "\"hide\"",
+            "\"move\"",
+            "\"resize\"",
+            "\"setBounds\"",
+            "\"screenshot\"",
+            "\"capture\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/list_app_windows_by_bundle_id result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_returns_not_found() {
+        let runtime = BundleIdAppWindowsRuntime {
+            fail_apps: false,
+            fail_pid: None,
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Missing" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid list_app_windows_by_bundle_id json");
+        assert_eq!(value["status"], "notFound");
+        assert_eq!(value["bundleId"], "com.apple.Missing");
+        assert_eq!(value["appCount"], 0);
+        assert_eq!(value["windowCount"], 0);
+        assert!(value["apps"].as_array().unwrap().is_empty());
+        assert!(value["warnings"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_handles_per_app_window_error_as_partial() {
+        let runtime = BundleIdAppWindowsRuntime {
+            fail_apps: false,
+            fail_pid: Some(303),
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid list_app_windows_by_bundle_id json");
+        assert_eq!(value["status"], "partial");
+        assert_eq!(value["appCount"], 2);
+        assert_eq!(value["windowCount"], 2);
+        assert_eq!(value["apps"][1]["app"]["pid"], 303);
+        assert_eq!(value["apps"][1]["status"], "windowListFailed");
+        assert!(value["apps"][1]["windows"].as_array().unwrap().is_empty());
+        assert!(value["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("failed to list windows for pid 303"));
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_marks_disappearing_app_as_partial() {
+        let runtime = BundleIdAppWindowsRuntime {
+            fail_apps: false,
+            fail_pid: None,
+            missing_pid: Some(303),
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid list_app_windows_by_bundle_id json");
+        assert_eq!(value["status"], "partial");
+        assert_eq!(value["appCount"], 2);
+        assert_eq!(value["windowCount"], 2);
+        assert_eq!(value["apps"][1]["app"]["pid"], 303);
+        assert_eq!(value["apps"][1]["status"], "appNotFound");
+        assert!(value["apps"][1]["windows"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn computer_list_app_windows_by_bundle_id_propagates_app_list_failure() {
+        let runtime = BundleIdAppWindowsRuntime {
+            fail_apps: true,
+            fail_pid: None,
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL,
+            &serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("inspection_failed"));
+        assert!(result.content[0]
+            .text
+            .contains("failed to list running apps"));
     }
 
     #[test]
