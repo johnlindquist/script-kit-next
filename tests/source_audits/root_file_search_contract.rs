@@ -319,8 +319,37 @@ mod tests {
         }
         assert!(
             filtering_source.contains("self.root_file_search_mode")
+                && filtering_source.contains("self.root_file_search_loading")
                 && filtering_source.contains("&self.root_file_results"),
-            "filtering cache should pass the root file source mode alongside collected rows"
+            "filtering cache should pass the root file source mode, loading state, and collected rows"
+        );
+    }
+
+    #[test]
+    fn root_file_loading_state_reaches_files_section_header() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+
+        assert!(
+            grouping_source.contains("root_file_search_loading: bool"),
+            "root grouping should accept the root file provider loading state"
+        );
+        assert!(
+            grouping_source.contains("fn root_file_section_title(")
+                && grouping_source.contains("\"Files · Searching...\"")
+                && grouping_source.contains("\"Files · Loading folder...\""),
+            "root Files section should expose distinct loading copy for global and directory modes"
+        );
+        assert!(
+            grouping_source
+                .contains("root_file_section_title(mode, root_file_search_loading).to_string()"),
+            "root Files section header should be computed from mode and loading state"
+        );
+        assert!(
+            filtering_source.contains("self.root_file_search_loading"),
+            "filtering cache should pass root provider loading state into grouping"
         );
     }
 
