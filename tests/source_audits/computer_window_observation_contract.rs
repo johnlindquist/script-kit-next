@@ -30,6 +30,7 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub struct ComputerUseWindowObservationV1",
         "#[serde(skip_serializing_if = \"Option::is_none\")]",
         "pub duplicate_group: Option<WindowDuplicateGroupV1>,",
+        "pub title_fallback: Option<WindowTitleFallbackV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
@@ -40,6 +41,11 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub enum WindowDuplicateSelectionBasis",
         "pub struct WindowDuplicateObservationInputV1",
         "pub fn window_duplicate_groups_v1(",
+        "pub struct WindowTitleFallbackV1",
+        "pub enum WindowTitleFallbackStatus",
+        "pub enum WindowTitleFallbackSelectionBasis",
+        "pub struct WindowTitleFallbackObservationInputV1",
+        "pub fn window_title_fallbacks_v1(",
         "pub const COMPUTER_USE_WINDOW_OBSERVATION_SCHEMA_VERSION: u32 = 1;",
         "pub const WINDOW_CAPTURE_REQUIRED_LAYER: i64 = 0;",
         "pub const WINDOW_CAPTURE_MIN_ALPHA: f64 = 0.01;",
@@ -155,6 +161,54 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         );
     }
 
+    let title_helper_body = extract_function_body(&module, "pub fn window_title_fallbacks_v1(");
+    for needle in [
+        "let eligible_candidate_count = windows.iter().filter(|window| window.is_eligible()).count();",
+        "WindowTitleFallbackStatus::NonEmptyTitle",
+        "WindowTitleFallbackStatus::EmptyTitleSoleCandidate",
+        "WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates",
+        "WindowTitleFallbackSelectionBasis::PreferNonEmptyTitleThenAllowEmptyOnlyIfSoleCandidate",
+        ".title",
+        ".trim().is_empty()",
+        "eligible_candidate_count == 1",
+    ] {
+        assert!(
+            title_helper_body.contains(needle),
+            "title fallback helper must pin {needle}"
+        );
+    }
+    let title_eligibility_body = extract_function_body(&module, "fn is_eligible(&self) -> bool");
+    for needle in [
+        "self.capture_candidate_status == WindowCaptureCandidateStatus::Candidate",
+        "self.duplicate_group_status != Some(WindowDuplicateGroupStatus::Duplicate)",
+    ] {
+        assert!(
+            title_eligibility_body.contains(needle),
+            "title fallback eligibility must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "CoreGraphics",
+        "CGWindowListCopyWindowInfo",
+        "NSWorkspace",
+        "AppKit",
+        "retain(",
+        "dedup",
+        "remove(",
+        "sort",
+        "focus",
+        "activate",
+        "capture",
+        "click",
+        "press",
+        "execute",
+    ] {
+        assert!(
+            !title_helper_body.contains(forbidden),
+            "title fallback helper must stay diagnostic-only; found {forbidden}"
+        );
+    }
+
     for needle in [
         "let duplicate_groups = window_duplicate_groups_v1(",
         ".iter()",
@@ -167,6 +221,30 @@ fn computer_window_observation_is_additive_read_only_metadata() {
             "CoreGraphics bridge must annotate duplicate groups without changing returned rows: {needle}"
         );
     }
+
+    for needle in [
+        "let title_fallbacks = window_title_fallbacks_v1(",
+        "WindowTitleFallbackObservationInputV1",
+        "title: window.title.clone()",
+        "capture_candidate_status: observation.capture_candidate.status.clone()",
+        ".map(|group| group.status.clone())",
+        "observation.title_fallback = title_fallback;",
+        "Ok(windows)",
+    ] {
+        assert!(
+            bridge.contains(needle),
+            "CoreGraphics bridge must annotate title fallback without changing returned rows: {needle}"
+        );
+    }
+    assert!(
+        bridge
+            .find("observation.duplicate_group = duplicate_group;")
+            .expect("duplicate group assignment")
+            < bridge
+                .find("let title_fallbacks = window_title_fallbacks_v1(")
+                .expect("title fallback assignment"),
+        "title fallback must be computed after duplicate-group annotation"
+    );
 
     assert!(
         !mcp_tools.contains("COMPUTER_WINDOW_OBSERVATION_TOOL")
@@ -186,6 +264,11 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "preferred",
         "duplicate",
         "onScreenThenLargestAreaThenLowestZOrder",
+        "titleFallback",
+        "nonEmptyTitle",
+        "emptyTitleSoleCandidate",
+        "emptyTitleAmongMultipleCandidates",
+        "preferNonEmptyTitleThenAllowEmptyOnlyIfSoleCandidate",
         "layerNonZero",
         "alphaTooLow",
         "sharingStateNone",
