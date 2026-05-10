@@ -833,6 +833,27 @@ mod tests {
         }
     }
 
+    struct PanickingComputerUseRuntime;
+
+    impl ComputerUseRuntimeBridge for PanickingComputerUseRuntime {
+        fn inspect_automation_window(
+            &self,
+            _request: ComputerUseInspectRequest,
+        ) -> Result<AutomationInspectSnapshot, ComputerUseRuntimeError> {
+            panic!("computer/list_tray_menu must not inspect automation windows")
+        }
+
+        fn list_running_apps(
+            &self,
+            _request: ComputerUseListAppsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            panic!("computer/list_tray_menu must not list running apps")
+        }
+    }
+
     #[test]
     fn computer_use_tool_definitions_are_registered() {
         let names: Vec<String> = get_computer_use_tool_definitions()
@@ -1500,6 +1521,18 @@ mod tests {
         assert!(value["sections"].is_array());
         assert!(!result.content[0].text.contains("\"click\""));
         assert!(!result.content[0].text.contains("\"execute\""));
+    }
+
+    #[test]
+    fn computer_list_tray_menu_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_TRAY_MENU_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
     }
 
     #[test]
