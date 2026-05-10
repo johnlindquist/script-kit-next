@@ -19,6 +19,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - Execution routes through the built-in execution pipeline and can branch into view changes, popups, ACP handoffs, note flows, system actions, or current-app automation.
 - Reset Windows immediately clears persisted bounds, resets the launcher to the default main-menu search, and moves the visible main window back to its default eye-line position without HUD feedback.
 - File search treats plain `Enter` as the default OS open action for the selected item, including directories, while `Tab` browses into a selected directory inline and `Shift+Tab` moves up.
+- Root launcher search appends a capped `Files` section for eligible plain-text queries using a cancellable Spotlight-backed background source. Dedicated File Search remains richer: `Enter` opens, `Tab` browses into directories, `Shift+Tab` moves up, and bounded filesystem fallback belongs only to that view.
 - File-search directory browsing keeps the current directory rows visible until the next directory stream completes and applies one stable replacement batch, avoiding blank flashes and visible row churn during `Tab` navigation.
 - File search renders a six-row skeleton while choices are still loading and no cached results are visible, preserving the real row columns instead of collapsing to a text-only spinner.
 - File-search modified-time sorts compare folders and files together, so newest/oldest ordering is not overridden by directory-first grouping.
@@ -41,6 +42,8 @@ These files define the built-in catalog and its execution paths.
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs) - Frontmost-app identity tracking and PID-aware menu cache ownership so refreshes cannot republish stale menu trees for the wrong app.
 - [src/fallbacks/builtins.rs](/Users/johnlindquist/dev/script-kit-gpui/src/fallbacks/builtins.rs) - Built-in fallback ordering, including the current-app fallback that anchors empty-result flows.
 - [src/scripts/grouping.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/grouping.rs) - Main-menu grouping and the exact-name default Suggested seed list used for empty frecency stores.
+- [src/app_impl/root_file_search.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/root_file_search.rs) - Root launcher file-result source, cancellation, debounce, and cache invalidation.
+- [src/file_search/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/file_search/mod.rs) - File search result types, root-file eligibility, and root-file ranking caps.
 - [src/scripts/search/scripts.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/search/scripts.rs) - Script body-content search scoring and the exclusion of legacy machine-only current-app recipe headers from launcher matching.
 - [src/render_builtins/dictation_history.rs](/Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/dictation_history.rs) - Dictation history browser rendering, keyboard actions, and preview layout.
 - [src/browser_history.rs](/Users/johnlindquist/dev/script-kit-gpui/src/browser_history.rs) - Browser history snapshot loading, duplicate collapse, caching, and fuzzy ranking for the ACP attachment portal.
@@ -62,6 +65,8 @@ These source files back the built-in behavior described here.
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs)
 - [src/fallbacks/builtins.rs](/Users/johnlindquist/dev/script-kit-gpui/src/fallbacks/builtins.rs)
 - [src/scripts/grouping.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/grouping.rs)
+- [src/app_impl/root_file_search.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/root_file_search.rs)
+- [src/file_search/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/file_search/mod.rs)
 - [src/scripts/search/scripts.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/search/scripts.rs)
 - [src/render_builtins/dictation_history.rs](/Users/johnlindquist/dev/script-kit-gpui/src/render_builtins/dictation_history.rs)
 - [src/browser_history.rs](/Users/johnlindquist/dev/script-kit-gpui/src/browser_history.rs)

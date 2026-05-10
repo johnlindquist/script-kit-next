@@ -347,7 +347,7 @@ impl ScriptListApp {
             let search_text =
                 crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, raw_filter_text);
             let advanced_query = self.menu_syntax_mode.advanced_query_for(raw_filter_text);
-            crate::scripts::get_grouped_results_with_validation_and_query(
+            crate::scripts::get_grouped_results_with_validation_query_and_root_files(
                 &self.scripts,
                 &self.scriptlets,
                 &self.builtin_entries,
@@ -361,6 +361,7 @@ impl ScriptListApp {
                 Some(&self.input_history),
                 self.script_validation_report.as_deref(),
                 advanced_query,
+                &self.root_file_results,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
@@ -424,6 +425,12 @@ impl ScriptListApp {
             );
         }
 
+        self.main_menu_result_caches.clone_grouped_results()
+    }
+
+    pub(crate) fn cached_grouped_results_snapshot(
+        &self,
+    ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
         self.main_menu_result_caches.clone_grouped_results()
     }
 

@@ -41,6 +41,7 @@ pub(super) fn build_search_mode_results(
                 SearchResult::Window(wm) => {
                     Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                 }
+                SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
                 // Suppressed: agents don't participate in search-mode frecency
                 SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,

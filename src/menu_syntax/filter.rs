@@ -48,6 +48,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::BuiltIn(_) => ArtifactKind::Builtin,
         SearchResult::App(_) => ArtifactKind::App,
         SearchResult::Window(_) => ArtifactKind::Window,
+        SearchResult::File(_) => ArtifactKind::File,
         SearchResult::Agent(_) => ArtifactKind::Agent,
         SearchResult::Fallback(_) => ArtifactKind::Fallback,
         SearchResult::ScriptIssue(_) => ArtifactKind::Issue,

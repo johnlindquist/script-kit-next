@@ -2975,6 +2975,7 @@ impl ScriptListApp {
             scripts::SearchResult::BuiltIn(_) => "builtin",
             scripts::SearchResult::App(_) => "app",
             scripts::SearchResult::Window(_) => "window",
+            scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::Agent(_) => "agent",
             scripts::SearchResult::Skill(_) => "skill",
             scripts::SearchResult::Fallback(_) => "fallback",
@@ -3006,6 +3007,11 @@ impl ScriptListApp {
             scripts::SearchResult::Window(m) => serde_json::json!({
                 "app": m.window.app,
                 "title": m.window.title,
+            }),
+            scripts::SearchResult::File(m) => serde_json::json!({
+                "name": m.file.name,
+                "path": m.file.path,
+                "fileType": format!("{:?}", m.file.file_type),
             }),
             scripts::SearchResult::Agent(m) => serde_json::json!({
                 "name": m.agent.name,

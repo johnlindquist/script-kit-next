@@ -10,6 +10,7 @@ pub enum ArtifactKind {
     Builtin,
     App,
     Window,
+    File,
     Fallback,
     Issue,
 }
@@ -24,6 +25,7 @@ impl ArtifactKind {
             "builtin" | "built-in" | "builtins" => Some(Self::Builtin),
             "app" | "apps" => Some(Self::App),
             "window" | "windows" => Some(Self::Window),
+            "file" | "files" => Some(Self::File),
             "fallback" | "fallbacks" => Some(Self::Fallback),
             "issue" | "issues" | "scriptissue" | "script-issue" => Some(Self::Issue),
             _ => None,

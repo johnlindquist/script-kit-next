@@ -23,10 +23,7 @@ struct FocusedInfoStyle {
 }
 
 impl FocusedInfoStyle {
-    fn from_theme_and_design(
-        theme: &crate::theme::Theme,
-        design: designs::DesignVariant,
-    ) -> Self {
+    fn from_theme_and_design(theme: &crate::theme::Theme, design: designs::DesignVariant) -> Self {
         let tokens = get_tokens(design);
         let colors = tokens.colors();
         let spacing = tokens.spacing();
@@ -181,8 +178,7 @@ fn render_focused_info_for_result(
             // Source indicator with match highlighting
             let filename = &script_match.filename;
             let filename_indices = &match_indices.filename_indices;
-            let path_segments =
-                render_path_with_highlights(filename, filename, filename_indices);
+            let path_segments = render_path_with_highlights(filename, filename, filename_indices);
 
             let mut path_div = div()
                 .flex()
@@ -229,14 +225,12 @@ fn render_focused_info_for_result(
                 let mut show_script_badges = false;
                 if let Some(ref kit) = script.kit_name {
                     show_script_badges = true;
-                    script_badges = script_badges.child(
-                        focused_info_badge(
-                            &format!("kit: {}", kit),
-                            style.badge_bg_rgba,
-                            style.badge_border_rgba,
-                            style.badge_text_hex,
-                        ),
-                    );
+                    script_badges = script_badges.child(focused_info_badge(
+                        &format!("kit: {}", kit),
+                        style.badge_bg_rgba,
+                        style.badge_border_rgba,
+                        style.badge_text_hex,
+                    ));
                 }
                 // Extension badge
                 {
@@ -253,50 +247,42 @@ fn render_focused_info_for_result(
                     };
                     if !ext_display.is_empty() {
                         show_script_badges = true;
-                        script_badges = script_badges.child(
-                            focused_info_badge(
-                                ext_display,
-                                style.badge_bg_rgba,
-                                style.badge_border_rgba,
-                                style.badge_text_hex,
-                            ),
-                        );
+                        script_badges = script_badges.child(focused_info_badge(
+                            ext_display,
+                            style.badge_bg_rgba,
+                            style.badge_border_rgba,
+                            style.badge_text_hex,
+                        ));
                     }
                 }
                 if let Some(ref alias) = script.alias {
                     show_script_badges = true;
-                    script_badges = script_badges.child(
-                        focused_info_badge(
-                            &format!("alias: {}", alias),
-                            style.accent_badge_bg_rgba,
-                            style.accent_badge_border_rgba,
-                            style.accent_badge_text_hex,
-                        ),
-                    );
+                    script_badges = script_badges.child(focused_info_badge(
+                        &format!("alias: {}", alias),
+                        style.accent_badge_bg_rgba,
+                        style.accent_badge_border_rgba,
+                        style.accent_badge_text_hex,
+                    ));
                 }
                 // Author badge from typed metadata
                 if let Some(ref typed_meta) = script.typed_metadata {
                     if let Some(ref author) = typed_meta.author {
                         show_script_badges = true;
-                        script_badges = script_badges.child(
-                            focused_info_badge(
-                                &format!("by {}", author),
-                                style.badge_bg_rgba,
-                                style.badge_border_rgba,
-                                style.badge_text_hex,
-                            ),
-                        );
+                        script_badges = script_badges.child(focused_info_badge(
+                            &format!("by {}", author),
+                            style.badge_bg_rgba,
+                            style.badge_border_rgba,
+                            style.badge_text_hex,
+                        ));
                     }
                     for tag in &typed_meta.tags {
                         show_script_badges = true;
-                        script_badges = script_badges.child(
-                            focused_info_badge(
-                                tag,
-                                style.badge_bg_rgba,
-                                style.badge_border_rgba,
-                                style.badge_text_hex,
-                            ),
-                        );
+                        script_badges = script_badges.child(focused_info_badge(
+                            tag,
+                            style.badge_bg_rgba,
+                            style.badge_border_rgba,
+                            style.badge_text_hex,
+                        ));
                     }
                 }
                 if show_script_badges {
@@ -305,13 +291,9 @@ fn render_focused_info_for_result(
             }
 
             // Keyboard shortcut
-            let effective_shortcut =
-                script.shortcut.clone().or_else(|| shortcut_display.clone());
+            let effective_shortcut = script.shortcut.clone().or_else(|| shortcut_display.clone());
             if let Some(shortcut_str) = effective_shortcut {
-                content = content.child(focused_info_shortcut_section(
-                    &shortcut_str,
-                    style,
-                ));
+                content = content.child(focused_info_shortcut_section(&shortcut_str, style));
             }
 
             // Description
@@ -382,45 +364,37 @@ fn render_focused_info_for_result(
                     .flex_wrap()
                     .gap(px(s.gap_sm))
                     .pb(px(s.padding_sm));
-                slet_badges = slet_badges.child(
-                    focused_info_badge(
-                        scriptlet.tool_display_name(),
-                        style.badge_bg_rgba,
-                        style.badge_border_rgba,
-                        style.badge_text_hex,
-                    ),
-                );
+                slet_badges = slet_badges.child(focused_info_badge(
+                    scriptlet.tool_display_name(),
+                    style.badge_bg_rgba,
+                    style.badge_border_rgba,
+                    style.badge_text_hex,
+                ));
                 if let Some(ref group) = scriptlet.group {
                     if !group.is_empty() {
-                        slet_badges = slet_badges.child(
-                            focused_info_badge(
-                                group,
-                                style.badge_bg_rgba,
-                                style.badge_border_rgba,
-                                style.badge_text_hex,
-                            ),
-                        );
+                        slet_badges = slet_badges.child(focused_info_badge(
+                            group,
+                            style.badge_bg_rgba,
+                            style.badge_border_rgba,
+                            style.badge_text_hex,
+                        ));
                     }
                 }
                 if let Some(ref alias) = scriptlet.alias {
-                    slet_badges = slet_badges.child(
-                        focused_info_badge(
-                            &format!("alias: {}", alias),
-                            style.accent_badge_bg_rgba,
-                            style.accent_badge_border_rgba,
-                            style.accent_badge_text_hex,
-                        ),
-                    );
+                    slet_badges = slet_badges.child(focused_info_badge(
+                        &format!("alias: {}", alias),
+                        style.accent_badge_bg_rgba,
+                        style.accent_badge_border_rgba,
+                        style.accent_badge_text_hex,
+                    ));
                 }
                 if let Some(ref keyword) = scriptlet.keyword {
-                    slet_badges = slet_badges.child(
-                        focused_info_badge(
-                            &format!("keyword: {}", keyword),
-                            style.accent_badge_bg_rgba,
-                            style.accent_badge_border_rgba,
-                            style.accent_badge_text_hex,
-                        ),
-                    );
+                    slet_badges = slet_badges.child(focused_info_badge(
+                        &format!("keyword: {}", keyword),
+                        style.accent_badge_bg_rgba,
+                        style.accent_badge_border_rgba,
+                        style.accent_badge_text_hex,
+                    ));
                 }
                 content = content.child(slet_badges);
             }
@@ -443,10 +417,7 @@ fn render_focused_info_for_result(
                 .clone()
                 .or_else(|| shortcut_display.clone());
             if let Some(shortcut) = effective_shortcut {
-                content = content.child(focused_info_shortcut_section(
-                    &shortcut,
-                    style,
-                ));
+                content = content.child(focused_info_shortcut_section(&shortcut, style));
             }
         }
 
@@ -465,10 +436,7 @@ fn render_focused_info_for_result(
 
             // Keyboard shortcut
             if let Some(ref shortcut_str) = shortcut_display {
-                content = content.child(focused_info_shortcut_section(
-                    shortcut_str,
-                    style,
-                ));
+                content = content.child(focused_info_shortcut_section(shortcut_str, style));
             }
 
             // Description
@@ -483,8 +451,7 @@ fn render_focused_info_for_result(
 
             // Keywords and feature type as subtle inline tags
             let mut metadata_tags = preview_keyword_tags(&builtin.keywords);
-            let feature_tag =
-                builtin_feature_annotation(&builtin.feature).to_lowercase();
+            let feature_tag = builtin_feature_annotation(&builtin.feature).to_lowercase();
             if !metadata_tags
                 .iter()
                 .any(|tag| tag.eq_ignore_ascii_case(&feature_tag))
@@ -534,10 +501,7 @@ fn render_focused_info_for_result(
 
             // Keyboard shortcut
             if let Some(ref shortcut_str) = shortcut_display {
-                content = content.child(focused_info_shortcut_section(
-                    shortcut_str,
-                    style,
-                ));
+                content = content.child(focused_info_shortcut_section(shortcut_str, style));
             }
 
             // Path
@@ -549,11 +513,8 @@ fn render_focused_info_for_result(
 
             // Bundle ID
             if let Some(bundle_id) = &app.bundle_id {
-                content = content.child(focused_info_labeled_section(
-                    "BUNDLE ID",
-                    bundle_id,
-                    style,
-                ));
+                content =
+                    content.child(focused_info_labeled_section("BUNDLE ID", bundle_id, style));
             }
 
             // Divider + Type indicator
@@ -587,10 +548,7 @@ fn render_focused_info_for_result(
                 "POSITION & SIZE",
                 &format!(
                     "{}×{} at ({}, {})",
-                    window.bounds.width,
-                    window.bounds.height,
-                    window.bounds.x,
-                    window.bounds.y
+                    window.bounds.width, window.bounds.height, window.bounds.x, window.bounds.y
                 ),
                 style,
             ));
@@ -599,6 +557,34 @@ fn render_focused_info_for_result(
             content = content
                 .child(focused_info_divider(style))
                 .child(focused_info_type_indicator("Window", style));
+        }
+
+        scripts::SearchResult::File(file_match) => {
+            let file = &file_match.file;
+            let path = std::path::Path::new(&file.path);
+            let parent = path
+                .parent()
+                .map(|path| path.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(file.name.clone()),
+            );
+
+            if !parent.is_empty() {
+                content = content.child(focused_info_labeled_section("LOCATION", &parent, style));
+            }
+
+            content = content.child(focused_info_labeled_section("PATH", &file.path, style));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("File", style));
         }
 
         scripts::SearchResult::Agent(agent_match) => {
@@ -662,11 +648,7 @@ fn render_focused_info_for_result(
 
             // Kit
             if let Some(kit) = &agent.kit {
-                content = content.child(focused_info_labeled_section(
-                    "KIT",
-                    kit,
-                    style,
-                ));
+                content = content.child(focused_info_labeled_section("KIT", kit, style));
             }
 
             // Divider + Type indicator
@@ -796,7 +778,11 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Skill", style));
         }
         scripts::SearchResult::ScriptIssue(issue) => {
-            let mut summary_row = div().flex().flex_row().gap(px(s.gap_sm)).pb(px(s.padding_sm));
+            let mut summary_row = div()
+                .flex()
+                .flex_row()
+                .gap(px(s.gap_sm))
+                .pb(px(s.padding_sm));
             summary_row = summary_row.child(focused_info_badge(
                 &format!("{} failed", issue.failed_count),
                 style.badge_bg_rgba,
@@ -980,6 +966,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(m) => {
                         Some(format!("window:{}:{}", m.window.app, m.window.title))
                     }
+                    scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
@@ -1081,6 +1068,23 @@ impl ScriptListApp {
                                 format!("window:{}", m.window.id),
                                 false,
                                 "Switch to",
+                            )
+                            .with_frecency(is_suggested, frecency_path),
+                        )
+                    }
+                    scripts::SearchResult::File(m) => {
+                        let action = if m.file.file_type == crate::file_search::FileType::Directory
+                        {
+                            "Open Folder"
+                        } else {
+                            "Open"
+                        };
+                        Some(
+                            ScriptInfo::with_action_verb(
+                                &m.file.name,
+                                m.file.path.clone(),
+                                false,
+                                action,
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )

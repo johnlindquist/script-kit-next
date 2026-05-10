@@ -205,6 +205,12 @@ pub fn render_design_item(
                         Some(IconKind::Svg("File".to_string())),
                     )
                 }
+                SearchResult::File(fm) => (
+                    fm.file.name.clone(),
+                    Some(fm.file.path.clone()),
+                    None,
+                    Some(IconKind::Svg("File".to_string())),
+                ),
                 SearchResult::Skill(sm) => {
                     // Skills use a star icon (gold accent theme)
                     let description = if sm.skill.description.is_empty() {

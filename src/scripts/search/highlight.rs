@@ -200,6 +200,23 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        SearchResult::File(fm) => {
+            let mut indices = MatchIndices::default();
+
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&fm.file.name);
+            if name_matched {
+                indices.name_indices = name_indices;
+            }
+
+            if indices.name_indices.is_empty() {
+                let (path_matched, path_indices) = highlight_ctx.indices_for(&fm.file.path);
+                if path_matched {
+                    indices.filename_indices = path_indices;
+                }
+            }
+
+            indices
+        }
         SearchResult::Skill(sm) => {
             let mut indices = MatchIndices::default();
 

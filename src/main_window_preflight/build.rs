@@ -15,6 +15,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::BuiltIn(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::App(_) => MainWindowPreflightActionKind::LaunchApp,
         crate::scripts::SearchResult::Window(_) => MainWindowPreflightActionKind::SwitchWindow,
+        crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
         crate::scripts::SearchResult::Agent(_) => MainWindowPreflightActionKind::RunAgent,
         crate::scripts::SearchResult::Skill(_) => MainWindowPreflightActionKind::OpenSkill,
         crate::scripts::SearchResult::Fallback(_) => MainWindowPreflightActionKind::RunFallback,

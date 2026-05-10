@@ -17,7 +17,9 @@ impl ScriptListApp {
         match action_id {
             "create_script" => {
                 tracing::info!(category = "UI", trace_id = %trace_id, "create script action - opening scripts folder");
-                let scripts_dir = crate::script_creation::scripts_dir().to_string_lossy().to_string();
+                let scripts_dir = crate::script_creation::scripts_dir()
+                    .to_string_lossy()
+                    .to_string();
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {
@@ -93,12 +95,14 @@ impl ScriptListApp {
                         scripts::SearchResult::Skill(_) => None,
                         scripts::SearchResult::App(_) => None,
                         scripts::SearchResult::Window(_) => None,
+                        scripts::SearchResult::File(_) => None,
                         scripts::SearchResult::Fallback(_) => None,
                         scripts::SearchResult::ScriptIssue(_) => None,
                     };
 
                     if let Some(path) = path_opt {
-                        let editor_launch_rx = self.launch_editor_with_feedback_async(&path, trace_id);
+                        let editor_launch_rx =
+                            self.launch_editor_with_feedback_async(&path, trace_id);
                         let trace_id = trace_id.to_string();
                         let start = std::time::Instant::now();
                         cx.spawn(async move |this, cx| {
@@ -172,10 +176,7 @@ impl ScriptListApp {
                     );
                 }
 
-                let body: gpui::SharedString = format!(
-                    "Move \"{}\" to Trash?",
-                    target.name
-                ).into();
+                let body: gpui::SharedString = format!("Move \"{}\" to Trash?", target.name).into();
 
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
@@ -338,10 +339,7 @@ impl ScriptListApp {
                                 "Async action failed: settings"
                             );
                             this.show_error_toast(
-                                format!(
-                                    "Failed to open {} for settings: {}",
-                                    editor_for_hud, e
-                                ),
+                                format!("Failed to open {} for settings: {}", editor_for_hud, e),
                                 cx,
                             );
                         }
@@ -361,20 +359,12 @@ impl ScriptListApp {
                     owner,
                     Self::quit_script_kit_confirm_options(),
                     move |_window, cx| {
-                        tracing::info!(
-                            category = "UI",
-                            event = "quit_confirmed",
-                            "quit_confirmed"
-                        );
+                        tracing::info!(category = "UI", event = "quit_confirmed", "quit_confirmed");
                         Self::prepare_script_kit_shutdown();
                         cx.quit();
                     },
                     move |_window, _cx| {
-                        tracing::info!(
-                            category = "UI",
-                            event = "quit_cancelled",
-                            "quit_cancelled"
-                        );
+                        tracing::info!(category = "UI", event = "quit_cancelled", "quit_cancelled");
                     },
                 );
 

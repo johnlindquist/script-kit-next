@@ -1,13 +1,20 @@
 use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::Arc;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use tracing::{debug, instrument, warn};
 
-use super::{build_mdquery, detect_file_type, FileResult};
+use super::{
+    build_mdquery, detect_file_type, expand_path, looks_like_advanced_mdquery, FileResult,
+};
+
+const FILESYSTEM_FALLBACK_MAX_VISITED: usize = 75_000;
+const MDFIND_TIMEOUT: Duration = Duration::from_secs(3);
+const MDFIND_POLL_INTERVAL: Duration = Duration::from_millis(25);
 
 /// Events emitted during streaming search
 #[derive(Debug, Clone)]
@@ -27,6 +34,28 @@ pub type CancelToken = Arc<AtomicBool>;
 /// Create a new cancel token
 pub fn new_cancel_token() -> CancelToken {
     Arc::new(AtomicBool::new(false))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchFilesStreamingOptions {
+    pub skip_metadata: bool,
+    pub allow_filesystem_fallback: bool,
+}
+
+impl SearchFilesStreamingOptions {
+    pub fn dedicated_file_search(skip_metadata: bool) -> Self {
+        Self {
+            skip_metadata,
+            allow_filesystem_fallback: true,
+        }
+    }
+
+    pub fn root_search() -> Self {
+        Self {
+            skip_metadata: true,
+            allow_filesystem_fallback: false,
+        }
+    }
 }
 
 /// Search for files using macOS mdfind (Spotlight)
@@ -90,14 +119,38 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
         }
     };
 
-    let reader = BufReader::new(stdout);
+    let (line_tx, line_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line_result in reader.lines() {
+            let _ = line_tx.send(line_result);
+        }
+    });
+
     let mut results = Vec::new();
+    let deadline = Instant::now() + MDFIND_TIMEOUT;
 
     // Stream line-by-line, stopping after limit
-    for line_result in reader.lines() {
+    while results.len() < limit {
         if results.len() >= limit {
             break;
         }
+
+        let line_result = match line_rx.recv_timeout(MDFIND_POLL_INTERVAL) {
+            Ok(line_result) => line_result,
+            Err(RecvTimeoutError::Timeout) => {
+                if child.try_wait().ok().flatten().is_some() {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    warn!("mdfind search timed out; falling back if possible");
+                    let _ = child.kill();
+                    break;
+                }
+                continue;
+            }
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
 
         let line = match line_result {
             Ok(line) => line,
@@ -107,46 +160,9 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
             }
         };
 
-        // Only skip truly empty lines, not lines with spaces
-        // NOTE: .lines() already strips newline characters (\n, \r\n).
-        // We intentionally do NOT call trim() because macOS paths CAN contain
-        // leading/trailing spaces (rare but valid).
-        if line.is_empty() {
-            continue;
+        if let Some(result) = file_result_from_mdfind_line(line, false) {
+            results.push(result);
         }
-
-        let path = Path::new(&line);
-
-        // Get file metadata
-        let (size, modified) = match std::fs::metadata(path) {
-            Ok(meta) => {
-                let size = meta.len();
-                let modified = meta
-                    .modified()
-                    .ok()
-                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                    .map(|d| d.as_secs())
-                    .unwrap_or(0);
-                (size, modified)
-            }
-            Err(_) => (0, 0),
-        };
-
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-
-        let file_type = detect_file_type(path);
-
-        results.push(FileResult {
-            path: line,
-            name,
-            size,
-            modified,
-            file_type,
-        });
     }
 
     // Clean up the child process
@@ -156,6 +172,17 @@ pub fn search_files(query: &str, onlyin: Option<&str>, limit: usize) -> Vec<File
     }
     // Wait for process to fully exit (prevents zombies)
     let _ = child.wait();
+
+    if results.is_empty() && !looks_like_advanced_mdquery(query) {
+        let fallback = search_files_filesystem_fallback(query, onlyin, limit);
+        if !fallback.is_empty() {
+            debug!(
+                result_count = fallback.len(),
+                "Search completed with filesystem fallback results"
+            );
+            return fallback;
+        }
+    }
 
     debug!(result_count = results.len(), "Search completed");
     results
@@ -206,6 +233,27 @@ pub fn search_files_streaming<F>(
     limit: usize,
     cancel: CancelToken,
     skip_metadata: bool,
+    on_event: F,
+) where
+    F: FnMut(SearchEvent),
+{
+    search_files_streaming_with_options(
+        query,
+        onlyin,
+        limit,
+        cancel,
+        SearchFilesStreamingOptions::dedicated_file_search(skip_metadata),
+        on_event,
+    );
+}
+
+#[instrument(skip_all, fields(query = %query, onlyin = ?onlyin, limit = limit, skip_metadata = options.skip_metadata, allow_filesystem_fallback = options.allow_filesystem_fallback))]
+pub fn search_files_streaming_with_options<F>(
+    query: &str,
+    onlyin: Option<&str>,
+    limit: usize,
+    cancel: CancelToken,
+    options: SearchFilesStreamingOptions,
     mut on_event: F,
 ) where
     F: FnMut(SearchEvent),
@@ -247,10 +295,18 @@ pub fn search_files_streaming<F>(
         }
     };
 
-    let reader = BufReader::new(stdout);
-    let mut count = 0usize;
+    let (line_tx, line_rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let reader = BufReader::new(stdout);
+        for line_result in reader.lines() {
+            let _ = line_tx.send(line_result);
+        }
+    });
 
-    for line_result in reader.lines() {
+    let mut count = 0usize;
+    let deadline = Instant::now() + MDFIND_TIMEOUT;
+
+    loop {
         // Check cancellation token before processing each line
         if cancel.load(Ordering::Relaxed) {
             debug!("Search cancelled, killing mdfind");
@@ -264,6 +320,22 @@ pub fn search_files_streaming<F>(
             break;
         }
 
+        let line_result = match line_rx.recv_timeout(MDFIND_POLL_INTERVAL) {
+            Ok(line_result) => line_result,
+            Err(RecvTimeoutError::Timeout) => {
+                if child.try_wait().ok().flatten().is_some() {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    warn!("mdfind streaming search timed out; falling back if possible");
+                    let _ = child.kill();
+                    break;
+                }
+                continue;
+            }
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+
         let line = match line_result {
             Ok(l) => l,
             Err(e) => {
@@ -272,49 +344,262 @@ pub fn search_files_streaming<F>(
             }
         };
 
-        if line.is_empty() {
-            continue;
+        if let Some(result) = file_result_from_mdfind_line(line, options.skip_metadata) {
+            on_event(SearchEvent::Result(result));
+            count += 1;
         }
-
-        let path = Path::new(&line);
-        let name = path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("")
-            .to_string();
-
-        // Optionally skip metadata for faster results
-        let (size, modified) = if skip_metadata {
-            (0, 0)
-        } else {
-            std::fs::metadata(path)
-                .map(|m| {
-                    (
-                        m.len(),
-                        m.modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs())
-                            .unwrap_or(0),
-                    )
-                })
-                .unwrap_or((0, 0))
-        };
-
-        let file_type = detect_file_type(path);
-
-        on_event(SearchEvent::Result(FileResult {
-            path: line,
-            name,
-            size,
-            modified,
-            file_type,
-        }));
-        count += 1;
     }
 
     // Clean up the child process
     let _ = child.wait();
+
+    if options.allow_filesystem_fallback
+        && count == 0
+        && !cancel.load(Ordering::Relaxed)
+        && !looks_like_advanced_mdquery(query)
+    {
+        let fallback = search_files_filesystem_fallback(query, onlyin, limit);
+        for result in fallback {
+            if cancel.load(Ordering::Relaxed) {
+                break;
+            }
+            on_event(SearchEvent::Result(result));
+        }
+    }
+
     debug!(result_count = count, "Streaming search completed");
     on_event(SearchEvent::Done);
+}
+
+fn file_result_from_mdfind_line(line: String, skip_metadata: bool) -> Option<FileResult> {
+    // Only skip truly empty lines, not lines with spaces.
+    // .lines() already strips newline characters; macOS paths can contain
+    // leading/trailing spaces, so do not trim.
+    if line.is_empty() {
+        return None;
+    }
+
+    let path = Path::new(&line);
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string();
+
+    let (size, modified) = if skip_metadata {
+        (0, 0)
+    } else {
+        std::fs::metadata(path)
+            .map(|m| {
+                (
+                    m.len(),
+                    m.modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs())
+                        .unwrap_or(0),
+                )
+            })
+            .unwrap_or((0, 0))
+    };
+
+    let file_type = detect_file_type(path);
+
+    Some(FileResult {
+        path: line,
+        name,
+        size,
+        modified,
+        file_type,
+    })
+}
+
+fn search_files_filesystem_fallback(
+    query: &str,
+    onlyin: Option<&str>,
+    limit: usize,
+) -> Vec<FileResult> {
+    let needle = query.trim().to_lowercase();
+    if needle.is_empty() || limit == 0 {
+        return Vec::new();
+    }
+
+    let roots = fallback_roots(onlyin);
+    if roots.is_empty() {
+        return Vec::new();
+    }
+
+    let mut results = Vec::new();
+    let mut visited = 0usize;
+    let mut stack = roots;
+
+    while let Some(dir) = stack.pop() {
+        if results.len() >= limit || visited >= FILESYSTEM_FALLBACK_MAX_VISITED {
+            break;
+        }
+
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            if results.len() >= limit || visited >= FILESYSTEM_FALLBACK_MAX_VISITED {
+                break;
+            }
+            visited += 1;
+
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+
+            if metadata.is_dir() {
+                if should_skip_fallback_dir(&name) {
+                    continue;
+                }
+                stack.push(path.clone());
+            }
+
+            if !name.to_lowercase().contains(&needle) {
+                continue;
+            }
+
+            let Some(path_str) = path.to_str().map(str::to_string) else {
+                continue;
+            };
+            let modified = metadata
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+
+            results.push(FileResult {
+                path: path_str,
+                name,
+                size: metadata.len(),
+                modified,
+                file_type: detect_file_type(&path),
+            });
+        }
+    }
+
+    results.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.path.cmp(&b.path))
+    });
+    results
+}
+
+fn fallback_roots(onlyin: Option<&str>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(dir) = onlyin {
+        if let Some(expanded) = expand_path(dir) {
+            push_fallback_root(&mut roots, PathBuf::from(expanded));
+        }
+        return roots;
+    }
+
+    if let Some(home) = dirs::home_dir() {
+        push_fallback_root(&mut roots, home.clone());
+        for child in [
+            "Desktop",
+            "Documents",
+            "Downloads",
+            "dev",
+            "Developer",
+            "Projects",
+        ] {
+            push_fallback_root(&mut roots, home.join(child));
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        push_fallback_root(&mut roots, cwd);
+    }
+
+    roots
+}
+
+fn push_fallback_root(roots: &mut Vec<PathBuf>, path: PathBuf) {
+    if !path.is_dir() {
+        return;
+    }
+    let canonical = path.canonicalize().unwrap_or(path);
+    if !roots.iter().any(|existing| existing == &canonical) {
+        roots.push(canonical);
+    }
+}
+
+fn should_skip_fallback_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git"
+            | ".hg"
+            | ".svn"
+            | ".Trash"
+            | ".cache"
+            | "Library"
+            | "node_modules"
+            | "target"
+            | "dist"
+            | "build"
+            | ".next"
+            | ".turbo"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{search_files_filesystem_fallback, SearchFilesStreamingOptions};
+
+    #[test]
+    fn streaming_options_keep_dedicated_file_search_fallback_enabled() {
+        let options = SearchFilesStreamingOptions::dedicated_file_search(true);
+        assert!(options.skip_metadata);
+        assert!(options.allow_filesystem_fallback);
+    }
+
+    #[test]
+    fn streaming_options_disable_root_search_fallback() {
+        let options = SearchFilesStreamingOptions::root_search();
+        assert!(options.skip_metadata);
+        assert!(!options.allow_filesystem_fallback);
+    }
+
+    #[test]
+    fn filesystem_fallback_finds_files_inside_onlyin_directory() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        let wanted = temp.path().join("script-kit-search-target.txt");
+        std::fs::write(&wanted, "fixture").expect("write fixture");
+
+        let results = search_files_filesystem_fallback("search-target", temp.path().to_str(), 10);
+
+        assert!(
+            results
+                .iter()
+                .any(|entry| entry.path == wanted.to_string_lossy()),
+            "fallback should find filename matches under onlyin"
+        );
+    }
+
+    #[test]
+    fn filesystem_fallback_respects_limit() {
+        let temp = tempfile::tempdir().expect("temp dir");
+        for ix in 0..3 {
+            std::fs::write(
+                temp.path().join(format!("limit-target-{ix}.txt")),
+                "fixture",
+            )
+            .expect("write fixture");
+        }
+
+        let results = search_files_filesystem_fallback("limit-target", temp.path().to_str(), 2);
+
+        assert_eq!(results.len(), 2);
+    }
 }
