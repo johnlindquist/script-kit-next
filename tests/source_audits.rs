@@ -140,6 +140,9 @@ mod computer_list_menu_item_paths_contract;
 #[path = "source_audits/computer_get_menu_item_by_index_path_contract.rs"]
 mod computer_get_menu_item_by_index_path_contract;
 
+#[path = "source_audits/computer_list_apps_by_bundle_id_contract.rs"]
+mod computer_list_apps_by_bundle_id_contract;
+
 #[path = "source_audits/computer_list_native_windows_contract.rs"]
 mod computer_list_native_windows_contract;
 

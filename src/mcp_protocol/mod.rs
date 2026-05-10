@@ -711,6 +711,10 @@ mod tests {
             "Should include computer/get_app"
         );
         assert!(
+            tool_names.contains(&"computer/list_apps_by_bundle_id"),
+            "Should include computer/list_apps_by_bundle_id"
+        );
+        assert!(
             tool_names.contains(&"computer/list_app_windows"),
             "Should include computer/list_app_windows"
         );
