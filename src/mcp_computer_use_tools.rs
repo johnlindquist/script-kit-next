@@ -22,6 +22,7 @@ pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
+pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
@@ -57,6 +58,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_list_menus_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
+            description: "List Script Kit's own tray menu model without opening the menu, clicking status items, invoking actions, or requesting permissions."
+                .to_string(),
+            input_schema: computer_list_tray_menu_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_LIST_SCREENS_TOOL.to_string(),
             description: "List attached screens/displays without moving windows, changing screen placement, or requesting permissions."
                 .to_string(),
@@ -85,6 +92,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
+        COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments, runtime),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
@@ -128,6 +136,10 @@ struct ComputerUseListAppsResult {
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ComputerUseListMenusArgs {}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListTrayMenuArgs {}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -289,6 +301,28 @@ fn handle_list_menus(arguments: &Value) -> ToolResult {
         menus: snapshot.items.iter().map(computer_use_menu_item).collect(),
         warnings: Vec::new(),
     })
+}
+
+fn handle_list_tray_menu(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let _args: ComputerUseListTrayMenuArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/list_tray_menu requires the live GPUI runtime bridge to read Script Kit tray state safely",
+        );
+    };
+
+    match runtime.list_tray_menu() {
+        Ok(snapshot) => json_tool_result(&snapshot),
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
 }
 
 fn computer_use_menu_item(item: &MenuBarItem) -> ComputerUseMenuItem {
@@ -578,6 +612,14 @@ fn computer_list_menus_input_schema() -> Value {
     })
 }
 
+fn computer_list_tray_menu_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_list_screens_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -677,6 +719,15 @@ mod tests {
                 },
             )
         }
+
+        fn list_tray_menu(
+            &self,
+        ) -> Result<crate::tray::TrayMenuObservation, ComputerUseRuntimeError> {
+            Ok(crate::tray::tray_menu_observation_snapshot(
+                &crate::updates::UpdateState::Idle,
+                true,
+            ))
+        }
     }
 
     #[test]
@@ -693,6 +744,7 @@ mod tests {
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
+                COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
@@ -781,6 +833,28 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_tray_menu_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_TRAY_MENU_TOOL)
+            .expect("computer/list_tray_menu tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+    }
+
+    #[test]
     fn computer_list_permissions_tool_definition_has_closed_schema() {
         let tool = get_computer_use_tool_definitions()
             .into_iter()
@@ -843,6 +917,18 @@ mod tests {
     fn computer_list_apps_without_runtime_returns_tool_error() {
         let result =
             handle_computer_use_tool_call(COMPUTER_LIST_APPS_TOOL, &serde_json::json!({}), None);
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
+    fn computer_list_tray_menu_without_runtime_returns_tool_error() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_TRAY_MENU_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
 
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("runtime_unavailable"));
@@ -975,6 +1061,26 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_tray_menu_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "execute": true }),
+            serde_json::json!({ "index": 0 }),
+            serde_json::json!({ "itemName": "GitHub" }),
+            serde_json::json!({ "actionId": "tray.open_github" }),
+            serde_json::json!({ "open": true }),
+            serde_json::json!({ "target": "menubar" }),
+            serde_json::json!({ "includeGlobalStatusItems": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_LIST_TRAY_MENU_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_permissions_rejects_bad_arguments() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_PERMISSIONS_TOOL,
@@ -1078,6 +1184,26 @@ mod tests {
                 "computer/list_menus result must not expose menu action handles; found {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn computer_list_tray_menu_with_runtime_returns_snapshot() {
+        let runtime = FakeComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_TRAY_MENU_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_tray_menu json");
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["owner"]["scope"], "ownTrayMenuOnly");
+        assert!(value["sections"].is_array());
+        assert!(!result.content[0].text.contains("\"click\""));
+        assert!(!result.content[0].text.contains("\"execute\""));
     }
 
     #[test]
