@@ -7,8 +7,7 @@ fn root_unified_acp_history_config_is_real_and_scoped() {
     assert!(config_types.contains("fn acp_history_section_options("));
     assert!(config_schema.contains("acpHistory?: UnifiedSearchAcpHistoryConfig"));
     assert!(
-        !config_schema.contains("unifiedSearch?: { clipboard")
-            && !config_schema.contains("clipboard?: UnifiedSearch")
+        config_schema.contains("clipboardHistory?: UnifiedSearchClipboardHistoryConfig")
             && !config_schema.contains("notes?: UnifiedSearch"),
         "config.ts schema should only expose implemented unified-search sources"
     );

@@ -57,6 +57,7 @@ pub struct UnifiedSearchConfig {
     pub enabled: bool,
     pub files: UnifiedSearchFilesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
+    pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
 }
 
 impl Default for UnifiedSearchConfig {
@@ -65,6 +66,7 @@ impl Default for UnifiedSearchConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
             files: UnifiedSearchFilesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
+            clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
         }
     }
 }
@@ -105,6 +107,26 @@ impl Default for UnifiedSearchAcpHistoryConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED,
             max_results: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchClipboardHistoryConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+}
+
+impl Default for UnifiedSearchClipboardHistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_MIN_QUERY_CHARS,
+            scan_limit: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_SCAN_LIMIT,
         }
     }
 }
@@ -1082,6 +1104,23 @@ impl Config {
     /// Returns unified root-search configuration, or defaults if not configured.
     pub fn get_unified_search(&self) -> UnifiedSearchConfig {
         self.unified_search.clone().unwrap_or_default()
+    }
+
+    /// Returns root clipboard-history options, gated by unified search and the built-in feature.
+    #[allow(dead_code)]
+    pub(crate) fn root_clipboard_history_section_options(
+        &self,
+    ) -> crate::clipboard_history::RootClipboardHistorySectionOptions {
+        let unified = self.get_unified_search();
+        let builtins = self.get_builtins();
+        crate::clipboard_history::RootClipboardHistorySectionOptions {
+            enabled: unified.enabled
+                && builtins.clipboard_history
+                && unified.clipboard_history.enabled,
+            max_results: unified.clipboard_history.max_results.clamp(1, 5),
+            min_query_chars: unified.clipboard_history.min_query_chars.clamp(2, 32),
+            scan_limit: unified.clipboard_history.scan_limit.clamp(25, 1000),
+        }
     }
 
     /// Returns the notes hotkey configuration, or None if not configured.

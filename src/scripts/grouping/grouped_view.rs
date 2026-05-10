@@ -130,6 +130,9 @@ pub(super) fn build_grouped_view_results(
             }
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
+            SearchResult::ClipboardHistory(cm) => {
+                Some(format!("clipboard-history/{}", cm.entry.id))
+            }
             // Suppressed: agents are not top-level launcher artifacts
             SearchResult::Agent(_) => None,
             // Fallbacks don't have paths - they're only shown in search mode, not grouped view
@@ -186,6 +189,7 @@ pub(super) fn build_grouped_view_results(
                     }
                     SearchResult::File(_) => {}
                     SearchResult::AcpHistory(_) => {}
+                    SearchResult::ClipboardHistory(_) => {}
                     SearchResult::App(_) => apps_indices.push(idx),
                     // Suppressed: agents are not top-level launcher artifacts
                     SearchResult::Agent(_) => {
@@ -219,6 +223,7 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::File(_) => {}
                 SearchResult::AcpHistory(_) => {}
+                SearchResult::ClipboardHistory(_) => {}
                 SearchResult::App(_) => apps_indices.push(idx),
                 // Suppressed: agents are not top-level launcher artifacts
                 SearchResult::Agent(_) => {}

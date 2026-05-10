@@ -1216,6 +1216,10 @@ fn unified_search_defaults_enable_files_but_disable_promotion() {
     assert!(unified.acp_history.enabled);
     assert_eq!(unified.acp_history.max_results, 3);
     assert_eq!(unified.acp_history.min_query_chars, 3);
+    assert!(!unified.clipboard_history.enabled);
+    assert_eq!(unified.clipboard_history.max_results, 3);
+    assert_eq!(unified.clipboard_history.min_query_chars, 3);
+    assert_eq!(unified.clipboard_history.scan_limit, 200);
 }
 
 #[test]
@@ -1278,6 +1282,32 @@ fn unified_search_acp_history_options_are_sanitized() {
 
     assert_eq!(options.max_results, 5);
     assert_eq!(options.min_query_chars, 2);
+}
+
+#[test]
+fn unified_search_clipboard_history_is_opt_in_and_gated_by_builtins() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "builtIns": { "clipboardHistory": false },
+        "unifiedSearch": {
+            "clipboardHistory": {
+                "enabled": true,
+                "maxResults": 99,
+                "minQueryChars": 1,
+                "scanLimit": 9999
+            }
+        }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let unified = config.get_unified_search();
+    let options = config.root_clipboard_history_section_options();
+
+    assert!(unified.clipboard_history.enabled);
+    assert!(!options.enabled);
+    assert_eq!(options.max_results, 5);
+    assert_eq!(options.min_query_chars, 2);
+    assert_eq!(options.scan_limit, 1000);
 }
 
 #[test]

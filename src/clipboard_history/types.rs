@@ -134,6 +134,40 @@ pub struct ClipboardEntryMeta {
     pub ocr_text: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RootClipboardHistorySectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+}
+
+impl Default for RootClipboardHistorySectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_results: 3,
+            min_query_chars: 3,
+            scan_limit: 200,
+        }
+    }
+}
+
+pub fn root_clipboard_history_query_is_eligible(
+    query: &str,
+    options: RootClipboardHistorySectionOptions,
+) -> bool {
+    let query = query.trim();
+    options.enabled && !query.contains('\n') && query.chars().count() >= options.min_query_chars
+}
+
+pub fn root_clipboard_entry_is_eligible(entry: &ClipboardEntryMeta) -> bool {
+    matches!(
+        entry.content_type,
+        ContentType::Text | ContentType::Link | ContentType::File | ContentType::Color
+    )
+}
+
 impl ClipboardEntryMeta {
     /// Get a display-friendly preview string for list items
     pub fn display_preview(&self) -> String {
@@ -458,5 +492,48 @@ mod tests {
 
         let total_entries: usize = grouped.iter().map(|(_, entries)| entries.len()).sum();
         assert_eq!(total_entries, 3, "All entries should be grouped");
+    }
+
+    #[test]
+    fn clipboard_history_root_query_requires_opt_in_and_minimum_length() {
+        let options = RootClipboardHistorySectionOptions {
+            enabled: true,
+            max_results: 3,
+            min_query_chars: 3,
+            scan_limit: 200,
+        };
+
+        assert!(root_clipboard_history_query_is_eligible("fix", options));
+        assert!(!root_clipboard_history_query_is_eligible("fi", options));
+        assert!(!root_clipboard_history_query_is_eligible(
+            "fix\ncase",
+            options
+        ));
+        assert!(!root_clipboard_history_query_is_eligible(
+            "fix",
+            RootClipboardHistorySectionOptions {
+                enabled: false,
+                ..options
+            }
+        ));
+    }
+
+    #[test]
+    fn clipboard_history_root_rows_exclude_images() {
+        let mut entry = ClipboardEntryMeta {
+            id: "clip-1".to_string(),
+            content_type: ContentType::Text,
+            timestamp: 1_778_000_000_000,
+            pinned: false,
+            text_preview: "fix spelling".to_string(),
+            image_width: None,
+            image_height: None,
+            byte_size: 12,
+            ocr_text: None,
+        };
+
+        assert!(root_clipboard_entry_is_eligible(&entry));
+        entry.content_type = ContentType::Image;
+        assert!(!root_clipboard_entry_is_eligible(&entry));
     }
 }

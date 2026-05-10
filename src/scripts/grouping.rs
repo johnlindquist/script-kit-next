@@ -390,6 +390,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         root_recent_file_results,
         crate::file_search::RootFileSectionOptions::default(),
         &[],
+        crate::clipboard_history::RootClipboardHistorySectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
+        &[],
         crate::ai::acp::history::RootAcpHistorySectionOptions {
             enabled: false,
             ..Default::default()
@@ -418,6 +423,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
     root_file_options: crate::file_search::RootFileSectionOptions,
+    root_clipboard_history_hits: &[crate::clipboard_history::ClipboardEntryMeta],
+    root_clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
@@ -456,6 +463,14 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         filter_text,
         advanced_query,
         root_file_options,
+    );
+    append_root_clipboard_history_section(
+        &mut grouped,
+        &mut flat_results,
+        filter_text,
+        advanced_query,
+        root_clipboard_history_hits,
+        root_clipboard_history_options,
     );
     append_root_acp_history_section(
         &mut grouped,
@@ -525,6 +540,46 @@ fn append_root_acp_history_section(
         .collect::<Vec<_>>();
 
     append_root_passive_section(grouped, flat_results, "AI Conversations", rows);
+}
+
+fn append_root_clipboard_history_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::clipboard_history::ClipboardEntryMeta],
+    options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+) {
+    if advanced_query.is_some()
+        || !crate::clipboard_history::root_clipboard_history_query_is_eligible(filter_text, options)
+    {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(options.max_results)
+        .enumerate()
+        .map(|(rank, entry)| {
+            let content_type = match entry.content_type {
+                crate::clipboard_history::ContentType::Text => "Text",
+                crate::clipboard_history::ContentType::Link => "Link",
+                crate::clipboard_history::ContentType::File => "File",
+                crate::clipboard_history::ContentType::Color => "Color",
+                crate::clipboard_history::ContentType::Image => "Image",
+            };
+            let pinned = if entry.pinned { "Pinned · " } else { "" };
+            let time = crate::formatting::format_relative_time_short_millis(entry.timestamp);
+            SearchResult::ClipboardHistory(crate::scripts::ClipboardHistoryMatch {
+                entry: entry.clone(),
+                title: entry.display_preview(),
+                subtitle: format!("{pinned}{content_type} · {time}"),
+                score: i32::MAX.saturating_sub(rank as i32),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
 }
 
 fn append_recent_root_file_section(
@@ -1101,6 +1156,24 @@ mod advanced_query_tests {
         }
     }
 
+    fn clipboard_history_entry(
+        id: &str,
+        preview: &str,
+        pinned: bool,
+    ) -> crate::clipboard_history::ClipboardEntryMeta {
+        crate::clipboard_history::ClipboardEntryMeta {
+            id: id.to_string(),
+            content_type: crate::clipboard_history::ContentType::Text,
+            timestamp: chrono::Utc::now().timestamp_millis(),
+            pinned,
+            text_preview: preview.to_string(),
+            image_width: None,
+            image_height: None,
+            byte_size: preview.len(),
+            ocr_text: None,
+        }
+    }
+
     #[test]
     fn root_file_rows_append_files_section_for_eligible_search() {
         let frecency_store = FrecencyStore::new();
@@ -1230,6 +1303,127 @@ mod advanced_query_tests {
             },
         );
 
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+    }
+
+    #[test]
+    fn root_clipboard_history_rows_insert_before_acp_and_fallbacks() {
+        let mut grouped = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::SectionHeader("Use \"search\" with...".to_string(), None),
+            GroupedListItem::Item(1),
+        ];
+        let mut flat = vec![
+            builtin_result("Search Files"),
+            root_file_search_handoff_result(
+                "search",
+                crate::file_search::RootFileSectionMode::GlobalQuery,
+            )
+            .unwrap(),
+        ];
+        let clips = vec![clipboard_history_entry(
+            "clip-1",
+            "search copied text",
+            true,
+        )];
+        let acp = vec![acp_history_hit("session-1", "search design notes")];
+
+        append_root_clipboard_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            None,
+            &clips,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+        );
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            None,
+            &acp,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+        );
+
+        assert!(
+            matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "Clipboard History")
+        );
+        assert!(
+            matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations")
+        );
+        assert!(matches!(
+            flat.get(2),
+            Some(SearchResult::ClipboardHistory(hit)) if hit.entry.id == "clip-1"
+        ));
+        assert!(matches!(
+            flat.get(3),
+            Some(SearchResult::AcpHistory(hit)) if hit.entry.session_id == "session-1"
+        ));
+    }
+
+    #[test]
+    fn root_clipboard_history_rows_do_not_append_for_empty_short_disabled_or_advanced_query() {
+        let clips = vec![clipboard_history_entry(
+            "clip-1",
+            "search copied text",
+            false,
+        )];
+        let enabled_options = crate::clipboard_history::RootClipboardHistorySectionOptions {
+            enabled: true,
+            ..Default::default()
+        };
+
+        let mut grouped = Vec::new();
+        let mut flat = Vec::new();
+        append_root_clipboard_history_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            None,
+            &clips,
+            enabled_options,
+        );
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+
+        append_root_clipboard_history_section(
+            &mut grouped,
+            &mut flat,
+            "se",
+            None,
+            &clips,
+            enabled_options,
+        );
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+
+        append_root_clipboard_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            None,
+            &clips,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
+        );
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+
+        let query = advanced_query_from(":type:clipboard search");
+        append_root_clipboard_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            Some(&query),
+            &clips,
+            enabled_options,
+        );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
     }

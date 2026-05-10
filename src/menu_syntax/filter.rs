@@ -50,6 +50,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::Window(_) => ArtifactKind::Window,
         SearchResult::File(_) => ArtifactKind::File,
         SearchResult::AcpHistory(_) => ArtifactKind::AcpHistory,
+        SearchResult::ClipboardHistory(_) => ArtifactKind::ClipboardHistory,
         SearchResult::Agent(_) => ArtifactKind::Agent,
         SearchResult::Fallback(_) => ArtifactKind::Fallback,
         SearchResult::ScriptIssue(_) => ArtifactKind::Issue,

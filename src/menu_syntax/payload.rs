@@ -12,6 +12,7 @@ pub enum ArtifactKind {
     Window,
     File,
     AcpHistory,
+    ClipboardHistory,
     Fallback,
     Issue,
 }
@@ -30,6 +31,7 @@ impl ArtifactKind {
             "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
                 Some(Self::AcpHistory)
             }
+            "clipboard" | "clipboard-history" | "clipboardhistory" => Some(Self::ClipboardHistory),
             "fallback" | "fallbacks" => Some(Self::Fallback),
             "issue" | "issues" | "scriptissue" | "script-issue" => Some(Self::Issue),
             _ => None,

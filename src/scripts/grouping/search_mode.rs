@@ -45,6 +45,9 @@ pub(super) fn build_search_mode_results(
                 SearchResult::AcpHistory(am) => {
                     Some(format!("acp-history/{}", am.entry.session_id))
                 }
+                SearchResult::ClipboardHistory(cm) => {
+                    Some(format!("clipboard-history/{}", cm.entry.id))
+                }
                 // Suppressed: agents don't participate in search-mode frecency
                 SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,

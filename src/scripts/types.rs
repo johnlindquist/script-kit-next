@@ -301,6 +301,15 @@ pub struct AcpHistoryMatch {
     pub(crate) subtitle: String,
 }
 
+/// Represents a passive root-search match for recent clipboard metadata.
+#[derive(Clone, Debug)]
+pub struct ClipboardHistoryMatch {
+    pub(crate) entry: crate::clipboard_history::ClipboardEntryMeta,
+    pub(crate) title: String,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+}
+
 /// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, File, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -316,6 +325,8 @@ pub enum SearchResult {
     File(FileMatch),
     /// Saved ACP conversation surfaced as a passive root-search source.
     AcpHistory(AcpHistoryMatch),
+    /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
+    ClipboardHistory(ClipboardHistoryMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
     /// Agent results are actively filtered out of search/grouping/selection.
     /// ACP agent catalog and provider selection remain intact in `src/ai/acp/`.
@@ -348,6 +359,7 @@ impl SearchResult {
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
+            SearchResult::ClipboardHistory(cm) => &cm.title,
             SearchResult::Agent(am) => &am.agent.name,
             SearchResult::Fallback(fm) => fm
                 .title_override
@@ -374,6 +386,7 @@ impl SearchResult {
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
+            SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
             SearchResult::Fallback(fm) => fm
                 .description_override
@@ -394,6 +407,7 @@ impl SearchResult {
             SearchResult::Window(wm) => wm.score,
             SearchResult::File(fm) => fm.score,
             SearchResult::AcpHistory(am) => am.score,
+            SearchResult::ClipboardHistory(cm) => cm.score,
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
@@ -411,6 +425,7 @@ impl SearchResult {
             SearchResult::Window(_) => "Window",
             SearchResult::File(_) => "File",
             SearchResult::AcpHistory(_) => "AI Conversation",
+            SearchResult::ClipboardHistory(_) => "Clipboard",
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
@@ -439,6 +454,7 @@ impl SearchResult {
             ),
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::AcpHistory(_) => None,
+            SearchResult::ClipboardHistory(_) => None,
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::ScriptIssue(_) => None,
@@ -459,6 +475,9 @@ impl SearchResult {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
+            SearchResult::ClipboardHistory(cm) => {
+                Some(format!("clipboard-history/{}", cm.entry.id))
+            }
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
             SearchResult::ScriptIssue(_) => None,
             _ => self.launcher_command_id(),
@@ -484,6 +503,7 @@ impl SearchResult {
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
             SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
             SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
+            SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
             SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
             SearchResult::ScriptIssue(_) => ("Issues", 0xEF4444), // Red-500
@@ -526,6 +546,7 @@ impl SearchResult {
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             SearchResult::File(_) => Some("Files"),
             SearchResult::AcpHistory(_) => Some("AI Conversations"),
+            SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
             SearchResult::ScriptIssue(_) => None,
             _ => None,
         }
@@ -578,6 +599,7 @@ impl SearchResult {
                 }
             }
             SearchResult::AcpHistory(_) => "Resume Conversation",
+            SearchResult::ClipboardHistory(_) => "Paste Clipboard",
             SearchResult::Agent(_) => {
                 // Suppressed: agents are not launchable from the main menu
                 "Agent (suppressed)"
@@ -692,8 +714,9 @@ impl FallbackConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AcpHistoryMatch, FileMatch, SearchResult};
+    use super::{AcpHistoryMatch, ClipboardHistoryMatch, FileMatch, SearchResult};
     use crate::ai::acp::history::{AcpHistoryEntry, AcpHistorySearchField};
+    use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::file_search::{FileResult, FileType};
 
     fn file_result(file_type: FileType) -> FileResult {
@@ -772,5 +795,38 @@ mod tests {
         assert_eq!(result.type_tag_info(), ("AI Chat", 0x22C55E));
         assert_eq!(result.source_name(), Some("AI Conversations"));
         assert_eq!(result.get_default_action_text(), "Resume Conversation");
+    }
+
+    #[test]
+    fn clipboard_history_result_exposes_launcher_metadata() {
+        let result = SearchResult::ClipboardHistory(ClipboardHistoryMatch {
+            entry: ClipboardEntryMeta {
+                id: "clip-123".to_string(),
+                content_type: ContentType::Text,
+                timestamp: 1_778_000_000_000,
+                pinned: false,
+                text_preview: "fix spelling without changing case".to_string(),
+                image_width: None,
+                image_height: None,
+                byte_size: 36,
+                ocr_text: None,
+            },
+            title: "fix spelling without changing case".to_string(),
+            subtitle: "Text · just now".to_string(),
+            score: 70,
+        });
+
+        assert_eq!(result.name(), "fix spelling without changing case");
+        assert_eq!(result.description(), Some("Text · just now"));
+        assert_eq!(result.score(), 70);
+        assert_eq!(result.type_label(), "Clipboard");
+        assert_eq!(result.launcher_command_id(), None);
+        assert_eq!(
+            result.history_result_key(),
+            Some("clipboard-history/clip-123".to_string())
+        );
+        assert_eq!(result.type_tag_info(), ("Clipboard", 0xA78BFA));
+        assert_eq!(result.source_name(), Some("Clipboard History"));
+        assert_eq!(result.get_default_action_text(), "Paste Clipboard");
     }
 }

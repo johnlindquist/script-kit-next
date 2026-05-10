@@ -615,6 +615,34 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("AI Conversation", style));
         }
 
+        scripts::SearchResult::ClipboardHistory(clipboard_match) => {
+            let entry = &clipboard_match.entry;
+
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(clipboard_match.title.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section(
+                "PREVIEW",
+                &entry.display_preview(),
+                style,
+            ));
+            content = content.child(focused_info_labeled_section(
+                "TYPE",
+                entry.content_type.as_str(),
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Clipboard", style));
+        }
+
         scripts::SearchResult::Agent(agent_match) => {
             let agent = &agent_match.agent;
 
@@ -995,6 +1023,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
@@ -1123,6 +1152,14 @@ impl ScriptListApp {
                         false,
                         "Resume",
                     )),
+                    scripts::SearchResult::ClipboardHistory(m) => Some(
+                        ScriptInfo::with_action_verb(
+                            &m.title,
+                            format!("clipboard-history:{}", m.entry.id),
+                            false,
+                            "Paste",
+                        ),
+                    ),
                     scripts::SearchResult::Agent(m) => {
                         // Agents use their path as identifier
                         Some(
