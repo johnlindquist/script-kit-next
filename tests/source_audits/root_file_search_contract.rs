@@ -61,4 +61,24 @@ mod tests {
             "existing streaming entry point should preserve dedicated File Search defaults"
         );
     }
+
+    #[test]
+    fn script_list_automation_reads_grouped_visible_rows() {
+        let collect_source = fs::read_to_string("src/app_layout/collect_elements.rs")
+            .expect("read src/app_layout/collect_elements.rs");
+        let prompt_source = fs::read_to_string("src/prompt_handler/mod.rs")
+            .expect("read src/prompt_handler/mod.rs");
+
+        assert!(
+            collect_source.contains("script_list_visible_row_labels_from_cache")
+                && collect_source.contains("cached_grouped_results_snapshot()")
+                && collect_source.contains("SearchResult::File"),
+            "getElements should expose ScriptList grouped rows, including root file results"
+        );
+        assert!(
+            prompt_source.contains("self.get_grouped_results_cached();")
+                && prompt_source.contains("self.script_list_visible_row_labels_from_cache()"),
+            "getState should refresh grouped rows before reporting ScriptList visible rows"
+        );
+    }
 }
