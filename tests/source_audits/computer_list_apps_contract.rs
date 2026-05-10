@@ -43,13 +43,8 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
         args_struct.contains("#[serde(default)]\n    include_background: bool"),
         "includeBackground must default to false via serde"
     );
-    let arg_fields: Vec<&str> = args_struct
-        .lines()
-        .map(str::trim)
-        .filter(|line| line.ends_with(": bool,"))
-        .collect();
     assert_eq!(
-        arg_fields,
+        field_declarations(args_struct),
         vec!["include_hidden: bool,", "include_background: bool,"],
         "computer/list_apps args must expose exactly the two include flags"
     );
@@ -67,10 +62,25 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
             field
         );
     }
+    let include_hidden_schema = extract_json_object_block(input_schema_body, "\"includeHidden\":");
+    let include_background_schema =
+        extract_json_object_block(input_schema_body, "\"includeBackground\":");
+    assert!(
+        include_hidden_schema.contains("\"type\": \"boolean\""),
+        "includeHidden must be a boolean schema property"
+    );
+    assert!(
+        include_background_schema.contains("\"type\": \"boolean\""),
+        "includeBackground must be a boolean schema property"
+    );
     assert_eq!(
         input_schema_body.matches("\"default\": false").count(),
         2,
         "both computer/list_apps flags must default to false"
+    );
+    assert!(
+        !input_schema_body.contains("\"required\""),
+        "computer/list_apps flags must remain optional with serde defaults"
     );
     assert_eq!(
         extract_json_object_block(input_schema_body, "\"properties\":")
@@ -104,33 +114,29 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
     }
 
     let result_struct = extract_struct_block(&mcp_tools, "struct ComputerUseListAppsResult");
-    for field in [
-        "schema_version: u32",
-        "apps: Vec<ComputerUseRunningAppInfo>",
-        "frontmost_pid: Option<i32>",
-    ] {
-        assert!(
-            result_struct.contains(field),
-            "computer/list_apps result missing {}",
-            field
-        );
-    }
+    assert_eq!(
+        field_declarations(result_struct),
+        vec![
+            "schema_version: u32,",
+            "apps: Vec<ComputerUseRunningAppInfo>,",
+            "frontmost_pid: Option<i32>,",
+        ],
+        "computer/list_apps result must expose exactly schemaVersion, apps, and optional frontmostPid"
+    );
 
     let app_info_struct = extract_struct_block(&runtime, "struct ComputerUseRunningAppInfo");
-    for field in [
-        "pid: i32",
-        "bundle_id: Option<String>",
-        "name: String",
-        "is_active: bool",
-        "is_hidden: bool",
-        "activation_policy: String",
-    ] {
-        assert!(
-            app_info_struct.contains(field),
-            "running app metadata missing {}",
-            field
-        );
-    }
+    assert_eq!(
+        field_declarations(app_info_struct),
+        vec![
+            "pid: i32,",
+            "bundle_id: Option<String>,",
+            "name: String,",
+            "is_active: bool,",
+            "is_hidden: bool,",
+            "activation_policy: String,",
+        ],
+        "running app metadata must expose exactly the six read-only fields"
+    );
     for needle in [
         "action",
         "click",
@@ -173,6 +179,12 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
         "load_scriptlets",
         "Command::new(\"open\")",
         "NSWorkspace",
+        "hide]",
+        "hideOtherApplications",
+        "unhide",
+        "focus",
+        "focus_window",
+        "set_automation_focus",
         "activateWithOptions",
         "activateIgnoringOtherApps",
         "launchApplication",
@@ -212,9 +224,58 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
         bridge.contains("ListRunningApps"),
         "GPUI bridge must carry running-app requests to the GPUI/native side"
     );
+    let bridge_method = extract_function_body(&bridge, "fn list_running_apps(");
+    assert!(
+        bridge_method.contains("GpuiComputerUseRequest::ListRunningApps"),
+        "runtime bridge method must send the ListRunningApps request variant"
+    );
+    assert!(
+        bridge_method.contains("try_send"),
+        "runtime bridge method must use the async GPUI request channel"
+    );
+    for needle in [
+        "NSWorkspace",
+        "runningApplications",
+        "process_manager",
+        "Command::new(\"open\")",
+        "hide]",
+        "hideOtherApplications",
+        "unhide",
+        "focus",
+        "focus_window",
+        "set_automation_focus",
+        "activateWithOptions",
+        "activateIgnoringOtherApps",
+        "launchApplication",
+        "openApplicationAtURL",
+        "terminate",
+        "forceTerminate",
+        "CGEvent",
+        "AXUIElementPerformAction",
+        "AXPress",
+        "CGRequestScreenCaptureAccess",
+        "request_accessibility_permission",
+    ] {
+        assert!(
+            !bridge_method.contains(needle),
+            "runtime bridge method must not perform native/action work directly; found {}",
+            needle
+        );
+    }
     assert!(
         app_run_setup.contains("list_running_apps_on_gpui_thread"),
         "app runtime must execute running-app enumeration on the GPUI side"
+    );
+    let app_run_arm = extract_match_arm(&app_run_setup, "GpuiComputerUseRequest::ListRunningApps");
+    assert!(
+        app_run_arm.contains("cx.update"),
+        "app runtime arm must execute the native wrapper inside cx.update"
+    );
+    assert!(
+        app_run_arm.contains(
+            "list_running_apps_on_gpui_thread(\n                                &request,"
+        ),
+        "app runtime arm must call the GPUI-side running-app wrapper with the request"
     );
 
     let native_wrapper = extract_function_body(&bridge, "pub fn list_running_apps_on_gpui_thread(");
@@ -235,6 +296,12 @@ fn computer_list_apps_is_closed_runtime_bridged_inventory() {
         "read_scripts",
         "load_scriptlets",
         "Command::new(\"open\")",
+        "hide]",
+        "hideOtherApplications",
+        "unhide",
+        "focus",
+        "focus_window",
+        "set_automation_focus",
         "activateWithOptions",
         "activateIgnoringOtherApps",
         "launchApplication",
@@ -278,6 +345,37 @@ fn extract_struct_block<'a>(source: &'a str, signature: &str) -> &'a str {
 
 fn extract_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     extract_braced_block(source, signature)
+}
+
+fn field_declarations(block: &str) -> Vec<&str> {
+    block
+        .lines()
+        .map(str::trim)
+        .map(|line| line.strip_prefix("pub ").unwrap_or(line))
+        .filter(|line| line.ends_with(',') && line.contains(':') && !line.starts_with("#["))
+        .collect()
+}
+
+fn extract_match_arm<'a>(source: &'a str, marker: &str) -> &'a str {
+    let start = source.find(marker).expect("match arm marker");
+    let arrow = source[start..].find("=>").expect("match arm arrow") + start;
+    let open = source[arrow..].find('{').expect("match arm open brace") + arrow;
+    let mut depth = 0usize;
+
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("match arm for {} did not close", marker)
 }
 
 fn extract_json_object_block<'a>(source: &'a str, marker: &str) -> &'a str {
