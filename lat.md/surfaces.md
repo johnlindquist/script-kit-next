@@ -127,7 +127,7 @@ Shared actions-dialog routing now resolves from one view-to-host map and closes 
 
 User-facing launcher timestamps should be readable and consistent across routed surfaces.
 
-`src/formatting.rs` is the shared display layer for relative and absolute timestamp text. Relative labels route through `chrono-humanize` so clipboard history, file search, notes, browser history, ACP chat, env prompts, and process rows avoid local abbreviations such as `5m ago` or raw sortable formats. Storage, cache invalidation, and protocol identity timestamps still keep raw epoch or RFC3339 forms where machine precision matters.
+`src/formatting.rs` is the shared display layer for relative and absolute timestamp text. Relative labels route through `chrono-humanize` after flooring display ages to whole minutes, so clipboard history, file search, notes, browser history, ACP chat, env prompts, and process rows avoid repainting visible seconds, local abbreviations such as `5m ago`, or raw sortable formats. Storage, cache invalidation, and protocol identity timestamps still keep raw epoch or RFC3339 forms where machine precision matters.
 
 ## Global Key Intent Routing
 Main-window global shortcuts should be classified into named intents before dispatch so shortcut behavior has an explicit owner.

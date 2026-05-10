@@ -105,20 +105,18 @@ pub(crate) fn format_relative_seconds(seconds: i64) -> String {
         return "just now".to_string();
     }
 
-    HumanTime::from(chrono::Duration::seconds(-seconds)).to_text_en(Accuracy::Precise, Tense::Past)
+    let minute_floor = seconds - (seconds % 60);
+    HumanTime::from(chrono::Duration::seconds(-minute_floor))
+        .to_text_en(Accuracy::Precise, Tense::Past)
 }
 
 fn format_relative_datetime(dt: DateTime<Utc>) -> String {
-    if dt > Utc::now() {
+    let now = Utc::now();
+    if dt > now {
         return "just now".to_string();
     }
 
-    let text = HumanTime::from(dt).to_text_en(Accuracy::Precise, Tense::Past);
-    if text == "0 seconds ago" {
-        "just now".to_string()
-    } else {
-        text
-    }
+    format_relative_seconds(now.signed_duration_since(dt).num_seconds())
 }
 
 #[cfg(test)]
@@ -227,7 +225,13 @@ mod tests {
     #[test]
     fn test_relative_time_short_seconds() {
         let past = Utc::now() - TimeDelta::seconds(30);
-        assert_eq!(format_relative_time_short_dt(past), "30 seconds ago");
+        assert_eq!(format_relative_time_short_dt(past), "just now");
+    }
+
+    #[test]
+    fn test_relative_time_short_floors_to_whole_minutes() {
+        let past = Utc::now() - TimeDelta::seconds(95);
+        assert_eq!(format_relative_time_short_dt(past), "1 minute ago");
     }
 
     #[test]
@@ -255,6 +259,21 @@ mod tests {
         assert_eq!(result, "2 weeks ago");
     }
 
+    #[test]
+    fn test_relative_time_short_omits_seconds_for_old_values() {
+        let past = Utc::now()
+            - TimeDelta::weeks(7)
+            - TimeDelta::days(3)
+            - TimeDelta::hours(4)
+            - TimeDelta::minutes(28)
+            - TimeDelta::seconds(17);
+        let result = format_relative_time_short_dt(past);
+        assert!(
+            !result.contains("second"),
+            "relative timestamp should not repaint at second precision: {result}"
+        );
+    }
+
     // ── format_relative_time_short_millis ─────────────────────────────────
 
     #[test]
@@ -270,6 +289,16 @@ mod tests {
         assert_eq!(
             format_relative_time_short_millis(five_min_ago),
             "5 minutes ago"
+        );
+    }
+
+    #[test]
+    fn test_relative_time_short_millis_floors_to_whole_minutes() {
+        let now_ms = Utc::now().timestamp_millis();
+        let ninety_five_seconds_ago = now_ms - 95 * 1000;
+        assert_eq!(
+            format_relative_time_short_millis(ninety_five_seconds_ago),
+            "1 minute ago"
         );
     }
 
