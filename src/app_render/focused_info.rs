@@ -669,6 +669,37 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Clipboard", style));
         }
 
+        scripts::SearchResult::DictationHistory(dictation_match) => {
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(dictation_match.preview.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section(
+                "TARGET",
+                &dictation_match.target,
+                style,
+            ));
+            content = content.child(focused_info_labeled_section(
+                "DURATION",
+                &crate::dictation::format_history_duration_ms(dictation_match.audio_duration_ms),
+                style,
+            ));
+            content = content.child(focused_info_labeled_section(
+                "TIME",
+                &crate::dictation::format_history_timestamp(&dictation_match.timestamp),
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Dictation", style));
+        }
+
         scripts::SearchResult::BrowserTab(browser_match) => {
             let hit = &browser_match.hit;
 
@@ -1101,6 +1132,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::DictationHistory(_) => None,
                     scripts::SearchResult::BrowserTab(_) => None,
                     scripts::SearchResult::BrowserHistory(_) => None,
                     scripts::SearchResult::Agent(m) => {
@@ -1241,6 +1273,14 @@ impl ScriptListApp {
                         ScriptInfo::with_action_verb(
                             &m.title,
                             format!("clipboard-history:{}", m.entry.id),
+                            false,
+                            "Paste",
+                        ),
+                    ),
+                    scripts::SearchResult::DictationHistory(m) => Some(
+                        ScriptInfo::with_action_verb(
+                            &m.preview,
+                            format!("dictation-history:{}", m.id),
                             false,
                             "Paste",
                         ),

@@ -1511,6 +1511,7 @@ fn predicate_user_label(predicate: &Predicate) -> String {
             ArtifactKind::Note => "notes only".to_string(),
             ArtifactKind::AcpHistory => "AI conversations only".to_string(),
             ArtifactKind::ClipboardHistory => "clipboard history only".to_string(),
+            ArtifactKind::DictationHistory => "dictation history only".to_string(),
             ArtifactKind::BrowserTab => "browser tabs only".to_string(),
             ArtifactKind::BrowserHistory => "browser history only".to_string(),
             ArtifactKind::Fallback => "fallbacks only".to_string(),
@@ -1558,6 +1559,7 @@ fn artifact_kind_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::Note => "note",
         ArtifactKind::AcpHistory => "acp-history",
         ArtifactKind::ClipboardHistory => "clipboard-history",
+        ArtifactKind::DictationHistory => "dictation-history",
         ArtifactKind::Fallback => "fallback",
         ArtifactKind::Issue => "issue",
     }

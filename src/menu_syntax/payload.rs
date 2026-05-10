@@ -14,6 +14,7 @@ pub enum ArtifactKind {
     Note,
     AcpHistory,
     ClipboardHistory,
+    DictationHistory,
     BrowserTab,
     BrowserHistory,
     Fallback,
@@ -36,6 +37,8 @@ impl ArtifactKind {
                 Some(Self::AcpHistory)
             }
             "clipboard" | "clipboard-history" | "clipboardhistory" => Some(Self::ClipboardHistory),
+            "dictation" | "dictation-history" | "dictationhistory" | "transcript"
+            | "transcripts" => Some(Self::DictationHistory),
             "browser-tab" | "browser-tabs" | "browsertab" | "browsertabs" | "tab" | "tabs" => {
                 Some(Self::BrowserTab)
             }

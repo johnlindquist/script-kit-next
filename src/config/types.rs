@@ -59,6 +59,7 @@ pub struct UnifiedSearchConfig {
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
+    pub dictation_history: UnifiedSearchDictationHistoryConfig,
     pub browser_tabs: UnifiedSearchBrowserTabsConfig,
     pub browser_history: UnifiedSearchBrowserHistoryConfig,
 }
@@ -71,6 +72,7 @@ impl Default for UnifiedSearchConfig {
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
+            dictation_history: UnifiedSearchDictationHistoryConfig::default(),
             browser_tabs: UnifiedSearchBrowserTabsConfig::default(),
             browser_history: UnifiedSearchBrowserHistoryConfig::default(),
         }
@@ -153,6 +155,26 @@ impl Default for UnifiedSearchClipboardHistoryConfig {
             max_results: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_MIN_QUERY_CHARS,
             scan_limit: DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_SCAN_LIMIT,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchDictationHistoryConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+}
+
+impl Default for UnifiedSearchDictationHistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_DICTATION_HISTORY_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_DICTATION_HISTORY_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_DICTATION_HISTORY_MIN_QUERY_CHARS,
+            scan_limit: DEFAULT_UNIFIED_SEARCH_DICTATION_HISTORY_SCAN_LIMIT,
         }
     }
 }
@@ -325,6 +347,18 @@ impl UnifiedSearchConfig {
             search_urls: self.browser_tabs.search_urls,
             providers: self.browser_tabs.providers.clone(),
             cache_ttl_ms: self.browser_tabs.cache_ttl_ms.clamp(1_000, 60_000),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn dictation_history_section_options(
+        &self,
+    ) -> crate::dictation::RootDictationHistorySectionOptions {
+        crate::dictation::RootDictationHistorySectionOptions {
+            enabled: self.enabled && self.dictation_history.enabled,
+            max_results: self.dictation_history.max_results.clamp(1, 5),
+            min_query_chars: self.dictation_history.min_query_chars.clamp(4, 32),
+            scan_limit: self.dictation_history.scan_limit.clamp(25, 200),
         }
     }
 }

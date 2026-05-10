@@ -1305,6 +1305,7 @@ export interface Config extends BaseConfig {
    *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
    *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
    *   clipboardHistory: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
+ *   dictationHistory: { enabled: false, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
    *   browserHistory: { enabled: false, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
    *   browserTabs: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 80, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true, cacheTtlMs: 10000 }
    * }
@@ -1508,6 +1509,8 @@ export interface UnifiedSearchConfig {
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for opt-in passive root clipboard history rows. */
   clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
+  /** Controls for opt-in passive root dictation transcript rows. */
+  dictationHistory?: UnifiedSearchDictationHistoryConfig;
   /** Controls for opt-in passive root open-browser-tab rows. */
   browserTabs?: UnifiedSearchBrowserTabsConfig;
   /** Controls for opt-in passive root browser history rows. */
@@ -1560,6 +1563,17 @@ export interface UnifiedSearchClipboardHistoryConfig {
   /** Minimum query length before clipboard history rows appear. Clamped to 2-32. */
   minQueryChars?: number;
   /** Recent metadata rows to scan without reading raw clipboard content. Clamped to 25-1000. */
+  scanLimit?: number;
+}
+
+export interface UnifiedSearchDictationHistoryConfig {
+  /** Enable dictation transcript rows in root launcher search. Disabled by default. */
+  enabled?: boolean;
+  /** Maximum number of dictation history rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before dictation history rows appear. Clamped to 4-32. */
+  minQueryChars?: number;
+  /** Recent transcript rows to scan from the local compacted history. Clamped to 25-200. */
   scanLimit?: number;
 }
 

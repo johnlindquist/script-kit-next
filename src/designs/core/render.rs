@@ -244,6 +244,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("Clipboard".to_string())),
                 ),
+                SearchResult::DictationHistory(dm) => (
+                    dm.preview.clone(),
+                    Some(dm.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("Mic".to_string())),
+                ),
                 SearchResult::BrowserTab(bm) => (
                     bm.hit.title.clone(),
                     Some(bm.subtitle.clone()),

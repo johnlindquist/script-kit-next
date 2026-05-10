@@ -13,7 +13,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - Direct-provider API key setup commands are no longer exposed as built-ins or Settings actions; agent setup is driven by the Agent Catalog and `config.ts` preferences instead.
 - The launcher now includes a browser-tabs builtin that enumerates tabs from running Safari and Chromium-family browsers, filters them with the shared fuzzy-ranking model, and activates the chosen tab on `Enter`.
 - ACP attachment portals also include a browser-history picker that snapshots recent history from supported browsers, caches that snapshot briefly for reopen speed, collapses duplicate rows by normalized page identity before ranking matches, and drives wheel scrolling through the shared selected-row path so large history sets stay responsive.
-- Root launcher search can also opt into passive Browser Tabs and Browser History rows backed by local browser metadata. These sources are disabled by default and never read page content, favicons, cookies, downloads, or network data.
+- Root launcher search can also opt into passive Dictation History, Browser Tabs, and Browser History rows backed by local metadata. These sources are disabled by default; browser sources never read page content, favicons, cookies, downloads, or network data.
 - Hidden internal built-ins can still resolve by canonical command ID when hotkeys or other programmatic callers need them without exposing them in launcher search.
 - `config.ts` supports a top-level `hiddenCommands: string[]` array of canonical command IDs (e.g. `"builtin/clipboard-history"`, `"script/foo"`). Hidden commands are filtered out of launcher materialization at startup but stay resolvable via `triggerBuiltin` and hotkeys. The older per-command `commands.*.hidden` override continues to work and is OR'd with `hiddenCommands`.
 - User-facing command IDs are canonicalized through the built-in config path instead of being treated as free-form labels.
@@ -164,6 +164,12 @@ Clipboard history rows are an opt-in passive launcher source for non-empty root 
 Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render after Files, Browser Tabs, and Notes, before AI Conversations and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
 
 `config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
+
+## Root Unified Search Dictation History
+
+Dictation history rows are opt-in passive launcher rows backed by saved local transcripts.
+
+Root Dictation History scans the compacted local `dictation-history.jsonl` transcript log with a bounded `scanLimit`, excludes empty, short, newline, disabled, and advanced queries, and appends capped passive rows after Clipboard History and before AI Conversations. Rows carry metadata only: id, preview, target, timestamp, duration, matched field, subtitle, and score. Enter loads the full transcript by selected id and reuses the existing paste flow. The source is disabled by default through `unifiedSearch.dictationHistory` so users explicitly choose whether voice transcripts appear in the main launcher.
 
 ## Root Unified Search Browser History
 

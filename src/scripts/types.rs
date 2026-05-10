@@ -319,6 +319,19 @@ pub struct ClipboardHistoryMatch {
     pub(crate) score: i32,
 }
 
+/// Represents a passive root-search match for a saved dictation transcript.
+#[derive(Clone, Debug)]
+pub struct DictationHistoryMatch {
+    pub(crate) id: String,
+    pub(crate) preview: String,
+    pub(crate) target: String,
+    pub(crate) timestamp: String,
+    pub(crate) audio_duration_ms: u64,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+    pub(crate) matched_field: crate::dictation::DictationHistorySearchField,
+}
+
 /// Represents a passive root-search match for local browser history metadata.
 #[derive(Clone, Debug)]
 pub struct BrowserHistoryMatch {
@@ -354,6 +367,8 @@ pub enum SearchResult {
     AcpHistory(AcpHistoryMatch),
     /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
     ClipboardHistory(ClipboardHistoryMatch),
+    /// Saved dictation transcripts surfaced as an opt-in passive root-search source.
+    DictationHistory(DictationHistoryMatch),
     /// Open browser tab metadata surfaced as an opt-in passive root-search source.
     BrowserTab(BrowserTabMatch),
     /// Local browser history metadata surfaced as an opt-in passive root-search source.
@@ -392,6 +407,7 @@ impl SearchResult {
             SearchResult::Note(nm) => &nm.title,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
             SearchResult::ClipboardHistory(cm) => &cm.title,
+            SearchResult::DictationHistory(dm) => &dm.preview,
             SearchResult::BrowserTab(bm) => &bm.hit.title,
             SearchResult::BrowserHistory(bm) => &bm.hit.title,
             SearchResult::Agent(am) => &am.agent.name,
@@ -422,6 +438,7 @@ impl SearchResult {
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
+            SearchResult::DictationHistory(dm) => Some(dm.subtitle.as_str()),
             SearchResult::BrowserTab(bm) => Some(bm.subtitle.as_str()),
             SearchResult::BrowserHistory(bm) => Some(bm.subtitle.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
@@ -446,6 +463,7 @@ impl SearchResult {
             SearchResult::Note(nm) => nm.score,
             SearchResult::AcpHistory(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
+            SearchResult::DictationHistory(dm) => dm.score,
             SearchResult::BrowserTab(bm) => bm.score,
             SearchResult::BrowserHistory(bm) => bm.score,
             SearchResult::Agent(am) => am.score,
@@ -467,6 +485,7 @@ impl SearchResult {
             SearchResult::Note(_) => "Note",
             SearchResult::AcpHistory(_) => "AI Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
+            SearchResult::DictationHistory(_) => "Dictation",
             SearchResult::BrowserTab(_) => "Browser Tab",
             SearchResult::BrowserHistory(_) => "Browser History",
             SearchResult::Agent(_) => "Agent",
@@ -499,6 +518,7 @@ impl SearchResult {
             SearchResult::Note(_) => None,
             SearchResult::AcpHistory(_) => None,
             SearchResult::ClipboardHistory(_) => None,
+            SearchResult::DictationHistory(_) => None,
             SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(_) => None,
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
@@ -525,6 +545,7 @@ impl SearchResult {
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
+            SearchResult::DictationHistory(dm) => Some(format!("dictation-history/{}", dm.id)),
             SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
@@ -575,6 +596,7 @@ impl SearchResult {
             SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
             SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
             SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
+            SearchResult::DictationHistory(_) => ("Dictation", 0xFB7185), // Rose-400
             SearchResult::BrowserTab(_) => ("Tab", 0x06B6D4), // Cyan-500
             SearchResult::BrowserHistory(_) => ("Web", 0x38BDF8), // Sky-400
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
@@ -621,6 +643,7 @@ impl SearchResult {
             SearchResult::Note(_) => Some("Notes"),
             SearchResult::AcpHistory(_) => Some("AI Conversations"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
+            SearchResult::DictationHistory(_) => Some("Dictation History"),
             SearchResult::BrowserTab(_) => Some("Browser Tabs"),
             SearchResult::BrowserHistory(_) => Some("Browser History"),
             SearchResult::ScriptIssue(_) => None,
@@ -677,6 +700,7 @@ impl SearchResult {
             SearchResult::Note(_) => "Open Note",
             SearchResult::AcpHistory(_) => "Resume Conversation",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
+            SearchResult::DictationHistory(_) => "Paste Dictation",
             SearchResult::BrowserTab(_) => "Switch to Tab",
             SearchResult::BrowserHistory(_) => "Open Page",
             SearchResult::Agent(_) => {

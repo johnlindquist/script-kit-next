@@ -99,6 +99,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Note(_) => None,
                         scripts::SearchResult::AcpHistory(_) => None,
                         scripts::SearchResult::ClipboardHistory(_) => None,
+                        scripts::SearchResult::DictationHistory(_) => None,
                         scripts::SearchResult::BrowserTab(_) => None,
                         scripts::SearchResult::BrowserHistory(_) => None,
                         scripts::SearchResult::Fallback(_) => None,

@@ -332,6 +332,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::DictationHistory(_) => None,
                     scripts::SearchResult::BrowserTab(_) => None,
                     scripts::SearchResult::BrowserHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
@@ -457,6 +458,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::ClipboardHistory(clipboard_match) => {
                         self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
+                    }
+                    scripts::SearchResult::DictationHistory(dictation_match) => {
+                        self.execute_root_dictation_history_paste(&dictation_match.id, cx);
                     }
                     scripts::SearchResult::BrowserTab(browser_tab_match) => {
                         self.execute_root_browser_tab_switch(&browser_tab_match.hit, cx);
@@ -638,6 +642,40 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    pub(crate) fn execute_root_dictation_history_paste(
+        &mut self,
+        entry_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(entry) = crate::dictation::get_history_entry(entry_id) else {
+            logging::log(
+                "ERROR",
+                &format!("Root dictation history entry not found: {entry_id}"),
+            );
+            self.show_hud(
+                "Failed to paste dictation".to_string(),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
+            return;
+        };
+
+        let transcript = entry.transcript;
+        self.hide_main_and_reset(cx);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let injector = crate::text_injector::TextInjector::new();
+            if let Err(error) = injector.paste_text(&transcript) {
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to paste root dictation history: {error}"),
+                );
+            } else {
+                logging::log("EXEC", "Pasted root dictation history transcript");
+            }
+        });
     }
 
     pub(crate) fn execute_root_browser_history_open(

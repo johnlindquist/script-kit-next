@@ -1343,6 +1343,7 @@ impl ScriptListApp {
             scripts::SearchResult::Note(m) => m.title.clone(),
             scripts::SearchResult::AcpHistory(m) => m.entry.title_display().to_string(),
             scripts::SearchResult::ClipboardHistory(m) => m.title.clone(),
+            scripts::SearchResult::DictationHistory(m) => m.preview.clone(),
             scripts::SearchResult::BrowserTab(m) => m.hit.title.clone(),
             scripts::SearchResult::BrowserHistory(m) => m.hit.title.clone(),
             scripts::SearchResult::Agent(m) => m.agent.name.clone(),

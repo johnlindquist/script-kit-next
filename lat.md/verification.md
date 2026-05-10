@@ -88,6 +88,14 @@ Checks must prove that root clipboard search is bounded to metadata, disabled by
 
 Use `cargo test --test source_audits root_unified_clipboard_history_contract -- --nocapture` with the existing root file and ACP history source audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 
+## Root Unified Search Dictation History
+
+Dictation history root rows are verified as opt-in, metadata-only, bounded, local-only, and passive.
+
+Checks must prove that root Dictation History is disabled by default; excludes empty, short, newline, disabled, and advanced queries; scans only the compacted local history loader up to `scanLimit`; does not log raw root query text; carries no full transcript text in root result rows; inserts after Clipboard History and before AI Conversations; uses the shared capped passive-score helper; keys rows by `dictation-history/{id}`; and loads transcript content only after explicit Enter.
+
+Use `cargo test --test source_audits root_unified_dictation_history_contract -- --nocapture` with the existing root stability, passive snapshot, config parity, clipboard history, and ACP history audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof should use a synthetic saved dictation entry when validating the live surface.
+
 ## Root Unified Search Notes
 
 Notes root rows are verified with metadata-only storage tests, passive grouping, stable-key, config, and non-toggle open wiring.
