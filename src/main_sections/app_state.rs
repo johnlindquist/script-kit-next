@@ -236,7 +236,7 @@ impl MainMenuResultCacheState {
             })
     }
 
-    fn grouped_index_for_history_result_key(&self, key: &str) -> Option<usize> {
+    fn grouped_index_for_stable_selection_key(&self, key: &str) -> Option<usize> {
         self.cached_grouped_items
             .iter()
             .enumerate()
@@ -246,7 +246,7 @@ impl MainMenuResultCacheState {
                 };
                 self.cached_grouped_flat_results
                     .get(*result_idx)
-                    .and_then(|result| result.history_result_key())
+                    .and_then(|result| result.stable_selection_key())
                     .filter(|candidate| candidate == key)
                     .map(|_| grouped_index)
             })
@@ -318,7 +318,7 @@ impl ScriptListApp {
                 self.main_menu_result_caches
                     .search_result_for_flat_index(result_idx)
             })
-            .and_then(|result| result.history_result_key());
+            .and_then(|result| result.stable_selection_key());
 
         MainMenuSelectionSnapshot {
             query: self.computed_filter_text.clone(),
@@ -340,7 +340,7 @@ impl ScriptListApp {
         self.get_grouped_results_cached();
         let Some(grouped_index) = self
             .main_menu_result_caches
-            .grouped_index_for_history_result_key(&selected_key)
+            .grouped_index_for_stable_selection_key(&selected_key)
         else {
             return false;
         };
@@ -388,6 +388,8 @@ struct ScriptListApp {
     cached_file_results: Vec<file_search::FileResult>,
     /// Latest capped Spotlight results appended to eligible root launcher searches.
     root_file_results: Vec<file_search::FileResult>,
+    /// Bounded completed global root file batches, keyed by root search request.
+    root_file_result_cache: std::collections::VecDeque<(String, Vec<file_search::FileResult>)>,
     /// Source mode currently backing `root_file_results`.
     root_file_search_mode: Option<file_search::RootFileSectionMode>,
     /// Frecency-backed file rows shown on the empty root launcher.

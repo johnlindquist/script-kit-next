@@ -37,6 +37,9 @@ pub(crate) struct MainWindowPreflightAction {
 pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
     pub selected_index: usize,
+    pub selected_result_key: Option<String>,
+    pub visible_result_key_fingerprint: String,
+    pub visible_result_count: usize,
     pub enter_action: MainWindowPreflightAction,
     pub tab_action: Option<MainWindowPreflightAction>,
     pub warnings: Vec<String>,

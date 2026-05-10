@@ -794,6 +794,7 @@ fn append_root_file_section(
     let promote = root_file_section_should_promote(
         options.promotion_policy,
         mode,
+        root_file_search_loading,
         filter_text,
         &files,
         flat_results,
@@ -821,11 +822,15 @@ fn append_root_file_section(
 fn root_file_section_should_promote(
     policy: crate::file_search::RootFilePromotionPolicy,
     mode: crate::file_search::RootFileSectionMode,
+    root_file_search_loading: bool,
     filter_text: &str,
     files: &[crate::scripts::FileMatch],
     flat_results: &[SearchResult],
 ) -> bool {
     if policy == crate::file_search::RootFilePromotionPolicy::Never {
+        return false;
+    }
+    if root_file_search_loading {
         return false;
     }
     if mode != crate::file_search::RootFileSectionMode::GlobalQuery {

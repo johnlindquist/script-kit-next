@@ -44,9 +44,17 @@ Run `cargo test --lib root_file_path_context`, `cargo check --lib`, `cargo fmt -
 
 Root unified-search safety is verified with grouping, config, and selection-key checks before runtime screenshots.
 
-Files must remain passive by default: they can beat fallback handoff rows, but not command, script, app, skill, or window rows unless an explicit exact-only promotion policy allows it. Async provider updates must preserve the selected stable result key.
+Files must remain passive by default: they can beat fallback handoff rows, but not command, script, app, skill, or window rows unless an explicit exact-only promotion policy allows it. Global root file provider completion must not mutate the active visible frame for the same filter text.
 
 Use `cargo test --test source_audits root_file_search_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If `cargo test --lib root_file` hits the known local SIGBUS before tests execute, keep the failure log and rely on the focused source-audit proof plus `cargo check --lib`.
+
+## Root Unified Search Frame Stability
+
+Root unified-search frame stability prevents late passive rows from changing the selected command or click target.
+
+Checks must prove that global root file search does not publish partial provider rows into the active visible frame, provider completion warms a bounded per-query cache, grouped-result cache reads return before refreshing recent-file seeds, selection snapshots use `SearchResult::stable_selection_key` instead of input-history keys, fallback rows have stable selection keys without becoming history targets, and main-window preflight receipts expose the selected key plus a visible row fingerprint.
+
+Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib stable_selection_key`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Add a state-first agentic runtime proof against the real main menu showing that `selected_result_key`, Enter action, and `visible_result_key_fingerprint` remain unchanged after root file provider completion for the same filter text.
 
 ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests. The critical regression guard is that adding a second passive source cannot split the Files section or its Search Files continuation row.
 

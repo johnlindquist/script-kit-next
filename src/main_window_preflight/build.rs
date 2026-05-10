@@ -8,6 +8,13 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
         .cloned_first_search_result_at_or_after_grouped_item(app.selected_index)
 }
 
+fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
+    app.main_menu_result_caches
+        .grouped_search_results()
+        .filter_map(|result| result.stable_selection_key())
+        .collect()
+}
+
 fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflightActionKind {
     match result {
         crate::scripts::SearchResult::Script(_) => MainWindowPreflightActionKind::RunScript,
@@ -81,6 +88,9 @@ pub(crate) fn build_main_window_preflight_receipt(
     Some(MainWindowPreflightReceipt {
         filter_text: app.filter_text.clone(),
         selected_index: app.selected_index,
+        selected_result_key: result.stable_selection_key(),
+        visible_result_key_fingerprint: visible_result_keys(app).join("|"),
+        visible_result_count: app.main_menu_result_caches.grouped_search_results().count(),
         enter_action,
         tab_action: build_tab_action(app),
         warnings,
@@ -91,6 +101,9 @@ pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightRec
     tracing::info!(
         event = "main_window_preflight_receipt",
         selected_index = receipt.selected_index,
+        selected_result_key = ?receipt.selected_result_key,
+        visible_result_key_fingerprint = %receipt.visible_result_key_fingerprint,
+        visible_result_count = receipt.visible_result_count,
         enter_label = %receipt.enter_action.label,
         enter_subject = %receipt.enter_action.subject,
         enter_type = %receipt.enter_action.type_label,
