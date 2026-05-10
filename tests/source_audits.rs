@@ -122,6 +122,12 @@ mod stdin_set_selected_text_wired;
 #[path = "source_audits/acp_session_update_span.rs"]
 mod acp_session_update_span;
 
+#[path = "source_audits/root_file_search_contract.rs"]
+mod root_file_search_contract;
+
+#[path = "source_audits/computer_get_tray_menu_item_contract.rs"]
+mod computer_get_tray_menu_item_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.
