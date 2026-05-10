@@ -130,6 +130,14 @@ Eligible non-empty root queries append an AI Conversations section using the exi
 
 `config.ts` exposes `unifiedSearch.acpHistory` only for the implemented ACP history source. Selecting a row resumes the saved conversation through the shared `[[src/render_builtins/acp_history.rs#ScriptListApp#resume_acp_conversation_from_history]]` path; root search does not expose attach-summary actions in this first pass.
 
+## Root Unified Search Clipboard History
+
+Clipboard history rows are an opt-in passive launcher source for non-empty root queries.
+
+Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render after Files and before AI Conversations and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
+
+`config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
+
 ## Dictation model download prompt
 
 The Parakeet model prompt is a stateful MiniPrompt that must not reinterpret a repeated submit as a destructive action after its choices change.

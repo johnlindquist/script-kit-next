@@ -50,6 +50,14 @@ ACP history root rows are verified with grouping, config, type metadata, executi
 
 Use `cargo test --test source_audits root_unified_acp_history_contract -- --nocapture` with the root file source audit, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 
+## Root Unified Search Clipboard History
+
+Clipboard root rows are verified with metadata search, passive grouping, stable-key, config, and execution source audits.
+
+Checks must prove that root clipboard search is bounded to metadata, disabled by default, excluded from empty root, inserted without splitting Files or fallbacks, keyed by `clipboard-history/{id}`, and executed through the existing clipboard paste helper.
+
+Use `cargo test --test source_audits root_unified_clipboard_history_contract -- --nocapture` with the existing root file and ACP history source audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.

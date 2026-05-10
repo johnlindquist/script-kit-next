@@ -17,7 +17,10 @@ use super::cache::{
 };
 use super::config::{get_max_text_content_len, get_retention_days, is_text_over_limit};
 use super::image::get_image_dimensions;
-use super::types::{ClipboardEntry, ClipboardEntryMeta, ContentType};
+use super::types::{
+    root_clipboard_entry_is_eligible, root_clipboard_history_query_is_eligible, ClipboardEntry,
+    ClipboardEntryMeta, ContentType, RootClipboardHistorySectionOptions,
+};
 
 /// Global database connection (thread-safe)
 static DB_CONNECTION: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
@@ -582,6 +585,24 @@ pub fn get_clipboard_history_meta(limit: usize, offset: usize) -> Vec<ClipboardE
         limit, offset, "Retrieved clipboard history metadata"
     );
     entries
+}
+
+/// Search recent clipboard metadata for root launcher rows without loading raw content.
+pub fn search_root_clipboard_history_meta(
+    query: &str,
+    options: RootClipboardHistorySectionOptions,
+) -> Vec<ClipboardEntryMeta> {
+    if !root_clipboard_history_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+
+    let query = query.trim().to_lowercase();
+    get_clipboard_history_meta(options.scan_limit, 0)
+        .into_iter()
+        .filter(root_clipboard_entry_is_eligible)
+        .filter(|entry| entry.text_preview.to_lowercase().contains(&query))
+        .take(options.max_results)
+        .collect()
 }
 
 /// Get just the content for an entry (for copy/preview operations)

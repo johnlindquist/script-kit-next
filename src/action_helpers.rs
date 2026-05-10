@@ -61,6 +61,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
         )),
+        Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Clipboard History row has no filesystem path"),
+        )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
         )),
@@ -92,6 +95,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
+        )),
+        Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Clipboard History row has no filesystem path"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
@@ -134,6 +140,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open AI conversations in Quick Terminal"),
+        )),
+        Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open clipboard history in Quick Terminal"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
@@ -195,6 +204,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit AI conversations"),
+        )),
+        Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit clipboard history"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row cannot be edited"),

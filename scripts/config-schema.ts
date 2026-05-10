@@ -1496,6 +1496,8 @@ export interface UnifiedSearchConfig {
   files?: UnifiedSearchFilesConfig;
   /** Controls for passive root AI conversation rows backed by saved ACP history. */
   acpHistory?: UnifiedSearchAcpHistoryConfig;
+  /** Controls for opt-in passive root clipboard history rows. */
+  clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
 }
 
 export interface UnifiedSearchFilesConfig {
@@ -1523,6 +1525,17 @@ export interface UnifiedSearchAcpHistoryConfig {
   maxResults?: number;
   /** Minimum query length before AI conversation rows appear. Clamped to 2-32. */
   minQueryChars?: number;
+}
+
+export interface UnifiedSearchClipboardHistoryConfig {
+  /** Enable clipboard history rows in root launcher search. Disabled by default. */
+  enabled?: boolean;
+  /** Maximum number of clipboard history rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before clipboard history rows appear. Clamped to 2-32. */
+  minQueryChars?: number;
+  /** Recent metadata rows to scan without reading raw clipboard content. Clamped to 25-1000. */
+  scanLimit?: number;
 }
 
 // =============================================================================

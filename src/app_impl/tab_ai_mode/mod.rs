@@ -2977,6 +2977,7 @@ impl ScriptListApp {
             scripts::SearchResult::Window(_) => "window",
             scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::AcpHistory(_) => "acpHistory",
+            scripts::SearchResult::ClipboardHistory(_) => "clipboardHistory",
             scripts::SearchResult::Agent(_) => "agent",
             scripts::SearchResult::Skill(_) => "skill",
             scripts::SearchResult::Fallback(_) => "fallback",
@@ -3020,6 +3021,13 @@ impl ScriptListApp {
                 "preview": m.entry.preview_display(),
                 "messageCount": m.entry.message_count,
                 "matchedField": format!("{:?}", m.matched_field),
+            }),
+            scripts::SearchResult::ClipboardHistory(m) => serde_json::json!({
+                "id": m.entry.id,
+                "contentType": m.entry.content_type.as_str(),
+                "preview": m.title,
+                "pinned": m.entry.pinned,
+                "timestamp": m.entry.timestamp,
             }),
             scripts::SearchResult::Agent(m) => serde_json::json!({
                 "name": m.agent.name,

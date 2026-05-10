@@ -330,6 +330,7 @@ impl ScriptListApp {
                     // execute_root_file_open is shared by Enter and the root-file Open action.
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::ClipboardHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
@@ -447,6 +448,9 @@ impl ScriptListApp {
                             acp_history_match.entry.first_message.as_str(),
                             cx,
                         );
+                    }
+                    scripts::SearchResult::ClipboardHistory(clipboard_match) => {
+                        self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged
@@ -573,6 +577,41 @@ impl ScriptListApp {
         }
         self.record_root_file_open_use(file);
         self.close_and_reset_window(cx);
+    }
+
+    pub(crate) fn execute_root_clipboard_history_paste(
+        &mut self,
+        entry_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::clipboard_history::copy_entry_to_clipboard(entry_id) {
+            Ok(()) => {
+                logging::log("EXEC", &format!("Root clipboard entry copied: {entry_id}"));
+                self.hide_main_and_reset(cx);
+                std::thread::spawn(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                    if let Err(error) = crate::selected_text::simulate_paste_with_cg() {
+                        logging::log(
+                            "ERROR",
+                            &format!("Failed to simulate root clipboard paste: {error}"),
+                        );
+                    } else {
+                        logging::log("EXEC", "Simulated root clipboard paste");
+                    }
+                });
+            }
+            Err(error) => {
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to copy root clipboard entry: {error}"),
+                );
+                self.show_hud(
+                    "Failed to paste clipboard entry".to_string(),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+            }
+        }
     }
 
     pub(crate) fn root_file_search_in_folder_query(
