@@ -516,19 +516,39 @@ app.run(move |cx: &mut App| {
         let app_entity_for_mcp_computer = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             while let Ok(request) = mcp_computer_ui_rx.recv().await {
-                let app_entity = app_entity_for_mcp_computer.clone();
-                let snapshot = cx.update(|cx| {
-                    app_entity.update(cx, |app, app_cx| {
-                        app.build_automation_inspect_snapshot(
-                            &request.request_id,
-                            request.request.target.as_ref(),
-                            request.request.hi_dpi,
-                            &request.request.probes,
-                            app_cx,
-                        )
-                    })
-                });
-                request.respond(Ok(snapshot));
+                match request {
+                    crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRequest::InspectAutomationWindow {
+                        request_id,
+                        request,
+                        response_tx,
+                    } => {
+                        let app_entity = app_entity_for_mcp_computer.clone();
+                        let snapshot = cx.update(|cx| {
+                            app_entity.update(cx, |app, app_cx| {
+                                app.build_automation_inspect_snapshot(
+                                    &request_id,
+                                    request.target.as_ref(),
+                                    request.hi_dpi,
+                                    &request.probes,
+                                    app_cx,
+                                )
+                            })
+                        });
+                        let _ = response_tx.send(Ok(snapshot));
+                    }
+                    crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRequest::ListRunningApps {
+                        request,
+                        response_tx,
+                        ..
+                    } => {
+                        let result = cx.update(|_| {
+                            crate::computer_use::gpui_runtime_bridge::list_running_apps_on_gpui_thread(
+                                &request,
+                            )
+                        });
+                        let _ = response_tx.send(result);
+                    }
+                }
             }
         })
         .detach();
