@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: builtin-filterable-surfaces
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Clipboard history, app launcher, window switcher, browser tabs, emoji picker, process manager, current app commands, settings, favorites, kit store, and design gallery list surfaces.
 ---
 
-# lat.md knowledge graph
+# Builtin Filterable Surfaces
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns shared filterable built-in list surfaces for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Clipboard history, app launcher, window switcher, browser tabs, emoji picker, process manager, current app commands, settings, favorites, kit store, and design gallery list surfaces.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for file search, prompt entities, or main menu result caches; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/builtins.md`
+- `lat.md/surfaces.md`
+- `.agents/subagents/builtin-filterable-surfaces-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/render_builtins/, src/builtins/, src/clipboard_history/, src/emoji/, src/process_manager/, src/app_launcher/`
+- shared filterable built-in list surfaces.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+filterable surface matrix or row-projection tests; lat check
 ```
 
 ## Adjacent Skills

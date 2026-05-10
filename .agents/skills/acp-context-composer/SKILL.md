@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: acp-context-composer
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  ACP composer input, slash commands, @mentions, context parts, attachment tokens, pasted text/image, /new-script, focused target, and context staging.
 ---
 
-# lat.md knowledge graph
+# ACP Context Composer
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns Agent Chat composer and context assembly for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- ACP composer input, slash commands, @mentions, context parts, attachment tokens, pasted text/image, /new-script, focused target, and context staging.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for ACP process startup or MCP resource capture implementation; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/acp-chat.md`
+- `lat.md/ai-context.md`
+- `.agents/subagents/acp-context-composer-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/ai/acp/, src/ai/context_mentions/, src/context_snapshot/, src/app_impl/attachment_portal.rs`
+- Agent Chat composer and context assembly.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+ACP context/composer tests; getAcpState picker proof; lat check
 ```
 
 ## Adjacent Skills

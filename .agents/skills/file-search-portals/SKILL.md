@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: file-search-portals
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  File search, ~ trigger, mini/full file browser, drag-out rows, hidden files, attachment portals, portal return, and file attach flows.
 ---
 
-# lat.md knowledge graph
+# File Search Portals
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns file search and launcher-side attachment portals for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- File search, ~ trigger, mini/full file browser, drag-out rows, hidden files, attachment portals, portal return, and file attach flows.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for ACP inline token replacement or terminal cwd execution; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/surfaces.md`
+- `lat.md/acp-chat.md`
+- `.agents/subagents/file-search-portals-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/render_builtins/file_search.rs, src/file_search/, src/app_impl/attachment_portal.rs`
+- file search and launcher-side attachment portals.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+file-search tests; state-first portal proof; lat check
 ```
 
 ## Adjacent Skills

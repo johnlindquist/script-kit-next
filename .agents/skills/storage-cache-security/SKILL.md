@@ -1,38 +1,38 @@
 ---
-name: lat-md
+name: storage-cache-security
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  SQLite stores, clipboard history DB, icon/image caches, secrets, file watchers, persistence, dedupe, cache invalidation, and user-data cleanup/security boundaries.
 ---
 
-# lat.md knowledge graph
+# Storage Cache Security
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns persistent data, caches, and security boundaries for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- SQLite stores, clipboard history DB, icon/image caches, secrets, file watchers, persistence, dedupe, cache invalidation, and user-data cleanup/security boundaries.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for UI list rendering or prompt routing; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/workspace.md`
+- `lat.md/builtins.md`
+- `lat.md/logging.md`
+- `.agents/subagents/storage-cache-security-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/clipboard_history/, src/icons/, src/watcher/, src/input_history/, src/frecency/, src/config/`
+- persistent data, caches, and security boundaries.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +67,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+storage/cache tests with temp dirs; lat check
 ```
 
 ## Adjacent Skills

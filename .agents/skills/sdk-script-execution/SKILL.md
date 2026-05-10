@@ -1,38 +1,38 @@
 ---
-name: lat-md
+name: sdk-script-execution
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  scripts/kit-sdk.ts, script metadata, scriptlets, Bun preload, executor, workspace init, script loading, and script execution pipeline.
 ---
 
-# lat.md knowledge graph
+# SDK Script Execution
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns SDK and script execution compatibility for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- scripts/kit-sdk.ts, script metadata, scriptlets, Bun preload, executor, workspace init, script loading, and script execution pipeline.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for prompt rendering after command dispatch; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/scripting.md`
+- `lat.md/workspace.md`
+- `.claude/skills/script-kit-scripting/SKILL.md`
+- `.agents/subagents/sdk-script-execution-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `scripts/kit-sdk.ts, src/scripts/, src/scriptlets/, src/executor/, src/setup/, kit-init/`
+- SDK and script execution compatibility.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +67,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+SDK/script execution tests or Bun checks; lat check
 ```
 
 ## Adjacent Skills

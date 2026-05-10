@@ -1,38 +1,37 @@
 ---
-name: lat-md
+name: notes-window
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  Notes window, markdown notes, notes browse, notes-hosted ACP, floating notes, notes attachment, notes-specific actions, and notes portal behavior.
 ---
 
-# lat.md knowledge graph
+# Notes Window
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns Notes subsystem and notes-hosted ACP for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- Notes window, markdown notes, notes browse, notes-hosted ACP, floating notes, notes attachment, notes-specific actions, and notes portal behavior.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for main launcher ACP cache or generic attachment portal machinery; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/notes.md`
+- `lat.md/acp-chat.md`
+- `.agents/subagents/notes-window-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/notes/, src/notes/window/`
+- Notes subsystem and notes-hosted ACP.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +66,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+notes/source tests; notes state proof; lat check
 ```
 
 ## Adjacent Skills

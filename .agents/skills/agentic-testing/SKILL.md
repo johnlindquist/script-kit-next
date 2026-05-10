@@ -1,38 +1,38 @@
 ---
-name: lat-md
+name: agentic-testing
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  State-first runtime proof for UI, protocol, behavior, ACP, actions dialogs, surface changes, screenshots only when needed, and cleanup of launched sessions.
 ---
 
-# lat.md knowledge graph
+# Agentic Testing
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns runtime proof and session cleanup for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- State-first runtime proof for UI, protocol, behavior, ACP, actions dialogs, surface changes, screenshots only when needed, and cleanup of launched sessions.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for test authoring or product ownership decisions; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/automation.md`
+- `lat.md/verification.md`
+- `.claude/skills/agentic-testing/SKILL.md`
+- `.agents/subagents/agentic-testing-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `scripts/agentic/, .test-output/, .test-screenshots/`
+- runtime proof and session cleanup.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +67,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+lat check; targeted agentic receipt proof when runtime behavior changed
 ```
 
 ## Adjacent Skills

@@ -1,38 +1,38 @@
 ---
-name: lat-md
+name: theme-config-preferences
 description: >-
-  lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+  config.ts, theme.json, preferences, font size, UI scale, runtime settings, model/profile preference reads, and theme/config caches.
 ---
 
-# lat.md knowledge graph
+# Theme Config Preferences
 
-This skill owns lat.md/ authoring and validation for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns theme, config, and persisted preferences for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
 
 ## Use When
 
 Use this skill for tasks involving:
 
-- lat.md authoring, wiki links, code refs, section structure, test specs, and lat check failures. Use when creating, editing, or reviewing lat.md/ files.
+- config.ts, theme.json, preferences, font size, UI scale, runtime settings, model/profile preference reads, and theme/config caches.
 - Owned paths or concepts listed below.
 - Bugs, tests, docs, or behavior changes where this domain is the primary owner.
 
-Do not use this skill as the primary owner for product behavior changes without documentation ownership; load the adjacent owning skill instead.
+Do not use this skill as the primary owner for ACP runtime semantics or terminal PTY behavior; load the adjacent owning skill instead.
 
 ## First Reads
 
 Start with these sources before editing:
 
-- `lat.md/lat.md`
-- `CLAUDE.md`
-- `.agents/skills/lat-md/SKILL.md`
-- `.agents/subagents/lat-md-reader.md` for broad or high-risk investigation.
+- `lat.md/theme.md`
+- `lat.md/workspace.md`
+- `.claude/skills/gpui-patterns/SKILL.md`
+- `.agents/subagents/theme-config-preferences-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
 
 Primary paths and concepts:
 
-- `lat.md/`
-- lat.md/ authoring and validation.
+- `src/config/, src/theme/, scripts/config-schema.ts, scripts/config-cli.ts`
+- theme, config, and persisted preferences.
 - The verification and documentation boundaries for this domain.
 
 ## Core Rules
@@ -67,7 +67,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-lat check
+config/theme tests or cargo check; lat check
 ```
 
 ## Adjacent Skills
