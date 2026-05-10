@@ -29,6 +29,7 @@ pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
+pub const COMPUTER_GET_MENU_ITEM_TOOL: &str = "computer/get_menu_item";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
@@ -103,6 +104,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_list_menus_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
+            description: "Return one cached menu item by exact title path without refreshing menus, focusing apps, clicking, or requesting permissions."
+                .to_string(),
+            input_schema: computer_get_menu_item_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
             description: "List Script Kit's own tray menu model without opening the menu, clicking status items, invoking actions, or requesting permissions."
                 .to_string(),
@@ -143,6 +150,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
+        COMPUTER_GET_MENU_ITEM_TOOL => handle_get_menu_item(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
@@ -300,6 +308,12 @@ struct ComputerUseListMenusArgs {}
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+struct ComputerUseGetMenuItemArgs {
+    path: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ComputerUseListTrayMenuArgs {}
 
 #[derive(serde::Serialize)]
@@ -310,6 +324,20 @@ struct ComputerUseListMenusResult {
     app: Option<ComputerUseMenuApp>,
     cache: ComputerUseMenuCache,
     menus: Vec<ComputerUseMenuItem>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetMenuItemResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseMenuApp>,
+    cache: ComputerUseMenuCache,
+    path: Vec<String>,
+    item: Option<ComputerUseMenuItem>,
     warnings: Vec<String>,
 }
 
@@ -655,6 +683,54 @@ fn handle_list_menus(arguments: &Value) -> ToolResult {
     })
 }
 
+fn handle_get_menu_item(arguments: &Value) -> ToolResult {
+    let args: ComputerUseGetMenuItemArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    if args.path.is_empty() || args.path.iter().any(|segment| segment.is_empty()) {
+        return error_result(
+            "invalid_arguments",
+            "path must contain at least one non-empty menu title segment",
+        );
+    }
+
+    let snapshot = get_cached_menu_snapshot();
+    let app = snapshot.app.map(|app| ComputerUseMenuApp {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+        name: app.name,
+        window_title: app.window_title,
+    });
+    let item =
+        find_cached_menu_item_by_path(&snapshot.items, &args.path).map(computer_use_menu_item);
+    let status = if app.is_none() {
+        "noTrackedApp"
+    } else if snapshot.items.is_empty() {
+        "noCachedMenus"
+    } else if item.is_some() {
+        "found"
+    } else {
+        "notFound"
+    };
+
+    json_tool_result(&ComputerUseGetMenuItemResult {
+        schema_version: COMPUTER_MENUS_SCHEMA_VERSION,
+        source: "frontmostAppTrackerCache",
+        scope: "cachedMenuPath",
+        status,
+        app,
+        cache: ComputerUseMenuCache {
+            status: snapshot.status.as_str(),
+            is_fetching: snapshot.is_fetching,
+        },
+        path: args.path,
+        item,
+        warnings: Vec::new(),
+    })
+}
+
 fn handle_list_tray_menu(arguments: &Value) -> ToolResult {
     let _args: ComputerUseListTrayMenuArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
@@ -662,6 +738,19 @@ fn handle_list_tray_menu(arguments: &Value) -> ToolResult {
     };
 
     json_tool_result(&crate::tray::current_tray_menu_observation_snapshot())
+}
+
+fn find_cached_menu_item_by_path<'a>(
+    items: &'a [MenuBarItem],
+    path: &[String],
+) -> Option<&'a MenuBarItem> {
+    let (head, tail) = path.split_first()?;
+    let item = items.iter().find(|item| item.title == *head)?;
+    if tail.is_empty() {
+        Some(item)
+    } else {
+        find_cached_menu_item_by_path(&item.children, tail)
+    }
 }
 
 fn computer_use_menu_item(item: &MenuBarItem) -> ComputerUseMenuItem {
@@ -1012,6 +1101,25 @@ fn computer_list_menus_input_schema() -> Value {
     })
 }
 
+fn computer_get_menu_item_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "path": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "description": "Exact cached menu title path, e.g. [\"File\", \"New Window\"]. Call computer/list_menus first."
+            }
+        },
+        "required": ["path"]
+    })
+}
+
 fn computer_list_tray_menu_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1209,6 +1317,7 @@ mod tests {
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
+                COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
@@ -1486,6 +1595,61 @@ mod tests {
                 .and_then(Value::as_object)
                 .map(|properties| properties.is_empty()),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_get_menu_item_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_MENU_ITEM_TOOL)
+            .expect("computer/get_menu_item tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        assert_eq!(
+            properties
+                .get("path")
+                .and_then(|value| value.get("type"))
+                .and_then(Value::as_str),
+            Some("array")
+        );
+        assert_eq!(
+            properties
+                .get("path")
+                .and_then(|value| value.get("minItems"))
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            properties
+                .get("path")
+                .and_then(|value| value.get("items"))
+                .and_then(|items| items.get("type"))
+                .and_then(Value::as_str),
+            Some("string")
+        );
+        assert_eq!(
+            properties
+                .get("path")
+                .and_then(|value| value.get("items"))
+                .and_then(|items| items.get("minLength"))
+                .and_then(Value::as_u64),
+            Some(1)
+        );
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["path"]))
         );
     }
 
@@ -2083,6 +2247,33 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_menu_item_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "path": [] }),
+            serde_json::json!({ "path": ["File", ""] }),
+            serde_json::json!({ "path": [0, 1] }),
+            serde_json::json!({ "path": "File" }),
+            serde_json::json!({ "path": ["File"], "pid": 101 }),
+            serde_json::json!({ "path": ["File"], "bundleId": "com.apple.Terminal" }),
+            serde_json::json!({ "path": ["File"], "refresh": true }),
+            serde_json::json!({ "path": ["File"], "focus": true }),
+            serde_json::json!({ "path": ["File"], "activate": true }),
+            serde_json::json!({ "path": ["File"], "click": true }),
+            serde_json::json!({ "path": ["File"], "execute": true }),
+            serde_json::json!({ "path": ["File"], "includeDisabled": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_GET_MENU_ITEM_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_tray_menu_rejects_bad_arguments() {
         for arguments in [
             serde_json::json!({ "click": true }),
@@ -2453,6 +2644,133 @@ mod tests {
                 !result.content[0].text.contains(forbidden),
                 "computer/list_menus result must not expose menu action handles; found {forbidden}"
             );
+        }
+    }
+
+    #[test]
+    fn computer_get_menu_item_returns_cache_snapshot_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_MENU_ITEM_TOOL,
+            &serde_json::json!({ "path": ["__missing_menu_for_contract_test__"] }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_menu_item json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_MENUS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuPath");
+        assert!(
+            value["status"] == "notFound"
+                || value["status"] == "noTrackedApp"
+                || value["status"] == "noCachedMenus"
+        );
+        assert_eq!(
+            value["path"],
+            serde_json::json!(["__missing_menu_for_contract_test__"])
+        );
+        assert!(value["cache"]["status"].is_string());
+        assert!(value["cache"]["isFetching"].is_boolean());
+        assert!(value["warnings"].is_array());
+        assert!(value["item"].is_null());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_menu_item result must not expose menu action handles; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_get_menu_item_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_MENU_ITEM_TOOL,
+            &serde_json::json!({ "path": ["__missing_menu_for_runtime_test__"] }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_menu_item json");
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuPath");
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_path_finds_top_level_item() {
+        let items = vec![
+            test_menu_item("File", vec![]),
+            test_menu_item("Edit", vec![]),
+        ];
+
+        let found = find_cached_menu_item_by_path(&items, &[String::from("File")])
+            .expect("top-level File item");
+
+        assert_eq!(found.title, "File");
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_path_finds_nested_item() {
+        let items = vec![test_menu_item(
+            "File",
+            vec![test_menu_item(
+                "New",
+                vec![test_menu_item("Project", vec![])],
+            )],
+        )];
+
+        let found = find_cached_menu_item_by_path(
+            &items,
+            &[
+                String::from("File"),
+                String::from("New"),
+                String::from("Project"),
+            ],
+        )
+        .expect("nested Project item");
+
+        assert_eq!(found.title, "Project");
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_path_returns_none_for_missing_segment() {
+        let items = vec![test_menu_item("File", vec![test_menu_item("Open", vec![])])];
+
+        let found =
+            find_cached_menu_item_by_path(&items, &[String::from("File"), String::from("New")]);
+
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_path_returns_none_for_empty_path() {
+        let items = vec![test_menu_item("File", vec![])];
+
+        let found = find_cached_menu_item_by_path(&items, &[]);
+
+        assert!(found.is_none());
+    }
+
+    fn test_menu_item(title: &str, children: Vec<MenuBarItem>) -> MenuBarItem {
+        MenuBarItem {
+            title: title.to_string(),
+            enabled: true,
+            shortcut: None,
+            children,
+            ax_element_path: Vec::new(),
         }
     }
 
