@@ -109,7 +109,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
-        COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments, runtime),
+        COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
@@ -412,26 +412,13 @@ fn handle_list_menus(arguments: &Value) -> ToolResult {
     })
 }
 
-fn handle_list_tray_menu(
-    arguments: &Value,
-    runtime: Option<&dyn ComputerUseRuntimeBridge>,
-) -> ToolResult {
+fn handle_list_tray_menu(arguments: &Value) -> ToolResult {
     let _args: ComputerUseListTrayMenuArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
         Err(error) => return error_result("invalid_arguments", &error.to_string()),
     };
 
-    let Some(runtime) = runtime else {
-        return error_result(
-            "runtime_unavailable",
-            "computer/list_tray_menu requires the live GPUI runtime bridge to read Script Kit tray state safely",
-        );
-    };
-
-    match runtime.list_tray_menu() {
-        Ok(snapshot) => json_tool_result(&snapshot),
-        Err(error) => error_result(error.error_code(), &error.message()),
-    }
+    json_tool_result(&crate::tray::current_tray_menu_observation_snapshot())
 }
 
 fn computer_use_menu_item(item: &MenuBarItem) -> ComputerUseMenuItem {
@@ -1094,15 +1081,21 @@ mod tests {
     }
 
     #[test]
-    fn computer_list_tray_menu_without_runtime_returns_tool_error() {
+    fn computer_list_tray_menu_without_runtime_returns_snapshot() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_TRAY_MENU_TOOL,
             &serde_json::json!({}),
             None,
         );
 
-        assert_eq!(result.is_error, Some(true));
-        assert!(result.content[0].text.contains("runtime_unavailable"));
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_tray_menu json");
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["owner"]["scope"], "ownTrayMenuOnly");
+        assert!(value["sections"].is_array());
+        assert!(value["warnings"].is_array());
     }
 
     #[test]
