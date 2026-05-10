@@ -101,6 +101,32 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    fn apply_root_file_search_results_for_generation(
+        &mut self,
+        generation: u64,
+        results: Vec<crate::file_search::FileResult>,
+        loading: bool,
+        clear_cancel: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.root_file_search_generation != generation {
+            return;
+        }
+
+        self.root_file_results = results;
+        self.root_file_search_loading = loading;
+        if clear_cancel {
+            self.root_file_search_cancel = None;
+        }
+        self.invalidate_grouped_cache();
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.sync_list_state_for_filter_replacement();
+            self.validate_selection_bounds(cx);
+            self.rebuild_main_window_preflight_if_needed();
+        }
+        cx.notify();
+    }
+
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
         let trimmed = query.trim();
         let can_collect = matches!(self.current_view, AppView::ScriptList)
@@ -183,6 +209,7 @@ impl ScriptListApp {
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_file_search_cancel = Some(cancel.clone());
+        let publish_partial_results = matches!(&request, RootFileSearchRequest::GlobalQuery { .. });
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -231,13 +258,31 @@ impl ScriptListApp {
             });
 
             let mut batch = Vec::new();
+            let mut published_len = 0usize;
             loop {
                 if cancel.load(std::sync::atomic::Ordering::Relaxed) {
                     return;
                 }
 
                 match rx.try_recv() {
-                    Ok(crate::file_search::SearchEvent::Result(result)) => batch.push(result),
+                    Ok(crate::file_search::SearchEvent::Result(result)) => {
+                        batch.push(result);
+                        let should_publish_partial = publish_partial_results
+                            && (published_len == 0
+                                || (batch.len() >= crate::file_search::ROOT_FILE_RENDER_LIMIT
+                                    && published_len < crate::file_search::ROOT_FILE_RENDER_LIMIT));
+                        if should_publish_partial {
+                            published_len = batch.len();
+                            let snapshot = batch.clone();
+                            let _ = cx.update(|cx| {
+                                this.update(cx, |app, cx| {
+                                    app.apply_root_file_search_results_for_generation(
+                                        generation, snapshot, true, false, cx,
+                                    );
+                                })
+                            });
+                        }
+                    }
                     Ok(crate::file_search::SearchEvent::Done) => break,
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
                         cx.background_executor()
@@ -250,20 +295,9 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
-                    if app.root_file_search_generation != generation {
-                        return;
-                    }
-
-                    app.root_file_results = batch;
-                    app.root_file_search_loading = false;
-                    app.root_file_search_cancel = None;
-                    app.invalidate_grouped_cache();
-                    if matches!(app.current_view, AppView::ScriptList) {
-                        app.sync_list_state_for_filter_replacement();
-                        app.validate_selection_bounds(cx);
-                        app.rebuild_main_window_preflight_if_needed();
-                    }
-                    cx.notify();
+                    app.apply_root_file_search_results_for_generation(
+                        generation, batch, false, true, cx,
+                    );
                 })
             });
         })
