@@ -799,6 +799,11 @@ fn handle_list_permissions(arguments: &Value) -> ToolResult {
                 "Screen Recording",
                 crate::platform::screen_capture_access_preflight(),
             ),
+            permission_status(
+                "eventSynthesizing",
+                "Event Synthesizing",
+                crate::platform::event_synthesizing_access_preflight(),
+            ),
         ],
     })
 }
@@ -2295,14 +2300,22 @@ mod tests {
 
     #[test]
     fn computer_list_permissions_rejects_bad_arguments() {
-        let result = handle_computer_use_tool_call(
-            COMPUTER_LIST_PERMISSIONS_TOOL,
-            &serde_json::json!({ "request": true }),
-            None,
-        );
+        for arguments in [
+            serde_json::json!({ "request": true }),
+            serde_json::json!({ "grant": true }),
+            serde_json::json!({ "openSettings": true }),
+            serde_json::json!({ "requestEventSynthesizing": true }),
+            serde_json::json!({ "includeGrantInstructions": true }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "press": true }),
+            serde_json::json!({ "execute": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_LIST_PERMISSIONS_TOOL, &arguments, None);
 
-        assert_eq!(result.is_error, Some(true));
-        assert!(result.content[0].text.contains("invalid_arguments"));
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
     }
 
     #[test]
@@ -2841,8 +2854,24 @@ mod tests {
                 || screen_recording["status"] == "notGranted"
                 || screen_recording["status"] == "unknown"
         );
+
+        let event_synthesizing = permissions
+            .iter()
+            .find(|permission| permission["id"] == "eventSynthesizing")
+            .expect("event synthesizing status");
+        assert_eq!(event_synthesizing["name"], "Event Synthesizing");
+        assert!(
+            event_synthesizing["status"] == "granted"
+                || event_synthesizing["status"] == "notGranted"
+                || event_synthesizing["status"] == "unknown"
+        );
         assert!(!result.content[0].text.contains("requestAccessibility"));
+        assert!(!result.content[0].text.contains("requestEventSynthesizing"));
+        assert!(!result.content[0].text.contains("grantInstructions"));
         assert!(!result.content[0].text.contains("openSettings"));
+        assert!(!result.content[0].text.contains("\"execute\""));
+        assert!(!result.content[0].text.contains("\"click\""));
+        assert!(!result.content[0].text.contains("\"press\""));
     }
 
     #[test]
