@@ -507,6 +507,82 @@ mod tests {
     }
 
     #[test]
+    fn root_recent_files_keep_grouping_search_pure() {
+        for path in [
+            "src/scripts/grouping.rs",
+            "src/scripts/grouping/search_mode.rs",
+            "src/scripts/types.rs",
+        ] {
+            let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("read {path}"));
+            let production = production_source(&source);
+            for forbidden in [
+                "mdfind",
+                "search_files(",
+                "search_files_streaming",
+                "std::process::Command",
+                "std::fs::read_dir",
+                "list_directory",
+            ] {
+                assert!(
+                    !production.contains(forbidden),
+                    "{path} should not start filesystem providers while grouping or ranking: {forbidden}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn root_recent_files_are_file_rows_not_fallbacks() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let recent_source = grouping_source
+            .split("fn append_recent_root_file_section(")
+            .nth(1)
+            .and_then(|section| section.split("fn append_root_file_section(").next())
+            .expect("append_recent_root_file_section source should be present");
+
+        assert!(
+            recent_source.contains("\"Recent Files\""),
+            "empty root recent files should render under a Recent Files section"
+        );
+        assert!(
+            recent_source.contains("flat_results.push(SearchResult::File(")
+                && !recent_source.contains("SearchResult::Fallback("),
+            "recent root files should be real file rows, not fallback rows"
+        );
+        assert!(
+            !recent_source.contains("root_file_search_handoff_result"),
+            "empty recent files should not create the Search Files continuation row"
+        );
+    }
+
+    #[test]
+    fn root_recent_files_hydrate_from_frecency_in_app_layer() {
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+        let root_normalized = root_source.split_whitespace().collect::<Vec<_>>().join(" ");
+        let filtering_normalized = filtering_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            root_normalized
+                .contains("top_file_paths(crate::file_search::ROOT_FILE_RECENT_LIMIT * 3)")
+                && root_normalized.contains("file_result_from_existing_path(&path)")
+                && root_normalized.contains("self.root_recent_file_results = hydrated"),
+            "recent root files should hydrate known frecency paths in the app layer"
+        );
+        assert!(
+            filtering_normalized.contains("if self.computed_filter_text.is_empty() { self.refresh_root_recent_file_results(); }")
+                && filtering_normalized.contains("&self.root_recent_file_results"),
+            "empty root grouping should refresh and pass recent file rows explicitly"
+        );
+    }
+
+    #[test]
     fn root_launcher_does_not_browse_directories_inline() {
         let source = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("read src/render_script_list/mod.rs");

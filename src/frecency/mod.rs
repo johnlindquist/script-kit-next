@@ -443,6 +443,44 @@ impl FrecencyStore {
             .collect()
     }
 
+    /// Return recent launcher file paths recorded under the `file/<absolute-path>` key.
+    ///
+    /// This intentionally exposes only file frecency entries so callers cannot
+    /// turn the generic frecency store into an arbitrary prefix query source.
+    pub fn top_file_paths(&self, limit: usize) -> Vec<(String, f64)> {
+        const FILE_PREFIX: &str = "file/";
+        let now = current_timestamp();
+        let hl = self.half_life_days;
+        let mut items: Vec<_> = self
+            .entries
+            .iter()
+            .filter_map(|(key, score)| {
+                key.strip_prefix(FILE_PREFIX)
+                    .map(|path| (path.to_string(), score.score_at(now, hl), score.last_used))
+            })
+            .collect();
+
+        items.sort_by(|a, b| {
+            match b.1.partial_cmp(&a.1) {
+                Some(std::cmp::Ordering::Equal) | None => {}
+                Some(ord) => return ord,
+            }
+
+            match b.2.cmp(&a.2) {
+                std::cmp::Ordering::Equal => {}
+                ord => return ord,
+            }
+
+            a.0.cmp(&b.0)
+        });
+
+        items
+            .into_iter()
+            .take(limit)
+            .map(|(path, score, _)| (path, score))
+            .collect()
+    }
+
     /// Get the top N items by frecency score at a specific timestamp (for testing)
     ///
     /// Same as `get_recent_items()` but allows querying at a specific timestamp
@@ -835,6 +873,26 @@ mod tests {
 
         let recent = store.get_recent_items(5);
         assert_eq!(recent.len(), 5);
+    }
+    #[test]
+    fn test_frecency_store_top_file_paths_only_returns_file_entries() {
+        let (mut store, _temp) = create_test_store();
+
+        store.record_use("builtin:search-files");
+        store.record_use("file//tmp/older.txt");
+        store.record_use("file//tmp/recent.txt");
+        store.record_use("file//tmp/recent.txt");
+        store.record_use("builtin:open");
+        store.record_use("builtin:open");
+        store.record_use("builtin:open");
+
+        let recent = store.top_file_paths(1);
+
+        assert_eq!(recent[0].0, "/tmp/recent.txt");
+        assert!(
+            recent.iter().all(|(path, _)| !path.starts_with("builtin:")),
+            "top_file_paths should expose only stripped file paths"
+        );
     }
     #[test]
     fn test_frecency_store_save_and_load() {

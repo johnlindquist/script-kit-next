@@ -1,6 +1,43 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn refresh_root_recent_file_results(&mut self) {
+        let revision = self.frecency_store.revision();
+        if self.root_recent_file_revision == revision {
+            return;
+        }
+
+        let mut seen = std::collections::HashSet::new();
+        let mut hydrated: Vec<_> = self
+            .frecency_store
+            .top_file_paths(crate::file_search::ROOT_FILE_RECENT_LIMIT * 3)
+            .into_iter()
+            .filter_map(|(path, score)| {
+                if !seen.insert(path.clone()) {
+                    return None;
+                }
+                crate::file_search::file_result_from_existing_path(&path).map(|file| (file, score))
+            })
+            .collect();
+
+        hydrated.sort_by(|(a, a_score), (b, b_score)| {
+            b_score
+                .partial_cmp(a_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.modified.cmp(&a.modified))
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.path.cmp(&b.path))
+        });
+
+        self.root_recent_file_results = hydrated
+            .into_iter()
+            .take(crate::file_search::ROOT_FILE_RECENT_LIMIT)
+            .map(|(file, _)| file)
+            .collect();
+        self.root_recent_file_revision = revision;
+        self.invalidate_grouped_cache();
+    }
+
     fn cancel_root_file_search(&mut self) {
         if let Some(cancel) = self.root_file_search_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);

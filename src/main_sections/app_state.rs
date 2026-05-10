@@ -318,6 +318,10 @@ struct ScriptListApp {
     cached_file_results: Vec<file_search::FileResult>,
     /// Latest capped Spotlight results appended to eligible root launcher searches.
     root_file_results: Vec<file_search::FileResult>,
+    /// Frecency-backed file rows shown on the empty root launcher.
+    root_recent_file_results: Vec<file_search::FileResult>,
+    /// Frecency revision currently backing `root_recent_file_results`.
+    root_recent_file_revision: u64,
     /// Query currently backing `root_file_results`.
     root_file_search_query: String,
     /// Generation counter used to ignore stale root file search batches.
