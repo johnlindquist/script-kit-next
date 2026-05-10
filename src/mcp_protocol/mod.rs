@@ -727,6 +727,10 @@ mod tests {
             "Should include computer/list_menus"
         );
         assert!(
+            tool_names.contains(&"computer/get_menu_item"),
+            "Should include computer/get_menu_item"
+        );
+        assert!(
             tool_names.contains(&"computer/list_tray_menu"),
             "Should include computer/list_tray_menu"
         );
@@ -972,6 +976,42 @@ mod tests {
         assert_eq!(value["source"], "frontmostAppTrackerCache");
         assert!(value["cache"].is_object());
         assert!(value["menus"].is_array());
+        Ok(())
+    }
+
+    #[test]
+    fn test_tools_call_computer_get_menu_item_does_not_require_runtime() -> anyhow::Result<()> {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(50),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/get_menu_item",
+                "arguments": { "path": ["__missing_menu_for_protocol_test__"] }
+            }),
+        };
+
+        let response = handle_tools_call_with_runtime(request, &[], None);
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(result.get("isError"), None);
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuPath");
+        assert!(value["cache"].is_object());
+        assert_eq!(
+            value["path"],
+            serde_json::json!(["__missing_menu_for_protocol_test__"])
+        );
         Ok(())
     }
 
