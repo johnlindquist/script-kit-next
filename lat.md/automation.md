@@ -141,6 +141,12 @@ Agentic-testing runs generate one bounded improvement pass with `$agentic-testin
 
 Attached popups must preserve parent identity and `parent_capture_with_crop`. Detached surfaces must preserve exact-id stability. Main should stay state-first unless a visual assertion explicitly requires capture.
 
+## Root Search Frame Stability Proof
+
+Root unified search has a dedicated state-first proof for target stability after late provider work.
+
+`scripts/agentic/root-search-frame-stability.ts` drives the main launcher through `session.sh`, sets a root query, waits for the ScriptList input state, samples `getState.mainWindowPreflight`, then polls `getState.rootFileSearch` until the matching global root file provider is no longer loading. The proof fails if `selectedResultKey`, `enterAction`, or `visibleResultKeyFingerprint` change between the two receipts.
+
 ## Screenshot pixel audit
 
 Screenshot proof must include content-level validation before a PNG can count as reviewable evidence.

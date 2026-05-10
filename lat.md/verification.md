@@ -54,7 +54,7 @@ Root unified-search frame stability prevents late passive rows from changing the
 
 Checks must prove that global root file search does not publish partial provider rows into the active visible frame, provider completion warms a bounded per-query cache, grouped-result cache reads return before refreshing recent-file seeds, ScriptList typing does not notify/render between `filter_text` and `computed_filter_text` updates, selection snapshots use `SearchResult::stable_selection_key` instead of input-history keys, fallback rows have stable selection keys without becoming history targets, and main-window preflight receipts expose the selected key plus a visible row fingerprint.
 
-Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib stable_selection_key`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Add a state-first agentic runtime proof against the real main menu showing that `selected_result_key`, Enter action, and `visible_result_key_fingerprint` remain unchanged after root file provider completion for the same filter text.
+Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib stable_selection_key`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Run `bun scripts/agentic/root-search-frame-stability.ts` for the state-first runtime proof against the real main menu; it compares `selected_result_key`, Enter action, and `visible_result_key_fingerprint` before and after root file provider completion for the same filter text.
 
 ## Root Unified Passive Snapshot Caches
 
