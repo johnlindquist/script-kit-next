@@ -24,6 +24,12 @@ Shell helper changes outside the Rust app should keep their proof narrow too. Fo
 
 For UI changes outside the main launcher/footer path, use the project's agentic runtime verification flow against the real surface instead of guessing from unit tests alone.
 
+## Root Recent File Seed Pool
+
+Root recent-file seed-pool changes are verified with source audits and grouping checks because they only change app-layer hydration and pure grouping.
+
+Hydration must use the deeper seed limit, empty-root rendering must use the render limit, grouping must remain provider-free, and non-empty global recent seeds must keep filename-token eligibility.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.

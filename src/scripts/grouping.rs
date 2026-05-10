@@ -423,6 +423,7 @@ fn append_recent_root_file_section(
     let eligible_recent_files = recent_file_results
         .iter()
         .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
+        .take(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT)
         .collect::<Vec<_>>();
     if eligible_recent_files.is_empty() {
         return;
@@ -2131,6 +2132,93 @@ mod advanced_query_tests {
             flat.iter()
                 .all(|result| !matches!(result, SearchResult::File(_))),
             "all-ineligible recent files should not render file rows"
+        );
+    }
+
+    #[test]
+    fn root_global_recent_seed_can_match_beyond_empty_recent_render_limit() {
+        let frecency_store = FrecencyStore::new();
+        let mut recent_files = Vec::new();
+        for idx in 0..crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT {
+            recent_files.push(root_file(
+                &format!("/Users/example/Desktop/other-{idx}.md"),
+                &format!("other-{idx}.md"),
+            ));
+        }
+        recent_files.push(root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        ));
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/design-notes.md"
+            )),
+            "non-empty global Files should seed from the deeper recent pool, not only the empty-root render cap"
+        );
+    }
+
+    #[test]
+    fn empty_root_recent_files_stay_render_capped_with_deeper_recent_pool() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = (0..crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT + 3)
+            .map(|idx| {
+                root_file(
+                    &format!("/Users/example/Desktop/recent-{idx}.md"),
+                    &format!("recent-{idx}.md"),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            &[],
+            &recent_files,
+        );
+
+        let file_count = flat
+            .iter()
+            .filter(|result| matches!(result, SearchResult::File(_)))
+            .count();
+        assert_eq!(
+            file_count,
+            crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT,
+            "empty-root Recent Files should remain visually capped"
         );
     }
 

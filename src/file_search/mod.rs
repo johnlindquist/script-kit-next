@@ -131,7 +131,11 @@ pub const ROOT_FILE_SOURCE_LIMIT: usize = 24;
 /// Maximum root launcher file rows rendered under the Files section.
 pub const ROOT_FILE_RENDER_LIMIT: usize = 6;
 /// Maximum frecency-backed recent file rows rendered on the empty root launcher.
-pub const ROOT_FILE_RECENT_LIMIT: usize = ROOT_FILE_RENDER_LIMIT;
+pub const ROOT_FILE_RECENT_RENDER_LIMIT: usize = ROOT_FILE_RENDER_LIMIT;
+/// Maximum frecency-backed recent file rows cached for non-empty root seeds.
+pub const ROOT_FILE_RECENT_SEED_LIMIT: usize = ROOT_FILE_RENDER_LIMIT * 4;
+/// Maximum frecency paths to hydrate while refreshing root recent files.
+pub const ROOT_FILE_RECENT_HYDRATE_LIMIT: usize = ROOT_FILE_RECENT_SEED_LIMIT * 3;
 /// Maximum directory children collected for root launcher directory browsing.
 pub const ROOT_FILE_BROWSE_SOURCE_LIMIT: usize = 96;
 /// Maximum directory children rendered for root launcher directory browsing.
