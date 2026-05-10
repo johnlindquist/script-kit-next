@@ -134,6 +134,9 @@ mod computer_get_tray_menu_item_by_id_contract;
 #[path = "source_audits/computer_get_menu_item_contract.rs"]
 mod computer_get_menu_item_contract;
 
+#[path = "source_audits/computer_list_menu_item_paths_contract.rs"]
+mod computer_list_menu_item_paths_contract;
+
 #[path = "source_audits/computer_get_menu_item_by_index_path_contract.rs"]
 mod computer_get_menu_item_by_index_path_contract;
 
