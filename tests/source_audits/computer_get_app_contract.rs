@@ -6,6 +6,10 @@ fn computer_get_app_is_pid_only_list_apps_lookup() {
     let protocol = std::fs::read_to_string("lat.md/protocol.md").expect("read protocol docs");
     let mcp_protocol =
         std::fs::read_to_string("src/mcp_protocol/mod.rs").expect("read mcp_protocol/mod.rs");
+    let runtime_bridge =
+        std::fs::read_to_string("src/computer_use/runtime_bridge.rs").expect("read runtime bridge");
+    let gpui_runtime_bridge = std::fs::read_to_string("src/computer_use/gpui_runtime_bridge.rs")
+        .expect("read GPUI runtime bridge");
 
     assert!(
         mcp_tools.contains("pub const COMPUTER_GET_APP_TOOL: &str = \"computer/get_app\";"),
@@ -132,6 +136,8 @@ fn computer_get_app_is_pid_only_list_apps_lookup() {
     for needle in [
         "ComputerUseRuntimeBridge::list_app",
         "ComputerUseGetAppRequest",
+        "ComputerUseListAppWindowsRequest",
+        "runtime.list_app_windows",
         "NSWorkspace",
         "runningApplications",
         "process_manager",
@@ -175,6 +181,23 @@ fn computer_get_app_is_pid_only_list_apps_lookup() {
         !mcp_tools.contains("ComputerUseRuntimeBridge::get_app"),
         "computer/get_app must not add a new runtime bridge method"
     );
+    for (label, source) in [
+        ("runtime bridge", runtime_bridge.as_str()),
+        ("GPUI runtime bridge", gpui_runtime_bridge.as_str()),
+    ] {
+        for needle in [
+            "GetApp",
+            "fn get_app",
+            "get_app_on_gpui_thread",
+            "ComputerUseGetAppRequest",
+            "ComputerUseGetAppSnapshot",
+        ] {
+            assert!(
+                !source.contains(needle),
+                "computer/get_app must not add a dedicated {label} surface; found {needle}"
+            );
+        }
+    }
     assert!(
         protocol.contains("computer/get_app"),
         "protocol docs must mention computer/get_app"
