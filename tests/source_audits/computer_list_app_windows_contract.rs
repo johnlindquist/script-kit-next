@@ -234,6 +234,47 @@ fn computer_list_app_windows_is_pid_only_read_only_inventory() {
         );
     }
 
+    let gpui_wrapper = extract_function_body(&bridge, "pub fn list_app_windows_on_gpui_thread(");
+    assert!(
+        gpui_wrapper.contains("list_running_apps_on_gpui_thread"),
+        "GPUI wrapper must validate the PID against the running-app inventory"
+    );
+    assert!(
+        gpui_wrapper.contains("screen_capture_access_preflight"),
+        "GPUI wrapper may warn about redacted titles when screen recording is unavailable"
+    );
+    assert!(
+        gpui_wrapper.contains("core_graphics_windows_for_pid(request.pid)"),
+        "GPUI wrapper must delegate PID-scoped native window metadata to the CoreGraphics helper"
+    );
+    for needle in [
+        "CGRequestScreenCaptureAccess",
+        "request_accessibility_permission",
+        "AXUIElementCreateApplication",
+        "AXUIElementPerformAction",
+        "AXPress",
+        "CGEvent",
+        "CGWindowListCreateImage",
+        "capture_targeted_rgba_image",
+        "focus_window",
+        "move_window",
+        "resize_window",
+        "set_automation_focus",
+        "Command::new(\"open\")",
+        "activateWithOptions",
+        "activateIgnoringOtherApps",
+        "launchApplication",
+        "openApplicationAtURL",
+        "terminate",
+        "forceTerminate",
+    ] {
+        assert!(
+            !gpui_wrapper.contains(needle),
+            "GPUI wrapper must stay read-only and non-prompting; found {}",
+            needle
+        );
+    }
+
     let native_helper = extract_function_body(&bridge, "fn core_graphics_windows_for_pid(");
     assert!(
         native_helper.contains("CGWindowListCopyWindowInfo"),
