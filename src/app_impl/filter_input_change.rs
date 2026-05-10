@@ -826,12 +826,10 @@ impl ScriptListApp {
             }
         }
 
-        // P3: Notify immediately so UI updates (responsive typing)
-        cx.notify();
-
-        // Menu bar items are now pre-fetched by frontmost_app_tracker
-        // No lazy loading needed - items are already in cache when we open
-
+        // Queue the result-frame update before notifying. Rendering between
+        // `filter_text` and `computed_filter_text` would show rows from the
+        // previous query under the new input, changing the visible Enter
+        // target one coalescing tick later.
         self.queue_filter_compute(new_text.clone(), cx);
 
         // Log handler timing
