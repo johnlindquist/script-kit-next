@@ -138,9 +138,18 @@ struct RootBrowserTabSnapshot {
     tabs: Vec<BrowserTabInfo>,
 }
 
+#[derive(Debug, Default)]
 #[allow(dead_code)]
-static ROOT_BROWSER_TAB_SNAPSHOT: LazyLock<Mutex<Option<RootBrowserTabSnapshot>>> =
-    LazyLock::new(|| Mutex::new(None));
+struct RootBrowserTabSnapshotState {
+    snapshot: Option<RootBrowserTabSnapshot>,
+    refresh_in_flight: bool,
+    generation: u64,
+    last_refresh_error: Option<String>,
+}
+
+#[allow(dead_code)]
+static ROOT_BROWSER_TAB_SNAPSHOT: LazyLock<Mutex<RootBrowserTabSnapshotState>> =
+    LazyLock::new(|| Mutex::new(RootBrowserTabSnapshotState::default()));
 
 pub fn list_open_tabs() -> Result<Vec<BrowserTabInfo>> {
     let mut tabs = Vec::new();
@@ -300,7 +309,9 @@ pub(crate) fn search_root_browser_tabs_meta(
         return Vec::new();
     }
 
-    let tabs = cached_root_browser_tabs(options.cache_ttl_ms)
+    ensure_root_browser_tabs_refresh(options.cache_ttl_ms, "root_search_query");
+
+    let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms)
         .into_iter()
         .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
         .take(options.scan_limit)
@@ -333,35 +344,113 @@ pub(crate) fn focus_root_browser_tab(hit: &RootBrowserTabSearchHit) -> Result<()
 }
 
 #[allow(dead_code)]
-fn cached_root_browser_tabs(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
+fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
     let ttl = Duration::from_millis(cache_ttl_ms);
     if let Ok(cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
-        if let Some(snapshot) = cache.as_ref() {
-            if snapshot.captured_at.elapsed() <= ttl {
-                return snapshot.tabs.clone();
-            }
+        if let Some(snapshot) = cache.snapshot.as_ref() {
+            let _expired = snapshot.captured_at.elapsed() > ttl;
+            return snapshot.tabs.clone();
         }
     }
 
-    let tabs = match list_open_tabs() {
-        Ok(tabs) => tabs,
-        Err(error) => {
-            tracing::warn!(
-                error = %error,
-                "root_browser_tabs_snapshot_failed"
-            );
-            Vec::new()
+    Vec::new()
+}
+
+#[allow(dead_code)]
+fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
+    let ttl = Duration::from_millis(cache_ttl_ms);
+    let generation = {
+        let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() else {
+            return;
+        };
+        let is_fresh = cache
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ttl);
+        if is_fresh || cache.refresh_in_flight {
+            return;
         }
+        cache.refresh_in_flight = true;
+        cache.generation = cache.generation.wrapping_add(1);
+        let generation = cache.generation;
+        let cache_age_ms = cache
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.captured_at.elapsed().as_millis() as u64)
+            .unwrap_or(0);
+        let row_count = cache
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.tabs.len())
+            .unwrap_or(0);
+        tracing::info!(
+            source = "browser_tabs",
+            generation,
+            cache_age_ms,
+            ttl_ms = cache_ttl_ms,
+            row_count,
+            reason,
+            "root_passive_snapshot_refresh_started"
+        );
+        generation
     };
 
-    if let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
-        *cache = Some(RootBrowserTabSnapshot {
-            captured_at: Instant::now(),
-            tabs: tabs.clone(),
-        });
-    }
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let result = list_open_tabs();
+        let elapsed_ms = started.elapsed().as_millis() as u64;
 
-    tabs
+        let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() else {
+            return;
+        };
+        if cache.generation != generation {
+            return;
+        }
+
+        match result {
+            Ok(tabs) => {
+                let row_count = tabs.len();
+                cache.snapshot = Some(RootBrowserTabSnapshot {
+                    captured_at: Instant::now(),
+                    tabs,
+                });
+                cache.last_refresh_error = None;
+                tracing::info!(
+                    source = "browser_tabs",
+                    generation,
+                    elapsed_ms,
+                    row_count,
+                    "root_passive_snapshot_refresh_completed"
+                );
+            }
+            Err(error) => {
+                cache.last_refresh_error = Some(error.to_string());
+                tracing::warn!(
+                    source = "browser_tabs",
+                    generation,
+                    elapsed_ms,
+                    error = %error,
+                    "root_passive_snapshot_refresh_failed"
+                );
+            }
+        }
+        cache.refresh_in_flight = false;
+    });
+}
+
+#[cfg(test)]
+fn reset_root_browser_tabs_snapshot_for_test() {
+    if let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
+        *cache = RootBrowserTabSnapshotState::default();
+    }
+}
+
+#[cfg(test)]
+fn store_root_browser_tabs_snapshot_for_test(captured_at: Instant, tabs: Vec<BrowserTabInfo>) {
+    if let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
+        cache.snapshot = Some(RootBrowserTabSnapshot { captured_at, tabs });
+        cache.refresh_in_flight = false;
+    }
 }
 
 #[allow(dead_code)]
@@ -862,6 +951,33 @@ mod tests {
             matches[0].tab.title, "Build a Claude Managed Agent",
             "title hit should outrank URL-only hit"
         );
+    }
+
+    #[test]
+    fn expired_root_browser_tab_snapshot_returns_stale_rows() {
+        reset_root_browser_tabs_snapshot_for_test();
+        let tab = BrowserTabInfo {
+            browser_name: "Google Chrome".to_string(),
+            browser_bundle_id: "com.google.Chrome".to_string(),
+            window_index: 1,
+            tab_index: 1,
+            title: "Root Passive Snapshot".to_string(),
+            url: "https://example.com/root-passive-snapshot".to_string(),
+        };
+        store_root_browser_tabs_snapshot_for_test(
+            Instant::now() - Duration::from_millis(500),
+            vec![tab.clone()],
+        );
+
+        let rows = cached_root_browser_tabs_snapshot(1);
+        assert_eq!(rows, vec![tab]);
+        reset_root_browser_tabs_snapshot_for_test();
+    }
+
+    #[test]
+    fn missing_root_browser_tab_snapshot_returns_empty_rows() {
+        reset_root_browser_tabs_snapshot_for_test();
+        assert!(cached_root_browser_tabs_snapshot(1).is_empty());
     }
 
     #[test]

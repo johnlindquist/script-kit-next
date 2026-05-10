@@ -11,16 +11,46 @@ fn root_unified_browser_history_config_is_opt_in_and_scoped() {
     assert!(config_schema.contains("export type BrowserHistoryProvider"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_ENABLED: bool = false"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MIN_QUERY_CHARS: usize = 4"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SCAN_LIMIT: usize = 500"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_CACHE_TTL_MS: u64 = 30_000"));
+    assert!(config_types.contains("pub scan_limit: usize"));
+    assert!(config_types.contains("pub cache_ttl_ms: u64"));
+    assert!(config_schema.contains("scanLimit?: number"));
+    assert!(config_schema.contains("cacheTtlMs?: number"));
 }
 
 #[test]
-fn root_unified_browser_history_search_is_chromium_metadata_only_and_bounded() {
+fn root_unified_browser_history_search_uses_cached_metadata_snapshot() {
     let browser_history = include_str!("../../src/browser_history.rs");
     let root_search_fn = browser_history
         .split("pub(crate) fn search_root_browser_history_meta(")
         .nth(1)
         .and_then(|rest| rest.split("pub fn list_recent_history(").next())
         .expect("search_root_browser_history_meta should exist");
+
+    assert!(browser_history.contains("pub(crate) struct RootBrowserHistorySectionOptions"));
+    assert!(browser_history.contains("pub(crate) struct RootBrowserHistorySearchHit"));
+    assert!(browser_history.contains("root_browser_history_query_is_eligible("));
+    assert!(browser_history.contains("static ROOT_BROWSER_HISTORY_SNAPSHOT"));
+    assert!(root_search_fn.contains("ensure_root_browser_history_refresh("));
+    assert!(root_search_fn.contains("cached_root_browser_history_snapshot("));
+    assert!(root_search_fn.contains("root_fuzzy_search_browser_history_hits("));
+    assert!(root_search_fn.contains(".take(options.scan_limit)"));
+    assert!(!root_search_fn.contains("copy_sqlite_db_snapshot("));
+    assert!(!root_search_fn.contains("Connection::open"));
+}
+
+#[test]
+fn root_unified_browser_history_refresh_is_chromium_metadata_only_and_bounded() {
+    let browser_history = include_str!("../../src/browser_history.rs");
+    let refresh_fn = browser_history
+        .split("fn refresh_root_browser_history_snapshot_from_home(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("fn root_fuzzy_search_browser_history_hits(")
+                .next()
+        })
+        .expect("refresh_root_browser_history_snapshot_from_home should exist");
     let root_query_fn = browser_history
         .split("fn query_root_chromium_history_conn(")
         .nth(1)
@@ -32,10 +62,8 @@ fn root_unified_browser_history_search_is_chromium_metadata_only_and_bounded() {
         .and_then(|rest| rest.split("fn query_root_chromium_history_conn(").next())
         .expect("query_root_chromium_history_db should exist before root connection query");
 
-    assert!(browser_history.contains("pub(crate) struct RootBrowserHistorySectionOptions"));
-    assert!(browser_history.contains("pub(crate) struct RootBrowserHistorySearchHit"));
-    assert!(browser_history.contains("root_browser_history_query_is_eligible("));
-    assert!(root_search_fn.contains("ROOT_BROWSER_HISTORY_PROVIDERS"));
+    assert!(refresh_fn.contains("ROOT_BROWSER_HISTORY_PROVIDERS"));
+    assert!(refresh_fn.contains("options.scan_limit"));
     assert!(root_db_fn.contains("copy_sqlite_db_snapshot("));
     assert!(root_query_fn.contains("FROM urls"));
     assert!(root_query_fn.contains("WHERE last_visit_time >= ?1"));

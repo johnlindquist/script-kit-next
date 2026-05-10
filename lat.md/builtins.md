@@ -147,9 +147,15 @@ Browser tab rows are an opt-in passive launcher source backed by currently open 
 
 Eligible root queries append a Browser Tabs section after root Files and Recent Files, before Notes, Clipboard History, AI Conversations, Browser History, and fallback rows. Rows are capped through the shared passive-score helper so they never outrank commands, scripts, apps, skills, windows, or actions.
 
-`config.ts` exposes `unifiedSearch.browserTabs`, disabled by default, with controls for `maxResults`, `minQueryChars`, `scanLimit`, `providers`, `searchUrls`, and `cacheTtlMs`. The root source reuses a short-lived open-tab metadata snapshot from Arc, Chrome, Brave, and Edge without fetching favicons or page content.
+`config.ts` exposes `unifiedSearch.browserTabs`, disabled by default, with controls for `maxResults`, `minQueryChars`, `scanLimit`, `providers`, `searchUrls`, and `cacheTtlMs`. The root source reads only from the current open-tab metadata snapshot on the foreground grouping path, while stale or missing snapshots refresh in the background. Refresh completion warms future frames without notifying the main list, invalidating grouped results, fetching favicons, or reading page content.
 
 Root Browser Tabs rows carry title, URL, domain, provider label, tab location, and a stable `browser-tab/...` key. Selecting a row switches the existing tab through `[[src/browser_tabs.rs#activate_tab]]` via the root focus helper rather than opening a duplicate URL.
+
+## Root Unified Passive Snapshot Caches
+
+Passive root sources use cached snapshots on the foreground grouping path so late local-provider work cannot shift the selected target.
+
+Browser Tabs and Browser History refresh stale snapshots in the background. Refresh completion must not invalidate grouped results, notify the main list, or change the visible result fingerprint for the same filter text; it only warms a future frame after the query changes or the cache is rebuilt for another reason.
 
 ## Root Unified Search Clipboard History
 
