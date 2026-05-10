@@ -573,10 +573,14 @@ fn handle_get_app_window(
     match runtime.list_app_windows(request) {
         Ok(snapshot) => {
             let app = snapshot.app;
-            let window = snapshot
-                .windows
-                .into_iter()
-                .find(|window| window.native_window_id == args.native_window_id);
+            let window = if app.is_some() {
+                snapshot
+                    .windows
+                    .into_iter()
+                    .find(|window| window.native_window_id == args.native_window_id)
+            } else {
+                None
+            };
             let status = match (&app, &window) {
                 (Some(_), Some(_)) => "found",
                 (Some(_), None) => "windowNotFound",
@@ -986,7 +990,7 @@ fn computer_get_app_window_input_schema() -> Value {
         "additionalProperties": false,
         "properties": {
             "pid": { "type": "integer" },
-            "nativeWindowId": { "type": "integer", "minimum": 0 }
+            "nativeWindowId": { "type": "integer", "minimum": 0, "maximum": 4294967295u64 }
         },
         "required": ["pid", "nativeWindowId"]
     })
@@ -1427,6 +1431,13 @@ mod tests {
                 .and_then(|value| value.get("minimum"))
                 .and_then(Value::as_i64),
             Some(0)
+        );
+        assert_eq!(
+            properties
+                .get("nativeWindowId")
+                .and_then(|value| value.get("maximum"))
+                .and_then(Value::as_u64),
+            Some(u32::MAX as u64)
         );
         assert_eq!(
             tool.input_schema.get("required"),
@@ -2017,6 +2028,7 @@ mod tests {
             serde_json::json!({ "pid": "101", "nativeWindowId": 98765 }),
             serde_json::json!({ "pid": 101, "nativeWindowId": "98765" }),
             serde_json::json!({ "pid": 101, "nativeWindowId": -1 }),
+            serde_json::json!({ "pid": 101, "nativeWindowId": 4294967296u64 }),
             serde_json::json!({ "pid": 101, "nativeWindowId": 98765, "focus": true }),
             serde_json::json!({ "pid": 101, "nativeWindowId": 98765, "activate": true }),
             serde_json::json!({ "pid": 101, "nativeWindowId": 98765, "move": true }),
