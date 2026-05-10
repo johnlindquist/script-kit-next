@@ -672,6 +672,17 @@ pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
     root_file_name_token_matches_query(name, query)
 }
 
+/// Return true when a recent file can seed a non-empty global root Files section.
+pub fn root_file_recent_seed_matches_query(file: &FileResult, query: &str) -> bool {
+    let query = query.trim();
+    if query.is_empty() || !root_file_global_query_is_eligible(query) {
+        return false;
+    }
+
+    root_file_name_seed_matches_query(&file.name, query)
+        || root_file_path_context_matches_query(file, query)
+}
+
 fn contains_at_root_file_token_boundary(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
@@ -1292,6 +1303,50 @@ mod tests {
             "q2"
         ));
         assert!(!root_file_name_token_matches_query("myq2report.xlsx", "q2"));
+    }
+
+    #[test]
+    fn root_file_recent_seed_accepts_ordered_directory_context() {
+        let result = file("/tmp/src/README.md", "README.md", FileType::Document);
+
+        assert!(
+            root_file_recent_seed_matches_query(&result, "src readme"),
+            "recent seeds should accept ordered directory-context plus filename matches"
+        );
+    }
+
+    #[test]
+    fn root_file_recent_seed_rejects_path_only_context() {
+        let result = file(
+            "/tmp/src/readme/archive.txt",
+            "archive.txt",
+            FileType::Document,
+        );
+
+        assert!(
+            !root_file_recent_seed_matches_query(&result, "src readme"),
+            "recent seeds must not match when every query term is only in the parent path"
+        );
+    }
+
+    #[test]
+    fn root_file_recent_seed_rejects_reversed_directory_context() {
+        let result = file("/tmp/docs/README.md", "README.md", FileType::Document);
+
+        assert!(
+            !root_file_recent_seed_matches_query(&result, "readme docs"),
+            "directory-context recent seeds must preserve parent-then-filename ordering"
+        );
+    }
+
+    #[test]
+    fn root_file_recent_seed_rejects_short_plain_parent_terms() {
+        let result = file("/tmp/ai/README.md", "README.md", FileType::Document);
+
+        assert!(
+            !root_file_recent_seed_matches_query(&result, "ai readme"),
+            "plain two-letter parent terms should not become recent-seed path context"
+        );
     }
 
     #[test]
