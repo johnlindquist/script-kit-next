@@ -35,7 +35,29 @@ fn computer_list_windows_reads_automation_registry_only() {
         "computer/list_windows must read only the focused automation-window id"
     );
 
+    let result_struct = extract_struct_block(&mcp_tools, "struct ComputerUseListWindowsResult");
+    assert!(
+        result_struct.contains("schema_version: u32"),
+        "computer/list_windows result must include schemaVersion"
+    );
+    assert!(
+        result_struct.contains("windows: Vec<AutomationWindowInfo>"),
+        "computer/list_windows result must include the registry window snapshot"
+    );
+    assert!(
+        result_struct.contains("focused_window_id: Option<String>"),
+        "computer/list_windows result must include focusedWindowId, serialized as null when no window is focused"
+    );
+    assert!(
+        !result_struct.contains("skip_serializing_if"),
+        "computer/list_windows must serialize focusedWindowId as null instead of omitting it"
+    );
+
     let handler_body = extract_function_body(&mcp_tools, "fn handle_list_windows(");
+    assert!(
+        handler_body.contains("schema_version: AUTOMATION_WINDOW_SCHEMA_VERSION"),
+        "computer/list_windows handler must return the automation window schema version"
+    );
     assert!(
         handler_body.contains("list_automation_windows()"),
         "computer/list_windows handler must read list_automation_windows"
@@ -95,6 +117,17 @@ fn computer_list_windows_reads_automation_registry_only() {
             needle
         );
     }
+
+    let input_schema_body =
+        extract_function_body(&mcp_tools, "fn computer_list_windows_input_schema()");
+    assert!(
+        input_schema_body.contains("\"additionalProperties\": false"),
+        "computer/list_windows must reject unknown input fields"
+    );
+    assert!(
+        input_schema_body.contains("\"properties\": {}"),
+        "computer/list_windows must keep a closed empty input schema"
+    );
 
     let list_body = extract_function_body(&registry, "pub fn list_automation_windows()");
     assert!(
@@ -163,7 +196,15 @@ fn computer_list_windows_reads_automation_registry_only() {
     }
 }
 
+fn extract_struct_block<'a>(source: &'a str, signature: &str) -> &'a str {
+    extract_braced_block(source, signature)
+}
+
 fn extract_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    extract_braced_block(source, signature)
+}
+
+fn extract_braced_block<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("function signature");
     let open = source[start..].find('{').expect("function open brace") + start;
     let mut depth = 0usize;
