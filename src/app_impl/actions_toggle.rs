@@ -148,20 +148,37 @@ pub(crate) fn root_file_actions_for(
         "Opens with the default app".to_string()
     };
 
-    vec![
-        Action::new(
-            crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
-            open_title,
-            Some(open_description),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("\u{21b5}")
-        .with_icon(if is_dir {
-            IconName::FolderOpen
-        } else {
-            IconName::File
-        })
-        .with_section("Actions"),
+    let mut actions = vec![Action::new(
+        crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
+        open_title,
+        Some(open_description),
+        ActionCategory::ScriptContext,
+    )
+    .with_shortcut("\u{21b5}")
+    .with_icon(if is_dir {
+        IconName::FolderOpen
+    } else {
+        IconName::File
+    })
+    .with_section("Actions")];
+
+    if is_dir {
+        actions.push(
+            Action::new(
+                crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID,
+                "Search Inside Folder",
+                Some(format!(
+                    "Searches {} in File Search",
+                    crate::file_search::shorten_path(&file.path)
+                )),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section("Actions"),
+        );
+    }
+
+    actions.extend([
         Action::new(
             crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
             "Reveal in Finder",
@@ -189,7 +206,9 @@ pub(crate) fn root_file_actions_for(
         .with_shortcut("\u{2318}Y")
         .with_icon(IconName::File)
         .with_section("Actions"),
-    ]
+    ]);
+
+    actions
 }
 
 fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
@@ -1724,13 +1743,31 @@ mod root_file_action_tests {
     }
 
     #[test]
-    fn root_file_actions_for_directory_labels_open_folder() {
+    fn root_file_actions_for_directory_adds_search_inside_folder() {
         let actions = root_file_actions_for(&root_file(FileType::Directory));
+        let titles = actions
+            .iter()
+            .map(|action| action.title.as_str())
+            .collect::<Vec<_>>();
 
         assert_eq!(actions[0].title, "Open Folder");
         assert_eq!(
             actions[0].id,
             crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID
+        );
+        assert_eq!(
+            titles,
+            vec![
+                "Open Folder",
+                "Search Inside Folder",
+                "Reveal in Finder",
+                "Copy Path",
+                "Quick Look"
+            ]
+        );
+        assert_eq!(
+            actions[1].id,
+            crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID
         );
     }
 

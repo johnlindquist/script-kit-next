@@ -546,6 +546,13 @@ impl ScriptListApp {
         self.close_and_reset_window(cx);
     }
 
+    pub(crate) fn root_file_search_in_folder_query(
+        file: &crate::file_search::FileResult,
+    ) -> Option<String> {
+        (file.file_type == crate::file_search::FileType::Directory)
+            .then(|| crate::file_search::ensure_trailing_slash(&file.path))
+    }
+
     pub(crate) fn execute_root_file_action(
         &mut self,
         action_id: &str,
@@ -597,6 +604,19 @@ impl ScriptListApp {
                         cx,
                     );
                 }
+                true
+            }
+            crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID => {
+                let Some(query) = Self::root_file_search_in_folder_query(file) else {
+                    self.show_hud(
+                        format!("Not a folder: {}", file.name),
+                        Some(HUD_MEDIUM_MS),
+                        cx,
+                    );
+                    return true;
+                };
+                self.pending_root_file_actions_file = None;
+                self.open_file_search(query, cx);
                 true
             }
             _ => false,
@@ -916,5 +936,42 @@ mod tests {
         );
 
         assert!(!fallback_keeps_window_open(&fallback));
+    }
+
+    fn root_file_result(
+        path: &str,
+        file_type: crate::file_search::FileType,
+    ) -> crate::file_search::FileResult {
+        crate::file_search::FileResult {
+            path: path.to_string(),
+            name: std::path::Path::new(path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(path)
+                .to_string(),
+            size: 0,
+            modified: 0,
+            file_type,
+        }
+    }
+
+    #[test]
+    fn root_file_search_in_folder_query_accepts_directories() {
+        let file = root_file_result(
+            "/tmp/example-folder",
+            crate::file_search::FileType::Directory,
+        );
+
+        assert_eq!(
+            ScriptListApp::root_file_search_in_folder_query(&file),
+            Some("/tmp/example-folder/".to_string())
+        );
+    }
+
+    #[test]
+    fn root_file_search_in_folder_query_rejects_regular_files() {
+        let file = root_file_result("/tmp/example.txt", crate::file_search::FileType::Document);
+
+        assert_eq!(ScriptListApp::root_file_search_in_folder_query(&file), None);
     }
 }
