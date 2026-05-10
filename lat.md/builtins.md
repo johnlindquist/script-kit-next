@@ -135,7 +135,7 @@ Eligible non-empty root queries append an AI Conversations section using the exi
 
 Notes rows are a passive launcher source backed by local Notes metadata search.
 
-Eligible non-empty root queries append a Notes section after root Files and Browser Tabs, before Clipboard History, AI Conversations, and fallback rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
+Eligible non-empty root queries append a Notes section through the configured passive source order. By default they appear after root Files and Browser Tabs, before Clipboard History, Dictation History, AI Conversations, Browser History, and fallback rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.notes` for the implemented source: `enabled`, `maxResults`, `minQueryChars`, and `searchContent`. The storage search may use Notes FTS over title and content, but root rows only carry note id, title, updated time, pinned state, character count, and score.
 
@@ -145,7 +145,7 @@ Selecting a root Note row opens or focuses the floating Notes window through `[[
 
 Browser tab rows are an opt-in passive launcher source backed by currently open tab metadata.
 
-Eligible root queries append a Browser Tabs section after root Files and Recent Files, before Notes, Clipboard History, AI Conversations, Browser History, and fallback rows. Rows are capped through the shared passive-score helper so they never outrank commands, scripts, apps, skills, windows, or actions.
+Eligible root queries append a Browser Tabs section through the configured passive source order. By default they appear after root Files and Recent Files, before Notes, Clipboard History, Dictation History, AI Conversations, Browser History, and fallback rows. Rows are capped through the shared passive-score helper so they never outrank commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.browserTabs`, disabled by default, with controls for `maxResults`, `minQueryChars`, `scanLimit`, `providers`, `searchUrls`, and `cacheTtlMs`. The root source reads only from the current open-tab metadata snapshot on the foreground grouping path, while stale or missing snapshots refresh in the background. Refresh completion warms future frames without notifying the main list, invalidating grouped results, fetching favicons, or reading page content.
 
@@ -161,13 +161,19 @@ Browser Tabs and Browser History refresh stale snapshots in the background. The 
 
 Root passive ranking receipts make the launcher row-order contract visible to automation without exposing row content.
 
-The `mainWindowPreflight` receipt now includes `selectedResultRole` and `visibleResults`. Each visible row receipt carries grouped index, visible rank, stable selection key, role, action kind, type label, and source name. The role is derived directly from `SearchResult`: scripts, scriptlets, skills, built-ins, apps, and windows are primary; root files are root-file rows; Notes, ACP History, Clipboard History, Dictation History, Browser Tabs, and Browser History are root-passive rows; fallbacks, script issues, and agents stay distinct. This lets state-first proofs verify that real passive rows are present but remain below primary launcher intent for the same query.
+The `mainWindowPreflight` receipt now includes `selectedResultRole` and `visibleResults`. Each visible row receipt carries grouped index, visible rank, stable selection key, role, action kind, type label, and source name. The role is derived directly from `SearchResult`: scripts, scriptlets, skills, built-ins, apps, and windows are primary; root files are root-file rows; Notes, ACP History, Clipboard History, Dictation History, Browser Tabs, and Browser History are root-passive rows; fallbacks, script issues, and agents stay distinct. This lets state-first proofs verify that real passive rows are present but remain below primary launcher intent for the same query, including when `config.ts` reorders passive sections.
+
+## Root Unified Search Passive Source Order
+
+Passive source order is user-configurable while primary rows, root file rows, and fallback rows keep their safety positions.
+
+`config.ts` exposes `unifiedSearch.passiveSourceOrder` with values for `browserTabs`, `notes`, `clipboardHistory`, `dictationHistory`, `acpHistory`, and `browserHistory`. The runtime deduplicates configured entries, appends missing defaults, and only reorders passive local sections. It does not enable disabled sources, skip enabled sources, or let passive rows move ahead of primary launcher rows or root Files.
 
 ## Root Unified Search Clipboard History
 
 Clipboard history rows are an opt-in passive launcher source for non-empty root queries.
 
-Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render after Files, Browser Tabs, and Notes, before AI Conversations and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
+Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render through the configured passive source order; by default they appear after Files, Browser Tabs, and Notes, before Dictation History, AI Conversations, Browser History, and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
 
 `config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
 
@@ -175,13 +181,13 @@ Root Clipboard History scans bounded recent clipboard metadata only, never raw c
 
 Dictation history rows are opt-in passive launcher rows backed by saved local transcripts.
 
-Root Dictation History scans the compacted local `dictation-history.jsonl` transcript log with a bounded `scanLimit`, excludes empty, short, newline, disabled, and advanced queries, and appends capped passive rows after Clipboard History and before AI Conversations. Rows carry metadata only: id, preview, target, timestamp, duration, matched field, subtitle, and score. Enter loads the full transcript by selected id and reuses the existing paste flow. The source is disabled by default through `unifiedSearch.dictationHistory` so users explicitly choose whether voice transcripts appear in the main launcher.
+Root Dictation History scans the compacted local `dictation-history.jsonl` transcript log with a bounded `scanLimit`, excludes empty, short, newline, disabled, and advanced queries, and appends capped passive rows through the configured passive source order. By default it appears after Clipboard History and before AI Conversations. Rows carry metadata only: id, preview, target, timestamp, duration, matched field, subtitle, and score. Enter loads the full transcript by selected id and reuses the existing paste flow. The source is disabled by default through `unifiedSearch.dictationHistory` so users explicitly choose whether voice transcripts appear in the main launcher.
 
 ## Root Unified Search Browser History
 
 Browser history rows are an opt-in passive launcher source backed by local browser URL metadata.
 
-Eligible root queries append a Browser History section after Files, Browser Tabs, Notes, Clipboard History, and AI Conversations, before fallback handoff rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
+Eligible root queries append a Browser History section through the configured passive source order. By default it appears after Files, Browser Tabs, Notes, Clipboard History, Dictation History, and AI Conversations, before fallback handoff rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.browserHistory`, disabled by default, with controls for `maxResults`, `minQueryChars`, `maxAgeDays`, `providers`, and `searchUrls`. The root source is intentionally narrower than the dedicated browser-history picker: it only scans copied SQLite snapshots from Arc, Chrome, Brave, and Edge Chromium history databases.
 

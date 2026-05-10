@@ -426,6 +426,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             enabled: false,
             ..Default::default()
         },
+        &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
     )
 }
 
@@ -462,6 +463,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     root_browser_history_hits: &[crate::browser_history::RootBrowserHistorySearchHit],
     root_browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
+    root_passive_source_order: &[crate::config::UnifiedSearchPassiveSource],
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
@@ -499,54 +501,70 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         advanced_query,
         root_file_options,
     );
-    append_root_browser_tabs_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_browser_tab_hits,
-        root_browser_tabs_options,
-    );
-    append_root_notes_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_note_hits,
-        root_notes_options,
-    );
-    append_root_clipboard_history_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_clipboard_history_hits,
-        root_clipboard_history_options,
-    );
-    append_root_dictation_history_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_dictation_history_hits,
-        root_dictation_history_options,
-    );
-    append_root_acp_history_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_acp_history_hits,
-        root_acp_history_options,
-    );
-    append_root_browser_history_section(
-        &mut grouped,
-        &mut flat_results,
-        filter_text,
-        advanced_query,
-        root_browser_history_hits,
-        root_browser_history_options,
-    );
+    for source in root_passive_source_order {
+        match source {
+            crate::config::UnifiedSearchPassiveSource::BrowserTabs => {
+                append_root_browser_tabs_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_browser_tab_hits,
+                    root_browser_tabs_options.clone(),
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::Notes => {
+                append_root_notes_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_note_hits,
+                    root_notes_options,
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::ClipboardHistory => {
+                append_root_clipboard_history_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_clipboard_history_hits,
+                    root_clipboard_history_options,
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::DictationHistory => {
+                append_root_dictation_history_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_dictation_history_hits,
+                    root_dictation_history_options,
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::AcpHistory => {
+                append_root_acp_history_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_acp_history_hits,
+                    root_acp_history_options,
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
+                append_root_browser_history_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_browser_history_hits,
+                    root_browser_history_options.clone(),
+                );
+            }
+        }
+    }
 
     (grouped, flat_results)
 }
@@ -1619,6 +1637,7 @@ mod advanced_query_tests {
                 min_query_chars: 3,
                 ..Default::default()
             },
+            &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
         );
 
         let roles = grouped_result_roles(&grouped, &flat);
@@ -1667,6 +1686,139 @@ mod advanced_query_tests {
                 "Dictation History",
                 "AI Conversations",
                 "Browser History",
+                "Use \"design\" with...",
+            ]
+        );
+    }
+
+    #[test]
+    fn root_passive_source_order_reorders_only_passive_sections() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+        let browser_tabs = vec![root_browser_tab_hit("tab/design", "design tab")];
+        let notes = vec![root_note_hit(
+            "33333333-3333-3333-3333-333333333333",
+            "design note",
+            false,
+        )];
+        let clipboard = vec![clipboard_history_entry(
+            "clip-design",
+            "design copied text",
+            false,
+        )];
+        let dictation = vec![root_dictation_history_hit(
+            "dictation-design",
+            "design transcript",
+        )];
+        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let browser_history = vec![root_browser_history_hit(
+            "history/design",
+            "design history page",
+        )];
+        let passive_order = [
+            crate::config::UnifiedSearchPassiveSource::AcpHistory,
+            crate::config::UnifiedSearchPassiveSource::BrowserHistory,
+            crate::config::UnifiedSearchPassiveSource::Notes,
+            crate::config::UnifiedSearchPassiveSource::BrowserTabs,
+            crate::config::UnifiedSearchPassiveSource::ClipboardHistory,
+            crate::config::UnifiedSearchPassiveSource::DictationHistory,
+        ];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files_with_options(
+            &[],
+            &[],
+            &[builtin_entry("Design Gallery")],
+            &[],
+            &[],
+            &frecency_store,
+            query,
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+            crate::file_search::RootFileSectionOptions::default(),
+            &notes,
+            crate::notes::RootNotesSectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &clipboard,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &dictation,
+            crate::dictation::RootDictationHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                scan_limit: 10,
+            },
+            &acp,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &browser_tabs,
+            crate::browser_tabs::RootBrowserTabsSectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &browser_history,
+            crate::browser_history::RootBrowserHistorySectionOptions {
+                enabled: true,
+                min_query_chars: 3,
+                ..Default::default()
+            },
+            &passive_order,
+        );
+
+        let roles = grouped_result_roles(&grouped, &flat);
+        let first_primary = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "primary").then_some(*index))
+            .expect("collision fixture should include a primary launcher row");
+        let first_root_file = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootFile").then_some(*index))
+            .expect("collision fixture should include a root file row");
+        let first_passive = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
+            .expect("collision fixture should include a passive row");
+        let first_fallback = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
+            .expect("collision fixture should include a File Search fallback row");
+
+        assert!(first_primary < first_root_file);
+        assert!(first_root_file < first_passive);
+        assert!(first_passive < first_fallback);
+
+        let section_labels = grouped
+            .iter()
+            .filter_map(|item| match item {
+                GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
+                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            section_labels,
+            vec![
+                "Files",
+                "AI Conversations",
+                "Browser History",
+                "Notes",
+                "Browser Tabs",
+                "Clipboard History",
+                "Dictation History",
                 "Use \"design\" with...",
             ]
         );

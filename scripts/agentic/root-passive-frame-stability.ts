@@ -121,6 +121,20 @@ function refreshing(preflight: Json): boolean {
   return Boolean(frame?.browserTabs?.refreshing || frame?.browserHistory?.refreshing);
 }
 
+function assertPassiveRolesDoNotPrecedePrimary(preflight: Json, label: string): void {
+  const rows = preflight.visibleResults ?? [];
+  const firstPrimary = rows.find((row: Json) => row.role === "primary");
+  const firstPassive = rows.find((row: Json) => row.role === "rootPassive");
+  if (!firstPrimary || !firstPassive) {
+    return;
+  }
+  if (firstPassive.visibleRank <= firstPrimary.visibleRank) {
+    throw new Error(
+      `${label}: rootPassive row appeared before primary row: ${JSON.stringify(rows)}`,
+    );
+  }
+}
+
 async function waitForPassiveSettled(): Promise<Json> {
   const deadline = Date.now() + timeoutMs;
   let last = getState("settle-start");
@@ -149,9 +163,13 @@ async function main() {
   waitForInput();
 
   const before = getState("before");
-  const beforeComparable = comparable(requirePreflight(before, "before"));
+  const beforePreflight = requirePreflight(before, "before");
+  assertPassiveRolesDoNotPrecedePrimary(beforePreflight, "before");
+  const beforeComparable = comparable(beforePreflight);
   const after = await waitForPassiveSettled();
-  const afterComparable = comparable(requirePreflight(after, "after"));
+  const afterPreflight = requirePreflight(after, "after");
+  assertPassiveRolesDoNotPrecedePrimary(afterPreflight, "after");
+  const afterComparable = comparable(afterPreflight);
 
   const stable =
     JSON.stringify(beforeComparable) === JSON.stringify(afterComparable);

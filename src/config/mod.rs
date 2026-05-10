@@ -36,8 +36,8 @@ pub use types::{
     McpHttpServerConfig, McpServerConfig, McpStdioServerConfig, RootFilePromotionConfig,
     ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
     UnifiedSearchAcpHistoryConfig, UnifiedSearchBrowserHistoryConfig,
-    UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig, WatcherConfig,
-    WindowManagementPreferences,
+    UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,
+    UnifiedSearchPassiveSource, WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader
