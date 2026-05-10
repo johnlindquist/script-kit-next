@@ -3,7 +3,10 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseListAppWindowsSnapshot, ComputerUseListAppsRequest, ComputerUseListAppsSnapshot,
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
-use crate::computer_use::window_observation::computer_use_window_observation_v1;
+use crate::computer_use::window_observation::{
+    computer_use_window_observation_v1, window_duplicate_groups_v1,
+    WindowDuplicateObservationInputV1,
+};
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::RwLock;
@@ -353,6 +356,24 @@ fn core_graphics_windows_for_pid(
             z_order: windows.len() as u32,
             observation: Some(observation),
         });
+    }
+
+    let duplicate_groups = window_duplicate_groups_v1(
+        &windows
+            .iter()
+            .map(|window| WindowDuplicateObservationInputV1 {
+                native_window_id: window.native_window_id,
+                bounds: window.bounds.clone(),
+                is_on_screen: window.is_on_screen,
+                z_order: window.z_order,
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    for (window, duplicate_group) in windows.iter_mut().zip(duplicate_groups) {
+        if let Some(observation) = &mut window.observation {
+            observation.duplicate_group = duplicate_group;
+        }
     }
 
     Ok(windows)

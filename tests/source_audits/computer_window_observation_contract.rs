@@ -28,11 +28,18 @@ fn computer_window_observation_is_additive_read_only_metadata() {
 
     for needle in [
         "pub struct ComputerUseWindowObservationV1",
+        "#[serde(skip_serializing_if = \"Option::is_none\")]",
+        "pub duplicate_group: Option<WindowDuplicateGroupV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
         "pub enum WindowDisqualificationReason",
         "pub struct WindowCaptureThresholdsV1",
+        "pub struct WindowDuplicateGroupV1",
+        "pub enum WindowDuplicateGroupStatus",
+        "pub enum WindowDuplicateSelectionBasis",
+        "pub struct WindowDuplicateObservationInputV1",
+        "pub fn window_duplicate_groups_v1(",
         "pub const COMPUTER_USE_WINDOW_OBSERVATION_SCHEMA_VERSION: u32 = 1;",
         "pub const WINDOW_CAPTURE_REQUIRED_LAYER: i64 = 0;",
         "pub const WINDOW_CAPTURE_MIN_ALPHA: f64 = 0.01;",
@@ -107,6 +114,60 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         );
     }
 
+    let duplicate_helper_body =
+        extract_function_body(&module, "pub fn window_duplicate_groups_v1(");
+    for needle in [
+        "candidate.native_window_id == window.native_window_id",
+        "group_count < 2",
+        "WindowDuplicateGroupStatus::Preferred",
+        "WindowDuplicateGroupStatus::Duplicate",
+        "preferred_z_order: preferred.z_order",
+        "WindowDuplicateSelectionBasis::OnScreenThenLargestAreaThenLowestZOrder",
+        "candidate.is_on_screen",
+        "window_area(&candidate.bounds)",
+        "std::cmp::Reverse(candidate.z_order)",
+        "std::ptr::eq(preferred, window)",
+    ] {
+        assert!(
+            duplicate_helper_body.contains(needle),
+            "duplicate observation helper must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "CoreGraphics",
+        "CGWindowListCopyWindowInfo",
+        "NSWorkspace",
+        "AppKit",
+        "retain(",
+        "dedup",
+        "remove(",
+        "sort",
+        "focus",
+        "activate",
+        "capture",
+        "click",
+        "press",
+        "execute",
+    ] {
+        assert!(
+            !duplicate_helper_body.contains(forbidden),
+            "duplicate observation helper must stay diagnostic-only; found {forbidden}"
+        );
+    }
+
+    for needle in [
+        "let duplicate_groups = window_duplicate_groups_v1(",
+        ".iter()",
+        "WindowDuplicateObservationInputV1",
+        "observation.duplicate_group = duplicate_group;",
+        "Ok(windows)",
+    ] {
+        assert!(
+            bridge.contains(needle),
+            "CoreGraphics bridge must annotate duplicate groups without changing returned rows: {needle}"
+        );
+    }
+
     assert!(
         !mcp_tools.contains("COMPUTER_WINDOW_OBSERVATION_TOOL")
             && !mcp_tools.contains("handle_window_observation"),
@@ -121,6 +182,10 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "ComputerUseWindowObservationV1",
         "captureCandidate",
         "metadataQuality",
+        "duplicateGroup",
+        "preferred",
+        "duplicate",
+        "onScreenThenLargestAreaThenLowestZOrder",
         "layerNonZero",
         "alphaTooLow",
         "sharingStateNone",
