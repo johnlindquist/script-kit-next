@@ -504,19 +504,8 @@ fn append_root_file_section(
         return;
     }
 
-    let insertion_index = grouped
-        .iter()
-        .position(|item| match item {
-            GroupedListItem::Item(result_idx) => matches!(
-                flat_results.get(*result_idx),
-                Some(SearchResult::Fallback(_))
-            ),
-            GroupedListItem::SectionHeader(label, None) => {
-                label.starts_with("Use \"") && label.ends_with("\" with...")
-            }
-            GroupedListItem::SectionHeader(_, Some(_)) => false,
-        })
-        .unwrap_or(grouped.len());
+    let promote = root_file_section_should_promote(mode, filter_text, &files);
+    let insertion_index = root_file_section_insertion_index(grouped, flat_results, promote);
 
     let mut file_group = Vec::with_capacity(files.len() + 2);
     file_group.push(GroupedListItem::SectionHeader(
@@ -534,6 +523,71 @@ fn append_root_file_section(
         file_group.push(GroupedListItem::Item(idx));
     }
     grouped.splice(insertion_index..insertion_index, file_group);
+}
+
+fn root_file_section_should_promote(
+    mode: crate::file_search::RootFileSectionMode,
+    filter_text: &str,
+    files: &[crate::scripts::FileMatch],
+) -> bool {
+    if mode != crate::file_search::RootFileSectionMode::GlobalQuery {
+        return false;
+    }
+
+    let query = filter_text.trim().to_lowercase();
+    if query.len() < 3 {
+        return false;
+    }
+
+    let Some(first_file) = files.first() else {
+        return false;
+    };
+
+    let name = first_file.file.name.to_lowercase();
+    let stem = std::path::Path::new(&first_file.file.name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .map(str::to_lowercase);
+
+    name == query
+        || name.starts_with(&query)
+        || stem
+            .as_deref()
+            .is_some_and(|stem| stem == query || stem.starts_with(&query))
+}
+
+fn root_file_section_insertion_index(
+    grouped: &[GroupedListItem],
+    flat_results: &[SearchResult],
+    promote: bool,
+) -> usize {
+    if promote {
+        return match grouped.first() {
+            Some(GroupedListItem::Item(result_idx))
+                if matches!(
+                    flat_results.get(*result_idx),
+                    Some(SearchResult::ScriptIssue(_))
+                ) =>
+            {
+                1
+            }
+            _ => 0,
+        };
+    }
+
+    grouped
+        .iter()
+        .position(|item| match item {
+            GroupedListItem::Item(result_idx) => matches!(
+                flat_results.get(*result_idx),
+                Some(SearchResult::Fallback(_))
+            ),
+            GroupedListItem::SectionHeader(label, None) => {
+                label.starts_with("Use \"") && label.ends_with("\" with...")
+            }
+            GroupedListItem::SectionHeader(_, Some(_)) => false,
+        })
+        .unwrap_or(grouped.len())
 }
 
 fn merge_root_global_file_results_with_recent(
@@ -978,6 +1032,47 @@ mod advanced_query_tests {
             duplicate_count, 1,
             "provider and recent rows with the same full path should render once"
         );
+    }
+
+    #[test]
+    fn root_global_strong_filename_match_promotes_files_section() {
+        let files = vec![SearchResult::File(crate::scripts::FileMatch {
+            file: root_file("/Users/example/Desktop/design-notes.md", "design-notes.md"),
+            score: 100,
+        })];
+        let grouped = vec![GroupedListItem::SectionHeader("Commands".to_string(), None)];
+        let file_matches = files
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design",
+            &file_matches,
+        ));
+        assert_eq!(
+            root_file_section_insertion_index(&grouped, &files, true),
+            0,
+            "strong filename matches should insert Files above ordinary launcher groups"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_never_promotes_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file("/Users/example/dev/design-notes.md", "design-notes.md"),
+            score: 100,
+        }];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::DirectoryBrowse,
+            "design",
+            &files,
+        ));
     }
 
     #[test]

@@ -264,7 +264,7 @@ mod tests {
             .expect("append_root_file_section source should be present");
 
         let section_offset = append_source
-            .find("GroupedListItem::SectionHeader(\"Files\".to_string(), None)")
+            .find("root_file_section_title(mode, root_file_search_loading).to_string()")
             .expect("Files section header should be inserted");
         let file_offset = append_source
             .find("flat_results.push(SearchResult::File(file_match));")
@@ -286,6 +286,48 @@ mod tests {
                 && append_source.contains("files.is_empty() && handoff.is_none()"),
             "Files section should still appear with the handoff row when Spotlight returns zero file rows"
         );
+    }
+
+    #[test]
+    fn root_global_file_promotion_stays_grouping_only() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let production = production_source(&grouping_source);
+        let helper = production
+            .split("fn root_file_section_should_promote(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn root_file_section_insertion_index(")
+                    .next()
+            })
+            .expect("root file promotion helper should be present");
+
+        assert!(
+            helper.contains("RootFileSectionMode::GlobalQuery")
+                && helper.contains("filter_text.trim()")
+                && helper.contains("file_stem()")
+                && helper.contains("files.first()"),
+            "root file promotion should depend on a strong global filename/stem match"
+        );
+        assert!(
+            production.contains("root_file_section_insertion_index(grouped, flat_results, promote)")
+                && production.contains("SearchResult::ScriptIssue(_)"),
+            "promotion should route through a grouping insertion helper while preserving the script issue row"
+        );
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !helper.contains(forbidden),
+                "root file promotion must not start providers: {forbidden}"
+            );
+        }
     }
 
     #[test]
@@ -927,9 +969,10 @@ mod tests {
             "recent root files should hydrate known frecency paths in the app layer"
         );
         assert!(
-            filtering_normalized.contains("if self.computed_filter_text.is_empty() { self.refresh_root_recent_file_results(); }")
+            filtering_normalized.contains("RootFileSectionMode::GlobalQuery")
+                && filtering_normalized.contains("self.refresh_root_recent_file_results();")
                 && filtering_normalized.contains("&self.root_recent_file_results"),
-            "empty root grouping should refresh and pass recent file rows explicitly"
+            "empty and non-empty global root grouping should refresh and pass recent file rows explicitly"
         );
     }
 
