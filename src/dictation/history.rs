@@ -3,10 +3,34 @@
 use crate::dictation::DictationTarget;
 use chrono::{Datelike, Local};
 use serde::{Deserialize, Serialize};
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 const HISTORY_COMPACT_LIMIT: usize = 200;
 const RESOURCE_ITEMS_LIMIT: usize = 10;
+
+type HistoryFileSignature = Option<(std::path::PathBuf, std::time::SystemTime, u64)>;
+
+#[derive(Clone)]
+struct DictationHistoryIndexCache {
+    signature: HistoryFileSignature,
+    entries: Vec<DictationHistoryEntry>,
+}
+
+static DICTATION_HISTORY_INDEX_CACHE: OnceLock<Mutex<Option<DictationHistoryIndexCache>>> =
+    OnceLock::new();
+
+fn dictation_history_index_cache() -> &'static Mutex<Option<DictationHistoryIndexCache>> {
+    DICTATION_HISTORY_INDEX_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn invalidate_history_cache() {
+    if let Some(cache) = DICTATION_HISTORY_INDEX_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            *guard = None;
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DictationHistoryEntry {
@@ -165,6 +189,7 @@ fn write_history(entries: &[DictationHistoryEntry]) -> std::io::Result<()> {
             writeln!(file, "{json}")?;
         }
     }
+    invalidate_history_cache();
     Ok(())
 }
 
@@ -200,10 +225,43 @@ fn save_history_entry(entry: &DictationHistoryEntry) {
 }
 
 pub fn load_history() -> Vec<DictationHistoryEntry> {
-    let Ok(content) = std::fs::read_to_string(history_path()) else {
-        return Vec::new();
-    };
+    let path = history_path();
+    let signature = history_file_signature(&path);
+    if let Ok(guard) = dictation_history_index_cache().lock() {
+        if let Some(cache) = guard.as_ref() {
+            if cache.signature == signature {
+                return cache.entries.clone();
+            }
+        }
+    }
 
+    let entries = std::fs::read_to_string(&path)
+        .map(|content| parse_history_entries(&content))
+        .unwrap_or_default();
+
+    if let Ok(mut guard) = dictation_history_index_cache().lock() {
+        *guard = Some(DictationHistoryIndexCache {
+            signature,
+            entries: entries.clone(),
+        });
+    }
+
+    entries
+}
+
+fn history_file_signature(path: &std::path::Path) -> HistoryFileSignature {
+    std::fs::metadata(path).ok().map(|metadata| {
+        (
+            path.to_path_buf(),
+            metadata
+                .modified()
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            metadata.len(),
+        )
+    })
+}
+
+fn parse_history_entries(content: &str) -> Vec<DictationHistoryEntry> {
     let mut entries: Vec<DictationHistoryEntry> = content
         .lines()
         .filter_map(|line| serde_json::from_str::<DictationHistoryEntry>(line).ok())

@@ -58,11 +58,11 @@ Use `cargo test --test source_audits root_unified_search_stability_contract -- -
 
 ## Root Unified Passive Snapshot Caches
 
-Passive snapshot caches keep slow local providers off the foreground root-search grouping path.
+Passive snapshot caches and query-frame latches keep slow local providers from changing an active root-search frame.
 
-Checks must prove that Browser Tabs and Browser History foreground search only fuzzy-filters cached metadata snapshots, that stale or missing snapshots start background refreshes, and that refresh completion never calls `cx.notify`, invalidates grouped results, or publishes rows into the active frame for the same filter text.
+Checks must prove that Browser Tabs and Browser History foreground search only fuzzy-filters cached metadata snapshots, that stale or missing snapshots start background refreshes only after source eligibility passes, and that their hit vectors flow through a frozen per-query passive frame before grouping. Saved ACP and Dictation history must reuse mtime-backed JSONL indexes while invalidating after local writes/deletes. Refresh completion must never call `cx.notify`, invalidate grouped results, or publish rows into the active frame for the same filter text.
 
-Use `cargo test --test source_audits root_unified_passive_snapshot_contract -- --nocapture` with the browser-tabs, browser-history, and root-stability audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof should use preflight/state receipts rather than screenshots.
+Use `cargo test --test source_audits root_unified_passive_snapshot_contract -- --nocapture` with the browser-tabs, browser-history, passive-frame, JSONL index, and root-stability audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof should use `bun scripts/agentic/root-passive-frame-stability.ts` with preflight/state receipts rather than screenshots.
 
 ## Root Unified Search Config Parity
 

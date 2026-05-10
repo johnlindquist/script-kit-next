@@ -34,12 +34,31 @@ pub(crate) struct MainWindowPreflightAction {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct RootPassiveSourceReceipt {
+    pub enabled: bool,
+    pub frame_count: usize,
+    pub cache_generation: u64,
+    pub frame_generation: u64,
+    pub refreshing: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct RootPassiveFrameReceipt {
+    pub query: String,
+    pub browser_tabs: RootPassiveSourceReceipt,
+    pub browser_history: RootPassiveSourceReceipt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
     pub selected_index: usize,
     pub selected_result_key: Option<String>,
     pub visible_result_key_fingerprint: String,
     pub visible_result_count: usize,
+    pub root_passive_frame: Option<RootPassiveFrameReceipt>,
     pub enter_action: MainWindowPreflightAction,
     pub tab_action: Option<MainWindowPreflightAction>,
     pub warnings: Vec<String>,

@@ -4,6 +4,29 @@
 //! - `acp-conversations/{session_id}.json` — Full message history for resume
 
 use serde::{Deserialize, Serialize};
+use std::sync::{Mutex, OnceLock};
+
+type HistoryFileSignature = Option<(std::path::PathBuf, std::time::SystemTime, u64)>;
+
+#[derive(Clone)]
+struct AcpHistoryIndexCache {
+    signature: HistoryFileSignature,
+    entries: Vec<AcpHistoryEntry>,
+}
+
+static ACP_HISTORY_INDEX_CACHE: OnceLock<Mutex<Option<AcpHistoryIndexCache>>> = OnceLock::new();
+
+fn acp_history_index_cache() -> &'static Mutex<Option<AcpHistoryIndexCache>> {
+    ACP_HISTORY_INDEX_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn invalidate_history_cache() {
+    if let Some(cache) = ACP_HISTORY_INDEX_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            *guard = None;
+        }
+    }
+}
 
 /// A single conversation history entry (summary for the index).
 ///
@@ -313,6 +336,7 @@ pub(crate) fn save_history_entry(entry: &AcpHistoryEntry) {
         return;
     };
     let _ = writeln!(file, "{json}");
+    invalidate_history_cache();
 
     // Compact when file grows too large (>200 lines)
     if let Ok(content) = std::fs::read_to_string(&path) {
@@ -325,6 +349,7 @@ pub(crate) fn save_history_entry(entry: &AcpHistoryEntry) {
                         let _ = writeln!(f, "{j}");
                     }
                 }
+                invalidate_history_cache();
             }
         }
     }
@@ -361,10 +386,42 @@ pub(crate) fn save_conversation(conversation: &SavedConversation) {
 /// always see populated display fields.
 pub(crate) fn load_history() -> Vec<AcpHistoryEntry> {
     let path = history_path();
-    let Ok(content) = std::fs::read_to_string(&path) else {
-        return Vec::new();
-    };
+    let signature = history_file_signature(&path);
+    if let Ok(guard) = acp_history_index_cache().lock() {
+        if let Some(cache) = guard.as_ref() {
+            if cache.signature == signature {
+                return cache.entries.clone();
+            }
+        }
+    }
 
+    let entries = std::fs::read_to_string(&path)
+        .map(|content| parse_history_entries(&content))
+        .unwrap_or_default();
+
+    if let Ok(mut guard) = acp_history_index_cache().lock() {
+        *guard = Some(AcpHistoryIndexCache {
+            signature,
+            entries: entries.clone(),
+        });
+    }
+
+    entries
+}
+
+fn history_file_signature(path: &std::path::Path) -> HistoryFileSignature {
+    std::fs::metadata(path).ok().map(|metadata| {
+        (
+            path.to_path_buf(),
+            metadata
+                .modified()
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            metadata.len(),
+        )
+    })
+}
+
+fn parse_history_entries(content: &str) -> Vec<AcpHistoryEntry> {
     let mut entries: Vec<AcpHistoryEntry> = content
         .lines()
         .filter_map(|line| serde_json::from_str(line).ok())
@@ -433,6 +490,7 @@ pub(crate) fn delete_conversation(session_id: &str) -> anyhow::Result<()> {
             }
         }
         std::fs::write(&hp, out).with_context(|| format!("rewrite {}", hp.display()))?;
+        invalidate_history_cache();
     }
 
     tracing::info!(event = "acp_history_item_deleted", session_id = %session_id);
