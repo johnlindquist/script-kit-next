@@ -400,20 +400,18 @@ pub fn parent_folder_search_query(path: &str) -> Option<String> {
 /// Build a root-launcher file result from live metadata for a previously seen path.
 ///
 /// Recent root files are frecency-backed, not search-backed, so this helper only
-/// hydrates known paths and filters out app bundles that belong to app search.
+/// hydrates known paths and applies the same global root eligibility gate used
+/// by non-empty root file rows.
 pub fn file_result_from_existing_path(path: &str) -> Option<FileResult> {
     let metadata = get_file_metadata(path)?;
-    if metadata.file_type == FileType::Application {
-        return None;
-    }
-
-    Some(FileResult {
+    let result = FileResult {
         path: metadata.path,
         name: metadata.name,
         size: metadata.size,
         modified: metadata.modified,
         file_type: metadata.file_type,
-    })
+    };
+    root_global_file_result_is_eligible(&result).then_some(result)
 }
 
 /// Convert directory browse results into root-launcher file matches.
@@ -987,6 +985,27 @@ mod tests {
         let _ = std::fs::remove_dir_all(&app_dir);
         assert!(result.is_none(), "app bundles should stay in app search");
     }
+
+    #[test]
+    fn recent_file_hydration_skips_app_bundle_contents() {
+        let app_dir = std::env::temp_dir().join(format!(
+            "sk-recent-file-hydration-contents-{}.app",
+            std::process::id()
+        ));
+        let contents_dir = app_dir.join("Contents");
+        let plist = contents_dir.join("Info.plist");
+        std::fs::create_dir_all(&contents_dir).expect("create temporary app bundle contents");
+        std::fs::write(&plist, "bundle internals").expect("write temporary app bundle file");
+
+        let result = file_result_from_existing_path(&plist.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&app_dir);
+
+        assert!(
+            result.is_none(),
+            "app bundle contents should stay out of root Recent Files"
+        );
+    }
+
     #[test]
     fn recent_file_hydration_returns_file_result_for_existing_file() {
         let file_path = std::env::temp_dir().join(format!(

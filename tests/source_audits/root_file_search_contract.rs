@@ -387,6 +387,36 @@ mod tests {
     }
 
     #[test]
+    fn root_recent_files_share_global_file_eligibility() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let grouping_production = production_source(&grouping_source);
+
+        let hydrate_body = file_search_production
+            .split("pub fn file_result_from_existing_path(")
+            .nth(1)
+            .and_then(|section| section.split("/// Convert directory browse results").next())
+            .expect("file_result_from_existing_path body should be present");
+        assert!(
+            hydrate_body.contains("root_global_file_result_is_eligible(&result)"),
+            "recent file hydration should use the shared global root file eligibility gate"
+        );
+
+        let recent_body = grouping_production
+            .split("fn append_recent_root_file_section(")
+            .nth(1)
+            .and_then(|section| section.split("fn append_root_file_section(").next())
+            .expect("append_recent_root_file_section body should be present");
+        assert!(
+            recent_body.contains("root_global_file_result_is_eligible(file)"),
+            "empty-root Recent Files should defensively filter app bundles and bundle contents"
+        );
+    }
+
+    #[test]
     fn root_file_token_gate_supports_developer_filename_boundaries() {
         let file_search_source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
