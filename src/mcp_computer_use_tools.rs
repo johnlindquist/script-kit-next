@@ -1314,7 +1314,11 @@ mod tests {
     #[test]
     fn computer_get_window_rejects_bad_arguments() {
         for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
             serde_json::json!({}),
+            serde_json::json!({ "id": 123 }),
+            serde_json::json!({ "id": null }),
             serde_json::json!({ "target": { "type": "focused" } }),
             serde_json::json!({ "id": "main", "focus": true }),
             serde_json::json!({ "id": "main", "activate": true }),
@@ -1328,6 +1332,23 @@ mod tests {
             assert_eq!(result.is_error, Some(true));
             assert!(result.content[0].text.contains("invalid_arguments"));
         }
+    }
+
+    #[test]
+    fn computer_get_window_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_WINDOW_TOOL,
+            &serde_json::json!({ "id": "missing-window-id-for-runtime-test" }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_window json");
+        assert_eq!(value["source"], "automationWindowRegistry");
+        assert_eq!(value["status"], "notFound");
+        assert!(value["window"].is_null());
     }
 
     #[test]
