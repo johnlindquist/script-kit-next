@@ -145,6 +145,7 @@ fn computer_list_app_windows_is_pid_only_read_only_inventory() {
         "is_on_screen: bool",
         "layer: i64",
         "z_order: u32",
+        "observation: Option<ComputerUseWindowObservationV1>",
     ] {
         assert!(
             window_info_struct.contains(field),

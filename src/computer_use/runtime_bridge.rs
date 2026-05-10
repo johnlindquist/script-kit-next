@@ -1,3 +1,4 @@
+use crate::computer_use::window_observation::ComputerUseWindowObservationV1;
 use crate::protocol::{
     AutomationInspectSnapshot, AutomationWindowTarget, PixelProbe, TargetWindowBounds,
 };
@@ -40,6 +41,8 @@ pub struct ComputerUseAppWindowInfo {
     pub is_on_screen: bool,
     pub layer: i64,
     pub z_order: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub observation: Option<ComputerUseWindowObservationV1>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

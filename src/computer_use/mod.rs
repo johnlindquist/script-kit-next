@@ -8,3 +8,4 @@ pub mod gpui_runtime_bridge;
 pub mod runtime_bridge;
 pub mod see;
 pub mod types;
+pub mod window_observation;

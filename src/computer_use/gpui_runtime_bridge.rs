@@ -3,6 +3,7 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseListAppWindowsSnapshot, ComputerUseListAppsRequest, ComputerUseListAppsSnapshot,
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
+use crate::computer_use::window_observation::computer_use_window_observation_v1;
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::RwLock;
@@ -311,6 +312,8 @@ fn core_graphics_windows_for_pid(
     let k_window_bounds = CFString::new("kCGWindowBounds");
     let k_window_is_on_screen = CFString::new("kCGWindowIsOnscreen");
     let k_window_layer = CFString::new("kCGWindowLayer");
+    let k_window_alpha = CFString::new("kCGWindowAlpha");
+    let k_window_sharing_state = CFString::new("kCGWindowSharingState");
 
     let mut windows = Vec::new();
     for index in 0..info_array.len() {
@@ -334,13 +337,21 @@ fn core_graphics_windows_for_pid(
             continue;
         };
 
+        let is_on_screen = cf_bool(dict_ref, &k_window_is_on_screen).unwrap_or(true);
+        let layer = cf_number_i64(dict_ref, &k_window_layer).unwrap_or(0);
+        let alpha = cf_number_f64(dict_ref, &k_window_alpha);
+        let sharing_state = cf_number_i64(dict_ref, &k_window_sharing_state);
+        let observation =
+            computer_use_window_observation_v1(&bounds, is_on_screen, layer, alpha, sharing_state);
+
         windows.push(ComputerUseAppWindowInfo {
             native_window_id,
             title: cf_string(dict_ref, &k_window_name),
             bounds,
-            is_on_screen: cf_bool(dict_ref, &k_window_is_on_screen).unwrap_or(true),
-            layer: cf_number_i64(dict_ref, &k_window_layer).unwrap_or(0),
+            is_on_screen,
+            layer,
             z_order: windows.len() as u32,
+            observation: Some(observation),
         });
     }
 
@@ -377,6 +388,48 @@ fn cf_number_i64(
     let value = cf_dictionary_value(dict_ref, key)?;
     let number = unsafe { CFNumber::wrap_under_get_rule(value as *const _) };
     number.to_i64()
+}
+
+#[cfg(target_os = "macos")]
+fn cf_number_f64(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<f64> {
+    use core_foundation::base::CFTypeRef;
+    use std::ffi::c_void;
+
+    const K_CF_NUMBER_DOUBLE_TYPE: i32 = 13;
+    const K_CF_NUMBER_SINT64_TYPE: i32 = 4;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFNumberGetValue(number: CFTypeRef, number_type: i32, value_ptr: *mut c_void) -> bool;
+    }
+
+    let value = cf_dictionary_value(dict_ref, key)?;
+    let mut double_value = 0.0_f64;
+    if unsafe {
+        CFNumberGetValue(
+            value,
+            K_CF_NUMBER_DOUBLE_TYPE,
+            &mut double_value as *mut f64 as *mut c_void,
+        )
+    } {
+        return Some(double_value);
+    }
+
+    let mut int_value = 0_i64;
+    if unsafe {
+        CFNumberGetValue(
+            value,
+            K_CF_NUMBER_SINT64_TYPE,
+            &mut int_value as *mut i64 as *mut c_void,
+        )
+    } {
+        return Some(int_value as f64);
+    }
+
+    None
 }
 
 #[cfg(target_os = "macos")]
