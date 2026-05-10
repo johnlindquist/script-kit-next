@@ -960,7 +960,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tools_call_computer_list_tray_menu_requires_runtime() -> anyhow::Result<()> {
+    fn test_tools_call_computer_list_tray_menu_does_not_require_runtime() -> anyhow::Result<()> {
         let request = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(48),
@@ -975,10 +975,7 @@ mod tests {
         assert!(response.error.is_none());
 
         let result = response.result.context("expected result")?;
-        assert_eq!(
-            result.get("isError").and_then(|value| value.as_bool()),
-            Some(true)
-        );
+        assert_eq!(result.get("isError"), None);
         let text = result
             .get("content")
             .and_then(|content| content.as_array())
@@ -986,7 +983,14 @@ mod tests {
             .and_then(|item| item.get("text"))
             .and_then(|text| text.as_str())
             .context("missing tool text")?;
-        assert!(text.contains("runtime_unavailable"));
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        assert_eq!(value["schemaVersion"], serde_json::json!(1));
+        assert_eq!(value["source"], "scriptKitTrayMenuModel");
+        assert_eq!(value["owner"]["scope"], "ownTrayMenuOnly");
+        assert!(value["sections"].is_array());
+        assert!(value["warnings"].is_array());
+        assert!(!text.contains("\"click\""));
+        assert!(!text.contains("\"execute\""));
         Ok(())
     }
 
