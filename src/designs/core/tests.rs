@@ -1144,6 +1144,20 @@ fn test_extension_default_icon_default_code() {
     assert_eq!(extension_default_icon("rb"), "Code");
 }
 
+#[test]
+fn test_root_file_type_svg_icon_mapping() {
+    use crate::file_search::FileType;
+
+    assert_eq!(root_file_type_svg_icon(FileType::Directory), "FolderOpen");
+    assert_eq!(root_file_type_svg_icon(FileType::Application), "package");
+    assert_eq!(root_file_type_svg_icon(FileType::Image), "file-image");
+    assert_eq!(root_file_type_svg_icon(FileType::Document), "file-text");
+    assert_eq!(root_file_type_svg_icon(FileType::Audio), "file-audio");
+    assert_eq!(root_file_type_svg_icon(FileType::Video), "file-video");
+    assert_eq!(root_file_type_svg_icon(FileType::File), "File");
+    assert_eq!(root_file_type_svg_icon(FileType::Other), "File");
+}
+
 // =========================================================================
 // Extension language label tests
 // =========================================================================
