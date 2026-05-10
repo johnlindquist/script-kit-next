@@ -9,7 +9,7 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
-use crate::frontmost_app_tracker::get_cached_menu_snapshot;
+use crate::frontmost_app_tracker::{get_cached_menu_snapshot, get_last_real_app};
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use crate::menu_bar::MenuBarItem;
 use crate::protocol::{
@@ -21,11 +21,13 @@ pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
+pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
+const COMPUTER_FRONTMOST_APP_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_MENUS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_PERMISSIONS_SCHEMA_VERSION: u32 = 1;
@@ -50,6 +52,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List running GUI applications without launching, quitting, focusing, hiding, or sending input."
                 .to_string(),
             input_schema: computer_list_apps_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
+            description: "Return the last tracked non-Script-Kit frontmost app from the frontmost app tracker cache without refreshing, focusing, activating, or requesting permissions."
+                .to_string(),
+            input_schema: computer_get_frontmost_app_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_MENUS_TOOL.to_string(),
@@ -91,6 +99,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
+        COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments, runtime),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
@@ -131,6 +140,31 @@ struct ComputerUseListAppsResult {
     apps: Vec<ComputerUseRunningAppInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     frontmost_pid: Option<i32>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetFrontmostAppArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetFrontmostAppResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseFrontmostApp>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseFrontmostApp {
+    pid: i32,
+    bundle_id: String,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    window_title: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -274,6 +308,33 @@ fn handle_list_apps(
         }),
         Err(error) => error_result(error.error_code(), &error.message()),
     }
+}
+
+fn handle_get_frontmost_app(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseGetFrontmostAppArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let app = get_last_real_app().map(|app| ComputerUseFrontmostApp {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+        name: app.name,
+        window_title: app.window_title,
+    });
+
+    json_tool_result(&ComputerUseGetFrontmostAppResult {
+        schema_version: COMPUTER_FRONTMOST_APP_SCHEMA_VERSION,
+        source: "frontmostAppTrackerCache",
+        scope: "lastNonScriptKitApp",
+        status: if app.is_some() {
+            "tracked"
+        } else {
+            "noTrackedApp"
+        },
+        app,
+        warnings: Vec::new(),
+    })
 }
 
 fn handle_list_menus(arguments: &Value) -> ToolResult {
@@ -604,6 +665,14 @@ fn computer_list_apps_input_schema() -> Value {
     })
 }
 
+fn computer_get_frontmost_app_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_list_menus_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -743,6 +812,7 @@ mod tests {
                 COMPUTER_SEE_TOOL.to_string(),
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
+                COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
@@ -808,6 +878,28 @@ mod tests {
             .expect("properties");
         assert!(properties.contains_key("includeHidden"));
         assert!(properties.contains_key("includeBackground"));
+    }
+
+    #[test]
+    fn computer_get_frontmost_app_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_FRONTMOST_APP_TOOL)
+            .expect("computer/get_frontmost_app tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
     }
 
     #[test]
@@ -1043,6 +1135,25 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_frontmost_app_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!({ "refresh": true }),
+            serde_json::json!({ "focus": true }),
+            serde_json::json!({ "activate": true }),
+            serde_json::json!({ "pid": 123 }),
+            serde_json::json!({ "bundleId": "com.apple.Safari" }),
+            serde_json::json!({ "includeMenus": true }),
+            serde_json::json!({ "click": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_GET_FRONTMOST_APP_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_menus_rejects_bad_arguments() {
         for arguments in [
             serde_json::json!({ "pid": 101 }),
@@ -1151,6 +1262,42 @@ mod tests {
         assert_eq!(window["kind"], "notes");
         assert_eq!(window["visible"], true);
         assert_eq!(window["semanticSurface"], "notes");
+    }
+
+    #[test]
+    fn computer_get_frontmost_app_returns_cached_snapshot_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_APP_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_frontmost_app json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_FRONTMOST_APP_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "lastNonScriptKitApp");
+        assert!(value["status"] == "tracked" || value["status"] == "noTrackedApp");
+        assert!(value["app"].is_null() || value["app"].is_object());
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"click\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_frontmost_app result must not expose executable fields; found {forbidden}"
+            );
+        }
     }
 
     #[test]
