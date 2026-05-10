@@ -101,6 +101,35 @@ mod tests {
     }
 
     #[test]
+    fn root_file_ranking_stays_local_and_does_not_start_searches() {
+        let source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let rank_source = source
+            .split("pub fn rank_root_file_results(")
+            .nth(1)
+            .and_then(|section| section.split("/// Payload for file drag-out").next())
+            .expect("rank_root_file_results source should be present");
+
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !rank_source.contains(forbidden),
+                "root ranking should only rank already-returned rows, not start searches: {forbidden}"
+            );
+        }
+        assert!(
+            rank_source.contains("file.name") && rank_source.contains("file.path"),
+            "root ranking should continue scoring the existing FileResult name/path fields"
+        );
+    }
+
+    #[test]
     fn root_file_actions_are_main_list_only() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("read src/app_impl/actions_dialog.rs");

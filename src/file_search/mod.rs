@@ -262,6 +262,57 @@ pub fn parent_folder_search_query(path: &str) -> Option<String> {
     Some(ensure_trailing_slash(parent))
 }
 
+const ROOT_FILE_TEXT_TIER_MULTIPLIER: i32 = 20_000;
+
+fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) -> i32 {
+    let name_lc = name.to_lowercase();
+    let stem_lc = Path::new(name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name)
+        .to_lowercase();
+
+    if name_lc == query || stem_lc == query {
+        return 6;
+    }
+    if name_lc.starts_with(query) || stem_lc.starts_with(query) {
+        return 5;
+    }
+    if contains_at_root_file_boundary(&name_lc, query)
+        || contains_at_root_file_boundary(&stem_lc, query)
+    {
+        return 4;
+    }
+    if name_lc.contains(query) || stem_lc.contains(query) {
+        return 3;
+    }
+    if name_matched {
+        return 2;
+    }
+    1
+}
+
+fn contains_at_root_file_boundary(haystack: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return false;
+    }
+    haystack.match_indices(needle).any(|(idx, _)| {
+        idx == 0
+            || haystack[..idx]
+                .chars()
+                .next_back()
+                .map(is_root_file_boundary_char)
+                .unwrap_or(false)
+    })
+}
+
+fn is_root_file_boundary_char(ch: char) -> bool {
+    matches!(
+        ch,
+        ' ' | '-' | '_' | '.' | '/' | '(' | ')' | '[' | ']' | '{' | '}'
+    )
+}
+
 /// Rank a bounded batch of Spotlight results for display in root launcher search.
 pub fn rank_root_file_results(
     results: &[FileResult],
@@ -281,20 +332,20 @@ pub fn rank_root_file_results(
         .filter(|file| seen.insert(file.path.clone()))
         .filter(|file| file.file_type != FileType::Application)
         .filter_map(|file| {
-            let score = nucleo
-                .score(&file.name)
-                .or_else(|| nucleo.score(&file.path))?;
-            let name_lc = file.name.to_lowercase();
-            let exact_bonus = if name_lc == q { 3_000 } else { 0 };
-            let prefix_bonus = if name_lc.starts_with(&q) { 1_000 } else { 0 };
+            let name_score = nucleo.score(&file.name);
+            let (score, name_matched) = match name_score {
+                Some(score) => (score, true),
+                None => (nucleo.score(&file.path)?, false),
+            };
+            let text_tier = root_file_name_relevance_tier(&file.name, &q, name_matched);
             let frecency_bonus =
                 (frecency_score(&format!("file/{}", file.path)) * 100.0).min(500.0) as i32;
 
             Some(crate::scripts::FileMatch {
                 file: file.clone(),
-                score: (score.min(10_000) as i32)
-                    .saturating_add(exact_bonus)
-                    .saturating_add(prefix_bonus)
+                score: text_tier
+                    .saturating_mul(ROOT_FILE_TEXT_TIER_MULTIPLIER)
+                    .saturating_add(score.min(10_000) as i32)
                     .saturating_add(frecency_bonus),
             })
         })
@@ -680,6 +731,102 @@ mod tests {
             ranked.first().map(|entry| entry.file.path.as_str()),
             Some("/tmp/fix-beta.txt"),
             "frecency should break close root-file ranking ties"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_prefers_stem_exact_over_path_only_frecency() {
+        let results = vec![
+            file(
+                "/tmp/fix/archive/report.md",
+                "report.md",
+                FileType::Document,
+            ),
+            file("/tmp/other/fix.md", "fix.md", FileType::Document),
+        ];
+
+        let ranked = rank_root_file_results(&results, "fix", 2, |key| {
+            if key == "file//tmp/fix/archive/report.md" {
+                10.0
+            } else {
+                0.0
+            }
+        });
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.path.as_str()),
+            Some("/tmp/other/fix.md"),
+            "filename stem exact should beat path-only matches even with frecency"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_prefers_filename_prefix_over_boundary_contains() {
+        let results = vec![
+            file("/tmp/prefix-fix.md", "prefix-fix.md", FileType::Document),
+            file("/tmp/fix-notes.md", "fix-notes.md", FileType::Document),
+        ];
+
+        let ranked = rank_root_file_results(&results, "fix", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("fix-notes.md"),
+            "filename prefix should beat separator-boundary contains"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_prefers_exact_stem_over_filename_prefix() {
+        let results = vec![
+            file(
+                "/tmp/notes-backup.md",
+                "notes-backup.md",
+                FileType::Document,
+            ),
+            file("/tmp/notes.md", "notes.md", FileType::Document),
+            file(
+                "/tmp/notes/archive/report.md",
+                "report.md",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "notes", 3, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("notes.md"),
+            "exact filename stem should beat prefix and path-only matches"
+        );
+        assert!(
+            ranked
+                .iter()
+                .position(|entry| entry.file.name == "notes-backup.md")
+                < ranked
+                    .iter()
+                    .position(|entry| entry.file.name == "report.md"),
+            "filename prefix should rank ahead of path-only matches"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_prefers_fuzzy_filename_over_path_only() {
+        let results = vec![
+            file("/tmp/final/report.md", "report.md", FileType::Document),
+            file(
+                "/tmp/other/fnl-notes.md",
+                "fnl-notes.md",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "fnl", 2, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("fnl-notes.md"),
+            "fuzzy filename match should beat a path-only match"
         );
     }
     // ========================================================================
