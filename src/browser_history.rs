@@ -171,6 +171,14 @@ impl Default for RootBrowserHistorySectionOptions {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) struct RootPassiveSnapshotStatus {
+    pub generation: u64,
+    pub refreshing: bool,
+    pub cached_count: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RootBrowserHistorySearchHit {
     pub stable_key: String,
@@ -303,6 +311,26 @@ fn cached_root_browser_history_snapshot(cache_ttl_ms: u64) -> Vec<RootBrowserHis
     }
 
     Vec::new()
+}
+
+#[allow(dead_code)] // Runtime state receipts use this through the binary app layer.
+pub(crate) fn root_browser_history_snapshot_status() -> RootPassiveSnapshotStatus {
+    ROOT_BROWSER_HISTORY_SNAPSHOT
+        .lock()
+        .map(|cache| RootPassiveSnapshotStatus {
+            generation: cache.generation,
+            refreshing: cache.refresh_in_flight,
+            cached_count: cache
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.hits.len())
+                .unwrap_or(0),
+        })
+        .unwrap_or(RootPassiveSnapshotStatus {
+            generation: 0,
+            refreshing: false,
+            cached_count: 0,
+        })
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.

@@ -147,6 +147,8 @@ Root unified search has a dedicated state-first proof for target stability after
 
 `scripts/agentic/root-search-frame-stability.ts` drives the main launcher through `session.sh`, sets a root query, waits for the ScriptList input state, samples `getState.mainWindowPreflight`, then polls `getState.rootFileSearch` until the matching global root file provider is no longer loading. The proof fails if `selectedResultKey`, `enterAction`, or `visibleResultKeyFingerprint` change between the two receipts.
 
+`scripts/agentic/root-passive-frame-stability.ts` uses the same state-first path for cache-refreshable passive browser sources. It samples `getState.mainWindowPreflight.rootPassiveFrame`, waits until Browser Tabs and Browser History snapshot status is not refreshing, and fails if the selected key, Enter action, visible-row fingerprint, or passive-frame receipt changes for the same query.
+
 ## Screenshot pixel audit
 
 Screenshot proof must include content-level validation before a PNG can count as reviewable evidence.

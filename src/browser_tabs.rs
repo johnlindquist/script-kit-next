@@ -92,7 +92,7 @@ pub struct BrowserTabMatch {
     pub score: i32,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub(crate) struct RootBrowserTabsSectionOptions {
     pub enabled: bool,
@@ -117,6 +117,14 @@ impl Default for RootBrowserTabsSectionOptions {
             cache_ttl_ms: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) struct RootPassiveSnapshotStatus {
+    pub generation: u64,
+    pub refreshing: bool,
+    pub cached_count: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -354,6 +362,26 @@ fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
     }
 
     Vec::new()
+}
+
+#[allow(dead_code)]
+pub(crate) fn root_browser_tabs_snapshot_status() -> RootPassiveSnapshotStatus {
+    ROOT_BROWSER_TAB_SNAPSHOT
+        .lock()
+        .map(|cache| RootPassiveSnapshotStatus {
+            generation: cache.generation,
+            refreshing: cache.refresh_in_flight,
+            cached_count: cache
+                .snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.tabs.len())
+                .unwrap_or(0),
+        })
+        .unwrap_or(RootPassiveSnapshotStatus {
+            generation: 0,
+            refreshing: false,
+            cached_count: 0,
+        })
 }
 
 #[allow(dead_code)]

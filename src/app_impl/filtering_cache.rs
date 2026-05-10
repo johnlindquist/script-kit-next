@@ -28,6 +28,66 @@ impl ScriptListApp {
         self.filter_text.as_str()
     }
 
+    fn root_passive_frame_for_current_query(
+        &mut self,
+        search_text: &str,
+        advanced_query_active: bool,
+        browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
+        browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
+    ) -> crate::RootPassiveFrame {
+        let key = crate::RootPassiveFrameKey {
+            query: search_text.to_string(),
+            advanced_query: advanced_query_active,
+            browser_tabs_options: browser_tabs_options.clone(),
+            browser_history_options: browser_history_options.clone(),
+        };
+
+        if let Some(frame) = self.root_passive_frame.as_ref() {
+            if frame.key == key {
+                return frame.clone();
+            }
+        }
+
+        let browser_tab_hits = if !advanced_query_active
+            && crate::browser_tabs::root_browser_tabs_query_is_eligible(
+                search_text,
+                browser_tabs_options.clone(),
+            ) {
+            crate::browser_tabs::search_root_browser_tabs_meta(
+                search_text,
+                browser_tabs_options.clone(),
+            )
+        } else {
+            Vec::new()
+        };
+        let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
+
+        let browser_history_hits = if !advanced_query_active
+            && crate::browser_history::root_browser_history_query_is_eligible(
+                search_text,
+                browser_history_options.clone(),
+            ) {
+            crate::browser_history::search_root_browser_history_meta(
+                search_text,
+                browser_history_options.clone(),
+            )
+        } else {
+            Vec::new()
+        };
+        let browser_history_status =
+            crate::browser_history::root_browser_history_snapshot_status();
+
+        let frame = crate::RootPassiveFrame {
+            key,
+            browser_tab_hits,
+            browser_history_hits,
+            browser_tabs_snapshot_generation: browser_tabs_status.generation,
+            browser_history_snapshot_generation: browser_history_status.generation,
+        };
+        self.root_passive_frame = Some(frame.clone());
+        frame
+    }
+
     /// Shared recompute helper: every filtered search path routes through here
     /// so plugin skills are always included in main-menu results.
     fn recompute_filtered_results(&self, filter_text: &str) -> Vec<scripts::SearchResult> {
@@ -323,14 +383,14 @@ impl ScriptListApp {
                 menu_bar_bundle_id
             ),
         );
-        let raw_filter_text = self.computed_filter_text.as_str();
+        let raw_filter_text = self.computed_filter_text.clone();
         let menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
             || self
                 .menu_syntax_mode
-                .capture_composer_owns_input_for(raw_filter_text)
+                .capture_composer_owns_input_for(&raw_filter_text)
             || self
                 .menu_syntax_mode
-                .command_owns_input_for(raw_filter_text);
+                .command_owns_input_for(&raw_filter_text);
 
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
             // A composer-style menu-syntax surface owns the input. Suppress
@@ -340,11 +400,11 @@ impl ScriptListApp {
             // capture-mode rows behind the picker). Refine (`:`) remains
             // structured launcher search and is handled below.
             (Vec::new(), Vec::new())
-        } else if let Some(invocation) = self.menu_syntax_mode.capture_for(raw_filter_text) {
+        } else if let Some(invocation) = self.menu_syntax_mode.capture_for(&raw_filter_text) {
             // Capture mode replaces the normal launcher grouping entirely.
             // Do not mix with Suggested/Favorites/Recent/menu-bar/fallback.
             crate::scripts::build_capture_mode_results(&self.scripts, invocation)
-        } else if let Some(hint) = self.menu_syntax_mode.incomplete_hint_for(raw_filter_text) {
+        } else if let Some(hint) = self.menu_syntax_mode.incomplete_hint_for(&raw_filter_text) {
             // Menu-syntax trigger picker rows are now owned by the detached
             // popup window at
             // `crate::menu_syntax_trigger_popup_window::MenuSyntaxTriggerPopupWindow`
@@ -353,9 +413,12 @@ impl ScriptListApp {
             // rich qualifier / capture target rows live in the popup.
             crate::scripts::build_menu_syntax_hint_results(hint)
         } else {
-            let search_text =
-                crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, raw_filter_text);
-            let advanced_query = self.menu_syntax_mode.advanced_query_for(raw_filter_text);
+            let search_text_owned =
+                crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, &raw_filter_text)
+                    .to_string();
+            let search_text = search_text_owned.as_str();
+            let advanced_query_owned = self.menu_syntax_mode.advanced_query_for(&raw_filter_text).cloned();
+            let advanced_query = advanced_query_owned.as_ref();
             let unified_search = self.config.get_unified_search();
             let root_file_options = unified_search.root_file_section_options();
             let notes_options = unified_search.notes_section_options();
@@ -407,30 +470,12 @@ impl ScriptListApp {
             } else {
                 Vec::new()
             };
-            let root_browser_tab_hits = if advanced_query.is_none()
-                && crate::browser_tabs::root_browser_tabs_query_is_eligible(
-                    search_text,
-                    browser_tabs_options.clone(),
-                ) {
-                crate::browser_tabs::search_root_browser_tabs_meta(
-                    search_text,
-                    browser_tabs_options.clone(),
-                )
-            } else {
-                Vec::new()
-            };
-            let root_browser_history_hits = if advanced_query.is_none()
-                && crate::browser_history::root_browser_history_query_is_eligible(
-                    search_text,
-                    browser_history_options.clone(),
-                ) {
-                crate::browser_history::search_root_browser_history_meta(
-                    search_text,
-                    browser_history_options.clone(),
-                )
-            } else {
-                Vec::new()
-            };
+            let root_passive_frame = self.root_passive_frame_for_current_query(
+                search_text,
+                advanced_query.is_some(),
+                browser_tabs_options.clone(),
+                browser_history_options.clone(),
+            );
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -458,9 +503,9 @@ impl ScriptListApp {
                 dictation_history_options,
                 &root_acp_history_hits,
                 acp_history_options,
-                &root_browser_tab_hits,
+                &root_passive_frame.browser_tab_hits,
                 browser_tabs_options,
-                &root_browser_history_hits,
+                &root_passive_frame.browser_history_hits,
                 browser_history_options,
             )
         };

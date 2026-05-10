@@ -39,6 +39,23 @@ struct MainMenuFallbackState {
     cached_items: Vec<crate::fallbacks::FallbackItem>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RootPassiveFrameKey {
+    pub(crate) query: String,
+    pub(crate) advanced_query: bool,
+    pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
+    pub(crate) browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RootPassiveFrame {
+    pub(crate) key: RootPassiveFrameKey,
+    pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
+    pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
+    pub(crate) browser_tabs_snapshot_generation: u64,
+    pub(crate) browser_history_snapshot_generation: u64,
+}
+
 impl MainMenuFallbackState {
     fn is_active(&self) -> bool {
         self.active && !self.cached_items.is_empty()
@@ -404,6 +421,8 @@ struct ScriptListApp {
     root_file_search_cancel: Option<file_search::CancelToken>,
     /// True while a root file search task is collecting its one stable batch.
     root_file_search_loading: bool,
+    /// Frozen cache-refreshable passive rows for the current root-search query frame.
+    root_passive_frame: Option<RootPassiveFrame>,
     /// File row captured when opening the root-file actions palette.
     pending_root_file_actions_file: Option<file_search::FileResult>,
     /// Cached process list for ProcessManagerView (avoids cloning per frame)

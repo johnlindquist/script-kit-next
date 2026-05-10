@@ -604,6 +604,7 @@ impl ScriptListApp {
             root_file_search_generation: 0,
             root_file_search_cancel: None,
             root_file_search_loading: false,
+            root_passive_frame: None,
             pending_root_file_actions_file: None,
             cached_processes: Vec::new(),
             process_manager_refresh_task: None,
