@@ -1596,6 +1596,10 @@ export interface UnifiedSearchBrowserHistoryConfig {
   providers?: BrowserHistoryProvider[];
   /** Match URLs in addition to titles. Page content is never searched. */
   searchUrls?: boolean;
+  /** Browser history metadata rows to keep in the root-search snapshot. Clamped to 25-2000. */
+  scanLimit?: number;
+  /** Milliseconds to reuse the browser history metadata snapshot. Clamped to 5000-120000. */
+  cacheTtlMs?: number;
 }
 
 // =============================================================================

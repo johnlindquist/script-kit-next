@@ -27,10 +27,12 @@ fn root_unified_browser_tabs_search_uses_cached_metadata_only_snapshot() {
     assert!(browser_tabs.contains("pub(crate) struct RootBrowserTabSearchHit"));
     assert!(browser_tabs.contains("root_browser_tabs_query_is_eligible("));
     assert!(browser_tabs.contains("static ROOT_BROWSER_TAB_SNAPSHOT"));
-    assert!(root_search_fn.contains("cached_root_browser_tabs(options.cache_ttl_ms)"));
+    assert!(root_search_fn.contains("ensure_root_browser_tabs_refresh("));
+    assert!(root_search_fn.contains("cached_root_browser_tabs_snapshot(options.cache_ttl_ms)"));
     assert!(root_search_fn.contains(".take(options.scan_limit)"));
     assert!(root_search_fn.contains(".take(options.max_results)"));
     assert!(root_search_fn.contains("root_tab_provider_is_enabled("));
+    assert!(!root_search_fn.contains("list_open_tabs("));
     assert!(!root_search_fn.contains("fetch_favicons"));
     assert!(!root_search_fn.contains("open::that"));
 }

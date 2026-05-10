@@ -151,6 +151,8 @@ pub(crate) struct RootBrowserHistorySectionOptions {
     pub max_age_days: u32,
     pub providers: Vec<crate::config::BrowserHistoryProvider>,
     pub search_urls: bool,
+    pub scan_limit: usize,
+    pub cache_ttl_ms: u64,
 }
 
 impl Default for RootBrowserHistorySectionOptions {
@@ -162,6 +164,9 @@ impl Default for RootBrowserHistorySectionOptions {
             max_age_days: 90,
             providers: crate::config::BrowserHistoryProvider::default_root_providers(),
             search_urls: true,
+            scan_limit: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SCAN_LIMIT,
+            cache_ttl_ms:
+                crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_CACHE_TTL_MS,
         }
     }
 }
@@ -177,6 +182,26 @@ pub(crate) struct RootBrowserHistorySearchHit {
     pub last_visit_unix_ms: i64,
     pub visit_count: i64,
 }
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+struct RootBrowserHistorySnapshot {
+    captured_at: Instant,
+    hits: Vec<RootBrowserHistorySearchHit>,
+}
+
+#[derive(Debug, Default)]
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+struct RootBrowserHistorySnapshotState {
+    snapshot: Option<RootBrowserHistorySnapshot>,
+    refresh_in_flight: bool,
+    generation: u64,
+    last_refresh_error: Option<String>,
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+static ROOT_BROWSER_HISTORY_SNAPSHOT: LazyLock<Mutex<RootBrowserHistorySnapshotState>> =
+    LazyLock::new(|| Mutex::new(RootBrowserHistorySnapshotState::default()));
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
@@ -244,13 +269,137 @@ fn search_root_browser_history_meta_from_home(
     query: &str,
     options: RootBrowserHistorySectionOptions,
 ) -> Vec<RootBrowserHistorySearchHit> {
+    ensure_root_browser_history_refresh(home.to_path_buf(), options.clone(), "root_search_query");
+
+    let selected_provider_labels: HashSet<_> = options
+        .providers
+        .iter()
+        .filter_map(|provider| root_browser_history_provider_label(*provider))
+        .collect();
+    let cutoff_unix_ms = Utc::now()
+        .timestamp_millis()
+        .saturating_sub(i64::from(options.max_age_days).saturating_mul(24 * 60 * 60 * 1000));
+    let candidates = cached_root_browser_history_snapshot(options.cache_ttl_ms)
+        .into_iter()
+        .filter(|hit| selected_provider_labels.contains(hit.provider_label.as_str()))
+        .filter(|hit| hit.last_visit_unix_ms >= cutoff_unix_ms)
+        .take(options.scan_limit)
+        .collect::<Vec<_>>();
+
+    root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
+        .into_iter()
+        .take(options.max_results)
+        .collect()
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn cached_root_browser_history_snapshot(cache_ttl_ms: u64) -> Vec<RootBrowserHistorySearchHit> {
+    let ttl = Duration::from_millis(cache_ttl_ms);
+    if let Ok(cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+        if let Some(snapshot) = cache.snapshot.as_ref() {
+            let _expired = snapshot.captured_at.elapsed() > ttl;
+            return snapshot.hits.clone();
+        }
+    }
+
+    Vec::new()
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn ensure_root_browser_history_refresh(
+    home: PathBuf,
+    options: RootBrowserHistorySectionOptions,
+    reason: &'static str,
+) {
+    let ttl = Duration::from_millis(options.cache_ttl_ms);
+    let generation = {
+        let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
+            return;
+        };
+        let is_fresh = cache
+            .snapshot
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ttl);
+        if is_fresh || cache.refresh_in_flight {
+            return;
+        }
+        cache.refresh_in_flight = true;
+        cache.generation = cache.generation.wrapping_add(1);
+        let generation = cache.generation;
+        let cache_age_ms = cache
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.captured_at.elapsed().as_millis() as u64)
+            .unwrap_or(0);
+        let row_count = cache
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.hits.len())
+            .unwrap_or(0);
+        tracing::info!(
+            source = "browser_history",
+            generation,
+            cache_age_ms,
+            ttl_ms = options.cache_ttl_ms,
+            row_count,
+            reason,
+            "root_passive_snapshot_refresh_started"
+        );
+        generation
+    };
+
+    std::thread::spawn(move || {
+        let started = Instant::now();
+        let result = refresh_root_browser_history_snapshot_from_home(&home, &options);
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+
+        let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() else {
+            return;
+        };
+        if cache.generation != generation {
+            return;
+        }
+
+        match result {
+            Ok(hits) => {
+                let row_count = hits.len();
+                cache.snapshot = Some(RootBrowserHistorySnapshot {
+                    captured_at: Instant::now(),
+                    hits,
+                });
+                cache.last_refresh_error = None;
+                tracing::info!(
+                    source = "browser_history",
+                    generation,
+                    elapsed_ms,
+                    row_count,
+                    "root_passive_snapshot_refresh_completed"
+                );
+            }
+            Err(error) => {
+                cache.last_refresh_error = Some(error.to_string());
+                tracing::warn!(
+                    source = "browser_history",
+                    generation,
+                    elapsed_ms,
+                    error = %error,
+                    "root_passive_snapshot_refresh_failed"
+                );
+            }
+        }
+        cache.refresh_in_flight = false;
+    });
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn refresh_root_browser_history_snapshot_from_home(
+    home: &Path,
+    options: &RootBrowserHistorySectionOptions,
+) -> Result<Vec<RootBrowserHistorySearchHit>> {
     let mut hits = Vec::new();
     let selected_providers: HashSet<_> = options.providers.iter().copied().collect();
     let cutoff = chromium_cutoff_time_for_max_age_days(options.max_age_days);
-    let per_db_limit = options
-        .max_results
-        .saturating_mul(4)
-        .max(options.max_results);
+    let per_db_limit = options.scan_limit.max(options.max_results).max(1);
 
     for spec in ROOT_BROWSER_HISTORY_PROVIDERS {
         if !selected_providers.contains(&spec.provider) {
@@ -269,10 +418,10 @@ fn search_root_browser_history_meta_from_home(
                 spec,
                 &profile_label,
                 &db_path,
-                query,
+                "",
                 cutoff,
                 per_db_limit,
-                options.search_urls,
+                true,
             ) {
                 Ok(mut db_hits) => hits.append(&mut db_hits),
                 Err(error) => {
@@ -288,7 +437,85 @@ fn search_root_browser_history_meta_from_home(
         }
     }
 
-    dedupe_root_browser_history_hits(hits, options.max_results)
+    Ok(dedupe_root_browser_history_hits(hits, options.scan_limit))
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_fuzzy_search_browser_history_hits(
+    hits: &[RootBrowserHistorySearchHit],
+    query: &str,
+    search_urls: bool,
+) -> Vec<RootBrowserHistorySearchHit> {
+    let query = query.trim();
+    if query.is_empty() {
+        return Vec::new();
+    }
+
+    let query_lower = query.to_lowercase();
+    let query_is_ascii = query_lower.is_ascii();
+    let use_nucleo = query_lower.len() >= crate::scripts::search::MIN_FUZZY_QUERY_LEN;
+    let mut nucleo = crate::scripts::NucleoCtx::new(&query_lower);
+    let mut scored = Vec::with_capacity(hits.len());
+
+    for hit in hits {
+        let mut score = 0i32;
+        if query_is_ascii && hit.title.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&hit.title, &query_lower)
+            {
+                score += if pos == 0 { 220 } else { 175 };
+            }
+        }
+        if query_is_ascii && hit.domain.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&hit.domain, &query_lower)
+            {
+                score += if pos == 0 { 160 } else { 120 };
+            }
+        }
+        if search_urls && query_is_ascii && hit.url.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&hit.url, &query_lower)
+            {
+                score += if pos == 0 { 90 } else { 65 };
+            }
+        }
+        if use_nucleo {
+            if let Some(nucleo_score) = nucleo.score(&hit.title) {
+                score += 100 + (nucleo_score / 24) as i32;
+            }
+            if let Some(nucleo_score) = nucleo.score(&hit.domain) {
+                score += 65 + (nucleo_score / 32) as i32;
+            }
+            if search_urls {
+                if let Some(nucleo_score) = nucleo.score(&hit.url) {
+                    score += 45 + (nucleo_score / 40) as i32;
+                }
+            }
+        }
+        if score > 0 {
+            scored.push((score, hit.clone()));
+        }
+    }
+
+    scored.sort_by(|(score_a, hit_a), (score_b, hit_b)| {
+        score_b
+            .cmp(score_a)
+            .then_with(|| hit_b.last_visit_unix_ms.cmp(&hit_a.last_visit_unix_ms))
+            .then_with(|| hit_b.visit_count.cmp(&hit_a.visit_count))
+            .then_with(|| hit_a.title.cmp(&hit_b.title))
+    });
+    scored.into_iter().map(|(_, hit)| hit).collect()
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_browser_history_provider_label(
+    provider: crate::config::BrowserHistoryProvider,
+) -> Option<&'static str> {
+    ROOT_BROWSER_HISTORY_PROVIDERS
+        .iter()
+        .find(|spec| spec.provider == provider)
+        .map(|spec| spec.provider_label)
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
@@ -1291,17 +1518,22 @@ mod tests {
         .unwrap_or_else(|error| panic!("insert chrome row failed: {error}"));
         drop(conn);
 
-        let hits = search_root_browser_history_meta_from_home(
-            temp.path(),
+        let options = RootBrowserHistorySectionOptions {
+            enabled: true,
+            max_results: 3,
+            min_query_chars: 4,
+            max_age_days: 90,
+            providers: vec![crate::config::BrowserHistoryProvider::Chrome],
+            search_urls: true,
+            scan_limit: 500,
+            cache_ttl_ms: 30_000,
+        };
+        let candidates = refresh_root_browser_history_snapshot_from_home(temp.path(), &options)
+            .expect("refresh root browser history snapshot");
+        let hits = root_fuzzy_search_browser_history_hits(
+            &candidates,
             "Root Browser Unique",
-            RootBrowserHistorySectionOptions {
-                enabled: true,
-                max_results: 3,
-                min_query_chars: 4,
-                max_age_days: 90,
-                providers: vec![crate::config::BrowserHistoryProvider::Chrome],
-                search_urls: true,
-            },
+            options.search_urls,
         );
 
         assert_eq!(hits.len(), 1);

@@ -56,6 +56,14 @@ Checks must prove that global root file search does not publish partial provider
 
 Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib stable_selection_key`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Add a state-first agentic runtime proof against the real main menu showing that `selected_result_key`, Enter action, and `visible_result_key_fingerprint` remain unchanged after root file provider completion for the same filter text.
 
+## Root Unified Passive Snapshot Caches
+
+Passive snapshot caches keep slow local providers off the foreground root-search grouping path.
+
+Checks must prove that Browser Tabs and Browser History foreground search only fuzzy-filters cached metadata snapshots, that stale or missing snapshots start background refreshes, and that refresh completion never calls `cx.notify`, invalidates grouped results, or publishes rows into the active frame for the same filter text.
+
+Use `cargo test --test source_audits root_unified_passive_snapshot_contract -- --nocapture` with the browser-tabs, browser-history, and root-stability audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof should use preflight/state receipts rather than screenshots.
+
 ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests. The critical regression guard is that adding a second passive source cannot split the Files section or its Search Files continuation row.
 
 Use `cargo test --test source_audits root_unified_acp_history_contract -- --nocapture` with the root file source audit, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
@@ -78,17 +86,17 @@ Use `cargo test --test source_audits root_unified_notes_contract -- --nocapture`
 
 ## Root Unified Search Browser Tabs
 
-Browser Tabs root rows are verified as opt-in, metadata-only, cached, and passive.
+Browser Tabs root rows are verified as opt-in, metadata-only, stale-while-revalidate cached, and passive.
 
-Checks must prove that root Browser Tabs search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only current tab title, URL, browser, and tab-location metadata from a TTL-bound snapshot; performs no favicon, page-content, cookie, download, or network reads; inserts after Files/Recent Files and before Notes; uses the shared capped passive-score helper; keys rows by `browser-tab/...` for selection only; and switches the existing tab through `activate_tab`.
+Checks must prove that root Browser Tabs search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only current tab title, URL, browser, and tab-location metadata from a cache-only foreground snapshot; performs no favicon, page-content, cookie, download, or network reads; inserts after Files/Recent Files and before Notes; uses the shared capped passive-score helper; keys rows by `browser-tab/...` for selection only; and switches the existing tab through `activate_tab`.
 
 Use `cargo test --test source_audits root_unified_browser_tabs_contract -- --nocapture` with the existing root stability, file, notes, clipboard history, ACP history, and browser history audits, plus `cargo check --lib`, `cargo build`, `cargo fmt --check`, `git diff --check`, and `lat check`. Add a state-first runtime proof when a supported browser is open and `unifiedSearch.browserTabs.enabled` is true.
 
 ## Root Unified Search Browser History
 
-Browser History root rows are verified as opt-in, metadata-only, and passive.
+Browser History root rows are verified as opt-in, metadata-only, stale-while-revalidate cached, and passive.
 
-Checks must prove that root Browser History search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only local URL/title/visit metadata from bounded copied Chromium history DBs; rejects non-HTTP(S) schemes; performs no favicon, cookie, download, content, or network reads; inserts after Browser Tabs, Notes, Clipboard History, and AI Conversations and before fallback handoff rows; keys rows by `browser-history/...`; and opens through the safe URL helper.
+Checks must prove that root Browser History search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; foreground search fuzzy-filters only cached local URL/title/visit metadata while background refreshes copy bounded Chromium history DBs; rejects non-HTTP(S) schemes; performs no favicon, cookie, download, content, or network reads; inserts after Browser Tabs, Notes, Clipboard History, and AI Conversations and before fallback handoff rows; keys rows by `browser-history/...`; and opens through the safe URL helper.
 
 Use `cargo test --test source_audits root_unified_browser_history_contract -- --nocapture` with the existing root file, notes, clipboard history, and ACP history audits, plus `cargo check --lib`, `cargo build`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 

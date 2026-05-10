@@ -192,6 +192,8 @@ pub struct UnifiedSearchBrowserHistoryConfig {
     pub max_age_days: u32,
     pub providers: Vec<BrowserHistoryProvider>,
     pub search_urls: bool,
+    pub scan_limit: usize,
+    pub cache_ttl_ms: u64,
 }
 
 impl Default for UnifiedSearchBrowserHistoryConfig {
@@ -203,6 +205,8 @@ impl Default for UnifiedSearchBrowserHistoryConfig {
             max_age_days: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MAX_AGE_DAYS,
             providers: BrowserHistoryProvider::default_root_providers(),
             search_urls: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SEARCH_URLS,
+            scan_limit: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SCAN_LIMIT,
+            cache_ttl_ms: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_CACHE_TTL_MS,
         }
     }
 }
@@ -304,6 +308,8 @@ impl UnifiedSearchConfig {
             max_age_days: self.browser_history.max_age_days.clamp(1, 365),
             providers: self.browser_history.providers.clone(),
             search_urls: self.browser_history.search_urls,
+            scan_limit: self.browser_history.scan_limit.clamp(25, 2_000),
+            cache_ttl_ms: self.browser_history.cache_ttl_ms.clamp(5_000, 120_000),
         }
     }
 
