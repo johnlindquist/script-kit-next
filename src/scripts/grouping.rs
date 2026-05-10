@@ -420,6 +420,14 @@ fn append_recent_root_file_section(
         return;
     }
 
+    let eligible_recent_files = recent_file_results
+        .iter()
+        .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
+        .collect::<Vec<_>>();
+    if eligible_recent_files.is_empty() {
+        return;
+    }
+
     let insertion_index = grouped
         .iter()
         .position(
@@ -442,12 +450,12 @@ fn append_recent_root_file_section(
         })
         .unwrap_or(grouped.len());
 
-    let mut recent_group = Vec::with_capacity(recent_file_results.len() + 1);
+    let mut recent_group = Vec::with_capacity(eligible_recent_files.len() + 1);
     recent_group.push(GroupedListItem::SectionHeader(
         "Recent Files".to_string(),
         None,
     ));
-    for (rank, file) in recent_file_results.iter().enumerate() {
+    for (rank, file) in eligible_recent_files.into_iter().enumerate() {
         let idx = flat_results.len();
         flat_results.push(SearchResult::File(crate::scripts::FileMatch {
             file: file.clone(),
@@ -2032,6 +2040,97 @@ mod advanced_query_tests {
                 SearchResult::File(file) if file.file.path == "/Users/example/Desktop/recent design notes.md"
             )),
             "Recent Files should render real SearchResult::File rows"
+        );
+    }
+
+    #[test]
+    fn empty_root_recent_files_filter_app_bundle_contents() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![
+            root_file_with_type(
+                "/Applications/Zed.app/Contents/Info.plist",
+                "Info.plist",
+                FileType::Document,
+            ),
+            root_file("/Users/example/Desktop/design-notes.md", "design-notes.md"),
+        ];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            &[],
+            &recent_files,
+        );
+
+        let rendered_paths = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.path.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            rendered_paths,
+            vec!["/Users/example/Desktop/design-notes.md"],
+            "empty-root Recent Files should filter app bundle internals"
+        );
+    }
+
+    #[test]
+    fn empty_root_recent_files_suppress_section_when_all_rows_ineligible() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![
+            root_file_with_type("/Applications/Zed.app", "Zed.app", FileType::Application),
+            root_file_with_type(
+                "/Applications/Zed.app/Contents/Info.plist",
+                "Info.plist",
+                FileType::Document,
+            ),
+        ];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            !grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Recent Files")),
+            "empty-root Recent Files should omit the section when every row is ineligible"
+        );
+        assert!(
+            flat.iter()
+                .all(|result| !matches!(result, SearchResult::File(_))),
+            "all-ineligible recent files should not render file rows"
         );
     }
 
