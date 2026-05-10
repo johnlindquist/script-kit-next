@@ -146,6 +146,12 @@ mod computer_list_apps_by_bundle_id_contract;
 #[path = "source_audits/computer_list_native_windows_contract.rs"]
 mod computer_list_native_windows_contract;
 
+#[path = "source_audits/computer_list_app_windows_contract.rs"]
+mod computer_list_app_windows_contract;
+
+#[path = "source_audits/computer_window_observation_contract.rs"]
+mod computer_window_observation_contract;
+
 #[path = "source_audits/computer_list_app_windows_by_bundle_id_contract.rs"]
 mod computer_list_app_windows_by_bundle_id_contract;
 

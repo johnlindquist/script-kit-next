@@ -2882,6 +2882,7 @@ mod tests {
                         is_on_screen: true,
                         layer: 0,
                         z_order: 0,
+                        observation: None,
                     }],
                     warnings: Vec::new(),
                 },
@@ -3106,6 +3107,7 @@ mod tests {
                         is_on_screen: true,
                         layer: 0,
                         z_order: 0,
+                        observation: None,
                     },
                     ComputerUseAppWindowInfo {
                         native_window_id: 98766,
@@ -3119,6 +3121,7 @@ mod tests {
                         is_on_screen: true,
                         layer: 0,
                         z_order: 1,
+                        observation: None,
                     },
                 ],
                 202 => Vec::new(),
@@ -3369,6 +3372,7 @@ mod tests {
                         is_on_screen: true,
                         layer: 0,
                         z_order: 0,
+                        observation: None,
                     }],
                 ),
                 202 => (
@@ -7822,6 +7826,7 @@ mod tests {
             is_on_screen: true,
             layer: 0,
             z_order,
+            observation: None,
         }
     }
 
