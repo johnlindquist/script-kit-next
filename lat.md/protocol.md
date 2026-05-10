@@ -183,6 +183,8 @@ The old protocol docs lag the live module split. In current code:
 
 Current code references for this page:
 
+- [src/mcp_computer_use_tools.rs](../src/mcp_computer_use_tools.rs)
+- [src/frontmost_app_tracker/mod.rs](../src/frontmost_app_tracker/mod.rs)
 - [src/protocol/mod.rs](../src/protocol/mod.rs)
 - [src/protocol/version.rs](../src/protocol/version.rs)
 - [src/protocol/deprecations.rs](../src/protocol/deprecations.rs)

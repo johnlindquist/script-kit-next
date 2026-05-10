@@ -32,6 +32,21 @@ fn computer_get_frontmost_app_reads_cached_tracker_state_only() {
     );
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_get_frontmost_app(");
+    assert!(
+        handler_body.contains("get_last_real_app()"),
+        "computer/get_frontmost_app handler must read the frontmost app tracker cache directly"
+    );
+    assert!(
+        !handler_body.contains("get_cached_menu_snapshot"),
+        "computer/get_frontmost_app handler must not read the cached menu snapshot"
+    );
+    for needle in ["ComputerUseRuntimeBridge", "runtime.", "Option<&dyn"] {
+        assert!(
+            !handler_body.contains(needle),
+            "computer/get_frontmost_app handler must not depend on a runtime bridge; found {}",
+            needle
+        );
+    }
     for needle in [
         "NSWorkspace",
         "runningApplications",
@@ -54,6 +69,10 @@ fn computer_get_frontmost_app_reads_cached_tracker_state_only() {
         "move_window",
         "resize_window",
         "request_accessibility_permission",
+        "check_accessibility_permission",
+        "screen_capture_access_preflight",
+        "AXIsProcessTrustedWithOptions",
+        "CGPreflightScreenCaptureAccess",
         "CGRequestScreenCaptureAccess",
         "Command::new(\"open\")",
     ] {
@@ -68,6 +87,7 @@ fn computer_get_frontmost_app_reads_cached_tracker_state_only() {
     for needle in [
         "capture_current_frontmost_app",
         "fetch_menu_items_async",
+        "get_cached_menu_snapshot",
         "get_menu_bar_for_pid",
         "NSWorkspace",
         "AXUIElementCreateApplication",
@@ -75,6 +95,11 @@ fn computer_get_frontmost_app_reads_cached_tracker_state_only() {
         "menuBarOwningApplication",
         "frontmostApplication",
         "request_accessibility_permission",
+        "check_accessibility_permission",
+        "screen_capture_access_preflight",
+        "AXIsProcessTrustedWithOptions",
+        "CGPreflightScreenCaptureAccess",
+        "CGRequestScreenCaptureAccess",
     ] {
         assert!(
             !helper_body.contains(needle),
