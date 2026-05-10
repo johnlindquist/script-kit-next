@@ -707,6 +707,10 @@ mod tests {
             "Should include computer/list_apps"
         );
         assert!(
+            tool_names.contains(&"computer/list_app_windows"),
+            "Should include computer/list_app_windows"
+        );
+        assert!(
             tool_names.contains(&"computer/get_frontmost_app"),
             "Should include computer/get_frontmost_app"
         );
@@ -778,6 +782,22 @@ mod tests {
                     crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
                         apps: Vec::new(),
                         frontmost_pid: None,
+                    },
+                )
+            }
+
+            fn list_app_windows(
+                &self,
+                _request: crate::computer_use::runtime_bridge::ComputerUseListAppWindowsRequest,
+            ) -> Result<
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                        app: None,
+                        windows: Vec::new(),
+                        warnings: Vec::new(),
                     },
                 )
             }

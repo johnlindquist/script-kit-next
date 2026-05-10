@@ -818,6 +818,22 @@ mod tests {
                 )
             }
 
+            fn list_app_windows(
+                &self,
+                _request: crate::computer_use::runtime_bridge::ComputerUseListAppWindowsRequest,
+            ) -> Result<
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                        app: None,
+                        windows: Vec::new(),
+                        warnings: Vec::new(),
+                    },
+                )
+            }
+
             fn list_tray_menu(
                 &self,
             ) -> Result<
