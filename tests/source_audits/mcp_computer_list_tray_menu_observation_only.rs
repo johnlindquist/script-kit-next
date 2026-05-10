@@ -18,12 +18,25 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
         "computer/list_tray_menu must expose a closed input schema"
     );
     assert!(
+        mcp_tools.contains("crate::tray::current_tray_menu_observation_snapshot()"),
+        "computer/list_tray_menu must read the current tray menu observation snapshot directly"
+    );
+    assert!(
+        tray.contains("pub fn current_tray_menu_observation_snapshot()"),
+        "tray menu observation must expose a direct current snapshot accessor"
+    );
+    assert!(
         tray.contains("pub(crate) fn tray_menu_observation_snapshot("),
         "tray menu observation must be built by a pure model/state snapshot helper"
     );
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_list_tray_menu(");
     for needle in [
+        "ComputerUseRuntimeBridge",
+        "runtime.",
+        "Option<&dyn",
+        "runtime_unavailable",
+        "list_tray_menu()",
         "MenuEvent::receiver",
         "action_from_event",
         "handle_action",
@@ -44,6 +57,29 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
         );
     }
 
+    let current_helper_body =
+        extract_function_body(&tray, "pub fn current_tray_menu_observation_snapshot()");
+    for needle in [
+        "set_text",
+        "set_enabled",
+        "set_menu",
+        ".append(",
+        "MenuEvent",
+        "handle_action",
+        "Command::new(\"open\")",
+        "AXUIElement",
+        "CGEvent",
+        "TrayIconBuilder",
+        "create_menu",
+        "template_menu_items",
+    ] {
+        assert!(
+            !current_helper_body.contains(needle),
+            "current_tray_menu_observation_snapshot must remain a pure model/state read; found {}",
+            needle
+        );
+    }
+
     let helper_body = extract_function_body(&tray, "pub(crate) fn tray_menu_observation_snapshot(");
     for needle in [
         "set_text",
@@ -55,6 +91,9 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
         "Command::new(\"open\")",
         "AXUIElement",
         "CGEvent",
+        "TrayIconBuilder",
+        "create_menu",
+        "template_menu_items",
     ] {
         assert!(
             !helper_body.contains(needle),
