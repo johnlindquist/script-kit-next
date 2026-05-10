@@ -239,6 +239,21 @@ pub const ERROR_UNSUPPORTED_PLATFORM: &str = "unsupported_platform";
 /// External process (editor, Finder, etc.) failed to launch.
 pub const ERROR_LAUNCH_FAILED: &str = "launch_failed";
 
+pub const ROOT_FILE_OPEN_ACTION_ID: &str = "root_file_open";
+pub const ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID: &str = "root_file_reveal_in_finder";
+pub const ROOT_FILE_COPY_PATH_ACTION_ID: &str = "root_file_copy_path";
+pub const ROOT_FILE_QUICK_LOOK_ACTION_ID: &str = "root_file_quick_look";
+
+pub fn is_root_file_action_id(action_id: &str) -> bool {
+    matches!(
+        action_id,
+        ROOT_FILE_OPEN_ACTION_ID
+            | ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID
+            | ROOT_FILE_COPY_PATH_ACTION_ID
+            | ROOT_FILE_QUICK_LOOK_ACTION_ID
+    )
+}
+
 /// Reveal-in-Finder (or equivalent) operation failed.
 pub const ERROR_REVEAL_FAILED: &str = "reveal_failed";
 
@@ -622,6 +637,11 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "open_in_finder",
     "open_in_editor",
     "move_to_trash",
+    // Root launcher file result actions
+    ROOT_FILE_OPEN_ACTION_ID,
+    ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+    ROOT_FILE_COPY_PATH_ACTION_ID,
+    ROOT_FILE_QUICK_LOOK_ACTION_ID,
     // Internal
     "__cancel__",
 ];

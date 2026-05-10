@@ -436,20 +436,7 @@ impl ScriptListApp {
                         self.execute_window_focus(&window_match.window, cx);
                     }
                     scripts::SearchResult::File(file_match) => {
-                        let path = file_match.file.path.clone();
-                        if let Err(error) = crate::file_search::open_file(&path) {
-                            logging::log(
-                                "ROOT_FILE_SEARCH",
-                                &format!("failed_to_open path={} error={}", path, error),
-                            );
-                            self.show_hud(
-                                format!("Failed to open {}", file_match.file.name),
-                                Some(HUD_MEDIUM_MS),
-                                cx,
-                            );
-                            return;
-                        }
-                        self.close_and_reset_window(cx);
+                        self.execute_root_file_open(&file_match.file, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged
@@ -500,6 +487,119 @@ impl ScriptListApp {
                     }
                 }
             }
+        }
+    }
+
+    pub(crate) fn selected_main_list_search_result_owned(
+        &mut self,
+    ) -> Option<scripts::SearchResult> {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+
+        self.get_grouped_results_cached();
+        let (resolved_index, result_idx) = self
+            .main_menu_result_caches
+            .flat_result_index_for_coerced_grouped_selection(self.selected_index)?;
+        if resolved_index != self.selected_index {
+            self.selected_index = resolved_index;
+            self.rebuild_main_window_preflight_if_needed();
+        }
+
+        if self
+            .inline_calculator_for_result_index(result_idx)
+            .is_some()
+        {
+            return None;
+        }
+
+        self.main_menu_result_caches
+            .cloned_search_result_for_flat_index(result_idx)
+    }
+
+    pub(crate) fn selected_root_file_result_owned(
+        &mut self,
+    ) -> Option<crate::file_search::FileResult> {
+        match self.selected_main_list_search_result_owned()? {
+            scripts::SearchResult::File(file_match) => Some(file_match.file),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn execute_root_file_open(
+        &mut self,
+        file: &crate::file_search::FileResult,
+        cx: &mut Context<Self>,
+    ) {
+        if let Err(error) = crate::file_search::open_file(&file.path) {
+            logging::log(
+                "ROOT_FILE_SEARCH",
+                &format!("failed_to_open path={} error={}", file.path, error),
+            );
+            self.show_hud(
+                format!("Failed to open {}", file.name),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
+            return;
+        }
+        self.close_and_reset_window(cx);
+    }
+
+    pub(crate) fn execute_root_file_action(
+        &mut self,
+        action_id: &str,
+        file: &crate::file_search::FileResult,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match action_id {
+            crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID => {
+                self.pending_root_file_actions_file = None;
+                self.execute_root_file_open(file, cx);
+                true
+            }
+            crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID => {
+                if let Err(error) = crate::file_search::reveal_in_finder(&file.path) {
+                    logging::log(
+                        "ROOT_FILE_SEARCH",
+                        &format!("failed_to_reveal path={} error={}", file.path, error),
+                    );
+                    self.show_hud(
+                        format!("Failed to reveal {}", file.name),
+                        Some(HUD_MEDIUM_MS),
+                        cx,
+                    );
+                    return true;
+                }
+                self.pending_root_file_actions_file = None;
+                self.close_and_reset_window(cx);
+                true
+            }
+            crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID => {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.path.clone()));
+                self.show_hud(
+                    format!("Copied path: {}", file.name),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+                true
+            }
+            crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID => {
+                if let Err(error) = crate::file_search::quick_look(&file.path) {
+                    logging::log(
+                        "ROOT_FILE_SEARCH",
+                        &format!("failed_to_quick_look path={} error={}", file.path, error),
+                    );
+                    self.show_hud(
+                        format!("Failed to preview {}", file.name),
+                        Some(HUD_MEDIUM_MS),
+                        cx,
+                    );
+                }
+                true
+            }
+            _ => false,
         }
     }
 

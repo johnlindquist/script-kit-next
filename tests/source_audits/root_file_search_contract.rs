@@ -99,4 +99,119 @@ mod tests {
             "root file receive loop should exit if the worker channel disconnects before Done"
         );
     }
+
+    #[test]
+    fn root_file_actions_are_main_list_only() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("read src/app_impl/actions_dialog.rs");
+        let simulate_key_source =
+            fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+                .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+        let simulate_key_normalized = simulate_key_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            normalized.contains(
+                "ActionsDialogHost::MainList => { if let Some(file) = self.selected_root_file_result_owned()"
+            ) && normalized.contains("self.toggle_root_file_actions(&file, window, cx);"),
+            "MainList actions should branch to root-file actions for selected root file rows"
+        );
+        assert!(
+            simulate_key_normalized
+                .contains("if has_cmd && key_lower == \"k\" { logging::log( \"STDIN\", \"SimulateKey: Cmd+K - dispatch actions toggle\", ); view.handle_cmd_k_actions_toggle(window, ctx);"),
+            "stdin simulateKey Cmd+K on ScriptList should use the shared dispatcher so root-file rows get their actions"
+        );
+        assert!(
+            normalized.contains("ActionsDialogHost::FileSearch => { let selected = self.selected_file_search_result_owned();")
+                && normalized.contains("self.toggle_file_search_actions("),
+            "dedicated FileSearch actions should keep using the file-search action route"
+        );
+    }
+
+    #[test]
+    fn root_file_actions_do_not_expand_dedicated_file_search_browser() {
+        let view_source = fs::read_to_string("src/render_builtins/file_search.rs")
+            .expect("read src/render_builtins/file_search.rs");
+        let list_source = fs::read_to_string("src/render_builtins/file_search_list.rs")
+            .expect("read src/render_builtins/file_search_list.rs");
+        let dedicated_file_search = format!("{view_source}\n{list_source}");
+
+        for forbidden in [
+            "root_file_open",
+            "root_file_reveal_in_finder",
+            "root_file_copy_path",
+            "root_file_quick_look",
+        ] {
+            assert!(
+                !dedicated_file_search.contains(forbidden),
+                "root file action id should not be introduced into dedicated File Search render/navigation code: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_file_open_uses_shared_open_helper() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let actions_dialog_source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("read src/app_impl/actions_dialog.rs");
+        let actions_toggle_source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("read src/app_impl/actions_toggle.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+        let actions_dialog_normalized = actions_dialog_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let actions_toggle_normalized = actions_toggle_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            normalized.contains(
+                "scripts::SearchResult::File(file_match) => { self.execute_root_file_open(&file_match.file, cx); }"
+            ),
+            "Enter on root file rows should call execute_root_file_open instead of inlining open_file"
+        );
+        assert!(
+            normalized.contains("ROOT_FILE_OPEN_ACTION_ID => {")
+                && normalized.contains("self.execute_root_file_open(file, cx);"),
+            "root_file_open action should share execute_root_file_open with Enter"
+        );
+        assert!(
+            actions_toggle_normalized
+                .contains("self.pending_root_file_actions_file = Some(file.clone());"),
+            "root file actions should capture the selected file when the palette opens"
+        );
+        assert!(
+            actions_dialog_normalized.contains(
+                "let root_file_context = if should_close && matches!(host, ActionsDialogHost::MainList) && crate::action_helpers::is_root_file_action_id(&action_id)"
+            ) && actions_dialog_normalized.contains(
+                ".selected_root_file_result_owned() .or_else(|| self.pending_root_file_actions_file.clone())"
+            ) && actions_dialog_normalized
+                .contains("self.pending_root_file_actions_file = None;"),
+            "root file action activation should capture context before close and clear it on MainList close"
+        );
+    }
+
+    #[test]
+    fn root_file_action_ids_are_reserved() {
+        let source =
+            fs::read_to_string("src/action_helpers.rs").expect("read src/action_helpers.rs");
+
+        for action_id in [
+            "root_file_open",
+            "root_file_reveal_in_finder",
+            "root_file_copy_path",
+            "root_file_quick_look",
+        ] {
+            assert!(
+                source.contains(action_id),
+                "root file action id should be reserved: {action_id}"
+            );
+        }
+    }
 }

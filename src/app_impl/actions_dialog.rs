@@ -149,8 +149,22 @@ impl ScriptListApp {
                 action_id,
                 should_close,
             } => {
+                let root_file_context = if should_close
+                    && matches!(host, ActionsDialogHost::MainList)
+                    && crate::action_helpers::is_root_file_action_id(&action_id)
+                {
+                    self.selected_root_file_result_owned()
+                        .or_else(|| self.pending_root_file_actions_file.clone())
+                } else {
+                    None
+                };
                 if should_close {
                     self.close_actions_popup(host, window, cx);
+                }
+                if let Some(file) = root_file_context {
+                    if self.execute_root_file_action(&action_id, &file, window, cx) {
+                        return;
+                    }
                 }
                 self.execute_action_for_actions_host(host, action_id, window, cx);
             }
@@ -184,6 +198,17 @@ impl ScriptListApp {
         }
 
         match host {
+            ActionsDialogHost::MainList => {
+                if let Some(file) = self
+                    .selected_root_file_result_owned()
+                    .or_else(|| self.pending_root_file_actions_file.clone())
+                {
+                    if self.execute_root_file_action(&action_id, &file, window, cx) {
+                        return;
+                    }
+                }
+                self.handle_action(action_id, window, cx);
+            }
             ActionsDialogHost::ChatPrompt => self.execute_chat_action(&action_id, cx),
             ActionsDialogHost::ArgPrompt => {
                 self.trigger_action_by_name(&action_id, cx);
@@ -322,7 +347,9 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
-                if self.has_actions() {
+                if let Some(file) = self.selected_root_file_result_owned() {
+                    self.toggle_root_file_actions(&file, window, cx);
+                } else if self.has_actions() {
                     self.toggle_actions(cx, window);
                 }
                 true
@@ -864,6 +891,9 @@ impl ScriptListApp {
         }
 
         self.request_focus_restore_for_actions_host(host);
+        if matches!(host, ActionsDialogHost::MainList) {
+            self.pending_root_file_actions_file = None;
+        }
 
         // Apply restored focus immediately rather than deferring to next render.
         // pop_focus_overlay sets pending_focus to the saved target (e.g. ChatPrompt).
