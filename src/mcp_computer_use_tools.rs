@@ -9,7 +9,9 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
+use crate::frontmost_app_tracker::get_cached_menu_snapshot;
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
+use crate::menu_bar::MenuBarItem;
 use crate::protocol::{
     AutomationWindowInfo, DisplayInfo, TargetWindowBounds, AUTOMATION_WINDOW_SCHEMA_VERSION,
 };
@@ -19,9 +21,11 @@ pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
+pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
+const COMPUTER_MENUS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_PERMISSIONS_SCHEMA_VERSION: u32 = 1;
 
@@ -45,6 +49,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List running GUI applications without launching, quitting, focusing, hiding, or sending input."
                 .to_string(),
             input_schema: computer_list_apps_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_MENUS_TOOL.to_string(),
+            description: "List cached menu items for the last tracked real application without refreshing, focusing, clicking, or requesting permissions."
+                .to_string(),
+            input_schema: computer_list_menus_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_SCREENS_TOOL.to_string(),
@@ -74,6 +84,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
+        COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
@@ -112,6 +123,48 @@ struct ComputerUseListAppsResult {
     apps: Vec<ComputerUseRunningAppInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     frontmost_pid: Option<i32>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListMenusArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListMenusResult {
+    schema_version: u32,
+    source: &'static str,
+    app: Option<ComputerUseMenuApp>,
+    cache: ComputerUseMenuCache,
+    menus: Vec<ComputerUseMenuItem>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseMenuApp {
+    pid: i32,
+    bundle_id: String,
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    window_title: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseMenuCache {
+    status: &'static str,
+    is_fetching: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseMenuItem {
+    title: String,
+    enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shortcut: Option<String>,
+    children: Vec<ComputerUseMenuItem>,
 }
 
 #[derive(serde::Deserialize)]
@@ -208,6 +261,45 @@ fn handle_list_apps(
             frontmost_pid: snapshot.frontmost_pid,
         }),
         Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
+fn handle_list_menus(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseListMenusArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let snapshot = get_cached_menu_snapshot();
+    let app = snapshot.app.map(|app| ComputerUseMenuApp {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+        name: app.name,
+        window_title: app.window_title,
+    });
+
+    json_tool_result(&ComputerUseListMenusResult {
+        schema_version: COMPUTER_MENUS_SCHEMA_VERSION,
+        source: "frontmostAppTrackerCache",
+        app,
+        cache: ComputerUseMenuCache {
+            status: snapshot.status.as_str(),
+            is_fetching: snapshot.is_fetching,
+        },
+        menus: snapshot.items.iter().map(computer_use_menu_item).collect(),
+        warnings: Vec::new(),
+    })
+}
+
+fn computer_use_menu_item(item: &MenuBarItem) -> ComputerUseMenuItem {
+    ComputerUseMenuItem {
+        title: item.title.clone(),
+        enabled: item.enabled,
+        shortcut: item
+            .shortcut
+            .as_ref()
+            .map(|shortcut| shortcut.to_display_string()),
+        children: item.children.iter().map(computer_use_menu_item).collect(),
     }
 }
 
@@ -478,6 +570,14 @@ fn computer_list_apps_input_schema() -> Value {
     })
 }
 
+fn computer_list_menus_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_list_screens_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -592,6 +692,7 @@ mod tests {
                 COMPUTER_SEE_TOOL.to_string(),
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
+                COMPUTER_LIST_MENUS_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
@@ -655,6 +756,28 @@ mod tests {
             .expect("properties");
         assert!(properties.contains_key("includeHidden"));
         assert!(properties.contains_key("includeBackground"));
+    }
+
+    #[test]
+    fn computer_list_menus_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_MENUS_TOOL)
+            .expect("computer/list_menus tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
     }
 
     #[test]
@@ -834,6 +957,24 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_menus_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!({ "pid": 101 }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            serde_json::json!({ "refresh": true }),
+            serde_json::json!({ "target": "frontmost" }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "path": [0, 1] }),
+            serde_json::json!({ "includeDisabled": true }),
+        ] {
+            let result = handle_computer_use_tool_call(COMPUTER_LIST_MENUS_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_permissions_rejects_bad_arguments() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_PERMISSIONS_TOOL,
@@ -904,6 +1045,39 @@ mod tests {
         assert_eq!(window["kind"], "notes");
         assert_eq!(window["visible"], true);
         assert_eq!(window["semanticSurface"], "notes");
+    }
+
+    #[test]
+    fn computer_list_menus_returns_cached_snapshot_without_runtime() {
+        let result =
+            handle_computer_use_tool_call(COMPUTER_LIST_MENUS_TOOL, &serde_json::json!({}), None);
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_menus json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_MENUS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert!(value["cache"]["status"].is_string());
+        assert!(value["cache"]["isFetching"].is_boolean());
+        assert!(value["menus"].is_array());
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/list_menus result must not expose menu action handles; found {forbidden}"
+            );
+        }
     }
 
     #[test]
