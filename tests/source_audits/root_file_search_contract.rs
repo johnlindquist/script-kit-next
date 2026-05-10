@@ -699,6 +699,53 @@ mod tests {
     }
 
     #[test]
+    fn root_global_file_rows_filter_app_bundles_without_affecting_directory_browse() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            file_search_production.contains("pub fn root_global_file_result_is_eligible(")
+                && file_search_production.contains("file.file_type != FileType::Application"),
+            "root global file result eligibility should keep app bundles out of global Files"
+        );
+
+        let merge_helper = grouping_production
+            .split("fn merge_root_global_file_results_with_recent(")
+            .nth(1)
+            .and_then(|section| section.split("fn root_file_section_title(").next())
+            .expect("recent/global merge helper should be present");
+        assert!(
+            merge_helper.contains("root_global_file_result_is_eligible(file)")
+                && merge_helper
+                    .contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
+            "global Files should filter app bundles before ranking while preserving recent filename-token gating"
+        );
+        assert!(
+            grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
+                && grouping_production.contains("root_directory_file_matches("),
+            "directory browse should keep rendering already-collected direct children, including app bundles"
+        );
+
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !merge_helper.contains(forbidden),
+                "global app-bundle filtering must stay grouping-only: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
     fn nonempty_global_root_search_refreshes_recent_file_snapshot() {
         let source = fs::read_to_string("src/app_impl/filtering_cache.rs")
             .expect("read src/app_impl/filtering_cache.rs");
