@@ -699,6 +699,10 @@ mod tests {
             "Should include computer/list_windows"
         );
         assert!(
+            tool_names.contains(&"computer/list_apps"),
+            "Should include computer/list_apps"
+        );
+        assert!(
             tool_names.contains(&"computer/list_screens"),
             "Should include computer/list_screens"
         );
@@ -745,6 +749,21 @@ mod tests {
                     semantic_quality: Some(crate::protocol::SemanticQuality::Full),
                     warnings: Vec::new(),
                 })
+            }
+
+            fn list_running_apps(
+                &self,
+                _request: crate::computer_use::runtime_bridge::ComputerUseListAppsRequest,
+            ) -> Result<
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                        apps: Vec::new(),
+                        frontmost_pid: None,
+                    },
+                )
             }
         }
 

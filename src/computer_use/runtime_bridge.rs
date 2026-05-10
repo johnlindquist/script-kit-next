@@ -7,6 +7,29 @@ pub struct ComputerUseInspectRequest {
     pub probes: Vec<PixelProbe>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputerUseListAppsRequest {
+    pub include_hidden: bool,
+    pub include_background: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerUseRunningAppInfo {
+    pub pid: i32,
+    pub bundle_id: Option<String>,
+    pub name: String,
+    pub is_active: bool,
+    pub is_hidden: bool,
+    pub activation_policy: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputerUseListAppsSnapshot {
+    pub apps: Vec<ComputerUseRunningAppInfo>,
+    pub frontmost_pid: Option<i32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ComputerUseRuntimeError {
     Unavailable,
@@ -43,4 +66,9 @@ pub trait ComputerUseRuntimeBridge: Send + Sync {
         &self,
         request: ComputerUseInspectRequest,
     ) -> Result<AutomationInspectSnapshot, ComputerUseRuntimeError>;
+
+    fn list_running_apps(
+        &self,
+        request: ComputerUseListAppsRequest,
+    ) -> Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>;
 }

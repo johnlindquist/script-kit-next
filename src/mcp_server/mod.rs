@@ -802,6 +802,21 @@ mod tests {
                     warnings: Vec::new(),
                 })
             }
+
+            fn list_running_apps(
+                &self,
+                _request: crate::computer_use::runtime_bridge::ComputerUseListAppsRequest,
+            ) -> Result<
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                        apps: Vec::new(),
+                        frontmost_pid: None,
+                    },
+                )
+            }
         }
 
         let (server, _temp_dir) = create_test_server(43227)?;

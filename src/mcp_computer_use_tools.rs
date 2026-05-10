@@ -5,7 +5,8 @@
 //! remain deferred until they can cite stable inspection receipts.
 
 use crate::computer_use::runtime_bridge::{
-    ComputerUseInspectRequest, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
+    ComputerUseInspectRequest, ComputerUseListAppsRequest, ComputerUseRunningAppInfo,
+    ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
@@ -17,8 +18,10 @@ use serde_json::Value;
 pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
+pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
+const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_PERMISSIONS_SCHEMA_VERSION: u32 = 1;
 
@@ -36,6 +39,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List registered Script Kit automation windows without interacting with them."
                 .to_string(),
             input_schema: computer_list_windows_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_APPS_TOOL.to_string(),
+            description: "List running GUI applications without launching, quitting, focusing, hiding, or sending input."
+                .to_string(),
+            input_schema: computer_list_apps_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_SCREENS_TOOL.to_string(),
@@ -64,6 +73,7 @@ pub fn handle_computer_use_tool_call(
     match name {
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
+        COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
@@ -84,6 +94,24 @@ struct ComputerUseListWindowsResult {
     windows: Vec<AutomationWindowInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     focused_window_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ComputerUseListAppsArgs {
+    #[serde(default)]
+    include_hidden: bool,
+    #[serde(default)]
+    include_background: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListAppsResult {
+    schema_version: u32,
+    apps: Vec<ComputerUseRunningAppInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frontmost_pid: Option<i32>,
 }
 
 #[derive(serde::Deserialize)]
@@ -128,9 +156,9 @@ fn handle_see(arguments: &Value, runtime: Option<&dyn ComputerUseRuntimeBridge>)
     };
 
     let request = ComputerUseInspectRequest {
-        target: args.target,
+        target: args.target.clone(),
         hi_dpi: args.hi_dpi,
-        probes: args.probes,
+        probes: args.probes.clone(),
     };
 
     match runtime.inspect_automation_window(request) {
@@ -150,6 +178,37 @@ fn handle_list_windows(arguments: &Value) -> ToolResult {
         windows: crate::windows::list_automation_windows(),
         focused_window_id: crate::windows::focused_automation_window_id(),
     })
+}
+
+fn handle_list_apps(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseListAppsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/list_apps requires the live GPUI runtime bridge to enumerate running applications safely",
+        );
+    };
+
+    let request = ComputerUseListAppsRequest {
+        include_hidden: args.include_hidden,
+        include_background: args.include_background,
+    };
+
+    match runtime.list_running_apps(request) {
+        Ok(snapshot) => json_tool_result(&ComputerUseListAppsResult {
+            schema_version: COMPUTER_APPS_SCHEMA_VERSION,
+            apps: snapshot.apps,
+            frontmost_pid: snapshot.frontmost_pid,
+        }),
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
 }
 
 fn handle_list_screens(arguments: &Value) -> ToolResult {
@@ -400,6 +459,25 @@ fn computer_list_windows_input_schema() -> Value {
     })
 }
 
+fn computer_list_apps_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "includeHidden": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include hidden running GUI applications."
+            },
+            "includeBackground": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include accessory, prohibited, and unknown background applications in addition to regular GUI apps."
+            }
+        }
+    })
+}
+
 fn computer_list_screens_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -464,6 +542,41 @@ mod tests {
                 warnings: Vec::new(),
             })
         }
+
+        fn list_running_apps(
+            &self,
+            request: ComputerUseListAppsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert!(request.include_hidden);
+            assert!(request.include_background);
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                    apps: vec![
+                        ComputerUseRunningAppInfo {
+                            pid: 101,
+                            bundle_id: Some("com.apple.Terminal".to_string()),
+                            name: "Terminal".to_string(),
+                            is_active: true,
+                            is_hidden: false,
+                            activation_policy: "regular".to_string(),
+                        },
+                        ComputerUseRunningAppInfo {
+                            pid: 202,
+                            bundle_id: None,
+                            name: "Background Utility".to_string(),
+                            is_active: false,
+                            is_hidden: true,
+                            activation_policy: "accessory".to_string(),
+                        },
+                    ],
+                    frontmost_pid: Some(101),
+                },
+            )
+        }
     }
 
     #[test]
@@ -478,6 +591,7 @@ mod tests {
             vec![
                 COMPUTER_SEE_TOOL.to_string(),
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
+                COMPUTER_LIST_APPS_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
@@ -519,6 +633,28 @@ mod tests {
                 .map(|properties| properties.is_empty()),
             Some(true)
         );
+    }
+
+    #[test]
+    fn computer_list_apps_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_APPS_TOOL)
+            .expect("computer/list_apps tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert!(properties.contains_key("includeHidden"));
+        assert!(properties.contains_key("includeBackground"));
     }
 
     #[test]
@@ -581,6 +717,15 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_apps_without_runtime_returns_tool_error() {
+        let result =
+            handle_computer_use_tool_call(COMPUTER_LIST_APPS_TOOL, &serde_json::json!({}), None);
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
     fn computer_see_with_runtime_returns_raw_snapshot() {
         let runtime = FakeComputerUseRuntime;
         let result = handle_computer_use_tool_call(
@@ -603,6 +748,41 @@ mod tests {
         assert_eq!(snapshot.schema_version, AUTOMATION_INSPECT_SCHEMA_VERSION);
         assert_eq!(snapshot.window_id, "main:0");
         assert!(!result.content[0].text.contains("\"action\""));
+    }
+
+    #[test]
+    fn computer_list_apps_with_runtime_returns_running_app_snapshot() {
+        let runtime = FakeComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APPS_TOOL,
+            &serde_json::json!({
+                "includeHidden": true,
+                "includeBackground": true
+            }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_apps json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_APPS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["frontmostPid"], 101);
+
+        let apps = value["apps"].as_array().expect("apps array");
+        assert_eq!(apps.len(), 2);
+        assert_eq!(apps[0]["pid"], 101);
+        assert_eq!(apps[0]["bundleId"], "com.apple.Terminal");
+        assert_eq!(apps[0]["name"], "Terminal");
+        assert_eq!(apps[0]["isActive"], true);
+        assert_eq!(apps[0]["isHidden"], false);
+        assert_eq!(apps[0]["activationPolicy"], "regular");
+        assert_eq!(apps[1]["bundleId"], serde_json::Value::Null);
+        assert!(!result.content[0].text.contains("\"launch\""));
+        assert!(!result.content[0].text.contains("\"quit\""));
+        assert!(!result.content[0].text.contains("\"focus\""));
     }
 
     #[test]
@@ -634,6 +814,18 @@ mod tests {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_WINDOWS_TOOL,
             &serde_json::json!({ "target": { "type": "focused" } }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
+    fn computer_list_apps_rejects_bad_arguments() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APPS_TOOL,
+            &serde_json::json!({ "launch": true }),
             None,
         );
 
