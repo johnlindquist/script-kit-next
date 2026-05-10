@@ -5,6 +5,10 @@ pub const WINDOW_CAPTURE_REQUIRED_LAYER: i64 = 0;
 pub const WINDOW_CAPTURE_MIN_ALPHA: f64 = 0.01;
 pub const WINDOW_CAPTURE_MIN_WIDTH: u32 = 120;
 pub const WINDOW_CAPTURE_MIN_HEIGHT: u32 = 90;
+pub const WINDOW_LIST_REQUIRED_LAYER: i64 = 0;
+pub const WINDOW_LIST_MIN_ALPHA: f64 = 0.0;
+pub const WINDOW_LIST_MIN_WIDTH: u32 = 60;
+pub const WINDOW_LIST_MIN_HEIGHT: u32 = 60;
 pub const CG_WINDOW_SHARING_NONE: i64 = 0;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -22,6 +26,8 @@ pub struct ComputerUseWindowObservationV1 {
     pub title_fallback: Option<WindowTitleFallbackV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list_candidate: Option<WindowListCandidateV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -61,6 +67,41 @@ pub enum WindowDisqualificationReason {
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowCaptureThresholdsV1 {
+    pub required_layer: i64,
+    pub min_alpha: f64,
+    pub min_width: u32,
+    pub min_height: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowListCandidateV1 {
+    pub status: WindowListCandidateStatus,
+    pub reason: Option<WindowListDisqualificationReason>,
+    pub thresholds: WindowListThresholdsV1,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowListCandidateStatus {
+    Candidate,
+    Disqualified,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowListDisqualificationReason {
+    LayerNonZero,
+    AlphaTooLow,
+    TooSmall,
+    OwnProcessExcludedFromWindowsMenu,
+    MetadataIncomplete,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowListThresholdsV1 {
     pub required_layer: i64,
     pub min_alpha: f64,
     pub min_width: u32,
@@ -171,6 +212,7 @@ pub fn computer_use_window_observation_v1(
         duplicate_group: None,
         title_fallback: None,
         own_process_window_policy: None,
+        list_candidate: None,
     }
 }
 
@@ -213,6 +255,48 @@ pub fn window_capture_candidate_v1(
             min_alpha: WINDOW_CAPTURE_MIN_ALPHA,
             min_width: WINDOW_CAPTURE_MIN_WIDTH,
             min_height: WINDOW_CAPTURE_MIN_HEIGHT,
+        },
+    }
+}
+
+pub fn window_list_candidate_v1(
+    bounds: &TargetWindowBounds,
+    layer: i64,
+    alpha: Option<f64>,
+    own_process_window_policy_status: Option<WindowOwnProcessPolicyStatus>,
+) -> WindowListCandidateV1 {
+    let reason = if layer != WINDOW_LIST_REQUIRED_LAYER {
+        Some(WindowListDisqualificationReason::LayerNonZero)
+    } else if alpha.is_some_and(|value| value <= WINDOW_LIST_MIN_ALPHA) {
+        Some(WindowListDisqualificationReason::AlphaTooLow)
+    } else if bounds.width < WINDOW_LIST_MIN_WIDTH || bounds.height < WINDOW_LIST_MIN_HEIGHT {
+        Some(WindowListDisqualificationReason::TooSmall)
+    } else if own_process_window_policy_status
+        == Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu)
+    {
+        Some(WindowListDisqualificationReason::OwnProcessExcludedFromWindowsMenu)
+    } else if alpha.is_none() {
+        Some(WindowListDisqualificationReason::MetadataIncomplete)
+    } else {
+        None
+    };
+
+    let status = match reason {
+        None => WindowListCandidateStatus::Candidate,
+        Some(WindowListDisqualificationReason::MetadataIncomplete) => {
+            WindowListCandidateStatus::Unknown
+        }
+        Some(_) => WindowListCandidateStatus::Disqualified,
+    };
+
+    WindowListCandidateV1 {
+        status,
+        reason,
+        thresholds: WindowListThresholdsV1 {
+            required_layer: WINDOW_LIST_REQUIRED_LAYER,
+            min_alpha: WINDOW_LIST_MIN_ALPHA,
+            min_width: WINDOW_LIST_MIN_WIDTH,
+            min_height: WINDOW_LIST_MIN_HEIGHT,
         },
     }
 }
@@ -403,6 +487,85 @@ mod tests {
                 .metadata_quality,
             WindowObservationMetadataQuality::Partial
         );
+    }
+
+    #[test]
+    fn window_list_candidate_allows_looser_list_thresholds() {
+        let candidate = window_list_candidate_v1(&bounds(60, 60), 0, Some(0.01), None);
+
+        assert_eq!(candidate.status, WindowListCandidateStatus::Candidate);
+        assert_eq!(candidate.reason, None);
+        assert_eq!(candidate.thresholds.required_layer, 0);
+        assert_eq!(candidate.thresholds.min_alpha, 0.0);
+        assert_eq!(candidate.thresholds.min_width, 60);
+        assert_eq!(candidate.thresholds.min_height, 60);
+    }
+
+    #[test]
+    fn window_list_candidate_rejects_zero_alpha() {
+        let candidate = window_list_candidate_v1(&bounds(60, 60), 0, Some(0.0), None);
+
+        assert_eq!(candidate.status, WindowListCandidateStatus::Disqualified);
+        assert_eq!(
+            candidate.reason,
+            Some(WindowListDisqualificationReason::AlphaTooLow)
+        );
+    }
+
+    #[test]
+    fn window_list_candidate_rejects_too_small_rows() {
+        let candidate = window_list_candidate_v1(&bounds(59, 60), 0, Some(0.01), None);
+
+        assert_eq!(candidate.status, WindowListCandidateStatus::Disqualified);
+        assert_eq!(
+            candidate.reason,
+            Some(WindowListDisqualificationReason::TooSmall)
+        );
+    }
+
+    #[test]
+    fn window_list_candidate_rejects_own_process_windows_excluded_from_windows_menu() {
+        let candidate = window_list_candidate_v1(
+            &bounds(60, 60),
+            0,
+            Some(0.01),
+            Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu),
+        );
+
+        assert_eq!(candidate.status, WindowListCandidateStatus::Disqualified);
+        assert_eq!(
+            candidate.reason,
+            Some(WindowListDisqualificationReason::OwnProcessExcludedFromWindowsMenu)
+        );
+    }
+
+    #[test]
+    fn window_list_candidate_marks_missing_alpha_unknown() {
+        let candidate = window_list_candidate_v1(&bounds(60, 60), 0, None, None);
+
+        assert_eq!(candidate.status, WindowListCandidateStatus::Unknown);
+        assert_eq!(
+            candidate.reason,
+            Some(WindowListDisqualificationReason::MetadataIncomplete)
+        );
+    }
+
+    #[test]
+    fn window_list_candidate_serializes_camel_case_contract() {
+        let candidate = window_list_candidate_v1(
+            &bounds(60, 60),
+            0,
+            Some(0.01),
+            Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu),
+        );
+        let serialized = serde_json::to_value(candidate).expect("serialize candidate");
+
+        assert_eq!(serialized["status"], "disqualified");
+        assert_eq!(serialized["reason"], "ownProcessExcludedFromWindowsMenu");
+        assert_eq!(serialized["thresholds"]["requiredLayer"], 0);
+        assert_eq!(serialized["thresholds"]["minAlpha"], 0.0);
+        assert_eq!(serialized["thresholds"]["minWidth"], 60);
+        assert_eq!(serialized["thresholds"]["minHeight"], 60);
     }
 
     #[test]
@@ -688,6 +851,15 @@ mod tests {
         assert_eq!(
             computer_use_window_observation_v1(&bounds(120, 90), true, 0, Some(1.0), Some(1))
                 .own_process_window_policy,
+            None
+        );
+    }
+
+    #[test]
+    fn window_observation_initializes_list_candidate_as_none() {
+        assert_eq!(
+            computer_use_window_observation_v1(&bounds(120, 90), true, 0, Some(1.0), Some(1))
+                .list_candidate,
             None
         );
     }

@@ -4,8 +4,8 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::window_observation::{
-    computer_use_window_observation_v1, window_duplicate_groups_v1, window_own_process_policy_v1,
-    window_title_fallbacks_v1, WindowDuplicateObservationInputV1,
+    computer_use_window_observation_v1, window_duplicate_groups_v1, window_list_candidate_v1,
+    window_own_process_policy_v1, window_title_fallbacks_v1, WindowDuplicateObservationInputV1,
     WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
@@ -357,6 +357,16 @@ fn core_graphics_windows_for_pid(
         let mut observation =
             computer_use_window_observation_v1(&bounds, is_on_screen, layer, alpha, sharing_state);
         observation.own_process_window_policy = own_process_window_policy;
+        let own_process_window_policy_status = observation
+            .own_process_window_policy
+            .as_ref()
+            .map(|policy| policy.status.clone());
+        observation.list_candidate = Some(window_list_candidate_v1(
+            &bounds,
+            layer,
+            alpha,
+            own_process_window_policy_status,
+        ));
 
         windows.push(ComputerUseAppWindowInfo {
             native_window_id,
