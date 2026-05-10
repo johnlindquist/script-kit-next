@@ -29,6 +29,7 @@ pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_LIST_NATIVE_WINDOWS_TOOL: &str = "computer/list_native_windows";
 pub const COMPUTER_GET_NATIVE_WINDOW_TOOL: &str = "computer/get_native_window";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
+pub const COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL: &str = "computer/get_frontmost_native_window";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_LIST_MENU_ITEM_PATHS_TOOL: &str = "computer/list_menu_item_paths";
@@ -44,6 +45,7 @@ pub const COMPUTER_GET_PERMISSION_TOOL: &str = "computer/get_permission";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_APP_WINDOWS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_NATIVE_WINDOWS_SCHEMA_VERSION: u32 = 1;
+const COMPUTER_FRONTMOST_NATIVE_WINDOW_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_FRONTMOST_APP_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_MENUS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
@@ -111,6 +113,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "Return one native window for one running GUI application by PID and CoreGraphics window id without focusing, moving, resizing, capturing screenshots, or sending input."
                 .to_string(),
             input_schema: computer_get_app_window_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL.to_string(),
+            description: "Return the current frontmost app's top native window without focusing, activating, launching, quitting, hiding, moving, resizing, capturing screenshots, inspecting AX elements, requesting permissions, enumerating menu extras, exposing action handles, or sending input."
+                .to_string(),
+            input_schema: computer_get_frontmost_native_window_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
@@ -207,6 +215,9 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_NATIVE_WINDOWS_TOOL => handle_list_native_windows(arguments, runtime),
         COMPUTER_GET_NATIVE_WINDOW_TOOL => handle_get_native_window(arguments, runtime),
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
+        COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL => {
+            handle_get_frontmost_native_window(arguments, runtime)
+        }
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
         COMPUTER_LIST_MENU_ITEM_PATHS_TOOL => handle_list_menu_item_paths(arguments),
@@ -391,6 +402,24 @@ struct ComputerUseGetAppWindowResult {
     status: &'static str,
     app: Option<ComputerUseRunningAppInfo>,
     window: Option<ComputerUseAppWindowInfo>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetFrontmostNativeWindowArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetFrontmostNativeWindowResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    frontmost_pid: Option<i32>,
+    app: Option<ComputerUseRunningAppInfo>,
+    window: Option<ComputerUseAppWindowInfo>,
+    window_count: usize,
     warnings: Vec<String>,
 }
 
@@ -1035,6 +1064,84 @@ fn handle_get_app_window(
         }
         Err(error) => error_result(error.error_code(), &error.message()),
     }
+}
+
+fn handle_get_frontmost_native_window(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let _args: ComputerUseGetFrontmostNativeWindowArgs =
+        match serde_json::from_value(arguments.clone()) {
+            Ok(args) => args,
+            Err(error) => return error_result("invalid_arguments", &error.to_string()),
+        };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/get_frontmost_native_window requires the live GPUI runtime bridge to enumerate the frontmost native window safely",
+        );
+    };
+
+    let apps_snapshot = match runtime.list_running_apps(ComputerUseListAppsRequest {
+        include_hidden: true,
+        include_background: true,
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return error_result(error.error_code(), &error.message()),
+    };
+
+    let Some(frontmost_pid) = apps_snapshot.frontmost_pid else {
+        return json_tool_result(&ComputerUseGetFrontmostNativeWindowResult {
+            schema_version: COMPUTER_FRONTMOST_NATIVE_WINDOW_SCHEMA_VERSION,
+            source: "nsWorkspaceRunningApplications+coreGraphicsWindowList",
+            scope: "frontmostNativeWindow",
+            status: "noFrontmostApp",
+            frontmost_pid: None,
+            app: None,
+            window: None,
+            window_count: 0,
+            warnings: Vec::new(),
+        });
+    };
+
+    match runtime.list_app_windows(ComputerUseListAppWindowsRequest { pid: frontmost_pid }) {
+        Ok(snapshot) => {
+            let app = snapshot.app;
+            let window_count = snapshot.windows.len();
+            let window = if app.is_some() {
+                choose_frontmost_native_window(snapshot.windows)
+            } else {
+                None
+            };
+            let status = match (&app, &window) {
+                (None, _) => "appNotFound",
+                (Some(_), Some(_)) => "found",
+                (Some(_), None) => "noWindows",
+            };
+
+            json_tool_result(&ComputerUseGetFrontmostNativeWindowResult {
+                schema_version: COMPUTER_FRONTMOST_NATIVE_WINDOW_SCHEMA_VERSION,
+                source: "nsWorkspaceRunningApplications+coreGraphicsWindowList",
+                scope: "frontmostNativeWindow",
+                status,
+                frontmost_pid: Some(frontmost_pid),
+                app,
+                window,
+                window_count,
+                warnings: snapshot.warnings,
+            })
+        }
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
+fn choose_frontmost_native_window(
+    windows: Vec<ComputerUseAppWindowInfo>,
+) -> Option<ComputerUseAppWindowInfo> {
+    windows
+        .into_iter()
+        .min_by_key(|window| (window.z_order, window.native_window_id))
 }
 
 fn handle_get_frontmost_app(arguments: &Value) -> ToolResult {
@@ -1843,6 +1950,14 @@ fn computer_get_app_window_input_schema() -> Value {
     })
 }
 
+fn computer_get_frontmost_native_window_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_get_frontmost_app_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -2401,6 +2516,85 @@ mod tests {
         }
     }
 
+    struct FrontmostNativeWindowRuntime {
+        frontmost_pid: Option<i32>,
+        missing_app_window_pid: Option<i32>,
+        windows: Vec<ComputerUseAppWindowInfo>,
+    }
+
+    impl ComputerUseRuntimeBridge for FrontmostNativeWindowRuntime {
+        fn inspect_automation_window(
+            &self,
+            _request: ComputerUseInspectRequest,
+        ) -> Result<AutomationInspectSnapshot, ComputerUseRuntimeError> {
+            panic!("computer/get_frontmost_native_window must not inspect automation windows")
+        }
+
+        fn list_running_apps(
+            &self,
+            request: ComputerUseListAppsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert!(request.include_hidden);
+            assert!(request.include_background);
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                    apps: vec![ComputerUseRunningAppInfo {
+                        pid: 101,
+                        bundle_id: Some("com.apple.Terminal".to_string()),
+                        name: "Terminal".to_string(),
+                        is_active: true,
+                        is_hidden: false,
+                        activation_policy: "regular".to_string(),
+                    }],
+                    frontmost_pid: self.frontmost_pid,
+                },
+            )
+        }
+
+        fn list_app_windows(
+            &self,
+            request: ComputerUseListAppWindowsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert_eq!(
+                Some(request.pid),
+                self.frontmost_pid,
+                "frontmost native-window lookup must query only frontmostPid"
+            );
+
+            if self.missing_app_window_pid == Some(request.pid) {
+                return Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                        app: None,
+                        windows: Vec::new(),
+                        warnings: Vec::new(),
+                    },
+                );
+            }
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                    app: Some(ComputerUseRunningAppInfo {
+                        pid: request.pid,
+                        bundle_id: Some("com.apple.Terminal".to_string()),
+                        name: "Terminal".to_string(),
+                        is_active: true,
+                        is_hidden: false,
+                        activation_policy: "regular".to_string(),
+                    }),
+                    windows: self.windows.clone(),
+                    warnings: Vec::new(),
+                },
+            )
+        }
+    }
+
     #[test]
     fn computer_use_tool_definitions_are_registered() {
         let names: Vec<String> = get_computer_use_tool_definitions()
@@ -2421,6 +2615,7 @@ mod tests {
                 COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
+                COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
                 COMPUTER_LIST_MENU_ITEM_PATHS_TOOL.to_string(),
@@ -2728,6 +2923,29 @@ mod tests {
             tool.input_schema.get("required"),
             Some(&serde_json::json!(["pid", "nativeWindowId"]))
         );
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL)
+            .expect("computer/get_frontmost_native_window tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+        assert!(tool.input_schema.get("required").is_none());
     }
 
     #[test]
@@ -3181,6 +3399,18 @@ mod tests {
         let result = handle_computer_use_tool_call(
             COMPUTER_GET_NATIVE_WINDOW_TOOL,
             &serde_json::json!({ "nativeWindowId": 98765 }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_without_runtime_returns_tool_error() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+            &serde_json::json!({}),
             None,
         );
 
@@ -3666,6 +3896,42 @@ mod tests {
         ] {
             let result =
                 handle_computer_use_tool_call(COMPUTER_GET_NATIVE_WINDOW_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({ "pid": 101 }),
+            serde_json::json!({ "nativeWindowId": 98765 }),
+            serde_json::json!({ "includeHidden": true }),
+            serde_json::json!({ "includeBackground": true }),
+            serde_json::json!({ "focus": true }),
+            serde_json::json!({ "activate": true }),
+            serde_json::json!({ "launch": true }),
+            serde_json::json!({ "quit": true }),
+            serde_json::json!({ "hide": true }),
+            serde_json::json!({ "move": true }),
+            serde_json::json!({ "resize": true }),
+            serde_json::json!({ "setBounds": true }),
+            serde_json::json!({ "screenshot": true }),
+            serde_json::json!({ "capture": true }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "press": true }),
+            serde_json::json!({ "execute": true }),
+            serde_json::json!({ "AXPress": true }),
+            serde_json::json!({ "includeGlobalStatusItems": true }),
+        ] {
+            let result = handle_computer_use_tool_call(
+                COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+                &arguments,
+                None,
+            );
 
             assert_eq!(result.is_error, Some(true));
             assert!(result.content[0].text.contains("invalid_arguments"));
@@ -4525,6 +4791,148 @@ mod tests {
     }
 
     #[test]
+    fn choose_frontmost_native_window_prefers_lowest_z_order_then_window_id() {
+        let window = choose_frontmost_native_window(vec![
+            test_native_window(300, 0, "Later id"),
+            test_native_window(200, 0, "Earlier id"),
+            test_native_window(100, 1, "Behind"),
+        ])
+        .expect("frontmost native window");
+
+        assert_eq!(window.native_window_id, 200);
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_returns_lowest_z_order_window() {
+        let runtime = FrontmostNativeWindowRuntime {
+            frontmost_pid: Some(101),
+            missing_app_window_pid: None,
+            windows: vec![
+                test_native_window(98766, 1, "Terminal Settings"),
+                test_native_window(98765, 0, "Terminal"),
+            ],
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_frontmost_native_window json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_FRONTMOST_NATIVE_WINDOW_SCHEMA_VERSION)
+        );
+        assert_eq!(
+            value["source"],
+            "nsWorkspaceRunningApplications+coreGraphicsWindowList"
+        );
+        assert_eq!(value["scope"], "frontmostNativeWindow");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["frontmostPid"], 101);
+        assert_eq!(value["app"]["pid"], 101);
+        assert_eq!(value["window"]["nativeWindowId"], 98765);
+        assert_eq!(value["window"]["title"], "Terminal");
+        assert_eq!(value["windowCount"], 2);
+        assert!(value["warnings"].as_array().unwrap().is_empty());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+            "\"hide\"",
+            "\"move\"",
+            "\"resize\"",
+            "\"setBounds\"",
+            "\"screenshot\"",
+            "\"capture\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_frontmost_native_window result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_returns_no_frontmost_app() {
+        let runtime = FrontmostNativeWindowRuntime {
+            frontmost_pid: None,
+            missing_app_window_pid: None,
+            windows: vec![test_native_window(98765, 0, "Terminal")],
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_frontmost_native_window json");
+        assert_eq!(value["status"], "noFrontmostApp");
+        assert!(value["frontmostPid"].is_null());
+        assert!(value["app"].is_null());
+        assert!(value["window"].is_null());
+        assert_eq!(value["windowCount"], 0);
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_returns_app_not_found() {
+        let runtime = FrontmostNativeWindowRuntime {
+            frontmost_pid: Some(101),
+            missing_app_window_pid: Some(101),
+            windows: Vec::new(),
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_frontmost_native_window json");
+        assert_eq!(value["status"], "appNotFound");
+        assert_eq!(value["frontmostPid"], 101);
+        assert!(value["app"].is_null());
+        assert!(value["window"].is_null());
+        assert_eq!(value["windowCount"], 0);
+    }
+
+    #[test]
+    fn computer_get_frontmost_native_window_returns_no_windows() {
+        let runtime = FrontmostNativeWindowRuntime {
+            frontmost_pid: Some(101),
+            missing_app_window_pid: None,
+            windows: Vec::new(),
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FRONTMOST_NATIVE_WINDOW_TOOL,
+            &serde_json::json!({}),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_frontmost_native_window json");
+        assert_eq!(value["status"], "noWindows");
+        assert_eq!(value["frontmostPid"], 101);
+        assert_eq!(value["app"]["pid"], 101);
+        assert!(value["window"].is_null());
+        assert_eq!(value["windowCount"], 0);
+    }
+
+    #[test]
     fn computer_list_app_windows_requires_runtime() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_APP_WINDOWS_TOOL,
@@ -4921,6 +5329,26 @@ mod tests {
             shortcut: None,
             children,
             ax_element_path: Vec::new(),
+        }
+    }
+
+    fn test_native_window(
+        native_window_id: u32,
+        z_order: u32,
+        title: &str,
+    ) -> ComputerUseAppWindowInfo {
+        ComputerUseAppWindowInfo {
+            native_window_id,
+            title: Some(title.to_string()),
+            bounds: TargetWindowBounds {
+                x: 10,
+                y: 20,
+                width: 300,
+                height: 200,
+            },
+            is_on_screen: true,
+            layer: 0,
+            z_order,
         }
     }
 

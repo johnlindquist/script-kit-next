@@ -727,6 +727,10 @@ mod tests {
             "Should include computer/get_app_window"
         );
         assert!(
+            tool_names.contains(&"computer/get_frontmost_native_window"),
+            "Should include computer/get_frontmost_native_window"
+        );
+        assert!(
             tool_names.contains(&"computer/get_frontmost_app"),
             "Should include computer/get_frontmost_app"
         );
