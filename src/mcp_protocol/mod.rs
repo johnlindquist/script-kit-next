@@ -699,6 +699,10 @@ mod tests {
             "Should include computer/list_windows"
         );
         assert!(
+            tool_names.contains(&"computer/get_focused_window"),
+            "Should include computer/get_focused_window"
+        );
+        assert!(
             tool_names.contains(&"computer/list_apps"),
             "Should include computer/list_apps"
         );
@@ -852,6 +856,42 @@ mod tests {
             serde_json::json!(crate::protocol::AUTOMATION_WINDOW_SCHEMA_VERSION)
         );
         assert!(value["windows"].is_array());
+        Ok(())
+    }
+
+    #[test]
+    fn test_tools_call_computer_get_focused_window_does_not_require_runtime() -> anyhow::Result<()>
+    {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(50),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/get_focused_window",
+                "arguments": {}
+            }),
+        };
+
+        let response = handle_tools_call_with_runtime(request, &[], None);
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(result.get("isError"), None);
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(crate::protocol::AUTOMATION_WINDOW_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "automationWindowRegistry");
+        assert_eq!(value["scope"], "focusedAutomationWindow");
+        assert!(value["status"] == "focused" || value["status"] == "noFocusedWindow");
         Ok(())
     }
 

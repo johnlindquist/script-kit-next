@@ -20,6 +20,7 @@ use serde_json::Value;
 pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
+pub const COMPUTER_GET_FOCUSED_WINDOW_TOOL: &str = "computer/get_focused_window";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
@@ -46,6 +47,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List registered Script Kit automation windows without interacting with them."
                 .to_string(),
             input_schema: computer_list_windows_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_GET_FOCUSED_WINDOW_TOOL.to_string(),
+            description: "Return the focused Script Kit automation window from the automation registry without screenshots, native focus changes, or runtime inspection."
+                .to_string(),
+            input_schema: computer_get_focused_window_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_APPS_TOOL.to_string(),
@@ -98,6 +105,7 @@ pub fn handle_computer_use_tool_call(
     match name {
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
+        COMPUTER_GET_FOCUSED_WINDOW_TOOL => handle_get_focused_window(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
@@ -122,6 +130,22 @@ struct ComputerUseListWindowsResult {
     windows: Vec<AutomationWindowInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     focused_window_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetFocusedWindowArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetFocusedWindowResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    focused_window_id: Option<String>,
+    window: Option<AutomationWindowInfo>,
+    warnings: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -276,6 +300,30 @@ fn handle_list_windows(arguments: &Value) -> ToolResult {
         schema_version: AUTOMATION_WINDOW_SCHEMA_VERSION,
         windows: crate::windows::list_automation_windows(),
         focused_window_id: crate::windows::focused_automation_window_id(),
+    })
+}
+
+fn handle_get_focused_window(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseGetFocusedWindowArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let window = crate::windows::focused_automation_window();
+    let focused_window_id = window.as_ref().map(|window| window.id.clone());
+
+    json_tool_result(&ComputerUseGetFocusedWindowResult {
+        schema_version: AUTOMATION_WINDOW_SCHEMA_VERSION,
+        source: "automationWindowRegistry",
+        scope: "focusedAutomationWindow",
+        status: if window.is_some() {
+            "focused"
+        } else {
+            "noFocusedWindow"
+        },
+        focused_window_id,
+        window,
+        warnings: Vec::new(),
     })
 }
 
@@ -646,6 +694,14 @@ fn computer_list_windows_input_schema() -> Value {
     })
 }
 
+fn computer_get_focused_window_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 fn computer_list_apps_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -811,6 +867,7 @@ mod tests {
             vec![
                 COMPUTER_SEE_TOOL.to_string(),
                 COMPUTER_LIST_WINDOWS_TOOL.to_string(),
+                COMPUTER_GET_FOCUSED_WINDOW_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
@@ -842,6 +899,28 @@ mod tests {
             .into_iter()
             .find(|tool| tool.name == COMPUTER_LIST_WINDOWS_TOOL)
             .expect("computer/list_windows tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_get_focused_window_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_FOCUSED_WINDOW_TOOL)
+            .expect("computer/get_focused_window tool");
 
         assert_eq!(
             tool.input_schema
@@ -1123,6 +1202,24 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_focused_window_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!({ "target": { "type": "focused" } }),
+            serde_json::json!({ "focus": true }),
+            serde_json::json!({ "activate": true }),
+            serde_json::json!({ "refresh": true }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "id": "main" }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_GET_FOCUSED_WINDOW_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_apps_rejects_bad_arguments() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_APPS_TOOL,
@@ -1262,6 +1359,73 @@ mod tests {
         assert_eq!(window["kind"], "notes");
         assert_eq!(window["visible"], true);
         assert_eq!(window["semanticSurface"], "notes");
+    }
+
+    #[test]
+    fn computer_get_focused_window_returns_registry_snapshot_without_runtime() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let id = format!("mcp-focused-window-test-{nonce}");
+
+        crate::windows::upsert_automation_window(AutomationWindowInfo {
+            id: id.clone(),
+            kind: AutomationWindowKind::Notes,
+            title: Some("MCP Focused Window Test".to_string()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("notes".to_string()),
+            bounds: Some(AutomationWindowBounds {
+                x: 10.0,
+                y: 20.0,
+                width: 300.0,
+                height: 200.0,
+            }),
+            parent_window_id: None,
+            parent_kind: None,
+        });
+        assert!(crate::windows::set_automation_focus(&id));
+
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_FOCUSED_WINDOW_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
+
+        crate::windows::remove_automation_window(&id);
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_focused_window json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(AUTOMATION_WINDOW_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "automationWindowRegistry");
+        assert_eq!(value["scope"], "focusedAutomationWindow");
+        assert_eq!(value["status"], "focused");
+        assert_eq!(value["focusedWindowId"], id);
+        assert_eq!(value["window"]["id"], id);
+        assert_eq!(value["window"]["kind"], "notes");
+        assert_eq!(value["window"]["visible"], true);
+        assert_eq!(value["window"]["semanticSurface"], "notes");
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_focused_window result must not expose executable fields; found {forbidden}"
+            );
+        }
     }
 
     #[test]
