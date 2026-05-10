@@ -268,7 +268,12 @@ impl ScriptListApp {
             );
         }
 
-        if self.computed_filter_text.is_empty() {
+        let should_refresh_root_recent_files = self.computed_filter_text.is_empty()
+            || matches!(
+                self.root_file_search_mode,
+                Some(crate::file_search::RootFileSectionMode::GlobalQuery)
+            );
+        if should_refresh_root_recent_files {
             self.refresh_root_recent_file_results();
         }
 
