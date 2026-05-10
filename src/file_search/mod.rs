@@ -215,6 +215,15 @@ pub fn root_directory_query_base(query: &str) -> Option<String> {
     Some(q[..=last_slash].to_string())
 }
 
+/// Return the provider identity for a root directory-browse query.
+///
+/// The visible query may include a child fragment after the final slash, but
+/// the source provider is only the containing directory plus hidden-file mode.
+pub fn root_directory_browse_source_key(query: &str) -> Option<(String, bool)> {
+    let parsed = parse_directory_path(query)?;
+    Some((parsed.directory, parsed.show_hidden))
+}
+
 /// Returns the root file section mode implied by a query's syntax.
 pub fn root_file_section_mode_for_query(query: &str) -> Option<RootFileSectionMode> {
     if should_search_root_files(query) {
@@ -872,6 +881,47 @@ mod tests {
             root_file_section_mode_for_query("fix"),
             Some(RootFileSectionMode::GlobalQuery)
         );
+    }
+
+    #[test]
+    fn root_directory_browse_source_key_ignores_child_fragments() {
+        let root =
+            std::env::temp_dir().join(format!("script-kit-root-source-key-{}", std::process::id()));
+        let nested = root.join("nested");
+        std::fs::create_dir_all(&nested).expect("create temp root directory");
+
+        let base = format!("{}/", nested.display());
+        let with_fragment = format!("{base}al");
+
+        let base_key = root_directory_browse_source_key(&base);
+        let fragment_key = root_directory_browse_source_key(&with_fragment);
+
+        assert_eq!(base_key, fragment_key);
+        assert_eq!(
+            base_key,
+            Some((nested.to_string_lossy().into_owned(), false))
+        );
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn root_directory_browse_source_key_keeps_hidden_mode() {
+        let root = std::env::temp_dir().join(format!(
+            ".script-kit-root-source-key-hidden-{}",
+            std::process::id()
+        ));
+        let nested = root.join("nested");
+        std::fs::create_dir_all(&nested).expect("create hidden temp root directory");
+
+        let query = format!("{}/al", nested.display());
+
+        assert_eq!(
+            root_directory_browse_source_key(&query),
+            Some((nested.to_string_lossy().into_owned(), true))
+        );
+
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

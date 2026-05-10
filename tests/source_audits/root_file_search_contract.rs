@@ -333,6 +333,40 @@ mod tests {
     }
 
     #[test]
+    fn root_directory_child_fragment_edits_reuse_active_provider() {
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let normalized = root_source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            file_search_source.contains("pub fn root_directory_browse_source_key(")
+                && file_search_source.contains("parse_directory_path(query)?")
+                && file_search_source.contains("Some((parsed.directory, parsed.show_hidden))"),
+            "file search should expose a provider key based on directory plus hidden-file mode"
+        );
+        assert!(
+            root_source.contains("fn active_root_directory_browse_source_matches(")
+                && root_source.contains(
+                    "root_directory_browse_source_key(&self.root_file_search_query)"
+                ),
+            "root app layer should compare active directory-browse provider identity separately from the visible query"
+        );
+        assert!(
+            normalized.contains(
+                "RootFileSearchRequest::DirectoryBrowse { query, directory, show_hidden, } if self.active_root_directory_browse_source_matches(directory, *show_hidden)"
+            ) && normalized.contains("self.root_file_search_query = query.clone();")
+                && normalized.contains("self.refresh_root_file_grouping_after_query_only_change(cx);"),
+            "directory child-fragment edits should only update the visible query and regroup cached rows"
+        );
+        assert!(
+            !normalized.contains("app.root_file_search_query != query_for_task"),
+            "directory listings should be allowed to complete after the visible child fragment changes"
+        );
+    }
+
+    #[test]
     fn root_directory_tab_navigation_precedes_plain_tab_acp_routing() {
         for path in [
             "src/app_impl/startup.rs",

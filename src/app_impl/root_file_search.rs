@@ -22,7 +22,9 @@ impl RootFileSearchRequest {
     fn mode(&self) -> crate::file_search::RootFileSectionMode {
         match self {
             Self::GlobalQuery { .. } => crate::file_search::RootFileSectionMode::GlobalQuery,
-            Self::DirectoryBrowse { .. } => crate::file_search::RootFileSectionMode::DirectoryBrowse,
+            Self::DirectoryBrowse { .. } => {
+                crate::file_search::RootFileSectionMode::DirectoryBrowse
+            }
         }
     }
 }
@@ -69,6 +71,34 @@ impl ScriptListApp {
         if let Some(cancel) = self.root_file_search_cancel.take() {
             cancel.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+    }
+
+    fn active_root_directory_browse_source_matches(
+        &self,
+        directory: &str,
+        show_hidden: bool,
+    ) -> bool {
+        if self.root_file_search_mode
+            != Some(crate::file_search::RootFileSectionMode::DirectoryBrowse)
+        {
+            return false;
+        }
+
+        crate::file_search::root_directory_browse_source_key(&self.root_file_search_query)
+            .map(|(active_directory, active_show_hidden)| {
+                active_directory == directory && active_show_hidden == show_hidden
+            })
+            .unwrap_or(false)
+    }
+
+    fn refresh_root_file_grouping_after_query_only_change(&mut self, cx: &mut Context<Self>) {
+        self.invalidate_grouped_cache();
+        if matches!(self.current_view, AppView::ScriptList) {
+            self.sync_list_state_for_filter_replacement();
+            self.validate_selection_bounds(cx);
+            self.rebuild_main_window_preflight_if_needed();
+        }
+        cx.notify();
     }
 
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
@@ -121,9 +151,25 @@ impl ScriptListApp {
         };
 
         let mode = request.mode();
-        if self.root_file_search_query == request.query() && self.root_file_search_mode == Some(mode)
-        {
-            return;
+        match &request {
+            RootFileSearchRequest::GlobalQuery { .. }
+                if self.root_file_search_query == request.query()
+                    && self.root_file_search_mode == Some(mode) =>
+            {
+                return;
+            }
+            RootFileSearchRequest::DirectoryBrowse {
+                query,
+                directory,
+                show_hidden,
+            } if self.active_root_directory_browse_source_matches(directory, *show_hidden) => {
+                if self.root_file_search_query != *query {
+                    self.root_file_search_query = query.clone();
+                    self.refresh_root_file_grouping_after_query_only_change(cx);
+                }
+                return;
+            }
+            _ => {}
         }
 
         self.cancel_root_file_search();
@@ -137,7 +183,6 @@ impl ScriptListApp {
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_file_search_cancel = Some(cancel.clone());
-        let query_for_task = request.query().to_string();
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -205,9 +250,7 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
-                    if app.root_file_search_generation != generation
-                        || app.root_file_search_query != query_for_task
-                    {
+                    if app.root_file_search_generation != generation {
                         return;
                     }
 
