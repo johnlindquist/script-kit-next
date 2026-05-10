@@ -1167,7 +1167,7 @@ app.run(move |cx: &mut App| {
         }).detach();
 
         // Script/Scriptlet/App hotkey listener - event-driven via async_channel
-        // Handles shortcuts from shortcuts.json for scriptlets, builtins, and apps
+        // Handles config.ts and metadata shortcuts for scriptlets, builtins, and apps
         let app_entity_for_scripts = app_entity.clone();
         let window_for_scripts = window;
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
@@ -2507,8 +2507,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                         if let Some(action_id) = action_id {
                                                             logging::log("ACTIONS", &format!("SimulateKey: Executing action: {} (close={})", action_id, should_close));
                                                             if should_close {
-                                                                view.show_actions_popup = false;
-                                                                view.actions_dialog = None;
+                                                                view.mark_actions_popup_closed();
                                                                 view.focused_input = FocusedInput::ArgPrompt;
                                                                 window.focus(&view.focus_handle, ctx);
                                                             }
@@ -2517,8 +2516,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     }
                                                     "escape" => {
                                                         logging::log("STDIN", "SimulateKey: Escape - close actions dialog");
-                                                        view.show_actions_popup = false;
-                                                        view.actions_dialog = None;
+                                                        view.mark_actions_popup_closed();
                                                         view.focused_input = FocusedInput::ArgPrompt;
                                                         window.focus(&view.focus_handle, ctx);
                                                     }

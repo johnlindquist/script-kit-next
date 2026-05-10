@@ -160,7 +160,7 @@ impl ScriptListApp {
         });
 
         self.actions_dialog = Some(dialog);
-        self.show_actions_popup = true;
+        self.mark_actions_popup_opening();
         self.path_prompt_update_actions_showing(true, "handle_show_path_actions");
         self.path_prompt_sync_actions_search_from_dialog(cx, "handle_show_path_actions");
         cx.notify();
@@ -169,8 +169,7 @@ impl ScriptListApp {
     /// Close path actions dialog - called from PathPrompt callback or key handler.
     fn handle_close_path_actions(&mut self, cx: &mut Context<Self>) {
         logging::log("UI", "handle_close_path_actions called");
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.mark_actions_popup_closed();
         self.path_prompt_update_actions_showing(false, "handle_close_path_actions");
         self.path_prompt_update_actions_search_text("", "handle_close_path_actions");
         cx.notify();
