@@ -152,7 +152,7 @@ pub(super) fn build_search_mode_results(
         // Append fallback items to the results vec and add their indices to grouped
         for fallback in fallbacks {
             let idx = results.len();
-            results.push(SearchResult::Fallback(FallbackMatch { fallback, score: 0 }));
+            results.push(SearchResult::Fallback(FallbackMatch::new(fallback, 0)));
             grouped.push(GroupedListItem::Item(idx));
         }
     }

@@ -17,7 +17,7 @@ fn fallback_keeps_window_open(fallback: &crate::fallbacks::FallbackItem) -> bool
         crate::fallbacks::FallbackItem::Builtin(builtin) => matches!(
             builtin.id,
             "run-in-terminal"
-                | "search-files"
+                | crate::fallbacks::builtins::SEARCH_FILES_FALLBACK_ID
                 | crate::fallbacks::builtins::DO_IN_CURRENT_APP_FALLBACK_ID
                 | crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
         ),
@@ -695,6 +695,20 @@ impl ScriptListApp {
     /// This is called from keyboard handler, so we need to defer window access
     pub fn execute_selected_fallback(&mut self, cx: &mut Context<Self>) {
         if self.should_ignore_selection_event_during_main_menu_open_guard() {
+            return;
+        }
+
+        if let Some(scripts::SearchResult::Fallback(fallback_match)) =
+            self.selected_main_list_search_result_owned()
+        {
+            logging::log(
+                "EXEC",
+                &format!(
+                    "Executing selected grouped fallback: {}",
+                    fallback_match.display_name()
+                ),
+            );
+            self.execute_fallback_item(&fallback_match.fallback, cx);
             return;
         }
 

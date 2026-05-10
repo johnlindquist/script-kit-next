@@ -658,10 +658,9 @@ fn render_focused_info_for_result(
         }
 
         scripts::SearchResult::Fallback(fallback_match) => {
-            let fallback = &fallback_match.fallback;
-            let fallback_name = fallback.display_name();
-            let fallback_label = fallback.display_label();
-            let fallback_description = fallback.display_description();
+            let fallback_name = fallback_match.display_name();
+            let fallback_label = fallback_match.display_label();
+            let fallback_description = fallback_match.display_description();
 
             // Source indicator
             let mut path_div = div()
@@ -1115,7 +1114,7 @@ impl ScriptListApp {
                         )
                     }
                     scripts::SearchResult::Fallback(m) => {
-                        let fallback_name = m.fallback.display_name();
+                        let fallback_name = m.display_name();
                         // Fallbacks use their name as identifier
                         // is_script depends on whether it's a built-in fallback or script-based
                         // Fallbacks don't track frecency, so is_suggested is always false

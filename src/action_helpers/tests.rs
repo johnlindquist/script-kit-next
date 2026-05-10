@@ -121,8 +121,8 @@ fn make_window_match() -> WindowMatch {
 }
 
 fn make_fallback_match() -> FallbackMatch {
-    FallbackMatch {
-        fallback: FallbackItem::Builtin(BuiltinFallback {
+    FallbackMatch::new(
+        FallbackItem::Builtin(BuiltinFallback {
             id: "search_google",
             name: "Search Google",
             description: "Search Google for query",
@@ -132,8 +132,8 @@ fn make_fallback_match() -> FallbackMatch {
             enabled: true,
             priority: 0,
         }),
-        score: 0,
-    }
+        0,
+    )
 }
 
 // Tests for extract_path_for_reveal

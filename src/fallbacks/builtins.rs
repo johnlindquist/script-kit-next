@@ -77,6 +77,8 @@ pub const SEND_TO_AI_FALLBACK_DESCRIPTION: &str =
     "Open Agent Chat and immediately submit the current input";
 /// Fallback ID for the current-app action.
 pub const DO_IN_CURRENT_APP_FALLBACK_ID: &str = "builtin/do-in-current-app";
+/// Fallback ID for opening the dedicated File Search view with the current query.
+pub const SEARCH_FILES_FALLBACK_ID: &str = "search-files";
 const DO_IN_CURRENT_APP_FALLBACK_LABEL: &str = "Do This in Current App";
 const DO_IN_CURRENT_APP_FALLBACK_DESCRIPTION: &str =
     "Use the current app's menu commands or generate a Script Kit automation from its live context";
@@ -354,7 +356,7 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
         },
         // Search Files - high priority, always available
         BuiltinFallback {
-            id: "search-files",
+            id: SEARCH_FILES_FALLBACK_ID,
             name: "Search Files",
             description: "Search for files matching this query",
             icon: "folder-search",

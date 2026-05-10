@@ -240,6 +240,49 @@ pub struct FallbackMatch {
     pub fallback: FallbackItem,
     /// Score is always 0 for fallbacks (they sort by priority, not score)
     pub score: i32,
+    /// Optional row title override for synthetic fallback placements.
+    pub title_override: Option<String>,
+    /// Optional row description override for synthetic fallback placements.
+    pub description_override: Option<String>,
+}
+
+impl FallbackMatch {
+    pub fn new(fallback: FallbackItem, score: i32) -> Self {
+        Self {
+            fallback,
+            score,
+            title_override: None,
+            description_override: None,
+        }
+    }
+
+    pub fn with_display_overrides(
+        mut self,
+        title: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
+        self.title_override = Some(title.into());
+        self.description_override = Some(description.into());
+        self
+    }
+
+    pub fn display_label(&self) -> String {
+        self.title_override
+            .clone()
+            .unwrap_or_else(|| self.fallback.display_label())
+    }
+
+    pub fn display_name(&self) -> String {
+        self.title_override
+            .clone()
+            .unwrap_or_else(|| self.fallback.display_name())
+    }
+
+    pub fn display_description(&self) -> String {
+        self.description_override
+            .clone()
+            .unwrap_or_else(|| self.fallback.display_description())
+    }
 }
 
 /// Represents a scored local file result surfaced in root launcher search.
@@ -294,7 +337,10 @@ impl SearchResult {
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::Agent(am) => &am.agent.name,
-            SearchResult::Fallback(fm) => fm.fallback.name(),
+            SearchResult::Fallback(fm) => fm
+                .title_override
+                .as_deref()
+                .unwrap_or_else(|| fm.fallback.name()),
             SearchResult::ScriptIssue(issue) => &issue.title,
         }
     }
@@ -316,7 +362,10 @@ impl SearchResult {
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
-            SearchResult::Fallback(fm) => Some(fm.fallback.description()),
+            SearchResult::Fallback(fm) => fm
+                .description_override
+                .as_deref()
+                .or_else(|| Some(fm.fallback.description())),
             SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
         }
     }
