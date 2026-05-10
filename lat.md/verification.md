@@ -6,6 +6,8 @@ This repo prefers the smallest runtime-backed verification that proves a change.
 
 `make smoke-main-menu` is the repo's fast launcher and footer smoke target. Use it for main window, footer, built-in menu, and plugin-skill routing changes.
 
+Native footer click-box changes need a real native click on empty space inside a visible footer item, plus a negative click or wheel over non-button footer background. Source-contract tests alone are not sufficient because AppKit hit testing can fail before GPUI state changes.
+
 ## Targeted checks
 
 Use the smallest check that exercises the touched code:
@@ -66,11 +68,21 @@ Checks must prove that root Notes search excludes empty, short, newline, disable
 
 Use `cargo test --test source_audits root_unified_notes_contract -- --nocapture` with the existing root file, ACP history, and clipboard history audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Because Enter crosses from the launcher to a separate Notes window, add a narrow state-first runtime proof when validating the live surface.
 
+## Root Unified Search Browser History
+
+Browser History root rows are verified as opt-in, metadata-only, and passive.
+
+Checks must prove that root Browser History search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only local URL/title/visit metadata from bounded copied Chromium history DBs; rejects non-HTTP(S) schemes; performs no favicon, cookie, download, content, or network reads; inserts after AI Conversations and before fallback handoff rows; keys rows by `browser-history/...`; and opens through the safe URL helper.
+
+Use `cargo test --test source_audits root_unified_browser_history_contract -- --nocapture` with the existing root file, notes, clipboard history, and ACP history audits, plus `cargo check --lib`, `cargo build`, `cargo fmt --check`, `git diff --check`, and `lat check`.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.
 
 For `computer/capture_native_window`, first call `computer/list_native_windows` and select a row whose `observation.captureSelectionCandidate.status` is `candidate`; then call `computer/capture_native_window` with `pid`, `nativeWindowId`, and `expectedBundleId`. The primary proof is the receipt: `status:"captured"`, stable `correlationId`, non-empty SHA-256, positive byte length/dimensions, and `pixelAudit.blankLike:false`. When `includeImage:true`, decode `pngBase64`, verify PNG magic bytes, decoded byte length, and SHA-256. Negative proof should include wrong `expectedBundleId` -> `ownershipMismatch`, stale or missing `nativeWindowId` -> `windowNotFound`, unknown input fields -> `invalid_arguments`, and a non-candidate listed row -> `notCaptureCandidate` when the current runtime exposes one; all negative capture receipts must keep `capture:null`.
+
+SDK scriptability is pinned separately by `tests/source_audits/sdk_computer_use_contract.rs`: the SDK must expose typed `computer.listNativeWindows()` and `computer.captureNativeWindow()` helpers, discover the app server from `~/.scriptkit/server.json`, call `/rpc` with the bearer token, and keep the public `computer` namespace observation/capture-only.
 
 ## Oracle Bundle Context
 

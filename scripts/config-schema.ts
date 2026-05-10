@@ -1299,7 +1299,14 @@ export interface Config extends BaseConfig {
    * handoff rows, but they do not promote above commands, scripts, apps, or
    * skills unless an explicit promotion policy is configured.
    *
- * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" }, notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true }, acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 } }
+   * @default {
+   *   enabled: true,
+   *   files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" },
+   *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
+   *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
+   *   clipboardHistory: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
+   *   browserHistory: { enabled: false, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
+   * }
    * @example
    * ```typescript
    * unifiedSearch: {
@@ -1500,6 +1507,8 @@ export interface UnifiedSearchConfig {
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for opt-in passive root clipboard history rows. */
   clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
+  /** Controls for opt-in passive root browser history rows. */
+  browserHistory?: UnifiedSearchBrowserHistoryConfig;
 }
 
 export interface UnifiedSearchFilesConfig {
@@ -1549,6 +1558,23 @@ export interface UnifiedSearchClipboardHistoryConfig {
   minQueryChars?: number;
   /** Recent metadata rows to scan without reading raw clipboard content. Clamped to 25-1000. */
   scanLimit?: number;
+}
+
+export type BrowserHistoryProvider = "arc" | "chrome" | "brave" | "edge";
+
+export interface UnifiedSearchBrowserHistoryConfig {
+  /** Enable browser history rows in root launcher search. Disabled by default. */
+  enabled?: boolean;
+  /** Maximum number of browser history rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before browser history rows appear. Clamped to 4-32. */
+  minQueryChars?: number;
+  /** Maximum browser history age to read, in days. Clamped to 1-365. */
+  maxAgeDays?: number;
+  /** Chromium-family providers to scan. Safari and Firefox are intentionally excluded here. */
+  providers?: BrowserHistoryProvider[];
+  /** Match URLs in addition to titles. Page content is never searched. */
+  searchUrls?: boolean;
 }
 
 // =============================================================================

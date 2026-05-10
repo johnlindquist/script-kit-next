@@ -31,11 +31,12 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 // Re-export types that are used externally
 #[allow(unused_imports)]
 pub use types::{
-    AcpProfile, AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
-    HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
-    McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SuggestedConfig,
-    ThemeSelectionPreferences, UnifiedSearchAcpHistoryConfig, UnifiedSearchConfig,
-    UnifiedSearchFilesConfig, WatcherConfig, WindowManagementPreferences,
+    AcpProfile, AiPreferences, BrowserHistoryProvider, BuiltInConfig, ClaudeCodeConfig, Config,
+    DictationPreferences, HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig,
+    McpServerConfig, McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences,
+    SuggestedConfig, ThemeSelectionPreferences, UnifiedSearchAcpHistoryConfig,
+    UnifiedSearchBrowserHistoryConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,
+    WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader

@@ -404,6 +404,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             enabled: false,
             ..Default::default()
         },
+        &[],
+        crate::browser_history::RootBrowserHistorySectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
     )
 }
 
@@ -434,6 +439,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    root_browser_history_hits: &[crate::browser_history::RootBrowserHistorySearchHit],
+    root_browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
@@ -494,6 +501,14 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         advanced_query,
         root_acp_history_hits,
         root_acp_history_options,
+    );
+    append_root_browser_history_section(
+        &mut grouped,
+        &mut flat_results,
+        filter_text,
+        advanced_query,
+        root_browser_history_hits,
+        root_browser_history_options,
     );
 
     (grouped, flat_results)
@@ -632,6 +647,43 @@ fn append_root_clipboard_history_section(
         .collect::<Vec<_>>();
 
     append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
+}
+
+fn append_root_browser_history_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::browser_history::RootBrowserHistorySearchHit],
+    options: crate::browser_history::RootBrowserHistorySectionOptions,
+) {
+    if advanced_query.is_some()
+        || !crate::browser_history::root_browser_history_query_is_eligible(
+            filter_text,
+            options.clone(),
+        )
+    {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(options.max_results)
+        .enumerate()
+        .map(|(rank, hit)| {
+            let time = crate::formatting::format_relative_time_short_millis(hit.last_visit_unix_ms);
+            SearchResult::BrowserHistory(crate::scripts::BrowserHistoryMatch {
+                hit: hit.clone(),
+                subtitle: format!(
+                    "{} · {}/{} · {}",
+                    hit.domain, hit.provider_label, hit.profile_label, time
+                ),
+                score: i32::MAX.saturating_sub(rank as i32),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    append_root_passive_section(grouped, flat_results, "Browser History", rows);
 }
 
 fn append_recent_root_file_section(

@@ -14,6 +14,7 @@ pub enum ArtifactKind {
     Note,
     AcpHistory,
     ClipboardHistory,
+    BrowserHistory,
     Fallback,
     Issue,
 }
@@ -34,6 +35,7 @@ impl ArtifactKind {
                 Some(Self::AcpHistory)
             }
             "clipboard" | "clipboard-history" | "clipboardhistory" => Some(Self::ClipboardHistory),
+            "browser" | "browser-history" | "browserhistory" | "web" => Some(Self::BrowserHistory),
             "fallback" | "fallbacks" => Some(Self::Fallback),
             "issue" | "issues" | "scriptissue" | "script-issue" => Some(Self::Issue),
             _ => None,
