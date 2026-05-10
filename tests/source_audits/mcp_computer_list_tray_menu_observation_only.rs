@@ -1,0 +1,86 @@
+// @lat: [[protocol#Protocol#Tool exposure]]
+#[test]
+fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
+    let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")
+        .expect("read mcp_computer_use_tools.rs");
+    let tray = std::fs::read_to_string("src/tray/mod.rs").expect("read tray/mod.rs");
+
+    assert!(
+        mcp_tools.contains("COMPUTER_LIST_TRAY_MENU_TOOL"),
+        "computer/list_tray_menu must be registered through the computer-use MCP tool module"
+    );
+    assert!(
+        mcp_tools.contains("fn handle_list_tray_menu("),
+        "computer/list_tray_menu must have a dedicated handler"
+    );
+    assert!(
+        mcp_tools.contains("computer_list_tray_menu_input_schema"),
+        "computer/list_tray_menu must expose a closed input schema"
+    );
+    assert!(
+        tray.contains("pub(crate) fn tray_menu_observation_snapshot("),
+        "tray menu observation must be built by a pure model/state snapshot helper"
+    );
+
+    let handler_body = extract_function_body(&mcp_tools, "fn handle_list_tray_menu(");
+    for needle in [
+        "MenuEvent::receiver",
+        "action_from_event",
+        "handle_action",
+        "Command::new(\"open\")",
+        "AXUIElement",
+        "CGEvent",
+        "request_accessibility_permission",
+        "CGRequestScreenCaptureAccess",
+        "get_menu_bar_for_pid",
+        "window_control",
+        "click",
+        "execute",
+    ] {
+        assert!(
+            !handler_body.contains(needle),
+            "computer/list_tray_menu handler must not open, click, execute, prompt, or enumerate native windows; found {}",
+            needle
+        );
+    }
+
+    let helper_body = extract_function_body(&tray, "pub(crate) fn tray_menu_observation_snapshot(");
+    for needle in [
+        "set_text",
+        "set_enabled",
+        "set_menu",
+        ".append(",
+        "MenuEvent",
+        "handle_action",
+        "Command::new(\"open\")",
+        "AXUIElement",
+        "CGEvent",
+    ] {
+        assert!(
+            !helper_body.contains(needle),
+            "tray_menu_observation_snapshot must remain a pure model/state read; found {}",
+            needle
+        );
+    }
+}
+
+fn extract_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source.find(signature).expect("function signature");
+    let open = source[start..].find('{').expect("function open brace") + start;
+    let mut depth = 0usize;
+
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("function body for {} did not close", signature)
+}

@@ -707,6 +707,10 @@ mod tests {
             "Should include computer/list_menus"
         );
         assert!(
+            tool_names.contains(&"computer/list_tray_menu"),
+            "Should include computer/list_tray_menu"
+        );
+        assert!(
             tool_names.contains(&"computer/list_screens"),
             "Should include computer/list_screens"
         );
@@ -768,6 +772,18 @@ mod tests {
                         frontmost_pid: None,
                     },
                 )
+            }
+
+            fn list_tray_menu(
+                &self,
+            ) -> Result<
+                crate::tray::TrayMenuObservation,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                Ok(crate::tray::tray_menu_observation_snapshot(
+                    &crate::updates::UpdateState::Idle,
+                    false,
+                ))
             }
         }
 
@@ -864,6 +880,37 @@ mod tests {
         assert_eq!(value["source"], "frontmostAppTrackerCache");
         assert!(value["cache"].is_object());
         assert!(value["menus"].is_array());
+        Ok(())
+    }
+
+    #[test]
+    fn test_tools_call_computer_list_tray_menu_requires_runtime() -> anyhow::Result<()> {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(48),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/list_tray_menu",
+                "arguments": {}
+            }),
+        };
+
+        let response = handle_tools_call_with_runtime(request, &[], None);
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(
+            result.get("isError").and_then(|value| value.as_bool()),
+            Some(true)
+        );
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        assert!(text.contains("runtime_unavailable"));
         Ok(())
     }
 

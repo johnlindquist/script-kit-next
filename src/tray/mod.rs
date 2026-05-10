@@ -7,6 +7,7 @@
 // --- merged from part_000.rs ---
 use crate::updates::UpdateState;
 use anyhow::{bail, Context, Result};
+use std::sync::LazyLock;
 use std::sync::{Arc, RwLock};
 use tray_icon::{
     menu::{
@@ -20,6 +21,61 @@ use tray_icon::{
 /// URLs the tray menu opens. Centralised so callers and tests stay in sync.
 pub use crate::branding::{LOGO_SVG, URL_DISCORD, URL_FOLLOW_US, URL_GITHUB};
 pub const URL_FEEDBACK: &str = "https://github.com/johnlindquist/script-kit-next/issues/new";
+const TRAY_MENU_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuObservation {
+    pub schema_version: u32,
+    pub source: &'static str,
+    pub owner: TrayMenuOwnerObservation,
+    pub sections: Vec<TrayMenuSectionObservation>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuOwnerObservation {
+    pub kind: &'static str,
+    pub name: &'static str,
+    pub scope: &'static str,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuSectionObservation {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub items: Vec<TrayMenuItemObservation>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuItemObservation {
+    pub id: &'static str,
+    pub title: String,
+    pub enabled: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shortcut: Option<TrayMenuShortcutObservation>,
+    pub title_source: &'static str,
+    pub destination_kind: &'static str,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrayMenuShortcutObservation {
+    pub display: Option<String>,
+    pub source: &'static str,
+}
+
+#[derive(Clone)]
+struct TrayMenuObservationSource {
+    update_state: Arc<RwLock<UpdateState>>,
+    launcher_shortcut_configured: bool,
+}
+
+static TRAY_MENU_OBSERVATION_SOURCE: LazyLock<RwLock<Option<TrayMenuObservationSource>>> =
+    LazyLock::new(|| RwLock::new(None));
 /// Renders an SVG string to RGBA pixel data with validation.
 ///
 /// # Arguments
@@ -274,6 +330,7 @@ impl TrayManager {
         main_shortcut: Option<Accelerator>,
     ) -> Result<Self> {
         let icon = Self::create_icon_from_svg()?;
+        let launcher_shortcut_configured = main_shortcut.is_some();
         let (menu, current_app_commands_item, version_item) =
             Self::create_menu(&update_state, main_shortcut)?;
 
@@ -304,6 +361,8 @@ impl TrayManager {
         }
 
         let tray_icon = builder.build().context("Failed to create tray icon")?;
+
+        store_tray_menu_observation_source(Arc::clone(&update_state), launcher_shortcut_configured);
 
         Ok(Self {
             tray_icon,
@@ -629,6 +688,241 @@ impl TrayManager {
     pub fn update_state_handle(&self) -> Arc<RwLock<UpdateState>> {
         Arc::clone(&self.update_state)
     }
+
+    pub fn observation_snapshot(&self) -> TrayMenuObservation {
+        tray_menu_observation_snapshot(
+            &self.update_state_snapshot(),
+            self.main_shortcut_configured(),
+        )
+    }
+
+    fn main_shortcut_configured(&self) -> bool {
+        TRAY_MENU_OBSERVATION_SOURCE
+            .read()
+            .ok()
+            .and_then(|source| {
+                source
+                    .as_ref()
+                    .map(|source| source.launcher_shortcut_configured)
+            })
+            .unwrap_or(false)
+    }
+}
+
+fn store_tray_menu_observation_source(
+    update_state: Arc<RwLock<UpdateState>>,
+    launcher_shortcut_configured: bool,
+) {
+    if let Ok(mut source) = TRAY_MENU_OBSERVATION_SOURCE.write() {
+        *source = Some(TrayMenuObservationSource {
+            update_state,
+            launcher_shortcut_configured,
+        });
+    }
+}
+
+pub fn current_tray_menu_observation_snapshot() -> TrayMenuObservation {
+    let source = TRAY_MENU_OBSERVATION_SOURCE
+        .read()
+        .ok()
+        .and_then(|source| source.clone());
+
+    match source {
+        Some(source) => {
+            let update_state = source
+                .update_state
+                .read()
+                .map(|state| state.clone())
+                .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()));
+            tray_menu_observation_snapshot(&update_state, source.launcher_shortcut_configured)
+        }
+        None => {
+            let mut snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+            snapshot
+                .warnings
+                .push("tray menu manager has not been initialized".to_string());
+            snapshot
+        }
+    }
+}
+
+pub(crate) fn tray_menu_observation_snapshot(
+    update_state: &UpdateState,
+    launcher_shortcut_configured: bool,
+) -> TrayMenuObservation {
+    let (version_label, version_enabled) = version_label_and_enabled(update_state);
+
+    TrayMenuObservation {
+        schema_version: TRAY_MENU_SCHEMA_VERSION,
+        source: "scriptKitTrayMenuModel",
+        owner: TrayMenuOwnerObservation {
+            kind: "scriptKitStatusItem",
+            name: "Script Kit",
+            scope: "ownTrayMenuOnly",
+        },
+        sections: vec![
+            TrayMenuSectionObservation {
+                id: "open",
+                label: "Open",
+                items: vec![
+                    tray_menu_item(
+                        TrayMenuAction::OpenScriptKit,
+                        "Open Script Kit".to_string(),
+                        true,
+                        launcher_shortcut_configured.then_some(TrayMenuShortcutObservation {
+                            display: None,
+                            source: "configuredLauncherHotkey",
+                        }),
+                        "static",
+                        "scriptKitWindow",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenCurrentAppCommands,
+                        current_app_commands_label(),
+                        true,
+                        None,
+                        "frontmostAppTracker",
+                        "scriptKitWindow",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenNotes,
+                        "Open Notes".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "scriptKitWindow",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenAgentChat,
+                        "Open AI".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "scriptKitWindow",
+                    ),
+                ],
+            },
+            TrayMenuSectionObservation {
+                id: "help",
+                label: "Help",
+                items: vec![tray_menu_item(
+                    TrayMenuAction::SendFeedback,
+                    "Send Feedback…".to_string(),
+                    true,
+                    None,
+                    "static",
+                    "externalUrl",
+                )],
+            },
+            TrayMenuSectionObservation {
+                id: "social",
+                label: "Social",
+                items: vec![
+                    tray_menu_item(
+                        TrayMenuAction::FollowUs,
+                        "Follow Us".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "externalUrl",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenGitHub,
+                        "GitHub".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "externalUrl",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::JoinDiscord,
+                        "Discord".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "externalUrl",
+                    ),
+                ],
+            },
+            TrayMenuSectionObservation {
+                id: "system",
+                label: "System",
+                items: vec![
+                    tray_menu_item(
+                        TrayMenuAction::Settings,
+                        "Settings".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "scriptKitWindow",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::ReloadScripts,
+                        "Reload Scripts".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "scriptKitRuntime",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::CheckForUpdates,
+                        "Check for Updates…".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "updateCheck",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenReleasePage,
+                        version_label,
+                        version_enabled,
+                        None,
+                        "updateState",
+                        "externalUrl",
+                    ),
+                    tray_menu_item(
+                        TrayMenuAction::OpenAbout,
+                        "About Script Kit".to_string(),
+                        true,
+                        None,
+                        "static",
+                        "appInfo",
+                    ),
+                ],
+            },
+            TrayMenuSectionObservation {
+                id: "exit",
+                label: "Exit",
+                items: vec![tray_menu_item(
+                    TrayMenuAction::Quit,
+                    "Quit Script Kit".to_string(),
+                    true,
+                    None,
+                    "static",
+                    "appLifecycle",
+                )],
+            },
+        ],
+        warnings: Vec::new(),
+    }
+}
+
+fn tray_menu_item(
+    action: TrayMenuAction,
+    title: String,
+    enabled: bool,
+    shortcut: Option<TrayMenuShortcutObservation>,
+    title_source: &'static str,
+    destination_kind: &'static str,
+) -> TrayMenuItemObservation {
+    TrayMenuItemObservation {
+        id: action.id(),
+        title,
+        enabled,
+        shortcut,
+        title_source,
+        destination_kind,
+    }
 }
 
 /// Convert the launcher's `HotkeyConfig` (modifiers + key) into a muda
@@ -812,6 +1106,128 @@ mod tests {
     fn test_tray_menu_action_all_count() {
         // Verify all() returns all variants — bump when adding TrayMenuAction variants.
         assert_eq!(TrayMenuAction::all().len(), 14);
+    }
+
+    fn observed_items(snapshot: &TrayMenuObservation) -> Vec<&TrayMenuItemObservation> {
+        snapshot
+            .sections
+            .iter()
+            .flat_map(|section| section.items.iter())
+            .collect()
+    }
+
+    #[test]
+    fn tray_menu_observation_contains_all_tray_actions() {
+        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, true);
+        let ids: Vec<&str> = observed_items(&snapshot)
+            .into_iter()
+            .map(|item| item.id)
+            .collect();
+
+        for action in TrayMenuAction::all() {
+            assert!(
+                ids.contains(&action.id()),
+                "tray observation missing {}",
+                action.id()
+            );
+        }
+        assert_eq!(ids.len(), TrayMenuAction::all().len());
+    }
+
+    #[test]
+    fn tray_menu_observation_sections_match_create_menu_order() {
+        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let section_ids: Vec<&str> = snapshot.sections.iter().map(|section| section.id).collect();
+        assert_eq!(
+            section_ids,
+            vec!["open", "help", "social", "system", "exit"]
+        );
+
+        let ids: Vec<&str> = observed_items(&snapshot)
+            .into_iter()
+            .map(|item| item.id)
+            .collect();
+        assert_eq!(
+            ids,
+            vec![
+                TrayMenuAction::OpenScriptKit.id(),
+                TrayMenuAction::OpenCurrentAppCommands.id(),
+                TrayMenuAction::OpenNotes.id(),
+                TrayMenuAction::OpenAgentChat.id(),
+                TrayMenuAction::SendFeedback.id(),
+                TrayMenuAction::FollowUs.id(),
+                TrayMenuAction::OpenGitHub.id(),
+                TrayMenuAction::JoinDiscord.id(),
+                TrayMenuAction::Settings.id(),
+                TrayMenuAction::ReloadScripts.id(),
+                TrayMenuAction::CheckForUpdates.id(),
+                TrayMenuAction::OpenReleasePage.id(),
+                TrayMenuAction::OpenAbout.id(),
+                TrayMenuAction::Quit.id(),
+            ]
+        );
+    }
+
+    #[test]
+    fn tray_menu_observation_ids_are_unique() {
+        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let ids: Vec<&str> = observed_items(&snapshot)
+            .into_iter()
+            .map(|item| item.id)
+            .collect();
+
+        for (index, id) in ids.iter().enumerate() {
+            assert!(
+                !ids.iter()
+                    .enumerate()
+                    .any(|(other_index, other)| other_index != index && other == id),
+                "duplicate tray observation id: {id}"
+            );
+        }
+    }
+
+    #[test]
+    fn tray_menu_observation_current_app_title_uses_frontmost_tracker_fallback() {
+        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, false);
+        let current_app = observed_items(&snapshot)
+            .into_iter()
+            .find(|item| item.id == TrayMenuAction::OpenCurrentAppCommands.id())
+            .expect("current app commands row");
+
+        assert!(!current_app.title.trim().is_empty());
+        assert_eq!(current_app.title_source, "frontmostAppTracker");
+    }
+
+    #[test]
+    fn tray_menu_observation_version_row_reflects_update_state() {
+        let snapshot = tray_menu_observation_snapshot(
+            &UpdateState::Available {
+                version: "9.9.9".to_string(),
+                url: "https://example.com/release".to_string(),
+            },
+            false,
+        );
+        let version = observed_items(&snapshot)
+            .into_iter()
+            .find(|item| item.id == TrayMenuAction::OpenReleasePage.id())
+            .expect("version row");
+
+        assert_eq!(version.title, "Update Available: v9.9.9");
+        assert!(version.enabled);
+        assert_eq!(version.title_source, "updateState");
+    }
+
+    #[test]
+    fn tray_menu_observation_has_no_click_or_execute_fields() {
+        let snapshot = tray_menu_observation_snapshot(&UpdateState::Idle, true);
+        let text = serde_json::to_string(&snapshot).expect("serialize tray observation");
+
+        for forbidden in ["\"click\"", "\"execute\"", "\"action\"", "\"event\""] {
+            assert!(
+                !text.contains(forbidden),
+                "tray observation must not expose executable fields; found {forbidden}"
+            );
+        }
     }
 
     // ========================================================================
