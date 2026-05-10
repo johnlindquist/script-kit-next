@@ -30,6 +30,7 @@ pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_GET_MENU_ITEM_TOOL: &str = "computer/get_menu_item";
+pub const COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL: &str = "computer/get_menu_item_by_index_path";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_GET_TRAY_MENU_ITEM_TOOL: &str = "computer/get_tray_menu_item";
 pub const COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL: &str = "computer/get_tray_menu_item_by_id";
@@ -114,6 +115,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_get_menu_item_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL.to_string(),
+            description: "Return one cached menu item by zero-based recursive index path without refreshing menus, focusing apps, clicking, or requesting permissions."
+                .to_string(),
+            input_schema: computer_get_menu_item_by_index_path_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
             description: "List Script Kit's own tray menu model without opening the menu, clicking status items, invoking actions, or requesting permissions."
                 .to_string(),
@@ -179,6 +186,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
         COMPUTER_GET_MENU_ITEM_TOOL => handle_get_menu_item(arguments),
+        COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL => handle_get_menu_item_by_index_path(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
         COMPUTER_GET_TRAY_MENU_ITEM_TOOL => handle_get_tray_menu_item(arguments),
         COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL => handle_get_tray_menu_item_by_id(arguments),
@@ -345,6 +353,12 @@ struct ComputerUseGetMenuItemArgs {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ComputerUseGetMenuItemByIndexPathArgs {
+    index_path: Vec<usize>,
+}
+
+#[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ComputerUseListTrayMenuArgs {}
 
@@ -382,6 +396,21 @@ struct ComputerUseGetMenuItemResult {
     app: Option<ComputerUseMenuApp>,
     cache: ComputerUseMenuCache,
     path: Vec<String>,
+    item: Option<ComputerUseMenuItem>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetMenuItemByIndexPathResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseMenuApp>,
+    cache: ComputerUseMenuCache,
+    index_path: Vec<usize>,
+    resolved_path: Option<Vec<String>>,
     item: Option<ComputerUseMenuItem>,
     warnings: Vec<String>,
 }
@@ -849,6 +878,63 @@ fn handle_get_menu_item(arguments: &Value) -> ToolResult {
     })
 }
 
+fn handle_get_menu_item_by_index_path(arguments: &Value) -> ToolResult {
+    let args: ComputerUseGetMenuItemByIndexPathArgs =
+        match serde_json::from_value(arguments.clone()) {
+            Ok(args) => args,
+            Err(error) => return error_result("invalid_arguments", &error.to_string()),
+        };
+
+    if args.index_path.is_empty() {
+        return error_result(
+            "invalid_arguments",
+            "indexPath must contain at least one index",
+        );
+    }
+
+    let snapshot = get_cached_menu_snapshot();
+    let app = snapshot.app.map(|app| ComputerUseMenuApp {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+        name: app.name,
+        window_title: app.window_title,
+    });
+    let found = if app.is_some() && !snapshot.items.is_empty() {
+        find_cached_menu_item_by_index_path(&snapshot.items, &args.index_path)
+    } else {
+        None
+    };
+    let status = if app.is_none() {
+        "noTrackedApp"
+    } else if snapshot.items.is_empty() {
+        "noCachedMenus"
+    } else if found.is_some() {
+        "found"
+    } else {
+        "notFound"
+    };
+    let (item, resolved_path) = match found {
+        Some((item, resolved_path)) => (Some(computer_use_menu_item(item)), Some(resolved_path)),
+        None => (None, None),
+    };
+
+    json_tool_result(&ComputerUseGetMenuItemByIndexPathResult {
+        schema_version: COMPUTER_MENUS_SCHEMA_VERSION,
+        source: "frontmostAppTrackerCache",
+        scope: "cachedMenuIndexPath",
+        status,
+        app,
+        cache: ComputerUseMenuCache {
+            status: snapshot.status.as_str(),
+            is_fetching: snapshot.is_fetching,
+        },
+        index_path: args.index_path,
+        resolved_path,
+        item,
+        warnings: Vec::new(),
+    })
+}
+
 fn handle_list_tray_menu(arguments: &Value) -> ToolResult {
     let _args: ComputerUseListTrayMenuArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
@@ -981,6 +1067,21 @@ fn find_cached_menu_item_by_path<'a>(
         Some(item)
     } else {
         find_cached_menu_item_by_path(&item.children, tail)
+    }
+}
+
+fn find_cached_menu_item_by_index_path<'a>(
+    items: &'a [MenuBarItem],
+    index_path: &[usize],
+) -> Option<(&'a MenuBarItem, Vec<String>)> {
+    let (head, tail) = index_path.split_first()?;
+    let item = items.get(*head)?;
+    if tail.is_empty() {
+        Some((item, vec![item.title.clone()]))
+    } else {
+        let (found, mut path) = find_cached_menu_item_by_index_path(&item.children, tail)?;
+        path.insert(0, item.title.clone());
+        Some((found, path))
     }
 }
 
@@ -1415,6 +1516,25 @@ fn computer_get_menu_item_input_schema() -> Value {
     })
 }
 
+fn computer_get_menu_item_by_index_path_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "indexPath": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "description": "Zero-based recursive index path into computer/list_menus output, e.g. [0, 2, 1]. Call computer/list_menus first."
+            }
+        },
+        "required": ["indexPath"]
+    })
+}
+
 fn computer_list_tray_menu_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1670,6 +1790,7 @@ mod tests {
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
                 COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
+                COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_GET_TRAY_MENU_ITEM_TOOL.to_string(),
                 COMPUTER_GET_TRAY_MENU_ITEM_BY_ID_TOOL.to_string(),
@@ -2006,6 +2127,51 @@ mod tests {
         assert_eq!(
             tool.input_schema.get("required"),
             Some(&serde_json::json!(["path"]))
+        );
+    }
+
+    #[test]
+    fn computer_get_menu_item_by_index_path_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL)
+            .expect("computer/get_menu_item_by_index_path tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        let index_path = properties.get("indexPath").expect("indexPath property");
+        assert_eq!(
+            index_path.get("type").and_then(Value::as_str),
+            Some("array")
+        );
+        assert_eq!(index_path.get("minItems").and_then(Value::as_u64), Some(1));
+        assert_eq!(
+            index_path
+                .get("items")
+                .and_then(|items| items.get("type"))
+                .and_then(Value::as_str),
+            Some("integer")
+        );
+        assert_eq!(
+            index_path
+                .get("items")
+                .and_then(|items| items.get("minimum"))
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["indexPath"]))
         );
     }
 
@@ -2784,6 +2950,35 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_menu_item_by_index_path_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "indexPath": [] }),
+            serde_json::json!({ "indexPath": "0.1" }),
+            serde_json::json!({ "indexPath": [0, "1"] }),
+            serde_json::json!({ "indexPath": [-1] }),
+            serde_json::json!({ "indexPath": [0], "click": true }),
+            serde_json::json!({ "indexPath": [0], "press": true }),
+            serde_json::json!({ "indexPath": [0], "execute": true }),
+            serde_json::json!({ "indexPath": [0], "refresh": true }),
+            serde_json::json!({ "indexPath": [0], "focus": true }),
+            serde_json::json!({ "indexPath": [0], "activate": true }),
+            serde_json::json!({ "indexPath": [0], "pid": 123 }),
+        ] {
+            let result = handle_computer_use_tool_call(
+                COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL,
+                &arguments,
+                None,
+            );
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_tray_menu_rejects_bad_arguments() {
         for arguments in [
             serde_json::json!({ "click": true }),
@@ -3327,6 +3522,66 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_menu_item_by_index_path_returns_cache_snapshot_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL,
+            &serde_json::json!({ "indexPath": [9999] }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_menu_item_by_index_path json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_MENUS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuIndexPath");
+        assert!(
+            value["status"] == "notFound"
+                || value["status"] == "noTrackedApp"
+                || value["status"] == "noCachedMenus"
+        );
+        assert_eq!(value["indexPath"], serde_json::json!([9999]));
+        assert!(value["resolvedPath"].is_null());
+        assert!(value["cache"]["status"].is_string());
+        assert!(value["cache"]["isFetching"].is_boolean());
+        assert!(value["warnings"].is_array());
+        assert!(value["item"].is_null());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_menu_item_by_index_path result must not expose menu action handles; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_get_menu_item_by_index_path_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_MENU_ITEM_BY_INDEX_PATH_TOOL,
+            &serde_json::json!({ "indexPath": [9999] }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value = serde_json::from_str(&result.content[0].text)
+            .expect("valid get_menu_item_by_index_path json");
+        assert_eq!(value["source"], "frontmostAppTrackerCache");
+        assert_eq!(value["scope"], "cachedMenuIndexPath");
+    }
+
+    #[test]
     fn find_cached_menu_item_by_path_finds_top_level_item() {
         let items = vec![
             test_menu_item("File", vec![]),
@@ -3377,6 +3632,55 @@ mod tests {
         let items = vec![test_menu_item("File", vec![])];
 
         let found = find_cached_menu_item_by_path(&items, &[]);
+
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_index_path_finds_top_level_item() {
+        let items = vec![
+            test_menu_item("File", vec![]),
+            test_menu_item("Edit", vec![]),
+        ];
+
+        let (found, path) =
+            find_cached_menu_item_by_index_path(&items, &[1]).expect("top-level Edit item");
+
+        assert_eq!(found.title, "Edit");
+        assert_eq!(path, vec!["Edit"]);
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_index_path_finds_nested_item() {
+        let items = vec![test_menu_item(
+            "File",
+            vec![test_menu_item(
+                "New",
+                vec![test_menu_item("Project", vec![])],
+            )],
+        )];
+
+        let (found, path) =
+            find_cached_menu_item_by_index_path(&items, &[0, 0, 0]).expect("nested Project item");
+
+        assert_eq!(found.title, "Project");
+        assert_eq!(path, vec!["File", "New", "Project"]);
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_index_path_returns_none_for_missing_index() {
+        let items = vec![test_menu_item("File", vec![test_menu_item("Open", vec![])])];
+
+        let found = find_cached_menu_item_by_index_path(&items, &[0, 1]);
+
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_cached_menu_item_by_index_path_returns_none_for_empty_path() {
+        let items = vec![test_menu_item("File", vec![])];
+
+        let found = find_cached_menu_item_by_index_path(&items, &[]);
 
         assert!(found.is_none());
     }
