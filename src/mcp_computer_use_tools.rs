@@ -26,6 +26,7 @@ pub const COMPUTER_GET_FOCUSED_WINDOW_TOOL: &str = "computer/get_focused_window"
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
 pub const COMPUTER_GET_APP_TOOL: &str = "computer/get_app";
 pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
+pub const COMPUTER_LIST_NATIVE_WINDOWS_TOOL: &str = "computer/list_native_windows";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
@@ -41,6 +42,7 @@ pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 pub const COMPUTER_GET_PERMISSION_TOOL: &str = "computer/get_permission";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_APP_WINDOWS_SCHEMA_VERSION: u32 = 1;
+const COMPUTER_NATIVE_WINDOWS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_FRONTMOST_APP_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_MENUS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
@@ -90,6 +92,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List native windows for one running GUI application by PID without focusing, moving, resizing, or capturing screenshots."
                 .to_string(),
             input_schema: computer_list_app_windows_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
+            description: "List native windows grouped by running GUI application without focusing, activating, moving, resizing, capturing screenshots, or sending input."
+                .to_string(),
+            input_schema: computer_list_native_windows_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
@@ -189,6 +197,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
         COMPUTER_GET_APP_TOOL => handle_get_app(arguments, runtime),
         COMPUTER_LIST_APP_WINDOWS_TOOL => handle_list_app_windows(arguments, runtime),
+        COMPUTER_LIST_NATIVE_WINDOWS_TOOL => handle_list_native_windows(arguments, runtime),
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
@@ -302,6 +311,39 @@ struct ComputerUseListAppWindowsResult {
     scope: &'static str,
     status: &'static str,
     app: Option<ComputerUseRunningAppInfo>,
+    windows: Vec<ComputerUseAppWindowInfo>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ComputerUseListNativeWindowsArgs {
+    #[serde(default)]
+    include_hidden: bool,
+    #[serde(default)]
+    include_background: bool,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListNativeWindowsResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frontmost_pid: Option<i32>,
+    app_count: usize,
+    window_count: usize,
+    apps: Vec<ComputerUseNativeWindowsForApp>,
+    warnings: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseNativeWindowsForApp {
+    app: ComputerUseRunningAppInfo,
+    status: &'static str,
     windows: Vec<ComputerUseAppWindowInfo>,
     warnings: Vec<String>,
 }
@@ -762,6 +804,80 @@ fn handle_list_app_windows(
         }),
         Err(error) => error_result(error.error_code(), &error.message()),
     }
+}
+
+fn handle_list_native_windows(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseListNativeWindowsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/list_native_windows requires the live GPUI runtime bridge to enumerate native windows safely",
+        );
+    };
+
+    let apps_snapshot = match runtime.list_running_apps(ComputerUseListAppsRequest {
+        include_hidden: args.include_hidden,
+        include_background: args.include_background,
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => return error_result(error.error_code(), &error.message()),
+    };
+
+    let mut app_groups = Vec::new();
+    let mut warnings = Vec::new();
+    let mut partial = false;
+    let mut window_count = 0usize;
+
+    for app in apps_snapshot.apps {
+        match runtime.list_app_windows(ComputerUseListAppWindowsRequest { pid: app.pid }) {
+            Ok(snapshot) => {
+                let status = if snapshot.app.is_some() {
+                    "listed"
+                } else {
+                    partial = true;
+                    "appNotFound"
+                };
+                window_count += snapshot.windows.len();
+
+                app_groups.push(ComputerUseNativeWindowsForApp {
+                    app,
+                    status,
+                    windows: snapshot.windows,
+                    warnings: snapshot.warnings,
+                });
+            }
+            Err(error) => {
+                partial = true;
+                let warning = format!("windowListFailed for pid {}: {}", app.pid, error.message());
+                warnings.push(warning.clone());
+                app_groups.push(ComputerUseNativeWindowsForApp {
+                    app,
+                    status: "windowListFailed",
+                    windows: Vec::new(),
+                    warnings: vec![warning],
+                });
+            }
+        }
+    }
+
+    json_tool_result(&ComputerUseListNativeWindowsResult {
+        schema_version: COMPUTER_NATIVE_WINDOWS_SCHEMA_VERSION,
+        source: "nsWorkspaceRunningApplications+coreGraphicsWindowList",
+        scope: "runningGuiApps",
+        status: if partial { "partial" } else { "listed" },
+        frontmost_pid: apps_snapshot.frontmost_pid,
+        app_count: app_groups.len(),
+        window_count,
+        apps: app_groups,
+        warnings,
+    })
 }
 
 fn handle_get_app_window(
@@ -1577,6 +1693,25 @@ fn computer_list_app_windows_input_schema() -> Value {
     })
 }
 
+fn computer_list_native_windows_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "includeHidden": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include hidden running GUI applications."
+            },
+            "includeBackground": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include accessory, prohibited, and unknown background applications in addition to regular GUI apps."
+            }
+        }
+    })
+}
+
 fn computer_get_app_window_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1885,6 +2020,141 @@ mod tests {
         }
     }
 
+    struct GroupedNativeWindowsRuntime {
+        fail_pid: Option<i32>,
+        missing_pid: Option<i32>,
+    }
+
+    impl ComputerUseRuntimeBridge for GroupedNativeWindowsRuntime {
+        fn inspect_automation_window(
+            &self,
+            _request: ComputerUseInspectRequest,
+        ) -> Result<AutomationInspectSnapshot, ComputerUseRuntimeError> {
+            panic!("computer/list_native_windows must not inspect automation windows")
+        }
+
+        fn list_running_apps(
+            &self,
+            request: ComputerUseListAppsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert!(request.include_hidden);
+            assert!(!request.include_background);
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppsSnapshot {
+                    apps: vec![
+                        ComputerUseRunningAppInfo {
+                            pid: 101,
+                            bundle_id: Some("com.apple.Terminal".to_string()),
+                            name: "Terminal".to_string(),
+                            is_active: true,
+                            is_hidden: false,
+                            activation_policy: "regular".to_string(),
+                        },
+                        ComputerUseRunningAppInfo {
+                            pid: 202,
+                            bundle_id: Some("com.apple.TextEdit".to_string()),
+                            name: "TextEdit".to_string(),
+                            is_active: false,
+                            is_hidden: true,
+                            activation_policy: "regular".to_string(),
+                        },
+                    ],
+                    frontmost_pid: Some(101),
+                },
+            )
+        }
+
+        fn list_app_windows(
+            &self,
+            request: ComputerUseListAppWindowsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            if self.fail_pid == Some(request.pid) {
+                return Err(ComputerUseRuntimeError::Failed(format!(
+                    "failed to list windows for pid {}",
+                    request.pid
+                )));
+            }
+
+            if self.missing_pid == Some(request.pid) {
+                return Ok(
+                    crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                        app: None,
+                        windows: Vec::new(),
+                        warnings: Vec::new(),
+                    },
+                );
+            }
+
+            let app = match request.pid {
+                101 => ComputerUseRunningAppInfo {
+                    pid: 101,
+                    bundle_id: Some("com.apple.Terminal".to_string()),
+                    name: "Terminal".to_string(),
+                    is_active: true,
+                    is_hidden: false,
+                    activation_policy: "regular".to_string(),
+                },
+                202 => ComputerUseRunningAppInfo {
+                    pid: 202,
+                    bundle_id: Some("com.apple.TextEdit".to_string()),
+                    name: "TextEdit".to_string(),
+                    is_active: false,
+                    is_hidden: true,
+                    activation_policy: "regular".to_string(),
+                },
+                other => panic!("unexpected list_app_windows pid {other}"),
+            };
+
+            let windows = match request.pid {
+                101 => vec![
+                    ComputerUseAppWindowInfo {
+                        native_window_id: 98765,
+                        title: Some("Terminal".to_string()),
+                        bounds: TargetWindowBounds {
+                            x: 10,
+                            y: 20,
+                            width: 300,
+                            height: 200,
+                        },
+                        is_on_screen: true,
+                        layer: 0,
+                        z_order: 0,
+                    },
+                    ComputerUseAppWindowInfo {
+                        native_window_id: 98766,
+                        title: Some("Terminal Settings".to_string()),
+                        bounds: TargetWindowBounds {
+                            x: 30,
+                            y: 40,
+                            width: 500,
+                            height: 400,
+                        },
+                        is_on_screen: true,
+                        layer: 0,
+                        z_order: 1,
+                    },
+                ],
+                202 => Vec::new(),
+                _ => unreachable!(),
+            };
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                    app: Some(app),
+                    windows,
+                    warnings: Vec::new(),
+                },
+            )
+        }
+    }
+
     #[test]
     fn computer_use_tool_definitions_are_registered() {
         let names: Vec<String> = get_computer_use_tool_definitions()
@@ -1902,6 +2172,7 @@ mod tests {
                 COMPUTER_LIST_APPS_TOOL.to_string(),
                 COMPUTER_GET_APP_TOOL.to_string(),
                 COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
+                COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
@@ -2093,6 +2364,30 @@ mod tests {
             tool.input_schema.get("required"),
             Some(&serde_json::json!(["pid"]))
         );
+    }
+
+    #[test]
+    fn computer_list_native_windows_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_NATIVE_WINDOWS_TOOL)
+            .expect("computer/list_native_windows tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 2);
+        assert!(properties.contains_key("includeHidden"));
+        assert!(properties.contains_key("includeBackground"));
+        assert!(tool.input_schema.get("required").is_none());
     }
 
     #[test]
@@ -2583,6 +2878,18 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_native_windows_without_runtime_returns_tool_error() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_NATIVE_WINDOWS_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
     fn computer_list_tray_menu_without_runtime_returns_snapshot() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_TRAY_MENU_TOOL,
@@ -2990,6 +3297,39 @@ mod tests {
         ] {
             let result =
                 handle_computer_use_tool_call(COMPUTER_LIST_APP_WINDOWS_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
+    fn computer_list_native_windows_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({ "pid": 101 }),
+            serde_json::json!({ "app": "Terminal" }),
+            serde_json::json!({ "bundleId": "com.apple.Terminal" }),
+            serde_json::json!({ "includeHidden": "yes" }),
+            serde_json::json!({ "includeBackground": "yes" }),
+            serde_json::json!({ "focus": true }),
+            serde_json::json!({ "activate": true }),
+            serde_json::json!({ "launch": true }),
+            serde_json::json!({ "quit": true }),
+            serde_json::json!({ "hide": true }),
+            serde_json::json!({ "move": true }),
+            serde_json::json!({ "resize": true }),
+            serde_json::json!({ "setBounds": true }),
+            serde_json::json!({ "screenshot": true }),
+            serde_json::json!({ "capture": true }),
+            serde_json::json!({ "click": true }),
+            serde_json::json!({ "press": true }),
+            serde_json::json!({ "execute": true }),
+            serde_json::json!({ "includeGlobalStatusItems": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_LIST_NATIVE_WINDOWS_TOOL, &arguments, None);
 
             assert_eq!(result.is_error, Some(true));
             assert!(result.content[0].text.contains("invalid_arguments"));
@@ -3575,6 +3915,121 @@ mod tests {
                 "computer/list_app_windows result must not expose executable fields; found {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn computer_list_native_windows_with_runtime_returns_grouped_read_only_snapshot() {
+        let runtime = GroupedNativeWindowsRuntime {
+            fail_pid: None,
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_NATIVE_WINDOWS_TOOL,
+            &serde_json::json!({ "includeHidden": true }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_native_windows json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_NATIVE_WINDOWS_SCHEMA_VERSION)
+        );
+        assert_eq!(
+            value["source"],
+            "nsWorkspaceRunningApplications+coreGraphicsWindowList"
+        );
+        assert_eq!(value["scope"], "runningGuiApps");
+        assert_eq!(value["status"], "listed");
+        assert_eq!(value["frontmostPid"], 101);
+        assert_eq!(value["appCount"], 2);
+        assert_eq!(value["windowCount"], 2);
+        assert_eq!(value["apps"][0]["app"]["pid"], 101);
+        assert_eq!(value["apps"][0]["status"], "listed");
+        assert_eq!(value["apps"][0]["windows"][0]["nativeWindowId"], 98765);
+        assert_eq!(value["apps"][0]["windows"][1]["zOrder"], 1);
+        assert_eq!(value["apps"][1]["app"]["pid"], 202);
+        assert_eq!(value["apps"][1]["status"], "listed");
+        assert!(value["apps"][1]["windows"].as_array().unwrap().is_empty());
+        assert!(value["warnings"].as_array().unwrap().is_empty());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"press\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+            "\"hide\"",
+            "\"move\"",
+            "\"resize\"",
+            "\"setBounds\"",
+            "\"screenshot\"",
+            "\"capture\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/list_native_windows result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_list_native_windows_handles_per_app_window_error_as_partial_observation() {
+        let runtime = GroupedNativeWindowsRuntime {
+            fail_pid: Some(202),
+            missing_pid: None,
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_NATIVE_WINDOWS_TOOL,
+            &serde_json::json!({ "includeHidden": true }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_native_windows json");
+        assert_eq!(value["status"], "partial");
+        assert_eq!(value["windowCount"], 2);
+        assert_eq!(value["apps"][0]["status"], "listed");
+        assert_eq!(value["apps"][1]["status"], "windowListFailed");
+        assert!(value["apps"][1]["windows"].as_array().unwrap().is_empty());
+        assert!(value["apps"][1]["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("failed to list windows for pid 202"));
+        assert!(value["warnings"][0]
+            .as_str()
+            .unwrap()
+            .contains("windowListFailed for pid 202"));
+    }
+
+    #[test]
+    fn computer_list_native_windows_marks_disappearing_app_as_partial_app_not_found() {
+        let runtime = GroupedNativeWindowsRuntime {
+            fail_pid: None,
+            missing_pid: Some(202),
+        };
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_NATIVE_WINDOWS_TOOL,
+            &serde_json::json!({ "includeHidden": true }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_native_windows json");
+        assert_eq!(value["status"], "partial");
+        assert_eq!(value["windowCount"], 2);
+        assert_eq!(value["apps"][0]["status"], "listed");
+        assert_eq!(value["apps"][1]["app"]["pid"], 202);
+        assert_eq!(value["apps"][1]["status"], "appNotFound");
+        assert!(value["apps"][1]["windows"].as_array().unwrap().is_empty());
     }
 
     #[test]
