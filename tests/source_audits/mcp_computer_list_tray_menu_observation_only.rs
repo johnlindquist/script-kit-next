@@ -29,6 +29,14 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
         tray.contains("pub(crate) fn tray_menu_observation_snapshot("),
         "tray menu observation must be built by a pure model/state snapshot helper"
     );
+    assert!(
+        mcp_tools.contains("COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),"),
+        "computer/list_tray_menu must route without passing the runtime bridge"
+    );
+    assert!(
+        mcp_tools.contains("fn handle_list_tray_menu(arguments: &Value) -> ToolResult {"),
+        "computer/list_tray_menu handler must not accept a runtime bridge parameter"
+    );
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_list_tray_menu(");
     for needle in [
