@@ -144,6 +144,7 @@ mod tests {
             "root_file_reveal_in_finder",
             "root_file_copy_path",
             "root_file_quick_look",
+            "root_file_search_in_folder",
         ] {
             assert!(
                 !dedicated_file_search.contains(forbidden),
@@ -235,11 +236,59 @@ mod tests {
             "root_file_reveal_in_finder",
             "root_file_copy_path",
             "root_file_quick_look",
+            "root_file_search_in_folder",
         ] {
             assert!(
                 source.contains(action_id),
                 "root file action id should be reserved: {action_id}"
             );
         }
+        assert!(
+            source.contains("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID")
+                && source.contains("| ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID"),
+            "Search Inside Folder action id should be reserved and recognized as a captured root-file action"
+        );
+    }
+
+    #[test]
+    fn root_file_search_in_folder_action_is_directory_only() {
+        let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("read src/app_impl/actions_toggle.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("file.file_type == crate::file_search::FileType::Directory")
+                && normalized.contains("if is_dir { actions.push( Action::new( crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID"),
+            "Search Inside Folder should only be added for directory root-file rows"
+        );
+    }
+
+    #[test]
+    fn root_file_search_in_folder_action_opens_dedicated_file_search() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID")
+                && normalized.contains("ensure_trailing_slash(&file.path)")
+                && normalized.contains("self.open_file_search(query, cx);"),
+            "root folder action should hand off to dedicated File Search with a trailing-slashed directory path"
+        );
+    }
+
+    #[test]
+    fn root_launcher_does_not_browse_directories_inline() {
+        let source = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("read src/render_script_list/mod.rs");
+
+        assert!(
+            !source.contains("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID"),
+            "root folder handoff should live in the action executor, not ScriptList key handling"
+        );
+        assert!(
+            !source.contains("open_file_search("),
+            "ScriptList render/key handling should not directly open File Search for root folder rows"
+        );
     }
 }
