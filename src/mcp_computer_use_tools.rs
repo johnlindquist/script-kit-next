@@ -128,7 +128,6 @@ struct ComputerUseListWindowsArgs {}
 struct ComputerUseListWindowsResult {
     schema_version: u32,
     windows: Vec<AutomationWindowInfo>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     focused_window_id: Option<String>,
 }
 
