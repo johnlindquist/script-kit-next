@@ -548,6 +548,49 @@ mod tests {
     }
 
     #[test]
+    fn root_file_open_records_frecency_after_success_through_shared_open_helper() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("fn record_root_file_open_use(")
+                && normalized.contains("record_use(&format!(\"file/{}\", file.path))")
+                && normalized.contains("self.frecency_store.save()")
+                && normalized.contains("self.invalidate_grouped_cache();"),
+            "root file frecency should be centralized in a helper that records file/<path>, saves, and invalidates grouping"
+        );
+
+        let open_body = source
+            .split("pub(crate) fn execute_root_file_open(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("pub(crate) fn root_file_search_in_folder_query")
+                    .next()
+            })
+            .expect("execute_root_file_open source should be present");
+        let open_call = open_body
+            .find("crate::file_search::open_file(&file.path)")
+            .expect("execute_root_file_open should call open_file");
+        let record_call = open_body
+            .find("self.record_root_file_open_use(file);")
+            .expect("execute_root_file_open should record frecency after successful open");
+        let close_call = open_body
+            .find("self.close_and_reset_window(cx);")
+            .expect("execute_root_file_open should close after recording");
+
+        assert!(
+            open_call < record_call && record_call < close_call,
+            "root file frecency should record after a successful OS open and before closing"
+        );
+        assert!(
+            normalized.contains("scripts::SearchResult::File(_) => None"),
+            "execute_selected should not pre-record root file frecency before open success"
+        );
+    }
+
+    #[test]
     fn root_file_actions_prefer_captured_file_over_live_selection() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("read src/app_impl/actions_dialog.rs");

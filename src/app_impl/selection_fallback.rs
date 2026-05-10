@@ -326,7 +326,9 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
-                    scripts::SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
+                    // Root file opens record frecency only after the OS open succeeds;
+                    // execute_root_file_open is shared by Enter and the root-file Open action.
+                    scripts::SearchResult::File(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
@@ -531,6 +533,19 @@ impl ScriptListApp {
         Self::root_file_search_in_folder_query(&file)
     }
 
+    fn record_root_file_open_use(&mut self, file: &crate::file_search::FileResult) {
+        self.frecency_store
+            .record_use(&format!("file/{}", file.path));
+        if let Err(error) = self.frecency_store.save() {
+            tracing::warn!(
+                path = %file.path,
+                error = %error,
+                "Failed to save root file frecency after open"
+            );
+        }
+        self.invalidate_grouped_cache();
+    }
+
     pub(crate) fn execute_root_file_open(
         &mut self,
         file: &crate::file_search::FileResult,
@@ -548,6 +563,7 @@ impl ScriptListApp {
             );
             return;
         }
+        self.record_root_file_open_use(file);
         self.close_and_reset_window(cx);
     }
 
