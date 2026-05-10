@@ -13,12 +13,15 @@ These points capture the stable automation behavior that runtime tooling depends
 - The repo's `scripts/agentic/` tools choose between protocol-level batch input, GPUI event simulation, and native input instead of assuming one delivery method.
 - Screenshot capture is resolver-driven. Runtime capture paths rank candidate OS windows against automation targets and fail closed on ambiguity instead of silently picking the wrong window.
 - `SCRIPT_KIT_AI_LOG=1` is the compact log format used throughout the agentic tooling and test harness.
+- ScriptList `getState` and `getElements` project the grouped visible rows, so root file results, fallback rows, and other grouped-only entries are observable through state-first proof.
 
 ## Key Files
 
 These files define the durable automation contract and the proof-oriented harness around it.
 
 - [src/protocol/transaction_executor.rs](src/protocol/transaction_executor.rs) - Deterministic `waitFor` and `batch` execution.
+- [src/app_layout/collect_elements.rs](src/app_layout/collect_elements.rs) - Main-window element collection, including ScriptList grouped-row projection for `getElements`.
+- [src/prompt_handler/mod.rs](src/prompt_handler/mod.rs) - Stdin protocol handling for `getState`, `getElements`, and state-first ScriptList receipts.
 - [src/platform/screenshots_window_open.rs](src/platform/screenshots_window_open.rs) - Resolver-driven screenshot capture and ambiguous-candidate rejection.
 - [scripts/test-harness.ts](scripts/test-harness.ts) - Autonomous test harness using stdin JSON protocol.
 - [scripts/agentic/index.ts](scripts/agentic/index.ts) - Orchestrator for common proof-bearing agentic flows.
@@ -35,6 +38,8 @@ These files define the durable automation contract and the proof-oriented harnes
 These source files justify the automation summary on this page.
 
 - [src/protocol/transaction_executor.rs](src/protocol/transaction_executor.rs)
+- [src/app_layout/collect_elements.rs](src/app_layout/collect_elements.rs)
+- [src/prompt_handler/mod.rs](src/prompt_handler/mod.rs)
 - [src/platform/screenshots_window_open.rs](src/platform/screenshots_window_open.rs)
 - [scripts/test-harness.ts](scripts/test-harness.ts)
 - [scripts/agentic/index.ts](scripts/agentic/index.ts)
