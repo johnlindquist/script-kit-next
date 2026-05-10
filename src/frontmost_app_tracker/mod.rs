@@ -54,6 +54,35 @@ pub struct TrackedApp {
     pub window_title: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CachedMenuStatus {
+    Ready,
+    Fetching,
+    NoTrackedApp,
+    NoCache,
+    StaleCacheHidden,
+}
+
+impl CachedMenuStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ready => "ready",
+            Self::Fetching => "fetching",
+            Self::NoTrackedApp => "noTrackedApp",
+            Self::NoCache => "noCache",
+            Self::StaleCacheHidden => "staleCacheHidden",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CachedMenuSnapshot {
+    pub app: Option<TrackedApp>,
+    pub items: Vec<MenuBarItem>,
+    pub status: CachedMenuStatus,
+    pub is_fetching: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct MenuCacheIdentity {
     pid: i32,
@@ -412,6 +441,42 @@ pub fn get_cached_menu_items() -> Vec<MenuBarItem> {
         state.cached_menu_items.clone()
     } else {
         Vec::new()
+    }
+}
+
+pub fn get_cached_menu_snapshot() -> CachedMenuSnapshot {
+    let state = TRACKER_STATE.read();
+    let Some(tracked) = state.last_real_app.clone() else {
+        return CachedMenuSnapshot {
+            app: None,
+            items: Vec::new(),
+            status: CachedMenuStatus::NoTrackedApp,
+            is_fetching: state.fetching_menu_identity.is_some(),
+        };
+    };
+
+    let tracked_identity = MenuCacheIdentity {
+        pid: tracked.pid,
+        bundle_id: tracked.bundle_id.clone(),
+    };
+    let is_fetching = state.fetching_menu_identity.as_ref() == Some(&tracked_identity);
+    let cache_matches = state.cached_menu_identity.as_ref() == Some(&tracked_identity);
+
+    let (items, status) = if cache_matches {
+        (state.cached_menu_items.clone(), CachedMenuStatus::Ready)
+    } else if is_fetching {
+        (Vec::new(), CachedMenuStatus::Fetching)
+    } else if state.cached_menu_identity.is_some() {
+        (Vec::new(), CachedMenuStatus::StaleCacheHidden)
+    } else {
+        (Vec::new(), CachedMenuStatus::NoCache)
+    };
+
+    CachedMenuSnapshot {
+        app: Some(tracked),
+        items,
+        status,
+        is_fetching,
     }
 }
 
@@ -1295,6 +1360,172 @@ mod tests {
         }
 
         assert_eq!(get_cached_menu_items(), cached_items);
+
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
+    }
+
+    #[test]
+    fn test_get_cached_menu_snapshot_returns_items_when_identity_matches() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
+
+        let cached_items = vec![MenuBarItem {
+            title: "File".to_string(),
+            enabled: true,
+            shortcut: Some("⌘F".to_string()),
+            children: vec![],
+            ax_element_path: vec![0],
+        }];
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 42,
+                bundle_id: "com.example.bundle".to_string(),
+                name: "Example".to_string(),
+                window_title: Some("Window".to_string()),
+            });
+            state.cached_menu_items = cached_items.clone();
+            state.cached_menu_identity = Some(MenuCacheIdentity {
+                pid: 42,
+                bundle_id: "com.example.bundle".to_string(),
+            });
+            state.fetching_menu_identity = None;
+        }
+
+        let snapshot = get_cached_menu_snapshot();
+        assert_eq!(snapshot.status, CachedMenuStatus::Ready);
+        assert!(!snapshot.is_fetching);
+        assert_eq!(snapshot.items, cached_items);
+        assert_eq!(snapshot.app.as_ref().map(|app| app.pid), Some(42));
+
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
+    }
+
+    #[test]
+    fn test_get_cached_menu_snapshot_hides_same_bundle_different_pid_cache() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 2,
+                bundle_id: "com.example.bundle".to_string(),
+                name: "Example".to_string(),
+                window_title: None,
+            });
+            state.cached_menu_items = vec![MenuBarItem {
+                title: "File".to_string(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            }];
+            state.cached_menu_identity = Some(MenuCacheIdentity {
+                pid: 1,
+                bundle_id: "com.example.bundle".to_string(),
+            });
+            state.fetching_menu_identity = None;
+        }
+
+        let snapshot = get_cached_menu_snapshot();
+        assert_eq!(snapshot.status, CachedMenuStatus::StaleCacheHidden);
+        assert!(snapshot.items.is_empty());
+        assert!(!snapshot.is_fetching);
+        assert_eq!(snapshot.app.as_ref().map(|app| app.pid), Some(2));
+
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
+    }
+
+    #[test]
+    fn test_get_cached_menu_snapshot_reports_fetching_without_triggering_fetch() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 9,
+                bundle_id: "com.example.fetching".to_string(),
+                name: "Fetching".to_string(),
+                window_title: None,
+            });
+            state.cached_menu_items = Vec::new();
+            state.cached_menu_identity = None;
+            state.fetching_menu_identity = Some(MenuCacheIdentity {
+                pid: 9,
+                bundle_id: "com.example.fetching".to_string(),
+            });
+            state.fetching_menu_generation = 99;
+        }
+
+        let snapshot = get_cached_menu_snapshot();
+        assert_eq!(snapshot.status, CachedMenuStatus::Fetching);
+        assert!(snapshot.is_fetching);
+        assert!(snapshot.items.is_empty());
+        assert_eq!(TRACKER_STATE.read().fetching_menu_generation, 99);
+
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
+    }
+
+    #[test]
+    fn test_get_cached_menu_snapshot_reports_no_tracked_app() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = None;
+            state.cached_menu_items = Vec::new();
+            state.cached_menu_identity = None;
+            state.fetching_menu_identity = None;
+        }
+
+        let snapshot = get_cached_menu_snapshot();
+        assert_eq!(snapshot.status, CachedMenuStatus::NoTrackedApp);
+        assert!(snapshot.app.is_none());
+        assert!(snapshot.items.is_empty());
 
         restore_tracker_state(
             previous_last_real_app,
