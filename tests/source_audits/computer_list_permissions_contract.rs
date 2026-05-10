@@ -47,6 +47,13 @@ fn computer_list_permissions_reports_read_only_permission_statuses() {
     );
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_list_permissions(");
+    assert!(
+        handler_body.contains("computer_use_permission_statuses()"),
+        "computer/list_permissions must reuse the shared permission status helper"
+    );
+
+    let permission_helper =
+        extract_function_body(&mcp_tools, "fn computer_use_permission_statuses()");
     for needle in [
         "\"accessibility\"",
         "\"screenRecording\"",
@@ -56,8 +63,8 @@ fn computer_list_permissions_reports_read_only_permission_statuses() {
         "event_synthesizing_access_preflight()",
     ] {
         assert!(
-            handler_body.contains(needle),
-            "computer/list_permissions handler must contain {needle}"
+            permission_helper.contains(needle),
+            "shared permission helper must contain {needle}"
         );
     }
     for needle in [
@@ -84,6 +91,10 @@ fn computer_list_permissions_reports_read_only_permission_statuses() {
             !handler_body.contains(needle),
             "computer/list_permissions handler must stay read-only status reporting; found {needle}"
         );
+        assert!(
+            !permission_helper.contains(needle),
+            "shared permission helper must stay read-only status reporting; found {needle}"
+        );
     }
 
     let event_preflight = extract_function_body(
@@ -106,6 +117,25 @@ fn computer_list_permissions_reports_read_only_permission_statuses() {
         assert!(
             !event_preflight.contains(needle),
             "Event Synthesizing preflight must not request permissions or synthesize events; found {needle}"
+        );
+    }
+
+    let screen_preflight =
+        extract_function_body(&platform, "pub(crate) fn screen_capture_access_preflight()");
+    assert!(
+        screen_preflight.contains("CGPreflightScreenCaptureAccess"),
+        "Screen Recording status must use CoreGraphics preflight"
+    );
+    for needle in [
+        "CGRequestScreenCaptureAccess",
+        "capture_image",
+        "capture_targeted_screenshot",
+        "Command::new(\"open\")",
+        "x-apple.systempreferences",
+    ] {
+        assert!(
+            !screen_preflight.contains(needle),
+            "Screen Recording preflight must not request permission, capture, or open settings; found {needle}"
         );
     }
 
