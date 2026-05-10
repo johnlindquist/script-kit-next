@@ -307,10 +307,11 @@ mod tests {
             helper.contains("RootFileSectionMode::GlobalQuery")
                 && helper.contains("filter_text.trim()")
                 && helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
                 && helper.contains("files.first()")
                 && helper
                     .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "root file promotion should depend on the shared strong global filename-token match"
+            "root file promotion should depend on the shared strong global filename-token match and the current launcher winner"
         );
         assert!(
             production.contains("root_file_section_insertion_index(grouped, flat_results, promote)")
@@ -361,9 +362,10 @@ mod tests {
         assert!(
             promote_helper.contains("RootFileSectionMode::GlobalQuery")
                 && promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && promote_helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
                 && promote_helper
                     .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "promotion should use the same filename-token gate as recent seeds"
+            "promotion should use the same filename-token gate as recent seeds unless the launcher winner already strongly matches"
         );
         for forbidden in [
             "mdfind",
@@ -376,6 +378,43 @@ mod tests {
             assert!(
                 !promote_helper.contains(forbidden),
                 "root file promotion must not start providers: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_global_file_promotion_respects_strong_launcher_winner() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let production = production_source(&grouping_source);
+        let launcher_helper = production
+            .split("fn top_launcher_result_strongly_matches_query(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn root_file_section_insertion_index(")
+                    .next()
+            })
+            .expect("launcher collision helper should be present");
+
+        assert!(
+            launcher_helper.contains("SearchResult::ScriptIssue(_)")
+                && launcher_helper.contains("SearchResult::Fallback(_)")
+                && launcher_helper.contains("SearchResult::File(_)")
+                && launcher_helper.contains("root_file_name_token_matches_query(result.name(), query)"),
+            "file promotion should ignore issue/fallback/file rows and defer to a strong current launcher winner"
+        );
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !launcher_helper.contains(forbidden),
+                "launcher collision guard must stay grouping-only: {forbidden}"
             );
         }
     }
