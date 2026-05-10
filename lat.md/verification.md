@@ -60,9 +60,9 @@ Use `cargo test --test source_audits root_unified_search_stability_contract -- -
 
 Root passive ranking receipts prove actual visible row roles instead of inferring intent from action labels.
 
-`mainWindowPreflight.visibleResults` exposes content-light row receipts with grouped index, visible rank, stable key, role, action kind, type label, and source name. Roles classify visible rows as primary launcher intent, root file, root passive, fallback, script issue, or agent, so runtime proofs can assert that passive rows exist and stay below commands, scripts, apps, skills, and windows for collision queries.
+`mainWindowPreflight.visibleResults` exposes content-light row receipts with grouped index, visible rank, stable key, role, action kind, type label, and source name. Roles classify visible rows as primary launcher intent, root file, root passive, fallback, script issue, or agent, so runtime proofs can assert that passive rows exist and stay below commands, scripts, apps, skills, and windows for collision queries. Passive source order checks must use these receipts rather than row-label guesses.
 
-Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib root_passive_sources_never_precede_primary_launcher_rows_for_same_query -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If the known local `gpui_macros` SIGBUS interrupts the lib-test binary before tests execute, keep the failure log and rely on the source-audit receipt proof plus `cargo check --lib`.
+Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib root_passive_source_order -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If the known local `gpui_macros` SIGBUS interrupts the lib-test binary before tests execute, keep the failure log and rely on the source-audit receipt proof plus `cargo check --lib`.
 
 ## Root Unified Passive Snapshot Caches
 
@@ -76,7 +76,7 @@ Use `cargo test --test source_audits root_unified_passive_snapshot_contract -- -
 
 Root unified-search source additions must keep user controls, defaults, docs, and audits in lockstep.
 
-Each root source listed in `UnifiedSearchConfig` needs a Rust config struct, default constants, a section-options accessor with clamps or an explicit promotion policy, a `config.ts` schema interface, a grouping append function, a source-audit module, and a verification section. This parity guard should run before adding new passive sources so slower providers cannot enter the root menu without the controls and proofs that prevent ranking or target-shift regressions.
+Each root source listed in `UnifiedSearchConfig` needs a Rust config struct, default constants, a section-options accessor with clamps or an explicit promotion policy, a `config.ts` schema interface, a grouping append function, a source-audit module, and a verification section. The passive source order also needs Rust and `config.ts` schema parity, total enum coverage in grouping, duplicate normalization, and missing-default append behavior. This parity guard should run before adding new passive sources so slower providers cannot enter the root menu without the controls and proofs that prevent ranking or target-shift regressions.
 
 Use `cargo test --test source_audits root_unified_config_schema_parity_contract -- --nocapture`, the source-specific root unified-search audit, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Runtime proof is unnecessary for parity-only edits, but behavior changes still need the relevant state-first proof.
 

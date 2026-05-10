@@ -1501,6 +1501,8 @@ export interface Config extends BaseConfig {
 export interface UnifiedSearchConfig {
   /** Enable all unified root-search passive sources. */
   enabled?: boolean;
+  /** Reorders passive local source sections only; it does not enable or disable sources. */
+  passiveSourceOrder?: UnifiedSearchPassiveSource[];
   /** Controls for root file rows backed by recent files, Spotlight, and folder browsing. */
   files?: UnifiedSearchFilesConfig;
   /** Controls for passive root Notes rows backed by the local Notes index. */
@@ -1516,6 +1518,14 @@ export interface UnifiedSearchConfig {
   /** Controls for opt-in passive root browser history rows. */
   browserHistory?: UnifiedSearchBrowserHistoryConfig;
 }
+
+export type UnifiedSearchPassiveSource =
+  | "browserTabs"
+  | "notes"
+  | "clipboardHistory"
+  | "dictationHistory"
+  | "acpHistory"
+  | "browserHistory";
 
 export interface UnifiedSearchFilesConfig {
   /** Enable file rows in root launcher search. */

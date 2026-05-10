@@ -220,3 +220,107 @@ fn root_unified_user_controls_are_clamped_or_explicitly_policy_gated() {
         );
     }
 }
+
+#[test]
+fn root_unified_passive_source_order_is_schema_backed_and_total() {
+    let config_types = include_str!("../../src/config/types.rs");
+    let config_schema = include_str!("../../scripts/config-schema.ts");
+    let filtering_cache = include_str!("../../src/app_impl/filtering_cache.rs");
+    let grouping = include_str!("../../src/scripts/grouping.rs");
+
+    assert!(
+        config_types.contains("pub enum UnifiedSearchPassiveSource"),
+        "Rust config must expose a typed passive source order enum"
+    );
+    assert!(
+        config_types.contains("pub passive_source_order: Vec<UnifiedSearchPassiveSource>"),
+        "UnifiedSearchConfig must carry the passive source order"
+    );
+    assert!(
+        config_types.contains(
+            "pub(crate) fn passive_source_order(&self) -> Vec<UnifiedSearchPassiveSource>"
+        ),
+        "UnifiedSearchConfig must normalize passive source order"
+    );
+    assert!(
+        config_types.contains("if seen.insert(*source)")
+            && config_types.contains("if seen.insert(source)"),
+        "passive_source_order must dedupe configured entries and append missing defaults"
+    );
+    assert!(
+        config_schema.contains("export type UnifiedSearchPassiveSource"),
+        "TypeScript config schema must expose the passive source order type"
+    );
+    assert!(
+        config_schema.contains("passiveSourceOrder?: UnifiedSearchPassiveSource[]"),
+        "TypeScript config schema must expose unifiedSearch.passiveSourceOrder"
+    );
+    assert!(
+        config_schema.contains(
+            "Reorders passive local source sections only; it does not enable or disable sources."
+        ),
+        "schema docs must make clear that order does not toggle source enablement"
+    );
+    assert!(
+        filtering_cache
+            .contains("let root_passive_source_order = unified_search.passive_source_order()"),
+        "filtering cache must read the normalized config order"
+    );
+    assert!(
+        grouping
+            .contains("root_passive_source_order: &[crate::config::UnifiedSearchPassiveSource]"),
+        "grouping must accept the normalized passive source order"
+    );
+    assert!(
+        grouping.contains("for source in root_passive_source_order"),
+        "grouping must iterate the configured passive source order instead of a fixed sequence"
+    );
+
+    for (variant, schema_value, grouping_fn) in [
+        (
+            "BrowserTabs",
+            "\"browserTabs\"",
+            "append_root_browser_tabs_section",
+        ),
+        ("Notes", "\"notes\"", "append_root_notes_section"),
+        (
+            "ClipboardHistory",
+            "\"clipboardHistory\"",
+            "append_root_clipboard_history_section",
+        ),
+        (
+            "DictationHistory",
+            "\"dictationHistory\"",
+            "append_root_dictation_history_section",
+        ),
+        (
+            "AcpHistory",
+            "\"acpHistory\"",
+            "append_root_acp_history_section",
+        ),
+        (
+            "BrowserHistory",
+            "\"browserHistory\"",
+            "append_root_browser_history_section",
+        ),
+    ] {
+        assert!(
+            config_types.contains(&format!("Self::{variant}")),
+            "default order must include `{variant}`"
+        );
+        assert!(
+            grouping.contains(&format!(
+                "crate::config::UnifiedSearchPassiveSource::{variant}"
+            )),
+            "grouping match must handle `{variant}`"
+        );
+        assert!(
+            config_schema.contains(schema_value),
+            "schema source union must include `{schema_value}`"
+        );
+        assert!(
+            grouping.contains(grouping_fn),
+            "grouping must still route `{variant}` through `{grouping_fn}`"
+        );
+    }
+}

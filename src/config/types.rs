@@ -55,6 +55,8 @@ impl Default for BuiltInConfig {
 #[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchConfig {
     pub enabled: bool,
+    #[serde(default = "default_unified_search_passive_source_order")]
+    pub passive_source_order: Vec<UnifiedSearchPassiveSource>,
     pub files: UnifiedSearchFilesConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
@@ -68,6 +70,7 @@ impl Default for UnifiedSearchConfig {
     fn default() -> Self {
         Self {
             enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
+            passive_source_order: default_unified_search_passive_source_order(),
             files: UnifiedSearchFilesConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
@@ -77,6 +80,32 @@ impl Default for UnifiedSearchConfig {
             browser_history: UnifiedSearchBrowserHistoryConfig::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum UnifiedSearchPassiveSource {
+    BrowserTabs,
+    Notes,
+    ClipboardHistory,
+    DictationHistory,
+    AcpHistory,
+    BrowserHistory,
+}
+
+impl UnifiedSearchPassiveSource {
+    pub(crate) const DEFAULT_ORDER: [Self; 6] = [
+        Self::BrowserTabs,
+        Self::Notes,
+        Self::ClipboardHistory,
+        Self::DictationHistory,
+        Self::AcpHistory,
+        Self::BrowserHistory,
+    ];
+}
+
+fn default_unified_search_passive_source_order() -> Vec<UnifiedSearchPassiveSource> {
+    UnifiedSearchPassiveSource::DEFAULT_ORDER.to_vec()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -286,6 +315,23 @@ impl From<RootFilePromotionConfig> for crate::file_search::RootFilePromotionPoli
 }
 
 impl UnifiedSearchConfig {
+    #[allow(dead_code)]
+    pub(crate) fn passive_source_order(&self) -> Vec<UnifiedSearchPassiveSource> {
+        let mut seen = std::collections::HashSet::new();
+        let mut order = Vec::new();
+        for source in &self.passive_source_order {
+            if seen.insert(*source) {
+                order.push(*source);
+            }
+        }
+        for source in UnifiedSearchPassiveSource::DEFAULT_ORDER {
+            if seen.insert(source) {
+                order.push(source);
+            }
+        }
+        order
+    }
+
     pub fn root_file_section_options(&self) -> crate::file_search::RootFileSectionOptions {
         crate::file_search::RootFileSectionOptions {
             files_enabled: self.enabled && self.files.enabled,

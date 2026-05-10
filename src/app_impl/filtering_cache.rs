@@ -427,6 +427,7 @@ impl ScriptListApp {
             let dictation_history_options = unified_search.dictation_history_section_options();
             let browser_tabs_options = unified_search.browser_tabs_section_options();
             let browser_history_options = unified_search.browser_history_section_options();
+            let root_passive_source_order = unified_search.passive_source_order();
             let root_note_hits = if advanced_query.is_none()
                 && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
             {
@@ -507,6 +508,7 @@ impl ScriptListApp {
                 browser_tabs_options,
                 &root_passive_frame.browser_history_hits,
                 browser_history_options,
+                &root_passive_source_order,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
