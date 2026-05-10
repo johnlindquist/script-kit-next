@@ -346,7 +346,7 @@ mod tests {
         assert!(
             helper.contains("RootFileSectionMode::GlobalQuery")
                 && helper.contains("filter_text.trim()")
-                && helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && helper.contains("root_file_global_query_is_eligible(query)")
                 && helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
                 && helper.contains("files.first()")
                 && helper
@@ -385,9 +385,10 @@ mod tests {
         assert!(
             file_search_production.contains("pub fn root_file_name_token_matches_query(")
                 && file_search_production.contains("root_file_name_seed_matches_query")
+                && file_search_production.contains("root_file_recent_seed_matches_query")
                 && file_search_production
                     .contains("root_file_name_token_matches_query(name, query)"),
-            "recent seed eligibility should delegate to the shared filename-token gate"
+            "recent seed eligibility should preserve the shared filename-token gate"
         );
 
         let promote_helper = grouping_production
@@ -729,29 +730,47 @@ mod tests {
         assert!(
             production.contains("root_recent_file_results")
                 && production.contains("merge_root_global_file_results_with_recent(")
-                && production.contains("root_file_name_seed_matches_query")
+                && production.contains("root_file_recent_seed_matches_query")
                 && production.contains("RootFileSectionMode::DirectoryBrowse"),
-            "root grouping should pass filename-matching recent files into global ranking without changing directory browse mode"
+            "root grouping should pass eligible recent files into global ranking without changing directory browse mode"
         );
     }
 
     #[test]
     fn root_global_recent_file_seed_filters_path_only_matches() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
         let production = production_source(&grouping_source);
         let helper = production
             .split("fn merge_root_global_file_results_with_recent(")
             .nth(1)
             .and_then(|section| section.split("fn root_file_section_title(").next())
             .expect("recent merge helper should be present");
+        let recent_seed_helper = file_search_production
+            .split("pub fn root_file_recent_seed_matches_query(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn contains_at_root_file_token_boundary(")
+                    .next()
+            })
+            .expect("recent seed helper should be present");
 
         assert!(
             helper.contains("filter_text: &str")
                 && helper.contains("provider_results")
                 && helper.contains("recent_results")
-                && helper.contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
-            "recent root file seeds should be filtered by filename-side query matches while provider rows stay unfiltered"
+                && helper.contains("root_file_recent_seed_matches_query(file, filter_text)"),
+            "recent root file seeds should be filtered by the shared recent-seed predicate while provider rows stay unfiltered"
+        );
+        assert!(
+            recent_seed_helper.contains("root_file_global_query_is_eligible(query)")
+                && recent_seed_helper.contains("root_file_name_seed_matches_query(&file.name, query)")
+                && recent_seed_helper.contains("root_file_path_context_matches_query(file, query)"),
+            "recent seed eligibility should require a global query and allow filename-token or ordered directory-context matches"
         );
         for forbidden in [
             "mdfind",
@@ -791,8 +810,8 @@ mod tests {
         assert!(
             merge_helper.contains("root_global_file_result_is_eligible(file)")
                 && merge_helper
-                    .contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
-            "global Files should filter app bundles before ranking while preserving recent filename-token gating"
+                    .contains("root_file_recent_seed_matches_query(file, filter_text)"),
+            "global Files should filter app bundles before ranking while preserving recent seed gating"
         );
         assert!(
             grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
@@ -1444,8 +1463,8 @@ mod tests {
             "non-empty global recent seeds should search the deeper recent pool, not just visible empty-root rows"
         );
         assert!(
-            merge_helper.contains("root_file_name_seed_matches_query(&file.name, filter_text)"),
-            "non-empty global recent seeds should keep filename-token eligibility"
+            merge_helper.contains("root_file_recent_seed_matches_query(file, filter_text)"),
+            "non-empty global recent seeds should keep bounded recent-seed eligibility"
         );
     }
 

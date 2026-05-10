@@ -628,7 +628,7 @@ fn merge_root_global_file_results_with_recent(
     }
     for file in recent_results.iter().filter(|file| {
         crate::file_search::root_global_file_result_is_eligible(file)
-            && crate::file_search::root_file_name_seed_matches_query(&file.name, filter_text)
+            && crate::file_search::root_file_recent_seed_matches_query(file, filter_text)
     }) {
         if seen.insert(file.path.clone()) {
             merged.push(file.clone());
@@ -1089,6 +1089,101 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_global_recent_seed_accepts_ordered_directory_context() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/dev/script-kit/README.md",
+            "README.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "script kit readme",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+            )),
+            "directory-context recent seeds should render under the loading Files header"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/dev/script-kit/README.md"
+            )),
+            "ordered directory-context recent files should seed non-empty global root results"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"script kit readme\""
+            )),
+            "seeded directory-context rows should keep the full File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_global_recent_seed_rejects_path_only_directory_context() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/dev/script-kit/readme/archive.txt",
+            "archive.txt",
+        )];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "script kit readme",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            flat.iter().all(|result| !matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/dev/script-kit/readme/archive.txt"
+            )),
+            "path-only directory-context recents must not seed while the provider is loading"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"script kit readme\""
+            )),
+            "path-only rejection should still keep the dedicated File Search handoff"
+        );
+    }
+
+    #[test]
     fn root_global_provider_path_only_match_still_renders() {
         let frecency_store = FrecencyStore::new();
         let root_files = vec![root_file(
@@ -1373,6 +1468,21 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design notes",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_recent_seed_directory_context_does_not_promote_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file("/Users/example/dev/script-kit/README.md", "README.md"),
+            score: 100,
+        }];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "script kit readme",
             &files,
             &[],
         ));

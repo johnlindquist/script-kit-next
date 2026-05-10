@@ -30,6 +30,8 @@ Root recent-file seed-pool changes are verified with source audits and grouping 
 
 Hydration must use the deeper seed limit, empty-root rendering must use the render limit, grouping must remain provider-free, and non-empty global recent seeds must keep filename-token eligibility.
 
+Directory-context recent seed changes must assert that ordered parent-directory plus filename-token recents seed non-empty global root searches, while path-only, reversed-order, and unsafe short-parent matches stay excluded.
+
 ## Root File Directory Context Ranking
 
 Root file directory-context ranking is verified with pure query-builder and ranking tests because it changes retrieval and scoring math without adding UI state.
