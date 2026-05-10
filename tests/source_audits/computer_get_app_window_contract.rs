@@ -59,8 +59,10 @@ fn computer_get_app_window_is_read_only_window_lookup() {
         "computer/get_app_window pid must be an integer schema property"
     );
     assert!(
-        input_schema_body.contains("\"nativeWindowId\": { \"type\": \"integer\", \"minimum\": 0 }"),
-        "computer/get_app_window nativeWindowId must be a non-negative integer schema property"
+        input_schema_body.contains(
+            "\"nativeWindowId\": { \"type\": \"integer\", \"minimum\": 0, \"maximum\": 4294967295u64 }"
+        ),
+        "computer/get_app_window nativeWindowId must match the non-negative u32 schema boundary"
     );
     assert!(
         input_schema_body.contains("\"required\": [\"pid\", \"nativeWindowId\"]"),
@@ -128,6 +130,10 @@ fn computer_get_app_window_is_read_only_window_lookup() {
     assert!(
         handler_body.contains("runtime.list_app_windows(request)"),
         "handler must reuse the existing list_app_windows runtime bridge"
+    );
+    assert!(
+        handler_body.contains("let window = if app.is_some()"),
+        "handler must not search windows when the app is absent"
     );
     assert!(
         handler_body.contains(".find(|window| window.native_window_id == args.native_window_id)"),
