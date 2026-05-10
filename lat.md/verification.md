@@ -56,6 +56,14 @@ Checks must prove that global root file search does not publish partial provider
 
 Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib stable_selection_key`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Run `bun scripts/agentic/root-search-frame-stability.ts` for the state-first runtime proof against the real main menu; it compares `selected_result_key`, Enter action, and `visible_result_key_fingerprint` before and after root file provider completion for the same filter text.
 
+## Root Unified Search Passive Ranking Receipt
+
+Root passive ranking receipts prove actual visible row roles instead of inferring intent from action labels.
+
+`mainWindowPreflight.visibleResults` exposes content-light row receipts with grouped index, visible rank, stable key, role, action kind, type label, and source name. Roles classify visible rows as primary launcher intent, root file, root passive, fallback, script issue, or agent, so runtime proofs can assert that passive rows exist and stay below commands, scripts, apps, skills, and windows for collision queries.
+
+Use `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --lib root_passive_sources_never_precede_primary_launcher_rows_for_same_query -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If the known local `gpui_macros` SIGBUS interrupts the lib-test binary before tests execute, keep the failure log and rely on the source-audit receipt proof plus `cargo check --lib`.
+
 ## Root Unified Passive Snapshot Caches
 
 Passive snapshot caches and query-frame latches keep slow local providers from changing an active root-search frame.

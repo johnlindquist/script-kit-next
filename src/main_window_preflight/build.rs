@@ -1,6 +1,8 @@
+use crate::list_item::GroupedListItem;
 use crate::main_window_preflight::types::{
     MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightReceipt,
-    RootPassiveFrameReceipt, RootPassiveSourceReceipt,
+    MainWindowPreflightResultRole, MainWindowPreflightVisibleResult, RootPassiveFrameReceipt,
+    RootPassiveSourceReceipt,
 };
 use crate::AppView;
 
@@ -14,6 +16,29 @@ fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
         .grouped_search_results()
         .filter_map(|result| result.stable_selection_key())
         .collect()
+}
+
+fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResultRole {
+    match result {
+        crate::scripts::SearchResult::Script(_)
+        | crate::scripts::SearchResult::Scriptlet(_)
+        | crate::scripts::SearchResult::Skill(_)
+        | crate::scripts::SearchResult::BuiltIn(_)
+        | crate::scripts::SearchResult::App(_)
+        | crate::scripts::SearchResult::Window(_) => MainWindowPreflightResultRole::Primary,
+        crate::scripts::SearchResult::File(_) => MainWindowPreflightResultRole::RootFile,
+        crate::scripts::SearchResult::Note(_)
+        | crate::scripts::SearchResult::AcpHistory(_)
+        | crate::scripts::SearchResult::ClipboardHistory(_)
+        | crate::scripts::SearchResult::DictationHistory(_)
+        | crate::scripts::SearchResult::BrowserTab(_)
+        | crate::scripts::SearchResult::BrowserHistory(_) => {
+            MainWindowPreflightResultRole::RootPassive
+        }
+        crate::scripts::SearchResult::Fallback(_) => MainWindowPreflightResultRole::Fallback,
+        crate::scripts::SearchResult::ScriptIssue(_) => MainWindowPreflightResultRole::ScriptIssue,
+        crate::scripts::SearchResult::Agent(_) => MainWindowPreflightResultRole::Agent,
+    }
 }
 
 fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflightActionKind {
@@ -43,6 +68,36 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
             MainWindowPreflightActionKind::InspectIssues
         }
     }
+}
+
+fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPreflightVisibleResult> {
+    app.main_menu_result_caches
+        .grouped_items()
+        .iter()
+        .enumerate()
+        .filter_map(|(grouped_index, item)| {
+            let GroupedListItem::Item(flat_index) = item else {
+                return None;
+            };
+            let result = app
+                .main_menu_result_caches
+                .search_result_for_flat_index(*flat_index)?;
+            Some(MainWindowPreflightVisibleResult {
+                visible_rank: 0,
+                grouped_index,
+                stable_key: result.stable_selection_key(),
+                role: result_role(result),
+                action_kind: enter_action_kind(result),
+                type_label: result.type_label().to_string(),
+                source_name: result.source_name().map(ToString::to_string),
+            })
+        })
+        .enumerate()
+        .map(|(visible_rank, mut receipt)| {
+            receipt.visible_rank = visible_rank;
+            receipt
+        })
+        .collect()
 }
 
 fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAction> {
@@ -113,11 +168,15 @@ pub(crate) fn build_main_window_preflight_receipt(
         source_name: result.source_name().map(ToString::to_string),
         description: result.description().map(ToString::to_string),
     };
+    let visible_results = visible_result_receipts(app);
+    let selected_result_role = result_role(&result);
 
     Some(MainWindowPreflightReceipt {
         filter_text: app.filter_text.clone(),
         selected_index: app.selected_index,
         selected_result_key: result.stable_selection_key(),
+        selected_result_role,
+        visible_results,
         visible_result_key_fingerprint: visible_result_keys(app).join("|"),
         visible_result_count: app.main_menu_result_caches.grouped_search_results().count(),
         root_passive_frame: build_root_passive_frame_receipt(app),
@@ -132,6 +191,7 @@ pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightRec
         event = "main_window_preflight_receipt",
         selected_index = receipt.selected_index,
         selected_result_key = ?receipt.selected_result_key,
+        selected_result_role = ?receipt.selected_result_role,
         visible_result_key_fingerprint = %receipt.visible_result_key_fingerprint,
         visible_result_count = receipt.visible_result_count,
         enter_label = %receipt.enter_action.label,

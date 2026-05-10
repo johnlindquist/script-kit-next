@@ -157,6 +157,12 @@ Passive root sources use cached snapshots on the foreground grouping path so lat
 
 Browser Tabs and Browser History refresh stale snapshots in the background. The app layer freezes their hit vectors in a per-query passive frame before grouping, so a background refresh can change cache status without changing the active query's visible rows, focused target, or Enter action. Saved ACP and Dictation history reuse mtime-backed JSONL indexes on the foreground search path, invalidating after local writes/deletes. Refresh completion must not invalidate grouped results, notify the main list, or change the visible result fingerprint for the same filter text; it only warms a future frame after the query changes or the cache is rebuilt for another reason.
 
+## Root Unified Search Passive Ranking Receipt
+
+Root passive ranking receipts make the launcher row-order contract visible to automation without exposing row content.
+
+The `mainWindowPreflight` receipt now includes `selectedResultRole` and `visibleResults`. Each visible row receipt carries grouped index, visible rank, stable selection key, role, action kind, type label, and source name. The role is derived directly from `SearchResult`: scripts, scriptlets, skills, built-ins, apps, and windows are primary; root files are root-file rows; Notes, ACP History, Clipboard History, Dictation History, Browser Tabs, and Browser History are root-passive rows; fallbacks, script issues, and agents stay distinct. This lets state-first proofs verify that real passive rows are present but remain below primary launcher intent for the same query.
+
 ## Root Unified Search Clipboard History
 
 Clipboard history rows are an opt-in passive launcher source for non-empty root queries.
