@@ -537,7 +537,7 @@ fn root_file_section_should_promote(
     }
 
     let query = filter_text.trim();
-    if query.chars().count() < crate::file_search::ROOT_FILE_MIN_QUERY_CHARS {
+    if !crate::file_search::root_file_global_query_is_eligible(query) {
         return false;
     }
 
@@ -1360,6 +1360,80 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design notes",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_short_digit_recent_seed_uses_filename_tokens() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/2026-q2-report.xlsx",
+            "2026-q2-report.xlsx",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "q2",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+            )),
+            "short digit recent seeds should render in the loading Files section"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.name == "2026-q2-report.xlsx"
+            )),
+            "short digit filename tokens should seed non-empty global root file results"
+        );
+    }
+
+    #[test]
+    fn root_global_short_digit_filename_match_promotes_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file("/Users/example/Desktop/Q2Report.pdf", "Q2Report.pdf"),
+            score: 100,
+        }];
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "q2",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_two_letter_query_still_does_not_promote() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file("/Users/example/Desktop/ai-notes.md", "ai-notes.md"),
+            score: 100,
+        }];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "ai",
             &files,
             &[],
         ));

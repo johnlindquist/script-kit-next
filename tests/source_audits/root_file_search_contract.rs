@@ -361,11 +361,15 @@ mod tests {
             .expect("root file promotion helper should be present");
         assert!(
             promote_helper.contains("RootFileSectionMode::GlobalQuery")
-                && promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS")
+                && promote_helper.contains("root_file_global_query_is_eligible(query)")
                 && promote_helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
                 && promote_helper
                     .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
             "promotion should use the same filename-token gate as recent seeds unless the launcher winner already strongly matches"
+        );
+        assert!(
+            !promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS"),
+            "promotion should share root file global query eligibility instead of keeping a stale raw length check"
         );
         for forbidden in [
             "mdfind",
@@ -483,6 +487,46 @@ mod tests {
         assert!(
             file_search_production.contains("root_file_name_token_matches_query(name, query)"),
             "recent seeds should continue to delegate to the shared filename-token gate"
+        );
+    }
+
+    #[test]
+    fn root_global_short_digit_queries_share_search_and_promotion_eligibility() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            file_search_production.contains("pub fn root_file_global_query_is_eligible(")
+                && file_search_production.contains("fn root_file_query_has_safe_global_length(")
+                && file_search_production.contains("fn root_file_short_digit_token_query(")
+                && file_search_production.contains("root_file_global_query_is_eligible(query)"),
+            "root file search should expose one shared global eligibility helper with a narrow short-digit exception"
+        );
+
+        let promote_helper = grouping_production
+            .split("fn root_file_section_should_promote(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn root_file_section_insertion_index(")
+                    .next()
+            })
+            .expect("root file promotion helper should be present");
+        assert!(
+            promote_helper.contains("root_file_global_query_is_eligible(query)")
+                && promote_helper
+                    .contains("top_launcher_result_strongly_matches_query(flat_results, query)")
+                && promote_helper
+                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
+            "promotion should share root global search eligibility before applying filename-token promotion"
+        );
+        assert!(
+            !promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS"),
+            "promotion must not keep a stale raw min-length gate after short digit tokens become eligible"
         );
     }
 
