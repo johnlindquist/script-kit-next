@@ -669,6 +669,31 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Clipboard", style));
         }
 
+        scripts::SearchResult::BrowserHistory(browser_match) => {
+            let hit = &browser_match.hit;
+
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(hit.title.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section("DOMAIN", &hit.domain, style));
+            content = content.child(focused_info_labeled_section("URL", &hit.url, style));
+            content = content.child(focused_info_labeled_section(
+                "SOURCE",
+                &format!("{} / {}", hit.provider_label, hit.profile_label),
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Browser History", style));
+        }
+
         scripts::SearchResult::Agent(agent_match) => {
             let agent = &agent_match.agent;
 
@@ -1051,6 +1076,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::BrowserHistory(_) => None,
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
@@ -1191,6 +1217,14 @@ impl ScriptListApp {
                             format!("clipboard-history:{}", m.entry.id),
                             false,
                             "Paste",
+                        ),
+                    ),
+                    scripts::SearchResult::BrowserHistory(m) => Some(
+                        ScriptInfo::with_action_verb(
+                            &m.hit.title,
+                            m.hit.url.clone(),
+                            false,
+                            "Open Page",
                         ),
                     ),
                     scripts::SearchResult::Agent(m) => {

@@ -361,6 +361,7 @@ impl ScriptListApp {
             let notes_options = unified_search.notes_section_options();
             let acp_history_options = unified_search.acp_history_section_options();
             let clipboard_history_options = self.config.root_clipboard_history_section_options();
+            let browser_history_options = unified_search.browser_history_section_options();
             let root_note_hits = if advanced_query.is_none()
                 && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
             {
@@ -392,6 +393,18 @@ impl ScriptListApp {
             } else {
                 Vec::new()
             };
+            let root_browser_history_hits = if advanced_query.is_none()
+                && crate::browser_history::root_browser_history_query_is_eligible(
+                    search_text,
+                    browser_history_options.clone(),
+                ) {
+                crate::browser_history::search_root_browser_history_meta(
+                    search_text,
+                    browser_history_options.clone(),
+                )
+            } else {
+                Vec::new()
+            };
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -417,6 +430,8 @@ impl ScriptListApp {
                 clipboard_history_options,
                 &root_acp_history_hits,
                 acp_history_options,
+                &root_browser_history_hits,
+                browser_history_options,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {

@@ -59,6 +59,7 @@ pub struct UnifiedSearchConfig {
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
+    pub browser_history: UnifiedSearchBrowserHistoryConfig,
 }
 
 impl Default for UnifiedSearchConfig {
@@ -69,6 +70,7 @@ impl Default for UnifiedSearchConfig {
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
+            browser_history: UnifiedSearchBrowserHistoryConfig::default(),
         }
     }
 }
@@ -153,6 +155,45 @@ impl Default for UnifiedSearchClipboardHistoryConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchBrowserHistoryConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub max_age_days: u32,
+    pub providers: Vec<BrowserHistoryProvider>,
+    pub search_urls: bool,
+}
+
+impl Default for UnifiedSearchBrowserHistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MIN_QUERY_CHARS,
+            max_age_days: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MAX_AGE_DAYS,
+            providers: BrowserHistoryProvider::default_root_providers(),
+            search_urls: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SEARCH_URLS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowserHistoryProvider {
+    Arc,
+    Chrome,
+    Brave,
+    Edge,
+}
+
+impl BrowserHistoryProvider {
+    pub(crate) fn default_root_providers() -> Vec<Self> {
+        vec![Self::Arc, Self::Chrome, Self::Brave, Self::Edge]
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum RootFilePromotionConfig {
@@ -206,6 +247,20 @@ impl UnifiedSearchConfig {
             max_results: self.notes.max_results.clamp(1, 5),
             min_query_chars: self.notes.min_query_chars.clamp(2, 32),
             search_content: self.notes.search_content,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn browser_history_section_options(
+        &self,
+    ) -> crate::browser_history::RootBrowserHistorySectionOptions {
+        crate::browser_history::RootBrowserHistorySectionOptions {
+            enabled: self.enabled && self.browser_history.enabled,
+            max_results: self.browser_history.max_results.clamp(1, 5),
+            min_query_chars: self.browser_history.min_query_chars.clamp(4, 32),
+            max_age_days: self.browser_history.max_age_days.clamp(1, 365),
+            providers: self.browser_history.providers.clone(),
+            search_urls: self.browser_history.search_urls,
         }
     }
 }

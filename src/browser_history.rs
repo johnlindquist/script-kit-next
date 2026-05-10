@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use chrono::{DateTime, Utc};
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use sha2::{Digest, Sha256};
 
 const CHROMIUM_EPOCH_OFFSET_SECS: i64 = 11_644_473_600;
 const SAFARI_EPOCH_OFFSET_SECS: i64 = 978_307_200;
@@ -140,6 +141,197 @@ impl BrowserHistoryEntry {
 pub struct BrowserHistoryMatch {
     pub entry: BrowserHistoryEntry,
     pub score: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RootBrowserHistorySectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub max_age_days: u32,
+    pub providers: Vec<crate::config::BrowserHistoryProvider>,
+    pub search_urls: bool,
+}
+
+impl Default for RootBrowserHistorySectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_results: 3,
+            min_query_chars: 4,
+            max_age_days: 90,
+            providers: crate::config::BrowserHistoryProvider::default_root_providers(),
+            search_urls: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RootBrowserHistorySearchHit {
+    pub stable_key: String,
+    pub provider_label: String,
+    pub profile_label: String,
+    pub title: String,
+    pub url: String,
+    pub domain: String,
+    pub last_visit_unix_ms: i64,
+    pub visit_count: i64,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+struct RootBrowserHistoryProviderSpec {
+    provider: crate::config::BrowserHistoryProvider,
+    provider_label: &'static str,
+    profile_root: &'static str,
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+const ROOT_BROWSER_HISTORY_PROVIDERS: &[RootBrowserHistoryProviderSpec] = &[
+    RootBrowserHistoryProviderSpec {
+        provider: crate::config::BrowserHistoryProvider::Arc,
+        provider_label: "Arc",
+        profile_root: "Library/Application Support/Arc/User Data",
+    },
+    RootBrowserHistoryProviderSpec {
+        provider: crate::config::BrowserHistoryProvider::Chrome,
+        provider_label: "Chrome",
+        profile_root: "Library/Application Support/Google/Chrome",
+    },
+    RootBrowserHistoryProviderSpec {
+        provider: crate::config::BrowserHistoryProvider::Brave,
+        provider_label: "Brave",
+        profile_root: "Library/Application Support/BraveSoftware/Brave-Browser",
+    },
+    RootBrowserHistoryProviderSpec {
+        provider: crate::config::BrowserHistoryProvider::Edge,
+        provider_label: "Edge",
+        profile_root: "Library/Application Support/Microsoft Edge",
+    },
+];
+
+pub(crate) fn root_browser_history_query_is_eligible(
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> bool {
+    let trimmed = query.trim();
+    options.enabled
+        && trimmed.chars().count() >= options.min_query_chars
+        && !trimmed.contains('\n')
+        && !trimmed.contains('\r')
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+pub(crate) fn search_root_browser_history_meta(
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> Vec<RootBrowserHistorySearchHit> {
+    if !root_browser_history_query_is_eligible(query, options.clone()) {
+        return Vec::new();
+    }
+
+    let home = match std::env::var_os("HOME").map(PathBuf::from) {
+        Some(home) => home,
+        None => return Vec::new(),
+    };
+
+    search_root_browser_history_meta_from_home(&home, query, options)
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn search_root_browser_history_meta_from_home(
+    home: &Path,
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> Vec<RootBrowserHistorySearchHit> {
+    let mut hits = Vec::new();
+    let selected_providers: HashSet<_> = options.providers.iter().copied().collect();
+    let cutoff = chromium_cutoff_time_for_max_age_days(options.max_age_days);
+    let per_db_limit = options
+        .max_results
+        .saturating_mul(4)
+        .max(options.max_results);
+
+    for spec in ROOT_BROWSER_HISTORY_PROVIDERS {
+        if !selected_providers.contains(&spec.provider) {
+            continue;
+        }
+
+        for db_path in root_chromium_history_db_paths(spec, home) {
+            let profile_label = db_path
+                .parent()
+                .and_then(|parent| parent.file_name())
+                .and_then(|name| name.to_str())
+                .unwrap_or("Default")
+                .to_string();
+
+            match query_root_chromium_history_db(
+                spec,
+                &profile_label,
+                &db_path,
+                query,
+                cutoff,
+                per_db_limit,
+                options.search_urls,
+            ) {
+                Ok(mut db_hits) => hits.append(&mut db_hits),
+                Err(error) => {
+                    tracing::debug!(
+                        provider = spec.provider_label,
+                        profile = %profile_label,
+                        path = %db_path.display(),
+                        error = %error,
+                        "root browser history source skipped"
+                    );
+                }
+            }
+        }
+    }
+
+    dedupe_root_browser_history_hits(hits, options.max_results)
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+pub(crate) fn open_browser_history_url(url: &str) -> Result<()> {
+    ensure_browser_history_url_is_http_or_https(url)?;
+    open::that(url).context("open browser history URL with default handler")
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+pub(crate) fn ensure_browser_history_url_is_http_or_https(url: &str) -> Result<()> {
+    if root_browser_history_url_is_http_or_https(url) {
+        Ok(())
+    } else {
+        bail!("unsupported browser history URL scheme")
+    }
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_browser_history_url_is_http_or_https(url: &str) -> bool {
+    let trimmed = url.trim();
+    if trimmed.is_empty() || trimmed.chars().any(char::is_control) {
+        return false;
+    }
+
+    let Some((scheme, _)) = trimmed.split_once(':') else {
+        return false;
+    };
+    if scheme.is_empty() {
+        return false;
+    }
+
+    let mut chars = scheme.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphabetic() {
+        return false;
+    }
+    if !chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')) {
+        return false;
+    }
+
+    scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
 }
 
 pub fn list_recent_history(limit: usize) -> Result<Vec<BrowserHistoryEntry>> {
@@ -614,6 +806,198 @@ fn query_chromium_history(
     collect_rows(rows)
 }
 
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_chromium_history_db_paths(
+    spec: &RootBrowserHistoryProviderSpec,
+    home: &Path,
+) -> Vec<PathBuf> {
+    collect_profile_db_paths(&home.join(spec.profile_root), "History")
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn query_root_chromium_history_db(
+    spec: &RootBrowserHistoryProviderSpec,
+    profile_label: &str,
+    db_path: &Path,
+    query: &str,
+    cutoff_chromium_time: i64,
+    limit: usize,
+    search_urls: bool,
+) -> Result<Vec<RootBrowserHistorySearchHit>> {
+    let temp_dir =
+        tempfile::tempdir().context("create temp dir for root browser history db copy")?;
+    let copied_db = copy_sqlite_db_snapshot(db_path, temp_dir.path())?;
+    let conn = Connection::open_with_flags(
+        &copied_db,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .with_context(|| {
+        format!(
+            "open_root_browser_history_db_failed: path={}",
+            copied_db.display()
+        )
+    })?;
+
+    query_root_chromium_history_conn(
+        &conn,
+        spec,
+        profile_label,
+        query,
+        cutoff_chromium_time,
+        limit,
+        search_urls,
+    )
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn query_root_chromium_history_conn(
+    conn: &Connection,
+    spec: &RootBrowserHistoryProviderSpec,
+    profile_label: &str,
+    query: &str,
+    cutoff_chromium_time: i64,
+    limit: usize,
+    search_urls: bool,
+) -> Result<Vec<RootBrowserHistorySearchHit>> {
+    let like_pattern = format!("%{}%", escape_sql_like(query.trim()));
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, url, COALESCE(title, ''), COALESCE(visit_count, 0), last_visit_time
+        FROM urls
+        WHERE last_visit_time >= ?1
+          AND (title LIKE ?2 ESCAPE '\'
+               OR (?3 != 0 AND url LIKE ?2 ESCAPE '\'))
+        ORDER BY last_visit_time DESC, typed_count DESC, visit_count DESC
+        LIMIT ?4
+        "#,
+    )?;
+
+    let rows = stmt.query_map(
+        params![
+            cutoff_chromium_time,
+            like_pattern,
+            if search_urls { 1_i64 } else { 0_i64 },
+            i64::try_from(limit).unwrap_or(i64::MAX),
+        ],
+        |row| {
+            let id: i64 = row.get(0)?;
+            let url: String = row.get(1)?;
+            let title: String = row.get(2)?;
+            let visit_count: i64 = row.get(3)?;
+            let visit_time: i64 = row.get(4)?;
+            let domain = host_from_url(&url).to_string();
+            Ok(RootBrowserHistorySearchHit {
+                stable_key: root_browser_history_stable_key(
+                    spec.provider_label,
+                    profile_label,
+                    id,
+                    &url,
+                ),
+                provider_label: spec.provider_label.to_string(),
+                profile_label: profile_label.to_string(),
+                title: root_browser_history_display_title(&title, &domain, &url),
+                url,
+                domain,
+                last_visit_unix_ms: chromium_visit_time_to_unix_ms(visit_time),
+                visit_count,
+            })
+        },
+    )?;
+
+    let mut hits = Vec::new();
+    for row in rows {
+        let hit = row?;
+        if root_browser_history_url_is_http_or_https(&hit.url) {
+            hits.push(hit);
+        }
+    }
+    Ok(hits)
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn dedupe_root_browser_history_hits(
+    mut hits: Vec<RootBrowserHistorySearchHit>,
+    limit: usize,
+) -> Vec<RootBrowserHistorySearchHit> {
+    hits.sort_by(|a, b| {
+        b.last_visit_unix_ms
+            .cmp(&a.last_visit_unix_ms)
+            .then_with(|| b.visit_count.cmp(&a.visit_count))
+            .then_with(|| a.provider_label.cmp(&b.provider_label))
+            .then_with(|| a.url.cmp(&b.url))
+    });
+
+    let mut out = Vec::with_capacity(limit.min(hits.len()));
+    let mut seen_urls = HashSet::new();
+    for hit in hits {
+        let normalized = normalized_url_key(&hit.url).unwrap_or_else(|| hit.url.to_lowercase());
+        if !seen_urls.insert(normalized) {
+            continue;
+        }
+        out.push(hit);
+        if out.len() >= limit {
+            break;
+        }
+    }
+    out
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_browser_history_display_title(title: &str, domain: &str, url: &str) -> String {
+    let title = title.trim();
+    if !title.is_empty() {
+        return title.to_string();
+    }
+    let domain = domain.trim();
+    if !domain.is_empty() {
+        return domain.to_string();
+    }
+    url.trim().to_string()
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn root_browser_history_stable_key(
+    provider_label: &str,
+    profile_label: &str,
+    row_id: i64,
+    url: &str,
+) -> String {
+    format!(
+        "browser-history/{}/{}/{}",
+        provider_label.to_ascii_lowercase().replace(' ', "-"),
+        short_sha256_hex(profile_label),
+        short_sha256_hex(&format!("{row_id}:{url}"))
+    )
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn short_sha256_hex(input: &str) -> String {
+    let digest = Sha256::digest(input.as_bytes());
+    hex::encode(&digest[..6])
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn escape_sql_like(input: &str) -> String {
+    let mut escaped = String::with_capacity(input.len());
+    for ch in input.chars() {
+        match ch {
+            '%' | '_' | '\\' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+#[allow(dead_code)] // Root unified search calls this through the binary app layer.
+fn chromium_cutoff_time_for_max_age_days(max_age_days: u32) -> i64 {
+    let cutoff_unix_secs =
+        Utc::now().timestamp() - i64::from(max_age_days).saturating_mul(24 * 60 * 60);
+    (cutoff_unix_secs + CHROMIUM_EPOCH_OFFSET_SECS) * 1_000_000
+}
+
 fn query_safari_history(
     conn: &Connection,
     browser: &SupportedBrowserHistory,
@@ -853,5 +1237,88 @@ mod tests {
 
         let deduped = dedupe_history_entries(vec![newer.clone(), older], 10);
         assert_eq!(deduped, vec![newer]);
+    }
+
+    #[test]
+    fn root_browser_history_reads_chromium_url_metadata_only_and_filters_schemes() {
+        let temp = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir failed: {error}"));
+        let profile_dir = temp
+            .path()
+            .join("Library/Application Support/Google/Chrome/Default");
+        std::fs::create_dir_all(&profile_dir)
+            .unwrap_or_else(|error| panic!("create profile dir failed: {error}"));
+        let db_path = profile_dir.join("History");
+        let conn = Connection::open(&db_path)
+            .unwrap_or_else(|error| panic!("open history db failed: {error}"));
+        conn.execute_batch(
+            r#"
+            CREATE TABLE urls (
+                id INTEGER PRIMARY KEY,
+                url TEXT NOT NULL,
+                title TEXT,
+                visit_count INTEGER NOT NULL DEFAULT 0,
+                typed_count INTEGER NOT NULL DEFAULT 0,
+                last_visit_time INTEGER NOT NULL DEFAULT 0
+            );
+            "#,
+        )
+        .unwrap_or_else(|error| panic!("create urls table failed: {error}"));
+
+        let now_chromium = (Utc::now().timestamp() + CHROMIUM_EPOCH_OFFSET_SECS) * 1_000_000;
+        conn.execute(
+            "INSERT INTO urls (id, url, title, visit_count, typed_count, last_visit_time) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                1_i64,
+                "https://example.com/root-browser-unique",
+                "Root Browser Unique Planning Page",
+                7_i64,
+                2_i64,
+                now_chromium,
+            ],
+        )
+        .unwrap_or_else(|error| panic!("insert https row failed: {error}"));
+        conn.execute(
+            "INSERT INTO urls (id, url, title, visit_count, typed_count, last_visit_time) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                2_i64,
+                "chrome://settings/root-browser-unique",
+                "Root Browser Unique Settings",
+                3_i64,
+                0_i64,
+                now_chromium,
+            ],
+        )
+        .unwrap_or_else(|error| panic!("insert chrome row failed: {error}"));
+        drop(conn);
+
+        let hits = search_root_browser_history_meta_from_home(
+            temp.path(),
+            "Root Browser Unique",
+            RootBrowserHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 4,
+                max_age_days: 90,
+                providers: vec![crate::config::BrowserHistoryProvider::Chrome],
+                search_urls: true,
+            },
+        );
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "Root Browser Unique Planning Page");
+        assert_eq!(hits[0].url, "https://example.com/root-browser-unique");
+        assert_eq!(hits[0].domain, "example.com");
+        assert_eq!(hits[0].visit_count, 7);
+        assert!(hits[0].stable_key.starts_with("browser-history/chrome/"));
+    }
+
+    #[test]
+    fn root_browser_history_open_rejects_non_http_schemes() {
+        assert!(ensure_browser_history_url_is_http_or_https("https://example.com").is_ok());
+        assert!(ensure_browser_history_url_is_http_or_https("http://example.com").is_ok());
+        assert!(ensure_browser_history_url_is_http_or_https("chrome://settings").is_err());
+        assert!(ensure_browser_history_url_is_http_or_https("file:///tmp/a").is_err());
+        assert!(ensure_browser_history_url_is_http_or_https("javascript:alert(1)").is_err());
+        assert!(ensure_browser_history_url_is_http_or_https("scriptkit://run/test").is_err());
     }
 }

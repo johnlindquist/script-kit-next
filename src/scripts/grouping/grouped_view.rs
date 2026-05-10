@@ -134,6 +134,7 @@ pub(super) fn build_grouped_view_results(
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
+            SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             // Suppressed: agents are not top-level launcher artifacts
             SearchResult::Agent(_) => None,
             // Fallbacks don't have paths - they're only shown in search mode, not grouped view
@@ -192,6 +193,7 @@ pub(super) fn build_grouped_view_results(
                     SearchResult::Note(_) => {}
                     SearchResult::AcpHistory(_) => {}
                     SearchResult::ClipboardHistory(_) => {}
+                    SearchResult::BrowserHistory(_) => {}
                     SearchResult::App(_) => apps_indices.push(idx),
                     // Suppressed: agents are not top-level launcher artifacts
                     SearchResult::Agent(_) => {
@@ -227,6 +229,7 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::Note(_) => {}
                 SearchResult::AcpHistory(_) => {}
                 SearchResult::ClipboardHistory(_) => {}
+                SearchResult::BrowserHistory(_) => {}
                 SearchResult::App(_) => apps_indices.push(idx),
                 // Suppressed: agents are not top-level launcher artifacts
                 SearchResult::Agent(_) => {}

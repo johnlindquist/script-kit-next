@@ -332,6 +332,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::BrowserHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
@@ -455,6 +456,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::ClipboardHistory(clipboard_match) => {
                         self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
+                    }
+                    scripts::SearchResult::BrowserHistory(browser_match) => {
+                        self.execute_root_browser_history_open(&browser_match.hit.url, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged
@@ -625,6 +629,30 @@ impl ScriptListApp {
                 );
                 self.show_hud(
                     "Failed to paste clipboard entry".to_string(),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+            }
+        }
+    }
+
+    pub(crate) fn execute_root_browser_history_open(
+        &mut self,
+        url: &str,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::browser_history::open_browser_history_url(url) {
+            Ok(()) => {
+                logging::log("EXEC", &format!("Opened root browser history URL: {url}"));
+                self.hide_main_and_reset(cx);
+            }
+            Err(error) => {
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to open root browser history URL: {error}"),
+                );
+                self.show_hud(
+                    "Failed to open browser history page".to_string(),
                     Some(HUD_MEDIUM_MS),
                     cx,
                 );

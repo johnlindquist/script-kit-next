@@ -244,6 +244,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("Clipboard".to_string())),
                 ),
+                SearchResult::BrowserHistory(bm) => (
+                    bm.hit.title.clone(),
+                    Some(bm.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("Globe".to_string())),
+                ),
                 SearchResult::Skill(sm) => {
                     // Skills use a star icon (gold accent theme)
                     let description = if sm.skill.description.is_empty() {

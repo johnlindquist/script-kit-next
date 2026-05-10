@@ -269,6 +269,30 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        SearchResult::BrowserHistory(bm) => {
+            let mut indices = MatchIndices::default();
+
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&bm.hit.title);
+            if name_matched {
+                indices.name_indices = name_indices;
+            }
+
+            if indices.name_indices.is_empty() {
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&bm.subtitle);
+                if desc_matched {
+                    indices.description_indices = desc_indices;
+                }
+            }
+
+            if indices.name_indices.is_empty() && indices.description_indices.is_empty() {
+                let (url_matched, url_indices) = highlight_ctx.indices_for(&bm.hit.url);
+                if url_matched {
+                    indices.filename_indices = url_indices;
+                }
+            }
+
+            indices
+        }
         SearchResult::Skill(sm) => {
             let mut indices = MatchIndices::default();
 
