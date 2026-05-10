@@ -143,6 +143,7 @@ mod tests {
             "root_file_open",
             "root_file_reveal_in_finder",
             "root_file_copy_path",
+            "root_file_copy_name",
             "root_file_quick_look",
             "root_file_search_in_folder",
             "root_file_browse_parent_folder",
@@ -236,6 +237,7 @@ mod tests {
             "root_file_open",
             "root_file_reveal_in_finder",
             "root_file_copy_path",
+            "root_file_copy_name",
             "root_file_quick_look",
             "root_file_search_in_folder",
             "root_file_browse_parent_folder",
@@ -254,6 +256,11 @@ mod tests {
             source.contains("ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID")
                 && source.contains("| ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID"),
             "Browse Parent Folder action id should be reserved and recognized as a captured root-file action"
+        );
+        assert!(
+            source.contains("ROOT_FILE_COPY_NAME_ACTION_ID")
+                && source.contains("| ROOT_FILE_COPY_NAME_ACTION_ID"),
+            "Copy Name action id should be reserved and recognized as a captured root-file action"
         );
     }
 
@@ -309,6 +316,20 @@ mod tests {
                 && selection_normalized.contains("parent_folder_search_query(&file.path)")
                 && selection_normalized.contains("self.open_file_search(query, cx);"),
             "Browse Parent Folder should hand off to dedicated File Search at the containing folder"
+        );
+    }
+
+    #[test]
+    fn root_file_copy_name_action_copies_basename_only() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("ROOT_FILE_COPY_NAME_ACTION_ID")
+                && normalized.contains("gpui::ClipboardItem::new_string(file.name.clone())")
+                && normalized.contains("format!(\"Copied name: {}\", file.name)"),
+            "Copy Name should copy only FileResult.name and show basename-only HUD feedback"
         );
     }
 

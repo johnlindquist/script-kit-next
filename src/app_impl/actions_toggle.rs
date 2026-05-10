@@ -217,6 +217,14 @@ pub(crate) fn root_file_actions_for(
         .with_icon(IconName::Copy)
         .with_section("Share"),
         Action::new(
+            crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID,
+            "Copy Name",
+            Some("Copies only the file or folder name to the clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Copy)
+        .with_section("Share"),
+        Action::new(
             crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
             "Quick Look",
             Some("Previews this item with Quick Look".to_string()),
@@ -1761,6 +1769,7 @@ mod root_file_action_tests {
                 "Browse Parent Folder",
                 "Reveal in Finder",
                 "Copy Path",
+                "Copy Name",
                 "Quick Look"
             ]
         );
@@ -1791,6 +1800,7 @@ mod root_file_action_tests {
                 "Search Inside Folder",
                 "Reveal in Finder",
                 "Copy Path",
+                "Copy Name",
                 "Quick Look"
             ]
         );
@@ -1819,6 +1829,7 @@ mod root_file_action_tests {
                 crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+                crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
             ]
         );

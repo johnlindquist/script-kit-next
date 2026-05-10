@@ -601,6 +601,15 @@ impl ScriptListApp {
                 );
                 true
             }
+            crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID => {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.name.clone()));
+                self.show_hud(
+                    format!("Copied name: {}", file.name),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+                true
+            }
             crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID => {
                 if let Err(error) = crate::file_search::quick_look(&file.path) {
                     logging::log(
