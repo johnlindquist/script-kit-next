@@ -24,6 +24,7 @@ pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 pub const COMPUTER_GET_WINDOW_TOOL: &str = "computer/get_window";
 pub const COMPUTER_GET_FOCUSED_WINDOW_TOOL: &str = "computer/get_focused_window";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
+pub const COMPUTER_GET_APP_TOOL: &str = "computer/get_app";
 pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
@@ -69,6 +70,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List running GUI applications without launching, quitting, focusing, hiding, or sending input."
                 .to_string(),
             input_schema: computer_list_apps_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_GET_APP_TOOL.to_string(),
+            description: "Return one running GUI application by PID without launching, quitting, focusing, hiding, or sending input."
+                .to_string(),
+            input_schema: computer_get_app_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
@@ -124,6 +131,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_WINDOW_TOOL => handle_get_window(arguments),
         COMPUTER_GET_FOCUSED_WINDOW_TOOL => handle_get_focused_window(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
+        COMPUTER_GET_APP_TOOL => handle_get_app(arguments, runtime),
         COMPUTER_LIST_APP_WINDOWS_TOOL => handle_list_app_windows(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
@@ -197,6 +205,23 @@ struct ComputerUseListAppsResult {
     apps: Vec<ComputerUseRunningAppInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     frontmost_pid: Option<i32>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseGetAppArgs {
+    pid: i32,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetAppResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseRunningAppInfo>,
+    warnings: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -426,6 +451,40 @@ fn handle_list_apps(
             apps: snapshot.apps,
             frontmost_pid: snapshot.frontmost_pid,
         }),
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
+fn handle_get_app(arguments: &Value, runtime: Option<&dyn ComputerUseRuntimeBridge>) -> ToolResult {
+    let args: ComputerUseGetAppArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/get_app requires the live GPUI runtime bridge to enumerate running applications safely",
+        );
+    };
+
+    let request = ComputerUseListAppsRequest {
+        include_hidden: true,
+        include_background: true,
+    };
+
+    match runtime.list_running_apps(request) {
+        Ok(snapshot) => {
+            let app = snapshot.apps.into_iter().find(|app| app.pid == args.pid);
+            json_tool_result(&ComputerUseGetAppResult {
+                schema_version: COMPUTER_APPS_SCHEMA_VERSION,
+                source: "nsWorkspaceRunningApplications",
+                scope: "runningAppPid",
+                status: if app.is_some() { "found" } else { "notFound" },
+                app,
+                warnings: Vec::new(),
+            })
+        }
         Err(error) => error_result(error.error_code(), &error.message()),
     }
 }
@@ -827,6 +886,17 @@ fn computer_list_apps_input_schema() -> Value {
     })
 }
 
+fn computer_get_app_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "pid": { "type": "integer" }
+        },
+        "required": ["pid"]
+    })
+}
+
 fn computer_list_app_windows_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1046,6 +1116,7 @@ mod tests {
                 COMPUTER_GET_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FOCUSED_WINDOW_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
+                COMPUTER_GET_APP_TOOL.to_string(),
                 COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
@@ -1166,6 +1237,38 @@ mod tests {
             .expect("properties");
         assert!(properties.contains_key("includeHidden"));
         assert!(properties.contains_key("includeBackground"));
+    }
+
+    #[test]
+    fn computer_get_app_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_APP_TOOL)
+            .expect("computer/get_app tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        assert_eq!(
+            properties
+                .get("pid")
+                .and_then(|value| value.get("type"))
+                .and_then(Value::as_str),
+            Some("integer")
+        );
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["pid"]))
+        );
     }
 
     #[test]
@@ -1335,6 +1438,18 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_app_without_runtime_returns_tool_error() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_APP_TOOL,
+            &serde_json::json!({ "pid": 101 }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
+    }
+
+    #[test]
     fn computer_list_tray_menu_without_runtime_returns_snapshot() {
         let result = handle_computer_use_tool_call(
             COMPUTER_LIST_TRAY_MENU_TOOL,
@@ -1410,6 +1525,73 @@ mod tests {
         assert!(!result.content[0].text.contains("\"launch\""));
         assert!(!result.content[0].text.contains("\"quit\""));
         assert!(!result.content[0].text.contains("\"focus\""));
+    }
+
+    #[test]
+    fn computer_get_app_returns_running_app_by_pid() {
+        let runtime = FakeComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_APP_TOOL,
+            &serde_json::json!({ "pid": 101 }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_app json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_APPS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "nsWorkspaceRunningApplications");
+        assert_eq!(value["scope"], "runningAppPid");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["app"]["pid"], 101);
+        assert_eq!(value["app"]["bundleId"], "com.apple.Terminal");
+        assert_eq!(value["app"]["name"], "Terminal");
+        assert_eq!(value["app"]["isActive"], true);
+        assert_eq!(value["app"]["isHidden"], false);
+        assert_eq!(value["app"]["activationPolicy"], "regular");
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+            "\"hide\"",
+            "\"terminate\"",
+            "\"forceTerminate\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/get_app result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_get_app_returns_not_found_for_unknown_pid() {
+        let runtime = FakeComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_APP_TOOL,
+            &serde_json::json!({ "pid": 999 }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_app json");
+        assert_eq!(value["source"], "nsWorkspaceRunningApplications");
+        assert_eq!(value["scope"], "runningAppPid");
+        assert_eq!(value["status"], "notFound");
+        assert!(value["app"].is_null());
+        assert!(value["warnings"]
+            .as_array()
+            .is_some_and(|warnings| warnings.is_empty()));
     }
 
     #[test]
@@ -1516,6 +1698,27 @@ mod tests {
 
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
+    fn computer_get_app_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "pid": "101" }),
+            serde_json::json!({ "pid": 101, "focus": true }),
+            serde_json::json!({ "pid": 101, "activate": true }),
+            serde_json::json!({ "pid": 101, "launch": true }),
+            serde_json::json!({ "pid": 101, "quit": true }),
+            serde_json::json!({ "pid": 101, "hide": true }),
+            serde_json::json!({ "pid": 101, "includeWindows": true }),
+        ] {
+            let result = handle_computer_use_tool_call(COMPUTER_GET_APP_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
     }
 
     #[test]
