@@ -19,6 +19,19 @@ pub(crate) fn extension_default_icon(extension: &str) -> &'static str {
     }
 }
 
+/// Map root launcher file-result types to static SVG icons.
+pub(crate) fn root_file_type_svg_icon(file_type: crate::file_search::FileType) -> &'static str {
+    match file_type {
+        crate::file_search::FileType::Directory => "FolderOpen",
+        crate::file_search::FileType::Application => "package",
+        crate::file_search::FileType::Image => "file-image",
+        crate::file_search::FileType::Document => "file-text",
+        crate::file_search::FileType::Audio => "file-audio",
+        crate::file_search::FileType::Video => "file-video",
+        crate::file_search::FileType::File | crate::file_search::FileType::Other => "File",
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct SearchAccessories {
     pub(crate) type_tag: Option<crate::list_item::TypeTag>,
@@ -209,7 +222,9 @@ pub fn render_design_item(
                     fm.file.name.clone(),
                     Some(fm.file.path.clone()),
                     None,
-                    Some(IconKind::Svg("File".to_string())),
+                    Some(IconKind::Svg(
+                        root_file_type_svg_icon(fm.file.file_type).to_string(),
+                    )),
                 ),
                 SearchResult::Skill(sm) => {
                     // Skills use a star icon (gold accent theme)

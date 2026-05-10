@@ -130,6 +130,41 @@ mod tests {
     }
 
     #[test]
+    fn root_file_renderer_uses_file_type_specific_svg_icons() {
+        let source = fs::read_to_string("src/designs/core/render.rs")
+            .expect("read src/designs/core/render.rs");
+        let file_arm = source
+            .split("SearchResult::File(fm) =>")
+            .nth(1)
+            .and_then(|section| section.split("SearchResult::Skill").next())
+            .expect("SearchResult::File arm should be present");
+
+        assert!(
+            source.contains("fn root_file_type_svg_icon(")
+                && source.contains("FileType::Directory => \"FolderOpen\"")
+                && source.contains("FileType::Image => \"file-image\"")
+                && source.contains("FileType::Document => \"file-text\"")
+                && source.contains("FileType::Audio => \"file-audio\"")
+                && source.contains("FileType::Video => \"file-video\"")
+                && source.contains("FileType::Application => \"package\""),
+            "root file SVG icon mapping should live in a small named helper with type-specific icons"
+        );
+        assert!(
+            file_arm.contains("root_file_type_svg_icon(fm.file.file_type)"),
+            "root file rows should derive their SVG icon from FileResult.file_type"
+        );
+        assert!(
+            !file_arm.contains("IconKind::Svg(\"File\".to_string())"),
+            "root file rows should no longer hardcode the generic File icon"
+        );
+        assert!(
+            !file_arm.contains("IconKind::Image")
+                && !file_arm.contains("is_thumbnail_preview_supported"),
+            "root launcher file rows should stay on static SVG icons, not thumbnails"
+        );
+    }
+
+    #[test]
     fn root_file_handoff_row_uses_existing_search_files_fallback() {
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
