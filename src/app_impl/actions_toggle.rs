@@ -134,6 +134,64 @@ fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
     actions
 }
 
+pub(crate) fn root_file_actions_for(
+    file: &crate::file_search::FileResult,
+) -> Vec<crate::actions::Action> {
+    use crate::actions::{Action, ActionCategory};
+    use crate::designs::icon_variations::IconName;
+
+    let is_dir = file.file_type == crate::file_search::FileType::Directory;
+    let open_title = if is_dir { "Open Folder" } else { "Open File" };
+    let open_description = if is_dir {
+        "Opens this folder".to_string()
+    } else {
+        "Opens with the default app".to_string()
+    };
+
+    vec![
+        Action::new(
+            crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
+            open_title,
+            Some(open_description),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{21b5}")
+        .with_icon(if is_dir {
+            IconName::FolderOpen
+        } else {
+            IconName::File
+        })
+        .with_section("Actions"),
+        Action::new(
+            crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+            "Reveal in Finder",
+            Some("Shows this item in Finder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}F")
+        .with_icon(IconName::FolderOpen)
+        .with_section("Share"),
+        Action::new(
+            crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+            "Copy Path",
+            Some("Copies the full path to the clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}C")
+        .with_icon(IconName::Copy)
+        .with_section("Share"),
+        Action::new(
+            crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
+            "Quick Look",
+            Some("Previews this item with Quick Look".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}Y")
+        .with_icon(IconName::File)
+        .with_section("Actions"),
+    ]
+}
+
 fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
     match host {
         ActionsDialogHost::MainList => "MainList",
@@ -336,6 +394,11 @@ impl ScriptListApp {
         );
 
         if matches!(&self.current_view, AppView::ScriptList) {
+            if let Some(file) = self.selected_root_file_result_owned() {
+                self.toggle_root_file_actions(&file, window, cx);
+                return true;
+            }
+
             if self.has_actions()
                 || self.show_actions_popup
                 || crate::actions::is_actions_window_open()
@@ -842,6 +905,118 @@ impl ScriptListApp {
 
             logging::log("FOCUS", "Actions opened, keyboard routing active");
         }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_root_file_actions(
+        &mut self,
+        file: &crate::file_search::FileResult,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let host = ActionsDialogHost::MainList;
+        let host_label = actions_dialog_host_label(&host);
+        let recently_closed = self.was_actions_recently_closed();
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(host, window, cx);
+            cx.notify();
+            return;
+        }
+
+        if recently_closed {
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "root_file_actions_toggle_suppressed_recent_close",
+                path = %file.path,
+                "Suppressed root file actions reopen because the dialog was just closed"
+            );
+            cx.notify();
+            return;
+        }
+
+        let actions = root_file_actions_for(file);
+        self.pending_root_file_actions_file = Some(file.clone());
+        let context_title = Some(file.name.clone());
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
+        let config = crate::actions::ActionsDialogConfig {
+            search_position: if is_mini {
+                crate::actions::SearchPosition::Top
+            } else {
+                crate::actions::SearchPosition::Bottom
+            },
+            section_style: crate::actions::SectionStyle::Headers,
+            anchor: if is_mini {
+                crate::actions::AnchorPosition::Top
+            } else {
+                crate::actions::AnchorPosition::Bottom
+            },
+            show_icons: true,
+            search_placeholder: context_title.clone(),
+            show_context_header: false,
+            ..crate::actions::ActionsDialogConfig::default()
+        };
+
+        let position = self.main_list_actions_window_position();
+        crate::actions::emit_actions_popup_event(
+            crate::actions::ActionsPopupEvent::OpenRequested,
+            Some(host_label),
+            Some(position),
+            None,
+            None,
+            None,
+        );
+
+        self.resync_filter_input_after_actions_if_needed(window, cx);
+        self.begin_actions_popup_window_open(cx, window);
+
+        let dialog = cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = crate::actions::ActionsDialog::from_actions_with_context(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                None,
+                None,
+                theme_arc,
+                crate::designs::DesignVariant::Default,
+                context_title,
+                config,
+            );
+            dialog.set_skip_track_focus(true);
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                host,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity.clone(),
+                host,
+                "Root file actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+        Self::spawn_open_actions_window(
+            cx,
+            window.window_handle(),
+            main_bounds,
+            display_id,
+            dialog,
+            position,
+            "Root file actions popup window opened",
+            "Failed to open root file actions window",
+        );
+
+        logging::log("FOCUS", "Root file actions opened, keyboard routing active");
         cx.notify();
     }
 
@@ -1514,5 +1689,96 @@ mod terminal_command_shortcut_tests {
             source.contains("d.set_context_title(Some(\"Terminal\".to_string()));"),
             "toggle_terminal_commands should set terminal context title"
         );
+    }
+}
+
+#[cfg(test)]
+mod root_file_action_tests {
+    use super::*;
+    use crate::file_search::{FileResult, FileType};
+
+    fn root_file(file_type: FileType) -> FileResult {
+        FileResult {
+            path: "/Users/example/Desktop/fix spelling.png".to_string(),
+            name: "fix spelling.png".to_string(),
+            size: 0,
+            modified: 0,
+            file_type,
+        }
+    }
+
+    #[test]
+    fn root_file_actions_for_regular_file_has_minimal_four_rows() {
+        let actions = root_file_actions_for(&root_file(FileType::Image));
+        let titles = actions
+            .iter()
+            .map(|action| action.title.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            titles,
+            vec!["Open File", "Reveal in Finder", "Copy Path", "Quick Look"]
+        );
+        assert_eq!(actions.len(), 4);
+    }
+
+    #[test]
+    fn root_file_actions_for_directory_labels_open_folder() {
+        let actions = root_file_actions_for(&root_file(FileType::Directory));
+
+        assert_eq!(actions[0].title, "Open Folder");
+        assert_eq!(
+            actions[0].id,
+            crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID
+        );
+    }
+
+    #[test]
+    fn root_file_action_ids_are_stable() {
+        let actions = root_file_actions_for(&root_file(FileType::Image));
+        let ids = actions
+            .iter()
+            .map(|action| action.id.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            ids,
+            vec![
+                crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
+                crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+                crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+                crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
+            ]
+        );
+    }
+
+    #[test]
+    fn root_file_actions_do_not_include_deferred_file_search_actions() {
+        let actions = root_file_actions_for(&root_file(FileType::Image));
+        let ids = actions
+            .iter()
+            .map(|action| action.id.as_str())
+            .collect::<Vec<_>>();
+
+        for deferred in [
+            "open_with",
+            "show_info",
+            "attach_to_ai",
+            "copy_filename",
+            "move_to_trash",
+            "duplicate_file",
+            "copy_file",
+            "file:open_with",
+            "file:show_info",
+            "file:attach_to_ai",
+            "file:copy_filename",
+            "file:move_to_trash",
+            "file:duplicate_path",
+        ] {
+            assert!(
+                !ids.contains(&deferred),
+                "root file action palette should not include deferred action {deferred}"
+            );
+        }
     }
 }

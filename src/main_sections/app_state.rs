@@ -326,6 +326,8 @@ struct ScriptListApp {
     root_file_search_cancel: Option<file_search::CancelToken>,
     /// True while a root file search task is collecting its one stable batch.
     root_file_search_loading: bool,
+    /// File row captured when opening the root-file actions palette.
+    pending_root_file_actions_file: Option<file_search::FileResult>,
     /// Cached process list for ProcessManagerView (avoids cloning per frame)
     cached_processes: Vec<crate::process_manager::ProcessInfo>,
     /// Background refresh task for ProcessManagerView (dropped on view change)

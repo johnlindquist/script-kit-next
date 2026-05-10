@@ -2202,8 +2202,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     AppView::ScriptList => {
                                         // Main script list key handling
                                         if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
-                                            view.toggle_actions(ctx, window);
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Cmd+K - dispatch actions toggle",
+                                            );
+                                            view.handle_cmd_k_actions_toggle(window, ctx);
                                         } else if has_cmd
                                             && key_lower == "enter"
                                             && !has_shift
