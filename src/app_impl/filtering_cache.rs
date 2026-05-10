@@ -366,6 +366,7 @@ impl ScriptListApp {
                 self.script_validation_report.as_deref(),
                 advanced_query,
                 self.root_file_search_mode,
+                self.root_file_search_loading,
                 &self.root_file_results,
                 &self.root_recent_file_results,
             )

@@ -366,6 +366,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
     validation: Option<&ValidationReport>,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
+    root_file_search_loading: bool,
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
@@ -389,6 +390,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         &mut grouped,
         &mut flat_results,
         root_file_search_mode,
+        root_file_search_loading,
         root_file_results,
         filter_text,
         frecency_store,
@@ -460,6 +462,7 @@ fn append_root_file_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
     root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
+    root_file_search_loading: bool,
     root_file_results: &[crate::file_search::FileResult],
     filter_text: &str,
     frecency_store: &FrecencyStore,
@@ -510,7 +513,10 @@ fn append_root_file_section(
         .unwrap_or(grouped.len());
 
     let mut file_group = Vec::with_capacity(files.len() + 2);
-    file_group.push(GroupedListItem::SectionHeader("Files".to_string(), None));
+    file_group.push(GroupedListItem::SectionHeader(
+        root_file_section_title(mode, root_file_search_loading).to_string(),
+        None,
+    ));
     for file_match in files {
         let idx = flat_results.len();
         flat_results.push(SearchResult::File(file_match));
@@ -522,6 +528,20 @@ fn append_root_file_section(
         file_group.push(GroupedListItem::Item(idx));
     }
     grouped.splice(insertion_index..insertion_index, file_group);
+}
+
+fn root_file_section_title(
+    mode: crate::file_search::RootFileSectionMode,
+    loading: bool,
+) -> &'static str {
+    if !loading {
+        return "Files";
+    }
+
+    match mode {
+        crate::file_search::RootFileSectionMode::GlobalQuery => "Files · Searching...",
+        crate::file_search::RootFileSectionMode::DirectoryBrowse => "Files · Loading folder...",
+    }
 }
 
 fn root_file_search_handoff_result(
@@ -825,6 +845,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
             &root_files,
             &[],
         );
@@ -867,6 +888,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
             &root_files,
             &[],
         );
@@ -922,6 +944,7 @@ mod advanced_query_tests {
             None,
             Some(&query),
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
             &root_files,
             &[],
         );
@@ -966,6 +989,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            false,
             &root_files,
             &[],
         );
@@ -1023,6 +1047,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            false,
             &root_files,
             &[],
         );
@@ -1078,6 +1103,7 @@ mod advanced_query_tests {
             None,
             None,
             Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            false,
             &root_files,
             &[],
         );
@@ -1127,6 +1153,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            false,
             &[],
             &recent_files,
         );
@@ -1200,6 +1227,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            false,
             &[],
             &recent_files,
         );
@@ -1241,6 +1269,7 @@ mod advanced_query_tests {
             None,
             Some(&query),
             None,
+            false,
             &[],
             &recent_files,
         );
@@ -1281,6 +1310,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            false,
             &[],
             &recent_files,
         );
