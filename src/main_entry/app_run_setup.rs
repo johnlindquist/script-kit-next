@@ -198,25 +198,27 @@
     // Server runs on localhost:43210 with Bearer token authentication
     // Discovery file written to ~/.scriptkit/server.json
     let _mcp_handle = match mcp_server::McpServer::with_defaults() {
-        Ok(server) => match server
-            .with_computer_runtime(mcp_computer_runtime_for_server)
-            .start()
-        {
-            Ok(handle) => {
-                logging::log(
-                    "MCP",
-                    &format!(
-                        "MCP server started on {} (token in ~/.scriptkit/agent-token)",
-                        server.url()
-                    ),
-                );
-                Some(handle)
+        Ok(server) => {
+            let server = server.with_computer_runtime(mcp_computer_runtime_for_server);
+            let server_url = server.url();
+
+            match server.start() {
+                Ok(handle) => {
+                    logging::log(
+                        "MCP",
+                        &format!(
+                            "MCP server started on {} (token in ~/.scriptkit/agent-token)",
+                            server_url
+                        ),
+                    );
+                    Some(handle)
+                }
+                Err(e) => {
+                    logging::log("MCP", &format!("Failed to start MCP server: {}", e));
+                    None
+                }
             }
-            Err(e) => {
-                logging::log("MCP", &format!("Failed to start MCP server: {}", e));
-                None
-            }
-        },
+        }
         Err(e) => {
             logging::log("MCP", &format!("Failed to create MCP server: {}", e));
             None
