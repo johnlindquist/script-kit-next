@@ -1,6 +1,15 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn scroll_menu_syntax_main_hint(&mut self, direction: f32) {
+        let line_delta = gpui::px(crate::scrolling::free_scroll::FREE_SCROLL_LINE_DELTA_PX);
+        let current = self.menu_syntax_main_hint_scroll_handle.offset();
+        let max = self.menu_syntax_main_hint_scroll_handle.max_offset();
+        let next_y = (current.y - (line_delta * direction)).clamp(-max.y, gpui::px(0.0));
+        self.menu_syntax_main_hint_scroll_handle
+            .set_offset(gpui::point(current.x, next_y));
+    }
+
     pub(crate) fn menu_syntax_main_hint_snapshot(
         &self,
         raw_filter_text: &str,
@@ -41,10 +50,8 @@ impl ScriptListApp {
                         .collect();
                     if !recent.is_empty() {
                         let value = recent.join(" ");
-                        if let Some(existing) = snapshot
-                            .rows
-                            .iter_mut()
-                            .find(|row| row.label == "Tags")
+                        if let Some(existing) =
+                            snapshot.rows.iter_mut().find(|row| row.label == "Tags")
                         {
                             existing.value = value;
                         } else {
@@ -70,13 +77,13 @@ impl ScriptListApp {
                             let recent: Vec<String> =
                                 pool.iter().take(3).map(|vf| vf.value.clone()).collect();
                             if !recent.is_empty() {
-                                snapshot.rows.push(
-                                    crate::menu_syntax::MenuSyntaxMainHintRow {
+                                snapshot
+                                    .rows
+                                    .push(crate::menu_syntax::MenuSyntaxMainHintRow {
                                         label: format!("Recent {key}"),
                                         value: recent.join(", "),
                                         chips: Vec::new(),
-                                    },
-                                );
+                                    });
                             }
                         }
                     }

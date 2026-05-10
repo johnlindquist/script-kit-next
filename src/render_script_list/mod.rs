@@ -250,6 +250,7 @@ fn render_menu_syntax_fragment_preview_row(
 
 fn render_menu_syntax_main_hint(
     hint: &crate::menu_syntax::MenuSyntaxMainHintSnapshot,
+    scroll_handle: &ScrollHandle,
     theme: &crate::theme::Theme,
 ) -> AnyElement {
     let accent = theme.colors.accent.selected;
@@ -268,19 +269,25 @@ fn render_menu_syntax_main_hint(
     // room, but there's no longer a visible "card within a card" — see
     // story `hint-card-fills-main-window-no-nested-container` (Run 12).
     let _ = border; // chrome dropped; kept binding to avoid widening unused-warning set
-    div()
-        .w_full()
-        .h_full()
-        .flex()
-        .items_start()
-        .justify_center()
-        .px(px(18.0))
-        .pt(px(12.0))
-        .pb(main_list_footer_overlay_total_padding() + px(12.0))
+    gpui_component::scroll::ScrollableElement::vertical_scrollbar(
+        div()
+            .id("menu-syntax-main-hint-scroll")
+            .w_full()
+            .h_full()
+            .flex()
+            .items_start()
+            .justify_center()
+            .px(px(18.0))
+            .pt(px(12.0))
+            .pb(main_list_footer_overlay_total_padding() + px(12.0))
+            .track_scroll(scroll_handle)
+            .overflow_y_scroll(),
+        scroll_handle,
+    )
         .child(
             div()
                 .w_full()
-                .h_full()
+                .min_h(px(0.0))
                 .flex()
                 .flex_col()
                 .gap(px(12.0))
@@ -705,13 +712,27 @@ impl ScriptListApp {
 
         let list_element: AnyElement = if menu_syntax_owns_main_list {
             self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
-                .map(|hint| render_menu_syntax_main_hint(&hint, &self.theme))
+                .map(|hint| {
+                    render_menu_syntax_main_hint(
+                        &hint,
+                        &self.menu_syntax_main_hint_scroll_handle,
+                        &self.theme,
+                    )
+                })
                 .unwrap_or_else(|| div().w_full().h_full().into_any_element())
         } else if let Some(hint) = advanced_query_guide_hint {
-            render_menu_syntax_main_hint(&hint, &self.theme)
+            render_menu_syntax_main_hint(
+                &hint,
+                &self.menu_syntax_main_hint_scroll_handle,
+                &self.theme,
+            )
         } else if item_count == 0 {
             if let Some(hint) = self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true) {
-                render_menu_syntax_main_hint(&hint, &self.theme)
+                render_menu_syntax_main_hint(
+                    &hint,
+                    &self.menu_syntax_main_hint_scroll_handle,
+                    &self.theme,
+                )
             } else {
                 render_script_list_empty_state(
                     &filter_text_for_render,
