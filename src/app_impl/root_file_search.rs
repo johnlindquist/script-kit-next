@@ -226,8 +226,10 @@ impl ScriptListApp {
                 let request = request.clone();
                 move || match request {
                     RootFileSearchRequest::GlobalQuery { query } => {
+                        let provider_query =
+                            crate::file_search::root_file_provider_query_for_user_query(&query);
                         crate::file_search::search_files_streaming_with_options(
-                            &query,
+                            &provider_query,
                             None,
                             crate::file_search::ROOT_FILE_SOURCE_LIMIT,
                             cancel,
