@@ -2472,6 +2472,8 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
+                                None,
                             ));
                         }
                         return;
@@ -2492,6 +2494,8 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3314,6 +3318,27 @@ impl ScriptListApp {
                             crate::menu_syntax::capture_kv_enum_values_for_specs(target, key, &refs)
                         },
                     );
+                let script_list_active = matches!(self.current_view, AppView::ScriptList);
+                let main_window_preflight = if script_list_active {
+                    self.rebuild_main_window_preflight_if_needed();
+                    self.cached_main_window_preflight
+                        .as_ref()
+                        .and_then(|receipt| serde_json::to_value(receipt).ok())
+                } else {
+                    None
+                };
+                let root_file_search = if script_list_active {
+                    Some(serde_json::json!({
+                        "query": self.root_file_search_query,
+                        "mode": self.root_file_search_mode.map(|mode| format!("{:?}", mode)),
+                        "loading": self.root_file_search_loading,
+                        "generation": self.root_file_search_generation,
+                        "visibleResultCount": self.root_file_results.len(),
+                        "cacheEntryCount": self.root_file_result_cache.len(),
+                    }))
+                } else {
+                    None
+                };
 
                 // Create the response
                 let response = Message::state_result(
@@ -3332,6 +3357,8 @@ impl ScriptListApp {
                     window_visible,
                     menu_syntax_main_hint,
                     capture_history_picker,
+                    main_window_preflight,
+                    root_file_search,
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
                 );
 

@@ -142,6 +142,22 @@ macro_rules! protocol_message_variants_query_ops {
         )]
         capture_history_picker:
             Option<crate::menu_syntax::capture_history_picker::HistoryPickerSnapshot>,
+        /// Main-window Enter/Tab contract for the currently selected ScriptList row.
+        /// Omitted outside ScriptList or when no selected row can execute.
+        #[serde(
+            rename = "mainWindowPreflight",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        main_window_preflight: Option<serde_json::Value>,
+        /// Root file-search provider status used by state-first stability proofs.
+        /// Omitted outside ScriptList.
+        #[serde(
+            rename = "rootFileSearch",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        root_file_search: Option<serde_json::Value>,
         /// Identity (bare filename) of the most recent Tab AI screenshot
         /// captured in this process lifetime. `None` when no capture has
         /// occurred. Lets automation verify the identity-threading chain
