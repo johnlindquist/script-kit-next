@@ -147,6 +147,11 @@ pub(crate) fn root_file_actions_for(
     } else {
         "Opens with the default app".to_string()
     };
+    let parent_folder_query = if !is_dir {
+        crate::file_search::parent_folder_search_query(&file.path)
+    } else {
+        None
+    };
 
     let mut actions = vec![Action::new(
         crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
@@ -170,6 +175,20 @@ pub(crate) fn root_file_actions_for(
                 Some(format!(
                     "Searches {} in File Search",
                     crate::file_search::shorten_path(&file.path)
+                )),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section("Actions"),
+        );
+    } else if let Some(parent_query) = parent_folder_query {
+        actions.push(
+            Action::new(
+                crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID,
+                "Browse Parent Folder",
+                Some(format!(
+                    "Opens {} in File Search",
+                    crate::file_search::shorten_path(&parent_query)
                 )),
                 ActionCategory::ScriptContext,
             )
@@ -1728,7 +1747,7 @@ mod root_file_action_tests {
     }
 
     #[test]
-    fn root_file_actions_for_regular_file_has_minimal_four_rows() {
+    fn root_file_actions_for_regular_file_adds_browse_parent_folder() {
         let actions = root_file_actions_for(&root_file(FileType::Image));
         let titles = actions
             .iter()
@@ -1737,9 +1756,19 @@ mod root_file_action_tests {
 
         assert_eq!(
             titles,
-            vec!["Open File", "Reveal in Finder", "Copy Path", "Quick Look"]
+            vec![
+                "Open File",
+                "Browse Parent Folder",
+                "Reveal in Finder",
+                "Copy Path",
+                "Quick Look"
+            ]
         );
-        assert_eq!(actions.len(), 4);
+        assert_eq!(
+            actions[1].id,
+            crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID
+        );
+        assert_eq!(actions.len(), 5);
     }
 
     #[test]
@@ -1769,6 +1798,10 @@ mod root_file_action_tests {
             actions[1].id,
             crate::action_helpers::ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID
         );
+        assert!(!actions
+            .iter()
+            .any(|action| action.id
+                == crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID));
     }
 
     #[test]
@@ -1783,6 +1816,7 @@ mod root_file_action_tests {
             ids,
             vec![
                 crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
+                crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
                 crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,

@@ -553,6 +553,15 @@ impl ScriptListApp {
             .then(|| crate::file_search::ensure_trailing_slash(&file.path))
     }
 
+    pub(crate) fn root_file_browse_parent_folder_query(
+        file: &crate::file_search::FileResult,
+    ) -> Option<String> {
+        if file.file_type == crate::file_search::FileType::Directory {
+            return None;
+        }
+        crate::file_search::parent_folder_search_query(&file.path)
+    }
+
     pub(crate) fn execute_root_file_action(
         &mut self,
         action_id: &str,
@@ -610,6 +619,19 @@ impl ScriptListApp {
                 let Some(query) = Self::root_file_search_in_folder_query(file) else {
                     self.show_hud(
                         format!("Not a folder: {}", file.name),
+                        Some(HUD_MEDIUM_MS),
+                        cx,
+                    );
+                    return true;
+                };
+                self.pending_root_file_actions_file = None;
+                self.open_file_search(query, cx);
+                true
+            }
+            crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID => {
+                let Some(query) = Self::root_file_browse_parent_folder_query(file) else {
+                    self.show_hud(
+                        format!("No parent folder for {}", file.name),
                         Some(HUD_MEDIUM_MS),
                         cx,
                     );
@@ -973,5 +995,31 @@ mod tests {
         let file = root_file_result("/tmp/example.txt", crate::file_search::FileType::Document);
 
         assert_eq!(ScriptListApp::root_file_search_in_folder_query(&file), None);
+    }
+
+    #[test]
+    fn root_file_browse_parent_folder_query_accepts_regular_files() {
+        let file = root_file_result(
+            "/tmp/example-folder/readme.md",
+            crate::file_search::FileType::Document,
+        );
+
+        assert_eq!(
+            ScriptListApp::root_file_browse_parent_folder_query(&file),
+            Some("/tmp/example-folder/".to_string())
+        );
+    }
+
+    #[test]
+    fn root_file_browse_parent_folder_query_rejects_directories() {
+        let file = root_file_result(
+            "/tmp/example-folder",
+            crate::file_search::FileType::Directory,
+        );
+
+        assert_eq!(
+            ScriptListApp::root_file_browse_parent_folder_query(&file),
+            None
+        );
     }
 }

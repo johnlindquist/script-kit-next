@@ -244,6 +244,7 @@ pub const ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID: &str = "root_file_reveal_in_find
 pub const ROOT_FILE_COPY_PATH_ACTION_ID: &str = "root_file_copy_path";
 pub const ROOT_FILE_QUICK_LOOK_ACTION_ID: &str = "root_file_quick_look";
 pub const ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID: &str = "root_file_search_in_folder";
+pub const ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID: &str = "root_file_browse_parent_folder";
 
 pub fn is_root_file_action_id(action_id: &str) -> bool {
     matches!(
@@ -253,6 +254,7 @@ pub fn is_root_file_action_id(action_id: &str) -> bool {
             | ROOT_FILE_COPY_PATH_ACTION_ID
             | ROOT_FILE_QUICK_LOOK_ACTION_ID
             | ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID
+            | ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID
     )
 }
 
@@ -645,6 +647,7 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     ROOT_FILE_COPY_PATH_ACTION_ID,
     ROOT_FILE_QUICK_LOOK_ACTION_ID,
     ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID,
+    ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID,
     // Internal
     "__cancel__",
 ];
