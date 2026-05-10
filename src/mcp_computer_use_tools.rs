@@ -32,6 +32,7 @@ pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_GET_MENU_ITEM_TOOL: &str = "computer/get_menu_item";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
+pub const COMPUTER_GET_SCREEN_TOOL: &str = "computer/get_screen";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_APP_WINDOWS_SCHEMA_VERSION: u32 = 1;
@@ -122,6 +123,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             input_schema: computer_list_screens_input_schema(),
         },
         ToolDefinition {
+            name: COMPUTER_GET_SCREEN_TOOL.to_string(),
+            description: "Return one attached screen/display by CoreGraphics display id without moving windows, changing screen placement, capturing screenshots, or requesting permissions."
+                .to_string(),
+            input_schema: computer_get_screen_input_schema(),
+        },
+        ToolDefinition {
             name: COMPUTER_LIST_PERMISSIONS_TOOL.to_string(),
             description: "List read-only macOS permission status for Script Kit computer-use features without requesting permissions."
                 .to_string(),
@@ -153,6 +160,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_MENU_ITEM_TOOL => handle_get_menu_item(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
         COMPUTER_LIST_SCREENS_TOOL => handle_list_screens(arguments),
+        COMPUTER_GET_SCREEN_TOOL => handle_get_screen(arguments),
         COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
             "unknown_tool",
@@ -377,6 +385,23 @@ struct ComputerUseListScreensArgs {}
 struct ComputerUseListScreensResult {
     schema_version: u32,
     screens: Vec<DisplayInfo>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ComputerUseGetScreenArgs {
+    display_id: u32,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseGetScreenResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    screen: Option<DisplayInfo>,
+    warnings: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -780,6 +805,36 @@ fn handle_list_screens(arguments: &Value) -> ToolResult {
     }
 }
 
+fn handle_get_screen(arguments: &Value) -> ToolResult {
+    let args: ComputerUseGetScreenArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    match list_screens() {
+        Ok(screens) => {
+            let screen = screens
+                .into_iter()
+                .find(|screen| screen.display_id == args.display_id);
+            let status = if screen.is_some() {
+                "found"
+            } else {
+                "notFound"
+            };
+
+            json_tool_result(&ComputerUseGetScreenResult {
+                schema_version: COMPUTER_SCREENS_SCHEMA_VERSION,
+                source: "coreGraphicsActiveDisplays",
+                scope: "displayId",
+                status,
+                screen,
+                warnings: Vec::new(),
+            })
+        }
+        Err(error) => error_result("screen_list_failed", &error),
+    }
+}
+
 fn handle_list_permissions(arguments: &Value) -> ToolResult {
     let _args: ComputerUseListPermissionsArgs = match serde_json::from_value(arguments.clone()) {
         Ok(args) => args,
@@ -1141,6 +1196,21 @@ fn computer_list_screens_input_schema() -> Value {
     })
 }
 
+fn computer_get_screen_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "displayId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4_294_967_295u64,
+            }
+        },
+        "required": ["displayId"]
+    })
+}
+
 fn computer_list_permissions_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -1325,6 +1395,7 @@ mod tests {
                 COMPUTER_GET_MENU_ITEM_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
                 COMPUTER_LIST_SCREENS_TOOL.to_string(),
+                COMPUTER_GET_SCREEN_TOOL.to_string(),
                 COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
         );
@@ -1721,6 +1792,55 @@ mod tests {
                 .and_then(Value::as_object)
                 .map(|properties| properties.is_empty()),
             Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_get_screen_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_GET_SCREEN_TOOL)
+            .expect("computer/get_screen tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        assert_eq!(
+            properties
+                .get("displayId")
+                .and_then(|schema| schema.get("type"))
+                .and_then(Value::as_str),
+            Some("integer")
+        );
+        assert_eq!(
+            properties
+                .get("displayId")
+                .and_then(|schema| schema.get("minimum"))
+                .and_then(Value::as_u64),
+            Some(0)
+        );
+        assert_eq!(
+            properties
+                .get("displayId")
+                .and_then(|schema| schema.get("maximum"))
+                .and_then(Value::as_u64),
+            Some(u32::MAX as u64)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("required")
+                .and_then(Value::as_array)
+                .cloned(),
+            Some(vec![serde_json::json!("displayId")])
         );
     }
 
@@ -2331,6 +2451,31 @@ mod tests {
     }
 
     #[test]
+    fn computer_get_screen_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "displayId": "1" }),
+            serde_json::json!({ "displayId": -1 }),
+            serde_json::json!({ "displayId": 4_294_967_296u64 }),
+            serde_json::json!({ "displayId": 0, "move": true }),
+            serde_json::json!({ "displayId": 0, "resize": true }),
+            serde_json::json!({ "displayId": 0, "screenshot": true }),
+            serde_json::json!({ "displayId": 0, "capture": true }),
+            serde_json::json!({ "displayId": 0, "requestPermission": true }),
+            serde_json::json!({ "displayId": 0, "click": true }),
+            serde_json::json!({ "displayId": 0, "press": true }),
+            serde_json::json!({ "displayId": 0, "execute": true }),
+        ] {
+            let result = handle_computer_use_tool_call(COMPUTER_GET_SCREEN_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_list_windows_returns_registry_snapshot_without_runtime() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -2897,5 +3042,85 @@ mod tests {
             assert!(screen["visibleBounds"]["width"].is_number());
             assert!(screen["visibleBounds"]["height"].is_number());
         }
+    }
+
+    #[test]
+    fn computer_get_screen_returns_screen_by_display_id_without_runtime() {
+        let list_result =
+            handle_computer_use_tool_call(COMPUTER_LIST_SCREENS_TOOL, &serde_json::json!({}), None);
+        assert_eq!(list_result.is_error, None);
+        let list_value: serde_json::Value =
+            serde_json::from_str(&list_result.content[0].text).expect("valid list_screens json");
+        let Some(display_id) = list_value["screens"]
+            .as_array()
+            .and_then(|screens| screens.first())
+            .and_then(|screen| screen["displayId"].as_u64())
+        else {
+            return;
+        };
+
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_SCREEN_TOOL,
+            &serde_json::json!({ "displayId": display_id }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_screen json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_SCREENS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "coreGraphicsActiveDisplays");
+        assert_eq!(value["scope"], "displayId");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["screen"]["displayId"], serde_json::json!(display_id));
+        assert!(value["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .is_empty());
+        assert!(!result.content[0].text.contains("\"move\""));
+        assert!(!result.content[0].text.contains("\"resize\""));
+        assert!(!result.content[0].text.contains("\"screenshot\""));
+        assert!(!result.content[0].text.contains("\"click\""));
+        assert!(!result.content[0].text.contains("\"press\""));
+        assert!(!result.content[0].text.contains("\"execute\""));
+    }
+
+    #[test]
+    fn computer_get_screen_returns_not_found_for_unknown_display_id_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_SCREEN_TOOL,
+            &serde_json::json!({ "displayId": u32::MAX }),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_screen json");
+        assert_eq!(value["source"], "coreGraphicsActiveDisplays");
+        assert_eq!(value["scope"], "displayId");
+        assert_eq!(value["status"], "notFound");
+        assert!(value["screen"].is_null());
+        assert!(value["warnings"]
+            .as_array()
+            .expect("warnings array")
+            .is_empty());
+    }
+
+    #[test]
+    fn computer_get_screen_ignores_supplied_runtime() {
+        let runtime = PanickingComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_GET_SCREEN_TOOL,
+            &serde_json::json!({ "displayId": u32::MAX }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid get_screen json");
+        assert_eq!(value["status"], "notFound");
     }
 }
