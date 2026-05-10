@@ -269,6 +269,7 @@ pub struct ActionsWindow {
     pub focus_handle: FocusHandle,
     /// Keep activation observer alive so blur-driven auto-close is reliable.
     activation_subscription: Option<Subscription>,
+    close_requested: bool,
 }
 
 impl ActionsWindow {
@@ -278,6 +279,7 @@ impl ActionsWindow {
             dialog,
             focus_handle,
             activation_subscription: None,
+            close_requested: false,
         }
     }
 
@@ -297,12 +299,23 @@ impl ActionsWindow {
     }
 
     fn request_close(
-        &self,
+        &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
         reason: &'static str,
         activate_main_window: bool,
     ) {
+        if self.close_requested {
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_LIFECYCLE request_close_ignored: reason={reason}, already_requested=true"
+                ),
+            );
+            return;
+        }
+        self.close_requested = true;
+
         crate::logging::log(
             "ACTIONS",
             &format!(
@@ -439,6 +452,18 @@ impl Render for ActionsWindow {
                 is_focused, window_is_active
             ),
         );
+
+        let main_window_focused = platform::is_main_window_focused();
+        if should_auto_close_actions_window(main_window_focused, window_is_active) {
+            crate::logging::log(
+                "ACTIONS",
+                &format!(
+                    "ACTIONS_WINDOW_LIFECYCLE render_auto_close: main_window_focused={}, actions_window_active={}",
+                    main_window_focused, window_is_active
+                ),
+            );
+            self.request_close(window, cx, "render_focus_lost", false);
+        }
 
         // NOTE: We intentionally do NOT focus this window's focus_handle.
         // The parent window (AI window, Notes window, etc.) keeps keyboard focus

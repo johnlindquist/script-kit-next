@@ -277,6 +277,21 @@ use utils::render_path_with_highlights;
 
 // Global state for hotkey signaling between threads
 static NEEDS_RESET: AtomicBool = AtomicBool::new(false); // Track if window needs reset to script list on next show
+static RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS: AtomicBool = AtomicBool::new(false);
+
+fn mark_main_state_restore_after_focus_loss() {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(true, Ordering::SeqCst);
+}
+
+fn clear_main_state_restore_after_focus_loss() {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS.store(false, Ordering::SeqCst);
+}
+
+fn consume_main_state_restore_after_focus_loss() -> bool {
+    RESTORE_MAIN_STATE_AFTER_FOCUS_LOSS
+        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+}
 
 pub use script_kit_gpui::{
     emoji, emoji_usage, get_main_window_handle, is_main_window_visible, set_main_window_handle,

@@ -29,8 +29,7 @@ impl ScriptListApp {
         });
 
         // Close actions popup if open
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.clear_actions_popup_state();
 
         cx.notify();
     }

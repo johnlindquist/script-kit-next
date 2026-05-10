@@ -429,8 +429,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                         if let Some(action_id) = action_id {
                                                             logging::log("ACTIONS", &format!("SimulateKey: Executing action: {} (close={})", action_id, should_close));
                                                             if should_close {
-                                                                view.show_actions_popup = false;
-                                                                view.actions_dialog = None;
+                                                                view.mark_actions_popup_closed();
                                                                 view.focused_input = FocusedInput::ArgPrompt;
                                                                 window.focus(&view.focus_handle, ctx);
                                                             }
@@ -439,8 +438,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     }
                                                     "escape" => {
                                                         logging::log("STDIN", "SimulateKey: Escape - close actions dialog");
-                                                        view.show_actions_popup = false;
-                                                        view.actions_dialog = None;
+                                                        view.mark_actions_popup_closed();
                                                         view.focused_input = FocusedInput::ArgPrompt;
                                                         window.focus(&view.focus_handle, ctx);
                                                     }
