@@ -482,8 +482,10 @@ fn append_root_file_section(
             )
         }
         crate::file_search::RootFileSectionMode::DirectoryBrowse => {
+            let child_filter = root_directory_browse_child_filter(filter_text);
             crate::file_search::root_directory_file_matches(
                 root_file_results,
+                child_filter.as_deref(),
                 crate::file_search::ROOT_FILE_BROWSE_RENDER_LIMIT,
             )
         }
@@ -541,7 +543,8 @@ fn root_file_search_handoff_result(
             "Open full File Search".to_string(),
         ),
         crate::file_search::RootFileSectionMode::DirectoryBrowse => {
-            let label = crate::file_search::shorten_path(query.trim_end_matches('/'));
+            let base = crate::file_search::root_directory_query_base(query)?;
+            let label = crate::file_search::shorten_path(base.trim_end_matches('/'));
             (
                 format!("Open File Search in \"{label}\""),
                 "Browse the full folder".to_string(),
@@ -553,6 +556,13 @@ fn root_file_search_handoff_result(
         FallbackMatch::new(crate::fallbacks::FallbackItem::Builtin(fallback), 0)
             .with_display_overrides(title, subtitle),
     ))
+}
+
+fn root_directory_browse_child_filter(query: &str) -> Option<String> {
+    let query = query.trim();
+    let base = crate::file_search::root_directory_query_base(query)?;
+    let child_filter = query.strip_prefix(&base)?.trim();
+    (!child_filter.is_empty()).then(|| child_filter.to_string())
 }
 
 /// Incomplete menu-syntax hint row.
@@ -1029,6 +1039,68 @@ mod advanced_query_tests {
             rendered_files,
             vec!["beta.txt", "alpha.txt"],
             "directory browse should preserve provider order instead of fuzzy re-ranking"
+        );
+    }
+
+    #[test]
+    fn root_directory_browse_rows_filter_by_child_fragment() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![
+            root_file_with_type(
+                "/Users/example/dev/beta-notes.md",
+                "beta-notes.md",
+                FileType::Document,
+            ),
+            root_file_with_type(
+                "/Users/example/dev/alpha-report.md",
+                "alpha-report.md",
+                FileType::Document,
+            ),
+            root_file_with_type(
+                "/Users/example/dev/alpha-folder",
+                "alpha-folder",
+                FileType::Directory,
+            ),
+        ];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "~/dev/al",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::DirectoryBrowse),
+            &root_files,
+            &[],
+        );
+
+        let rendered_files = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered_files,
+            vec!["alpha-folder", "alpha-report.md"],
+            "directory browse child fragments should filter direct children inline"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Open File Search in \"~/dev\""
+            )),
+            "filtered directory browse should keep the handoff scoped to the containing folder"
         );
     }
 

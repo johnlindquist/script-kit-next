@@ -245,6 +245,7 @@ mod tests {
         assert!(
             grouping_production.contains("RootFileSectionMode::DirectoryBrowse")
                 && grouping_production.contains("root_directory_file_matches(")
+                && grouping_production.contains("root_directory_browse_child_filter(filter_text)")
                 && grouping_production.contains("ROOT_FILE_BROWSE_RENDER_LIMIT"),
             "grouping should render already-collected directory rows without starting providers"
         );
@@ -259,6 +260,41 @@ mod tests {
                 && filtering_source.contains("&self.root_file_results"),
             "filtering cache should pass the root file source mode alongside collected rows"
         );
+    }
+
+    #[test]
+    fn root_directory_child_fragment_filtering_stays_direct_child_only() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let file_search_production = production_source(&file_search_source);
+        let grouping_production = production_source(&grouping_source);
+
+        assert!(
+            file_search_production.contains("pub fn root_directory_query_base(")
+                && file_search_production.contains("root_file_section_mode_for_query")
+                && file_search_production.contains("RootFileSectionMode::DirectoryBrowse")
+                && file_search_production.contains("root_directory_file_matches("),
+            "root directory child-fragment queries should stay in directory-browse mode"
+        );
+        assert!(
+            grouping_production.contains("fn root_directory_browse_child_filter(")
+                && grouping_production.contains("root_directory_query_base(query)")
+                && grouping_production.contains("child_filter.as_deref()"),
+            "grouping should derive only a child-name filter and pass it to already-collected rows"
+        );
+        for forbidden in [
+            "std::fs::read_dir",
+            "list_directory_with_options(",
+            "search_files_streaming",
+            "mdfind",
+        ] {
+            assert!(
+                !grouping_production.contains(forbidden),
+                "filtered root directory grouping should not start providers directly: {forbidden}"
+            );
+        }
     }
 
     #[test]
