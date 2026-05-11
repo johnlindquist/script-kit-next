@@ -47,11 +47,18 @@ This is the current production distribution contract.
 
 AI agents should not run `make ship-check`; they should use `make verify` or narrower checks unless a human explicitly asks for packaging validation.
 
+## Local dev target hygiene
+
+`./dev.sh` protects local dev loops from silently growing `target/` past a disk-budget threshold.
+
+On startup, `dev.sh` measures `target/` and runs `cargo clean` by default when the directory is larger than `SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB`, which defaults to 50 GiB. Set `SCRIPT_KIT_TARGET_AUTO_CLEAN=0` to warn without cleaning when preserving a hot build cache matters more than disk use.
+
 ## Source files
 
 These files define the current local, CI, and release packaging paths.
 
 - [Cargo.toml](../Cargo.toml)
+- [dev.sh](../dev.sh)
 - [Makefile](../Makefile)
 - [rust-toolchain.toml](../rust-toolchain.toml)
 - [.github/workflows/ci.yml](../.github/workflows/ci.yml)

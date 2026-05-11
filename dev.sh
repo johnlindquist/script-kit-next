@@ -30,6 +30,38 @@ SESSION_DIR_RAW="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
 mkdir -p "$SESSION_DIR_RAW"
 export SCRIPT_KIT_SESSION_DIR="$(cd "$SESSION_DIR_RAW" && pwd -P)"
 
+# Keep local cargo artifacts from silently consuming the disk during long
+# cargo-watch/test cycles. Override with SCRIPT_KIT_TARGET_AUTO_CLEAN=0.
+SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB="${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB:-50}"
+SCRIPT_KIT_TARGET_AUTO_CLEAN="${SCRIPT_KIT_TARGET_AUTO_CLEAN:-1}"
+
+if [ -d target ]; then
+    if [[ "$SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB" =~ ^[0-9]+$ ]] && [ "$SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB" -gt 0 ]; then
+        target_size_kib="$(du -sk target 2>/dev/null | awk '{print $1}')"
+        threshold_kib=$((SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB * 1024 * 1024))
+
+        if [ -n "$target_size_kib" ] && [ "$target_size_kib" -gt "$threshold_kib" ]; then
+            target_size_human="$(du -sh target 2>/dev/null | awk '{print $1}')"
+            echo "Target directory is ${target_size_human:-over threshold} (threshold: ${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB}G)."
+
+            if [ "$SCRIPT_KIT_TARGET_AUTO_CLEAN" = "1" ]; then
+                echo "Cleaning target with cargo clean before starting dev loop."
+                echo "   Override: SCRIPT_KIT_TARGET_AUTO_CLEAN=0 ./dev.sh"
+                echo "   Threshold: SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB=<gb> ./dev.sh"
+                cargo clean
+                echo ""
+            else
+                echo "Skipping target cleanup because SCRIPT_KIT_TARGET_AUTO_CLEAN=${SCRIPT_KIT_TARGET_AUTO_CLEAN}."
+                echo "   Run cargo clean manually or lower disk usage before a long dev loop."
+                echo ""
+            fi
+        fi
+    else
+        echo "Ignoring invalid SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB=${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB}; expected a positive integer."
+        echo ""
+    fi
+fi
+
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then
     echo "cargo-watch is not installed"
