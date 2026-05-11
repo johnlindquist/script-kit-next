@@ -456,6 +456,13 @@ pub fn search_root_dictation_history(
     hits
 }
 
+pub fn search_root_dictation_history_direct(
+    query: &str,
+    options: RootDictationHistorySectionOptions,
+) -> Vec<RootDictationHistorySearchHit> {
+    search_root_dictation_history(query, options)
+}
+
 /// Cache-only dictation history search for root launcher passive rows.
 ///
 /// Cold JSONL reads warm a background index and return no hits for the current

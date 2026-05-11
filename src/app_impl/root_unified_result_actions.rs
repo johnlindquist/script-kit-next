@@ -1,0 +1,793 @@
+use gpui::{Context, Window};
+
+use crate::actions::{Action, ActionCategory};
+use crate::designs::icon_variations::IconName;
+use crate::scripts::SearchResult;
+use crate::ScriptListApp;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RootUnifiedResultAction {
+    FileOpen,
+    FileRevealInFinder,
+    FileCopyPath,
+    FileCopyName,
+    FileQuickLook,
+    NoteOpen,
+    NoteCopyTitle,
+    NoteCopyId,
+    ClipboardPaste,
+    ClipboardCopy,
+    ClipboardAttachToAi,
+    ClipboardPin,
+    ClipboardUnpin,
+    ClipboardQuickLook,
+    ClipboardDelete,
+    BrowserTabSwitch,
+    BrowserTabCopyUrl,
+    BrowserTabCopyTitle,
+    BrowserTabCopyTitleUrl,
+    BrowserTabOpenUrl,
+    BrowserHistoryOpen,
+    BrowserHistoryCopyUrl,
+    BrowserHistoryCopyTitle,
+    BrowserHistoryCopyTitleUrl,
+    AcpHistoryResume,
+    AcpHistoryCopyTitle,
+    AcpHistoryCopySessionId,
+    AcpHistoryCopyPreview,
+    DictationPaste,
+    DictationCopyTranscript,
+    DictationAttachToAi,
+    DictationCreateNote,
+    DictationDelete,
+    AppLaunch,
+    AppRevealInFinder,
+    AppCopyPath,
+    AppCopyName,
+    AppCopyBundleId,
+    WindowSwitch,
+    WindowCopyTitle,
+    WindowCopyAppName,
+    WindowCopyDescriptor,
+    CommandRun,
+    CommandCopyId,
+    SkillOpen,
+    SkillCopyId,
+    SkillCopyPluginId,
+    ScriptIssueInspect,
+    ScriptIssueCopySummary,
+}
+
+impl RootUnifiedResultAction {
+    pub(crate) const ALL: &'static [RootUnifiedResultAction] = &[
+        Self::FileOpen,
+        Self::FileRevealInFinder,
+        Self::FileCopyPath,
+        Self::FileCopyName,
+        Self::FileQuickLook,
+        Self::NoteOpen,
+        Self::NoteCopyTitle,
+        Self::NoteCopyId,
+        Self::ClipboardPaste,
+        Self::ClipboardCopy,
+        Self::ClipboardAttachToAi,
+        Self::ClipboardPin,
+        Self::ClipboardUnpin,
+        Self::ClipboardQuickLook,
+        Self::ClipboardDelete,
+        Self::BrowserTabSwitch,
+        Self::BrowserTabCopyUrl,
+        Self::BrowserTabCopyTitle,
+        Self::BrowserTabCopyTitleUrl,
+        Self::BrowserTabOpenUrl,
+        Self::BrowserHistoryOpen,
+        Self::BrowserHistoryCopyUrl,
+        Self::BrowserHistoryCopyTitle,
+        Self::BrowserHistoryCopyTitleUrl,
+        Self::AcpHistoryResume,
+        Self::AcpHistoryCopyTitle,
+        Self::AcpHistoryCopySessionId,
+        Self::AcpHistoryCopyPreview,
+        Self::DictationPaste,
+        Self::DictationCopyTranscript,
+        Self::DictationAttachToAi,
+        Self::DictationCreateNote,
+        Self::DictationDelete,
+        Self::AppLaunch,
+        Self::AppRevealInFinder,
+        Self::AppCopyPath,
+        Self::AppCopyName,
+        Self::AppCopyBundleId,
+        Self::WindowSwitch,
+        Self::WindowCopyTitle,
+        Self::WindowCopyAppName,
+        Self::WindowCopyDescriptor,
+        Self::CommandRun,
+        Self::CommandCopyId,
+        Self::SkillOpen,
+        Self::SkillCopyId,
+        Self::SkillCopyPluginId,
+        Self::ScriptIssueInspect,
+        Self::ScriptIssueCopySummary,
+    ];
+
+    pub(crate) fn action_id(self) -> &'static str {
+        match self {
+            Self::FileOpen => crate::action_helpers::ROOT_FILE_OPEN_ACTION_ID,
+            Self::FileRevealInFinder => crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+            Self::FileCopyPath => crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+            Self::FileCopyName => crate::action_helpers::ROOT_FILE_COPY_NAME_ACTION_ID,
+            Self::FileQuickLook => crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
+            Self::NoteOpen => "root_note_open",
+            Self::NoteCopyTitle => "root_note_copy_title",
+            Self::NoteCopyId => "root_note_copy_id",
+            Self::ClipboardPaste => "root_clipboard_paste",
+            Self::ClipboardCopy => "root_clipboard_copy",
+            Self::ClipboardAttachToAi => "root_clipboard_attach_to_ai",
+            Self::ClipboardPin => "root_clipboard_pin",
+            Self::ClipboardUnpin => "root_clipboard_unpin",
+            Self::ClipboardQuickLook => "root_clipboard_quick_look",
+            Self::ClipboardDelete => "root_clipboard_delete",
+            Self::BrowserTabSwitch => "root_browser_tab_switch",
+            Self::BrowserTabCopyUrl => "root_browser_tab_copy_url",
+            Self::BrowserTabCopyTitle => "root_browser_tab_copy_title",
+            Self::BrowserTabCopyTitleUrl => "root_browser_tab_copy_title_url",
+            Self::BrowserTabOpenUrl => "root_browser_tab_open_url",
+            Self::BrowserHistoryOpen => "root_browser_history_open",
+            Self::BrowserHistoryCopyUrl => "root_browser_history_copy_url",
+            Self::BrowserHistoryCopyTitle => "root_browser_history_copy_title",
+            Self::BrowserHistoryCopyTitleUrl => "root_browser_history_copy_title_url",
+            Self::AcpHistoryResume => "root_acp_history_resume",
+            Self::AcpHistoryCopyTitle => "root_acp_history_copy_title",
+            Self::AcpHistoryCopySessionId => "root_acp_history_copy_session_id",
+            Self::AcpHistoryCopyPreview => "root_acp_history_copy_preview",
+            Self::DictationPaste => "root_dictation_paste",
+            Self::DictationCopyTranscript => "root_dictation_copy_transcript",
+            Self::DictationAttachToAi => "root_dictation_attach_to_ai",
+            Self::DictationCreateNote => "root_dictation_create_note",
+            Self::DictationDelete => "root_dictation_delete",
+            Self::AppLaunch => "root_app_launch",
+            Self::AppRevealInFinder => "root_app_reveal_in_finder",
+            Self::AppCopyPath => "root_app_copy_path",
+            Self::AppCopyName => "root_app_copy_name",
+            Self::AppCopyBundleId => "root_app_copy_bundle_id",
+            Self::WindowSwitch => "root_window_switch",
+            Self::WindowCopyTitle => "root_window_copy_title",
+            Self::WindowCopyAppName => "root_window_copy_app_name",
+            Self::WindowCopyDescriptor => "root_window_copy_descriptor",
+            Self::CommandRun => "root_command_run",
+            Self::CommandCopyId => "root_command_copy_id",
+            Self::SkillOpen => "root_skill_open",
+            Self::SkillCopyId => "root_skill_copy_id",
+            Self::SkillCopyPluginId => "root_skill_copy_plugin_id",
+            Self::ScriptIssueInspect => "root_script_issue_inspect",
+            Self::ScriptIssueCopySummary => "root_script_issue_copy_summary",
+        }
+    }
+
+    pub(crate) fn from_action_id(id: &str) -> Option<Self> {
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|action| action.action_id() == id)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum RootUnifiedResultActionOwner {
+    RootSubject(RootUnifiedActionSubject),
+    ExistingScriptActions,
+    None,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum RootUnifiedActionSubject {
+    File(crate::file_search::FileResult),
+    Note {
+        id: crate::notes::NoteId,
+        title: String,
+    },
+    Clipboard(crate::clipboard_history::ClipboardEntryMeta),
+    BrowserTab(crate::browser_tabs::RootBrowserTabSearchHit),
+    BrowserHistory(crate::browser_history::RootBrowserHistorySearchHit),
+    AcpHistory(crate::ai::acp::history::AcpHistoryEntry),
+    Dictation {
+        id: String,
+        preview: String,
+    },
+    App(crate::app_launcher::AppInfo),
+    Window(crate::window_control::WindowInfo),
+    BuiltIn(crate::builtins::BuiltInEntry),
+    Skill(std::sync::Arc<crate::plugins::PluginSkill>),
+    ScriptIssue(crate::scripts::ScriptIssueMatch),
+}
+
+impl RootUnifiedActionSubject {
+    pub(crate) fn context_title(&self) -> String {
+        match self {
+            Self::File(file) => file.name.clone(),
+            Self::Note { title, .. } => title.clone(),
+            Self::Clipboard(entry) => entry.text_preview.clone(),
+            Self::BrowserTab(hit) => hit.title.clone(),
+            Self::BrowserHistory(hit) => hit.title.clone(),
+            Self::AcpHistory(entry) => entry.title_display().to_string(),
+            Self::Dictation { preview, .. } => preview.clone(),
+            Self::App(app) => app.name.clone(),
+            Self::Window(window) => window.title.clone(),
+            Self::BuiltIn(entry) => entry.name.clone(),
+            Self::Skill(skill) => skill.title.clone(),
+            Self::ScriptIssue(issue) => issue.title.clone(),
+        }
+    }
+
+    pub(crate) fn stable_key(&self) -> Option<String> {
+        match self {
+            Self::File(file) => Some(format!("file/{}", file.path)),
+            Self::Note { id, .. } => Some(format!("note/{}", id.as_str())),
+            Self::Clipboard(entry) => Some(format!("clipboard-history/{}", entry.id)),
+            Self::BrowserTab(hit) => Some(hit.stable_key.clone()),
+            Self::BrowserHistory(hit) => Some(hit.stable_key.clone()),
+            Self::AcpHistory(entry) => Some(format!("acp-history/{}", entry.session_id)),
+            Self::Dictation { id, .. } => Some(format!("dictation-history/{id}")),
+            Self::App(app) => Some(
+                app.bundle_id
+                    .as_ref()
+                    .map(|bundle_id| format!("app/{bundle_id}"))
+                    .unwrap_or_else(|| format!("app/{}", app.name.to_lowercase().replace(' ', "-"))),
+            ),
+            Self::Window(window) => Some(format!("window:{}:{}", window.app, window.title)),
+            Self::BuiltIn(entry) => {
+                if entry.id.starts_with("builtin/") {
+                    Some(entry.id.clone())
+                } else {
+                    Some(format!("builtin/{}", entry.id))
+                }
+            }
+            Self::Skill(skill) => Some(format!(
+                "skill:{}:{}",
+                skill.plugin_id, skill.skill_id
+            )),
+            Self::ScriptIssue(issue) => Some(format!(
+                "script-issue/{}:{}:{}:{}",
+                issue.title, issue.failed_count, issue.fatal_count, issue.warning_count
+            )),
+        }
+    }
+
+    pub(crate) fn source_name(&self) -> &'static str {
+        match self {
+            Self::File(_) => "Files",
+            Self::Note { .. } => "Notes",
+            Self::Clipboard(_) => "Clipboard History",
+            Self::BrowserTab(_) => "Browser Tabs",
+            Self::BrowserHistory(_) => "Browser History",
+            Self::AcpHistory(_) => "AI Conversations",
+            Self::Dictation { .. } => "Dictation History",
+            Self::App(_) => "Apps",
+            Self::Window(_) => "Windows",
+            Self::BuiltIn(_) | Self::Skill(_) | Self::ScriptIssue(_) => "Commands",
+        }
+    }
+}
+
+pub(crate) fn root_unified_action_owner_for_result(
+    result: &SearchResult,
+) -> RootUnifiedResultActionOwner {
+    match result {
+        SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+            RootUnifiedResultActionOwner::ExistingScriptActions
+        }
+        _ => root_unified_action_subject_from_result(result)
+            .map(RootUnifiedResultActionOwner::RootSubject)
+            .unwrap_or(RootUnifiedResultActionOwner::None),
+    }
+}
+
+pub(crate) fn root_unified_action_subject_from_result(
+    result: &SearchResult,
+) -> Option<RootUnifiedActionSubject> {
+    match result {
+        SearchResult::File(file) => Some(RootUnifiedActionSubject::File(file.file.clone())),
+        SearchResult::Note(note) => Some(RootUnifiedActionSubject::Note {
+            id: note.hit.id,
+            title: note.title.clone(),
+        }),
+        SearchResult::ClipboardHistory(entry) => {
+            Some(RootUnifiedActionSubject::Clipboard(entry.entry.clone()))
+        }
+        SearchResult::BrowserTab(tab) => Some(RootUnifiedActionSubject::BrowserTab(tab.hit.clone())),
+        SearchResult::BrowserHistory(history) => {
+            Some(RootUnifiedActionSubject::BrowserHistory(history.hit.clone()))
+        }
+        SearchResult::AcpHistory(history) => {
+            Some(RootUnifiedActionSubject::AcpHistory(history.entry.clone()))
+        }
+        SearchResult::DictationHistory(dictation) => Some(RootUnifiedActionSubject::Dictation {
+            id: dictation.id.clone(),
+            preview: dictation.preview.clone(),
+        }),
+        SearchResult::App(app) => Some(RootUnifiedActionSubject::App(app.app.clone())),
+        SearchResult::Window(window) => Some(RootUnifiedActionSubject::Window(window.window.clone())),
+        SearchResult::BuiltIn(builtin) => Some(RootUnifiedActionSubject::BuiltIn(
+            builtin.entry.clone(),
+        )),
+        SearchResult::Skill(skill) => Some(RootUnifiedActionSubject::Skill(skill.skill.clone())),
+        SearchResult::ScriptIssue(issue) => {
+            Some(RootUnifiedActionSubject::ScriptIssue(issue.clone()))
+        }
+        SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) | SearchResult::Fallback(_) => None,
+    }
+}
+
+pub(crate) fn root_unified_actions_for_subject(
+    subject: &RootUnifiedActionSubject,
+) -> Vec<Action> {
+    match subject {
+        RootUnifiedActionSubject::File(file) => super::actions_toggle::root_file_actions_for(file),
+        RootUnifiedActionSubject::Note { .. } => vec![
+            action(RootUnifiedResultAction::NoteOpen, "Open Note", "Open"),
+            action(RootUnifiedResultAction::NoteCopyTitle, "Copy Note Title", "Share"),
+            action(RootUnifiedResultAction::NoteCopyId, "Copy Note ID", "Share"),
+        ],
+        RootUnifiedActionSubject::Clipboard(entry) => {
+            let pin_action = if entry.pinned {
+                action(RootUnifiedResultAction::ClipboardUnpin, "Unpin", "Actions")
+            } else {
+                action(RootUnifiedResultAction::ClipboardPin, "Pin", "Actions")
+            };
+            vec![
+                action(RootUnifiedResultAction::ClipboardPaste, "Paste Clipboard", "Open"),
+                action(RootUnifiedResultAction::ClipboardCopy, "Copy to Clipboard", "Share"),
+                action(
+                    RootUnifiedResultAction::ClipboardAttachToAi,
+                    "Attach to AI",
+                    "Share",
+                ),
+                pin_action,
+                action(
+                    RootUnifiedResultAction::ClipboardQuickLook,
+                    "Quick Look",
+                    "Actions",
+                ),
+                action(
+                    RootUnifiedResultAction::ClipboardDelete,
+                    "Delete Clipboard Entry",
+                    "Danger",
+                ),
+            ]
+        }
+        RootUnifiedActionSubject::BrowserTab(_) => vec![
+            action(RootUnifiedResultAction::BrowserTabSwitch, "Switch to Tab", "Open"),
+            action(RootUnifiedResultAction::BrowserTabOpenUrl, "Open URL in Browser", "Open"),
+            action(RootUnifiedResultAction::BrowserTabCopyUrl, "Copy URL", "Share"),
+            action(RootUnifiedResultAction::BrowserTabCopyTitle, "Copy Title", "Share"),
+            action(
+                RootUnifiedResultAction::BrowserTabCopyTitleUrl,
+                "Copy Title and URL",
+                "Share",
+            ),
+        ],
+        RootUnifiedActionSubject::BrowserHistory(_) => vec![
+            action(RootUnifiedResultAction::BrowserHistoryOpen, "Open Page", "Open"),
+            action(RootUnifiedResultAction::BrowserHistoryCopyUrl, "Copy URL", "Share"),
+            action(
+                RootUnifiedResultAction::BrowserHistoryCopyTitle,
+                "Copy Title",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::BrowserHistoryCopyTitleUrl,
+                "Copy Title and URL",
+                "Share",
+            ),
+        ],
+        RootUnifiedActionSubject::AcpHistory(entry) => {
+            let mut actions = vec![
+                action(
+                    RootUnifiedResultAction::AcpHistoryResume,
+                    "Resume Conversation",
+                    "Open",
+                ),
+                action(
+                    RootUnifiedResultAction::AcpHistoryCopyTitle,
+                    "Copy Conversation Title",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AcpHistoryCopySessionId,
+                    "Copy Session ID",
+                    "Share",
+                ),
+            ];
+            if !entry.preview_display().is_empty() {
+                actions.push(action(
+                    RootUnifiedResultAction::AcpHistoryCopyPreview,
+                    "Copy Preview",
+                    "Share",
+                ));
+            }
+            actions
+        }
+        RootUnifiedActionSubject::Dictation { .. } => vec![
+            action(RootUnifiedResultAction::DictationPaste, "Paste Dictation", "Open"),
+            action(
+                RootUnifiedResultAction::DictationCopyTranscript,
+                "Copy Transcript",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::DictationAttachToAi,
+                "Attach to AI",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::DictationCreateNote,
+                "Create Note from Transcript",
+                "Actions",
+            ),
+            action(
+                RootUnifiedResultAction::DictationDelete,
+                "Delete Dictation",
+                "Danger",
+            ),
+        ],
+        RootUnifiedActionSubject::App(app) => {
+            let mut actions = vec![
+                action(RootUnifiedResultAction::AppLaunch, "Launch App", "Open"),
+                action(
+                    RootUnifiedResultAction::AppRevealInFinder,
+                    "Reveal in Finder",
+                    "Open",
+                ),
+                action(RootUnifiedResultAction::AppCopyPath, "Copy App Path", "Share"),
+                action(RootUnifiedResultAction::AppCopyName, "Copy App Name", "Share"),
+            ];
+            if app.bundle_id.is_some() {
+                actions.push(action(
+                    RootUnifiedResultAction::AppCopyBundleId,
+                    "Copy Bundle ID",
+                    "Share",
+                ));
+            }
+            actions
+        }
+        RootUnifiedActionSubject::Window(_) => vec![
+            action(RootUnifiedResultAction::WindowSwitch, "Switch to Window", "Open"),
+            action(
+                RootUnifiedResultAction::WindowCopyTitle,
+                "Copy Window Title",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::WindowCopyAppName,
+                "Copy App Name",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::WindowCopyDescriptor,
+                "Copy Window Descriptor",
+                "Share",
+            ),
+        ],
+        RootUnifiedActionSubject::BuiltIn(_) => vec![
+            action(RootUnifiedResultAction::CommandRun, "Run Command", "Open"),
+            action(RootUnifiedResultAction::CommandCopyId, "Copy Command ID", "Share"),
+        ],
+        RootUnifiedActionSubject::Skill(_) => vec![
+            action(RootUnifiedResultAction::SkillOpen, "Open Skill", "Open"),
+            action(RootUnifiedResultAction::SkillCopyId, "Copy Skill ID", "Share"),
+            action(
+                RootUnifiedResultAction::SkillCopyPluginId,
+                "Copy Plugin ID",
+                "Share",
+            ),
+        ],
+        RootUnifiedActionSubject::ScriptIssue(_) => vec![
+            action(
+                RootUnifiedResultAction::ScriptIssueInspect,
+                "Inspect Issues",
+                "Open",
+            ),
+            action(
+                RootUnifiedResultAction::ScriptIssueCopySummary,
+                "Copy Issue Summary",
+                "Share",
+            ),
+        ],
+    }
+}
+
+fn action(id: RootUnifiedResultAction, title: &str, section: &str) -> Action {
+    let icon = match section {
+        "Open" => IconName::PlayFilled,
+        "Share" => IconName::Copy,
+        "Danger" => IconName::Trash,
+        _ => IconName::Settings,
+    };
+    Action::new(id.action_id(), title, None, ActionCategory::ScriptContext)
+        .with_section(section)
+        .with_icon(icon)
+}
+
+pub(crate) fn execute_root_unified_result_action(
+    app: &mut ScriptListApp,
+    action_id: &str,
+    subject: &RootUnifiedActionSubject,
+    window: &mut Window,
+    cx: &mut Context<ScriptListApp>,
+) -> bool {
+    let Some(action) = RootUnifiedResultAction::from_action_id(action_id) else {
+        tracing::warn!(
+            target: "script_kit::actions",
+            event = "unknown_root_unified_result_action",
+            action_id,
+            "Unknown root result action ignored"
+        );
+        return true;
+    };
+
+    match (action, subject) {
+        (RootUnifiedResultAction::FileOpen
+        | RootUnifiedResultAction::FileRevealInFinder
+        | RootUnifiedResultAction::FileCopyPath
+        | RootUnifiedResultAction::FileCopyName
+        | RootUnifiedResultAction::FileQuickLook, RootUnifiedActionSubject::File(file)) => {
+            app.execute_root_file_action(action_id, file, window, cx)
+        }
+        (RootUnifiedResultAction::NoteOpen, RootUnifiedActionSubject::Note { id, .. }) => {
+            app.execute_root_note_open(*id, cx);
+            true
+        }
+        (RootUnifiedResultAction::NoteCopyTitle, RootUnifiedActionSubject::Note { title, .. }) => {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(title.clone()));
+            true
+        }
+        (RootUnifiedResultAction::NoteCopyId, RootUnifiedActionSubject::Note { id, .. }) => {
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(id.as_str()));
+            true
+        }
+        (RootUnifiedResultAction::ClipboardPaste, RootUnifiedActionSubject::Clipboard(entry)) => {
+            app.execute_root_clipboard_history_paste(&entry.id, cx);
+            true
+        }
+        (RootUnifiedResultAction::ClipboardCopy, RootUnifiedActionSubject::Clipboard(entry)) => {
+            if let Err(error) = crate::clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                app.show_hud(format!("Failed to copy clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::ClipboardAttachToAi, RootUnifiedActionSubject::Clipboard(entry)) => {
+            let text = crate::clipboard_history::get_entry_content(&entry.id)
+                .unwrap_or_else(|| entry.text_preview.clone());
+            app.submit_to_current_or_new_tab_ai_harness_from_text(
+                text,
+                crate::ai::TabAiQuickSubmitSource::Fallback,
+                cx,
+            );
+            true
+        }
+        (RootUnifiedResultAction::ClipboardPin, RootUnifiedActionSubject::Clipboard(entry)) => {
+            if let Err(error) = crate::clipboard_history::pin_entry(&entry.id) {
+                app.show_hud(format!("Failed to pin clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::ClipboardUnpin, RootUnifiedActionSubject::Clipboard(entry)) => {
+            if let Err(error) = crate::clipboard_history::unpin_entry(&entry.id) {
+                app.show_hud(format!("Failed to unpin clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::ClipboardQuickLook, RootUnifiedActionSubject::Clipboard(entry)) => {
+            if let Err(error) = crate::clipboard_history::quick_look_entry(entry) {
+                app.show_hud(format!("Failed to preview clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::ClipboardDelete, RootUnifiedActionSubject::Clipboard(entry)) => {
+            if let Err(error) = crate::clipboard_history::remove_entry(&entry.id) {
+                app.show_hud(format!("Failed to delete clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::BrowserTabSwitch, RootUnifiedActionSubject::BrowserTab(hit)) => {
+            app.execute_root_browser_tab_switch(hit, cx);
+            true
+        }
+        (RootUnifiedResultAction::BrowserTabOpenUrl, RootUnifiedActionSubject::BrowserTab(hit)) => {
+            app.execute_root_browser_history_open(&hit.url, cx);
+            true
+        }
+        (RootUnifiedResultAction::BrowserTabCopyUrl, RootUnifiedActionSubject::BrowserTab(hit)) => copy(hit.url.clone(), cx),
+        (RootUnifiedResultAction::BrowserTabCopyTitle, RootUnifiedActionSubject::BrowserTab(hit)) => copy(hit.title.clone(), cx),
+        (RootUnifiedResultAction::BrowserTabCopyTitleUrl, RootUnifiedActionSubject::BrowserTab(hit)) => copy(format!("{} — {}", hit.title, hit.url), cx),
+        (RootUnifiedResultAction::BrowserHistoryOpen, RootUnifiedActionSubject::BrowserHistory(hit)) => {
+            app.execute_root_browser_history_open(&hit.url, cx);
+            true
+        }
+        (RootUnifiedResultAction::BrowserHistoryCopyUrl, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(hit.url.clone(), cx),
+        (RootUnifiedResultAction::BrowserHistoryCopyTitle, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(hit.title.clone(), cx),
+        (RootUnifiedResultAction::BrowserHistoryCopyTitleUrl, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(format!("{} — {}", hit.title, hit.url), cx),
+        (RootUnifiedResultAction::AcpHistoryResume, RootUnifiedActionSubject::AcpHistory(entry)) => {
+            app.resume_acp_conversation_from_history(&entry.session_id, entry.first_message.as_str(), cx);
+            true
+        }
+        (RootUnifiedResultAction::AcpHistoryCopyTitle, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.title_display().to_string(), cx),
+        (RootUnifiedResultAction::AcpHistoryCopySessionId, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.session_id.clone(), cx),
+        (RootUnifiedResultAction::AcpHistoryCopyPreview, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.preview_display().to_string(), cx),
+        (RootUnifiedResultAction::DictationPaste, RootUnifiedActionSubject::Dictation { id, .. }) => {
+            app.execute_root_dictation_history_paste(id, cx);
+            true
+        }
+        (RootUnifiedResultAction::DictationCopyTranscript, RootUnifiedActionSubject::Dictation { id, .. }) => {
+            if let Some(entry) = crate::dictation::get_history_entry(id) {
+                copy(entry.transcript, cx)
+            } else {
+                true
+            }
+        }
+        (RootUnifiedResultAction::DictationAttachToAi, RootUnifiedActionSubject::Dictation { id, .. }) => {
+            if let Some(entry) = crate::dictation::get_history_entry(id) {
+                app.submit_to_current_or_new_tab_ai_harness_from_text(
+                    entry.transcript,
+                    crate::ai::TabAiQuickSubmitSource::Dictation,
+                    cx,
+                );
+            }
+            true
+        }
+        (RootUnifiedResultAction::DictationCreateNote, RootUnifiedActionSubject::Dictation { id, .. }) => {
+            if let Some(entry) = crate::dictation::get_history_entry(id) {
+                if let Err(error) = crate::notes::save_note_with_content(cx, entry.transcript) {
+                    app.show_hud(format!("Failed to create note: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                }
+            }
+            true
+        }
+        (RootUnifiedResultAction::DictationDelete, RootUnifiedActionSubject::Dictation { id, .. }) => {
+            if let Err(error) = crate::dictation::delete_history_entry(id) {
+                app.show_hud(format!("Failed to delete dictation: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::AppLaunch, RootUnifiedActionSubject::App(app_info)) => {
+            app.execute_app(app_info, cx);
+            true
+        }
+        (RootUnifiedResultAction::AppRevealInFinder, RootUnifiedActionSubject::App(app_info)) => {
+            if let Err(error) = crate::file_search::reveal_in_finder(&app_info.path.to_string_lossy()) {
+                app.show_hud(format!("Failed to reveal app: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            }
+            true
+        }
+        (RootUnifiedResultAction::AppCopyPath, RootUnifiedActionSubject::App(app_info)) => copy(app_info.path.to_string_lossy().to_string(), cx),
+        (RootUnifiedResultAction::AppCopyName, RootUnifiedActionSubject::App(app_info)) => copy(app_info.name.clone(), cx),
+        (RootUnifiedResultAction::AppCopyBundleId, RootUnifiedActionSubject::App(app_info)) => copy(app_info.bundle_id.clone().unwrap_or_default(), cx),
+        (RootUnifiedResultAction::WindowSwitch, RootUnifiedActionSubject::Window(window_info)) => {
+            app.execute_window_focus(window_info, cx);
+            true
+        }
+        (RootUnifiedResultAction::WindowCopyTitle, RootUnifiedActionSubject::Window(window_info)) => copy(window_info.title.clone(), cx),
+        (RootUnifiedResultAction::WindowCopyAppName, RootUnifiedActionSubject::Window(window_info)) => copy(window_info.app.clone(), cx),
+        (RootUnifiedResultAction::WindowCopyDescriptor, RootUnifiedActionSubject::Window(window_info)) => copy(format!("{} — {}", window_info.app, window_info.title), cx),
+        (RootUnifiedResultAction::CommandRun, RootUnifiedActionSubject::BuiltIn(entry)) => {
+            app.execute_builtin(entry, cx);
+            true
+        }
+        (RootUnifiedResultAction::CommandCopyId, RootUnifiedActionSubject::BuiltIn(entry)) => copy(entry.id.clone(), cx),
+        (RootUnifiedResultAction::SkillOpen, RootUnifiedActionSubject::Skill(skill)) => {
+            app.open_acp_with_selected_skill(skill, cx);
+            true
+        }
+        (RootUnifiedResultAction::SkillCopyId, RootUnifiedActionSubject::Skill(skill)) => copy(skill.skill_id.clone(), cx),
+        (RootUnifiedResultAction::SkillCopyPluginId, RootUnifiedActionSubject::Skill(skill)) => copy(skill.plugin_id.clone(), cx),
+        (RootUnifiedResultAction::ScriptIssueInspect, RootUnifiedActionSubject::ScriptIssue(_)) => {
+            app.open_script_issues_view(cx);
+            true
+        }
+        (RootUnifiedResultAction::ScriptIssueCopySummary, RootUnifiedActionSubject::ScriptIssue(issue)) => copy(issue.description.clone().unwrap_or_else(|| issue.title.clone()), cx),
+        _ => {
+            tracing::warn!(
+                target: "script_kit::actions",
+                event = "root_unified_result_action_subject_mismatch",
+                action_id,
+                subject_source = subject.source_name(),
+                "Root result action ignored for mismatched subject"
+            );
+            true
+        }
+    }
+}
+
+fn copy(value: String, cx: &mut Context<ScriptListApp>) -> bool {
+    cx.write_to_clipboard(gpui::ClipboardItem::new_string(value));
+    true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ids(subject: &RootUnifiedActionSubject) -> Vec<String> {
+        root_unified_actions_for_subject(subject)
+            .into_iter()
+            .map(|action| action.id)
+            .collect()
+    }
+
+    #[test]
+    fn every_action_id_round_trips() {
+        for action in RootUnifiedResultAction::ALL {
+            assert_eq!(
+                RootUnifiedResultAction::from_action_id(action.action_id()),
+                Some(*action)
+            );
+        }
+    }
+
+    #[test]
+    fn action_ids_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for action in RootUnifiedResultAction::ALL {
+            assert!(seen.insert(action.action_id()), "duplicate id {}", action.action_id());
+        }
+    }
+
+    #[test]
+    fn notes_actions_match_expected_matrix() {
+        let subject = RootUnifiedActionSubject::Note {
+            id: crate::notes::NoteId::new(),
+            title: "note".to_string(),
+        };
+        assert_eq!(
+            ids(&subject),
+            vec![
+                "root_note_open",
+                "root_note_copy_title",
+                "root_note_copy_id"
+            ]
+        );
+    }
+
+    #[test]
+    fn clipboard_actions_match_expected_matrix_pinned_and_unpinned() {
+        let mut entry = crate::clipboard_history::ClipboardEntryMeta {
+            id: "clip".to_string(),
+            content_type: crate::clipboard_history::ContentType::Text,
+            timestamp: 0,
+            pinned: false,
+            text_preview: "clip".to_string(),
+            image_width: None,
+            image_height: None,
+            byte_size: 4,
+            ocr_text: None,
+        };
+        assert!(ids(&RootUnifiedActionSubject::Clipboard(entry.clone()))
+            .contains(&"root_clipboard_pin".to_string()));
+        entry.pinned = true;
+        assert!(ids(&RootUnifiedActionSubject::Clipboard(entry))
+            .contains(&"root_clipboard_unpin".to_string()));
+    }
+
+    #[test]
+    fn script_rows_delegate_to_existing_script_actions_owner() {
+        let script = crate::scripts::Script {
+            name: "Build".to_string(),
+            path: std::path::PathBuf::from("/tmp/build.ts"),
+            plugin_id: "main".to_string(),
+            ..Default::default()
+        };
+        let result = SearchResult::Script(crate::scripts::ScriptMatch {
+            script: std::sync::Arc::new(script),
+            score: 1,
+            filename: "build.ts".to_string(),
+            match_indices: Default::default(),
+            match_kind: Default::default(),
+            content_match: None,
+        });
+        assert!(matches!(
+            root_unified_action_owner_for_result(&result),
+            RootUnifiedResultActionOwner::ExistingScriptActions
+        ));
+    }
+}

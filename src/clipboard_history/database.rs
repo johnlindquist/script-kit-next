@@ -605,6 +605,13 @@ pub fn search_root_clipboard_history_meta(
         .collect()
 }
 
+pub fn search_root_clipboard_history_meta_direct(
+    query: &str,
+    options: RootClipboardHistorySectionOptions,
+) -> Vec<ClipboardEntryMeta> {
+    search_root_clipboard_history_meta(query, options)
+}
+
 /// Get just the content for an entry (for copy/preview operations)
 ///
 /// Returns None if entry doesn't exist.

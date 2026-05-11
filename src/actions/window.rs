@@ -194,6 +194,13 @@ fn should_auto_close_actions_window(
     parent_window_focused: bool,
     actions_window_active: bool,
 ) -> bool {
+    if std::env::var("SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
+        return false;
+    }
     !parent_window_focused && !actions_window_active
 }
 

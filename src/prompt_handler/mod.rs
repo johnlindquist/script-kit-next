@@ -2474,6 +2474,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -2494,6 +2495,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3341,6 +3343,44 @@ impl ScriptListApp {
                 } else {
                     None
                 };
+                let actions_dialog = if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                    self.actions_dialog
+                        .clone()
+                        .or_else(|| crate::actions::get_actions_dialog_entity(cx))
+                        .map(|dialog| {
+                        let dialog = dialog.read(cx);
+                        let visible_actions = dialog
+                            .filtered_actions
+                            .iter()
+                            .filter_map(|action_idx| dialog.actions.get(*action_idx))
+                            .map(|action| {
+                                serde_json::json!({
+                                    "id": action.id,
+                                    "label": action.title,
+                                    "section": action.section,
+                                    "shortcut": action.shortcut,
+                                    "destructive": action.section.as_deref() == Some("Danger"),
+                                    "enabled": true,
+                                })
+                            })
+                            .collect::<Vec<_>>();
+                        let subject = self.pending_root_unified_actions_subject.as_ref();
+                        let context_title = subject.map(|subject| subject.context_title());
+                        let context_stable_key = subject.and_then(|subject| subject.stable_key());
+                        let context_source = subject.map(|subject| subject.source_name());
+                        serde_json::json!({
+                            "open": true,
+                            "host": self.current_actions_host().map(|host| format!("{:?}", host)),
+                            "contextTitle": context_title,
+                            "contextStableKey": context_stable_key,
+                            "contextSource": context_source,
+                            "selectedActionId": dialog.get_selected_action_id(),
+                            "visibleActions": visible_actions,
+                        })
+                    })
+                } else {
+                    None
+                };
 
                 // Create the response
                 let response = Message::state_result(
@@ -3360,6 +3400,7 @@ impl ScriptListApp {
                     menu_syntax_main_hint,
                     capture_history_picker,
                     main_window_preflight,
+                    actions_dialog,
                     root_file_search,
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
                 );

@@ -125,6 +125,8 @@ Global root file rows are frozen in a per-query frame. Provider completion may u
 
 Source-filter heads can make Files the only participating root source. When `files:` or `f:` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame. These filters are transparent refinements, not power-user UI mode switches, so `png files:` renders File rows without the menu-syntax hint; a bare leading `:` is reserved for filter discovery and insertion.
 
+When the stripped query is empty, `files:` and `f:` browse the frecency-backed Recent Files set even if ordinary root file search is disabled. Disabled recent-file refreshes leave the hydration revision invalid so an explicit source-only Files filter can load current recents immediately instead of reusing an empty disabled frame.
+
 ## Root Unified Search ACP History
 
 ACP conversation rows are a passive launcher source backed by saved conversation history.
@@ -132,6 +134,8 @@ ACP conversation rows are a passive launcher source backed by saved conversation
 Eligible non-empty root queries append an AI Conversations section using the existing ACP history search index. Rows render after primary launcher intent and root file rows, before fallback handoff rows. They never promote above commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.acpHistory` only for the implemented ACP history source. Selecting a row resumes the saved conversation through the shared `[[src/render_builtins/acp_history.rs#ScriptListApp#resume_acp_conversation_from_history]]` path; root search does not expose attach-summary actions in this first pass.
+
+When `conversations:` or `ai:` has no stripped search text, AI Conversations returns recent saved conversation metadata. This default browse stays source-only and does not make saved conversations appear on the ordinary empty root launcher.
 
 ## Root Unified Search Notes
 
@@ -147,6 +151,8 @@ Standalone source-filter heads `notes:` and `n:` make Notes the only passive sou
 
 Explicit positive source heads opt into their source for the active query. Disabled passive defaults still stay hidden during ordinary search, but typing a matching head such as `n:` or `clipboard:` means the user intentionally selected that source.
 
+When `notes:` or `n:` has no stripped search text, Notes returns the pinned and most recently updated active notes. Non-empty note filters keep FTS as the first path, then fall back to bounded title/content substring matching so `n:not` can find a note titled `Welcome to Notes`. This keeps source-only notes filters usable as a browse mode without exposing note bodies in root rows.
+
 ## Root Unified Search Browser Tabs
 
 Browser tab rows are an opt-in passive launcher source backed by currently open tab metadata.
@@ -156,6 +162,8 @@ Eligible root queries append a Browser Tabs section through the configured passi
 `config.ts` exposes `unifiedSearch.browserTabs`, disabled by default, with controls for `maxResults`, `minQueryChars`, `scanLimit`, `providers`, `searchUrls`, and `cacheTtlMs`. The root source reads only from the current open-tab metadata snapshot on the foreground grouping path, while stale or missing snapshots refresh in the background. Refresh completion warms future frames without notifying the main list, invalidating grouped results, fetching favicons, or reading page content.
 
 Root Browser Tabs rows carry title, URL, domain, provider label, tab location, and a stable `browser-tab/...` key. Selecting a row switches the existing tab through `[[src/browser_tabs.rs#activate_tab]]` via the root focus helper rather than opening a duplicate URL.
+
+When `tabs:` or `t:` has no stripped search text, Browser Tabs returns the current open-tab snapshot in source-only mode. The foreground path still reads only cached tab metadata and still suppresses every unselected source.
 
 ## Root Unified Passive Snapshot Caches
 
@@ -169,6 +177,20 @@ Root passive ranking receipts make the launcher row-order contract visible to au
 
 The `mainWindowPreflight` receipt now includes `selectedResultRole` and `visibleResults`. Each visible row receipt carries grouped index, visible rank, stable selection key, role, action kind, type label, and source name. The role is derived directly from `SearchResult`: scripts, scriptlets, skills, built-ins, apps, and windows are primary; root files are root-file rows; Notes, ACP History, Clipboard History, Dictation History, Browser Tabs, and Browser History are root-passive rows; fallbacks, script issues, and agents stay distinct. This lets state-first proofs verify that real passive rows are present but remain below primary launcher intent for the same query, including when `config.ts` reorders passive sections.
 
+## Root Unified Search Result Actions
+
+Root result actions make Cmd+K operate on the same focused ScriptList row identity that Enter would execute.
+
+When `AppView::ScriptList` focuses a committed root unified source row, Cmd+K resolves the visible `SearchResult` through the grouped selection projection, converts it into a captured `RootUnifiedActionSubject`, and opens a MainList actions dialog from `[[src/app_impl/root_unified_result_actions.rs#root_unified_actions_for_subject]]`. The pending subject stays attached to the dialog so action execution does not re-read selection after keyboard movement, cache warming, or source-filter frame changes.
+
+The shared actions dialog remains only the host: it owns presentation, popup lifecycle, search inside actions, and focus restoration. Source-specific IDs, labels, sections, and execution are owned by the root result catalog in `[[src/app_impl/root_unified_result_actions.rs#RootUnifiedResultAction]]`; unknown root IDs log and no-op instead of falling through to generic script `handle_action`.
+
+Scripts and scriptlets remain delegated to the existing MainList script action owner so SDK-defined and script-specific actions are preserved. Dedicated built-in views such as Clipboard History, Dictation History, File Search, ACP History, Browser History, Browser Tabs, App Launcher, and Window Switcher keep their existing action hosts; the root result action path is scoped to `ActionsDialogHost::MainList`.
+
+Windows source filters use the same primary `SearchResult::Window` rows as the window switcher search model. In agentic sessions, `SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER` can seed metadata-only `WindowInfo::for_test` rows so `w:` action receipts do not depend on macOS Accessibility state.
+
+The `actionsDialog` state receipt exposes only content-light action metadata: host, context title, context stable key, context source, selected action id, and visible action IDs/labels/sections/shortcuts. It must not expose note bodies, raw clipboard content, dictation transcripts, browser page contents, or other local payloads.
+
 ## Root Unified Search Passive Source Order
 
 Passive source order is user-configurable while primary rows, root file rows, and fallback rows keep their safety positions.
@@ -176,6 +198,8 @@ Passive source order is user-configurable while primary rows, root file rows, an
 `config.ts` exposes `unifiedSearch.passiveSourceOrder` with values for `browserTabs`, `notes`, `clipboardHistory`, `dictationHistory`, `acpHistory`, and `browserHistory`. The runtime deduplicates configured entries, appends missing defaults, and only reorders passive local sections. It does not enable disabled sources, skip enabled sources, or let passive rows move ahead of primary launcher rows or root Files.
 
 Source filters are the exception to passive defaults: an explicit positive source head enables that source for the current stripped query, then suppresses unselected primary, fallback, root-file, and passive rows. This keeps `c: text`, `clipboard: text`, `ai: text`, and similar filters predictable even when the source is disabled for unfiltered passive search.
+
+Source-only filters also define each source's default browse behavior. Empty `c: ` shows recent clipboard metadata, `ai: ` shows saved conversations, `d: ` shows recent dictations, `n: ` shows pinned/recent notes, `t: ` shows open tabs, `h: ` shows recent browser history, and `f: ` shows Recent Files.
 
 ## Root Unified Search Passive Result Limits
 
@@ -191,15 +215,19 @@ Root Clipboard History scans bounded recent clipboard metadata only, never raw c
 
 `config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
 
-Standalone source-filter heads `clipboard:` and `c:` make Clipboard History the only passive source allowed for the stripped query. Primary, fallback, Files, Notes, and other passive rows are suppressed unless their own source head is also present.
+Source-filter heads `clipboard:` and `c:` make Clipboard History the only passive source allowed for the stripped query. The query text may be spaced or attached, so `c: skip`, `c:skip`, and `clipboard:skip` all search Clipboard History for `skip`. Primary, fallback, Files, Notes, and other passive rows are suppressed unless their own source head is also present.
 
 Because `clipboard:` and `c:` are explicit source selection, they opt Clipboard History into the current query even though unfiltered passive Clipboard History remains disabled by default. The query still uses bounded metadata and minimum-query rules, but explicit source selection performs the direct local lookup instead of waiting for a cold passive cache to warm.
+
+When `clipboard:` or `c:` has no stripped search text, Clipboard History returns bounded recent entries from its metadata table. This is the source's default browse mode; it does not turn on unfiltered empty-root clipboard rows.
 
 ## Root Unified Search Dictation History
 
 Dictation history rows are opt-in passive launcher rows backed by saved local transcripts.
 
 Root Dictation History scans the compacted local `dictation-history.jsonl` transcript log with a bounded `scanLimit`, excludes empty, short, newline, disabled, and advanced queries, and appends capped passive rows through the configured passive source order. By default it appears after Clipboard History and before AI Conversations. Rows carry metadata only: id, preview, target, timestamp, duration, matched field, subtitle, and score. Enter loads the full transcript by selected id and reuses the existing paste flow. The source is disabled by default through `unifiedSearch.dictationHistory` so users explicitly choose whether voice transcripts appear in the main launcher.
+
+When `dictation:` or `d:` has no stripped search text, Dictation History returns recent saved transcript metadata. The full transcript still loads only after explicit selection.
 
 ## Root Unified Search Browser History
 
@@ -210,6 +238,8 @@ Eligible root queries append a Browser History section through the configured pa
 `config.ts` exposes `unifiedSearch.browserHistory`, disabled by default, with controls for `maxResults`, `minQueryChars`, `maxAgeDays`, `providers`, and `searchUrls`. The root source is intentionally narrower than the dedicated browser-history picker: it only scans copied SQLite snapshots from Arc, Chrome, Brave, and Edge Chromium history databases.
 
 Root Browser History rows carry title, URL, domain, provider label, profile label, last visit time, visit count, and a stable `browser-history/...` key. Selecting a row opens the URL through `[[src/browser_history.rs#open_browser_history_url]]`, which rejects non-HTTP(S) schemes before handing off to the OS default browser.
+
+When `history:` or `h:` has no stripped search text, Browser History returns the current bounded recent-history snapshot. It still filters to safe HTTP(S) URL metadata and never reads favicons, cookies, downloads, page content, or the network.
 
 ## Dictation model download prompt
 

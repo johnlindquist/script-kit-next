@@ -78,6 +78,57 @@ function errorResult(
   };
 }
 
+function findJsonObjectEnd(text: string): number | null {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const ch = text[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === "\"") {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+    } else if (ch === "{") {
+      depth += 1;
+    } else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return index + 1;
+      }
+    }
+  }
+
+  return null;
+}
+
+function parseJsonResponseLine(trimmed: string): unknown | null {
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const end = findJsonObjectEnd(trimmed);
+    if (end == null) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(trimmed.substring(0, end));
+    } catch {
+      return null;
+    }
+  }
+}
+
 /**
  * Scan the log file from `startOffset` for a JSON line containing the
  * given requestId and optionally the expected response type.
@@ -118,17 +169,15 @@ function scanLog(
     if (!trimmed || !trimmed.startsWith("{")) continue;
     if (!trimmed.includes(requestId)) continue;
 
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed.requestId !== requestId) continue;
+    const parsed = parseJsonResponseLine(trimmed);
+    if (parsed == null || typeof parsed !== "object") continue;
+    const response = parsed as { requestId?: string; type?: string; responseType?: string };
+    if (response.requestId !== requestId) continue;
 
-      const responseType = parsed.type ?? parsed.responseType ?? null;
-      if (expect && responseType !== expect) continue;
+    const responseType = response.type ?? response.responseType ?? null;
+    if (expect && responseType !== expect) continue;
 
-      return [parsed, responseType, newOffset];
-    } catch {
-      // not valid JSON, skip
-    }
+    return [parsed, responseType, newOffset];
   }
 
   return [null, null, newOffset];

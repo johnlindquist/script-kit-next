@@ -82,12 +82,15 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains("browser_tabs_options.enabled = true;"));
     assert!(filtering.contains("browser_history_options.enabled = true;"));
     assert!(filtering.contains("acp_history_options.enabled = true;"));
-    assert!(filtering.contains("crate::notes::search_root_notes_meta(search_text, notes_options)"));
-    assert!(filtering.contains("crate::clipboard_history::search_root_clipboard_history_meta("));
+    assert!(filtering
+        .contains("crate::notes::search_root_notes_meta_direct(search_text, notes_options)"));
+    assert!(
+        filtering.contains("crate::clipboard_history::search_root_clipboard_history_meta_direct(")
+    );
     assert!(filtering.contains(
-        "crate::dictation::search_root_dictation_history(search_text, dictation_history_options)"
+        "crate::dictation::search_root_dictation_history_direct(search_text, dictation_history_options)"
     ));
-    assert!(filtering.contains("crate::ai::acp::history::search_history(search_text"));
+    assert!(filtering.contains("crate::ai::acp::history::search_history_direct(search_text"));
     assert!(filtering.contains("search_root_browser_tabs_meta_direct"));
     assert!(filtering.contains("search_root_browser_history_meta_direct"));
     assert!(filtering.contains(".is_some_and(|query| query.has_source_filters())"));

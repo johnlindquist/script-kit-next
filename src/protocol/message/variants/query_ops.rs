@@ -150,6 +150,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         main_window_preflight: Option<serde_json::Value>,
+        /// Content-light actions dialog receipt for state-first action menu tests.
+        /// Includes IDs and labels only, never row bodies or raw local content.
+        #[serde(
+            rename = "actionsDialog",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        actions_dialog: Option<serde_json::Value>,
         /// Root file-search provider status used by state-first stability proofs.
         /// Omitted outside ScriptList.
         #[serde(
