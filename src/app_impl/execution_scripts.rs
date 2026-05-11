@@ -448,7 +448,7 @@ impl ScriptListApp {
 
                     // Hide window after successful execution
                     script_kit_gpui::set_main_window_visible(false);
-                    cx.hide();
+                    crate::platform::defer_hide_main_window(cx);
                 } else {
                     // Execution failed (non-zero exit code)
                     let error_msg = if !result.stderr.is_empty() {

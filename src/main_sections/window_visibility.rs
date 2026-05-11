@@ -325,8 +325,7 @@ fn show_main_window_helper(
 /// 2. Sets MAIN_WINDOW_VISIBLE state to false
 /// 3. Cancels any active prompt (if in prompt mode)
 /// 4. Resets to script list
-/// 5. Uses hide_main_window() if Notes/AI windows are open (to avoid hiding them)
-/// 6. Uses cx.hide() if no secondary windows are open
+/// 5. Defers a main-panel-only hide so secondary windows cannot be app-hidden
 ///
 /// # Arguments
 /// * `app_entity` - The ScriptListApp entity
@@ -441,17 +440,17 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         sync_main_automation_window(current_main_automation_bounds(), false, false);
     }
 
-    // 5. Hide appropriately based on secondary windows
-    if notes_open || ai_open || acp_chat_open {
-        logging::log(
-            "VISIBILITY",
-            "Using defer_hide_main_window() - secondary windows are open",
-        );
-        platform::defer_hide_main_window(cx);
-    } else {
-        logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
-        cx.hide();
-    }
+    // 5. Hide only the main panel. `cx.hide()` app-hides all windows, so any
+    // false-negative secondary-window check can take Notes down with main.
+    let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+    logging::log(
+        "VISIBILITY",
+        &format!(
+            "Using defer_hide_main_window() - main-only hide, secondary_windows_open={}",
+            secondary_windows_open
+        ),
+    );
+    platform::defer_hide_main_window(cx);
 
     logging::log("VISIBILITY", "Main window hidden");
 }

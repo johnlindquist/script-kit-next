@@ -415,6 +415,20 @@ fn test_notes_window_supports_close_without_launcher_restore() {
 }
 
 #[test]
+fn test_notes_window_opts_out_of_app_hide() {
+    const WINDOW_OPS_SOURCE: &str = include_str!("window_ops.rs");
+    let configure_fn = WINDOW_OPS_SOURCE
+        .split("fn configure_notes_as_floating_panel")
+        .nth(1)
+        .expect("configure_notes_as_floating_panel should exist");
+
+    assert!(
+        configure_fn.contains("setCanHide: false"),
+        "Notes must opt out of app-level hide so main-window app-hide paths cannot conceal it"
+    );
+}
+
+#[test]
 fn test_main_menu_notes_entries_use_no_restore_helper() {
     const BUILTIN_SOURCE: &str = include_str!("../../app_execute/builtin_execution.rs");
 

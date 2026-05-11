@@ -191,7 +191,7 @@
                                                             }
                                                         }
                                                         script_kit_gpui::set_main_window_visible(false);
-                                                        ctx.hide();
+                                                        platform::defer_hide_main_window(ctx);
                                                     }
                                                 }
                                                 _ => {

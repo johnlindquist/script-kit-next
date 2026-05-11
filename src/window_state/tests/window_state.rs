@@ -9,8 +9,9 @@
 //    - This ensures reset happens AND handles Notes/AI windows correctly
 //
 // 2. **When hiding the main window:**
-//    - If Notes OR AI window is open → use `platform::defer_hide_main_window(cx)`
-//    - If NO secondary windows open → use `cx.hide()`
+//    - Always use `platform::defer_hide_main_window(cx)`
+//    - `cx.hide()` app-hides every window, so a false-negative Notes check can
+//      hide the independent Notes host together with main
 //    - `close_and_reset_window()` handles this automatically
 //
 // 3. **NEVER call `platform::hide_main_window()` directly from GPUI callbacks**
@@ -243,7 +244,7 @@ mod tests {
         }
     }
 
-    /// Verify close_and_reset_window checks for Notes/AI windows
+    /// Verify close_and_reset_window records Notes/AI state for diagnostics.
     #[test]
     fn test_close_and_reset_window_checks_secondary_windows() {
         let content = read_source_file("app_impl/lifecycle_reset.rs");
@@ -263,6 +264,83 @@ mod tests {
             );
         } else {
             panic!("close_and_reset_window() function not found in app_impl/lifecycle_reset.rs");
+        }
+    }
+
+    #[test]
+    fn test_main_hide_paths_never_app_hide() {
+        let lifecycle = read_source_file("app_impl/lifecycle_reset.rs");
+        let close_chunk = lifecycle
+            .split("fn close_and_reset_window")
+            .nth(1)
+            .and_then(|rest| rest.split("pub(crate) fn can_preserve_hide").next())
+            .expect("close_and_reset_window should exist");
+        assert!(
+            close_chunk.contains("platform::defer_hide_main_window(cx);"),
+            "close_and_reset_window must hide only the main panel"
+        );
+        assert!(
+            !close_chunk.contains("cx.hide();"),
+            "close_and_reset_window must not app-hide, because that can hide Notes"
+        );
+
+        let preserve_chunk = lifecycle
+            .split("fn hide_main_window_preserving_state_for_focus_loss")
+            .nth(1)
+            .and_then(|rest| rest.split("/// Clear the current built-in view").next())
+            .expect("hide_main_window_preserving_state_for_focus_loss should exist");
+        assert!(
+            preserve_chunk.contains("platform::defer_hide_main_window(cx);"),
+            "focus-loss hide must hide only the main panel"
+        );
+        assert!(
+            !preserve_chunk.contains("cx.hide();"),
+            "focus-loss hide must not app-hide, because that can hide Notes"
+        );
+
+        let visibility = read_source_file("main_sections/window_visibility.rs");
+        let helper_chunk = visibility
+            .split("fn hide_main_window_helper")
+            .nth(1)
+            .and_then(|rest| rest.split("/// Handle window resize events").next())
+            .unwrap_or_else(|| visibility.split("fn hide_main_window_helper").nth(1).unwrap());
+        assert!(
+            helper_chunk.contains("platform::defer_hide_main_window(cx);"),
+            "shared hide helper must hide only the main panel"
+        );
+        assert!(
+            !helper_chunk.contains("cx.hide();"),
+            "shared hide helper must not app-hide, because that can hide Notes"
+        );
+    }
+
+    #[test]
+    fn test_main_entry_dispatchers_never_app_hide() {
+        for file in [
+            "main_entry/runtime_stdin.rs",
+            "main_entry/runtime_stdin_match_core.rs",
+            "main_entry/runtime_stdin_match_simulate_key.rs",
+            "main_entry/app_run_setup.rs",
+        ] {
+            let content = read_source_file(file);
+            let offenders: Vec<_> = content
+                .lines()
+                .enumerate()
+                .filter_map(|(index, line)| {
+                    let trimmed = line.trim();
+                    if trimmed.starts_with("//") || trimmed.starts_with("///") {
+                        return None;
+                    }
+                    (trimmed.contains("ctx.hide();") || trimmed.contains("cx.hide();"))
+                        .then_some(format!("{}:{}: {}", file, index + 1, trimmed))
+                })
+                .collect();
+
+            assert!(
+                offenders.is_empty(),
+                "main-entry hide dispatchers must not app-hide because that can hide Notes:\n{}",
+                offenders.join("\n")
+            );
         }
     }
 
@@ -288,7 +366,7 @@ mod tests {
         let start = content
             .find(anchor)
             .unwrap_or_else(|| panic!("Expected Escape SimulateKey branch log anchor"));
-        let branch = &content[start..std::cmp::min(start + 1200, content.len())];
+        let branch = &content[start..std::cmp::min(start + 3000, content.len())];
 
         assert!(
             branch.contains("view.opened_from_main_menu"),
@@ -299,20 +377,26 @@ mod tests {
             "Escape SimulateKey branch must delegate opened-from-main-menu handling to go_back_or_close"
         );
 
-        let fallback_start = branch
-            .find("} else {")
-            .unwrap_or_else(|| panic!("Expected fallback else branch after opened_from_main_menu"));
-        let fallback_branch = &branch[fallback_start..];
-        assert!(
-            fallback_branch.contains("ctx.hide();"),
-            "non-opened-from-main-menu fallback should still hide the app"
-        );
-
         let opened_from_main_menu_start = branch
             .find("} else if view.opened_from_main_menu {")
             .unwrap_or_else(|| panic!("Expected opened_from_main_menu branch"));
-        let opened_from_main_menu_branch =
-            &branch[opened_from_main_menu_start..fallback_start];
+        let fallback_start = opened_from_main_menu_start
+            + branch[opened_from_main_menu_start..]
+                .find("} else {")
+                .unwrap_or_else(|| {
+                    panic!("Expected fallback else branch after opened_from_main_menu")
+                });
+        let fallback_branch = &branch[fallback_start..];
+        assert!(
+            fallback_branch.contains("platform::defer_hide_main_window(ctx);"),
+            "non-opened-from-main-menu fallback should hide only the main panel"
+        );
+        assert!(
+            !fallback_branch.contains("ctx.hide();"),
+            "non-opened-from-main-menu fallback must not app-hide, because that can hide Notes"
+        );
+
+        let opened_from_main_menu_branch = &branch[opened_from_main_menu_start..fallback_start];
         assert!(
             !opened_from_main_menu_branch.contains("ctx.hide();"),
             "opened_from_main_menu branch must not directly call ctx.hide()"
