@@ -5,6 +5,8 @@
 
 const NAVIGATOR: &str = include_str!("../scripts/agentic/surface-navigator.ts");
 const MATRIX: &str = include_str!("../scripts/agentic/attached-popup-surface-matrix.ts");
+const FILTERABLE_MATRIX: &str = include_str!("../scripts/agentic/filterable-surface-matrix.ts");
+const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog.rs");
 
 #[test]
 fn attached_popup_matrix_declares_actions_dialog_active_cases() {
@@ -84,6 +86,56 @@ fn attached_popup_cases_use_filterable_main_host_fixtures() {
             && MATRIX.contains("caseId: \"app-launcher-visible-rows\""),
         "hosted Actions Dialog cases must reuse stable filterable-main matrix fixtures"
     );
+}
+
+#[test]
+fn attached_popup_matrix_does_not_promote_live_excluded_builtin_list_hosts() {
+    let excluded_candidates = [
+        (
+            "current-app-commands-visible-rows",
+            "actions-dialog-on-current-app-commands",
+            "CurrentAppCommandsView",
+        ),
+        (
+            "design-gallery-visible-rows",
+            "actions-dialog-on-design-gallery",
+            "DesignGalleryView",
+        ),
+        (
+            "process-manager-visible-rows",
+            "actions-dialog-on-process-manager",
+            "ProcessManagerView",
+        ),
+    ];
+
+    let builtin_exclusion_start = ACTIONS_DIALOG_SOURCE
+        .find("fn is_builtin_list_actions_view")
+        .expect("actions dialog source must declare builtin-list exclusion helper");
+    let static_host_start = ACTIONS_DIALOG_SOURCE[builtin_exclusion_start..]
+        .find("pub(crate) fn actions_host_for_view")
+        .map(|offset| builtin_exclusion_start + offset)
+        .expect("actions dialog source must declare static host resolver");
+    let builtin_exclusion_body = &ACTIONS_DIALOG_SOURCE[builtin_exclusion_start..static_host_start];
+
+    for (filterable_case_id, attached_popup_case_id, view_variant) in excluded_candidates {
+        assert!(
+            FILTERABLE_MATRIX.contains(filterable_case_id),
+            "{filterable_case_id} must remain visible as a stable filterable surface"
+        );
+        assert!(
+            builtin_exclusion_body.contains(view_variant),
+            "{view_variant} must remain excluded from live actions until product behavior changes"
+        );
+        assert!(
+            !MATRIX.contains(filterable_case_id)
+                && !MATRIX.contains(attached_popup_case_id)
+                && !MATRIX.contains(&format!(
+                    "hostFixture: {{ kind: \"filterable-main\", caseId: \"{filterable_case_id}\" }}"
+                )),
+            "attached popup matrix must not add hosted Actions Dialog coverage for \
+             {filterable_case_id} while its view is excluded from live Cmd+K actions"
+        );
+    }
 }
 
 #[test]

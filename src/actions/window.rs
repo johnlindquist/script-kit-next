@@ -9,6 +9,7 @@
 // - Shares the ActionsDialog entity with the main app for keyboard routing
 
 use crate::platform;
+use crate::protocol::AutomationWindowKind;
 use crate::theme::get_cached_theme;
 use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
 use crate::window_resize::layout::FOOTER_HEIGHT;
@@ -190,10 +191,21 @@ fn actions_window_key_intent(
 
 #[inline]
 fn should_auto_close_actions_window(
-    main_window_focused: bool,
+    parent_window_focused: bool,
     actions_window_active: bool,
 ) -> bool {
-    !main_window_focused && !actions_window_active
+    !parent_window_focused && !actions_window_active
+}
+
+fn actions_parent_window_focused(parent_automation_id: &str) -> bool {
+    match crate::windows::automation_window_by_id(parent_automation_id).map(|info| info.kind) {
+        Some(AutomationWindowKind::Main) => platform::is_main_window_focused(),
+        Some(AutomationWindowKind::Notes) => platform::is_notes_window_focused(),
+        Some(_) => crate::windows::focused_automation_window_id()
+            .as_deref()
+            .is_some_and(|focused_id| focused_id == parent_automation_id),
+        None => false,
+    }
 }
 
 #[inline]
@@ -270,16 +282,25 @@ pub struct ActionsWindow {
     /// Keep activation observer alive so blur-driven auto-close is reliable.
     activation_subscription: Option<Subscription>,
     close_requested: bool,
+    parent_automation_id: String,
+    parent_kind: AutomationWindowKind,
 }
 
 impl ActionsWindow {
-    pub fn new(dialog: Entity<ActionsDialog>, cx: &mut Context<Self>) -> Self {
+    pub fn new(
+        dialog: Entity<ActionsDialog>,
+        parent_automation_id: String,
+        parent_kind: AutomationWindowKind,
+        cx: &mut Context<Self>,
+    ) -> Self {
         let focus_handle = cx.focus_handle();
         Self {
             dialog,
             focus_handle,
             activation_subscription: None,
             close_requested: false,
+            parent_automation_id,
+            parent_kind,
         }
     }
 
@@ -327,7 +348,9 @@ impl ActionsWindow {
         // macOS window activation is async; starting it early gives the OS
         // more time to make the main window key before the deferred
         // on_close callback runs and sets pending focus.
-        if activate_main_window {
+        let should_activate_main_window =
+            activate_main_window && self.parent_kind == AutomationWindowKind::Main;
+        if should_activate_main_window {
             platform::activate_main_window();
         }
 
@@ -349,16 +372,16 @@ impl ActionsWindow {
         );
 
         self.activation_subscription = Some(cx.observe_window_activation(window, |this, window, cx| {
-            let main_window_focused = platform::is_main_window_focused();
+            let parent_window_focused = actions_parent_window_focused(&this.parent_automation_id);
             let actions_window_active = window.is_window_active();
             let should_close =
-                should_auto_close_actions_window(main_window_focused, actions_window_active);
+                should_auto_close_actions_window(parent_window_focused, actions_window_active);
 
             crate::logging::log(
                 "ACTIONS",
                 &format!(
-                    "ACTIONS_WINDOW_LIFECYCLE activation_changed: main_window_focused={}, actions_window_active={}, should_close={}",
-                    main_window_focused, actions_window_active, should_close
+                    "ACTIONS_WINDOW_LIFECYCLE activation_changed: parent_window_focused={}, actions_window_active={}, should_close={}, parent_automation_id={}",
+                    parent_window_focused, actions_window_active, should_close, this.parent_automation_id
                 ),
             );
 
@@ -453,13 +476,13 @@ impl Render for ActionsWindow {
             ),
         );
 
-        let main_window_focused = platform::is_main_window_focused();
-        if should_auto_close_actions_window(main_window_focused, window_is_active) {
+        let parent_window_focused = actions_parent_window_focused(&self.parent_automation_id);
+        if should_auto_close_actions_window(parent_window_focused, window_is_active) {
             crate::logging::log(
                 "ACTIONS",
                 &format!(
-                    "ACTIONS_WINDOW_LIFECYCLE render_auto_close: main_window_focused={}, actions_window_active={}",
-                    main_window_focused, window_is_active
+                    "ACTIONS_WINDOW_LIFECYCLE render_auto_close: parent_window_focused={}, actions_window_active={}, parent_automation_id={}",
+                    parent_window_focused, window_is_active, self.parent_automation_id
                 ),
             );
             self.request_close(window, cx, "render_focus_lost", false);
@@ -1376,6 +1399,14 @@ pub fn open_actions_window(
         main_window_bounds,
         parent_automation_id,
     )?;
+    let parent_kind = crate::windows::automation_window_by_id(&parent_automation_id)
+        .map(|info| info.kind)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "Cannot open actions popup: parent '{}' is missing from automation registry",
+                parent_automation_id
+            )
+        })?;
 
     // Close any existing actions window first
     close_actions_window(cx);
@@ -1449,8 +1480,16 @@ pub fn open_actions_window(
     // The parent window (AI window, Notes window, etc.) keeps focus and routes
     // keyboard events to us via its own capture_key_down handler.
     // This avoids focus conflicts where both windows try to handle keys.
+    let parent_automation_id_for_window = parent_automation_id.clone();
     let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| ActionsWindow::new(dialog_entity.clone(), cx))
+        cx.new(|cx| {
+            ActionsWindow::new(
+                dialog_entity.clone(),
+                parent_automation_id_for_window.clone(),
+                parent_kind,
+                cx,
+            )
+        })
     })?;
 
     // Configure the window as non-movable on macOS

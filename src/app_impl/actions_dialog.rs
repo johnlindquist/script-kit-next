@@ -29,6 +29,11 @@ impl ScriptListApp {
         )
     }
 
+    /// Static host identity for actions-related routing/focus contracts.
+    ///
+    /// This is broader than live Cmd+K popup support. Use
+    /// `live_actions_host_for_view` or `current_actions_host` when deciding
+    /// whether the visible view may open the shared ActionsDialog.
     pub(crate) fn actions_host_for_view(view: &AppView) -> Option<ActionsDialogHost> {
         match view {
             AppView::ScriptList => Some(ActionsDialogHost::MainList),
@@ -80,11 +85,12 @@ impl ScriptListApp {
         Self::live_actions_host_for_view(&self.current_view)
     }
 
-    /// Canonical resolver: map the current view to its shared-actions support.
+    /// Canonical static resolver: map the current view to shared-actions
+    /// identity for routing/focus contracts.
     ///
-    /// Every call site that needs to know "does this view use the shared
-    /// ActionsDialog, and with which host?" should call this instead of
-    /// maintaining its own `match` on `AppView`.
+    /// This is not proof that the visible view may open the shared
+    /// ActionsDialog. Live popup-open decisions must use
+    /// `live_actions_host_for_view` or `current_actions_host`.
     pub(crate) fn actions_support_for_view(&self) -> ActionsSupport {
         match Self::actions_host_for_view(&self.current_view) {
             Some(host) => ActionsSupport::SharedDialog(host),
@@ -1219,10 +1225,7 @@ mod actions_host_mapping_tests {
             filter: String::new(),
             selected_index: 0,
         };
-        assert_eq!(
-            ScriptListApp::live_actions_host_for_view(&settings),
-            None
-        );
+        assert_eq!(ScriptListApp::live_actions_host_for_view(&settings), None);
 
         let theme_chooser = AppView::ThemeChooserView {
             filter: String::new(),
@@ -1239,6 +1242,24 @@ mod actions_host_mapping_tests {
         };
         assert_eq!(
             ScriptListApp::live_actions_host_for_view(&current_app_commands),
+            None
+        );
+
+        let design_gallery = AppView::DesignGalleryView {
+            filter: String::new(),
+            selected_index: 0,
+        };
+        assert_eq!(
+            ScriptListApp::live_actions_host_for_view(&design_gallery),
+            None
+        );
+
+        let process_manager = AppView::ProcessManagerView {
+            filter: String::new(),
+            selected_index: 0,
+        };
+        assert_eq!(
+            ScriptListApp::live_actions_host_for_view(&process_manager),
             None
         );
     }

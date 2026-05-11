@@ -2,7 +2,9 @@
 //!
 //! AppKit activation observation can miss the path where the popup renders
 //! inactive after desktop click-away, so render must close through the same
-//! guarded lifecycle path when both main and actions windows are inactive.
+//! guarded lifecycle path when both parent and actions windows are inactive.
+//! Main-hosted actions still use main-window focus, but Notes-hosted actions
+//! must not treat the main launcher as their parent focus proxy.
 
 const ACTIONS_WINDOW: &str = include_str!("../src/actions/window.rs");
 
@@ -37,10 +39,48 @@ fn actions_window_render_falls_back_to_autoclose_when_inactive() {
         "let handle_key =",
     );
 
-    assert!(render.contains("let main_window_focused = platform::is_main_window_focused();"));
     assert!(
-        render.contains("should_auto_close_actions_window(main_window_focused, window_is_active)")
+        render.contains("actions_parent_window_focused(&self.parent_automation_id)"),
+        "render auto-close must check the actual actions parent, not hard-code main focus"
     );
+    assert!(
+        !render.contains("let main_window_focused = platform::is_main_window_focused();"),
+        "render auto-close must not close Notes-owned popups just because main is unfocused"
+    );
+    assert!(render
+        .contains("should_auto_close_actions_window(parent_window_focused, window_is_active)"));
     assert!(render.contains("ACTIONS_WINDOW_LIFECYCLE render_auto_close"));
     assert!(render.contains("self.request_close(window, cx, \"render_focus_lost\", false);"));
+}
+
+#[test]
+fn actions_window_tracks_parent_identity_for_focus_lifecycle() {
+    let actions_window = source_between(
+        ACTIONS_WINDOW,
+        "pub struct ActionsWindow",
+        "impl ActionsWindow",
+    );
+    assert!(actions_window.contains("parent_automation_id: String"));
+    assert!(actions_window.contains("parent_kind: AutomationWindowKind"));
+
+    let parent_focus = source_between(
+        ACTIONS_WINDOW,
+        "fn actions_parent_window_focused(",
+        "/// Actions window width",
+    );
+    assert!(parent_focus.contains("AutomationWindowKind::Main"));
+    assert!(parent_focus.contains("platform::is_main_window_focused()"));
+    assert!(parent_focus.contains("AutomationWindowKind::Notes"));
+    assert!(parent_focus.contains("platform::is_notes_window_focused()"));
+
+    let request_close = source_between(
+        ACTIONS_WINDOW,
+        "fn request_close(",
+        "fn ensure_activation_subscription",
+    );
+    assert!(
+        request_close
+            .contains("activate_main_window && self.parent_kind == AutomationWindowKind::Main"),
+        "actions close may activate main only for main-hosted popups"
+    );
 }

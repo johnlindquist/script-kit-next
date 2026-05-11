@@ -259,6 +259,54 @@ fn notes_batch_not_rejected_as_main_only() {
 }
 
 #[test]
+fn notes_command_bar_uses_notes_as_actions_parent() {
+    let source = include_str!("../../src/actions/command_bar.rs");
+    let open_start = source
+        .find("pub fn open_at_position")
+        .expect("CommandBar::open_at_position should exist");
+    let open_body = &source[open_start..];
+    let open_end = open_body
+        .find("/// Close the command bar")
+        .expect("open_at_position should end before close docs");
+    let open_body = &open_body[..open_end];
+
+    assert!(
+        open_body.contains("crate::notes::is_notes_window(window)"),
+        "Notes CommandBar must identify the Notes host directly instead of trusting stale focused automation state"
+    );
+    assert!(
+        open_body.contains("Some(\"notes\".to_string())"),
+        "Notes CommandBar must pass the stable notes automation id to open_actions_window"
+    );
+    assert!(
+        open_body.contains("crate::windows::focused_automation_window_id()"),
+        "non-Notes CommandBar hosts should retain the existing focused-window fallback"
+    );
+}
+
+#[test]
+fn notes_acp_actions_use_notes_as_actions_parent() {
+    let source = include_str!("../../src/notes/window/acp_host.rs");
+    let toggle_start = source
+        .find("pub(super) fn toggle_acp_actions")
+        .expect("Notes ACP toggle should exist");
+    let toggle_body = &source[toggle_start..];
+    let toggle_end = toggle_body
+        .find("/// Relaunch the cached Notes-hosted ACP surface")
+        .expect("toggle_acp_actions should end before relaunch docs");
+    let toggle_body = &toggle_body[..toggle_end];
+
+    assert!(
+        toggle_body.contains("let parent_automation_id = Some(\"notes\".to_string());"),
+        "Notes-hosted ACP actions must use the Notes window as their popup parent"
+    );
+    assert!(
+        !toggle_body.contains("focused_automation_window_id()"),
+        "Notes-hosted ACP actions must not inherit main/focused automation parent identity"
+    );
+}
+
+#[test]
 fn notes_wait_for_not_rejected_as_main_only() {
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(

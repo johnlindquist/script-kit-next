@@ -69,6 +69,11 @@ export const ATTACHED_POPUP_SURFACE_MATRIX: AttachedPopupSurfaceEntry[] = [
       submit: false,
     },
   },
+  // Hosted Actions Dialog cases must target live Cmd+K hosts. Stable
+  // filterable surfaces that are generic built-in list views remain
+  // main-surface-only until product behavior adds selection-specific shared
+  // actions support. Do not add candidate entries for Current App Commands,
+  // Design Gallery, or Process Manager.
   {
     id: "actions-dialog-on-clipboard-history",
     surfaceClass: "attachedPopup",
