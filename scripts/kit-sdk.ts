@@ -1102,6 +1102,125 @@ export interface McpApi {
   ): Promise<McpToolCallResult>;
 }
 
+export interface ComputerUseBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ComputerUseRunningApp {
+  pid: number;
+  bundleId?: string | null;
+  name: string;
+  isActive: boolean;
+  isHidden: boolean;
+  activationPolicy: string;
+}
+
+export interface ComputerUseNativeWindow {
+  nativeWindowId: number;
+  title?: string | null;
+  bounds: ComputerUseBounds;
+  isOnScreen: boolean;
+  layer: number;
+  zOrder: number;
+  observation?: Record<string, unknown> | null;
+}
+
+export interface ComputerUseNativeWindowsForApp {
+  app: ComputerUseRunningApp;
+  status: string;
+  windows: ComputerUseNativeWindow[];
+  warnings: string[];
+}
+
+export interface ComputerUseListNativeWindowsOptions {
+  includeHidden?: boolean;
+  includeBackground?: boolean;
+}
+
+export interface ComputerUseListNativeWindowsResult {
+  schemaVersion: number;
+  source: string;
+  scope: string;
+  status: 'listed' | 'partial' | string;
+  frontmostPid?: number;
+  appCount: number;
+  windowCount: number;
+  apps: ComputerUseNativeWindowsForApp[];
+  warnings: string[];
+}
+
+export interface ComputerUseCaptureNativeWindowOptions {
+  pid: number;
+  nativeWindowId: number;
+  hiDpi?: boolean;
+  includeImage?: boolean;
+  expectedBundleId?: string;
+}
+
+export type ComputerUseCaptureNativeWindowStatus =
+  | 'captured'
+  | 'appNotFound'
+  | 'windowNotFound'
+  | 'ownershipMismatch'
+  | 'notCaptureCandidate'
+  | 'ambiguousNativeWindowRows'
+  | 'ambiguousNativeWindowId'
+  | 'permissionDenied'
+  | 'blankImageRejected'
+  | 'captureFailed';
+
+export interface ComputerUseCapturePixelAudit {
+  sampled: number;
+  nonBlack: number;
+  nonTransparent: number;
+  uniqueBucketCount: number;
+  meanLuma: number;
+  blankLike: boolean;
+}
+
+export interface ComputerUseNativeWindowCapture {
+  mimeType: 'image/png' | string;
+  width: number;
+  height: number;
+  byteLength: number;
+  sha256: string;
+  hiDpi: boolean;
+  pixelAudit: ComputerUseCapturePixelAudit;
+  pngBase64?: string;
+}
+
+export interface ComputerUseCaptureNativeWindowError {
+  code: string;
+  message: string;
+  reason?: string;
+  pixelAudit?: ComputerUseCapturePixelAudit;
+}
+
+export interface ComputerUseCaptureNativeWindowResult {
+  schemaVersion: number;
+  source: string;
+  scope: string;
+  status: ComputerUseCaptureNativeWindowStatus | string;
+  correlationId: string;
+  app?: ComputerUseRunningApp;
+  window?: ComputerUseNativeWindow;
+  capture?: ComputerUseNativeWindowCapture;
+  error?: ComputerUseCaptureNativeWindowError;
+  warnings: string[];
+}
+
+export interface ComputerUseApi {
+  listNativeWindows(
+    options?: ComputerUseListNativeWindowsOptions
+  ): Promise<ComputerUseListNativeWindowsResult>;
+  captureNativeWindow(
+    options: ComputerUseCaptureNativeWindowOptions
+  ): Promise<ComputerUseCaptureNativeWindowResult>;
+}
+
 /**
  * Suggested-commands configuration.
  * Controls the frecency-based "Suggested" section in the main menu.
@@ -3521,6 +3640,11 @@ declare global {
    * Direct MCP client for Script Kit-managed external MCP servers.
    */
   var mcp: McpApi;
+
+  /**
+   * Typed computer-use helpers backed by Script Kit's own local MCP server.
+   */
+  var computer: ComputerUseApi;
   
   // =============================================================================
   // TIER 4A: Chat Prompt (Inline UI in Main Window)
@@ -8432,6 +8556,40 @@ async function loadScriptKitMcpConfig(): Promise<McpConfig> {
   return normalizeMcpConfig(config?.mcp);
 }
 
+interface ScriptKitMcpDiscovery {
+  url: string;
+  token: string;
+  version?: string;
+  capabilities?: Record<string, unknown>;
+}
+
+async function loadScriptKitSelfMcpServerConfig(): Promise<McpHttpServerConfig> {
+  const discoveryPath = nodePath.join(os.homedir(), '.scriptkit', 'server.json');
+  let discovery: ScriptKitMcpDiscovery;
+
+  try {
+    const text = await fs.readFile(discoveryPath, 'utf8');
+    discovery = JSON.parse(text) as ScriptKitMcpDiscovery;
+  } catch (error) {
+    throw new Error(
+      `[computer] Script Kit MCP discovery is unavailable at ${discoveryPath}. Start Script Kit before using computer.* helpers. ${getMcpErrorMessage(error)}`
+    );
+  }
+
+  if (!discovery.url?.trim() || !discovery.token?.trim()) {
+    throw new Error(`[computer] Script Kit MCP discovery at ${discoveryPath} is missing url or token`);
+  }
+
+  const baseUrl = discovery.url.replace(/\/+$/, '');
+  return {
+    transport: 'http',
+    endpoint: `${baseUrl}/rpc`,
+    headers: {
+      authorization: `Bearer ${discovery.token}`,
+    },
+  };
+}
+
 function isServerEnabled(server: McpServerConfig): boolean {
   return server.enabled ?? true;
 }
@@ -8766,6 +8924,41 @@ function normalizeMcpToolCallResult(
   };
 }
 
+function parseComputerToolTextResult<T>(result: McpToolCallResult): T {
+  if (result.isError) {
+    const text = result.content.find((entry) => typeof entry.text === 'string')?.text;
+    throw new Error(`[computer] ${result.toolName} failed${text ? `: ${text}` : ''}`);
+  }
+
+  const text = result.content.find((entry) => typeof entry.text === 'string')?.text;
+  if (!text) {
+    throw new Error(`[computer] ${result.toolName} returned no JSON text content`);
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    throw new Error(
+      `[computer] ${result.toolName} returned invalid JSON text content: ${getMcpErrorMessage(error)}`
+    );
+  }
+}
+
+async function callScriptKitComputerTool<T>(
+  toolName: string,
+  args: Record<string, unknown> = {}
+): Promise<T> {
+  const server = await loadScriptKitSelfMcpServerConfig();
+  const result = await withMcpSession('__scriptkit_self__', server, async (session) => {
+    const response = await session.request('tools/call', {
+      name: toolName,
+      arguments: args,
+    });
+    return normalizeMcpToolCallResult('__scriptkit_self__', toolName, response);
+  });
+  return parseComputerToolTextResult<T>(result);
+}
+
 function scoreDiscoveredTool(tool: McpToolInfo, query: string): number {
   const haystack = `${tool.serverId} ${tool.name} ${tool.description ?? ''}`.toLowerCase();
   const terms = query
@@ -8857,5 +9050,36 @@ globalThis.mcp = {
     });
   },
 } satisfies McpApi;
+
+globalThis.computer = {
+  async listNativeWindows(
+    options: ComputerUseListNativeWindowsOptions = {}
+  ): Promise<ComputerUseListNativeWindowsResult> {
+    return callScriptKitComputerTool<ComputerUseListNativeWindowsResult>(
+      'computer/list_native_windows',
+      {
+        includeHidden: options.includeHidden ?? false,
+        includeBackground: options.includeBackground ?? false,
+      }
+    );
+  },
+
+  async captureNativeWindow(
+    options: ComputerUseCaptureNativeWindowOptions
+  ): Promise<ComputerUseCaptureNativeWindowResult> {
+    return callScriptKitComputerTool<ComputerUseCaptureNativeWindowResult>(
+      'computer/capture_native_window',
+      {
+        pid: options.pid,
+        nativeWindowId: options.nativeWindowId,
+        hiDpi: options.hiDpi ?? false,
+        includeImage: options.includeImage ?? false,
+        ...(options.expectedBundleId
+          ? { expectedBundleId: options.expectedBundleId }
+          : {}),
+      }
+    );
+  },
+} satisfies ComputerUseApi;
 
 export {};

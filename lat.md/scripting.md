@@ -10,7 +10,8 @@ These facts describe the current SDK, resource, and tooling contract.
 
 - `scripts/kit-sdk.ts` still documents itself as a message-passing SDK layered over the Rust app.
 - The generated `kit://sdk-reference` resource is the current concise source of truth for exposed script APIs, script directories, and harness workflow.
-- The live SDK reference still includes Script Kit helpers such as `exec`, clipboard helpers, filesystem helpers, `getState`, `getElements`, `waitFor`, and `batch`.
+- The live SDK reference still includes Script Kit helpers such as `exec`, clipboard helpers, filesystem helpers, `getState`, `getElements`, `waitFor`, `batch`, and first-class `computer.*` observation/capture helpers.
+- `computer.listNativeWindows()` and `computer.captureNativeWindow()` are SDK wrappers over Script Kit's own local MCP server discovery file (`~/.scriptkit/server.json`). They reuse the app-owned `computer/list_native_windows` and `computer/capture_native_window` tools, so scripts receive the same structured receipts as external MCP clients without adding stdin verbs or input/action primitives.
 - Bun is still used directly in repo-side tooling for process execution and config inspection, especially in `scripts/config-cli.ts` and the `scripts/agentic/` helpers.
 - `scripts/lat-llm-key-helper.sh` wraps `LAT_LLM_KEY_HELPER` fetches with a shared on-disk cache so repeated `lat search` calls can reuse one fetched key across terminals.
 - Script discovery is plugin-based. `~/.scriptkit/plugins/main/scripts/` is the default personal plugin, and scriptlets are discovered from `~/.scriptkit/plugins/*/scriptlets/*.md`.
