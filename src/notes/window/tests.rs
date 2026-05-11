@@ -294,6 +294,45 @@ fn test_notes_keyboard_stops_propagation_for_cmd_p_browse_toggle() {
 }
 
 #[test]
+fn test_notes_keyboard_stops_propagation_for_cmd_n_new_note() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let branch = "key if key.eq_ignore_ascii_case(\"n\") => {";
+    let branch_start = KEYBOARD_SOURCE
+        .find(branch)
+        .expect("Expected cmd+n branch in keyboard.rs");
+    let branch_slice =
+        &KEYBOARD_SOURCE[branch_start..(branch_start + 384).min(KEYBOARD_SOURCE.len())];
+
+    let create_idx = branch_slice
+        .find("self.create_note(window, cx);")
+        .expect("Expected create_note call in cmd+n branch");
+    let stop_idx = branch_slice
+        .find("cx.stop_propagation();")
+        .expect("Expected cx.stop_propagation call in cmd+n branch");
+
+    assert!(
+        create_idx < stop_idx,
+        "Cmd+N branch should stop propagation after creating a note"
+    );
+}
+
+#[test]
+fn test_notes_auto_resize_height_allows_restored_height_above_default_max() {
+    assert_eq!(
+        NotesApp::resolve_auto_resize_height(108.0, 662.0, 600.0),
+        662.0
+    );
+}
+
+#[test]
+fn test_notes_auto_resize_height_clamps_to_default_max_when_initial_height_is_smaller() {
+    assert_eq!(
+        NotesApp::resolve_auto_resize_height(900.0, 280.0, 600.0),
+        600.0
+    );
+}
+
+#[test]
 fn test_notes_keyboard_uses_cmd_shift_o_for_focused_note_mentions() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(

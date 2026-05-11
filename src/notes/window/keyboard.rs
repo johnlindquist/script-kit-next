@@ -457,6 +457,7 @@ impl NotesApp {
                     } else {
                         self.create_note(window, cx);
                     }
+                    cx.stop_propagation();
                 }
                 key if key.eq_ignore_ascii_case("t") => {
                     if modifiers.shift {
