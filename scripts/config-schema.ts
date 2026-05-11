@@ -1503,6 +1503,11 @@ export interface UnifiedSearchConfig {
   enabled?: boolean;
   /** Reorders passive local source sections only; it does not enable or disable sources. */
   passiveSourceOrder?: UnifiedSearchPassiveSource[];
+  /**
+   * Caps passive local source rows so unified search does not overwhelm primary launcher intent.
+   * This does not reorder sources and does not enable disabled sources.
+   */
+  passiveResultLimits?: UnifiedSearchPassiveResultLimitsConfig;
   /** Controls for root file rows backed by recent files, Spotlight, and folder browsing. */
   files?: UnifiedSearchFilesConfig;
   /** Controls for passive root Notes rows backed by the local Notes index. */
@@ -1526,6 +1531,15 @@ export type UnifiedSearchPassiveSource =
   | "dictationHistory"
   | "acpHistory"
   | "browserHistory";
+
+export interface UnifiedSearchPassiveResultLimitsConfig {
+  /** Total passive rows allowed when no primary launcher result is visible. */
+  maxTotalResults?: number;
+  /** Total passive rows allowed when commands/scripts/apps/skills/windows already match. Set 0 to hide passive rows in primary collisions. */
+  maxTotalResultsWhenPrimaryVisible?: number;
+  /** Per-source passive row cap while primary launcher results are visible. Set 0 to hide each passive source in primary collisions. */
+  maxResultsPerSourceWhenPrimaryVisible?: number;
+}
 
 export interface UnifiedSearchFilesConfig {
   /** Enable file rows in root launcher search. */

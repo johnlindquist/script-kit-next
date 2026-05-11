@@ -121,7 +121,7 @@ Root Files and empty-root Recent Files render after primary launcher rows such a
 
 `config.ts` exposes `unifiedSearch.files` controls for the implemented file source: `enabled`, `globalSearch`, `recentFiles`, `directoryBrowse`, and `promotion`. Disabled sources are gated before provider startup and again during grouping so stale provider state cannot leak rows.
 
-Async root file provider updates snapshot the current launcher selection by `[[src/scripts/types.rs#SearchResult#history_result_key]]`, rebuild grouped rows, then restore the matching stable key before validating bounds. This prevents late file results from turning the same numeric row index into a different command.
+Global root file rows are frozen in a per-query frame. Provider completion may update provider loading receipts and warm the bounded cache, but it must not mutate active file rows, recent rows, visible loading, grouped caches, preflight, selection, or notifications for the same filter text. Warmed rows become eligible only when a new frame is built after the query changes or the frame is intentionally reset, so cold searches can show only a loading header while a later same query can show file rows immediately from cache. Explicit directory browse remains the only root file mode that may publish a final direct-child replacement into the active frame.
 
 ## Root Unified Search ACP History
 
@@ -155,7 +155,7 @@ Root Browser Tabs rows carry title, URL, domain, provider label, tab location, a
 
 Passive root sources use cached snapshots on the foreground grouping path so late local-provider work cannot shift the selected target.
 
-Browser Tabs and Browser History refresh stale snapshots in the background. The app layer freezes their hit vectors in a per-query passive frame before grouping, so a background refresh can change cache status without changing the active query's visible rows, focused target, or Enter action. Saved ACP and Dictation history reuse mtime-backed JSONL indexes on the foreground search path, invalidating after local writes/deletes. Refresh completion must not invalidate grouped results, notify the main list, or change the visible result fingerprint for the same filter text; it only warms a future frame after the query changes or the cache is rebuilt for another reason.
+Browser Tabs and Browser History refresh stale snapshots in the background. Notes, Clipboard History, Dictation History, and ACP History use cache-only foreground lookups and start cold SQLite or JSONL work on background warmers. The app layer freezes every passive hit vector in a per-query passive frame before grouping, so a background refresh can change cache status without changing the active query's visible rows, focused target, or Enter action. ACP history clamps legacy multi-megabyte `search_text` fields before cached ranking so root typing does not repeatedly lowercase or clone large transcripts. Refresh completion must not invalidate grouped results, notify the main list, or change the visible result fingerprint for the same filter text; it only warms a future frame after the query changes or the cache is rebuilt for another reason.
 
 ## Root Unified Search Passive Ranking Receipt
 
@@ -168,6 +168,12 @@ The `mainWindowPreflight` receipt now includes `selectedResultRole` and `visible
 Passive source order is user-configurable while primary rows, root file rows, and fallback rows keep their safety positions.
 
 `config.ts` exposes `unifiedSearch.passiveSourceOrder` with values for `browserTabs`, `notes`, `clipboardHistory`, `dictationHistory`, `acpHistory`, and `browserHistory`. The runtime deduplicates configured entries, appends missing defaults, and only reorders passive local sections. It does not enable disabled sources, skip enabled sources, or let passive rows move ahead of primary launcher rows or root Files.
+
+## Root Unified Search Passive Result Limits
+
+Passive result limits keep enabled local sources useful without letting them dominate command intent.
+
+`config.ts` exposes `unifiedSearch.passiveResultLimits` with a global passive cap, a lower cap when primary launcher rows are visible, and a per-source cap for primary collisions. The budget is applied after root Files and Recent Files and before passive sections are appended, so it never reorders primary rows, root file rows, or fallback rows. A zero collision budget is valid and hides passive rows when commands, scripts, apps, skills, or windows already match.
 
 ## Root Unified Search Clipboard History
 

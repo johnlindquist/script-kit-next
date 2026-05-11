@@ -739,7 +739,8 @@ mod tests {
         assert!(
             filtering_source.contains("self.root_file_search_mode")
                 && filtering_source.contains("self.root_file_search_loading")
-                && filtering_source.contains("&self.root_file_results"),
+                && (filtering_source.contains("&self.root_file_results")
+                    || filtering_source.contains("self.root_file_results.as_slice()")),
             "filtering cache should pass the root file source mode, loading state, and collected rows"
         );
     }
@@ -1502,7 +1503,8 @@ mod tests {
         assert!(
             filtering_normalized.contains("RootFileSectionMode::GlobalQuery")
                 && filtering_normalized.contains("self.refresh_root_recent_file_results();")
-                && filtering_normalized.contains("&self.root_recent_file_results"),
+                && (filtering_normalized.contains("&self.root_recent_file_results")
+                    || filtering_normalized.contains("self.root_recent_file_results.as_slice()")),
             "empty and non-empty global root grouping should refresh and pass recent file rows explicitly"
         );
     }

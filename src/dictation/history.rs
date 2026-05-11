@@ -19,9 +19,14 @@ struct DictationHistoryIndexCache {
 
 static DICTATION_HISTORY_INDEX_CACHE: OnceLock<Mutex<Option<DictationHistoryIndexCache>>> =
     OnceLock::new();
+static DICTATION_HISTORY_REFRESH_IN_FLIGHT: OnceLock<Mutex<bool>> = OnceLock::new();
 
 fn dictation_history_index_cache() -> &'static Mutex<Option<DictationHistoryIndexCache>> {
     DICTATION_HISTORY_INDEX_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn dictation_history_refresh_in_flight() -> &'static Mutex<bool> {
+    DICTATION_HISTORY_REFRESH_IN_FLIGHT.get_or_init(|| Mutex::new(false))
 }
 
 fn invalidate_history_cache() {
@@ -67,7 +72,7 @@ pub struct RootDictationHistorySearchHit {
     pub matched_field: DictationHistorySearchField,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RootDictationHistorySectionOptions {
     pub enabled: bool,
     pub max_results: usize,
@@ -375,6 +380,40 @@ pub fn search_history(query: &str, limit: usize) -> Vec<DictationHistorySearchHi
     hits
 }
 
+fn cached_history_entries_if_fresh() -> Option<Vec<DictationHistoryEntry>> {
+    let path = history_path();
+    let signature = history_file_signature(&path);
+    let guard = dictation_history_index_cache().lock().ok()?;
+    let cache = guard.as_ref()?;
+    (cache.signature == signature).then(|| cache.entries.clone())
+}
+
+fn ensure_history_cache_warm() {
+    if let Ok(mut refreshing) = dictation_history_refresh_in_flight().lock() {
+        if *refreshing {
+            return;
+        }
+        *refreshing = true;
+    } else {
+        return;
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name("root-dictation-history-cache".to_string())
+        .spawn(|| {
+            let _ = load_history();
+            if let Ok(mut refreshing) = dictation_history_refresh_in_flight().lock() {
+                *refreshing = false;
+            }
+        });
+
+    if spawn_result.is_err() {
+        if let Ok(mut refreshing) = dictation_history_refresh_in_flight().lock() {
+            *refreshing = false;
+        }
+    }
+}
+
 pub fn root_dictation_history_query_is_eligible(
     query: &str,
     options: RootDictationHistorySectionOptions,
@@ -409,6 +448,57 @@ pub fn search_root_dictation_history(
     tracing::info!(
         category = "DICTATION",
         event = "root_dictation_history_search_executed",
+        query_len = query.trim().chars().count(),
+        scan_limit = options.scan_limit,
+        max_results = options.max_results,
+        hit_count = hits.len(),
+    );
+    hits
+}
+
+/// Cache-only dictation history search for root launcher passive rows.
+///
+/// Cold JSONL reads warm a background index and return no hits for the current
+/// frame, preserving the active search result projection while the user types.
+pub fn search_root_dictation_history_cached(
+    query: &str,
+    options: RootDictationHistorySectionOptions,
+) -> Vec<RootDictationHistorySearchHit> {
+    if !root_dictation_history_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+
+    let Some(entries) = cached_history_entries_if_fresh() else {
+        ensure_history_cache_warm();
+        tracing::info!(
+            category = "DICTATION",
+            event = "root_dictation_history_search_cache_miss",
+            query_len = query.trim().chars().count(),
+            scan_limit = options.scan_limit,
+            max_results = options.max_results,
+        );
+        return Vec::new();
+    };
+
+    let hits = rank_history_entries(
+        entries.into_iter().take(options.scan_limit).collect(),
+        query,
+        options.max_results,
+    )
+    .into_iter()
+    .map(|hit| RootDictationHistorySearchHit {
+        id: hit.entry.id,
+        preview: hit.entry.preview,
+        target: hit.entry.target,
+        timestamp: hit.entry.timestamp,
+        audio_duration_ms: hit.entry.audio_duration_ms,
+        score: hit.score,
+        matched_field: hit.matched_field,
+    })
+    .collect::<Vec<_>>();
+    tracing::info!(
+        category = "DICTATION",
+        event = "root_dictation_history_search_cache_hit",
         query_len = query.trim().chars().count(),
         scan_limit = options.scan_limit,
         max_results = options.max_results,

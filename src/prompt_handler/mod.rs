@@ -3331,10 +3331,12 @@ impl ScriptListApp {
                     Some(serde_json::json!({
                         "query": self.root_file_search_query,
                         "mode": self.root_file_search_mode.map(|mode| format!("{:?}", mode)),
-                        "loading": self.root_file_search_loading,
+                        "loading": self.root_file_provider_loading,
+                        "visibleLoading": self.root_file_search_loading,
                         "generation": self.root_file_search_generation,
                         "visibleResultCount": self.root_file_results.len(),
                         "cacheEntryCount": self.root_file_result_cache.len(),
+                        "cacheResultCount": self.active_root_file_cache_result_count(),
                     }))
                 } else {
                     None

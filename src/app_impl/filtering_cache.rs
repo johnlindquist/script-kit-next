@@ -32,12 +32,20 @@ impl ScriptListApp {
         &mut self,
         search_text: &str,
         advanced_query_active: bool,
+        notes_options: crate::notes::RootNotesSectionOptions,
+        clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+        dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
+        acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
         browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
         browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
     ) -> crate::RootPassiveFrame {
         let key = crate::RootPassiveFrameKey {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
+            notes_options,
+            clipboard_history_options,
+            dictation_history_options,
+            acp_history_options,
             browser_tabs_options: browser_tabs_options.clone(),
             browser_history_options: browser_history_options.clone(),
         };
@@ -47,6 +55,53 @@ impl ScriptListApp {
                 return frame.clone();
             }
         }
+
+        let note_hits = if !advanced_query_active
+            && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
+        {
+            crate::notes::search_root_notes_meta_cached(search_text, notes_options)
+        } else {
+            Vec::new()
+        };
+
+        let clipboard_history_hits = if !advanced_query_active
+            && crate::clipboard_history::root_clipboard_history_query_is_eligible(
+                search_text,
+                clipboard_history_options,
+            ) {
+            crate::clipboard_history::search_root_clipboard_history_meta_cached(
+                search_text,
+                clipboard_history_options,
+            )
+        } else {
+            Vec::new()
+        };
+
+        let dictation_history_hits = if !advanced_query_active
+            && crate::dictation::root_dictation_history_query_is_eligible(
+                search_text,
+                dictation_history_options,
+            ) {
+            crate::dictation::search_root_dictation_history_cached(
+                search_text,
+                dictation_history_options,
+            )
+        } else {
+            Vec::new()
+        };
+
+        let acp_history_hits = if !advanced_query_active
+            && crate::ai::acp::history::root_acp_history_query_is_eligible(
+                search_text,
+                acp_history_options,
+            ) {
+            crate::ai::acp::history::search_history_cached(
+                search_text,
+                acp_history_options.max_results,
+            )
+        } else {
+            Vec::new()
+        };
 
         let browser_tab_hits = if !advanced_query_active
             && crate::browser_tabs::root_browser_tabs_query_is_eligible(
@@ -79,12 +134,46 @@ impl ScriptListApp {
 
         let frame = crate::RootPassiveFrame {
             key,
+            note_hits,
+            clipboard_history_hits,
+            dictation_history_hits,
+            acp_history_hits,
             browser_tab_hits,
             browser_history_hits,
             browser_tabs_snapshot_generation: browser_tabs_status.generation,
             browser_history_snapshot_generation: browser_history_status.generation,
         };
         self.root_passive_frame = Some(frame.clone());
+        frame
+    }
+
+    fn root_file_frame_for_current_query(
+        &mut self,
+        search_text: &str,
+        advanced_query_active: bool,
+        root_file_options: crate::file_search::RootFileSectionOptions,
+    ) -> crate::RootFileFrame {
+        let key = crate::RootFileFrameKey {
+            query: search_text.to_string(),
+            advanced_query: advanced_query_active,
+            mode: self.root_file_search_mode,
+            options: root_file_options,
+        };
+
+        if let Some(frame) = self.root_file_frame.as_ref() {
+            if frame.key == key {
+                return frame.clone();
+            }
+        }
+
+        let frame = crate::RootFileFrame {
+            key,
+            mode: self.root_file_search_mode,
+            visible_loading: self.root_file_search_loading,
+            file_results: self.root_file_results.clone(),
+            recent_file_results: self.root_recent_file_results.clone(),
+        };
+        self.root_file_frame = Some(frame.clone());
         frame
     }
 
@@ -308,9 +397,8 @@ impl ScriptListApp {
     pub(crate) fn get_grouped_results_cached(
         &mut self,
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
-        // The grouped cache is keyed by `computed_filter_text`, which can
-        // lag one coalescing tick behind the live input. Menu syntax is an
-        // ownership boundary, so never return stale grouped rows while the
+        // The grouped cache is keyed by `computed_filter_text`. Menu syntax is
+        // an ownership boundary, so never return stale grouped rows while the
         // live input is owned by the trigger popup or capture composer.
         let live_filter_text = self.filter_text.as_str();
         let computed_filter_text = self.computed_filter_text.as_str();
@@ -428,55 +516,44 @@ impl ScriptListApp {
             let browser_tabs_options = unified_search.browser_tabs_section_options();
             let browser_history_options = unified_search.browser_history_section_options();
             let root_passive_source_order = unified_search.passive_source_order();
-            let root_note_hits = if advanced_query.is_none()
-                && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
-            {
-                crate::notes::search_root_notes_meta(search_text, notes_options)
-            } else {
-                Vec::new()
-            };
-            let root_clipboard_history_hits = if advanced_query.is_none()
-                && crate::clipboard_history::root_clipboard_history_query_is_eligible(
-                    search_text,
-                    clipboard_history_options,
-                ) {
-                crate::clipboard_history::search_root_clipboard_history_meta(
-                    search_text,
-                    clipboard_history_options,
-                )
-            } else {
-                Vec::new()
-            };
-            let root_acp_history_hits = if advanced_query.is_none()
-                && crate::ai::acp::history::root_acp_history_query_is_eligible(
-                    search_text,
-                    acp_history_options,
-                ) {
-                crate::ai::acp::history::search_history(
-                    search_text,
-                    acp_history_options.max_results,
-                )
-            } else {
-                Vec::new()
-            };
-            let root_dictation_history_hits = if advanced_query.is_none()
-                && crate::dictation::root_dictation_history_query_is_eligible(
-                    search_text,
-                    dictation_history_options,
-                ) {
-                crate::dictation::search_root_dictation_history(
-                    search_text,
-                    dictation_history_options,
-                )
-            } else {
-                Vec::new()
-            };
+            let root_passive_result_limits = unified_search.passive_result_limits();
             let root_passive_frame = self.root_passive_frame_for_current_query(
                 search_text,
                 advanced_query.is_some(),
+                notes_options,
+                clipboard_history_options,
+                dictation_history_options,
+                acp_history_options,
                 browser_tabs_options.clone(),
                 browser_history_options.clone(),
             );
+            let root_file_frame = matches!(
+                self.root_file_search_mode,
+                Some(crate::file_search::RootFileSectionMode::GlobalQuery)
+            )
+            .then(|| {
+                self.root_file_frame_for_current_query(
+                    search_text,
+                    advanced_query.is_some(),
+                    root_file_options,
+                )
+            });
+            let root_file_search_mode_for_grouping = root_file_frame
+                .as_ref()
+                .map(|frame| frame.mode)
+                .unwrap_or(self.root_file_search_mode);
+            let root_file_search_loading_for_grouping = root_file_frame
+                .as_ref()
+                .map(|frame| frame.visible_loading)
+                .unwrap_or(self.root_file_search_loading);
+            let root_file_results_for_grouping = root_file_frame
+                .as_ref()
+                .map(|frame| frame.file_results.as_slice())
+                .unwrap_or(self.root_file_results.as_slice());
+            let root_recent_file_results_for_grouping = root_file_frame
+                .as_ref()
+                .map(|frame| frame.recent_file_results.as_slice())
+                .unwrap_or(self.root_recent_file_results.as_slice());
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -491,24 +568,25 @@ impl ScriptListApp {
                 Some(&self.input_history),
                 self.script_validation_report.as_deref(),
                 advanced_query,
-                self.root_file_search_mode,
-                self.root_file_search_loading,
-                &self.root_file_results,
-                &self.root_recent_file_results,
+                root_file_search_mode_for_grouping,
+                root_file_search_loading_for_grouping,
+                root_file_results_for_grouping,
+                root_recent_file_results_for_grouping,
                 root_file_options,
-                &root_note_hits,
+                &root_passive_frame.note_hits,
                 notes_options,
-                &root_clipboard_history_hits,
+                &root_passive_frame.clipboard_history_hits,
                 clipboard_history_options,
-                &root_dictation_history_hits,
+                &root_passive_frame.dictation_history_hits,
                 dictation_history_options,
-                &root_acp_history_hits,
+                &root_passive_frame.acp_history_hits,
                 acp_history_options,
                 &root_passive_frame.browser_tab_hits,
                 browser_tabs_options,
                 &root_passive_frame.browser_history_hits,
                 browser_history_options,
                 &root_passive_source_order,
+                root_passive_result_limits,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {

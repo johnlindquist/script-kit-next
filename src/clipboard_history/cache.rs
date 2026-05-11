@@ -10,7 +10,10 @@ use std::sync::{Arc, OnceLock};
 use tracing::debug;
 
 use super::database::get_clipboard_history_meta;
-use super::types::ClipboardEntryMeta;
+use super::types::{
+    root_clipboard_entry_is_eligible, root_clipboard_history_query_is_eligible, ClipboardEntryMeta,
+    RootClipboardHistorySectionOptions,
+};
 
 /// Maximum number of decoded images to keep in memory (LRU eviction)
 /// Each image can be 1-4MB, so 100 images = ~100-400MB max memory
@@ -32,6 +35,7 @@ static ENTRY_CACHE: OnceLock<Mutex<Arc<Vec<ClipboardEntryMeta>>>> = OnceLock::ne
 
 /// Timestamp of last cache update
 static CACHE_UPDATED: OnceLock<Mutex<i64>> = OnceLock::new();
+static ENTRY_CACHE_REFRESH_IN_FLIGHT: OnceLock<Mutex<bool>> = OnceLock::new();
 
 /// Get the global image cache, initializing if needed
 pub fn get_image_cache() -> &'static Mutex<LruCache<String, Arc<RenderImage>>> {
@@ -44,6 +48,10 @@ pub fn get_image_cache() -> &'static Mutex<LruCache<String, Arc<RenderImage>>> {
 /// Get the global entry cache, initializing if needed
 pub fn get_entry_cache() -> &'static Mutex<Arc<Vec<ClipboardEntryMeta>>> {
     ENTRY_CACHE.get_or_init(|| Mutex::new(Arc::new(Vec::new())))
+}
+
+fn entry_cache_refresh_in_flight() -> &'static Mutex<bool> {
+    ENTRY_CACHE_REFRESH_IN_FLIGHT.get_or_init(|| Mutex::new(false))
 }
 
 /// Initialize the cache timestamp tracker
@@ -113,6 +121,74 @@ pub fn refresh_entry_cache() {
         let mut ts = updated.lock();
         *ts = chrono::Utc::now().timestamp_millis();
     }
+}
+
+fn ensure_entry_cache_refresh() {
+    if let Some(mut refreshing) = entry_cache_refresh_in_flight().try_lock() {
+        if *refreshing {
+            return;
+        }
+        *refreshing = true;
+    } else {
+        return;
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name("root-clipboard-history-cache".to_string())
+        .spawn(|| {
+            refresh_entry_cache();
+            if let Some(mut refreshing) = entry_cache_refresh_in_flight().try_lock() {
+                *refreshing = false;
+            }
+        });
+
+    if spawn_result.is_err() {
+        if let Some(mut refreshing) = entry_cache_refresh_in_flight().try_lock() {
+            *refreshing = false;
+        }
+    }
+}
+
+/// Cache-only root clipboard search used by foreground launcher grouping.
+///
+/// When the metadata cache is cold, this starts a background refresh and returns
+/// no hits for the active frame so late SQLite work cannot repaint the current
+/// root-search rows.
+pub fn search_root_clipboard_history_meta_cached(
+    query: &str,
+    options: RootClipboardHistorySectionOptions,
+) -> Vec<ClipboardEntryMeta> {
+    if !root_clipboard_history_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+
+    let entries = {
+        let cache = get_entry_cache().lock();
+        if cache.is_empty() {
+            None
+        } else {
+            Some(
+                cache
+                    .iter()
+                    .take(options.scan_limit)
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+        }
+    };
+
+    let Some(entries) = entries else {
+        ensure_entry_cache_refresh();
+        return Vec::new();
+    };
+
+    let query = query.trim().to_lowercase();
+    entries
+        .into_iter()
+        .filter(root_clipboard_entry_is_eligible)
+        .filter(|entry| entry.text_preview.to_lowercase().contains(&query))
+        .take(options.max_results)
+        .collect()
 }
 
 /// Evict a single entry from the image cache

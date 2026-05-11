@@ -15,13 +15,29 @@ function argValue(name: string, fallback: string): string {
 
 const session = argValue("--session", "root-search-frame-stability");
 const query = argValue("--query", "zzqxframeproof");
-const timeoutMs = Number(argValue("--timeout", "8000"));
-const pollMs = Number(argValue("--poll", "100"));
+const timeoutMs = Number(argValue("--timeout", "10000"));
+const pollMs = Number(argValue("--poll", "25"));
+
+const fixtureResultPath = `/tmp/${query}-late-provider-result.txt`;
+process.env.SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER = JSON.stringify({
+  query,
+  delayMs: 250,
+  results: [
+    {
+      path: fixtureResultPath,
+      name: `${query}-late-provider-result.txt`,
+      fileType: "document",
+      size: 42,
+      modified: 1,
+    },
+  ],
+});
 
 function runSession(args: string[]): Json {
   const result = spawnSync(sessionScript, args, {
     cwd: repoRoot,
     encoding: "utf8",
+    env: process.env,
   });
   const stdout = result.stdout.trim();
   if (!stdout) {
@@ -84,6 +100,20 @@ function getState(tag: string): Json {
   return state;
 }
 
+function getElements(tag: string): Json {
+  const elements = rpc(
+    {
+      type: "getElements",
+      requestId: `root-frame-elements-${tag}-${Date.now()}`,
+    },
+    "elementsResult",
+  );
+  if (elements.type !== "elementsResult") {
+    throw new Error(`expected elementsResult, got ${JSON.stringify(elements)}`);
+  }
+  return elements;
+}
+
 function waitForInput(): Json {
   return rpc(
     {
@@ -110,7 +140,11 @@ function requirePreflight(state: Json, label: string): Json {
   }
   for (const field of [
     "selectedResultKey",
+    "selectedResultRole",
     "visibleResultKeyFingerprint",
+    "visibleRowFingerprint",
+    "visibleResultCount",
+    "visibleResults",
     "enterAction",
   ]) {
     if (!(field in preflight)) {
@@ -120,31 +154,92 @@ function requirePreflight(state: Json, label: string): Json {
   return preflight;
 }
 
-function comparable(preflight: Json): Json {
+function elementsFingerprint(elementsResult: Json): string {
+  const elements = Array.isArray(elementsResult.elements) ? elementsResult.elements : [];
+  return elements
+    .filter((element: Json) => typeof element.semanticId === "string")
+    .map((element: Json) =>
+      [
+        element.role ?? "",
+        element.semanticId,
+        element.text ?? "",
+        element.index ?? "",
+        element.action ?? "",
+      ].join(":"),
+    )
+    .join("|");
+}
+
+function comparable(state: Json, tag: string): Json {
+  const preflight = requirePreflight(state, tag);
   return {
     selectedIndex: preflight.selectedIndex,
     selectedResultKey: preflight.selectedResultKey ?? null,
+    selectedResultRole: preflight.selectedResultRole,
     visibleResultKeyFingerprint: preflight.visibleResultKeyFingerprint,
+    visibleRowFingerprint: preflight.visibleRowFingerprint,
+    visibleResultCount: preflight.visibleResultCount,
+    visibleResults: preflight.visibleResults,
     enterAction: preflight.enterAction,
+    elementsFingerprint: elementsFingerprint(getElements(tag)),
   };
 }
 
-async function waitForRootFileSettled(): Promise<Json> {
+function assertSameFrame(baseline: Json, sample: Json, label: string) {
+  const before = JSON.stringify(baseline);
+  const after = JSON.stringify(sample);
+  if (before !== after) {
+    throw new Error(
+      `${label}: visible frame changed while provider resolved\nbefore=${before}\nafter=${after}`,
+    );
+  }
+}
+
+async function sampleUntilRootFileSettled(
+  baseline: Json,
+  observedLoadingAtBaseline: boolean,
+): Promise<{
+  settled: Json;
+  samples: Json[];
+}> {
   const deadline = Date.now() + timeoutMs;
-  let last = getState("settle-start");
+  const samples: Json[] = [];
+  let observedLoading = observedLoadingAtBaseline;
+  let last = getState("sample-start");
+
   while (Date.now() < deadline) {
     const status = last.rootFileSearch;
-    if (
-      status &&
-      status.query === query &&
-      status.mode === "GlobalQuery" &&
-      status.loading === false
-    ) {
-      return last;
+    if (status?.query === query && status?.mode === "GlobalQuery") {
+      if (status.loading === true) {
+        observedLoading = true;
+      }
+
+      const frame = comparable(last, `sample-${samples.length}`);
+      samples.push({
+        rootFileSearch: status,
+        frame,
+      });
+      assertSameFrame(baseline, frame, `samples[${samples.length - 1}]`);
+
+      if (status.loading === false) {
+        if (observedLoading !== true) {
+          throw new Error(
+            `loading !== true before settle; status=${JSON.stringify(status)}`,
+          );
+        }
+        if ((status.cacheResultCount ?? 0) <= 0) {
+          throw new Error(
+            `provider settled without warming cache; status=${JSON.stringify(status)}`,
+          );
+        }
+        return { settled: last, samples };
+      }
     }
+
     await Bun.sleep(Math.max(25, pollMs));
-    last = getState("settle-poll");
+    last = getState(`sample-poll-${samples.length}`);
   }
+
   throw new Error(
     `root file search did not settle for ${JSON.stringify(query)}; last=${JSON.stringify(
       last.rootFileSearch,
@@ -157,6 +252,7 @@ async function main() {
     throw new Error(`missing ${sessionScript}`);
   }
 
+  runSession(["stop", session]);
   runSession(["start", session]);
   send({
     type: "setFilter",
@@ -166,9 +262,6 @@ async function main() {
   waitForInput();
 
   const before = getState("before");
-  const beforePreflight = requirePreflight(before, "before");
-  const beforeComparable = comparable(beforePreflight);
-
   if (before.rootFileSearch?.query !== query) {
     throw new Error(
       `root file search did not track query ${JSON.stringify(query)}: ${JSON.stringify(
@@ -181,36 +274,36 @@ async function main() {
       `expected GlobalQuery root file mode, got ${JSON.stringify(before.rootFileSearch)}`,
     );
   }
+  if (before.rootFileSearch?.loading !== true) {
+    throw new Error(
+      `loading !== true for delayed provider baseline: ${JSON.stringify(before.rootFileSearch)}`,
+    );
+  }
 
-  const after = await waitForRootFileSettled();
-  const afterPreflight = requirePreflight(after, "after");
-  const afterComparable = comparable(afterPreflight);
+  const baseline = comparable(before, "before");
+  const { settled, samples } = await sampleUntilRootFileSettled(baseline, true);
+  const settledFrame = comparable(settled, "settled");
+  assertSameFrame(baseline, settledFrame, "settled");
 
-  const stable =
-    JSON.stringify(beforeComparable) === JSON.stringify(afterComparable);
   const receipt = {
-    schemaVersion: 1,
-    status: stable ? "pass" : "fail",
+    schemaVersion: 2,
+    status: "pass",
     session,
     query,
-    before: {
+    baseline: {
       inputValue: before.inputValue,
-      selectedValue: before.selectedValue ?? null,
       rootFileSearch: before.rootFileSearch,
-      mainWindowPreflight: beforeComparable,
+      mainWindowPreflight: baseline,
     },
-    after: {
-      inputValue: after.inputValue,
-      selectedValue: after.selectedValue ?? null,
-      rootFileSearch: after.rootFileSearch,
-      mainWindowPreflight: afterComparable,
+    settled: {
+      inputValue: settled.inputValue,
+      rootFileSearch: settled.rootFileSearch,
+      mainWindowPreflight: settledFrame,
     },
+    samples,
   };
 
   process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
-  if (!stable) {
-    process.exit(1);
-  }
 }
 
 main().catch((error) => {

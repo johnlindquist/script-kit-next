@@ -43,6 +43,10 @@ struct MainMenuFallbackState {
 pub(crate) struct RootPassiveFrameKey {
     pub(crate) query: String,
     pub(crate) advanced_query: bool,
+    pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
+    pub(crate) clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+    pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
+    pub(crate) acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     pub(crate) browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
 }
@@ -50,10 +54,31 @@ pub(crate) struct RootPassiveFrameKey {
 #[derive(Clone, Debug)]
 pub(crate) struct RootPassiveFrame {
     pub(crate) key: RootPassiveFrameKey,
+    pub(crate) note_hits: Vec<crate::notes::RootNoteSearchHit>,
+    pub(crate) clipboard_history_hits: Vec<crate::clipboard_history::ClipboardEntryMeta>,
+    pub(crate) dictation_history_hits: Vec<crate::dictation::RootDictationHistorySearchHit>,
+    pub(crate) acp_history_hits: Vec<crate::ai::acp::history::AcpHistorySearchHit>,
     pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
     pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
     pub(crate) browser_tabs_snapshot_generation: u64,
     pub(crate) browser_history_snapshot_generation: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct RootFileFrameKey {
+    pub(crate) query: String,
+    pub(crate) advanced_query: bool,
+    pub(crate) mode: Option<crate::file_search::RootFileSectionMode>,
+    pub(crate) options: crate::file_search::RootFileSectionOptions,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct RootFileFrame {
+    pub(crate) key: RootFileFrameKey,
+    pub(crate) mode: Option<crate::file_search::RootFileSectionMode>,
+    pub(crate) visible_loading: bool,
+    pub(crate) file_results: Vec<crate::file_search::FileResult>,
+    pub(crate) recent_file_results: Vec<crate::file_search::FileResult>,
 }
 
 impl MainMenuFallbackState {
@@ -421,6 +446,10 @@ struct ScriptListApp {
     root_file_search_cancel: Option<file_search::CancelToken>,
     /// True while a root file search task is collecting its one stable batch.
     root_file_search_loading: bool,
+    /// True while the root file provider is still collecting/cache-warming.
+    root_file_provider_loading: bool,
+    /// Frozen global root file rows for the current root-search query frame.
+    root_file_frame: Option<RootFileFrame>,
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<RootPassiveFrame>,
     /// File row captured when opening the root-file actions palette.

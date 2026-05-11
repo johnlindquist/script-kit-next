@@ -427,6 +427,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             ..Default::default()
         },
         &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+        crate::config::UnifiedSearchPassiveResultLimitsConfig::default(),
     )
 }
 
@@ -464,6 +465,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_browser_history_hits: &[crate::browser_history::RootBrowserHistorySearchHit],
     root_browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
     root_passive_source_order: &[crate::config::UnifiedSearchPassiveSource],
+    root_passive_result_limits: crate::config::UnifiedSearchPassiveResultLimitsConfig,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
@@ -501,6 +503,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         advanced_query,
         root_file_options,
     );
+    let mut passive_budget =
+        RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
     for source in root_passive_source_order {
         match source {
             crate::config::UnifiedSearchPassiveSource::BrowserTabs => {
@@ -511,6 +515,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_browser_tab_hits,
                     root_browser_tabs_options.clone(),
+                    &mut passive_budget,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::Notes => {
@@ -521,6 +526,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_note_hits,
                     root_notes_options,
+                    &mut passive_budget,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::ClipboardHistory => {
@@ -531,6 +537,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_clipboard_history_hits,
                     root_clipboard_history_options,
+                    &mut passive_budget,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::DictationHistory => {
@@ -541,6 +548,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_dictation_history_hits,
                     root_dictation_history_options,
+                    &mut passive_budget,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::AcpHistory => {
@@ -551,6 +559,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_acp_history_hits,
                     root_acp_history_options,
+                    &mut passive_budget,
                 );
             }
             crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
@@ -561,12 +570,60 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     advanced_query,
                     root_browser_history_hits,
                     root_browser_history_options.clone(),
+                    &mut passive_budget,
                 );
             }
         }
     }
 
     (grouped, flat_results)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RootPassiveResultBudget {
+    remaining_total: usize,
+    max_per_source: usize,
+}
+
+impl RootPassiveResultBudget {
+    fn unbounded() -> Self {
+        Self {
+            remaining_total: usize::MAX,
+            max_per_source: usize::MAX,
+        }
+    }
+
+    fn for_results(
+        flat_results: &[SearchResult],
+        limits: crate::config::UnifiedSearchPassiveResultLimitsConfig,
+    ) -> Self {
+        let primary_visible = flat_results.iter().any(is_primary_launcher_result);
+        let remaining_total = if primary_visible {
+            limits.max_total_results_when_primary_visible
+        } else {
+            limits.max_total_results
+        };
+        let max_per_source = if primary_visible {
+            limits.max_results_per_source_when_primary_visible
+        } else {
+            usize::MAX
+        };
+
+        Self {
+            remaining_total,
+            max_per_source,
+        }
+    }
+
+    fn limit_for_source(&self, source_max: usize) -> usize {
+        source_max
+            .min(self.remaining_total)
+            .min(self.max_per_source)
+    }
+
+    fn consume(&mut self, rendered: usize) {
+        self.remaining_total = self.remaining_total.saturating_sub(rendered);
+    }
 }
 
 fn append_root_passive_section(
@@ -597,6 +654,7 @@ fn append_root_acp_history_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some()
         || !crate::ai::acp::history::root_acp_history_query_is_eligible(filter_text, options)
@@ -604,9 +662,14 @@ fn append_root_acp_history_section(
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, hit)| {
             let entry = hit.entry.clone();
@@ -625,6 +688,7 @@ fn append_root_acp_history_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "AI Conversations", rows);
 }
 
@@ -635,15 +699,21 @@ fn append_root_notes_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::notes::RootNoteSearchHit],
     options: crate::notes::RootNotesSectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some() || !crate::notes::root_notes_query_is_eligible(filter_text, options)
     {
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, hit)| {
             let title = if hit.title.trim().is_empty() {
@@ -662,6 +732,7 @@ fn append_root_notes_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "Notes", rows);
 }
 
@@ -672,6 +743,7 @@ fn append_root_clipboard_history_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::clipboard_history::ClipboardEntryMeta],
     options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some()
         || !crate::clipboard_history::root_clipboard_history_query_is_eligible(filter_text, options)
@@ -679,9 +751,14 @@ fn append_root_clipboard_history_section(
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, entry)| {
             let content_type = match entry.content_type {
@@ -702,6 +779,7 @@ fn append_root_clipboard_history_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
 }
 
@@ -712,6 +790,7 @@ fn append_root_dictation_history_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::dictation::RootDictationHistorySearchHit],
     options: crate::dictation::RootDictationHistorySectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some()
         || !crate::dictation::root_dictation_history_query_is_eligible(filter_text, options)
@@ -719,9 +798,14 @@ fn append_root_dictation_history_section(
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, hit)| {
             let time = crate::dictation::format_history_timestamp(&hit.timestamp);
@@ -739,6 +823,7 @@ fn append_root_dictation_history_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "Dictation History", rows);
 }
 
@@ -749,6 +834,7 @@ fn append_root_browser_tabs_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
     options: crate::browser_tabs::RootBrowserTabsSectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some()
         || !crate::browser_tabs::root_browser_tabs_query_is_eligible(filter_text, options.clone())
@@ -756,9 +842,14 @@ fn append_root_browser_tabs_section(
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, hit)| {
             let subtitle = if hit.domain.is_empty() {
@@ -774,6 +865,7 @@ fn append_root_browser_tabs_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "Browser Tabs", rows);
 }
 
@@ -784,6 +876,7 @@ fn append_root_browser_history_section(
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     hits: &[crate::browser_history::RootBrowserHistorySearchHit],
     options: crate::browser_history::RootBrowserHistorySectionOptions,
+    budget: &mut RootPassiveResultBudget,
 ) {
     if advanced_query.is_some()
         || !crate::browser_history::root_browser_history_query_is_eligible(
@@ -794,9 +887,14 @@ fn append_root_browser_history_section(
         return;
     }
 
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 {
+        return;
+    }
+
     let rows = hits
         .iter()
-        .take(options.max_results)
+        .take(limit)
         .enumerate()
         .map(|(rank, hit)| {
             let time = crate::formatting::format_relative_time_short_millis(hit.last_visit_unix_ms);
@@ -811,6 +909,7 @@ fn append_root_browser_history_section(
         })
         .collect::<Vec<_>>();
 
+    budget.consume(rows.len());
     append_root_passive_section(grouped, flat_results, "Browser History", rows);
 }
 
@@ -1516,6 +1615,29 @@ mod advanced_query_tests {
             .collect()
     }
 
+    fn passive_source_counts(
+        flat: &[SearchResult],
+    ) -> std::collections::HashMap<&'static str, usize> {
+        let mut counts = std::collections::HashMap::new();
+        for result in flat {
+            let source = match result {
+                SearchResult::Note(_) => "Notes",
+                SearchResult::AcpHistory(_) => "AI Conversations",
+                SearchResult::ClipboardHistory(_) => "Clipboard History",
+                SearchResult::DictationHistory(_) => "Dictation History",
+                SearchResult::BrowserTab(_) => "Browser Tabs",
+                SearchResult::BrowserHistory(_) => "Browser History",
+                _ => continue,
+            };
+            *counts.entry(source).or_insert(0) += 1;
+        }
+        counts
+    }
+
+    fn passive_result_count(flat: &[SearchResult]) -> usize {
+        passive_source_counts(flat).values().sum()
+    }
+
     #[test]
     fn root_file_rows_append_files_section_for_eligible_search() {
         let frecency_store = FrecencyStore::new();
@@ -1638,6 +1760,11 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+            crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                max_total_results: 12,
+                max_total_results_when_primary_visible: 12,
+                max_results_per_source_when_primary_visible: 5,
+            },
         );
 
         let roles = grouped_result_roles(&grouped, &flat);
@@ -1778,6 +1905,11 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &passive_order,
+            crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                max_total_results: 12,
+                max_total_results_when_primary_visible: 12,
+                max_results_per_source_when_primary_visible: 5,
+            },
         );
 
         let roles = grouped_result_roles(&grouped, &flat);
@@ -1825,6 +1957,316 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_passive_budget_caps_rows_when_primary_launcher_results_exist() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+        let browser_tabs = (0..3)
+            .map(|i| root_browser_tab_hit(&format!("tab/design-{i}"), "design tab"))
+            .collect::<Vec<_>>();
+        let notes = vec![
+            root_note_hit("33333333-3333-3333-3333-333333333331", "design note", false),
+            root_note_hit("33333333-3333-3333-3333-333333333332", "design note", false),
+            root_note_hit("33333333-3333-3333-3333-333333333333", "design note", false),
+        ];
+        let clipboard = (0..3)
+            .map(|i| {
+                clipboard_history_entry(&format!("clip-design-{i}"), "design copied text", false)
+            })
+            .collect::<Vec<_>>();
+        let dictation = (0..3)
+            .map(|i| {
+                root_dictation_history_hit(&format!("dictation-design-{i}"), "design transcript")
+            })
+            .collect::<Vec<_>>();
+        let acp = (0..3)
+            .map(|i| acp_history_hit(&format!("session-design-{i}"), "design conversation"))
+            .collect::<Vec<_>>();
+        let browser_history = (0..3)
+            .map(|i| {
+                root_browser_history_hit(&format!("history/design-{i}"), "design history page")
+            })
+            .collect::<Vec<_>>();
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files_with_options(
+            &[],
+            &[],
+            &[builtin_entry("Design Gallery")],
+            &[],
+            &[],
+            &frecency_store,
+            query,
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+            crate::file_search::RootFileSectionOptions::default(),
+            &notes,
+            crate::notes::RootNotesSectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &clipboard,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &dictation,
+            crate::dictation::RootDictationHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                scan_limit: 10,
+            },
+            &acp,
+            crate::ai::acp::history::RootAcpHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+            },
+            &browser_tabs,
+            crate::browser_tabs::RootBrowserTabsSectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &browser_history,
+            crate::browser_history::RootBrowserHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                ..Default::default()
+            },
+            &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+            crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                max_total_results: 12,
+                max_total_results_when_primary_visible: 4,
+                max_results_per_source_when_primary_visible: 1,
+            },
+        );
+
+        let roles = grouped_result_roles(&grouped, &flat);
+        let first_primary = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "primary").then_some(*index))
+            .unwrap();
+        let first_root_file = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootFile").then_some(*index))
+            .unwrap();
+        let first_passive = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
+            .unwrap();
+        let first_fallback = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
+            .unwrap();
+        assert!(first_primary < first_root_file);
+        assert!(first_root_file < first_passive);
+        assert!(first_passive < first_fallback);
+        assert_eq!(passive_result_count(&flat), 4);
+        assert!(passive_source_counts(&flat)
+            .values()
+            .all(|count| *count <= 1));
+    }
+
+    #[test]
+    fn root_passive_budget_allows_larger_passive_set_without_primary_launcher_results() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let browser_tabs = (0..3)
+            .map(|i| root_browser_tab_hit(&format!("tab/design-{i}"), "design tab"))
+            .collect::<Vec<_>>();
+        let notes = vec![
+            root_note_hit("33333333-3333-3333-3333-333333333331", "design note", false),
+            root_note_hit("33333333-3333-3333-3333-333333333332", "design note", false),
+            root_note_hit("33333333-3333-3333-3333-333333333333", "design note", false),
+        ];
+        let clipboard = (0..3)
+            .map(|i| {
+                clipboard_history_entry(&format!("clip-design-{i}"), "design copied text", false)
+            })
+            .collect::<Vec<_>>();
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files_with_options(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            query,
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            false,
+            &[],
+            &[],
+            crate::file_search::RootFileSectionOptions::default(),
+            &notes,
+            crate::notes::RootNotesSectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &clipboard,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &[],
+            crate::dictation::RootDictationHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                scan_limit: 10,
+            },
+            &[],
+            crate::ai::acp::history::RootAcpHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+            },
+            &browser_tabs,
+            crate::browser_tabs::RootBrowserTabsSectionOptions {
+                enabled: true,
+                max_results: 3,
+                ..Default::default()
+            },
+            &[],
+            crate::browser_history::RootBrowserHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                ..Default::default()
+            },
+            &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+            crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                max_total_results: 5,
+                max_total_results_when_primary_visible: 1,
+                max_results_per_source_when_primary_visible: 1,
+            },
+        );
+
+        assert_eq!(passive_result_count(&flat), 5);
+        let section_labels = grouped
+            .iter()
+            .filter_map(|item| match item {
+                GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
+                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            section_labels,
+            vec![
+                "Browser Tabs",
+                "Notes",
+                "Clipboard History",
+                "Use \"design\" with..."
+            ]
+        );
+    }
+
+    #[test]
+    fn root_passive_budget_zero_hides_passive_rows_during_primary_collision() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+        let notes = vec![root_note_hit(
+            "33333333-3333-3333-3333-333333333333",
+            "design note",
+            false,
+        )];
+
+        let (_grouped, flat) =
+            get_grouped_results_with_validation_query_and_root_files_with_options(
+                &[],
+                &[],
+                &[builtin_entry("Design Gallery")],
+                &[],
+                &[],
+                &frecency_store,
+                query,
+                &SuggestedConfig::default(),
+                &[],
+                None,
+                None,
+                None,
+                None,
+                Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+                false,
+                &root_files,
+                &[],
+                crate::file_search::RootFileSectionOptions::default(),
+                &notes,
+                crate::notes::RootNotesSectionOptions {
+                    enabled: true,
+                    ..Default::default()
+                },
+                &[],
+                crate::clipboard_history::RootClipboardHistorySectionOptions {
+                    enabled: true,
+                    ..Default::default()
+                },
+                &[],
+                crate::dictation::RootDictationHistorySectionOptions {
+                    enabled: true,
+                    max_results: 3,
+                    min_query_chars: 3,
+                    scan_limit: 10,
+                },
+                &[],
+                crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                &[],
+                crate::browser_tabs::RootBrowserTabsSectionOptions {
+                    enabled: true,
+                    ..Default::default()
+                },
+                &[],
+                crate::browser_history::RootBrowserHistorySectionOptions {
+                    enabled: true,
+                    min_query_chars: 3,
+                    ..Default::default()
+                },
+                &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+                crate::config::UnifiedSearchPassiveResultLimitsConfig {
+                    max_total_results: 12,
+                    max_total_results_when_primary_visible: 0,
+                    max_results_per_source_when_primary_visible: 1,
+                },
+            );
+
+        assert!(flat.iter().any(is_primary_launcher_result));
+        assert!(flat
+            .iter()
+            .any(|result| matches!(result, SearchResult::File(_))));
+        assert!(flat
+            .iter()
+            .any(|result| matches!(result, SearchResult::Fallback(_))));
+        assert_eq!(passive_result_count(&flat), 0);
+    }
+
+    #[test]
     fn root_acp_history_rows_insert_after_primary_rows_before_fallbacks() {
         let mut grouped = vec![
             GroupedListItem::Item(0),
@@ -1848,6 +2290,7 @@ mod advanced_query_tests {
             None,
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
 
         assert!(
@@ -1875,6 +2318,7 @@ mod advanced_query_tests {
             None,
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -1887,6 +2331,7 @@ mod advanced_query_tests {
             Some(&query),
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -1908,6 +2353,7 @@ mod advanced_query_tests {
                 enabled: false,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
 
         assert!(grouped.is_empty());
@@ -1946,6 +2392,7 @@ mod advanced_query_tests {
                 enabled: true,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
         append_root_acp_history_section(
             &mut grouped,
@@ -1954,6 +2401,7 @@ mod advanced_query_tests {
             None,
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
 
         assert!(
@@ -2009,6 +2457,7 @@ mod advanced_query_tests {
                 enabled: true,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
         append_root_clipboard_history_section(
             &mut grouped,
@@ -2020,6 +2469,7 @@ mod advanced_query_tests {
                 enabled: true,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
         append_root_acp_history_section(
             &mut grouped,
@@ -2028,6 +2478,7 @@ mod advanced_query_tests {
             None,
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
 
         assert!(
@@ -2059,11 +2510,27 @@ mod advanced_query_tests {
 
         let mut grouped = Vec::new();
         let mut flat = Vec::new();
-        append_root_notes_section(&mut grouped, &mut flat, "", None, &notes, enabled_options);
+        append_root_notes_section(
+            &mut grouped,
+            &mut flat,
+            "",
+            None,
+            &notes,
+            enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
+        );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
 
-        append_root_notes_section(&mut grouped, &mut flat, "no", None, &notes, enabled_options);
+        append_root_notes_section(
+            &mut grouped,
+            &mut flat,
+            "no",
+            None,
+            &notes,
+            enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
+        );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
 
@@ -2077,6 +2544,7 @@ mod advanced_query_tests {
                 enabled: false,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2089,6 +2557,7 @@ mod advanced_query_tests {
             Some(&query),
             &notes,
             enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2115,6 +2584,7 @@ mod advanced_query_tests {
             None,
             &clips,
             enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2126,6 +2596,7 @@ mod advanced_query_tests {
             None,
             &clips,
             enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2140,6 +2611,7 @@ mod advanced_query_tests {
                 enabled: false,
                 ..Default::default()
             },
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2152,6 +2624,7 @@ mod advanced_query_tests {
             Some(&query),
             &clips,
             enabled_options,
+            &mut RootPassiveResultBudget::unbounded(),
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2193,6 +2666,7 @@ mod advanced_query_tests {
             None,
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &mut RootPassiveResultBudget::unbounded(),
         );
 
         assert!(
