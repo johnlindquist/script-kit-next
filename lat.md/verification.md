@@ -90,7 +90,7 @@ Checks must prove that the budget applies only to root-passive rows, is applied 
 
 Source-filter tokens are verified by parser tests, source audits, and state-first runtime receipts.
 
-Checks must prove that standalone `:f`, `:n`, and `:c` aliases work anywhere in ScriptList input; quoted/unknown colon tokens stay literal; capture keyword aliases keep ownership; grouped rows suppress primary/fallback and disallowed sources while active; root file/passive frame keys include the source-filter set; and preflight receipts expose stripped search text plus source filters. Use `cargo test --test source_audits root_unified_source_filters_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, and `bun scripts/agentic/root-source-filter-stability.ts`.
+Checks must prove that standalone `:f`, `:n`, and `:c` aliases work anywhere in ScriptList input; quoted/unknown colon tokens stay literal; capture keyword aliases keep ownership; grouped rows suppress primary/fallback and disallowed sources while active; root file/passive frame keys include the source-filter set; preflight receipts expose stripped search text plus source filters; and source-filter-only queries do not render the menu-syntax power popup or hint while `;` still does. Use `cargo test --test source_audits root_unified_source_filters_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, and `bun scripts/agentic/root-source-filter-stability.ts`.
 
 ## Root Unified Search ACP History
 

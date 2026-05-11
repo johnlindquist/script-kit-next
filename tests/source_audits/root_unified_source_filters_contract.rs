@@ -88,3 +88,17 @@ fn preflight_receipt_exposes_source_filter_state_for_agentic_proof() {
     assert!(build.contains("query.source_filters.labels()"));
     assert!(build.contains("source_filters: frame"));
 }
+
+#[test]
+fn source_filters_do_not_open_power_user_popup_or_hint() {
+    let trigger = include_str!("../../src/menu_syntax/trigger_picker.rs");
+    let popup = include_str!("../../src/app_impl/menu_syntax_trigger_popup.rs");
+    let hint = include_str!("../../src/menu_syntax/main_hint.rs");
+
+    assert!(trigger.contains(
+        "MenuSyntaxParse::AdvancedQuery(query) if query.is_source_filter_only() => None"
+    ));
+    assert!(popup.contains("fn source_filter_query_does_not_open_power_popup()"));
+    assert!(hint.contains("if query.is_source_filter_only()"));
+    assert!(hint.contains("return None;"));
+}

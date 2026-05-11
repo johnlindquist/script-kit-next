@@ -569,6 +569,21 @@ mod tests {
     }
 
     #[test]
+    fn source_filter_query_does_not_open_power_popup() {
+        let state = MenuSyntaxTriggerPopupState::default();
+        assert_eq!(
+            plan_trigger_popup_transition(&state, "png :f", &ctx()),
+            TriggerPopupTransition::NoChange,
+            "inline file source filters should refine search without showing the power-user popup"
+        );
+        assert_eq!(
+            plan_trigger_popup_transition(&state, ":n meeting", &ctx()),
+            TriggerPopupTransition::NoChange,
+            "prefix source filters should still behave as normal search refinements"
+        );
+    }
+
+    #[test]
     fn plus_prefix_opens_popup_when_closed() {
         let state = MenuSyntaxTriggerPopupState::default();
         let transition = plan_trigger_popup_transition(&state, "+", &ctx());

@@ -123,7 +123,7 @@ Root Files and empty-root Recent Files render after primary launcher rows such a
 
 Global root file rows are frozen in a per-query frame. Provider completion may update provider loading receipts and warm the bounded cache, but it must not mutate active file rows, recent rows, visible loading, grouped caches, preflight, selection, or notifications for the same filter text. Warmed rows become eligible only when a new frame is built after the query changes or the frame is intentionally reset, so cold searches can show only a loading header while a later same query can show file rows immediately from cache. Explicit directory browse remains the only root file mode that may publish a final direct-child replacement into the active frame.
 
-Source-filter tokens can make Files the only participating root source. When `:f`, `:file`, or `:files` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame.
+Source-filter tokens can make Files the only participating root source. When `:f`, `:file`, or `:files` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame. These inline filters are transparent refinements, not power-user UI mode switches, so `png :f` renders File rows without the menu-syntax popup or hint.
 
 ## Root Unified Search ACP History
 

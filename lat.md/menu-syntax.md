@@ -32,7 +32,7 @@ Supported filters: `type:/kind:`, `shortcut:`, `source:`, `plugin:`, `name:`, `d
 
 Refine mode is search, not capture. A `:` filter popup can stay open for hints, but it does not blank the main launcher results; complete inputs like `:type:script deploy` show the filtered catalog. Partial filter text narrows rows, and applying a filter replaces only the active token so existing filters stay intact.
 
-Inline root-source filters are the exception to prefix-only refine syntax. Whole whitespace-delimited tokens `:f`/`:file`/`:files`, `:n`/`:note`/`:notes`, and `:c`/`:clip`/`:clipboard`/`:clipboard-history` may appear anywhere in ScriptList input; [[src/menu_syntax/query.rs#parse_source_filter_query]] strips those tokens into free text and records source gates for Files, Notes, and Clipboard History. Unknown colon tokens, quoted tokens, URLs, and capture keyword aliases remain literal or capture-owned.
+Inline root-source filters are the exception to prefix-only refine syntax. Whole whitespace-delimited tokens `:f`/`:file`/`:files`, `:n`/`:note`/`:notes`, and `:c`/`:clip`/`:clipboard`/`:clipboard-history` may appear anywhere in ScriptList input; [[src/menu_syntax/query.rs#parse_source_filter_query]] strips those tokens into free text and records source gates for Files, Notes, and Clipboard History. Source-filter-only advanced queries do not open the power-user trigger popup or empty-result hint, so `png :f` stays a normal main-menu search filtered to Files. Unknown colon tokens, quoted tokens, URLs, and capture keyword aliases remain literal or capture-owned.
 
 ## Command Invocation
 
