@@ -200,6 +200,37 @@ fn deferred_body_emits_complete_and_failed_tracing_events() {
 
 // @lat: [[lat.md/automation#Automation#Window metadata]]
 #[test]
+fn detached_exact_handle_dispatch_defers_out_of_stdin_update_stack() {
+    // Detached ACP exact-id dispatch can route back through shared app
+    // state while stdin is still updating ScriptListApp. It must take the
+    // same next-tick shape as Main reentrancy recovery instead of calling
+    // handle.update synchronously.
+    assert!(
+        SIMULATOR.contains("AutomationWindowKind::AcpDetached")
+            && SIMULATOR.contains("dispatch_with_any_handle_deferred("),
+        "src/platform/gpui_event_simulator.rs must send \
+         AutomationWindowKind::AcpDetached exact-handle dispatch through \
+         dispatch_with_any_handle_deferred so protocol simulateGpuiEvent \
+         cannot re-enter ScriptListApp while stdin owns the app update stack."
+    );
+    assert!(
+        SIMULATOR.contains("\"exact_handle_deferred\"")
+            || SIMULATOR.contains("format!(\"{dispatch_path}_deferred\")"),
+        "detached exact-handle dispatch must report a distinct \
+         exact_handle_deferred dispatch path so receipts can distinguish \
+         it from synchronous exact-handle delivery."
+    );
+    assert!(
+        SIMULATOR.contains("gpui_event_simulation.exact_deferred_complete")
+            && SIMULATOR.contains("gpui_event_simulation.exact_deferred_failed")
+            && SIMULATOR.contains("gpui_event_simulation.exact_deferred_scheduled"),
+        "deferred exact-handle dispatch must emit scheduled, complete, and \
+         failed tracing receipts for state-first runtime proof."
+    );
+}
+
+// @lat: [[lat.md/automation#Automation#Window metadata]]
+#[test]
 fn apply_simulated_event_helper_is_extracted_and_shared() {
     // `apply_simulated_event` must exist as a shared helper so the
     // synchronous paths (`exact_handle`, `main_reacquire_global`) and

@@ -4,6 +4,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
+use serde::Deserialize;
 
 const FIELD_SEPARATOR: char = '\u{1e}';
 const RECORD_SEPARATOR: char = '\u{1f}';
@@ -64,7 +65,7 @@ const SUPPORTED_BROWSERS: &[SupportedBrowser] = &[
     },
 ];
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct BrowserTabInfo {
     pub browser_name: String,
     pub browser_bundle_id: String,
@@ -160,6 +161,10 @@ static ROOT_BROWSER_TAB_SNAPSHOT: LazyLock<Mutex<RootBrowserTabSnapshotState>> =
     LazyLock::new(|| Mutex::new(RootBrowserTabSnapshotState::default()));
 
 pub fn list_open_tabs() -> Result<Vec<BrowserTabInfo>> {
+    if let Ok(raw) = std::env::var("SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER") {
+        return serde_json::from_str(&raw).context("parse SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER");
+    }
+
     let mut tabs = Vec::new();
     let mut errors = Vec::new();
 
@@ -324,6 +329,45 @@ pub(crate) fn search_root_browser_tabs_meta(
         .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
         .take(options.scan_limit)
         .collect::<Vec<_>>();
+
+    root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls)
+        .into_iter()
+        .take(options.max_results)
+        .map(|tab_match| {
+            let title = root_tab_title(&tab_match.tab);
+            let domain = domain_from_url(&tab_match.tab.url)
+                .unwrap_or("")
+                .to_string();
+            RootBrowserTabSearchHit {
+                stable_key: root_browser_tab_stable_key(&tab_match.tab),
+                url: tab_match.tab.url.clone(),
+                provider_label: tab_match.tab.browser_name.clone(),
+                tab: tab_match.tab,
+                title,
+                domain,
+                score: tab_match.score,
+            }
+        })
+        .collect()
+}
+
+#[allow(dead_code)]
+pub(crate) fn search_root_browser_tabs_meta_direct(
+    query: &str,
+    options: RootBrowserTabsSectionOptions,
+) -> Vec<RootBrowserTabSearchHit> {
+    if !root_browser_tabs_query_is_eligible(query, options.clone()) {
+        return Vec::new();
+    }
+
+    let tabs = list_open_tabs()
+        .map(|tabs| {
+            tabs.into_iter()
+                .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
+                .take(options.scan_limit)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls)
         .into_iter()

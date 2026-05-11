@@ -58,3 +58,15 @@ fn attached_popup_proof_depends_on_popup_semantics_receipt() {
         "attached popup scenario must fail or warn when popup semantics degrade"
     );
 }
+
+#[test]
+fn detached_surface_proof_uses_acp_state_receipt() {
+    let source = read_source("scripts/agentic/index.ts");
+    assert!(
+        source.contains("kind === \"acpDetached\"")
+            && source.contains("surface.getAcpState")
+            && source.contains("type: \"getAcpState\"")
+            && source.contains("expect: \"acpStateResult\""),
+        "detached ACP surface-proof must use getAcpState(target), not generic getState, so the state receipt describes the detached composer"
+    );
+}

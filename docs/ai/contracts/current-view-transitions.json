@@ -474,7 +474,7 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 706,
+      "line": 1147,
       "owner": "open_script_issues_view",
       "receiver": "self",
       "operation": "assign",
@@ -568,7 +568,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 1948,
+      "line": 1963,
       "owner": "open_tab_ai_harness_terminal_from_request",
       "receiver": "self",
       "operation": "assign",
@@ -578,7 +578,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2540,
+      "line": 2555,
       "owner": "close_tab_ai_harness_terminal_impl",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -602,7 +602,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2586,
+      "line": 2601,
       "owner": "close_tab_ai_harness_terminal",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -626,7 +626,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2628,
+      "line": 2643,
       "owner": "close_acp_chat_to_script_list",
       "receiver": "self",
       "operation": "assign",
@@ -636,7 +636,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 4338,
+      "line": 4413,
       "owner": "save_tab_ai_script",
       "receiver": "self",
       "operation": "assign",
@@ -716,7 +716,7 @@
     },
     {
       "file": "src/app_impl/ui_window.rs",
-      "line": 1171,
+      "line": 1191,
       "owner": "resolve_confirm_prompt",
       "receiver": "self",
       "operation": "assign",
@@ -726,7 +726,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1517,
+      "line": 1713,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -736,7 +736,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1559,
+      "line": 1755,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -746,7 +746,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1597,
+      "line": 1793,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -756,7 +756,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1662,
+      "line": 1858,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -766,7 +766,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1684,
+      "line": 1880,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -776,7 +776,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1732,
+      "line": 1929,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -786,7 +786,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1832,
+      "line": 2047,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -796,7 +796,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 5998,
+      "line": 6060,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -806,7 +806,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6074,
+      "line": 6136,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -816,7 +816,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6111,
+      "line": 6173,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -826,7 +826,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6142,
+      "line": 6204,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -836,7 +836,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6187,
+      "line": 6249,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -846,7 +846,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6459,
+      "line": 6521,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",

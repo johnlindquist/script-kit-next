@@ -62,7 +62,7 @@ The detached ACP window lives in `src/ai/acp/chat_window.rs` and carries a live 
 
 `open_chat_window_with_thread(...)` transfers a live `AcpThread` into that window, stores the handle for later focus/close operations, and registers a stable automation ID for runtime targeting.
 
-The detached window wires the same core footer actions as the embedded view: toggle actions, close, and history. `Cmd+W` closes the detached popup directly from `AcpChatView`; the main panel handles the equivalent close gesture through the app-level interceptor.
+The detached window wires the same core footer actions as the embedded view: toggle actions, close, and history. `Cmd+K` routes through the deferred footer callback before opening detached actions so `simulateGpuiEvent` and physical keyboard input do not update the chat view reentrantly; `Cmd+W` closes the detached popup directly from `AcpChatView`; the main panel handles the equivalent close gesture through the app-level interceptor.
 
 Detached ACP also keeps the thread alive for reuse. When the window is already open, ACP entry focuses it rather than creating another copy of the chat surface.
 
@@ -169,6 +169,8 @@ Dictation sessions that target the AI chat composer deliver the transcript witho
 [[src/app_execute/builtin_execution.rs#ScriptListApp#handle_dictation_transcript]] records history BEFORE the delivery `match` so a delivery failure never silently drops the captured audio, then routes to `ai::set_ai_input(&mut **cx, &transcript, false)` for the `DictationTarget::AiChatComposer` arm (the `false` is the no-auto-submit flag). The `DictationTarget::TabAiHarness` arm seeds ScriptList/MainFilter as the ACP return origin, opens Agent Chat with the transcript as the entry intent, and suppresses focused launcher context so the dictated prompt is submitted as the first turn without attaching the currently selected ScriptList row.
 
 The global dictation hotkey and legacy hidden `builtin/dictation-to-app` command route through `builtin/dictation-to-ai`, forcing `DictationTarget::TabAiHarness`. On completion, that target reveals main as Agent Chat, focuses the composer, submits the transcript, and ignores any remembered Notes or detached-ACP return focus. If a detached Agent Chat popup is open, dictation closes it before opening embedded Agent Chat so the orchestrator can focus the main composer.
+
+[[src/dictation/window.rs#open_dictation_overlay]] creates the overlay hidden and nonactivating, re-orders the main panel out when it was already hidden, then orders the overlay front so dictation can receive keys without flashing or revealing the launcher.
 
 The dictation reveal path depends on the window orchestrator bridge applying `FocusMain(ChatComposer)` after the AppKit reveal command runs. The bridge maps that token to the dedicated ACP focus target so the embedded composer receives keyboard focus on the next render instead of leaving focus on the main panel shell.
 

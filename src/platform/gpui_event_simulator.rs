@@ -320,6 +320,78 @@ fn dispatch_with_any_handle(
     }
 }
 
+/// Defer exact-handle dispatch until the current GPUI update stack unwinds.
+///
+/// Stdin protocol messages are processed while the main app entity is being
+/// updated. Detached surfaces can still route back through shared app state
+/// during key dispatch, so exact-handle dispatch must be able to hop a tick
+/// instead of synchronously re-entering `ScriptListApp`.
+fn dispatch_with_any_handle_deferred(
+    handle: gpui::AnyWindowHandle,
+    request_id: &str,
+    resolved_id: &str,
+    event_type: &str,
+    event: &crate::protocol::SimulatedGpuiEvent,
+    cx: &mut gpui::App,
+    dispatch_path: &str,
+) -> GpuiEventDispatchResult {
+    let request_id_owned = request_id.to_string();
+    let resolved_id_owned = resolved_id.to_string();
+    let event_type_owned = event_type.to_string();
+    let event_for_spawn = event.clone();
+    let deferred_path = format!("{dispatch_path}_deferred");
+    let deferred_path_for_spawn = deferred_path.clone();
+
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+        use gpui::AppContext;
+        cx.background_executor()
+            .timer(std::time::Duration::from_millis(1))
+            .await;
+        let update_result = cx.update_window(handle, |_root, window, cx| {
+            apply_simulated_event(window, cx, &event_for_spawn);
+        });
+        match update_result {
+            Ok(()) => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id_owned,
+                    window_id = %resolved_id_owned,
+                    event_type = %event_type_owned,
+                    dispatch_path = %deferred_path_for_spawn,
+                    "gpui_event_simulation.exact_deferred_complete"
+                );
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "script_kit::automation",
+                    request_id = %request_id_owned,
+                    window_id = %resolved_id_owned,
+                    error = %err,
+                    dispatch_path = %deferred_path_for_spawn,
+                    "gpui_event_simulation.exact_deferred_failed"
+                );
+            }
+        }
+    })
+    .detach();
+
+    tracing::info!(
+        target: "script_kit::automation",
+        request_id = %request_id,
+        window_id = %resolved_id,
+        dispatch_path = %deferred_path,
+        "gpui_event_simulation.exact_deferred_scheduled"
+    );
+
+    GpuiEventDispatchResult {
+        success: true,
+        error_code: None,
+        error: None,
+        dispatch_path: Some(deferred_path),
+        resolved_window_id: Some(resolved_id.to_string()),
+    }
+}
+
 /// Dispatch a [`SimulatedGpuiEvent`] to the resolved target window
 /// through GPUI's real input pipeline.
 ///
@@ -419,6 +491,21 @@ pub(crate) fn dispatch_gpui_event(
             window_id = %resolved.id,
             "gpui_event_simulation.dispatch_exact_handle"
         );
+        if matches!(
+            resolved.kind,
+            crate::protocol::AutomationWindowKind::AcpDetached
+        ) {
+            return dispatch_with_any_handle_deferred(
+                handle,
+                request_id,
+                &resolved.id,
+                event_type,
+                &event,
+                cx,
+                "exact_handle",
+            );
+        }
+
         return dispatch_with_any_handle(
             handle,
             request_id,

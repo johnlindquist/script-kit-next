@@ -58,16 +58,40 @@ impl ScriptListApp {
             }
         }
 
+        let explicit_notes =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
+        let explicit_clipboard =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory);
+        let explicit_dictation =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation);
+        let explicit_conversations =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations);
+        let explicit_browser_tabs =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
+        let explicit_browser_history =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
+
         let allow_notes = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
         let allow_clipboard =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory);
-        let allow_other_passive = !source_filters.active();
+        let allow_dictation =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Dictation);
+        let allow_conversations =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Conversations);
+        let allow_browser_tabs =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
+        let allow_browser_history =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
         let note_hits = if !advanced_query_active
             && allow_notes
             && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
         {
-            crate::notes::search_root_notes_meta_cached(search_text, notes_options)
+            if explicit_notes {
+                crate::notes::search_root_notes_meta(search_text, notes_options)
+            } else {
+                crate::notes::search_root_notes_meta_cached(search_text, notes_options)
+            }
         } else {
             Vec::new()
         };
@@ -78,67 +102,96 @@ impl ScriptListApp {
                 search_text,
                 clipboard_history_options,
             ) {
-            crate::clipboard_history::search_root_clipboard_history_meta_cached(
-                search_text,
-                clipboard_history_options,
-            )
+            if explicit_clipboard {
+                crate::clipboard_history::search_root_clipboard_history_meta(
+                    search_text,
+                    clipboard_history_options,
+                )
+            } else {
+                crate::clipboard_history::search_root_clipboard_history_meta_cached(
+                    search_text,
+                    clipboard_history_options,
+                )
+            }
         } else {
             Vec::new()
         };
 
         let dictation_history_hits = if !advanced_query_active
-            && allow_other_passive
+            && allow_dictation
             && crate::dictation::root_dictation_history_query_is_eligible(
                 search_text,
                 dictation_history_options,
             ) {
-            crate::dictation::search_root_dictation_history_cached(
-                search_text,
-                dictation_history_options,
-            )
+            if explicit_dictation {
+                crate::dictation::search_root_dictation_history(search_text, dictation_history_options)
+            } else {
+                crate::dictation::search_root_dictation_history_cached(
+                    search_text,
+                    dictation_history_options,
+                )
+            }
         } else {
             Vec::new()
         };
 
         let acp_history_hits = if !advanced_query_active
-            && allow_other_passive
+            && allow_conversations
             && crate::ai::acp::history::root_acp_history_query_is_eligible(
                 search_text,
                 acp_history_options,
             ) {
-            crate::ai::acp::history::search_history_cached(
-                search_text,
-                acp_history_options.max_results,
-            )
+            if explicit_conversations {
+                crate::ai::acp::history::search_history(search_text, acp_history_options.max_results)
+            } else {
+                crate::ai::acp::history::search_history_cached(
+                    search_text,
+                    acp_history_options.max_results,
+                )
+            }
         } else {
             Vec::new()
         };
 
         let browser_tab_hits = if !advanced_query_active
-            && allow_other_passive
+            && allow_browser_tabs
             && crate::browser_tabs::root_browser_tabs_query_is_eligible(
                 search_text,
                 browser_tabs_options.clone(),
             ) {
-            crate::browser_tabs::search_root_browser_tabs_meta(
-                search_text,
-                browser_tabs_options.clone(),
-            )
+            if explicit_browser_tabs {
+                crate::browser_tabs::search_root_browser_tabs_meta_direct(
+                    search_text,
+                    browser_tabs_options.clone(),
+                )
+            } else {
+                crate::browser_tabs::search_root_browser_tabs_meta(
+                    search_text,
+                    browser_tabs_options.clone(),
+                )
+            }
         } else {
             Vec::new()
         };
         let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
 
         let browser_history_hits = if !advanced_query_active
-            && allow_other_passive
+            && allow_browser_history
             && crate::browser_history::root_browser_history_query_is_eligible(
                 search_text,
                 browser_history_options.clone(),
             ) {
-            crate::browser_history::search_root_browser_history_meta(
-                search_text,
-                browser_history_options.clone(),
-            )
+            if explicit_browser_history {
+                crate::browser_history::search_root_browser_history_meta_direct(
+                    search_text,
+                    browser_history_options.clone(),
+                )
+            } else {
+                crate::browser_history::search_root_browser_history_meta(
+                    search_text,
+                    browser_history_options.clone(),
+                )
+            }
         } else {
             Vec::new()
         };
@@ -536,15 +589,43 @@ impl ScriptListApp {
             let advanced_predicate_query = advanced_query.filter(|query| query.has_predicates());
             let advanced_predicate_active = advanced_predicate_query.is_some();
             let unified_search = self.config.get_unified_search();
-            let root_file_options = unified_search.root_file_section_options();
-            let notes_options = unified_search.notes_section_options();
-            let acp_history_options = unified_search.acp_history_section_options();
-            let clipboard_history_options = self.config.root_clipboard_history_section_options();
-            let dictation_history_options = unified_search.dictation_history_section_options();
-            let browser_tabs_options = unified_search.browser_tabs_section_options();
-            let browser_history_options = unified_search.browser_history_section_options();
+            let mut root_file_options = unified_search.root_file_section_options();
+            let mut notes_options = unified_search.notes_section_options();
+            let mut acp_history_options = unified_search.acp_history_section_options();
+            let mut clipboard_history_options = self.config.root_clipboard_history_section_options();
+            let mut dictation_history_options = unified_search.dictation_history_section_options();
+            let mut browser_tabs_options = unified_search.browser_tabs_section_options();
+            let mut browser_history_options = unified_search.browser_history_section_options();
             let root_passive_source_order = unified_search.passive_source_order();
             let root_passive_result_limits = unified_search.passive_result_limits();
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
+                root_file_options.files_enabled = true;
+                root_file_options.global_search_enabled = true;
+                root_file_options.directory_browse_enabled = true;
+                root_file_options.recent_files_enabled = true;
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {
+                notes_options.enabled = true;
+            }
+            if source_filters
+                .includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)
+            {
+                clipboard_history_options.enabled = true;
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation) {
+                dictation_history_options.enabled = true;
+            }
+            if source_filters
+                .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)
+            {
+                acp_history_options.enabled = true;
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs) {
+                browser_tabs_options.enabled = true;
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory) {
+                browser_history_options.enabled = true;
+            }
             let root_passive_frame = self.root_passive_frame_for_current_query(
                 search_text,
                 advanced_predicate_active,

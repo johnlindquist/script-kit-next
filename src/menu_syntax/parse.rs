@@ -2,7 +2,7 @@ use super::capture::{is_capture_target_registered, parse_capture_with_targets, C
 use super::payload::{
     AdvancedQuery, ArgvInvocation, CaptureInvocation, IncompleteKind, IncompleteSyntax,
 };
-use super::query::{parse_advanced_query, parse_source_filter_query};
+use super::query::parse_filter_query;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuSyntaxParse {
@@ -56,17 +56,10 @@ pub fn parse_with_config_and_capture_targets(
 
     if let Some(first) = input.chars().next() {
         if first == ':' {
-            if input.len() == 1 {
-                return MenuSyntaxParse::Incomplete(IncompleteSyntax {
-                    kind: IncompleteKind::BareQueryPrefix,
-                    hint: "Type a free-text query or qualifiers like type:script name:foo"
-                        .to_string(),
-                });
-            }
-            if let Some(query) = parse_source_filter_query(input) {
-                return MenuSyntaxParse::AdvancedQuery(query);
-            }
-            return MenuSyntaxParse::AdvancedQuery(parse_advanced_query(input));
+            return MenuSyntaxParse::Incomplete(IncompleteSyntax {
+                kind: IncompleteKind::BareQueryPrefix,
+                hint: "Choose a filter: files, notes, clipboard, type, tag, shortcut".to_string(),
+            });
         }
 
         if first == ';' || first == '+' {
@@ -106,7 +99,7 @@ pub fn parse_with_config_and_capture_targets(
         }
     }
 
-    if let Some(query) = parse_source_filter_query(input) {
+    if let Some(query) = parse_filter_query(input) {
         return MenuSyntaxParse::AdvancedQuery(query);
     }
 
@@ -287,7 +280,7 @@ mod tests {
 
     #[test]
     fn colon_prefix_routes_to_advanced_query() {
-        let result = parse(":type:script git");
+        let result = parse("type:script git");
         match result {
             MenuSyntaxParse::AdvancedQuery(q) => {
                 assert_eq!(q.predicates, vec![Predicate::Type(ArtifactKind::Script)]);
@@ -300,7 +293,7 @@ mod tests {
 
     #[test]
     fn inline_source_filter_routes_to_query_mode() {
-        match parse("meeting :n") {
+        match parse("meeting n:") {
             MenuSyntaxParse::AdvancedQuery(q) => {
                 assert_eq!(q.free_text, "meeting");
                 assert!(q.predicates.is_empty());
@@ -312,7 +305,7 @@ mod tests {
 
     #[test]
     fn source_filter_prefix_routes_to_query_mode() {
-        match parse(":f meeting") {
+        match parse("f: meeting") {
             MenuSyntaxParse::AdvancedQuery(q) => {
                 assert_eq!(q.free_text, "meeting");
                 assert!(q.predicates.is_empty());
@@ -324,7 +317,7 @@ mod tests {
 
     #[test]
     fn capture_keyword_still_owns_input_before_source_filters() {
-        match parse("note: meeting :f") {
+        match parse("note: meeting f:") {
             MenuSyntaxParse::Capture(_) => {}
             other => panic!("expected Capture, got {other:?}"),
         }
