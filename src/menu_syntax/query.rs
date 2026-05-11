@@ -1,4 +1,7 @@
-use super::payload::{AdvancedQuery, ArtifactKind, Predicate, ShortcutPredicate};
+use super::payload::{
+    AdvancedQuery, ArtifactKind, Predicate, RootUnifiedSourceFilter, RootUnifiedSourceFilterSet,
+    ShortcutPredicate,
+};
 
 pub fn parse_advanced_query(input: &str) -> AdvancedQuery {
     let raw = input.to_string();
@@ -34,7 +37,53 @@ pub fn parse_advanced_query(input: &str) -> AdvancedQuery {
     AdvancedQuery {
         free_text: free_parts.join(" ").trim().to_string(),
         predicates,
+        source_filters: RootUnifiedSourceFilterSet::default(),
         raw,
+    }
+}
+
+pub fn parse_source_filter_query(input: &str) -> Option<AdvancedQuery> {
+    let tokens = tokenize(input);
+    if tokens.is_empty() {
+        return None;
+    }
+
+    if input.starts_with(':') && classify_source_filter_token(&tokens[0]).is_none() {
+        return None;
+    }
+
+    let mut source_filters = RootUnifiedSourceFilterSet::default();
+    let mut free_parts = Vec::new();
+
+    for token in tokens {
+        if let Some(source) = classify_source_filter_token(&token) {
+            source_filters.insert(source);
+        } else {
+            free_parts.push(token);
+        }
+    }
+
+    if source_filters.is_empty() {
+        return None;
+    }
+
+    Some(AdvancedQuery {
+        free_text: free_parts.join(" ").trim().to_string(),
+        predicates: Vec::new(),
+        source_filters,
+        raw: input.to_string(),
+    })
+}
+
+fn classify_source_filter_token(token: &str) -> Option<RootUnifiedSourceFilter> {
+    let body = token.strip_prefix(':')?;
+    match body.to_ascii_lowercase().as_str() {
+        "f" | "file" | "files" => Some(RootUnifiedSourceFilter::Files),
+        "n" | "note" | "notes" => Some(RootUnifiedSourceFilter::Notes),
+        "c" | "clip" | "clips" | "clipboard" | "clipboard-history" | "clipboard_history" => {
+            Some(RootUnifiedSourceFilter::ClipboardHistory)
+        }
+        _ => None,
     }
 }
 
@@ -141,6 +190,43 @@ mod tests {
             parsed.predicates,
             vec![Predicate::Type(ArtifactKind::Script)]
         );
+        assert!(parsed.source_filters.is_empty());
+    }
+
+    #[test]
+    fn source_filter_tokens_parse_anywhere() {
+        let parsed = parse_source_filter_query("open project :f").unwrap();
+        assert_eq!(parsed.free_text, "open project");
+        assert!(parsed.source_filters.allows(RootUnifiedSourceFilter::Files));
+        assert!(!parsed.source_filters.allows(RootUnifiedSourceFilter::Notes));
+    }
+
+    #[test]
+    fn source_filter_prefix_form_strips_token() {
+        let parsed = parse_source_filter_query(":n meeting notes").unwrap();
+        assert_eq!(parsed.free_text, "meeting notes");
+        assert!(parsed.source_filters.allows(RootUnifiedSourceFilter::Notes));
+    }
+
+    #[test]
+    fn multiple_source_filters_are_additive() {
+        let parsed = parse_source_filter_query(":n invoice :c").unwrap();
+        assert_eq!(parsed.free_text, "invoice");
+        assert!(parsed.source_filters.allows(RootUnifiedSourceFilter::Notes));
+        assert!(parsed
+            .source_filters
+            .allows(RootUnifiedSourceFilter::ClipboardHistory));
+        assert!(!parsed.source_filters.allows(RootUnifiedSourceFilter::Files));
+    }
+
+    #[test]
+    fn unknown_colon_token_stays_literal() {
+        assert!(parse_source_filter_query("deploy :x").is_none());
+    }
+
+    #[test]
+    fn quoted_source_filter_is_literal() {
+        assert!(parse_source_filter_query("search \":f\"").is_none());
     }
 
     #[test]

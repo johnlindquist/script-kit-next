@@ -582,6 +582,15 @@ mod tests {
     }
 
     #[test]
+    fn free_text_for_search_strips_source_filter_anywhere() {
+        let mode = MenuSyntaxMode::from_input("meeting :n");
+        assert_eq!(free_text_for_search(&mode, "meeting :n"), "meeting");
+
+        let mode = MenuSyntaxMode::from_input(":f project");
+        assert_eq!(free_text_for_search(&mode, ":f project"), "project");
+    }
+
+    #[test]
     fn free_text_for_search_returns_raw_without_query_mode() {
         let mode = MenuSyntaxMode::from_input("hello world");
         assert_eq!(free_text_for_search(&mode, "hello world"), "hello world");

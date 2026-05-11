@@ -43,6 +43,7 @@ struct MainMenuFallbackState {
 pub(crate) struct RootPassiveFrameKey {
     pub(crate) query: String,
     pub(crate) advanced_query: bool,
+    pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
     pub(crate) clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
@@ -68,6 +69,7 @@ pub(crate) struct RootPassiveFrame {
 pub(crate) struct RootFileFrameKey {
     pub(crate) query: String,
     pub(crate) advanced_query: bool,
+    pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) mode: Option<crate::file_search::RootFileSectionMode>,
     pub(crate) options: crate::file_search::RootFileSectionOptions,
 }

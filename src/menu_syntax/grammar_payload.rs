@@ -371,6 +371,7 @@ mod tests {
                 Predicate::Tag("work".into()),
                 Predicate::Negate(Box::new(Predicate::Tag("archived".into()))),
             ],
+            source_filters: Default::default(),
             raw: ":type:script #work :-tag:archived deploy".into(),
         };
         let payload: GrammarPayload = (&query).into();

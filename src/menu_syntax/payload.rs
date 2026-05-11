@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -76,7 +77,64 @@ pub enum ShortcutPredicate {
 pub struct AdvancedQuery {
     pub free_text: String,
     pub predicates: Vec<Predicate>,
+    pub source_filters: RootUnifiedSourceFilterSet,
     pub raw: String,
+}
+
+impl AdvancedQuery {
+    pub fn has_predicates(&self) -> bool {
+        !self.predicates.is_empty()
+    }
+
+    pub fn has_source_filters(&self) -> bool {
+        self.source_filters.active()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RootUnifiedSourceFilter {
+    Files,
+    Notes,
+    ClipboardHistory,
+}
+
+impl RootUnifiedSourceFilter {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Files => "files",
+            Self::Notes => "notes",
+            Self::ClipboardHistory => "clipboardHistory",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RootUnifiedSourceFilterSet {
+    sources: BTreeSet<RootUnifiedSourceFilter>,
+}
+
+impl RootUnifiedSourceFilterSet {
+    pub fn is_empty(&self) -> bool {
+        self.sources.is_empty()
+    }
+
+    pub fn active(&self) -> bool {
+        !self.sources.is_empty()
+    }
+
+    pub fn insert(&mut self, source: RootUnifiedSourceFilter) {
+        self.sources.insert(source);
+    }
+
+    pub fn allows(&self, source: RootUnifiedSourceFilter) -> bool {
+        self.sources.is_empty() || self.sources.contains(&source)
+    }
+
+    pub fn labels(&self) -> Vec<&'static str> {
+        self.sources.iter().map(|source| source.label()).collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

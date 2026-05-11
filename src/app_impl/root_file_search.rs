@@ -232,9 +232,18 @@ impl ScriptListApp {
     }
 
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
-        let trimmed = query.trim();
+        let search_text =
+            crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, query).to_string();
+        let trimmed = search_text.trim();
+        let source_filters = self
+            .menu_syntax_mode
+            .advanced_query_for(query)
+            .map(|advanced_query| advanced_query.source_filters.clone())
+            .unwrap_or_default();
         let root_file_options = self.config.get_unified_search().root_file_section_options();
-        if !root_file_options.files_enabled {
+        if !root_file_options.files_enabled
+            || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)
+        {
             self.cancel_root_file_search();
             let had_results = !self.root_file_results.is_empty()
                 || !self.root_recent_file_results.is_empty()
@@ -261,7 +270,7 @@ impl ScriptListApp {
             && self
                 .menu_syntax_mode
                 .advanced_query_for(&self.filter_text)
-                .is_none()
+                .is_none_or(|advanced_query| !advanced_query.has_predicates())
             && !self.menu_syntax_trigger_popup_state.owns_main_list()
             && !self
                 .menu_syntax_mode
@@ -317,6 +326,15 @@ impl ScriptListApp {
                 if self.root_file_search_query == request.query()
                     && self.root_file_search_mode == Some(mode) =>
             {
+                let cached_results = self.cached_root_file_results_for_request(&request);
+                if root_file_result_fingerprint(&self.root_file_results)
+                    != root_file_result_fingerprint(&cached_results)
+                {
+                    self.root_file_results = cached_results;
+                    self.root_file_search_loading = self.root_file_results.is_empty();
+                    self.root_file_frame = None;
+                    self.invalidate_grouped_cache();
+                }
                 return;
             }
             RootFileSearchRequest::DirectoryBrowse {

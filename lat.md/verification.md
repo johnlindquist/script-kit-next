@@ -86,6 +86,12 @@ Passive result-limit changes are verified through grouping tests, config/schema 
 
 Checks must prove that the budget applies only to root-passive rows, is applied after root Files and Recent Files and before passive source iteration, permits zero collision rows, preserves passive source order, and never moves passive rows above primary launcher results. Use `cargo test --test source_audits root_unified_passive_budget_contract -- --nocapture`, `cargo test --test source_audits root_unified_config_schema_parity_contract -- --nocapture`, `cargo test --test source_audits root_unified_search_stability_contract -- --nocapture`, `cargo test --test source_audits root_unified_passive_snapshot_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, and `bun scripts/agentic/root-passive-frame-stability.ts`.
 
+## Root Unified Search Source Filters
+
+Source-filter tokens are verified by parser tests, source audits, and state-first runtime receipts.
+
+Checks must prove that standalone `:f`, `:n`, and `:c` aliases work anywhere in ScriptList input; quoted/unknown colon tokens stay literal; capture keyword aliases keep ownership; grouped rows suppress primary/fallback and disallowed sources while active; root file/passive frame keys include the source-filter set; and preflight receipts expose stripped search text plus source filters. Use `cargo test --test source_audits root_unified_source_filters_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, and `bun scripts/agentic/root-source-filter-stability.ts`.
+
 ## Root Unified Search ACP History
 
 ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests.

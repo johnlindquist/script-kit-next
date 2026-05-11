@@ -445,6 +445,7 @@ mod tests {
         let query = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Type(ArtifactKind::Script)],
+            source_filters: Default::default(),
             raw: ":type:script".to_string(),
         };
         assert_eq!(apply_advanced_query(results.clone(), &query).len(), 1);
@@ -452,6 +453,7 @@ mod tests {
         let query2 = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Type(ArtifactKind::Skill)],
+            source_filters: Default::default(),
             raw: ":type:skill".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &query2).len(), 0);
@@ -470,6 +472,7 @@ mod tests {
         let query = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::HasShortcut(ShortcutPredicate::Any)],
+            source_filters: Default::default(),
             raw: ":shortcut:true".to_string(),
         };
         let filtered = apply_advanced_query(results, &query);
@@ -493,6 +496,7 @@ mod tests {
                 path: "domain.kind".to_string(),
                 value: "calendar".to_string(),
             }],
+            source_filters: Default::default(),
             raw: ":meta.domain.kind:calendar".to_string(),
         };
         assert_eq!(apply_advanced_query(results.clone(), &query).len(), 1);
@@ -503,6 +507,7 @@ mod tests {
                 path: "domain.kind".to_string(),
                 value: "analytics".to_string(),
             }],
+            source_filters: Default::default(),
             raw: ":meta.domain.kind:analytics".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &query_miss).len(), 0);
@@ -522,6 +527,7 @@ mod tests {
         let query = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Has("menuSyntax".to_string())],
+            source_filters: Default::default(),
             raw: ":has:menuSyntax".to_string(),
         };
         let filtered = apply_advanced_query(results, &query);
@@ -574,6 +580,7 @@ mod tests {
             predicates: vec![Predicate::Negate(Box::new(Predicate::Type(
                 ArtifactKind::Skill,
             )))],
+            source_filters: Default::default(),
             raw: ":-type:skill".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &query).len(), 1);
@@ -594,6 +601,7 @@ mod tests {
         let source_match = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Source("my-kenv".to_string())],
+            source_filters: Default::default(),
             raw: ":source:my-kenv".to_string(),
         };
         assert_eq!(
@@ -604,6 +612,7 @@ mod tests {
         let plugin_misses_kit = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Plugin("my-kenv".to_string())],
+            source_filters: Default::default(),
             raw: ":plugin:my-kenv".to_string(),
         };
         assert_eq!(
@@ -614,6 +623,7 @@ mod tests {
         let plugin_matches_id = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Plugin("core".to_string())],
+            source_filters: Default::default(),
             raw: ":plugin:core".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &plugin_matches_id).len(), 1);
@@ -630,6 +640,7 @@ mod tests {
             let query = AdvancedQuery {
                 free_text: String::new(),
                 predicates: vec![Predicate::Has(probe.to_string())],
+                source_filters: Default::default(),
                 raw: format!(":has:{probe}"),
             };
             assert_eq!(
@@ -653,6 +664,7 @@ mod tests {
                 path: "domain.kind".to_string(),
                 value: "calendar".to_string(),
             }],
+            source_filters: Default::default(),
             raw: ":meta.domain.kind:calendar".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &query).len(), 1);
@@ -728,6 +740,7 @@ mod tests {
         let query = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Tag("script-kit".to_string())],
+            source_filters: Default::default(),
             raw: ":#script-kit".to_string(),
         };
         assert_eq!(apply_advanced_query(results.clone(), &query).len(), 1);
@@ -735,6 +748,7 @@ mod tests {
         let miss = AdvancedQuery {
             free_text: String::new(),
             predicates: vec![Predicate::Tag("personal".to_string())],
+            source_filters: Default::default(),
             raw: ":#personal".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &miss).len(), 0);

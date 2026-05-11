@@ -32,6 +32,7 @@ fn refine(raw: &str) -> AdvancedQuery {
     AdvancedQuery {
         free_text: String::new(),
         predicates: Vec::<Predicate>::new(),
+        source_filters: Default::default(),
         raw: raw.to_string(),
     }
 }
