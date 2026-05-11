@@ -100,7 +100,10 @@ pub use main_hint::{
 pub use mode::{
     free_text_for_search, input_spans_for_input_with_targets, prefix_span_for_input, MenuSyntaxMode,
 };
-pub use payload::{AdvancedQuery, ArgvInvocation, CaptureInvocation, MenuSyntaxHandlerSpec};
+pub use payload::{
+    AdvancedQuery, ArgvInvocation, CaptureInvocation, MenuSyntaxHandlerSpec,
+    RootUnifiedSourceFilter, RootUnifiedSourceFilterSet,
+};
 pub use quote::quote_for_filter_value;
 #[allow(unused_imports)]
 pub use retention::{

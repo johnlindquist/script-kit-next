@@ -69,6 +69,7 @@ pub(crate) struct RootPassiveSourceReceipt {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RootPassiveFrameReceipt {
     pub query: String,
+    pub source_filters: Vec<String>,
     pub notes: RootPassiveSourceReceipt,
     pub clipboard_history: RootPassiveSourceReceipt,
     pub dictation_history: RootPassiveSourceReceipt,
@@ -81,6 +82,8 @@ pub(crate) struct RootPassiveFrameReceipt {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
+    pub computed_search_text: String,
+    pub source_filters: Vec<String>,
     pub selected_index: usize,
     pub selected_result_key: Option<String>,
     pub selected_result_role: MainWindowPreflightResultRole,

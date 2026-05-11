@@ -128,6 +128,9 @@ mod root_file_search_contract;
 #[path = "source_audits/root_unified_search_stability_contract.rs"]
 mod root_unified_search_stability_contract;
 
+#[path = "source_audits/root_unified_source_filters_contract.rs"]
+mod root_unified_source_filters_contract;
+
 #[path = "source_audits/root_unified_passive_snapshot_contract.rs"]
 mod root_unified_passive_snapshot_contract;
 

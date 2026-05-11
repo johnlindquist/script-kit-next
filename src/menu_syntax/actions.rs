@@ -229,6 +229,7 @@ mod tests {
         AdvancedQuery {
             free_text: String::new(),
             predicates: vec![],
+            source_filters: Default::default(),
             raw: ":".into(),
         }
     }

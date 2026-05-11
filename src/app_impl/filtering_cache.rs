@@ -32,6 +32,7 @@ impl ScriptListApp {
         &mut self,
         search_text: &str,
         advanced_query_active: bool,
+        source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
         notes_options: crate::notes::RootNotesSectionOptions,
         clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
         dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
@@ -42,6 +43,7 @@ impl ScriptListApp {
         let key = crate::RootPassiveFrameKey {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
+            source_filters: source_filters.clone(),
             notes_options,
             clipboard_history_options,
             dictation_history_options,
@@ -56,7 +58,13 @@ impl ScriptListApp {
             }
         }
 
+        let allow_notes = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
+        let allow_clipboard =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory);
+        let allow_other_passive = !source_filters.active();
+
         let note_hits = if !advanced_query_active
+            && allow_notes
             && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
         {
             crate::notes::search_root_notes_meta_cached(search_text, notes_options)
@@ -65,6 +73,7 @@ impl ScriptListApp {
         };
 
         let clipboard_history_hits = if !advanced_query_active
+            && allow_clipboard
             && crate::clipboard_history::root_clipboard_history_query_is_eligible(
                 search_text,
                 clipboard_history_options,
@@ -78,6 +87,7 @@ impl ScriptListApp {
         };
 
         let dictation_history_hits = if !advanced_query_active
+            && allow_other_passive
             && crate::dictation::root_dictation_history_query_is_eligible(
                 search_text,
                 dictation_history_options,
@@ -91,6 +101,7 @@ impl ScriptListApp {
         };
 
         let acp_history_hits = if !advanced_query_active
+            && allow_other_passive
             && crate::ai::acp::history::root_acp_history_query_is_eligible(
                 search_text,
                 acp_history_options,
@@ -104,6 +115,7 @@ impl ScriptListApp {
         };
 
         let browser_tab_hits = if !advanced_query_active
+            && allow_other_passive
             && crate::browser_tabs::root_browser_tabs_query_is_eligible(
                 search_text,
                 browser_tabs_options.clone(),
@@ -118,6 +130,7 @@ impl ScriptListApp {
         let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
 
         let browser_history_hits = if !advanced_query_active
+            && allow_other_passive
             && crate::browser_history::root_browser_history_query_is_eligible(
                 search_text,
                 browser_history_options.clone(),
@@ -151,11 +164,13 @@ impl ScriptListApp {
         &mut self,
         search_text: &str,
         advanced_query_active: bool,
+        source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
         root_file_options: crate::file_search::RootFileSectionOptions,
     ) -> crate::RootFileFrame {
         let key = crate::RootFileFrameKey {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
+            source_filters,
             mode: self.root_file_search_mode,
             options: root_file_options,
         };
@@ -182,6 +197,13 @@ impl ScriptListApp {
     fn recompute_filtered_results(&self, filter_text: &str) -> Vec<scripts::SearchResult> {
         let search_text =
             crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, filter_text);
+        if self
+            .menu_syntax_mode
+            .advanced_query_for(filter_text)
+            .is_some_and(|query| query.has_source_filters())
+        {
+            return Vec::new();
+        }
         let search_start = std::time::Instant::now();
         let results = scripts::fuzzy_search_unified_all_with_skills(
             &self.scripts,
@@ -506,7 +528,13 @@ impl ScriptListApp {
                     .to_string();
             let search_text = search_text_owned.as_str();
             let advanced_query_owned = self.menu_syntax_mode.advanced_query_for(&raw_filter_text).cloned();
+            let source_filters = advanced_query_owned
+                .as_ref()
+                .map(|query| query.source_filters.clone())
+                .unwrap_or_default();
             let advanced_query = advanced_query_owned.as_ref();
+            let advanced_predicate_query = advanced_query.filter(|query| query.has_predicates());
+            let advanced_predicate_active = advanced_predicate_query.is_some();
             let unified_search = self.config.get_unified_search();
             let root_file_options = unified_search.root_file_section_options();
             let notes_options = unified_search.notes_section_options();
@@ -519,7 +547,8 @@ impl ScriptListApp {
             let root_passive_result_limits = unified_search.passive_result_limits();
             let root_passive_frame = self.root_passive_frame_for_current_query(
                 search_text,
-                advanced_query.is_some(),
+                advanced_predicate_active,
+                source_filters.clone(),
                 notes_options,
                 clipboard_history_options,
                 dictation_history_options,
@@ -527,14 +556,15 @@ impl ScriptListApp {
                 browser_tabs_options.clone(),
                 browser_history_options.clone(),
             );
-            let root_file_frame = matches!(
+            let root_file_frame = (matches!(
                 self.root_file_search_mode,
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery)
-            )
+            ) && source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))
             .then(|| {
                 self.root_file_frame_for_current_query(
                     search_text,
-                    advanced_query.is_some(),
+                    advanced_predicate_active,
+                    source_filters.clone(),
                     root_file_options,
                 )
             });
@@ -567,7 +597,8 @@ impl ScriptListApp {
                 menu_bar_bundle_id.as_deref(),
                 Some(&self.input_history),
                 self.script_validation_report.as_deref(),
-                advanced_query,
+                advanced_predicate_query,
+                &source_filters,
                 root_file_search_mode_for_grouping,
                 root_file_search_loading_for_grouping,
                 root_file_results_for_grouping,

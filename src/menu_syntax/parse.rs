@@ -2,7 +2,7 @@ use super::capture::{is_capture_target_registered, parse_capture_with_targets, C
 use super::payload::{
     AdvancedQuery, ArgvInvocation, CaptureInvocation, IncompleteKind, IncompleteSyntax,
 };
-use super::query::parse_advanced_query;
+use super::query::{parse_advanced_query, parse_source_filter_query};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuSyntaxParse {
@@ -63,6 +63,9 @@ pub fn parse_with_config_and_capture_targets(
                         .to_string(),
                 });
             }
+            if let Some(query) = parse_source_filter_query(input) {
+                return MenuSyntaxParse::AdvancedQuery(query);
+            }
             return MenuSyntaxParse::AdvancedQuery(parse_advanced_query(input));
         }
 
@@ -101,6 +104,10 @@ pub fn parse_with_config_and_capture_targets(
         {
             return finalize_capture(input, registered_capture_targets);
         }
+    }
+
+    if let Some(query) = parse_source_filter_query(input) {
+        return MenuSyntaxParse::AdvancedQuery(query);
     }
 
     MenuSyntaxParse::None
@@ -243,7 +250,9 @@ pub fn argv_enabled() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::menu_syntax::payload::{ArtifactKind, CaptureAlias, Predicate};
+    use crate::menu_syntax::payload::{
+        ArtifactKind, CaptureAlias, Predicate, RootUnifiedSourceFilter,
+    };
 
     const ARGV_OFF: MenuSyntaxParseConfig = MenuSyntaxParseConfig {
         argv_enabled: false,
@@ -283,8 +292,41 @@ mod tests {
             MenuSyntaxParse::AdvancedQuery(q) => {
                 assert_eq!(q.predicates, vec![Predicate::Type(ArtifactKind::Script)]);
                 assert_eq!(q.free_text, "git");
+                assert!(q.source_filters.is_empty());
             }
             other => panic!("expected AdvancedQuery, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn inline_source_filter_routes_to_query_mode() {
+        match parse("meeting :n") {
+            MenuSyntaxParse::AdvancedQuery(q) => {
+                assert_eq!(q.free_text, "meeting");
+                assert!(q.predicates.is_empty());
+                assert!(q.source_filters.allows(RootUnifiedSourceFilter::Notes));
+            }
+            other => panic!("expected source-filter query, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn source_filter_prefix_routes_to_query_mode() {
+        match parse(":f meeting") {
+            MenuSyntaxParse::AdvancedQuery(q) => {
+                assert_eq!(q.free_text, "meeting");
+                assert!(q.predicates.is_empty());
+                assert!(q.source_filters.allows(RootUnifiedSourceFilter::Files));
+            }
+            other => panic!("expected source-filter query, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn capture_keyword_still_owns_input_before_source_filters() {
+        match parse("note: meeting :f") {
+            MenuSyntaxParse::Capture(_) => {}
+            other => panic!("expected Capture, got {other:?}"),
         }
     }
 

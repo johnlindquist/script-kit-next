@@ -389,6 +389,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         input_history,
         validation,
         advanced_query,
+        &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
         root_file_search_mode,
         root_file_search_loading,
         root_file_results,
@@ -447,6 +448,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     input_history: Option<&crate::input_history::InputHistory>,
     validation: Option<&ValidationReport>,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    root_source_filters: &crate::menu_syntax::RootUnifiedSourceFilterSet,
     root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
     root_file_search_loading: bool,
     root_file_results: &[crate::file_search::FileResult],
@@ -467,47 +469,57 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_passive_source_order: &[crate::config::UnifiedSearchPassiveSource],
     root_passive_result_limits: crate::config::UnifiedSearchPassiveResultLimitsConfig,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
-    let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
-        scripts,
-        scriptlets,
-        builtins,
-        apps,
-        skills,
-        frecency_store,
-        filter_text,
-        suggested_config,
-        menu_bar_items,
-        menu_bar_bundle_id,
-        input_history,
-        validation,
-        advanced_query,
-    );
+    let (mut grouped, mut flat_results) = if root_source_filters.active() {
+        (Vec::new(), Vec::new())
+    } else {
+        get_grouped_results_with_validation_and_query(
+            scripts,
+            scriptlets,
+            builtins,
+            apps,
+            skills,
+            frecency_store,
+            filter_text,
+            suggested_config,
+            menu_bar_items,
+            menu_bar_bundle_id,
+            input_history,
+            validation,
+            advanced_query,
+        )
+    };
 
-    append_root_file_section(
-        &mut grouped,
-        &mut flat_results,
-        root_file_search_mode,
-        root_file_search_loading,
-        root_file_results,
-        root_recent_file_results,
-        filter_text,
-        frecency_store,
-        advanced_query,
-        root_file_options,
-    );
-    append_recent_root_file_section(
-        &mut grouped,
-        &mut flat_results,
-        root_recent_file_results,
-        filter_text,
-        advanced_query,
-        root_file_options,
-    );
+    if root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
+        append_root_file_section(
+            &mut grouped,
+            &mut flat_results,
+            root_file_search_mode,
+            root_file_search_loading,
+            root_file_results,
+            root_recent_file_results,
+            filter_text,
+            frecency_store,
+            advanced_query,
+            root_file_options,
+            root_source_filters.active(),
+        );
+        append_recent_root_file_section(
+            &mut grouped,
+            &mut flat_results,
+            root_recent_file_results,
+            filter_text,
+            advanced_query,
+            root_file_options,
+        );
+    }
     let mut passive_budget =
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
     for source in root_passive_source_order {
         match source {
             crate::config::UnifiedSearchPassiveSource::BrowserTabs => {
+                if root_source_filters.active() {
+                    continue;
+                }
                 append_root_browser_tabs_section(
                     &mut grouped,
                     &mut flat_results,
@@ -519,6 +531,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::Notes => {
+                if !root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {
+                    continue;
+                }
                 append_root_notes_section(
                     &mut grouped,
                     &mut flat_results,
@@ -530,6 +545,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::ClipboardHistory => {
+                if !root_source_filters
+                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)
+                {
+                    continue;
+                }
                 append_root_clipboard_history_section(
                     &mut grouped,
                     &mut flat_results,
@@ -541,6 +561,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::DictationHistory => {
+                if root_source_filters.active() {
+                    continue;
+                }
                 append_root_dictation_history_section(
                     &mut grouped,
                     &mut flat_results,
@@ -552,6 +575,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::AcpHistory => {
+                if root_source_filters.active() {
+                    continue;
+                }
                 append_root_acp_history_section(
                     &mut grouped,
                     &mut flat_results,
@@ -563,6 +589,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
+                if root_source_filters.active() {
+                    continue;
+                }
                 append_root_browser_history_section(
                     &mut grouped,
                     &mut flat_results,
@@ -968,6 +997,7 @@ fn append_root_file_section(
     frecency_store: &FrecencyStore,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     options: crate::file_search::RootFileSectionOptions,
+    suppress_handoff: bool,
 ) {
     if !options.files_enabled {
         return;
@@ -1013,7 +1043,11 @@ fn append_root_file_section(
             )
         }
     };
-    let handoff = root_file_search_handoff_result(filter_text, mode);
+    let handoff = if suppress_handoff {
+        None
+    } else {
+        root_file_search_handoff_result(filter_text, mode)
+    };
     if files.is_empty() && handoff.is_none() {
         return;
     }
