@@ -19,6 +19,7 @@ These facts describe the stable Notes host behavior and its ACP integration.
 - Notes-owned actions popups use the stable `notes` automation parent and Notes key-window focus checks. They must not treat main-window focus as a proxy or activate the main launcher when they close.
 - Notes opts its AppKit window out of app-level hide with `setCanHide: false`, and main-window hide paths must use main-panel-only `defer_hide_main_window` instead of `cx.hide()` so Notes cannot disappear with the launcher.
 - Notes auto-resize treats the restored window height as a valid lower bound even when it is taller than the default auto-resize ceiling, so note creation cannot panic on an inverted height clamp.
+- The Notes markdown editor disables the code-editor dynamic bottom scroll margin, so deleting trailing lines collapses the scroll extent instead of leaving a half-window of blank scrollable space.
 
 ## Key Files
 
@@ -63,6 +64,7 @@ These rules describe what makes the Notes host distinct from the launcher host.
 - `CommandBar::open_at_position` and `NotesApp::toggle_acp_actions` must pass `Some("notes")` as the actions-popup parent when the host window is Notes. `ActionsWindow` uses that parent kind to evaluate auto-close through `platform::is_notes_window_focused()` and to avoid `platform::activate_main_window()` on Notes-owned close paths.
 - `configure_notes_as_floating_panel` must call `setCanHide: false`, and launcher hide helpers must not call `cx.hide()` / `ctx.hide()` for main dismissal. `tests::test_notes_window_opts_out_of_app_hide` and `window_state::tests::test_main_hide_paths_never_app_hide` pin that Notes stays independent from app-level hide.
 - Cmd+N and Cmd+Shift+N are Notes-owned shortcuts. After creating a new note or clipboard-backed note they must stop propagation, and the following auto-resize pass must call `[[src/notes/window/init.rs#NotesApp#resolve_auto_resize_height]]` so a restored Notes height above `AUTO_RESIZE_MAX_HEIGHT` becomes the effective ceiling instead of triggering `f32::clamp(min > max)`.
+- `NotesApp::new` configures the markdown editor with `[[src/notes/window/init.rs#NotesApp#new]]` and disables gpui-component's dynamic code-editor bottom margin. The shared input default remains available for larger editors, but Notes should keep its scrollable document height tied to actual note content plus the small fixed cursor margin.
 
 ## ACP staging replacement
 

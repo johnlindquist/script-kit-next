@@ -55,6 +55,7 @@ impl NotesApp {
         let editor_state = cx.new(|cx| {
             InputState::new(window, cx)
                 .code_editor("markdown")
+                .code_editor_dynamic_bottom_margin(false)
                 .line_number(false)
                 .searchable(true)
                 .rows(20)
