@@ -26,6 +26,8 @@ Built-in renderers delegate native footer ownership through `main_window_footer_
 
 `AppView::native_footer_surface()` owns the footer surface id map. `ui_window.rs` asks that method before building `MainWindowFooterConfig`, so future route changes cannot fork footer ownership away from the view contract registry.
 
+Native footer buttons own their full visual item slots. The AppKit bridge checks footer item geometry before normal `hitTest:`, returns the contained `ScriptKitFooterButton`, and keeps passive left-info chrome transparent while background footer space still falls through for list scrolling.
+
 Kit Store browse and installed views own surface-specific footer semantics through the native main-window footer. Browse advertises Install and Back or Clear Search; Installed advertises Update and Remove. Row action chips remain row-local mouse affordances, while the fallback GPUI footer is only a hint strip routed through the native footer slot.
 
 Design Gallery owns a select-only native footer surface. Its fallback GPUI footer is a single `↵ Select` hint routed through `main_window_footer_slot`, and native Run is guarded so it cannot fall through to launcher execution.

@@ -442,6 +442,94 @@ mod tests {
         );
     }
 
+    /// Fails if native footer hit testing only returns the NSButton's own tiny
+    /// hit region. Clicks on the label/key text or empty slot area must resolve
+    /// to the sibling button so the whole visible footer item is clickable.
+    #[test]
+    fn test_native_footer_hit_test_resolves_whole_item_to_button() {
+        let content =
+            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
+
+        assert!(
+            content.contains("fn footer_item_button_at_point"),
+            "Native footer must resolve visible item slots by geometry, not only from super hitTest"
+        );
+        assert!(
+            content.contains("fn footer_button_in_subviews"),
+            "Footer hit testing must be able to find a button inside an item wrapper"
+        );
+        assert!(
+            content.contains("fn nearest_footer_item_button"),
+            "Footer hit testing must map text-field/wrapper hits to the sibling button"
+        );
+
+        let hit_test_pos = content
+            .find("extern \"C\" fn footer_hit_test")
+            .expect("footer_hit_test must exist");
+        let hit_test_section = &content[hit_test_pos..content.len().min(hit_test_pos + 2200)];
+        let geometry_pos = hit_test_section
+            .find("footer_item_button_at_point(this_id, point)")
+            .expect("footer_hit_test must call footer_item_button_at_point(this_id, point)");
+        let super_pos = hit_test_section
+            .find("super(this_id, class!(NSVisualEffectView)), hitTest: point")
+            .expect("footer_hit_test must retain the AppKit super fallback");
+        assert!(
+            geometry_pos < super_pos,
+            "Footer item geometry must be checked before super hitTest so front sibling overlays cannot steal item-slot clicks. Found:\n{}",
+            hit_test_section
+        );
+        assert!(
+            hit_test_section.contains("nearest_footer_button(hit)"),
+            "footer_hit_test must preserve direct button hits. Found:\n{}",
+            hit_test_section
+        );
+        assert!(
+            hit_test_section.contains("nearest_footer_item_button(hit)"),
+            "footer_hit_test must resolve footer item wrapper hits to the sibling button. Found:\n{}",
+            hit_test_section
+        );
+
+        let helper_pos = content
+            .find("fn footer_item_button_at_point")
+            .expect("footer_item_button_at_point must exist");
+        let helper_section = &content[helper_pos..content.len().min(helper_pos + 3000)];
+        assert!(
+            helper_section.contains("FOOTER_HINTS_ID")
+                && helper_section.contains("convertPoint")
+                && helper_section.contains("footer_button_in_subviews(item)"),
+            "Geometry helper must search the native hints view, convert points into item bounds, and return the contained button. Found:\n{}",
+            helper_section
+        );
+    }
+
+    /// Fails if passive native footer chrome can cover the hint strip and steal
+    /// AppKit hit tests before item-slot geometry sees the click.
+    #[test]
+    fn test_native_footer_left_info_view_is_passthrough() {
+        let content =
+            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
+
+        assert!(
+            content.contains("fn footer_passthrough_view_class")
+                && content.contains("footer_passthrough_hit_test"),
+            "Passive native footer overlays need a pass-through view class"
+        );
+
+        let ensure_pos = content
+            .find("unsafe fn ensure_main_footer_host")
+            .expect("ensure_main_footer_host must exist");
+        let ensure_section = &content[ensure_pos..content.len().min(ensure_pos + 5000)];
+        assert!(
+            ensure_section.contains("msg_send![footer_passthrough_view_class(), alloc]"),
+            "left_info_view must use a hit-test pass-through class so it cannot cover footer item slots. Found:\n{}",
+            ensure_section
+        );
+        assert!(
+            !ensure_section.contains("let left_info_view: id = msg_send![class!(NSView), alloc];"),
+            "left_info_view must not be a plain NSView because it can steal super hitTest over the hint strip"
+        );
+    }
+
     /// Fails if the full ScriptList footer clickable strip stops dispatching
     /// all three actions through the canonical ScriptListApp methods.
     /// Complements test_footer_uses_universal_hint_strip by verifying the

@@ -394,7 +394,7 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
     }
 
     // Left-info container (streaming dot + model label)
-    let left_info_view: id = msg_send![class!(NSView), alloc];
+    let left_info_view: id = msg_send![footer_passthrough_view_class(), alloc];
     let left_info_view: id = msg_send![
         left_info_view,
         initWithFrame: footer_left_info_frame(content_bounds.size.width)
@@ -953,14 +953,24 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
         if index > 0 {
             total_item_width += FOOTER_HINT_ITEM_GAP;
         }
-        items.push((item, target_width));
+        items.push((item, target_width, button_cfg.action, button_cfg.enabled));
     }
 
     let mut x = (hints_bounds.size.width - total_item_width).max(0.0);
-    for (item, target_width) in items {
+    for (item, target_width, action, enabled) in items {
         let frame = NSRect::new(
             NSPoint::new(x, 0.0),
             NSSize::new(target_width, hints_bounds.size.height),
+        );
+        tracing::debug!(
+            target: "script_kit::footer_popup",
+            event = "native_footer_item_layout",
+            action = footer_action_key(action),
+            x,
+            width = target_width,
+            height = hints_bounds.size.height,
+            enabled,
+            "Laid out native footer item slot"
         );
         let _: () = msg_send![item, setFrame: frame];
         let _: () = msg_send![hints_view, addSubview: item];
@@ -1359,6 +1369,39 @@ unsafe fn ns_color_from_hex_with_alpha(hex: u32, alpha: f64) -> id {
 }
 
 #[cfg(target_os = "macos")]
+fn footer_passthrough_view_class() -> *const objc::runtime::Class {
+    use std::sync::OnceLock;
+
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, sel, sel_impl};
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+
+    *CLASS.get_or_init(|| unsafe {
+        let superclass = class!(NSView);
+        let Some(mut decl) = ClassDecl::new("ScriptKitFooterPassthroughView", superclass) else {
+            return class!(NSView) as *const _ as usize;
+        };
+        decl.add_method(
+            sel!(hitTest:),
+            footer_passthrough_hit_test
+                as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
+        );
+        decl.register() as *const _ as usize
+    }) as *const objc::runtime::Class
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_passthrough_hit_test(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: cocoa::foundation::NSPoint,
+) -> id {
+    nil
+}
+
+#[cfg(target_os = "macos")]
 fn footer_button_class() -> *const objc::runtime::Class {
     use std::sync::OnceLock;
 
@@ -1680,6 +1723,132 @@ unsafe fn nearest_footer_button(mut view: id) -> id {
 }
 
 #[cfg(target_os = "macos")]
+/// Return a footer button contained by `view`, if `view` is one of the native
+/// footer item wrappers.
+///
+/// SAFETY: Caller must ensure `view` is a valid, live AppKit view pointer on
+/// the main thread.
+unsafe fn footer_button_in_subviews(view: id) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if view == nil {
+        return nil;
+    }
+
+    let subviews: id = msg_send![view, subviews];
+    if subviews == nil {
+        return nil;
+    }
+
+    let count: usize = msg_send![subviews, count];
+    for index in 0..count {
+        let child: id = msg_send![subviews, objectAtIndex: index];
+        if child == nil {
+            continue;
+        }
+
+        let is_button: cocoa::base::BOOL = msg_send![child, isKindOfClass: class!(NSButton)];
+        if is_button == YES {
+            return child;
+        }
+    }
+
+    nil
+}
+
+#[cfg(target_os = "macos")]
+/// Resolve text-field or empty-area hits inside a footer item wrapper to the
+/// sibling button that owns that whole visual slot.
+///
+/// SAFETY: Caller must ensure `view` is a valid, live AppKit view pointer on
+/// the main thread.
+unsafe fn nearest_footer_item_button(mut view: id) -> id {
+    use objc::{msg_send, sel, sel_impl};
+
+    while view != nil {
+        let button = footer_button_in_subviews(view);
+        if button != nil {
+            return button;
+        }
+
+        let superview: id = msg_send![view, superview];
+        if superview == nil || superview == view {
+            break;
+        }
+        view = superview;
+    }
+
+    nil
+}
+
+#[cfg(target_os = "macos")]
+fn ns_point_in_rect(point: cocoa::foundation::NSPoint, rect: cocoa::foundation::NSRect) -> bool {
+    point.x >= rect.origin.x
+        && point.y >= rect.origin.y
+        && point.x < rect.origin.x + rect.size.width
+        && point.y < rect.origin.y + rect.size.height
+}
+
+#[cfg(target_os = "macos")]
+/// Resolve a footer point to the button inside the visible hint item frame,
+/// before AppKit's normal hit test can return an unrelated overlay sibling.
+///
+/// SAFETY: Caller must ensure `footer_view` is a valid footer AppKit view
+/// pointer on the main thread.
+unsafe fn footer_item_button_at_point(
+    footer_view: id,
+    point_in_footer: cocoa::foundation::NSPoint,
+) -> id {
+    use objc::{msg_send, sel, sel_impl};
+
+    let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
+    if hints_view == nil {
+        return nil;
+    }
+
+    let point_in_hints: cocoa::foundation::NSPoint =
+        msg_send![hints_view, convertPoint: point_in_footer fromView: footer_view];
+    let hints_bounds: cocoa::foundation::NSRect = msg_send![hints_view, bounds];
+    if !ns_point_in_rect(point_in_hints, hints_bounds) {
+        return nil;
+    }
+
+    let items: id = msg_send![hints_view, subviews];
+    if items == nil {
+        return nil;
+    }
+
+    let count: usize = msg_send![items, count];
+    for index in (0..count).rev() {
+        let item: id = msg_send![items, objectAtIndex: index];
+        if item == nil {
+            continue;
+        }
+
+        let point_in_item: cocoa::foundation::NSPoint =
+            msg_send![item, convertPoint: point_in_hints fromView: hints_view];
+        let item_bounds: cocoa::foundation::NSRect = msg_send![item, bounds];
+        if !ns_point_in_rect(point_in_item, item_bounds) {
+            continue;
+        }
+
+        let button = footer_button_in_subviews(item);
+        if button != nil {
+            tracing::debug!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_hit_test_item_geometry",
+                x = point_in_footer.x,
+                y = point_in_footer.y,
+                "Resolved native footer hit by item geometry"
+            );
+            return button;
+        }
+    }
+
+    nil
+}
+
+#[cfg(target_os = "macos")]
 extern "C" fn footer_hit_test(
     this: &objc::runtime::Object,
     _: objc::runtime::Sel,
@@ -1694,10 +1863,19 @@ extern "C" fn footer_hit_test(
     // break list scrolling.
     unsafe {
         let this_id = this as *const _ as id;
+        let item_button = footer_item_button_at_point(this_id, point);
+        if item_button != nil {
+            return item_button;
+        }
+
         let hit: id = msg_send![super(this_id, class!(NSVisualEffectView)), hitTest: point];
         let button = nearest_footer_button(hit);
         if button != nil {
             return button;
+        }
+        let item_button = nearest_footer_item_button(hit);
+        if item_button != nil {
+            return item_button;
         }
         nil
     }

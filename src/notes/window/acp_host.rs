@@ -418,7 +418,7 @@ impl NotesApp {
         let parent_window_handle = window.window_handle();
         let bounds = window.bounds();
         let display_id = window.display(cx).map(|d| d.id());
-        let parent_automation_id = crate::windows::focused_automation_window_id();
+        let parent_automation_id = Some("notes".to_string());
 
         match actions::open_actions_window(
             cx,

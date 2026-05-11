@@ -478,3 +478,47 @@ pub fn is_main_window_focused() -> bool {
     // On non-macOS, assume focused to avoid auto-dismiss behavior.
     true
 }
+
+/// Check whether the Notes utility window is currently the key window.
+///
+/// Notes is intentionally independent from the main launcher, so shared popup
+/// lifecycle checks cannot use `is_main_window_focused()` as a proxy for
+/// Notes-owned focus.
+#[cfg(target_os = "macos")]
+pub fn is_notes_window_focused() -> bool {
+    if require_main_thread("is_notes_window_focused") {
+        return false;
+    }
+
+    unsafe {
+        let app: id = NSApp();
+        let windows: id = msg_send![app, windows];
+        let count: usize = msg_send![windows, count];
+
+        for i in 0..count {
+            let window: id = msg_send![windows, objectAtIndex: i];
+            let title: id = msg_send![window, title];
+            if title == nil {
+                continue;
+            }
+
+            let title_cstr: *const i8 = msg_send![title, UTF8String];
+            if title_cstr.is_null() {
+                continue;
+            }
+
+            let title_str = std::ffi::CStr::from_ptr(title_cstr).to_string_lossy();
+            if title_str.as_ref() == "Notes" {
+                let is_key: bool = msg_send![window, isKeyWindow];
+                return is_key;
+            }
+        }
+
+        false
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn is_notes_window_focused() -> bool {
+    true
+}
