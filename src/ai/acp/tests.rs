@@ -926,10 +926,23 @@ fn acp_embedded_cmd_k_uses_host_actions_callback() {
 
 #[test]
 fn acp_detached_cmd_k_keeps_detached_actions_path() {
+    let route_start = ACP_VIEW_SOURCE
+        .find("event = \"detached_actions_shortcut_pressed\"")
+        .expect("detached Cmd+K branch should emit route tracing");
+    let route_block = &ACP_VIEW_SOURCE[route_start..(route_start + 900).min(ACP_VIEW_SOURCE.len())];
     assert!(
         ACP_VIEW_SOURCE.contains("detached_local")
-            && ACP_VIEW_SOURCE.contains("toggle_detached_actions(cx);"),
-        "detached ACP Cmd+K must keep using the detached actions window path"
+            && ACP_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);"),
+        "detached ACP Cmd+K must keep using the detached actions window path through the installed detached host callback"
+    );
+    assert!(
+        route_block.contains("self.trigger_toggle_actions(window, cx);")
+            && !route_block.contains("toggle_detached_actions(cx);"),
+        "detached ACP Cmd+K must defer through trigger_toggle_actions instead of synchronously calling toggle_detached_actions while AcpChatView is updating"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("cx.background_executor().timer(Duration::from_millis(1)).await;"),
+        "ACP footer callbacks must hop a timer tick before updating the host window so protocol simulateGpuiEvent cannot re-enter the app update stack"
     );
 }
 

@@ -466,8 +466,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Limit results to runnable scripts."),
             detail: None,
             display_token: "type:script",
-            example: ":type:script git",
-            insert: ":type:script",
+            example: "type:script git",
+            insert: "type:script",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -476,8 +476,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Limit results to scriptlets."),
             detail: None,
             display_token: "type:scriptlet",
-            example: ":type:scriptlet shell",
-            insert: ":type:scriptlet",
+            example: "type:scriptlet shell",
+            insert: "type:scriptlet",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -486,8 +486,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Find agent skills without using / chat syntax."),
             detail: None,
             display_token: "type:skill",
-            example: ":type:skill review",
-            insert: ":type:skill",
+            example: "type:skill review",
+            insert: "type:skill",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -496,8 +496,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "type:builtin",
-            example: ":type:builtin clipboard",
-            insert: ":type:builtin",
+            example: "type:builtin clipboard",
+            insert: "type:builtin",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -506,8 +506,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "type:app",
-            example: ":type:app safari",
-            insert: ":type:app",
+            example: "type:app safari",
+            insert: "type:app",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -516,8 +516,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "type:window",
-            example: ":type:window chrome",
-            insert: ":type:window",
+            example: "type:window chrome",
+            insert: "type:window",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -526,8 +526,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "type:agent",
-            example: ":type:agent",
-            insert: ":type:agent",
+            example: "type:agent",
+            insert: "type:agent",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -536,8 +536,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "type:issue",
-            example: ":type:issue",
-            insert: ":type:issue",
+            example: "type:issue",
+            insert: "type:issue",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -546,8 +546,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "shortcut:any",
-            example: ":shortcut:any",
-            insert: ":shortcut:any",
+            example: "shortcut:any",
+            insert: "shortcut:any",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -556,8 +556,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "shortcut:none",
-            example: ":shortcut:none",
-            insert: ":shortcut:none",
+            example: "shortcut:none",
+            insert: "shortcut:none",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -566,8 +566,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "shortcut:cmd+k",
-            example: ":shortcut:cmd+k",
-            insert: ":shortcut:cmd+k",
+            example: "shortcut:cmd+k",
+            insert: "shortcut:cmd+k",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -576,8 +576,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Broad match against plugin or kit name."),
             detail: None,
             display_token: "source:",
-            example: ":source:main inbox",
-            insert: ":source:",
+            example: "source:main inbox",
+            insert: "source:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -586,8 +586,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Exact plugin pair match."),
             detail: None,
             display_token: "plugin:",
-            example: ":plugin:main.todo",
-            insert: ":plugin:",
+            example: "plugin:main.todo",
+            insert: "plugin:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -596,8 +596,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "name:",
-            example: ":name:deploy",
-            insert: ":name:",
+            example: "name:deploy",
+            insert: "name:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -606,8 +606,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "desc:",
-            example: ":desc:database",
-            insert: ":desc:",
+            example: "desc:database",
+            insert: "desc:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -616,18 +616,18 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "alias:",
-            example: ":alias:db",
-            insert: ":alias:",
+            example: "alias:db",
+            insert: "alias:",
             keep_open: true,
         },
         StaticQualifierRow {
             token: "#",
             title: "Filter by tag",
-            subtitle: Some("Use after : as :#work"),
+            subtitle: Some("Use #work or tag:work"),
             detail: Some("Tags label captures and can narrow launcher rows."),
             display_token: "#",
-            example: ":#work type:script",
-            insert: ":#",
+            example: "#work type:script",
+            insert: "#",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -636,8 +636,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Same filter as #tag"),
             detail: Some("Useful for long or namespaced tags."),
             display_token: "tag:",
-            example: ":tag:client/acme type:issue",
-            insert: ":tag:",
+            example: "tag:client/acme type:issue",
+            insert: "tag:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -646,8 +646,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "has:menuSyntax",
-            example: ":has:menuSyntax",
-            insert: ":has:menuSyntax",
+            example: "has:menuSyntax",
+            insert: "has:menuSyntax",
             keep_open: false,
         },
         StaticQualifierRow {
@@ -656,8 +656,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: None,
             detail: None,
             display_token: "has:",
-            example: ":has:shortcut",
-            insert: ":has:",
+            example: "has:shortcut",
+            insert: "has:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -666,8 +666,8 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("Read a nested metadata path."),
             detail: None,
             display_token: "meta.category:",
-            example: ":meta.category:inbox",
-            insert: ":meta.category:",
+            example: "meta.category:inbox",
+            insert: "meta.category:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -676,31 +676,49 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             subtitle: Some("A leading - negates a filter."),
             detail: None,
             display_token: "-type:app",
-            example: ":-type:app triage",
-            insert: ":-type:app",
+            example: "-type:app triage",
+            insert: "-type:app",
             keep_open: false,
         },
     ];
 
-    qualifiers
+    let mut rows: Vec<TriggerPickerRow> = crate::menu_syntax::SOURCE_HEAD_SPECS
         .iter()
-        .map(|row| TriggerPickerRow {
-            id: format!("qualifier:{}", row.token),
+        .map(|spec| TriggerPickerRow {
+            id: format!("source:{}", spec.canonical),
             mode: TriggerPickerMode::AdvancedQuery,
             kind: TriggerPickerRowKind::Qualifier,
-            title: row.title.to_string(),
-            token: Some(row.display_token.to_string()),
-            subtitle: row.subtitle.map(str::to_string),
-            detail: row.detail.map(str::to_string),
-            example: Some(row.example.to_string()),
+            title: spec.label.to_string(),
+            token: Some(spec.canonical.to_string()),
+            subtitle: Some(spec.description.to_string()),
+            detail: spec.short.map(|short| format!("Shortcut: {short}")),
+            example: Some(format!("{} project", spec.canonical)),
             badges: Vec::new(),
             action: TriggerPickerAction::InsertToken {
-                token: row.insert.to_string(),
-                keep_open: row.keep_open,
+                token: spec.canonical.to_string(),
+                keep_open: false,
             },
             enabled: true,
         })
-        .collect()
+        .collect();
+
+    rows.extend(qualifiers.iter().map(|row| TriggerPickerRow {
+        id: format!("qualifier:{}", row.token),
+        mode: TriggerPickerMode::AdvancedQuery,
+        kind: TriggerPickerRowKind::Qualifier,
+        title: row.title.to_string(),
+        token: Some(row.display_token.to_string()),
+        subtitle: row.subtitle.map(str::to_string),
+        detail: row.detail.map(str::to_string),
+        example: Some(row.example.to_string()),
+        badges: Vec::new(),
+        action: TriggerPickerAction::InsertToken {
+            token: row.insert.to_string(),
+            keep_open: row.keep_open,
+        },
+        enabled: true,
+    }));
+    rows
 }
 
 fn typo_fix_rows(input: &str) -> Vec<TriggerPickerRow> {

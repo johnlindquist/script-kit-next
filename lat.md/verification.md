@@ -88,9 +88,9 @@ Checks must prove that the budget applies only to root-passive rows, is applied 
 
 ## Root Unified Search Source Filters
 
-Source-filter tokens are verified by parser tests, source audits, and state-first runtime receipts.
+Declarative source filters are verified by parser tests, source audits, and state-first runtime receipts.
 
-Checks must prove that standalone `:f`, `:n`, and `:c` aliases work anywhere in ScriptList input; quoted/unknown colon tokens stay literal; capture keyword aliases keep ownership; grouped rows suppress primary/fallback and disallowed sources while active; root file/passive frame keys include the source-filter set; preflight receipts expose stripped search text plus source filters; and source-filter-only queries do not render the menu-syntax power popup or hint while `;` still does. Use `cargo test --test source_audits root_unified_source_filters_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, and `bun scripts/agentic/root-source-filter-stability.ts`.
+Checks must prove that standalone trailing-colon heads such as `files:`/`f:`, `notes:`/`n:`, `clipboard:`/`c:`, `tabs:`/`t:`, `history:`/`h:`, `commands:`/`cmd:`, `conversations:`/`ai:`, `dictation:`/`d:`, and `windows:`/`w:` parse anywhere in ScriptList input; `processes:`/`p:` stays uncommitted until root process rows exist; leading `:` remains the discovery trigger and is not committed source syntax; quoted/unknown filter-looking tokens stay literal; capture keyword aliases keep ownership; grouped rows suppress primary/fallback and disallowed sources while active; positive source heads explicitly enable their source for the active stripped query even when that source is disabled for ordinary passive search; explicit local/passive source heads use direct source lookup so first-use filtered searches produce rows instead of warming a future cache frame; root file/passive frame keys include the source-filter set; preflight receipts expose stripped search text, source filters, and filter indicators; and source-filter-only queries do not render the menu-syntax hint while `;` still opens capture discovery. Use `cargo test --test menu_syntax_source_filters -- --nocapture`, `cargo test --test source_audits root_unified_source_filters_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, `lat check`, `bun scripts/agentic/root-source-filter-stability.ts`, `bun scripts/agentic/root-source-filter-clipboard.ts`, and `bun scripts/agentic/root-source-filter-matrix.ts`.
 
 ## Root Unified Search ACP History
 
@@ -104,7 +104,7 @@ Use `cargo test --test source_audits root_unified_acp_history_contract -- --noca
 
 Clipboard root rows are verified with metadata search, passive grouping, stable-key, config, and execution source audits.
 
-Checks must prove that root clipboard search is bounded to metadata, disabled by default, excluded from empty root, inserted without splitting Files or fallbacks, keyed by `clipboard-history/{id}`, and executed through the existing clipboard paste helper.
+Checks must prove that root clipboard search is bounded to metadata, disabled by default for ordinary passive search, explicitly enabled by `clipboard:`/`c:` for the active stripped query, excluded from empty root, inserted without splitting Files or fallbacks, keyed by `clipboard-history/{id}`, and executed through the existing clipboard paste helper.
 
 Use `cargo test --test source_audits root_unified_clipboard_history_contract -- --nocapture` with the existing root file and ACP history source audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 

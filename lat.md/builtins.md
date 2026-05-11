@@ -123,7 +123,7 @@ Root Files and empty-root Recent Files render after primary launcher rows such a
 
 Global root file rows are frozen in a per-query frame. Provider completion may update provider loading receipts and warm the bounded cache, but it must not mutate active file rows, recent rows, visible loading, grouped caches, preflight, selection, or notifications for the same filter text. Warmed rows become eligible only when a new frame is built after the query changes or the frame is intentionally reset, so cold searches can show only a loading header while a later same query can show file rows immediately from cache. Explicit directory browse remains the only root file mode that may publish a final direct-child replacement into the active frame.
 
-Source-filter tokens can make Files the only participating root source. When `:f`, `:file`, or `:files` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame. These inline filters are transparent refinements, not power-user UI mode switches, so `png :f` renders File rows without the menu-syntax popup or hint.
+Source-filter heads can make Files the only participating root source. When `files:` or `f:` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame. These filters are transparent refinements, not power-user UI mode switches, so `png files:` renders File rows without the menu-syntax hint; a bare leading `:` is reserved for filter discovery and insertion.
 
 ## Root Unified Search ACP History
 
@@ -143,7 +143,9 @@ Eligible non-empty root queries append a Notes section through the configured pa
 
 Selecting a root Note row opens or focuses the floating Notes window through `[[src/notes/window/window_ops.rs#open_note_in_notes_window]]`, then selects the note in the editor. Root search must not call the toggle-style `[[src/notes/window/window_ops.rs#open_notes_window]]` helper, because that helper closes an already-open Notes window.
 
-Standalone source-filter tokens `:n`, `:note`, and `:notes` make Notes the only passive source allowed to append rows for the stripped query. The passive frame key includes the source-filter set, preventing cached Notes rows from bleeding into Files, Clipboard History, or unfiltered frames with the same search words.
+Standalone source-filter heads `notes:` and `n:` make Notes the only passive source allowed to append rows for the stripped query. The passive frame key includes the source-filter set, preventing cached Notes rows from bleeding into Files, Clipboard History, or unfiltered frames with the same search words.
+
+Explicit positive source heads opt into their source for the active query. Disabled passive defaults still stay hidden during ordinary search, but typing a matching head such as `n:` or `clipboard:` means the user intentionally selected that source.
 
 ## Root Unified Search Browser Tabs
 
@@ -173,6 +175,8 @@ Passive source order is user-configurable while primary rows, root file rows, an
 
 `config.ts` exposes `unifiedSearch.passiveSourceOrder` with values for `browserTabs`, `notes`, `clipboardHistory`, `dictationHistory`, `acpHistory`, and `browserHistory`. The runtime deduplicates configured entries, appends missing defaults, and only reorders passive local sections. It does not enable disabled sources, skip enabled sources, or let passive rows move ahead of primary launcher rows or root Files.
 
+Source filters are the exception to passive defaults: an explicit positive source head enables that source for the current stripped query, then suppresses unselected primary, fallback, root-file, and passive rows. This keeps `c: text`, `clipboard: text`, `ai: text`, and similar filters predictable even when the source is disabled for unfiltered passive search.
+
 ## Root Unified Search Passive Result Limits
 
 Passive result limits keep enabled local sources useful without letting them dominate command intent.
@@ -187,7 +191,9 @@ Root Clipboard History scans bounded recent clipboard metadata only, never raw c
 
 `config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
 
-Standalone `:c`, `:clip`, `:clips`, `:clipboard`, `:clipboard-history`, and `:clipboard_history` tokens make Clipboard History the only passive source allowed for the stripped query. Primary, fallback, Files, Notes, and other passive rows are suppressed unless their own source token is also present.
+Standalone source-filter heads `clipboard:` and `c:` make Clipboard History the only passive source allowed for the stripped query. Primary, fallback, Files, Notes, and other passive rows are suppressed unless their own source head is also present.
+
+Because `clipboard:` and `c:` are explicit source selection, they opt Clipboard History into the current query even though unfiltered passive Clipboard History remains disabled by default. The query still uses bounded metadata and minimum-query rules, but explicit source selection performs the direct local lookup instead of waiting for a cold passive cache to warm.
 
 ## Root Unified Search Dictation History
 

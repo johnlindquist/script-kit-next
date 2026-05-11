@@ -100,9 +100,11 @@ pub use main_hint::{
 pub use mode::{
     free_text_for_search, input_spans_for_input_with_targets, prefix_span_for_input, MenuSyntaxMode,
 };
+#[allow(unused_imports)]
 pub use payload::{
-    AdvancedQuery, ArgvInvocation, CaptureInvocation, MenuSyntaxHandlerSpec,
-    RootUnifiedSourceFilter, RootUnifiedSourceFilterSet,
+    source_for_head, AdvancedQuery, ArgvInvocation, CaptureInvocation, FilterIndicator,
+    FilterIndicatorTone, MenuSyntaxHandlerSpec, RootUnifiedSourceFilter,
+    RootUnifiedSourceFilterSet, SourceHeadSpec, SOURCE_HEAD_SPECS,
 };
 pub use quote::quote_for_filter_value;
 #[allow(unused_imports)]

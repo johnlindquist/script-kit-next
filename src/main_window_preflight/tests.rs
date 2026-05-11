@@ -1,13 +1,40 @@
 use crate::main_window_preflight::types::{
     MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightReceipt,
+    MainWindowPreflightResultRole,
 };
+
+fn receipt_with_action(
+    filter_text: &str,
+    selected_index: usize,
+    enter_action: MainWindowPreflightAction,
+    tab_action: Option<MainWindowPreflightAction>,
+    warnings: Vec<String>,
+) -> MainWindowPreflightReceipt {
+    MainWindowPreflightReceipt {
+        filter_text: filter_text.to_string(),
+        computed_search_text: filter_text.to_string(),
+        source_filters: Vec::new(),
+        filter_indicators: Vec::new(),
+        selected_index,
+        selected_result_key: None,
+        selected_result_role: MainWindowPreflightResultRole::Primary,
+        visible_results: Vec::new(),
+        visible_result_key_fingerprint: String::new(),
+        visible_row_fingerprint: String::new(),
+        visible_result_count: 0,
+        root_passive_frame: None,
+        enter_action,
+        tab_action,
+        warnings,
+    }
+}
 
 #[test]
 fn receipt_serializes_with_camel_case_keys() {
-    let receipt = MainWindowPreflightReceipt {
-        filter_text: "resize images".to_string(),
-        selected_index: 2,
-        enter_action: MainWindowPreflightAction {
+    let receipt = receipt_with_action(
+        "resize images",
+        2,
+        MainWindowPreflightAction {
             kind: MainWindowPreflightActionKind::RunScript,
             label: "Run Script".to_string(),
             subject: "Resize Images".to_string(),
@@ -15,9 +42,9 @@ fn receipt_serializes_with_camel_case_keys() {
             source_name: Some("kit".to_string()),
             description: Some("Batch resize images".to_string()),
         },
-        tab_action: None,
-        warnings: vec![],
-    };
+        None,
+        vec![],
+    );
 
     let value = serde_json::to_value(&receipt).expect("receipt should serialize");
     assert!(
@@ -68,10 +95,10 @@ fn all_action_kinds_round_trip_to_camel_case() {
 
 #[test]
 fn receipt_with_tab_action_serializes_correctly() {
-    let receipt = MainWindowPreflightReceipt {
-        filter_text: "hello".to_string(),
-        selected_index: 0,
-        enter_action: MainWindowPreflightAction {
+    let receipt = receipt_with_action(
+        "hello",
+        0,
+        MainWindowPreflightAction {
             kind: MainWindowPreflightActionKind::RunScript,
             label: "Run Script".to_string(),
             subject: "Hello World".to_string(),
@@ -79,7 +106,7 @@ fn receipt_with_tab_action_serializes_correctly() {
             source_name: None,
             description: None,
         },
-        tab_action: Some(MainWindowPreflightAction {
+        Some(MainWindowPreflightAction {
             kind: MainWindowPreflightActionKind::AskAi,
             label: "Ask AI".to_string(),
             subject: "hello".to_string(),
@@ -87,8 +114,8 @@ fn receipt_with_tab_action_serializes_correctly() {
             source_name: None,
             description: Some("Opens the AI window".to_string()),
         }),
-        warnings: vec![],
-    };
+        vec![],
+    );
 
     let value = serde_json::to_value(&receipt).expect("should serialize");
     let tab = value.get("tabAction").expect("tabAction should be present");
@@ -106,10 +133,10 @@ fn receipt_with_tab_action_serializes_correctly() {
 
 #[test]
 fn receipt_with_warnings_serializes_correctly() {
-    let receipt = MainWindowPreflightReceipt {
-        filter_text: String::new(),
-        selected_index: 0,
-        enter_action: MainWindowPreflightAction {
+    let receipt = receipt_with_action(
+        "",
+        0,
+        MainWindowPreflightAction {
             kind: MainWindowPreflightActionKind::RunAgent,
             label: "Run Agent".to_string(),
             subject: "Test Agent".to_string(),
@@ -117,12 +144,12 @@ fn receipt_with_warnings_serializes_correctly() {
             source_name: None,
             description: None,
         },
-        tab_action: None,
-        warnings: vec![
+        None,
+        vec![
             "Agent execution is not fully implemented.".to_string(),
             "Tab-to-AI is inactive.".to_string(),
         ],
-    };
+    );
 
     let value = serde_json::to_value(&receipt).expect("should serialize");
     let warnings = value

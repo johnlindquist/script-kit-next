@@ -84,6 +84,7 @@ pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
     pub computed_search_text: String,
     pub source_filters: Vec<String>,
+    pub filter_indicators: Vec<crate::menu_syntax::FilterIndicator>,
     pub selected_index: usize,
     pub selected_result_key: Option<String>,
     pub selected_result_role: MainWindowPreflightResultRole,

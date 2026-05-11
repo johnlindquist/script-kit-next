@@ -55,33 +55,55 @@ fn embedded_acp_escape_routes_to_lifecycle_close_without_hiding_main() {
 
 #[test]
 fn embedded_acp_cmd_w_closes_lifecycle_before_hiding_main() {
-    for (name, source) in [
-        ("startup.rs", STARTUP_SOURCE),
-        ("startup_new_actions.rs", STARTUP_NEW_ACTIONS_SOURCE),
-    ] {
-        let section = section_between(
-            source,
-            "// Handle Cmd+W for AcpChatView",
-            "let acp_escape_popup_open",
-        );
-        assert!(
-            section.contains("AppView::AcpChatView")
-                && section.contains("embedded_acp_cmd_w_close_window"),
-            "{name} must identify embedded ACP Cmd+W distinctly"
-        );
-        assert_ordered(
-            section,
-            "close_tab_ai_harness_terminal_with_window(window, cx)",
-            "close_and_reset_window(cx)",
-        );
-    }
+    let startup_intent = section_between(
+        STARTUP_SOURCE,
+        "fn main_window_actions_key_intent",
+        "fn handle_main_window_global_key_intent",
+    );
+    assert!(
+        startup_intent.contains("CloseEmbeddedAcpWindow")
+            && startup_intent.contains("AppView::AcpChatView"),
+        "startup.rs must classify Cmd+W on embedded ACP as a named key intent"
+    );
+
+    let startup_handler = section_between(
+        STARTUP_SOURCE,
+        "fn handle_main_window_actions_key_intent",
+        "pub(crate) fn new(",
+    );
+    assert!(
+        startup_handler.contains("MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow")
+            && startup_handler.contains("embedded_acp_cmd_w_close_window"),
+        "startup.rs must handle embedded ACP Cmd+W through the named actions-key intent"
+    );
+    assert_ordered(
+        startup_handler,
+        "close_tab_ai_harness_terminal_with_window(window, cx)",
+        "close_and_reset_window(cx)",
+    );
+
+    let startup_new_actions_section = section_between(
+        STARTUP_NEW_ACTIONS_SOURCE,
+        "// Handle Cmd+W for AcpChatView",
+        "let acp_escape_cancelled_streaming",
+    );
+    assert!(
+        startup_new_actions_section.contains("AppView::AcpChatView")
+            && startup_new_actions_section.contains("embedded_acp_cmd_w_close_window"),
+        "startup_new_actions.rs must identify embedded ACP Cmd+W distinctly"
+    );
+    assert_ordered(
+        startup_new_actions_section,
+        "close_tab_ai_harness_terminal_with_window(window, cx)",
+        "close_and_reset_window(cx)",
+    );
 }
 
 #[test]
 fn focused_acp_view_handles_escape_and_cmd_w_without_root_bubbling() {
     let escape_section = section_between(
         ACP_VIEW_SOURCE,
-        "Escape with no open dialogs: close via the host callback",
+        "Escape with no open dialogs cancels an active turn first",
         "Enter submits.",
     );
     assert!(

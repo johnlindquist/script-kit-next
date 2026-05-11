@@ -171,7 +171,7 @@ pub fn capture_body_boundary_has_started_with_targets(
 /// Byte span of the "prefix chrome" that should get accent styling in the input
 /// field, for discoverability. `None` means no highlight.
 ///
-/// - `:type:script git` → `0..12` (`:type:script`)
+/// - `type:script git` → `0..11` (`type:script`)
 /// - `+todo Renew passport` → `0..5` (`+todo`)
 /// - `todo: Renew passport` → `0..5` (`todo:`)
 /// - `+` → `0..1`

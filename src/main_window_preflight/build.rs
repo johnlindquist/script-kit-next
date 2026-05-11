@@ -152,13 +152,7 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
 
     Some(RootPassiveFrameReceipt {
         query: frame.key.query.clone(),
-        source_filters: frame
-            .key
-            .source_filters
-            .labels()
-            .into_iter()
-            .map(ToString::to_string)
-            .collect(),
+        source_filters: frame.key.source_filters.labels(),
         notes: RootPassiveSourceReceipt {
             enabled: frame.key.notes_options.enabled,
             frame_count: frame.note_hits.len(),
@@ -240,15 +234,18 @@ pub(crate) fn build_main_window_preflight_receipt(
         .menu_syntax_mode
         .advanced_query_for(&app.filter_text)
         .map(|query| query.source_filters.labels())
-        .unwrap_or_default()
-        .into_iter()
-        .map(ToString::to_string)
-        .collect();
+        .unwrap_or_default();
+    let filter_indicators = app
+        .menu_syntax_mode
+        .advanced_query_for(&app.filter_text)
+        .map(|query| query.filter_indicators())
+        .unwrap_or_default();
 
     Some(MainWindowPreflightReceipt {
         filter_text: app.filter_text.clone(),
         computed_search_text,
         source_filters,
+        filter_indicators,
         selected_index: app.selected_index,
         selected_result_key: result.stable_selection_key(),
         selected_result_role,

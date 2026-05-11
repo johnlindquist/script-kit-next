@@ -391,6 +391,33 @@ impl SearchResult {
     pub fn is_suppressed_agent(&self) -> bool {
         matches!(self, SearchResult::Agent(_))
     }
+
+    /// Return the declarative root-search source represented by this row.
+    ///
+    /// `type:` continues to filter by row kind; this source mapping powers
+    /// valueless source heads such as `apps:`, `scripts:`, and `files:`.
+    pub fn root_unified_source(&self) -> Option<crate::menu_syntax::RootUnifiedSourceFilter> {
+        use crate::menu_syntax::RootUnifiedSourceFilter;
+
+        match self {
+            SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+                Some(RootUnifiedSourceFilter::Scripts)
+            }
+            SearchResult::BuiltIn(_) | SearchResult::Skill(_) | SearchResult::ScriptIssue(_) => {
+                Some(RootUnifiedSourceFilter::Commands)
+            }
+            SearchResult::App(_) => Some(RootUnifiedSourceFilter::Apps),
+            SearchResult::Window(_) => Some(RootUnifiedSourceFilter::Windows),
+            SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
+            SearchResult::Note(_) => Some(RootUnifiedSourceFilter::Notes),
+            SearchResult::AcpHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
+            SearchResult::ClipboardHistory(_) => Some(RootUnifiedSourceFilter::ClipboardHistory),
+            SearchResult::DictationHistory(_) => Some(RootUnifiedSourceFilter::Dictation),
+            SearchResult::BrowserTab(_) => Some(RootUnifiedSourceFilter::BrowserTabs),
+            SearchResult::BrowserHistory(_) => Some(RootUnifiedSourceFilter::BrowserHistory),
+            SearchResult::Agent(_) | SearchResult::Fallback(_) => None,
+        }
+    }
 }
 
 impl SearchResult {

@@ -150,6 +150,7 @@ impl ScriptListApp {
         self.root_file_results = results;
         self.root_file_search_loading = loading;
         self.root_file_provider_loading = loading;
+        self.root_file_frame = None;
         if clear_cancel {
             self.root_file_search_cancel = None;
         }
@@ -240,7 +241,13 @@ impl ScriptListApp {
             .advanced_query_for(query)
             .map(|advanced_query| advanced_query.source_filters.clone())
             .unwrap_or_default();
-        let root_file_options = self.config.get_unified_search().root_file_section_options();
+        let mut root_file_options = self.config.get_unified_search().root_file_section_options();
+        if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
+            root_file_options.files_enabled = true;
+            root_file_options.global_search_enabled = true;
+            root_file_options.directory_browse_enabled = true;
+            root_file_options.recent_files_enabled = true;
+        }
         if !root_file_options.files_enabled
             || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)
         {
@@ -364,8 +371,9 @@ impl ScriptListApp {
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_file_search_cancel = Some(cancel.clone());
-        let publish_active_results =
-            matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
+        let publish_active_results = source_filters.includes(
+            crate::menu_syntax::RootUnifiedSourceFilter::Files,
+        ) || matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
         let request_cache_key = request.cache_key();
 
         cx.spawn(async move |this, cx| {

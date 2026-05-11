@@ -125,17 +125,61 @@ fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
     // The SimulateKey escape handler in ScriptList must check opened_from_main_menu
     // and delegate to go_back_or_close. Without this, ESC from mini main window
     // via stdin protocol would hide the window instead of restoring full mode.
-    let source = read("src/main_entry/app_run_setup.rs");
+    for path in [
+        "src/main_entry/app_run_setup.rs",
+        "src/main_entry/runtime_stdin_match_simulate_key.rs",
+    ] {
+        let source = read(path);
+        let escape_start = source
+            .find("SimulateKey: Escape - clear filter, go back, or hide")
+            .unwrap_or_else(|| panic!("SimulateKey escape handler must exist in {path}"));
+        let escape_body = &source[escape_start..source.len().min(escape_start + 800)];
+        assert!(
+            escape_body.contains("view.opened_from_main_menu"),
+            "{path} SimulateKey escape must check opened_from_main_menu before hiding"
+        );
+        assert!(
+            escape_body.contains("view.go_back_or_close(window, ctx)"),
+            "{path} SimulateKey escape must delegate to go_back_or_close when opened_from_main_menu"
+        );
+    }
+}
+
+#[test]
+fn physical_script_list_escape_delegates_to_go_back_when_opened_from_main_menu() {
+    // Physical ScriptList Escape must keep the same launcher-origin layer as
+    // simulateKey: popup first, filter clear second, opened-from-menu back
+    // third, and only then window close.
+    let source = read("src/render_script_list/mod.rs");
     let escape_start = source
-        .find("SimulateKey: Escape - clear filter, go back, or hide")
-        .expect("SimulateKey escape handler must exist in app_run_setup.rs");
-    let escape_body = &source[escape_start..source.len().min(escape_start + 800)];
+        .find("Escape order on ScriptList:")
+        .expect("ScriptList physical Escape branch should document its order");
+    let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
+
+    for marker in [
+        "is_menu_syntax_trigger_popup_window_open",
+        "!this.filter_text.is_empty()",
+        "this.opened_from_main_menu",
+        "this.close_and_reset_window(cx)",
+    ] {
+        assert!(
+            escape_body.contains(marker),
+            "ScriptList physical Escape branch missing `{marker}`"
+        );
+    }
+
+    let popup_ix = escape_body
+        .find("is_menu_syntax_trigger_popup_window_open")
+        .unwrap();
+    let filter_ix = escape_body.find("!this.filter_text.is_empty()").unwrap();
+    let origin_ix = escape_body.find("this.opened_from_main_menu").unwrap();
+    let close_ix = escape_body.find("this.close_and_reset_window(cx)").unwrap();
     assert!(
-        escape_body.contains("view.opened_from_main_menu"),
-        "SimulateKey escape must check opened_from_main_menu before hiding"
+        popup_ix < filter_ix && filter_ix < origin_ix && origin_ix < close_ix,
+        "ScriptList physical Escape order must be popup -> filter -> launch origin -> close. Body was:\n{escape_body}"
     );
     assert!(
-        escape_body.contains("view.go_back_or_close(window, ctx)"),
-        "SimulateKey escape must delegate to go_back_or_close when opened_from_main_menu"
+        escape_body.contains("this.go_back_or_close(window, cx)"),
+        "ScriptList physical Escape must delegate opened-from-menu handling to go_back_or_close"
     );
 }

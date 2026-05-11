@@ -146,6 +146,7 @@ function comparable(state: Json, label: string): Json {
     inputValue: state.inputValue,
     computedSearchText: preflight.computedSearchText,
     sourceFilters: preflight.sourceFilters,
+    filterIndicators: preflight.filterIndicators,
     selectedResultKey: preflight.selectedResultKey ?? null,
     selectedResultRole: preflight.selectedResultRole,
     visibleResultKeyFingerprint: preflight.visibleResultKeyFingerprint,
@@ -162,6 +163,13 @@ function assertFilesOnly(frame: Json, input: string) {
   }
   if (JSON.stringify(frame.sourceFilters) !== JSON.stringify(["files"])) {
     throw new Error(`${input}: expected sourceFilters [files], got ${JSON.stringify(frame.sourceFilters)}`);
+  }
+  const indicators = frame.filterIndicators ?? [];
+  const hasFilesIndicator = indicators.some((indicator: Json) => {
+    return indicator.id === "files" && indicator.head === "files" && indicator.negated === false;
+  });
+  if (!hasFilesIndicator) {
+    throw new Error(`${input}: expected files filter indicator, got ${JSON.stringify(indicators)}`);
   }
   if (frame.rootFileSearch?.query !== query) {
     throw new Error(`${input}: provider query was not stripped: ${JSON.stringify(frame.rootFileSearch)}`);
@@ -181,6 +189,13 @@ function assertLiveFilesOnly(frame: Json, input: string, expectedSearchText: str
   }
   if (JSON.stringify(frame.sourceFilters) !== JSON.stringify(["files"])) {
     throw new Error(`${input}: expected sourceFilters [files], got ${JSON.stringify(frame.sourceFilters)}`);
+  }
+  const indicators = frame.filterIndicators ?? [];
+  const hasFilesIndicator = indicators.some((indicator: Json) => {
+    return indicator.id === "files" && indicator.head === "files" && indicator.negated === false;
+  });
+  if (!hasFilesIndicator) {
+    throw new Error(`${input}: expected files filter indicator, got ${JSON.stringify(indicators)}`);
   }
   if (frame.rootFileSearch?.query !== expectedSearchText) {
     throw new Error(`${input}: provider query was not stripped: ${JSON.stringify(frame.rootFileSearch)}`);
@@ -260,7 +275,7 @@ async function runCase(input: string): Promise<Json> {
 }
 
 async function runLivePngCase(): Promise<Json> {
-  const input = "png :f";
+  const input = "png files:";
   const expectedSearchText = "png";
   send({
     type: "setFilter",
@@ -378,7 +393,7 @@ async function main() {
   const warmed = await warmProvider();
 
   const cases = [];
-  for (const input of [`:f ${query}`, `${query} :f`, `${query} :files`]) {
+  for (const input of [`f: ${query}`, `${query} f:`, `${query} files:`]) {
     cases.push(await runCase(input));
   }
   const livePngCase = await runLivePngCase();

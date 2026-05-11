@@ -456,6 +456,7 @@ fn render_menu_syntax_main_hint(
 
 fn render_script_list_empty_state(
     filter_text_for_render: &str,
+    has_active_filter: bool,
     empty_text_color: u32,
     empty_font_family: String,
 ) -> AnyElement {
@@ -508,15 +509,19 @@ fn render_script_list_empty_state(
                 .chars()
                 .skip(1)
                 .all(|ch| !ch.is_whitespace());
-        let recovery_hint = if plain_hash_search {
+        let recovery_hint = if has_active_filter {
+            "There are no search results with this filter applied."
+        } else if plain_hash_search {
             "Plain #tag is launcher search. Use :#tag to filter tags, or ;todo ... #tag to label a capture."
         } else {
             "Try a different search term or press ⌘↵ to ask AI"
         };
-        let syntax_tips = if plain_hash_search {
+        let syntax_tips = if has_active_filter {
+            "Edit or remove a filter chip to widen the search."
+        } else if plain_hash_search {
             "Examples: :#work · :tag:work · ;todo Buy milk #errands"
         } else {
-            "Filters: :type:script · :type:scriptlet · :shortcut:cmd+k · ;todo · ;note"
+            "Filters: type:script · type:scriptlet · shortcut:cmd+k · ;todo · ;note"
         };
         div()
             .w_full()
@@ -734,8 +739,13 @@ impl ScriptListApp {
                     &self.theme,
                 )
             } else {
+                let has_active_filter = self
+                    .menu_syntax_mode
+                    .advanced_query_for(&filter_text_for_render)
+                    .is_some_and(|query| query.has_source_filters() || query.has_predicates());
                 render_script_list_empty_state(
                     &filter_text_for_render,
+                    has_active_filter,
                     empty_text_color,
                     empty_font_family,
                 )
@@ -1328,7 +1338,8 @@ impl ScriptListApp {
                         //      then falls through to the normal clear-filter
                         //      branch below.
                         //   2. filter non-empty → clear filter.
-                        //   3. filter empty → hide main window.
+                        //   3. launcher-origin surface → go back to the main launcher.
+                        //   4. filter empty → hide main window.
                         if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
                             if this.apply_menu_syntax_trigger_popup_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
@@ -1341,6 +1352,8 @@ impl ScriptListApp {
                         // Clear filter first if there's text, otherwise close window
                         if !this.filter_text.is_empty() {
                             this.clear_filter(window, cx);
+                        } else if this.opened_from_main_menu {
+                            this.go_back_or_close(window, cx);
                         } else {
                             // Filter is empty - close window
                             this.close_and_reset_window(cx);

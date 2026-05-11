@@ -271,6 +271,30 @@ pub(crate) fn search_root_browser_history_meta(
     search_root_browser_history_meta_from_home(&home, query, options)
 }
 
+#[allow(dead_code)]
+pub(crate) fn search_root_browser_history_meta_direct(
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> Vec<RootBrowserHistorySearchHit> {
+    if !root_browser_history_query_is_eligible(query, options.clone()) {
+        return Vec::new();
+    }
+
+    let home = match std::env::var_os("HOME").map(PathBuf::from) {
+        Some(home) => home,
+        None => return Vec::new(),
+    };
+
+    refresh_root_browser_history_snapshot_from_home(&home, &options)
+        .map(|candidates| {
+            root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
+                .into_iter()
+                .take(options.max_results)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
 fn search_root_browser_history_meta_from_home(
     home: &Path,

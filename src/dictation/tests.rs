@@ -3909,11 +3909,12 @@ fn compact_delta_contract(s: &str) -> String {
 #[test]
 fn dictation_overlay_singleton_nonactivating_contract() {
     let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
-    let body = compact_delta_contract(extract_delta_contract_section(
+    let section = extract_delta_contract_section(
         &src,
         "pub fn open_dictation_overlay(",
         "pub fn update_dictation_overlay(",
-    ));
+    );
+    let body = compact_delta_contract(section);
 
     // Live-handle reuse: probe handle liveness before reuse
     assert!(
@@ -3937,8 +3938,33 @@ fn dictation_overlay_singleton_nonactivating_contract() {
 
     // Non-activating open: focus: false
     assert!(
+        body.contains(&compact_delta_contract(
+            "let main_was_visible = crate::is_main_window_visible();"
+        )),
+        "overlay open path must snapshot main visibility before native window creation"
+    );
+    let visibility_snapshot_pos = section
+        .find("let main_was_visible = crate::is_main_window_visible();")
+        .expect("overlay must snapshot main visibility before native window creation");
+    let open_window_pos = section
+        .find(".open_window(window_options")
+        .expect("overlay must create the native window through GPUI open_window");
+    assert!(
+        visibility_snapshot_pos < open_window_pos,
+        "main visibility must be captured before opening the overlay window"
+    );
+
+    assert!(
         body.contains(&compact_delta_contract("focus: false,")),
         "overlay window must stay non-activating on open"
+    );
+    assert!(
+        body.contains(&compact_delta_contract("show: false,")),
+        "overlay must be created hidden so GPUI does not surface sibling launcher panels"
+    );
+    assert!(
+        body.contains(&compact_delta_contract("kind: gpui::WindowKind::PopUp,")),
+        "overlay must remain a PopUp so makeKeyWindow does not activate or reveal main"
     );
 
     // Order front without activating
@@ -3953,6 +3979,16 @@ fn dictation_overlay_singleton_nonactivating_contract() {
     assert!(
         body.contains(&compact_delta_contract("if !main_was_visible {")),
         "overlay open path must check main window visibility and re-hide when it was hidden"
+    );
+    let order_out_pos = section
+        .find("msg_send![main_window, orderOut: cocoa::base::nil]")
+        .expect("overlay must order out the hidden main window before surfacing");
+    let order_front_pos = section
+        .find("msg_send![ns_window, orderFrontRegardless]")
+        .expect("overlay must order itself front without activation");
+    assert!(
+        order_out_pos < order_front_pos,
+        "hidden-main orderOut must happen before overlay orderFrontRegardless"
     );
 
     // Singleton slot storage

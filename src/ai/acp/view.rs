@@ -1305,6 +1305,9 @@ impl AcpChatView {
     ) {
         let window_handle = window.window_handle();
         cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(1))
+                .await;
             let _ = window_handle.update(cx, |_root, window, cx| {
                 callback(window, cx);
             });
@@ -6949,12 +6952,14 @@ impl AcpChatView {
                 route = if is_detached_host { "detached_local" } else { "embedded_host_callback" },
             );
             if is_detached_host {
-                // Detached window: open actions popup directly
+                // Detached window: use the same deferred host callback as the
+                // footer button so the AcpChatView update borrow unwinds before
+                // the detached actions helper reads the view entity.
                 tracing::info!(
                     target: "script_kit::keyboard",
                     event = "detached_actions_shortcut_pressed",
                 );
-                crate::ai::acp::chat_window::toggle_detached_actions(cx);
+                self.trigger_toggle_actions(window, cx);
                 cx.stop_propagation();
             } else {
                 // Embedded main-panel ACP: call the host callback directly.

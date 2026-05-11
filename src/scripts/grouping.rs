@@ -469,25 +469,28 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_passive_source_order: &[crate::config::UnifiedSearchPassiveSource],
     root_passive_result_limits: crate::config::UnifiedSearchPassiveResultLimitsConfig,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
-    let (mut grouped, mut flat_results) = if root_source_filters.active() {
-        (Vec::new(), Vec::new())
-    } else {
-        get_grouped_results_with_validation_and_query(
-            scripts,
-            scriptlets,
-            builtins,
-            apps,
-            skills,
-            frecency_store,
-            filter_text,
-            suggested_config,
-            menu_bar_items,
-            menu_bar_bundle_id,
-            input_history,
-            validation,
-            advanced_query,
-        )
-    };
+    let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
+        scripts,
+        scriptlets,
+        builtins,
+        apps,
+        skills,
+        frecency_store,
+        filter_text,
+        suggested_config,
+        menu_bar_items,
+        menu_bar_bundle_id,
+        input_history,
+        validation,
+        advanced_query,
+    );
+    if root_source_filters.active() {
+        filter_grouped_results_by_root_sources(
+            &mut grouped,
+            &mut flat_results,
+            root_source_filters,
+        );
+    }
 
     if root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
         append_root_file_section(
@@ -517,7 +520,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     for source in root_passive_source_order {
         match source {
             crate::config::UnifiedSearchPassiveSource::BrowserTabs => {
-                if root_source_filters.active() {
+                if !root_source_filters
+                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)
+                {
                     continue;
                 }
                 append_root_browser_tabs_section(
@@ -561,7 +566,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::DictationHistory => {
-                if root_source_filters.active() {
+                if !root_source_filters
+                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::Dictation)
+                {
                     continue;
                 }
                 append_root_dictation_history_section(
@@ -575,7 +582,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::AcpHistory => {
-                if root_source_filters.active() {
+                if !root_source_filters
+                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)
+                {
                     continue;
                 }
                 append_root_acp_history_section(
@@ -589,7 +598,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                 );
             }
             crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
-                if root_source_filters.active() {
+                if !root_source_filters
+                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory)
+                {
                     continue;
                 }
                 append_root_browser_history_section(
@@ -606,6 +617,46 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     }
 
     (grouped, flat_results)
+}
+
+fn filter_grouped_results_by_root_sources(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    root_source_filters: &crate::menu_syntax::RootUnifiedSourceFilterSet,
+) {
+    let mut remap: Vec<Option<usize>> = vec![None; flat_results.len()];
+    let mut filtered_results = Vec::new();
+    for (old_index, result) in flat_results.iter().enumerate() {
+        let allowed = result
+            .root_unified_source()
+            .is_some_and(|source| root_source_filters.allows(source));
+        if allowed {
+            let new_index = filtered_results.len();
+            remap[old_index] = Some(new_index);
+            filtered_results.push(result.clone());
+        }
+    }
+
+    let mut filtered_grouped = Vec::new();
+    let mut pending_header: Option<GroupedListItem> = None;
+    for item in grouped.iter() {
+        match item {
+            GroupedListItem::SectionHeader(label, icon) => {
+                pending_header = Some(GroupedListItem::SectionHeader(label.clone(), icon.clone()));
+            }
+            GroupedListItem::Item(old_index) => {
+                if let Some(Some(new_index)) = remap.get(*old_index) {
+                    if let Some(header) = pending_header.take() {
+                        filtered_grouped.push(header);
+                    }
+                    filtered_grouped.push(GroupedListItem::Item(*new_index));
+                }
+            }
+        }
+    }
+
+    *flat_results = filtered_results;
+    *grouped = filtered_grouped;
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1988,6 +2039,136 @@ mod advanced_query_tests {
                 "Use \"design\" with...",
             ]
         );
+    }
+
+    #[test]
+    fn active_source_filters_select_matching_passive_sources() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let browser_tabs = vec![root_browser_tab_hit("tab/design", "design tab")];
+        let notes = vec![root_note_hit(
+            "33333333-3333-3333-3333-333333333333",
+            "design note",
+            false,
+        )];
+        let clipboard = vec![clipboard_history_entry(
+            "clip-design",
+            "design copied text",
+            false,
+        )];
+        let dictation = vec![root_dictation_history_hit(
+            "dictation-design",
+            "design transcript",
+        )];
+        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let browser_history = vec![root_browser_history_hit(
+            "history/design",
+            "design history page",
+        )];
+
+        for (source, expected_section, expected_source) in [
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs,
+                "Browser Tabs",
+                "Browser Tabs",
+            ),
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::Notes,
+                "Notes",
+                "Notes",
+            ),
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory,
+                "Clipboard History",
+                "Clipboard History",
+            ),
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::Dictation,
+                "Dictation History",
+                "Dictation History",
+            ),
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::Conversations,
+                "AI Conversations",
+                "AI Conversations",
+            ),
+            (
+                crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory,
+                "Browser History",
+                "Browser History",
+            ),
+        ] {
+            let mut source_filters = crate::menu_syntax::RootUnifiedSourceFilterSet::default();
+            source_filters.insert(source);
+
+            let (grouped, flat) =
+                get_grouped_results_with_validation_query_and_root_files_with_options(
+                    &[],
+                    &[],
+                    &[builtin_entry("Design Gallery")],
+                    &[],
+                    &[],
+                    &frecency_store,
+                    query,
+                    &SuggestedConfig::default(),
+                    &[],
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    &[],
+                    &[],
+                    crate::file_search::RootFileSectionOptions::default(),
+                    &notes,
+                    crate::notes::RootNotesSectionOptions {
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    &clipboard,
+                    crate::clipboard_history::RootClipboardHistorySectionOptions {
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    &dictation,
+                    crate::dictation::RootDictationHistorySectionOptions {
+                        enabled: true,
+                        max_results: 3,
+                        min_query_chars: 3,
+                        scan_limit: 10,
+                    },
+                    &acp,
+                    crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                    &browser_tabs,
+                    crate::browser_tabs::RootBrowserTabsSectionOptions {
+                        enabled: true,
+                        ..Default::default()
+                    },
+                    &browser_history,
+                    crate::browser_history::RootBrowserHistorySectionOptions {
+                        enabled: true,
+                        min_query_chars: 3,
+                        ..Default::default()
+                    },
+                    &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+                    crate::config::UnifiedSearchPassiveResultLimitsConfig::default(),
+                );
+
+            let section_labels = grouped
+                .iter()
+                .filter_map(|item| match item {
+                    GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
+                    GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(section_labels, vec![expected_section], "{source:?}");
+            assert!(
+                flat.iter()
+                    .all(|result| result.source_name() == Some(expected_source)),
+                "{source:?}: unexpected rows {flat:?}"
+            );
+        }
     }
 
     #[test]

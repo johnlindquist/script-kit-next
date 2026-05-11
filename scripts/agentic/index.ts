@@ -674,19 +674,34 @@ async function collectSurfaceStateAndElements(
   kind: SurfaceProofKind
 ): Promise<{ stateStep: StepReceipt; elementsStep: StepReceipt }> {
   const stamp = Date.now();
-  const stateStep = await step("surface.getState", () =>
-    rpc(
-      session,
-      buildCmd(
-        {
-          type: "getState",
-          requestId: `surface-proof-${kind}-state-${stamp}`,
-        },
-        target
-      ),
-      { expect: "stateResult", timeout: 5000 }
-    )
-  );
+  const stateStep =
+    kind === "acpDetached"
+      ? await step("surface.getAcpState", () =>
+          rpc(
+            session,
+            buildCmd(
+              {
+                type: "getAcpState",
+                requestId: `surface-proof-${kind}-state-${stamp}`,
+              },
+              target
+            ),
+            { expect: "acpStateResult", timeout: 5000 }
+          )
+        )
+      : await step("surface.getState", () =>
+          rpc(
+            session,
+            buildCmd(
+              {
+                type: "getState",
+                requestId: `surface-proof-${kind}-state-${stamp}`,
+              },
+              target
+            ),
+            { expect: "stateResult", timeout: 5000 }
+          )
+        );
 
   const elementsStep = await step("surface.getElements", () =>
     rpc(
