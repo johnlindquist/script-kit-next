@@ -137,6 +137,9 @@ mod root_unified_config_schema_parity_contract;
 #[path = "source_audits/root_unified_passive_budget_contract.rs"]
 mod root_unified_passive_budget_contract;
 
+#[path = "source_audits/sdk_computer_use_contract.rs"]
+mod sdk_computer_use_contract;
+
 #[path = "source_audits/root_unified_browser_history_contract.rs"]
 mod root_unified_browser_history_contract;
 

@@ -1013,6 +1013,18 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             "Execute a deterministic sequence of UI commands. Returns { success, results, failedAt?, totalElapsed, trace? }. Each result entry includes index, success, command, elapsed, value?, and a structured error with stable code on failure. Pass trace: 'onFailure' at the top-level message (not inside options) for per-command diagnostics. Error codes: wait_condition_timeout, element_not_found, selection_not_found, unsupported_command, unsupported_prompt, action_failed.",
             "automation",
         ),
+        SdkFunctionRef::supported(
+            "computer.listNativeWindows",
+            "await computer.listNativeWindows(options?: ComputerUseListNativeWindowsOptions): Promise<ComputerUseListNativeWindowsResult>",
+            "List native macOS windows grouped by running app through Script Kit's own local MCP server. Observation-only: does not focus, activate, move, resize, capture screenshots, or send input.",
+            "computer-use",
+        ),
+        SdkFunctionRef::supported(
+            "computer.captureNativeWindow",
+            "await computer.captureNativeWindow(options: ComputerUseCaptureNativeWindowOptions): Promise<ComputerUseCaptureNativeWindowResult>",
+            "Capture one exact native macOS window after PID/nativeWindowId ownership and capture-candidate validation. Returns the structured computer/capture_native_window receipt, optionally including pngBase64 when includeImage is true.",
+            "computer-use",
+        ),
         SdkFunctionRef::unsupported(
             "menu",
             "await menu(icon: string, scripts?: string[]): Promise<void>",

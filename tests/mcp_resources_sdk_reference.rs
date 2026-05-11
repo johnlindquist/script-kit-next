@@ -97,6 +97,16 @@ fn sdk_reference_lists_ui_automation_functions() {
             "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>",
             "automation",
         ),
+        (
+            "computer.listNativeWindows",
+            "await computer.listNativeWindows(options?: ComputerUseListNativeWindowsOptions): Promise<ComputerUseListNativeWindowsResult>",
+            "computer-use",
+        ),
+        (
+            "computer.captureNativeWindow",
+            "await computer.captureNativeWindow(options: ComputerUseCaptureNativeWindowOptions): Promise<ComputerUseCaptureNativeWindowResult>",
+            "computer-use",
+        ),
     ] {
         let entry = doc
             .functions
