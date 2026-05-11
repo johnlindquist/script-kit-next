@@ -327,6 +327,30 @@ impl NotesApp {
     /// Update window height based on content line count
     /// Raycast-style: window grows AND shrinks to fit content when auto_sizing_enabled
     /// IMPORTANT: Window never shrinks below initial_height (the height at window creation)
+    pub(super) fn resolve_auto_resize_height(
+        total_height: f32,
+        min_height: f32,
+        max_height: f32,
+    ) -> f32 {
+        let min_height = if min_height.is_finite() && min_height > 0.0 {
+            min_height
+        } else {
+            0.0
+        };
+        let max_height = if max_height.is_finite() && max_height > 0.0 {
+            max_height.max(min_height)
+        } else {
+            min_height
+        };
+        let total_height = if total_height.is_finite() {
+            total_height
+        } else {
+            min_height
+        };
+
+        total_height.clamp(min_height, max_height)
+    }
+
     pub(super) fn update_window_height(
         &mut self,
         window: &mut Window,
@@ -344,7 +368,8 @@ impl NotesApp {
         // Calculate desired height
         let content_height = (line_count as f32) * AUTO_RESIZE_LINE_HEIGHT;
         let total_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + AUTO_RESIZE_PADDING;
-        let clamped_height = total_height.clamp(min_height, AUTO_RESIZE_MAX_HEIGHT);
+        let clamped_height =
+            Self::resolve_auto_resize_height(total_height, min_height, AUTO_RESIZE_MAX_HEIGHT);
 
         // Get current bounds and update height
         let current_bounds = window.bounds();
