@@ -192,6 +192,15 @@ fn test_copy_as_markdown_notifies_after_feedback_state_update() {
 }
 
 #[test]
+fn test_notes_editor_disables_dynamic_code_editor_bottom_margin() {
+    const INIT_SOURCE: &str = include_str!("init.rs");
+    assert!(
+        INIT_SOURCE.contains(".code_editor(\"markdown\")\n                .code_editor_dynamic_bottom_margin(false)"),
+        "Notes editor should not reserve a large code-editor bottom scroll margin after trailing lines are deleted"
+    );
+}
+
+#[test]
 fn test_notes_keyboard_handles_named_bracket_keys_when_platform_navigation_shortcuts_run() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(

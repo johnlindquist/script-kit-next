@@ -315,6 +315,7 @@ pub struct InputState {
     pub(crate) deferred_scroll_offset: Option<Point<Pixels>>,
     /// The size of the scrollable content.
     pub(crate) scroll_size: gpui::Size<Pixels>,
+    pub(crate) code_editor_dynamic_bottom_margin: bool,
     pub(super) text_align: TextAlign,
     pub(super) highlight_ranges: Vec<(Range<usize>, Hsla)>,
 
@@ -423,6 +424,7 @@ impl InputState {
             scroll_handle: ScrollHandle::new(),
             scroll_size: gpui::size(px(0.), px(0.)),
             deferred_scroll_offset: None,
+            code_editor_dynamic_bottom_margin: true,
             preferred_column: None,
             placeholder: SharedString::default(),
             mask_pattern: MaskPattern::default(),
@@ -515,6 +517,15 @@ impl InputState {
         let language: SharedString = language.into();
         self.mode = InputMode::code_editor(language);
         self.searchable = true;
+        self
+    }
+
+    /// Configure whether code editor inputs reserve a large dynamic bottom
+    /// scroll margin. This is useful for full editors that keep the cursor away
+    /// from the bottom edge, but embedded note editors should let the scroll
+    /// extent shrink tightly after trailing lines are deleted.
+    pub fn code_editor_dynamic_bottom_margin(mut self, enabled: bool) -> Self {
+        self.code_editor_dynamic_bottom_margin = enabled;
         self
     }
 
