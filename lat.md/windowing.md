@@ -73,6 +73,7 @@ These rules describe the behavior constraints new windows and overlays should fo
 - The shortcut recorder popup stays child-attached to the parent, resurfaces with `orderFrontRegardless`, and must not override GPUI's `WindowKind::PopUp` level.
 - When a detached actions popup is open over the main window, the GPUI content behind it should be interaction-shielded so background hover/click/scroll state does not mutate; only the native actions toggle and click-anywhere dismissal path stay live.
 - Passive desktop click-away from the main ScriptList must use the preserve-state focus-loss hide path; detached MainList actions close first, while Escape, Cmd+W, script completion, prompt cancellation, and explicit hide/reset commands remain reset paths.
+- Main-window hide paths are main-panel-only dismissals. They must use `defer_hide_main_window` rather than `cx.hide()` / `ctx.hide()`, because app-level hide can conceal independent secondary hosts such as Notes if secondary-window detection is stale or racing.
 - HUD messages are standalone feedback and must not reveal the launcher. `PromptMessage::ShowHud` clears script-requested hide restore intent before delegating to the HUD manager, pinned by `tests/hud_visibility_decoupled_contract.rs`.
 
 ## Main Panel Invariants Contract

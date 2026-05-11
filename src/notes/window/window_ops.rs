@@ -707,6 +707,11 @@ fn configure_notes_as_floating_panel() {
                     if title_str == "Notes" {
                         // Found the Notes window - configure it
 
+                        // Keep Notes visible when the app is hidden by a stray
+                        // app-level hide. Main-window dismissal must not take
+                        // the independent Notes host with it.
+                        let _: () = msg_send![window, setCanHide: false];
+
                         // Keep the GPUI-assigned PopUp window level (101).
 
                         // Get current collection behavior to preserve existing flags

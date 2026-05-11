@@ -2081,18 +2081,21 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Pure registry op; idempotent.
                                 crate::windows::remove_automation_window("confirm-popup");
 
-                                // Check if Notes or AI windows are open
+                                // Check if Notes or AI windows are open for logging only.
                                 let notes_open = notes::is_notes_window_open();
                                 let ai_open = ai::is_ai_window_open();
 
-                                // CRITICAL: Only hide main window if Notes/AI are open
-                                // ctx.hide() hides the ENTIRE app (all windows)
-                                if notes_open || ai_open {
-                                    logging::log("STDIN", "Using defer_hide_main_window() - secondary windows are open");
-                                    platform::defer_hide_main_window(ctx);
-                                } else {
-                                    ctx.hide();
-                                }
+                                // CRITICAL: Always hide only the main panel. `ctx.hide()`
+                                // app-hides all windows, so a stale/false-negative Notes
+                                // handle can hide Notes together with main.
+                                logging::log(
+                                    "STDIN",
+                                    &format!(
+                                        "Using defer_hide_main_window() - main-only hide, secondary_windows_open={}",
+                                        notes_open || ai_open
+                                    ),
+                                );
+                                platform::defer_hide_main_window(ctx);
 
                                 // Run-14 Pass-13 fix: echo a windowVisibilityAck
                                 // back so `session.sh rpc … {"type":"hide",
@@ -2361,7 +2364,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                         }
                                                         script_kit_gpui::set_main_window_visible(false);
                                                         sync_main_automation_window(current_main_automation_bounds(), false, false);
-                                                        ctx.hide();
+                                                        platform::defer_hide_main_window(ctx);
                                                     }
                                                 }
                                                 _ => {

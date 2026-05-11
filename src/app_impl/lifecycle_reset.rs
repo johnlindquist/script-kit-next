@@ -205,21 +205,20 @@ impl ScriptListApp {
             ),
         );
 
-        // CRITICAL: Only hide main window if Notes/AI are open
-        // cx.hide() hides the ENTIRE app (all windows), so we use
-        // defer_hide_main_window() to hide only the main window.
+        // CRITICAL: Always hide only the main window. `cx.hide()` hides the
+        // entire app (all windows), so any false-negative secondary-window
+        // check can hide Notes together with main.
         // Must be deferred: orderOut: triggers window_did_change_key_status
         // synchronously, which re-enters GPUI's App RefCell and panics.
-        if notes_open || ai_open || acp_chat_open {
-            logging::log(
-                "VISIBILITY",
-                "Using defer_hide_main_window() - secondary windows are open",
-            );
-            platform::defer_hide_main_window(cx);
-        } else {
-            logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
-            cx.hide();
-        }
+        let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+        logging::log(
+            "VISIBILITY",
+            &format!(
+                "Using defer_hide_main_window() - main-only hide, secondary_windows_open={}",
+                secondary_windows_open
+            ),
+        );
+        platform::defer_hide_main_window(cx);
         logging::log("VISIBILITY", "=== Window closed ===");
     }
 
@@ -280,19 +279,15 @@ impl ScriptListApp {
             ),
         );
 
-        if notes_open || ai_open || acp_chat_open {
-            logging::log(
-                "VISIBILITY",
-                "Using defer_hide_main_window() - preserving state with secondary windows open",
-            );
-            platform::defer_hide_main_window(cx);
-        } else {
-            logging::log(
-                "VISIBILITY",
-                "Using cx.hide() - preserving state with no secondary windows",
-            );
-            cx.hide();
-        }
+        let secondary_windows_open = notes_open || ai_open || acp_chat_open;
+        logging::log(
+            "VISIBILITY",
+            &format!(
+                "Using defer_hide_main_window() - preserving state with main-only hide, secondary_windows_open={}",
+                secondary_windows_open
+            ),
+        );
+        platform::defer_hide_main_window(cx);
 
         logging::log(
             "VISIBILITY",
