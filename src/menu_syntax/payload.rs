@@ -89,6 +89,10 @@ impl AdvancedQuery {
     pub fn has_source_filters(&self) -> bool {
         self.source_filters.active()
     }
+
+    pub fn is_source_filter_only(&self) -> bool {
+        self.has_source_filters() && !self.has_predicates()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

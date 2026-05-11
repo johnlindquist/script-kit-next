@@ -210,6 +210,7 @@ pub fn build_trigger_picker_snapshot(
     };
 
     match parsed {
+        MenuSyntaxParse::AdvancedQuery(query) if query.is_source_filter_only() => None,
         MenuSyntaxParse::AdvancedQuery(_) => Some(build_advanced_query_snapshot(input, ctx)),
         MenuSyntaxParse::Capture(inv) => {
             Some(build_capture_snapshot(Some(inv.target.as_str()), ctx))

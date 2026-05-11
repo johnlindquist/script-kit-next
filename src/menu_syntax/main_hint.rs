@@ -183,6 +183,9 @@ pub fn build_menu_syntax_main_hint(
 
     if ctx.advanced_query_results_empty {
         if let Some(query) = ctx.mode.advanced_query_for(ctx.raw_filter_text) {
+            if query.is_source_filter_only() {
+                return None;
+            }
             return advanced_query_empty_hint(ctx.raw_filter_text, query);
         }
     }

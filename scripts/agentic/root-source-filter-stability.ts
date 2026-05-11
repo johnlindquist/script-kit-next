@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 
@@ -12,6 +12,7 @@ const query = argValue("--query", "zzqxfilters");
 const timeoutMs = Number(argValue("--timeout", "10000"));
 const pollMs = Number(argValue("--poll", "25"));
 const outputDir = join(repoRoot, ".test-output", "root-source-filter-stability");
+const sessionRoot = process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
 
 process.env.SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER = JSON.stringify({
   query,
@@ -53,10 +54,18 @@ function runSession(args: string[]): Json {
   return parsed;
 }
 
-function rpc(command: Json, expect: string, timeout = timeoutMs): Json {
+function sessionLogPath(sessionName: string): string {
+  return join(sessionRoot, sessionName, "app.log");
+}
+
+function sessionResponsesPath(sessionName: string): string {
+  return join(sessionRoot, sessionName, "responses.ndjson");
+}
+
+function rpcFor(sessionName: string, command: Json, expect: string, timeout = timeoutMs): Json {
   const envelope = runSession([
     "rpc",
-    session,
+    sessionName,
     JSON.stringify(command),
     "--expect",
     expect,
@@ -66,15 +75,23 @@ function rpc(command: Json, expect: string, timeout = timeoutMs): Json {
   return envelope.response;
 }
 
-function send(command: Json): Json {
+function rpc(command: Json, expect: string, timeout = timeoutMs): Json {
+  return rpcFor(session, command, expect, timeout);
+}
+
+function sendFor(sessionName: string, command: Json): Json {
   return runSession([
     "send",
-    session,
+    sessionName,
     JSON.stringify(command),
     "--await-parse",
     "--timeout",
     String(timeoutMs),
   ]);
+}
+
+function send(command: Json): Json {
+  return sendFor(session, command);
 }
 
 function getState(tag: string): Json {
@@ -91,8 +108,9 @@ function getState(tag: string): Json {
   return state;
 }
 
-function waitForInput(input: string): Json {
-  return rpc(
+function waitForInputFor(sessionName: string, input: string): Json {
+  return rpcFor(
+    sessionName,
     {
       type: "waitFor",
       requestId: `root-source-filter-wait-${Date.now()}`,
@@ -108,6 +126,10 @@ function waitForInput(input: string): Json {
     },
     "waitForResult",
   );
+}
+
+function waitForInput(input: string): Json {
+  return waitForInputFor(session, input);
 }
 
 function requirePreflight(state: Json, label: string): Json {
@@ -151,6 +173,31 @@ function assertFilesOnly(frame: Json, input: string) {
   }
 }
 
+function assertLiveFilesOnly(frame: Json, input: string, expectedSearchText: string) {
+  if (frame.computedSearchText !== expectedSearchText) {
+    throw new Error(
+      `${input}: expected computedSearchText ${expectedSearchText}, got ${frame.computedSearchText}`,
+    );
+  }
+  if (JSON.stringify(frame.sourceFilters) !== JSON.stringify(["files"])) {
+    throw new Error(`${input}: expected sourceFilters [files], got ${JSON.stringify(frame.sourceFilters)}`);
+  }
+  if (frame.rootFileSearch?.query !== expectedSearchText) {
+    throw new Error(`${input}: provider query was not stripped: ${JSON.stringify(frame.rootFileSearch)}`);
+  }
+  for (const result of frame.visibleResults ?? []) {
+    if (result.role !== "rootFile") {
+      throw new Error(`${input}: disallowed visible result ${JSON.stringify(result)}`);
+    }
+  }
+}
+
+function assertNoPowerUi(frame: Json, input: string) {
+  if ("menuSyntaxMainHint" in frame && frame.menuSyntaxMainHint != null) {
+    throw new Error(`${input}: source filter exposed menuSyntaxMainHint`);
+  }
+}
+
 function assertSameFrame(before: Json, after: Json, label: string) {
   const stableBefore = {
     visibleResultKeyFingerprint: before.visibleResultKeyFingerprint,
@@ -181,6 +228,7 @@ async function runCase(input: string): Promise<Json> {
 
   const beforeState = getState(`before-${input}`);
   const baseline = comparable(beforeState, `before-${input}`);
+  assertNoPowerUi(beforeState, input);
   assertFilesOnly(baseline, input);
 
   const samples: Json[] = [];
@@ -190,6 +238,7 @@ async function runCase(input: string): Promise<Json> {
     await Bun.sleep(Math.max(25, pollMs));
     const state = getState(`sample-${samples.length}`);
     const frame = comparable(state, `sample-${samples.length}`);
+    assertNoPowerUi(state, input);
     assertFilesOnly(frame, input);
     assertSameFrame(baseline, frame, `${input} sample ${samples.length}`);
     samples.push(frame);
@@ -207,6 +256,94 @@ async function runCase(input: string): Promise<Json> {
     baseline,
     samples,
     settled,
+  };
+}
+
+async function runLivePngCase(): Promise<Json> {
+  const input = "png :f";
+  const expectedSearchText = "png";
+  send({
+    type: "setFilter",
+    text: input,
+    requestId: `root-source-filter-live-png-${Date.now()}`,
+  });
+  waitForInput(input);
+
+  const deadline = Date.now() + timeoutMs;
+  let lastFrame: Json | null = null;
+  while (Date.now() < deadline) {
+    await Bun.sleep(Math.max(25, pollMs));
+    const state = getState(`live-png-${Date.now()}`);
+    assertNoPowerUi(state, input);
+    const frame = comparable(state, "live-png");
+    assertLiveFilesOnly(frame, input, expectedSearchText);
+    lastFrame = frame;
+
+    const pngResult = (frame.visibleResults ?? []).find((result: Json) => {
+      const haystack = [
+        result.stableKey,
+        result.title,
+        result.subtitle,
+        frame.rootFileSearch?.query,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return result.role === "rootFile" && haystack.includes(".png");
+    });
+    if (pngResult) {
+      return {
+        input,
+        frame,
+        pngResult,
+      };
+    }
+  }
+
+  throw new Error(
+    `${input}: did not observe a visible PNG root file result; lastFrame=${JSON.stringify(lastFrame)}`,
+  );
+}
+
+function assertSourceSessionDidNotOpenPowerPopup() {
+  const logPath = sessionLogPath(session);
+  const log = existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
+  if (log.includes("menu_syntax_trigger_popup_render")) {
+    throw new Error("source-filter session rendered the menu syntax trigger popup");
+  }
+  if (existsSync(logPath)) {
+    copyFileSync(logPath, join(outputDir, "app.log"));
+  }
+  const responsesPath = sessionResponsesPath(session);
+  if (existsSync(responsesPath)) {
+    copyFileSync(responsesPath, join(outputDir, "responses.ndjson"));
+  }
+}
+
+function proveSemicolonStillOpensCapturePopup(): Json {
+  const semicolonSession = `${session}-semicolon`;
+  runSession(["stop", semicolonSession]);
+  runSession(["start", semicolonSession]);
+  sendFor(semicolonSession, {
+    type: "setFilter",
+    text: ";",
+    requestId: `root-source-filter-semicolon-${Date.now()}`,
+  });
+  waitForInputFor(semicolonSession, ";");
+  const logPath = sessionLogPath(semicolonSession);
+  const log = existsSync(logPath) ? readFileSync(logPath, "utf8") : "";
+  if (!log.includes("menu_syntax_trigger_popup_render")) {
+    throw new Error("semicolon did not render the menu syntax trigger popup");
+  }
+  copyFileSync(logPath, join(outputDir, "semicolon-app.log"));
+  const responsesPath = sessionResponsesPath(semicolonSession);
+  if (existsSync(responsesPath)) {
+    copyFileSync(responsesPath, join(outputDir, "semicolon-responses.ndjson"));
+  }
+  runSession(["stop", semicolonSession]);
+  return {
+    session: semicolonSession,
+    popupRenderLogged: true,
   };
 }
 
@@ -244,6 +381,10 @@ async function main() {
   for (const input of [`:f ${query}`, `${query} :f`, `${query} :files`]) {
     cases.push(await runCase(input));
   }
+  const livePngCase = await runLivePngCase();
+  assertSourceSessionDidNotOpenPowerPopup();
+  const semicolonProof = proveSemicolonStillOpensCapturePopup();
+  runSession(["stop", session]);
 
   const receipt = {
     schemaVersion: 1,
@@ -251,7 +392,13 @@ async function main() {
     session,
     query,
     warmed,
+    powerUi: {
+      sourceFilterPopupRenderLogged: false,
+      sourceFilterHintObserved: false,
+      semicolonProof,
+    },
     cases,
+    livePngCase,
   };
   const receiptPath = join(outputDir, "receipt.json");
   writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
