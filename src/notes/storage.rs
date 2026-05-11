@@ -492,6 +492,13 @@ pub(crate) fn search_root_notes_meta(
     }
 }
 
+pub(crate) fn search_root_notes_meta_direct(
+    query: &str,
+    options: RootNotesSectionOptions,
+) -> Vec<RootNoteSearchHit> {
+    search_root_notes_meta(query, options)
+}
+
 /// Cache-only root notes lookup for the launcher foreground search path.
 ///
 /// A cold query starts a background SQLite search and returns no hits for the
@@ -558,7 +565,26 @@ fn search_root_notes_meta_result(
         .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
 
     let limit = options.max_results.clamp(1, 5) as i64;
-    let hits = if options.search_content {
+    let hits = if query.trim().is_empty() {
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT id, title, updated_at, is_pinned, length(content)
+                FROM notes
+                WHERE deleted_at IS NULL
+                ORDER BY is_pinned DESC, updated_at DESC
+                LIMIT ?1
+                "#,
+            )
+            .context("Failed to prepare root notes recent query")?;
+
+        let rows = stmt
+            .query_map(params![limit], row_to_root_note_hit)
+            .context("Failed to execute root notes recent query")?
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect root notes recent results")?;
+        rows
+    } else if options.search_content {
         let sanitized_query = sanitize_fts_query(query);
         let mut stmt = conn
             .prepare(
@@ -578,39 +604,13 @@ fn search_root_notes_meta_result(
             .context("Failed to execute root notes FTS query")?
             .collect::<Result<Vec<_>, _>>()
             .context("Failed to collect root notes FTS results")?;
-        hits
+        if hits.is_empty() {
+            search_root_notes_meta_like(&conn, query, true, limit)?
+        } else {
+            hits
+        }
     } else {
-        let like_pattern = format!("%{}%", query);
-        let exact = query.to_lowercase();
-        let prefix = format!("{}%", exact);
-        let mut stmt = conn
-            .prepare(
-                r#"
-                SELECT id, title, updated_at, is_pinned, length(content)
-                FROM notes
-                WHERE deleted_at IS NULL AND title LIKE ?1
-                ORDER BY
-                    CASE
-                        WHEN lower(title) = ?2 THEN 0
-                        WHEN lower(title) LIKE ?3 THEN 1
-                        ELSE 2
-                    END,
-                    is_pinned DESC,
-                    updated_at DESC
-                LIMIT ?4
-                "#,
-            )
-            .context("Failed to prepare root notes title query")?;
-
-        let hits = stmt
-            .query_map(
-                params![like_pattern, exact, prefix, limit],
-                row_to_root_note_hit,
-            )
-            .context("Failed to execute root notes title query")?
-            .collect::<Result<Vec<_>, _>>()
-            .context("Failed to collect root notes title results")?;
-        hits
+        search_root_notes_meta_like(&conn, query, false, limit)?
     };
 
     Ok(hits
@@ -621,6 +621,65 @@ fn search_root_notes_meta_result(
             hit
         })
         .collect())
+}
+
+fn search_root_notes_meta_like(
+    conn: &Connection,
+    query: &str,
+    search_content: bool,
+    limit: i64,
+) -> Result<Vec<RootNoteSearchHit>> {
+    let like_pattern = format!("%{}%", query);
+    let exact = query.to_lowercase();
+    let prefix = format!("{}%", exact);
+    let mut stmt = if search_content {
+        conn.prepare(
+            r#"
+            SELECT id, title, updated_at, is_pinned, length(content)
+            FROM notes
+            WHERE deleted_at IS NULL AND (title LIKE ?1 OR content LIKE ?1)
+            ORDER BY
+                CASE
+                    WHEN lower(title) = ?2 THEN 0
+                    WHEN lower(title) LIKE ?3 THEN 1
+                    WHEN lower(title) LIKE ?1 THEN 2
+                    ELSE 3
+                END,
+                is_pinned DESC,
+                updated_at DESC
+            LIMIT ?4
+            "#,
+        )
+        .context("Failed to prepare root notes content LIKE query")?
+    } else {
+        conn.prepare(
+            r#"
+            SELECT id, title, updated_at, is_pinned, length(content)
+            FROM notes
+            WHERE deleted_at IS NULL AND title LIKE ?1
+            ORDER BY
+                CASE
+                    WHEN lower(title) = ?2 THEN 0
+                    WHEN lower(title) LIKE ?3 THEN 1
+                    ELSE 2
+                END,
+                is_pinned DESC,
+                updated_at DESC
+            LIMIT ?4
+            "#,
+        )
+        .context("Failed to prepare root notes title LIKE query")?
+    };
+
+    let hits = stmt
+        .query_map(
+            params![like_pattern, exact, prefix, limit],
+            row_to_root_note_hit,
+        )
+        .context("Failed to execute root notes LIKE query")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect root notes LIKE results")?;
+    Ok(hits)
 }
 
 /// Permanently delete a note
@@ -1100,6 +1159,43 @@ mod tests {
         assert_eq!(hits[0].title, active.title);
         assert!(hits[0].is_pinned);
         assert_eq!(hits[0].char_count, active.content.chars().count());
+    }
+
+    #[test]
+    fn test_search_root_notes_meta_matches_title_substrings_when_fts_has_no_hit() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before root notes substring test");
+        let now = Utc::now();
+        let note = Note {
+            id: NoteId::new(),
+            title: "Welcome to Notes".to_string(),
+            content: "Starter content for source-filter search.".to_string(),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: true,
+            sort_order: 0,
+        };
+
+        save_note(&note).expect("failed to save welcome note");
+
+        let hits = search_root_notes_meta(
+            "not",
+            RootNotesSectionOptions {
+                enabled: true,
+                max_results: 5,
+                min_query_chars: 0,
+                search_content: true,
+            },
+        );
+
+        delete_note_permanently(note.id).expect("cleanup failed for welcome note");
+
+        assert!(
+            hits.iter()
+                .any(|candidate| candidate.id == note.id && candidate.title == "Welcome to Notes"),
+            "root note search should treat `not` as a substring/prefix match for `Notes`"
+        );
     }
 
     #[test]

@@ -16,6 +16,7 @@ const homeDir = join(outputDir, "home");
 const kitDir = join(homeDir, ".scriptkit");
 const dbDir = join(kitDir, "db");
 const sessionRoot = join(outputDir, "sessions");
+const recentDir = join(outputDir, "recent");
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;
@@ -137,6 +138,7 @@ function sql(path: string, input: string) {
 function seedFixtures() {
   rmSync(outputDir, { recursive: true, force: true });
   mkdirSync(dbDir, { recursive: true });
+  mkdirSync(recentDir, { recursive: true });
   mkdirSync(join(kitDir, "plugins", "main", "scripts"), { recursive: true });
   writeFileSync(
     join(kitDir, "config.ts"),
@@ -152,6 +154,20 @@ function seedFixtures() {
   },
 };
 `,
+  );
+
+  const recentFilePath = join(recentDir, `${query}-recent-file.txt`);
+  writeFileSync(recentFilePath, `${query} recent file body\n`);
+  writeFileSync(
+    join(kitDir, "frecency.json"),
+    `${JSON.stringify({
+      entries: {
+        [`file/${recentFilePath}`]: {
+          count: 3,
+          last_used: Math.floor(Date.now() / 1000),
+        },
+      },
+    })}\n`,
   );
 
   const now = new Date().toISOString();
@@ -171,7 +187,7 @@ CREATE TABLE notes (
 );
 CREATE VIRTUAL TABLE notes_fts USING fts5(title, content, content='notes', content_rowid='rowid');
 INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order)
-VALUES ('${noteId}', '${query} note title', '${query} note body', '${now}', '${now}', NULL, 0, 0);
+VALUES ('${noteId}', 'Welcome to Notes', 'Starter content for root source filter search', '${now}', '${now}', NULL, 0, 0);
 INSERT INTO notes_fts(rowid, title, content)
 SELECT rowid, title, content FROM notes WHERE id = '${noteId}';
 `,
@@ -253,13 +269,16 @@ const cases = [
     role: "rootFile",
     sourceName: "Files",
     stableKeyIncludes: `${query}-file-result.txt`,
+    emptyStableKeyIncludes: `${query}-recent-file.txt`,
   },
   {
     heads: ["n:", "notes:"],
+    query: "not",
     expectedFilters: ["notes"],
     role: "rootPassive",
     sourceName: "Notes",
     stableKey: "note/11111111-1111-4111-8111-111111111111",
+    emptyStableKey: "note/11111111-1111-4111-8111-111111111111",
   },
   {
     heads: ["c:", "clipboard:"],
@@ -267,6 +286,7 @@ const cases = [
     role: "rootPassive",
     sourceName: "Clipboard History",
     stableKey: "clipboard-history/clip-source-filter",
+    emptyStableKey: "clipboard-history/clip-source-filter",
   },
   {
     heads: ["d:", "dictation:"],
@@ -274,6 +294,7 @@ const cases = [
     role: "rootPassive",
     sourceName: "Dictation History",
     stableKey: "dictation-history/dictation-source-filter",
+    emptyStableKey: "dictation-history/dictation-source-filter",
   },
   {
     heads: ["ai:", "conversations:"],
@@ -281,6 +302,7 @@ const cases = [
     role: "rootPassive",
     sourceName: "AI Conversations",
     stableKey: "acp-history/acp-source-filter",
+    emptyStableKey: "acp-history/acp-source-filter",
   },
   {
     heads: ["h:", "history:"],
@@ -288,6 +310,7 @@ const cases = [
     role: "rootPassive",
     sourceName: "Browser History",
     stableKeyIncludes: "browser-history/",
+    emptyStableKeyIncludes: "browser-history/",
   },
   {
     heads: ["t:", "tabs:"],
@@ -295,16 +318,17 @@ const cases = [
     role: "rootPassive",
     sourceName: "Browser Tabs",
     stableKeyIncludes: `browser-tab/com.google.Chrome/1/1/https://example.com/${query}/tab`,
+    emptyStableKeyIncludes: `browser-tab/com.google.Chrome/1/1/https://example.com/${query}/tab`,
   },
 ];
 
-function assertFrame(state: Json, input: string, spec: Json) {
+function assertFrame(state: Json, input: string, spec: Json, expectedSearchText: string) {
   const preflight = state.mainWindowPreflight;
   if (!preflight) {
     throw new Error(`${input}: missing mainWindowPreflight in ${JSON.stringify(state)}`);
   }
-  if (preflight.computedSearchText !== query) {
-    throw new Error(`${input}: expected computedSearchText ${query}, got ${preflight.computedSearchText}`);
+  if (preflight.computedSearchText !== expectedSearchText) {
+    throw new Error(`${input}: expected computedSearchText ${expectedSearchText}, got ${preflight.computedSearchText}`);
   }
   if (JSON.stringify(preflight.sourceFilters) !== JSON.stringify(spec.expectedFilters)) {
     throw new Error(`${input}: expected filters ${JSON.stringify(spec.expectedFilters)}, got ${JSON.stringify(preflight.sourceFilters)}`);
@@ -328,8 +352,13 @@ function assertFrame(state: Json, input: string, spec: Json) {
   }
 }
 
+function queryFor(spec: Json): string {
+  return spec.query ?? query;
+}
+
 async function runCase(head: string, spec: Json): Promise<Json> {
-  const input = `${head} ${query}`;
+  const caseQuery = queryFor(spec);
+  const input = `${head} ${caseQuery}`;
   send({ type: "setFilter", text: input, requestId: `source-filter-matrix-set-${Date.now()}` });
   waitForInput(input);
 
@@ -339,7 +368,59 @@ async function runCase(head: string, spec: Json): Promise<Json> {
     const state = getState(head.replace(/[^a-z0-9]+/gi, "-"));
     lastFrame = state.mainWindowPreflight;
     try {
-      assertFrame(state, input, spec);
+      assertFrame(state, input, spec, caseQuery);
+      return { input, preflight: state.mainWindowPreflight };
+    } catch (error) {
+      await Bun.sleep(pollMs);
+      if (Date.now() >= deadline) {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`${input}: timed out, lastFrame=${JSON.stringify(lastFrame)}`);
+}
+
+async function runAttachedCase(head: string, spec: Json): Promise<Json> {
+  const caseQuery = queryFor(spec);
+  const input = `${head}${caseQuery}`;
+  send({ type: "setFilter", text: input, requestId: `source-filter-matrix-attached-set-${Date.now()}` });
+  waitForInput(input);
+
+  let lastFrame: Json | null = null;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = getState(`attached-${head.replace(/[^a-z0-9]+/gi, "-")}`);
+    lastFrame = state.mainWindowPreflight;
+    try {
+      assertFrame(state, input, spec, caseQuery);
+      return { input, preflight: state.mainWindowPreflight };
+    } catch (error) {
+      await Bun.sleep(pollMs);
+      if (Date.now() >= deadline) {
+        throw error;
+      }
+    }
+  }
+  throw new Error(`${input}: timed out, lastFrame=${JSON.stringify(lastFrame)}`);
+}
+
+async function runEmptyCase(head: string, spec: Json): Promise<Json> {
+  const input = `${head} `;
+  send({ type: "setFilter", text: input, requestId: `source-filter-matrix-empty-set-${Date.now()}` });
+  waitForInput(input);
+
+  const emptySpec = {
+    ...spec,
+    stableKey: spec.emptyStableKey,
+    stableKeyIncludes: spec.emptyStableKeyIncludes,
+  };
+  let lastFrame: Json | null = null;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const state = getState(`empty-${head.replace(/[^a-z0-9]+/gi, "-")}`);
+    lastFrame = state.mainWindowPreflight;
+    try {
+      assertFrame(state, input, emptySpec, "");
       return { input, preflight: state.mainWindowPreflight };
     } catch (error) {
       await Bun.sleep(pollMs);
@@ -362,6 +443,12 @@ async function main() {
       for (const head of spec.heads) {
         results.push(await runCase(head, spec));
         send({ type: "setFilter", text: "", requestId: `source-filter-matrix-reset-${Date.now()}` });
+        waitForInput("");
+        results.push(await runAttachedCase(head, spec));
+        send({ type: "setFilter", text: "", requestId: `source-filter-matrix-attached-reset-${Date.now()}` });
+        waitForInput("");
+        results.push(await runEmptyCase(head, spec));
+        send({ type: "setFilter", text: "", requestId: `source-filter-matrix-empty-reset-${Date.now()}` });
         waitForInput("");
       }
     }

@@ -23,8 +23,8 @@ pub use history::{
     format_history_timestamp, get_history_entry, hydrate_dictation_resource_from_history,
     load_history, record_dictation_history, root_dictation_history_query_is_eligible,
     search_history, search_root_dictation_history, search_root_dictation_history_cached,
-    DictationHistoryEntry, DictationHistorySearchField, DictationHistorySearchHit,
-    RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
+    search_root_dictation_history_direct, DictationHistoryEntry, DictationHistorySearchField,
+    DictationHistorySearchHit, RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
 };
 pub use runtime::{
     abort_dictation, can_cycle_dictation_target, current_dictation_phase, cycle_dictation_target,

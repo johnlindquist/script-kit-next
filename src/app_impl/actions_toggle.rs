@@ -441,9 +441,15 @@ impl ScriptListApp {
         );
 
         if matches!(&self.current_view, AppView::ScriptList) {
-            if let Some(file) = self.selected_root_file_result_owned() {
-                self.toggle_root_file_actions(&file, window, cx);
-                return true;
+            if let Some(result) = self.selected_main_list_search_result_owned() {
+                match crate::root_unified_result_actions::root_unified_action_owner_for_result(&result) {
+                    crate::root_unified_result_actions::RootUnifiedResultActionOwner::RootSubject(subject) => {
+                        self.toggle_root_unified_result_actions(subject, window, cx);
+                        return true;
+                    }
+                    crate::root_unified_result_actions::RootUnifiedResultActionOwner::ExistingScriptActions
+                    | crate::root_unified_result_actions::RootUnifiedResultActionOwner::None => {}
+                }
             }
 
             if self.has_actions()
@@ -1064,6 +1070,128 @@ impl ScriptListApp {
         );
 
         logging::log("FOCUS", "Root file actions opened, keyboard routing active");
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_root_unified_result_actions(
+        &mut self,
+        subject: crate::root_unified_result_actions::RootUnifiedActionSubject,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let host = ActionsDialogHost::MainList;
+        let host_label = actions_dialog_host_label(&host);
+        let recently_closed = self.was_actions_recently_closed();
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(host, window, cx);
+            cx.notify();
+            return;
+        }
+
+        if recently_closed {
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "root_unified_result_actions_toggle_suppressed_recent_close",
+                context_title = %subject.context_title(),
+                subject_key = ?subject.stable_key(),
+                source = %subject.source_name(),
+                "Suppressed root result actions reopen because the dialog was just closed"
+            );
+            cx.notify();
+            return;
+        }
+
+        let actions =
+            crate::root_unified_result_actions::root_unified_actions_for_subject(&subject);
+        let context_title = Some(subject.context_title());
+        if let crate::root_unified_result_actions::RootUnifiedActionSubject::File(file) =
+            &subject
+        {
+            self.pending_root_file_actions_file = Some(file.clone());
+        } else {
+            self.pending_root_file_actions_file = None;
+        }
+        self.pending_root_unified_actions_subject = Some(subject.clone());
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
+        let config = crate::actions::ActionsDialogConfig {
+            search_position: if is_mini {
+                crate::actions::SearchPosition::Top
+            } else {
+                crate::actions::SearchPosition::Bottom
+            },
+            section_style: crate::actions::SectionStyle::Headers,
+            anchor: if is_mini {
+                crate::actions::AnchorPosition::Top
+            } else {
+                crate::actions::AnchorPosition::Bottom
+            },
+            show_icons: true,
+            search_placeholder: context_title.clone(),
+            show_context_header: false,
+            ..crate::actions::ActionsDialogConfig::default()
+        };
+
+        let position = self.main_list_actions_window_position();
+        crate::actions::emit_actions_popup_event(
+            crate::actions::ActionsPopupEvent::OpenRequested,
+            Some(host_label),
+            Some(position),
+            None,
+            None,
+            None,
+        );
+
+        self.resync_filter_input_after_actions_if_needed(window, cx);
+        self.begin_actions_popup_window_open(cx, window);
+
+        let dialog = cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = crate::actions::ActionsDialog::from_actions_with_context(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                None,
+                None,
+                theme_arc,
+                crate::designs::DesignVariant::Default,
+                context_title,
+                config,
+            );
+            dialog.set_skip_track_focus(true);
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                host,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity.clone(),
+                host,
+                "Root unified result actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+        Self::spawn_open_actions_window(
+            cx,
+            window.window_handle(),
+            main_bounds,
+            display_id,
+            dialog,
+            position,
+            "Root unified result actions popup window opened",
+            "Failed to open root unified result actions window",
+        );
+
+        logging::log("FOCUS", "Root unified actions opened, keyboard routing active");
         cx.notify();
     }
 

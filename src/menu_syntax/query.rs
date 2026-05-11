@@ -1,6 +1,6 @@
 use super::payload::{
     source_for_head, AdvancedQuery, ArtifactKind, Predicate, RootUnifiedSourceFilter,
-    RootUnifiedSourceFilterSet, ShortcutPredicate,
+    RootUnifiedSourceFilterSet, ShortcutPredicate, SOURCE_HEAD_SPECS,
 };
 
 pub fn parse_advanced_query(input: &str) -> AdvancedQuery {
@@ -62,11 +62,14 @@ pub fn parse_filter_query(input: &str) -> Option<AdvancedQuery> {
     let mut claimed_filter = false;
 
     for token in tokens {
-        if let Some((negated, source)) = classify_source_filter_token(&token) {
+        if let Some((negated, source, attached_query)) = classify_source_filter_token(&token) {
             if negated {
                 source_filters.exclude(source);
             } else {
                 source_filters.insert(source);
+            }
+            if let Some(query) = attached_query {
+                free_parts.push(query);
             }
             claimed_filter = true;
         } else if let Some((negated, pred)) = classify_filter_predicate_token(&token) {
@@ -93,7 +96,9 @@ pub fn parse_filter_query(input: &str) -> Option<AdvancedQuery> {
     })
 }
 
-fn classify_source_filter_token(token: &str) -> Option<(bool, RootUnifiedSourceFilter)> {
+fn classify_source_filter_token(
+    token: &str,
+) -> Option<(bool, RootUnifiedSourceFilter, Option<String>)> {
     if quoted(token) {
         return None;
     }
@@ -101,7 +106,20 @@ fn classify_source_filter_token(token: &str) -> Option<(bool, RootUnifiedSourceF
         .strip_prefix('-')
         .map(|rest| (true, rest))
         .unwrap_or((false, token));
-    source_for_head(body).map(|source| (negated, source))
+    if let Some(source) = source_for_head(body) {
+        return Some((negated, source, None));
+    }
+
+    let normalized = body.to_ascii_lowercase();
+    SOURCE_HEAD_SPECS.iter().find_map(|spec| {
+        [Some(spec.canonical), spec.short]
+            .into_iter()
+            .flatten()
+            .find_map(|head| {
+                (normalized.starts_with(head) && body.len() > head.len())
+                    .then(|| (negated, spec.source, Some(body[head.len()..].to_string())))
+            })
+    })
 }
 
 fn classify_filter_predicate_token(token: &str) -> Option<(bool, Predicate)> {

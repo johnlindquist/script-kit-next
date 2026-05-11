@@ -44,13 +44,25 @@ impl RootFileSearchRequest {
 
 impl ScriptListApp {
     pub(crate) fn refresh_root_recent_file_results(&mut self) {
-        let options = self.config.get_unified_search().root_file_section_options();
+        let mut options = self.config.get_unified_search().root_file_section_options();
+        if self
+            .menu_syntax_mode
+            .advanced_query_for(&self.computed_filter_text)
+            .is_some_and(|query| {
+                query
+                    .source_filters
+                    .includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)
+            })
+        {
+            options.files_enabled = true;
+            options.recent_files_enabled = true;
+        }
         if !options.files_enabled || !options.recent_files_enabled {
             if !self.root_recent_file_results.is_empty() {
                 self.root_recent_file_results.clear();
                 self.invalidate_grouped_cache();
             }
-            self.root_recent_file_revision = self.frecency_store.revision();
+            self.root_recent_file_revision = u64::MAX;
             return;
         }
 
@@ -161,6 +173,7 @@ impl ScriptListApp {
                 self.restore_main_menu_selection_from_snapshot(snapshot);
             }
             self.validate_selection_bounds(cx);
+            self.invalidate_main_window_preflight();
             self.rebuild_main_window_preflight_if_needed();
         }
         cx.notify();

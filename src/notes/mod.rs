@@ -56,7 +56,7 @@ pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 pub(crate) use storage::{
     delete_note_cart_item, get_all_notes, list_note_cart_items, root_notes_query_is_eligible,
     save_note_cart_item, search_notes, search_root_notes_meta, search_root_notes_meta_cached,
-    RootNoteSearchHit, RootNotesSectionOptions,
+    search_root_notes_meta_direct, RootNoteSearchHit, RootNotesSectionOptions,
 };
 
 // Re-export key types - suppress unused warnings since these are public API

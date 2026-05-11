@@ -352,6 +352,11 @@ pub(crate) fn search_root_browser_tabs_meta(
 }
 
 #[allow(dead_code)]
+pub(crate) fn focus_root_browser_tab(hit: &RootBrowserTabSearchHit) -> Result<()> {
+    activate_tab(&hit.tab)
+}
+
+#[allow(dead_code)]
 pub(crate) fn search_root_browser_tabs_meta_direct(
     query: &str,
     options: RootBrowserTabsSectionOptions,
@@ -388,11 +393,6 @@ pub(crate) fn search_root_browser_tabs_meta_direct(
             }
         })
         .collect()
-}
-
-#[allow(dead_code)]
-pub(crate) fn focus_root_browser_tab(hit: &RootBrowserTabSearchHit) -> Result<()> {
-    activate_tab(&hit.tab)
 }
 
 #[allow(dead_code)]
@@ -532,7 +532,11 @@ fn root_fuzzy_search_browser_tabs(
     search_urls: bool,
 ) -> Vec<BrowserTabMatch> {
     if query.trim().is_empty() {
-        return Vec::new();
+        return tabs
+            .iter()
+            .cloned()
+            .map(|tab| BrowserTabMatch { tab, score: 0 })
+            .collect();
     }
 
     let query_lower = query.trim().to_lowercase();

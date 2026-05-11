@@ -500,7 +500,7 @@ fn root_fuzzy_search_browser_history_hits(
 ) -> Vec<RootBrowserHistorySearchHit> {
     let query = query.trim();
     if query.is_empty() {
-        return Vec::new();
+        return hits.to_vec();
     }
 
     let query_lower = query.to_lowercase();

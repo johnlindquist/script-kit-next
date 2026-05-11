@@ -88,7 +88,7 @@ impl ScriptListApp {
             && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
         {
             if explicit_notes {
-                crate::notes::search_root_notes_meta(search_text, notes_options)
+                crate::notes::search_root_notes_meta_direct(search_text, notes_options)
             } else {
                 crate::notes::search_root_notes_meta_cached(search_text, notes_options)
             }
@@ -103,7 +103,7 @@ impl ScriptListApp {
                 clipboard_history_options,
             ) {
             if explicit_clipboard {
-                crate::clipboard_history::search_root_clipboard_history_meta(
+                crate::clipboard_history::search_root_clipboard_history_meta_direct(
                     search_text,
                     clipboard_history_options,
                 )
@@ -124,7 +124,7 @@ impl ScriptListApp {
                 dictation_history_options,
             ) {
             if explicit_dictation {
-                crate::dictation::search_root_dictation_history(search_text, dictation_history_options)
+                crate::dictation::search_root_dictation_history_direct(search_text, dictation_history_options)
             } else {
                 crate::dictation::search_root_dictation_history_cached(
                     search_text,
@@ -142,7 +142,7 @@ impl ScriptListApp {
                 acp_history_options,
             ) {
             if explicit_conversations {
-                crate::ai::acp::history::search_history(search_text, acp_history_options.max_results)
+                crate::ai::acp::history::search_history_direct(search_text, acp_history_options.max_results)
             } else {
                 crate::ai::acp::history::search_history_cached(
                     search_text,
@@ -505,7 +505,16 @@ impl ScriptListApp {
             || matches!(
                 self.root_file_search_mode,
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery)
-            );
+            )
+            || self
+                .menu_syntax_mode
+                .advanced_query_for(&self.computed_filter_text)
+                .is_some_and(|query| {
+                    query.free_text.trim().is_empty()
+                        && query
+                            .source_filters
+                            .includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)
+                });
         if should_refresh_root_recent_files {
             self.refresh_root_recent_file_results();
         }
@@ -606,25 +615,31 @@ impl ScriptListApp {
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {
                 notes_options.enabled = true;
+                notes_options.min_query_chars = 0;
             }
             if source_filters
                 .includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)
             {
                 clipboard_history_options.enabled = true;
+                clipboard_history_options.min_query_chars = 0;
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation) {
                 dictation_history_options.enabled = true;
+                dictation_history_options.min_query_chars = 0;
             }
             if source_filters
                 .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)
             {
                 acp_history_options.enabled = true;
+                acp_history_options.min_query_chars = 0;
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs) {
                 browser_tabs_options.enabled = true;
+                browser_tabs_options.min_query_chars = 0;
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory) {
                 browser_history_options.enabled = true;
+                browser_history_options.min_query_chars = 0;
             }
             let root_passive_frame = self.root_passive_frame_for_current_query(
                 search_text,
@@ -670,6 +685,7 @@ impl ScriptListApp {
                 &self.scriptlets,
                 &self.builtin_entries,
                 &self.apps,
+                &self.cached_windows,
                 &self.skills,
                 &self.frecency_store,
                 search_text,

@@ -579,6 +579,12 @@ impl ScriptListApp {
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
         crate::dictation::hydrate_dictation_resource_from_history();
+        let initial_cached_windows =
+            if std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some() {
+                crate::window_control::list_windows().unwrap_or_default()
+            } else {
+                Vec::new()
+            };
 
         let mut app = ScriptListApp {
             scripts,
@@ -591,7 +597,7 @@ impl ScriptListApp {
             cached_clipboard_entries: Vec::new(),
             paste_sequential_state: None,
             focused_clipboard_entry_id: None,
-            cached_windows: Vec::new(),
+            cached_windows: initial_cached_windows,
             cached_browser_tabs: Vec::new(),
             cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
@@ -608,6 +614,7 @@ impl ScriptListApp {
             root_file_frame: None,
             root_passive_frame: None,
             pending_root_file_actions_file: None,
+            pending_root_unified_actions_subject: None,
             cached_processes: Vec::new(),
             process_manager_refresh_task: None,
             cached_current_app_entries: Vec::new(),

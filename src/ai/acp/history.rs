@@ -318,6 +318,10 @@ pub(crate) fn search_history(query: &str, limit: usize) -> Vec<AcpHistorySearchH
     hits
 }
 
+pub(crate) fn search_history_direct(query: &str, limit: usize) -> Vec<AcpHistorySearchHit> {
+    search_history(query, limit)
+}
+
 fn cached_history_entries_if_fresh() -> Option<Vec<AcpHistoryEntry>> {
     let path = history_path();
     let signature = history_file_signature(&path);

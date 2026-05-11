@@ -16,6 +16,8 @@ mod filter_input_change;
 mod filter_input_updates;
 #[path = "root_file_search.rs"]
 mod root_file_search;
+#[path = "root_unified_result_actions.rs"]
+pub(crate) mod root_unified_result_actions;
 #[path = "menu_syntax_trigger_popup.rs"]
 mod menu_syntax_trigger_popup;
 #[path = "menu_syntax_trigger_popup_window.rs"]

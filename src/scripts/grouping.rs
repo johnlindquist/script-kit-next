@@ -23,7 +23,7 @@ use crate::list_item::GroupedListItem;
 use crate::menu_bar::MenuBarItem;
 use crate::plugins::PluginSkill;
 
-use super::search::fuzzy_search_unified_all_with_skills;
+use super::search::{fuzzy_search_unified_all_with_skills, fuzzy_search_windows};
 use super::types::{
     FallbackMatch, MatchIndices, Script, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
     SearchResult,
@@ -380,6 +380,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         scriptlets,
         builtins,
         apps,
+        &[],
         skills,
         frecency_store,
         filter_text,
@@ -439,6 +440,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
+    windows: &[crate::window_control::WindowInfo],
     skills: &[Arc<PluginSkill>],
     frecency_store: &FrecencyStore,
     filter_text: &str,
@@ -489,6 +491,15 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             &mut grouped,
             &mut flat_results,
             root_source_filters,
+        );
+    }
+    if root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Windows) {
+        append_root_windows_section(
+            &mut grouped,
+            &mut flat_results,
+            windows,
+            filter_text,
+            advanced_query,
         );
     }
 
@@ -1223,6 +1234,30 @@ fn root_file_passive_insertion_index(
         .unwrap_or(grouped.len())
 }
 
+fn append_root_windows_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    windows: &[crate::window_control::WindowInfo],
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+) {
+    if advanced_query.is_some_and(|query| query.has_predicates()) {
+        return;
+    }
+
+    let matches = fuzzy_search_windows(windows, filter_text);
+    if matches.is_empty() {
+        return;
+    }
+
+    grouped.push(GroupedListItem::SectionHeader("Windows".to_string(), None));
+    for window_match in matches {
+        let idx = flat_results.len();
+        flat_results.push(SearchResult::Window(window_match));
+        grouped.push(GroupedListItem::Item(idx));
+    }
+}
+
 fn merge_root_global_file_results_with_recent(
     provider_results: &[crate::file_search::FileResult],
     recent_results: &[crate::file_search::FileResult],
@@ -1801,6 +1836,7 @@ mod advanced_query_tests {
             &[builtin_entry("Design Gallery")],
             &[],
             &[],
+            &[],
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -1944,6 +1980,7 @@ mod advanced_query_tests {
             &[],
             &[],
             &[builtin_entry("Design Gallery")],
+            &[],
             &[],
             &[],
             &frecency_store,
@@ -2108,6 +2145,7 @@ mod advanced_query_tests {
                     &[builtin_entry("Design Gallery")],
                     &[],
                     &[],
+                    &[],
                     &frecency_store,
                     query,
                     &SuggestedConfig::default(),
@@ -2210,6 +2248,7 @@ mod advanced_query_tests {
             &[],
             &[],
             &[builtin_entry("Design Gallery")],
+            &[],
             &[],
             &[],
             &frecency_store,
@@ -2321,6 +2360,7 @@ mod advanced_query_tests {
             &[],
             &[],
             &[],
+            &[],
             &frecency_store,
             query,
             &SuggestedConfig::default(),
@@ -2418,6 +2458,7 @@ mod advanced_query_tests {
                 &[],
                 &[],
                 &[builtin_entry("Design Gallery")],
+                &[],
                 &[],
                 &[],
                 &frecency_store,

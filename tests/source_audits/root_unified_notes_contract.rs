@@ -24,6 +24,9 @@ fn root_unified_notes_search_is_metadata_only_bounded_and_active_only() {
     assert!(storage.contains("pub(crate) struct RootNoteSearchHit"));
     assert!(storage.contains("root_notes_query_is_eligible("));
     assert!(search_fn.contains("n.deleted_at IS NULL"));
+    assert!(search_fn.contains("if hits.is_empty()"));
+    assert!(search_fn.contains("search_root_notes_meta_like(&conn, query, true, limit)?"));
+    assert!(search_fn.contains("title LIKE ?1 OR content LIKE ?1"));
     assert!(search_fn.contains("deleted_at IS NULL AND title LIKE"));
     assert!(search_fn.contains("LIMIT ?2"));
     assert!(search_fn.contains("LIMIT ?4"));

@@ -96,6 +96,7 @@ impl Message {
             crate::menu_syntax::capture_history_picker::HistoryPickerSnapshot,
         >,
         main_window_preflight: Option<serde_json::Value>,
+        actions_dialog: Option<serde_json::Value>,
         root_file_search: Option<serde_json::Value>,
         screenshot_identity: Option<String>,
     ) -> Self {
@@ -116,6 +117,7 @@ impl Message {
             menu_syntax_main_hint,
             capture_history_picker,
             main_window_preflight,
+            actions_dialog,
             root_file_search,
             screenshot_identity,
         }

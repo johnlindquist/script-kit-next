@@ -155,7 +155,16 @@ impl ScriptListApp {
                 action_id,
                 should_close,
             } => {
-                let root_file_context = if should_close
+                let root_unified_context = if should_close
+                    && matches!(host, ActionsDialogHost::MainList)
+                    && crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(&action_id).is_some()
+                {
+                    self.pending_root_unified_actions_subject.clone()
+                } else {
+                    None
+                };
+                let root_file_context = if root_unified_context.is_none()
+                    && should_close
                     && matches!(host, ActionsDialogHost::MainList)
                     && crate::action_helpers::is_root_file_action_id(&action_id)
                 {
@@ -167,6 +176,17 @@ impl ScriptListApp {
                 };
                 if should_close {
                     self.close_actions_popup(host, window, cx);
+                }
+                if let Some(subject) = root_unified_context {
+                    if crate::root_unified_result_actions::execute_root_unified_result_action(
+                        self,
+                        &action_id,
+                        &subject,
+                        window,
+                        cx,
+                    ) {
+                        return;
+                    }
                 }
                 if let Some(file) = root_file_context {
                     if self.execute_root_file_action(&action_id, &file, window, cx) {
@@ -206,6 +226,26 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
+                if let Some(subject) = self.pending_root_unified_actions_subject.clone() {
+                    if crate::root_unified_result_actions::execute_root_unified_result_action(
+                        self,
+                        &action_id,
+                        &subject,
+                        window,
+                        cx,
+                    ) {
+                        return;
+                    }
+                }
+                if crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(&action_id).is_some() {
+                    tracing::warn!(
+                        target: "script_kit::actions",
+                        event = "root_unified_result_action_missing_subject",
+                        action_id = %action_id,
+                        "Root result action ignored because no pending subject was captured"
+                    );
+                    return;
+                }
                 if crate::action_helpers::is_root_file_action_id(&action_id) {
                     if let Some(file) = self
                         .pending_root_file_actions_file
@@ -357,8 +397,22 @@ impl ScriptListApp {
 
         match host {
             ActionsDialogHost::MainList => {
-                if let Some(file) = self.selected_root_file_result_owned() {
-                    self.toggle_root_file_actions(&file, window, cx);
+                if let Some(result) = self.selected_main_list_search_result_owned() {
+                    match crate::root_unified_result_actions::root_unified_action_owner_for_result(&result) {
+                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::RootSubject(subject) => {
+                            self.toggle_root_unified_result_actions(subject, window, cx);
+                        }
+                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::ExistingScriptActions => {
+                            if self.has_actions() {
+                                self.toggle_actions(cx, window);
+                            }
+                        }
+                        crate::root_unified_result_actions::RootUnifiedResultActionOwner::None => {
+                            if self.has_actions() {
+                                self.toggle_actions(cx, window);
+                            }
+                        }
+                    }
                 } else if self.has_actions() {
                     self.toggle_actions(cx, window);
                 }
@@ -837,6 +891,7 @@ impl ScriptListApp {
     pub(crate) fn clear_actions_context_for_host(&mut self, host: ActionsDialogHost) {
         if matches!(host, ActionsDialogHost::MainList) {
             self.pending_root_file_actions_file = None;
+            self.pending_root_unified_actions_subject = None;
         }
     }
 

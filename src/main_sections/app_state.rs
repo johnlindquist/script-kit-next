@@ -456,6 +456,9 @@ struct ScriptListApp {
     root_passive_frame: Option<RootPassiveFrame>,
     /// File row captured when opening the root-file actions palette.
     pending_root_file_actions_file: Option<file_search::FileResult>,
+    /// Root unified-search row captured when opening the MainList actions palette.
+    pending_root_unified_actions_subject:
+        Option<crate::root_unified_result_actions::RootUnifiedActionSubject>,
     /// Cached process list for ProcessManagerView (avoids cloning per frame)
     cached_processes: Vec<crate::process_manager::ProcessInfo>,
     /// Background refresh task for ProcessManagerView (dropped on view change)
