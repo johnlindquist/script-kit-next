@@ -57,6 +57,7 @@ pub struct UnifiedSearchConfig {
     pub enabled: bool,
     #[serde(default = "default_unified_search_passive_source_order")]
     pub passive_source_order: Vec<UnifiedSearchPassiveSource>,
+    pub passive_result_limits: UnifiedSearchPassiveResultLimitsConfig,
     pub files: UnifiedSearchFilesConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
@@ -71,6 +72,7 @@ impl Default for UnifiedSearchConfig {
         Self {
             enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
             passive_source_order: default_unified_search_passive_source_order(),
+            passive_result_limits: UnifiedSearchPassiveResultLimitsConfig::default(),
             files: UnifiedSearchFilesConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
@@ -106,6 +108,26 @@ impl UnifiedSearchPassiveSource {
 
 fn default_unified_search_passive_source_order() -> Vec<UnifiedSearchPassiveSource> {
     UnifiedSearchPassiveSource::DEFAULT_ORDER.to_vec()
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchPassiveResultLimitsConfig {
+    pub max_total_results: usize,
+    pub max_total_results_when_primary_visible: usize,
+    pub max_results_per_source_when_primary_visible: usize,
+}
+
+impl Default for UnifiedSearchPassiveResultLimitsConfig {
+    fn default() -> Self {
+        Self {
+            max_total_results: DEFAULT_UNIFIED_SEARCH_PASSIVE_MAX_TOTAL_RESULTS,
+            max_total_results_when_primary_visible:
+                DEFAULT_UNIFIED_SEARCH_PASSIVE_MAX_TOTAL_RESULTS_WHEN_PRIMARY_VISIBLE,
+            max_results_per_source_when_primary_visible:
+                DEFAULT_UNIFIED_SEARCH_PASSIVE_MAX_PER_SOURCE_WHEN_PRIMARY_VISIBLE,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -330,6 +352,21 @@ impl UnifiedSearchConfig {
             }
         }
         order
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn passive_result_limits(&self) -> UnifiedSearchPassiveResultLimitsConfig {
+        UnifiedSearchPassiveResultLimitsConfig {
+            max_total_results: self.passive_result_limits.max_total_results.clamp(0, 24),
+            max_total_results_when_primary_visible: self
+                .passive_result_limits
+                .max_total_results_when_primary_visible
+                .clamp(0, 12),
+            max_results_per_source_when_primary_visible: self
+                .passive_result_limits
+                .max_results_per_source_when_primary_visible
+                .clamp(0, 5),
+        }
     }
 
     pub fn root_file_section_options(&self) -> crate::file_search::RootFileSectionOptions {

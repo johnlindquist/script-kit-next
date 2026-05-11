@@ -65,7 +65,9 @@ pub use config::{
 
 // Cache
 #[allow(unused_imports)]
-pub use cache::{cache_image, get_cached_entries, get_cached_image};
+pub use cache::{
+    cache_image, get_cached_entries, get_cached_image, search_root_clipboard_history_meta_cached,
+};
 
 // Database operations
 #[allow(unused_imports)]

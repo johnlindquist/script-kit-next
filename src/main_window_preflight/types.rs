@@ -69,6 +69,10 @@ pub(crate) struct RootPassiveSourceReceipt {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct RootPassiveFrameReceipt {
     pub query: String,
+    pub notes: RootPassiveSourceReceipt,
+    pub clipboard_history: RootPassiveSourceReceipt,
+    pub dictation_history: RootPassiveSourceReceipt,
+    pub acp_history: RootPassiveSourceReceipt,
     pub browser_tabs: RootPassiveSourceReceipt,
     pub browser_history: RootPassiveSourceReceipt,
 }
@@ -82,6 +86,7 @@ pub(crate) struct MainWindowPreflightReceipt {
     pub selected_result_role: MainWindowPreflightResultRole,
     pub visible_results: Vec<MainWindowPreflightVisibleResult>,
     pub visible_result_key_fingerprint: String,
+    pub visible_row_fingerprint: String,
     pub visible_result_count: usize,
     pub root_passive_frame: Option<RootPassiveFrameReceipt>,
     pub enter_action: MainWindowPreflightAction,

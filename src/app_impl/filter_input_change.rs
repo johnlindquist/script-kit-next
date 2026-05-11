@@ -826,10 +826,10 @@ impl ScriptListApp {
             }
         }
 
-        // Queue the result-frame update before notifying. Rendering between
+        // Apply the result-frame update before notifying. Rendering between
         // `filter_text` and `computed_filter_text` would show rows from the
         // previous query under the new input, changing the visible Enter
-        // target one coalescing tick later.
+        // target one frame later.
         self.queue_filter_compute(new_text.clone(), cx);
 
         // Log handler timing

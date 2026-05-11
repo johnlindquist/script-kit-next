@@ -6,7 +6,9 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, info};
 
@@ -14,6 +16,8 @@ use super::model::{Note, NoteId};
 
 /// Global database connection for notes
 static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
+static ROOT_NOTES_SEARCH_CACHE: OnceLock<Mutex<RootNotesSearchCache>> = OnceLock::new();
+static ROOT_NOTES_SEARCH_CACHE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootNotesSectionOptions {
@@ -42,6 +46,53 @@ pub(crate) struct RootNoteSearchHit {
     pub is_pinned: bool,
     pub char_count: usize,
     pub score: i32,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct RootNotesSearchCacheKey {
+    query: String,
+    enabled: bool,
+    max_results: usize,
+    min_query_chars: usize,
+    search_content: bool,
+}
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct RootNotesSearchFlightKey {
+    generation: u64,
+    search: RootNotesSearchCacheKey,
+}
+
+#[derive(Default)]
+struct RootNotesSearchCache {
+    hits_by_query: HashMap<RootNotesSearchCacheKey, Vec<RootNoteSearchHit>>,
+    in_flight: HashSet<RootNotesSearchFlightKey>,
+}
+
+fn root_notes_search_cache() -> &'static Mutex<RootNotesSearchCache> {
+    ROOT_NOTES_SEARCH_CACHE.get_or_init(|| Mutex::new(RootNotesSearchCache::default()))
+}
+
+fn root_notes_search_cache_key(
+    query: &str,
+    options: RootNotesSectionOptions,
+) -> RootNotesSearchCacheKey {
+    RootNotesSearchCacheKey {
+        query: query.trim().to_string(),
+        enabled: options.enabled,
+        max_results: options.max_results,
+        min_query_chars: options.min_query_chars,
+        search_content: options.search_content,
+    }
+}
+
+fn invalidate_root_notes_search_cache() {
+    ROOT_NOTES_SEARCH_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
+    if let Some(cache) = ROOT_NOTES_SEARCH_CACHE.get() {
+        if let Ok(mut guard) = cache.lock() {
+            guard.hits_by_query.clear();
+        }
+    }
 }
 
 pub(crate) fn root_notes_query_is_eligible(query: &str, options: RootNotesSectionOptions) -> bool {
@@ -248,6 +299,7 @@ pub fn save_note(note: &Note) -> Result<()> {
     .context("Failed to save note")?;
 
     debug!(note_id = %note.id, title = %note.title, "Note saved");
+    invalidate_root_notes_search_cache();
     Ok(())
 }
 
@@ -440,6 +492,61 @@ pub(crate) fn search_root_notes_meta(
     }
 }
 
+/// Cache-only root notes lookup for the launcher foreground search path.
+///
+/// A cold query starts a background SQLite search and returns no hits for the
+/// active frame. The worker only warms a future frame cache; it does not notify
+/// or invalidate the current launcher rows.
+pub(crate) fn search_root_notes_meta_cached(
+    query: &str,
+    options: RootNotesSectionOptions,
+) -> Vec<RootNoteSearchHit> {
+    if !root_notes_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+
+    let key = root_notes_search_cache_key(query, options);
+    let generation = ROOT_NOTES_SEARCH_CACHE_GENERATION.load(Ordering::Relaxed);
+    let flight = RootNotesSearchFlightKey {
+        generation,
+        search: key.clone(),
+    };
+
+    if let Ok(mut guard) = root_notes_search_cache().lock() {
+        if let Some(hits) = guard.hits_by_query.get(&key) {
+            return hits.clone();
+        }
+        if !guard.in_flight.insert(flight.clone()) {
+            return Vec::new();
+        }
+    } else {
+        return Vec::new();
+    }
+
+    let query = key.query.clone();
+    let key_for_worker = key.clone();
+    let flight_for_worker = flight.clone();
+    let spawn_result = std::thread::Builder::new()
+        .name("root-notes-search-cache".to_string())
+        .spawn(move || {
+            let hits = search_root_notes_meta(&query, options);
+            if let Ok(mut guard) = root_notes_search_cache().lock() {
+                guard.in_flight.remove(&flight_for_worker);
+                if ROOT_NOTES_SEARCH_CACHE_GENERATION.load(Ordering::Relaxed) == generation {
+                    guard.hits_by_query.insert(key_for_worker, hits);
+                }
+            }
+        });
+
+    if spawn_result.is_err() {
+        if let Ok(mut guard) = root_notes_search_cache().lock() {
+            guard.in_flight.remove(&flight);
+        }
+    }
+
+    Vec::new()
+}
+
 fn search_root_notes_meta_result(
     query: &str,
     options: RootNotesSectionOptions,
@@ -527,6 +634,7 @@ pub fn delete_note_permanently(id: NoteId) -> Result<()> {
         .context("Failed to delete note")?;
 
     info!(note_id = %id, "Note permanently deleted");
+    invalidate_root_notes_search_cache();
     Ok(())
 }
 
@@ -549,6 +657,9 @@ pub fn delete_all_deleted_notes() -> Result<()> {
         .context("Failed to commit delete_all_deleted_notes transaction")?;
 
     info!(deleted_count = count, "Deleted all soft-deleted notes");
+    if count > 0 {
+        invalidate_root_notes_search_cache();
+    }
     Ok(())
 }
 
@@ -570,6 +681,7 @@ pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
 
     if count > 0 {
         info!(count, days, "Pruned old deleted notes");
+        invalidate_root_notes_search_cache();
     }
 
     Ok(count)

@@ -149,6 +149,7 @@ impl ScriptListApp {
 
         self.root_file_results = results;
         self.root_file_search_loading = loading;
+        self.root_file_provider_loading = loading;
         if clear_cancel {
             self.root_file_search_cancel = None;
         }
@@ -208,7 +209,26 @@ impl ScriptListApp {
         if clear_cancel {
             self.root_file_search_cancel = None;
         }
-        self.root_file_search_loading = false;
+        self.root_file_provider_loading = false;
+    }
+
+    pub(crate) fn active_root_file_cache_result_count(&self) -> usize {
+        let Some(mode) = self.root_file_search_mode else {
+            return 0;
+        };
+        let request = match mode {
+            crate::file_search::RootFileSectionMode::GlobalQuery => {
+                RootFileSearchRequest::GlobalQuery {
+                    query: self.root_file_search_query.clone(),
+                }
+            }
+            crate::file_search::RootFileSectionMode::DirectoryBrowse => return 0,
+        };
+        let cache_key = request.cache_key();
+        self.root_file_result_cache
+            .iter()
+            .find_map(|(key, results)| (key == &cache_key).then_some(results.len()))
+            .unwrap_or(0)
     }
 
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
@@ -220,12 +240,15 @@ impl ScriptListApp {
                 || !self.root_recent_file_results.is_empty()
                 || !self.root_file_search_query.is_empty()
                 || self.root_file_search_loading
+                || self.root_file_provider_loading
                 || self.root_file_search_mode.is_some();
             self.root_file_results.clear();
             self.root_recent_file_results.clear();
             self.root_file_search_query.clear();
             self.root_file_search_mode = None;
             self.root_file_search_loading = false;
+            self.root_file_provider_loading = false;
+            self.root_file_frame = None;
             if had_results {
                 self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
                 self.invalidate_grouped_cache();
@@ -272,11 +295,14 @@ impl ScriptListApp {
             let had_results = !self.root_file_results.is_empty()
                 || !self.root_file_search_query.is_empty()
                 || self.root_file_search_loading
+                || self.root_file_provider_loading
                 || self.root_file_search_mode.is_some();
             self.root_file_results.clear();
             self.root_file_search_query.clear();
             self.root_file_search_mode = None;
             self.root_file_search_loading = false;
+            self.root_file_provider_loading = false;
+            self.root_file_frame = None;
             if had_results {
                 self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
                 self.invalidate_grouped_cache();
@@ -315,6 +341,7 @@ impl ScriptListApp {
         let cached_results = self.cached_root_file_results_for_request(&request);
         self.root_file_results = cached_results;
         self.root_file_search_loading = self.root_file_results.is_empty();
+        self.root_file_provider_loading = true;
         self.invalidate_grouped_cache();
 
         let cancel = crate::file_search::new_cancel_token();
@@ -338,6 +365,10 @@ impl ScriptListApp {
                 let request = request.clone();
                 move || match request {
                     RootFileSearchRequest::GlobalQuery { query } => {
+                        if emit_root_file_search_test_fixture(&query, &cancel, &tx) {
+                            return;
+                        }
+
                         let provider_query =
                             crate::file_search::root_file_provider_query_for_user_query(&query);
                         crate::file_search::search_files_streaming_with_options(
@@ -424,4 +455,89 @@ fn dedupe_root_file_results(
         .into_iter()
         .filter(|file| seen.insert(file.path.clone()))
         .collect()
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RootFileSearchTestFixture {
+    query: String,
+    #[serde(default = "default_root_file_test_delay_ms")]
+    delay_ms: u64,
+    results: Vec<RootFileSearchTestFixtureResult>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RootFileSearchTestFixtureResult {
+    path: String,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    file_type: Option<String>,
+    #[serde(default)]
+    size: u64,
+    #[serde(default)]
+    modified: u64,
+}
+
+fn default_root_file_test_delay_ms() -> u64 {
+    250
+}
+
+fn emit_root_file_search_test_fixture(
+    query: &str,
+    cancel: &crate::file_search::CancelToken,
+    tx: &std::sync::mpsc::Sender<crate::file_search::SearchEvent>,
+) -> bool {
+    let Ok(raw) = std::env::var("SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER") else {
+        return false;
+    };
+    let Ok(fixture) = serde_json::from_str::<RootFileSearchTestFixture>(&raw) else {
+        return false;
+    };
+    if fixture.query != query {
+        return false;
+    }
+
+    std::thread::sleep(std::time::Duration::from_millis(fixture.delay_ms));
+    if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+        return true;
+    }
+
+    for result in fixture.results {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return true;
+        }
+        let _ = tx.send(crate::file_search::SearchEvent::Result(result.into_file_result()));
+    }
+    let _ = tx.send(crate::file_search::SearchEvent::Done);
+    true
+}
+
+impl RootFileSearchTestFixtureResult {
+    fn into_file_result(self) -> crate::file_search::FileResult {
+        let name = self.name.unwrap_or_else(|| {
+            std::path::Path::new(&self.path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(&self.path)
+                .to_string()
+        });
+        crate::file_search::FileResult {
+            path: self.path,
+            name,
+            size: self.size,
+            modified: self.modified,
+            file_type: match self.file_type.as_deref() {
+                Some("directory") => crate::file_search::FileType::Directory,
+                Some("application") => crate::file_search::FileType::Application,
+                Some("image") => crate::file_search::FileType::Image,
+                Some("document") => crate::file_search::FileType::Document,
+                Some("audio") => crate::file_search::FileType::Audio,
+                Some("video") => crate::file_search::FileType::Video,
+                Some("other") => crate::file_search::FileType::Other,
+                _ => crate::file_search::FileType::File,
+            },
+        }
+    }
 }

@@ -155,7 +155,7 @@ impl Default for RootFilePromotionPolicy {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RootFileSectionOptions {
     pub files_enabled: bool,
     pub recent_files_enabled: bool,

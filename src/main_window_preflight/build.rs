@@ -18,6 +18,34 @@ fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
         .collect()
 }
 
+fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
+    app.main_menu_result_caches
+        .grouped_items()
+        .iter()
+        .enumerate()
+        .map(|(grouped_index, item)| match item {
+            GroupedListItem::SectionHeader(label, icon) => {
+                format!("h:{grouped_index}:{label}:{icon:?}")
+            }
+            GroupedListItem::Item(flat_index) => app
+                .main_menu_result_caches
+                .search_result_for_flat_index(*flat_index)
+                .map(|result| {
+                    format!(
+                        "i:{grouped_index}:{flat_index}:{}:{:?}:{:?}:{}:{}",
+                        result.stable_selection_key().unwrap_or_default(),
+                        result_role(result),
+                        enter_action_kind(result),
+                        result.type_label(),
+                        result.source_name().unwrap_or("")
+                    )
+                })
+                .unwrap_or_else(|| format!("i:{grouped_index}:{flat_index}:missing")),
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
 fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResultRole {
     match result {
         crate::scripts::SearchResult::Script(_)
@@ -124,6 +152,34 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
 
     Some(RootPassiveFrameReceipt {
         query: frame.key.query.clone(),
+        notes: RootPassiveSourceReceipt {
+            enabled: frame.key.notes_options.enabled,
+            frame_count: frame.note_hits.len(),
+            cache_generation: 0,
+            frame_generation: 0,
+            refreshing: false,
+        },
+        clipboard_history: RootPassiveSourceReceipt {
+            enabled: frame.key.clipboard_history_options.enabled,
+            frame_count: frame.clipboard_history_hits.len(),
+            cache_generation: 0,
+            frame_generation: 0,
+            refreshing: false,
+        },
+        dictation_history: RootPassiveSourceReceipt {
+            enabled: frame.key.dictation_history_options.enabled,
+            frame_count: frame.dictation_history_hits.len(),
+            cache_generation: 0,
+            frame_generation: 0,
+            refreshing: false,
+        },
+        acp_history: RootPassiveSourceReceipt {
+            enabled: frame.key.acp_history_options.enabled,
+            frame_count: frame.acp_history_hits.len(),
+            cache_generation: 0,
+            frame_generation: 0,
+            refreshing: false,
+        },
         browser_tabs: RootPassiveSourceReceipt {
             enabled: frame.key.browser_tabs_options.enabled,
             frame_count: frame.browser_tab_hits.len(),
@@ -178,6 +234,7 @@ pub(crate) fn build_main_window_preflight_receipt(
         selected_result_role,
         visible_results,
         visible_result_key_fingerprint: visible_result_keys(app).join("|"),
+        visible_row_fingerprint: visible_row_fingerprint(app),
         visible_result_count: app.main_menu_result_caches.grouped_search_results().count(),
         root_passive_frame: build_root_passive_frame_receipt(app),
         enter_action,
@@ -193,6 +250,7 @@ pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightRec
         selected_result_key = ?receipt.selected_result_key,
         selected_result_role = ?receipt.selected_result_role,
         visible_result_key_fingerprint = %receipt.visible_result_key_fingerprint,
+        visible_row_fingerprint = %receipt.visible_row_fingerprint,
         visible_result_count = receipt.visible_result_count,
         enter_label = %receipt.enter_action.label,
         enter_subject = %receipt.enter_action.subject,

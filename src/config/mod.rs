@@ -37,7 +37,8 @@ pub use types::{
     ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
     UnifiedSearchAcpHistoryConfig, UnifiedSearchBrowserHistoryConfig,
     UnifiedSearchBrowserTabsConfig, UnifiedSearchConfig, UnifiedSearchFilesConfig,
-    UnifiedSearchPassiveSource, WatcherConfig, WindowManagementPreferences,
+    UnifiedSearchPassiveResultLimitsConfig, UnifiedSearchPassiveSource, WatcherConfig,
+    WindowManagementPreferences,
 };
 
 // Re-export loader

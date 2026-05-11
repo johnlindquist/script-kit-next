@@ -99,7 +99,7 @@ fn browser_snapshot_sources_expose_status_for_state_first_proof() {
 }
 
 #[test]
-fn filtering_cache_freezes_browser_snapshot_hits_per_query_frame() {
+fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
     let app_state = include_str!("../../src/main_sections/app_state.rs");
     let filtering_cache = include_str!("../../src/app_impl/filtering_cache.rs");
     let preflight_types = include_str!("../../src/main_window_preflight/types.rs");
@@ -115,11 +115,19 @@ fn filtering_cache_freezes_browser_snapshot_hits_per_query_frame() {
         "same-query passive frames should reuse the frozen hit vectors"
     );
     assert!(
-        filtering_cache.contains("search_root_browser_tabs_meta(")
+        filtering_cache.contains("search_root_notes_meta_cached(")
+            && filtering_cache.contains("search_root_clipboard_history_meta_cached(")
+            && filtering_cache.contains("search_root_dictation_history_cached(")
+            && filtering_cache.contains("search_history_cached(")
+            && filtering_cache.contains("search_root_browser_tabs_meta(")
             && filtering_cache.contains("search_root_browser_history_meta(")
+            && filtering_cache.contains("&root_passive_frame.note_hits")
+            && filtering_cache.contains("&root_passive_frame.clipboard_history_hits")
+            && filtering_cache.contains("&root_passive_frame.dictation_history_hits")
+            && filtering_cache.contains("&root_passive_frame.acp_history_hits")
             && filtering_cache.contains("&root_passive_frame.browser_tab_hits")
             && filtering_cache.contains("&root_passive_frame.browser_history_hits"),
-        "browser tab/history hits should flow through the frozen passive frame"
+        "all passive source hits should flow through the frozen passive frame"
     );
     assert!(
         preflight_types.contains("RootPassiveFrameReceipt")
@@ -133,6 +141,86 @@ fn filtering_cache_freezes_browser_snapshot_hits_per_query_frame() {
             && preflight_build.contains("root_browser_history_snapshot_status()"),
         "runtime proof should be able to wait for browser passive refresh completion"
     );
+}
+
+#[test]
+fn foreground_grouping_uses_cache_only_passive_sources() {
+    let filtering_cache = include_str!("../../src/app_impl/filtering_cache.rs");
+    let frame_fn = filtering_cache
+        .split("fn root_passive_frame_for_current_query(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn root_file_frame_for_current_query(").next())
+        .expect("root_passive_frame_for_current_query should exist");
+
+    for required in [
+        "search_root_notes_meta_cached(",
+        "search_root_clipboard_history_meta_cached(",
+        "search_root_dictation_history_cached(",
+        "search_history_cached(",
+    ] {
+        assert!(
+            frame_fn.contains(required),
+            "root passive frame should use cache-only foreground source `{required}`"
+        );
+    }
+
+    for forbidden in [
+        "search_root_notes_meta(",
+        "search_root_clipboard_history_meta(",
+        "search_root_dictation_history(",
+        "crate::ai::acp::history::search_history(",
+    ] {
+        assert!(
+            !frame_fn.contains(forbidden),
+            "foreground root passive frame must not call blocking source `{forbidden}`"
+        );
+    }
+}
+
+#[test]
+fn cold_passive_sources_warm_future_frames_without_publishing() {
+    let notes = include_str!("../../src/notes/storage.rs");
+    let acp = include_str!("../../src/ai/acp/history.rs");
+    let clipboard = include_str!("../../src/clipboard_history/cache.rs");
+    let dictation = include_str!("../../src/dictation/history.rs");
+
+    for (source_name, source, cached_fn, warmer) in [
+        (
+            "notes",
+            notes,
+            "search_root_notes_meta_cached(",
+            "root-notes-search-cache",
+        ),
+        (
+            "acp_history",
+            acp,
+            "search_history_cached(",
+            "root-acp-history-cache",
+        ),
+        (
+            "clipboard_history",
+            clipboard,
+            "search_root_clipboard_history_meta_cached(",
+            "root-clipboard-history-cache",
+        ),
+        (
+            "dictation_history",
+            dictation,
+            "search_root_dictation_history_cached(",
+            "root-dictation-history-cache",
+        ),
+    ] {
+        assert!(
+            source.contains(cached_fn) && source.contains(warmer),
+            "{source_name} should expose a cache-only root search and background warmer"
+        );
+        assert!(
+            !source.contains("invalidate_grouped_cache")
+                && !source.contains("publish_active_results")
+                && !source.contains("cx.notify"),
+            "{source_name} cache warmers must not publish into the active root frame"
+        );
+    }
 }
 
 #[test]
@@ -187,6 +275,28 @@ fn jsonl_history_sources_use_mtime_backed_foreground_indexes() {
             "{source_name} history writes/deletes must invalidate the root-search index cache"
         );
     }
+}
+
+#[test]
+fn acp_history_root_cache_bounds_search_text_before_foreground_ranking() {
+    let source = include_str!("../../src/ai/acp/history.rs");
+    let rank_fn = source
+        .split("fn rank_history_entries(")
+        .nth(1)
+        .and_then(|rest| rest.split("/// Search loaded history entries").next())
+        .expect("rank_history_entries should exist");
+
+    assert!(
+        source.contains("const HISTORY_SEARCH_TEXT_MAX_CHARS")
+            && source.contains("fn bounded_search_text(")
+            && source.contains("entry.search_text = bounded_search_text(&entry.search_text);"),
+        "ACP history cache should clamp legacy multi-megabyte search_text fields before root ranking"
+    );
+    assert!(
+        rank_fn.contains("let full = entry.search_text.as_str();")
+            && !rank_fn.contains("normalize_search_text(&entry.search_text)"),
+        "foreground ACP history ranking should reuse normalized cached search_text without reallocating it per keystroke"
+    );
 }
 
 #[test]

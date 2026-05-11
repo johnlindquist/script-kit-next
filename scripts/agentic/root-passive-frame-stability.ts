@@ -17,6 +17,7 @@ const session = argValue("--session", "root-passive-frame-stability");
 const query = argValue("--query", "zzqxpassiveproof");
 const timeoutMs = Number(argValue("--timeout", "8000"));
 const pollMs = Number(argValue("--poll", "100"));
+const maxPassiveWhenPrimary = Number(argValue("--max-passive-when-primary", "4"));
 
 function runSession(args: string[]): Json {
   const result = spawnSync(sessionScript, args, {
@@ -131,6 +132,12 @@ function assertPassiveRolesDoNotPrecedePrimary(preflight: Json, label: string): 
   if (firstPassive.visibleRank <= firstPrimary.visibleRank) {
     throw new Error(
       `${label}: rootPassive row appeared before primary row: ${JSON.stringify(rows)}`,
+    );
+  }
+  const passiveCount = rows.filter((row: Json) => row.role === "rootPassive").length;
+  if (passiveCount > maxPassiveWhenPrimary) {
+    throw new Error(
+      `${label}: rootPassive row count ${passiveCount} exceeded primary-collision budget ${maxPassiveWhenPrimary}: ${JSON.stringify(rows)}`,
     );
   }
 }

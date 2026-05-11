@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, OnceLock};
 
 type HistoryFileSignature = Option<(std::path::PathBuf, std::time::SystemTime, u64)>;
+const HISTORY_SEARCH_TEXT_MAX_CHARS: usize = 4096;
 
 #[derive(Clone)]
 struct AcpHistoryIndexCache {
@@ -15,9 +16,14 @@ struct AcpHistoryIndexCache {
 }
 
 static ACP_HISTORY_INDEX_CACHE: OnceLock<Mutex<Option<AcpHistoryIndexCache>>> = OnceLock::new();
+static ACP_HISTORY_REFRESH_IN_FLIGHT: OnceLock<Mutex<bool>> = OnceLock::new();
 
 fn acp_history_index_cache() -> &'static Mutex<Option<AcpHistoryIndexCache>> {
     ACP_HISTORY_INDEX_CACHE.get_or_init(|| Mutex::new(None))
+}
+
+fn acp_history_refresh_in_flight() -> &'static Mutex<bool> {
+    ACP_HISTORY_REFRESH_IN_FLIGHT.get_or_init(|| Mutex::new(false))
 }
 
 fn invalidate_history_cache() {
@@ -141,6 +147,10 @@ fn normalize_search_text(value: &str) -> String {
     collapse_whitespace(value).to_lowercase()
 }
 
+fn bounded_search_text(value: &str) -> String {
+    truncate_chars(&normalize_search_text(value), HISTORY_SEARCH_TEXT_MAX_CHARS)
+}
+
 // ── Index builder ────────────────────────────────────────────────────
 
 /// Build a rich history entry from a full saved conversation.
@@ -181,7 +191,7 @@ pub(crate) fn build_history_entry(conversation: &SavedConversation) -> Option<Ac
         session_id: conversation.session_id.clone(),
         title: title.clone(),
         preview: preview.clone(),
-        search_text: normalize_search_text(&format!(
+        search_text: bounded_search_text(&format!(
             "{}\n{}\n{}\n{}",
             title, preview, transcript_sample, conversation.timestamp
         )),
@@ -221,7 +231,7 @@ fn rank_history_entries(
     for entry in entries {
         let title = normalize_search_text(entry.title_display());
         let preview = normalize_search_text(entry.preview_display());
-        let full = normalize_search_text(&entry.search_text);
+        let full = entry.search_text.as_str();
         let timestamp = normalize_search_text(&entry.timestamp);
         let combined = format!("{title} {preview} {full} {timestamp}");
 
@@ -302,6 +312,68 @@ pub(crate) fn search_history(query: &str, limit: usize) -> Vec<AcpHistorySearchH
         target: "script_kit::tab_ai",
         event = "acp_history_search_executed",
         query = %query,
+        limit,
+        hit_count = hits.len(),
+    );
+    hits
+}
+
+fn cached_history_entries_if_fresh() -> Option<Vec<AcpHistoryEntry>> {
+    let path = history_path();
+    let signature = history_file_signature(&path);
+    let guard = acp_history_index_cache().lock().ok()?;
+    let cache = guard.as_ref()?;
+    (cache.signature == signature).then(|| cache.entries.clone())
+}
+
+fn ensure_history_cache_warm() {
+    if let Ok(mut refreshing) = acp_history_refresh_in_flight().lock() {
+        if *refreshing {
+            return;
+        }
+        *refreshing = true;
+    } else {
+        return;
+    }
+
+    let spawn_result = std::thread::Builder::new()
+        .name("root-acp-history-cache".to_string())
+        .spawn(|| {
+            let _ = load_history();
+            if let Ok(mut refreshing) = acp_history_refresh_in_flight().lock() {
+                *refreshing = false;
+            }
+        });
+
+    if spawn_result.is_err() {
+        if let Ok(mut refreshing) = acp_history_refresh_in_flight().lock() {
+            *refreshing = false;
+        }
+    }
+}
+
+/// Cache-only ACP history search for root launcher passive rows.
+///
+/// A cold or stale JSONL index starts a background load and returns no hits for
+/// the current frame. Late completion warms a future frame without invalidating
+/// or notifying the active main menu.
+pub(crate) fn search_history_cached(query: &str, limit: usize) -> Vec<AcpHistorySearchHit> {
+    let Some(entries) = cached_history_entries_if_fresh() else {
+        ensure_history_cache_warm();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "root_acp_history_search_cache_miss",
+            query_len = query.trim().chars().count(),
+            limit,
+        );
+        return Vec::new();
+    };
+
+    let hits = rank_history_entries(entries, query, limit);
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "root_acp_history_search_cache_hit",
+        query_len = query.trim().chars().count(),
         limit,
         hit_count = hits.len(),
     );
@@ -434,10 +506,12 @@ fn parse_history_entries(content: &str) -> Vec<AcpHistoryEntry> {
                 entry.preview = entry.first_message.clone();
             }
             if entry.search_text.is_empty() {
-                entry.search_text = normalize_search_text(&format!(
+                entry.search_text = bounded_search_text(&format!(
                     "{}\n{}\n{}",
                     entry.title, entry.preview, entry.timestamp
                 ));
+            } else {
+                entry.search_text = bounded_search_text(&entry.search_text);
             }
             entry
         })

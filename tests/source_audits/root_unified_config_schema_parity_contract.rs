@@ -256,6 +256,43 @@ fn root_unified_passive_source_order_is_schema_backed_and_total() {
         "TypeScript config schema must expose unifiedSearch.passiveSourceOrder"
     );
     assert!(
+        config_types.contains("pub passive_result_limits: UnifiedSearchPassiveResultLimitsConfig"),
+        "UnifiedSearchConfig must carry passive result limits"
+    );
+    assert!(
+        config_types.contains("pub struct UnifiedSearchPassiveResultLimitsConfig"),
+        "Rust config must expose passive result limits"
+    );
+    assert!(
+        config_types
+            .contains("passive_result_limits: UnifiedSearchPassiveResultLimitsConfig::default()"),
+        "UnifiedSearchConfig::default must initialize passive result limits"
+    );
+    assert!(
+        config_types.contains(
+            "pub(crate) fn passive_result_limits(&self) -> UnifiedSearchPassiveResultLimitsConfig"
+        ),
+        "UnifiedSearchConfig must expose normalized passive result limits"
+    );
+    for required_clamp in [
+        "max_total_results.clamp(0, 24)",
+        "max_total_results_when_primary_visible\n                .clamp(0, 12)",
+        "max_results_per_source_when_primary_visible\n                .clamp(0, 5)",
+    ] {
+        assert!(
+            config_types.contains(required_clamp),
+            "passive result limits must clamp `{required_clamp}`"
+        );
+    }
+    assert!(
+        config_schema.contains("passiveResultLimits?: UnifiedSearchPassiveResultLimitsConfig"),
+        "TypeScript config schema must expose unifiedSearch.passiveResultLimits"
+    );
+    assert!(
+        config_schema.contains("export interface UnifiedSearchPassiveResultLimitsConfig"),
+        "TypeScript config schema must expose passive result limits interface"
+    );
+    assert!(
         config_schema.contains(
             "Reorders passive local source sections only; it does not enable or disable sources."
         ),

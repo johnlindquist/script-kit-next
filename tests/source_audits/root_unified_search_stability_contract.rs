@@ -80,15 +80,17 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
     assert!(types.contains("pub selected_result_role: MainWindowPreflightResultRole"));
     assert!(types.contains("pub visible_results: Vec<MainWindowPreflightVisibleResult>"));
     assert!(types.contains("pub visible_result_key_fingerprint: String"));
+    assert!(types.contains("pub visible_row_fingerprint: String"));
     assert!(types.contains("pub visible_result_count: usize"));
     assert!(build.contains("result.stable_selection_key()"));
     assert!(build.contains("visible_result_receipts(app)"));
     assert!(build.contains("visible_result_keys(app).join(\"|\")"));
+    assert!(build.contains("visible_row_fingerprint(app)"));
     assert!(build.contains("selected_result_key = ?receipt.selected_result_key"));
     assert!(protocol.contains("mainWindowPreflight"));
     assert!(protocol.contains("rootFileSearch"));
     assert!(prompt_handler.contains("serde_json::to_value(receipt).ok()"));
-    assert!(prompt_handler.contains("\"loading\": self.root_file_search_loading"));
+    assert!(prompt_handler.contains("\"loading\": self.root_file_provider_loading"));
 }
 
 #[test]
@@ -187,6 +189,8 @@ fn preflight_visible_results_expose_search_safety_roles() {
 fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
     let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("read filter_input_change.rs");
+    let updates = fs::read_to_string("src/app_impl/filter_input_updates.rs")
+        .expect("read filter_input_updates.rs");
     let body_start = source
         .find("pub(crate) fn handle_filter_input_change(")
         .expect("handle_filter_input_change should exist");
@@ -206,7 +210,40 @@ fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
 
     assert!(
         !script_list_tail[..queue_index].contains("cx.notify();"),
-        "ScriptList typing must not render after filter_text changes but before computed_filter_text/grouped rows catch up"
+        "ScriptList typing must not render after filter_text changes but before queue_filter_compute installs the computed frame"
+    );
+
+    let queue_body = updates
+        .split("pub(crate) fn queue_filter_compute(")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("/// Apply a filter text change synchronously")
+                .next()
+        })
+        .expect("queue_filter_compute body should be present");
+    let computed_index = queue_body
+        .find("self.computed_filter_text = value.clone();")
+        .expect("queue_filter_compute should synchronously install computed_filter_text");
+    let root_file_index = queue_body
+        .find("self.maybe_start_root_file_search(&value, cx);")
+        .expect("queue_filter_compute should start root file frame before reconcile");
+    let reconcile_index = queue_body
+        .find("self.reconcile_script_list_after_filter_change(\"filter_immediate\", cx);")
+        .expect("queue_filter_compute should reconcile the list immediately");
+    let notify_index = queue_body
+        .find("cx.notify();")
+        .expect("queue_filter_compute should notify after the stable frame is ready");
+
+    assert!(
+        computed_index < root_file_index
+            && root_file_index < reconcile_index
+            && reconcile_index < notify_index,
+        "ScriptList typing should install computed text, root file state, and grouped rows before notify"
+    );
+    assert!(
+        !queue_body.contains("timer(std::time::Duration::from_millis(8))"),
+        "ScriptList typing should not show a stale grouped frame while an async coalescer waits"
     );
 }
 
@@ -220,12 +257,23 @@ fn agentic_root_search_frame_stability_proof_compares_preflight_receipts() {
         "waitFor",
         "stateMatch",
         "getState",
+        "getElements",
         "mainWindowPreflight",
         "selectedResultKey",
+        "selectedResultRole",
         "visibleResultKeyFingerprint",
+        "visibleRowFingerprint",
+        "visibleResults",
+        "visibleResultCount",
         "enterAction",
         "rootFileSearch",
         "GlobalQuery",
+        "cacheResultCount",
+        "assertSameFrame",
+        "samples",
+        "provider settled without warming",
+        "SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER",
+        "loading !== true",
         "loading === false",
     ] {
         assert!(
@@ -238,4 +286,129 @@ fn agentic_root_search_frame_stability_proof_compares_preflight_receipts() {
         !proof.contains("captureScreenshot") && !proof.contains("simulateClick"),
         "root frame stability proof should stay state-first, not screenshot or mouse based"
     );
+}
+
+#[test]
+fn agentic_root_search_visual_stability_proof_captures_native_window_and_logs() {
+    let proof = fs::read_to_string("scripts/agentic/root-search-visual-stability.ts")
+        .expect("read root-search-visual-stability.ts");
+
+    for required in [
+        "Bun.spawn([binary]",
+        "macos-input.ts",
+        "screencapture",
+        "contact-sheet.png",
+        "SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER",
+        "visibleRowFingerprint",
+        "visibleResultKeyFingerprint",
+        "observedProviderLoading",
+        "observedProviderSettled",
+        "cacheResultCount",
+        "rootPassiveFrame",
+        "visibleResults",
+        "visibleRootFileCount",
+        "warmProvider",
+        "expectVisibleFileResults",
+        "warmRootFileProvider",
+        "waitForRootFileProviderSettlement",
+        "assertInputFramesStable",
+        "assertLatency",
+        "maxGroupMs",
+        "maxHandlerMs",
+        "app.log",
+        "responses.jsonl",
+        "receipt.json",
+        "assertStable",
+    ] {
+        assert!(
+            proof.contains(required),
+            "visual runtime proof script should contain `{required}`"
+        );
+    }
+
+    assert!(
+        !proof.contains("simulateKey"),
+        "visual stability proof should use native macOS input, not protocol simulateKey"
+    );
+}
+
+#[test]
+fn global_provider_completion_does_not_touch_visible_frame_fields() {
+    let source = fs::read_to_string("src/app_impl/root_file_search.rs")
+        .expect("read src/app_impl/root_file_search.rs");
+    let body = source
+        .split("fn cache_root_file_search_results_for_generation(")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub(crate) fn active_root_file_cache_result_count")
+                .next()
+        })
+        .expect("cache_root_file_search_results_for_generation body should be present");
+
+    assert!(body.contains("self.root_file_result_cache"));
+    assert!(body.contains("self.root_file_provider_loading = false"));
+    for forbidden in [
+        "self.root_file_results =",
+        "self.root_file_search_loading =",
+        "invalidate_grouped_cache",
+        "sync_list_state_for_filter_replacement",
+        "rebuild_main_window_preflight",
+        "cx.notify",
+    ] {
+        assert!(
+            !body.contains(forbidden),
+            "global cache-only provider completion must not touch visible frame path: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn global_root_file_grouping_uses_query_frame_latch() {
+    let app_state =
+        fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+    let filtering = fs::read_to_string("src/app_impl/filtering_cache.rs")
+        .expect("read src/app_impl/filtering_cache.rs");
+
+    for required in [
+        "RootFileFrameKey",
+        "RootFileFrame",
+        "root_file_frame: Option<RootFileFrame>",
+    ] {
+        assert!(
+            app_state.contains(required),
+            "app_state should contain `{required}`"
+        );
+    }
+
+    for required in [
+        "fn root_file_frame_for_current_query(",
+        "if frame.key == key",
+        "return frame.clone()",
+        "RootFileSectionMode::GlobalQuery",
+        "frame.file_results.as_slice()",
+        "frame.recent_file_results.as_slice()",
+        "frame.visible_loading",
+    ] {
+        assert!(
+            filtering.contains(required),
+            "filtering cache should contain `{required}`"
+        );
+    }
+}
+
+#[test]
+fn root_file_state_receipt_separates_provider_loading_from_visible_loading() {
+    let prompt_handler =
+        fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
+
+    for required in [
+        "\"loading\": self.root_file_provider_loading",
+        "\"visibleLoading\": self.root_file_search_loading",
+        "\"cacheResultCount\": self.active_root_file_cache_result_count()",
+    ] {
+        assert!(
+            prompt_handler.contains(required),
+            "rootFileSearch receipt should contain `{required}`"
+        );
+    }
 }

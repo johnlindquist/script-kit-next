@@ -53,54 +53,31 @@ impl ScriptListApp {
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
-        // P3: Debounce expensive search/window resize work.
-        // Use 8ms debounce (half a frame) to batch rapid keystrokes.
         logging::log(
             "FILTER_PERF",
-            &format!("[2/5] QUEUE_FILTER value='{}' len={}", value, value.len()),
+            &format!(
+                "[2/5] APPLY_FILTER value='{}' len={}",
+                value,
+                value.len()
+            ),
         );
-        if self.filter_coalescer.queue(value) {
-            cx.spawn(async move |this, cx| {
-                // Wait 8ms for coalescing window (half frame at 60fps)
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(8))
-                    .await;
-
-                let _ = cx.update(|cx| {
-                    this.update(cx, |app, cx| {
-                        if let Some(latest) = app.filter_coalescer.take_latest() {
-                            if app.computed_filter_text != latest {
-                                let coalesce_start = std::time::Instant::now();
-                                logging::log(
-                                    "FILTER_PERF",
-                                    &format!(
-                                        "[3/5] COALESCE_PROCESS value='{}' (after 8ms debounce)",
-                                        latest
-                                    ),
-                                );
-                                app.computed_filter_text = latest.clone();
-                                app.maybe_start_root_file_search(&latest, cx);
-                                app.reconcile_script_list_after_filter_change(
-                                    "filter_coalesced",
-                                    cx,
-                                );
-                                app.update_window_size();
-                                let coalesce_elapsed = coalesce_start.elapsed();
-                                logging::log(
-                                    "FILTER_PERF",
-                                    &format!(
-                                        "[3/5] COALESCE_DONE in {:.2}ms for '{}'",
-                                        coalesce_elapsed.as_secs_f64() * 1000.0,
-                                        latest
-                                    ),
-                                );
-                                cx.notify();
-                            }
-                        }
-                    })
-                });
-            })
-            .detach();
+        if self.computed_filter_text != value {
+            let update_start = std::time::Instant::now();
+            self.filter_coalescer.reset();
+            self.computed_filter_text = value.clone();
+            self.maybe_start_root_file_search(&value, cx);
+            self.reconcile_script_list_after_filter_change("filter_immediate", cx);
+            self.update_window_size();
+            let update_elapsed = update_start.elapsed();
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[3/5] APPLY_FILTER_DONE in {:.2}ms for '{}'",
+                    update_elapsed.as_secs_f64() * 1000.0,
+                    value
+                ),
+            );
+            cx.notify();
         }
     }
 
