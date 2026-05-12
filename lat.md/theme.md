@@ -10,6 +10,14 @@ Shared `BackgroundOpacity` defaults should keep `hover < selected` in every appe
 
 Theme validation should warn when a theme config sets `hover >= selected`, because equal values collapse hover and focus into the same visual state and make hovered rows compete with the active row.
 
+## Preset contrast guardrail
+
+Script Kit presets must keep text bases readable before semantic opacity tiers are applied; pre-dimming `secondary`, `tertiary`, `muted`, or `dimmed` text slots is forbidden.
+
+[[src/theme/presets.rs#theme_script_kit_dark]] and [[src/theme/presets.rs#theme_script_kit_light]] reuse the readable primary base color and let `BackgroundOpacity` text tiers create hierarchy. [[src/theme/audit.rs#audit_theme_contrast]] samples window, input, chrome, selection, surface, prompt, and status contrast. The `script_kit_dark_preset_passes_all_contrast_checks` and `script_kit_light_preset_passes_all_contrast_checks` tests in [[src/theme/audit.rs]] pin the stock presets so future token edits cannot reintroduce double-dimming.
+
+A companion `double_dim_audit_across_all_presets_is_informational` test in [[src/theme/audit.rs]] walks every preset and prints `[double-dim] <preset>: <slots>` lines for any third-party preset that still ships pre-dimmed text bases. It fails only when a Script Kit preset regresses; third-party retunes are tracked separately in `.goals/third-party-preset-contrast.md` because preset identities need design sign-off before their text tokens are rewritten.
+
 ## Current sources
 
 This page documents the shared row-state token contract and the guardrails that keep custom themes from erasing it.

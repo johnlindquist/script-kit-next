@@ -247,6 +247,111 @@ pub fn theme_contrast_score(theme: &Theme) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::theme::presets::presets_cached;
+
+    fn preset_theme_by_id(id: &str) -> Theme {
+        presets_cached()
+            .iter()
+            .find(|p| p.id == id)
+            .unwrap_or_else(|| panic!("preset id `{}` not found in presets_cached()", id))
+            .create_theme()
+    }
+
+    fn assert_all_contrast_samples_pass(preset_name: &str, theme: &Theme) {
+        let samples = audit_theme_contrast(theme);
+        let failing: Vec<&ThemeContrastSample> = samples.iter().filter(|s| !s.passes()).collect();
+        if !failing.is_empty() {
+            let mut details = String::new();
+            for f in &failing {
+                details.push_str(&format!(
+                    "\n  - label={} fg=#{:06x} bg=#{:06x} ratio={:.2} minimum={:.2}",
+                    f.label, f.foreground_hex, f.background_hex, f.ratio, f.minimum
+                ));
+            }
+            panic!(
+                "{} preset should pass all contrast checks; {} failing sample(s):{}",
+                preset_name,
+                failing.len(),
+                details
+            );
+        }
+    }
+
+    fn assert_text_slots_use_readable_base(theme: &Theme) {
+        let readable = best_readable_text_hex(theme.colors.background.main);
+        let text = &theme.colors.text;
+        for (slot, value) in [
+            ("secondary", text.secondary),
+            ("tertiary", text.tertiary),
+            ("muted", text.muted),
+            ("dimmed", text.dimmed),
+        ] {
+            assert_eq!(
+                value, readable,
+                "text.{} must equal the readable primary base (#{:06x}) to avoid double-dimming, got #{:06x}",
+                slot, readable, value
+            );
+        }
+    }
+
+    /// Informational report: scans every preset for pre-dimmed text slots
+    /// (secondary/tertiary/muted/dimmed not equal to the readable primary base)
+    /// and prints a `[double-dim] <preset>: <slots>` line. Does not fail —
+    /// retunes for third-party presets need design sign-off and are tracked in
+    /// `.goals/third-party-preset-contrast.md`. Asserts only that the report
+    /// runs and that Script Kit presets remain clean.
+    #[test]
+    fn double_dim_audit_across_all_presets_is_informational() {
+        let mut script_kit_double_dims: Vec<String> = Vec::new();
+        for preset in presets_cached() {
+            let theme = preset.create_theme();
+            let readable = best_readable_text_hex(theme.colors.background.main);
+            let t = &theme.colors.text;
+            let mut bad = Vec::new();
+            if t.secondary != readable {
+                bad.push(format!("secondary=#{:06x}", t.secondary));
+            }
+            if t.tertiary != readable {
+                bad.push(format!("tertiary=#{:06x}", t.tertiary));
+            }
+            if t.muted != readable {
+                bad.push(format!("muted=#{:06x}", t.muted));
+            }
+            if t.dimmed != readable {
+                bad.push(format!("dimmed=#{:06x}", t.dimmed));
+            }
+            if !bad.is_empty() {
+                println!(
+                    "[double-dim] {} (readable=#{:06x}): {}",
+                    preset.id,
+                    readable,
+                    bad.join(", ")
+                );
+                if preset.id == "script-kit-dark" || preset.id == "script-kit-light" {
+                    script_kit_double_dims.push(format!("{}: {}", preset.id, bad.join(", ")));
+                }
+            }
+        }
+        assert!(
+            script_kit_double_dims.is_empty(),
+            "Script Kit presets must not double-dim text bases; found: {:?}",
+            script_kit_double_dims
+        );
+    }
+
+    #[test]
+    fn script_kit_dark_preset_passes_all_contrast_checks() {
+        let theme = preset_theme_by_id("script-kit-dark");
+        assert_all_contrast_samples_pass("Script Kit Dark", &theme);
+        assert_text_slots_use_readable_base(&theme);
+    }
+
+    #[test]
+    fn script_kit_light_preset_passes_all_contrast_checks() {
+        let theme = preset_theme_by_id("script-kit-light");
+        assert_all_contrast_samples_pass("Script Kit Light", &theme);
+        assert_text_slots_use_readable_base(&theme);
+    }
 
     #[test]
     fn default_dark_theme_has_expected_sample_count() {

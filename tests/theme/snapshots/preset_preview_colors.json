@@ -6,7 +6,7 @@
     "bg": "#0F0F0F",
     "accent": "#FBBF24",
     "text": "#FFFFFF",
-    "secondary": "#CCCCCC",
+    "secondary": "#FFFFFF",
     "border": "#343434"
   },
   {
@@ -516,7 +516,7 @@
     "bg": "#FFFFFF",
     "accent": "#2F86D3",
     "text": "#000000",
-    "secondary": "#4A4A4A",
+    "secondary": "#111111",
     "border": "#E0E0E0"
   },
   {
