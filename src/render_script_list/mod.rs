@@ -816,6 +816,21 @@ impl ScriptListApp {
                                         .child(render_section_header(label, icon.as_deref(), theme_colors, ix == 0))
                                         .into_any_element()
                                 }
+                                GroupedListItem::Status(status) => {
+                                    div()
+                                        .id(ElementId::NamedInteger(
+                                            format!("source-status-gen-{row_generation}").into(),
+                                            ix as u64,
+                                        ))
+                                        .h(px(crate::list_item::effective_source_status_row_height()))
+                                        .px_4()
+                                        .flex()
+                                        .items_center()
+                                        .text_sm()
+                                        .text_color(rgb(theme_colors.text_secondary))
+                                        .child(status.label.clone())
+                                        .into_any_element()
+                                }
                                 GroupedListItem::Item(result_idx) => {
                                     // Regular item at 40px height (LIST_ITEM_HEIGHT)
                                     let is_selected = ix == current_selected;
@@ -969,6 +984,9 @@ impl ScriptListApp {
                     .map(|item| match item {
                         GroupedListItem::SectionHeader(..) => {
                             crate::list_item::effective_section_header_height()
+                        }
+                        GroupedListItem::Status(..) => {
+                            crate::list_item::effective_source_status_row_height()
                         }
                         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
                     })

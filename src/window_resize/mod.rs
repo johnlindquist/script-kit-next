@@ -125,6 +125,9 @@ pub(crate) fn mini_main_window_sizing_from_grouped_items(
             GroupedListItem::SectionHeader(..) => {
                 visible_section_headers += 1;
             }
+            GroupedListItem::Status(..) => {
+                visible_section_headers += 1;
+            }
             GroupedListItem::Item(_) => {
                 selectable_items += 1;
             }

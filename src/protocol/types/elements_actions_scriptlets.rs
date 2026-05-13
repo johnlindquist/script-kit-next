@@ -49,6 +49,24 @@ pub struct ElementInfo {
     /// Index in parent container (for list items)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub index: Option<usize>,
+    /// Semantic role for richer rows such as non-selectable source status.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// Stable kind for source-specific or status rows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// Root unified-search source id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Human-facing root unified-search source name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+    /// Whether this row can be selected/submitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selectable: Option<bool>,
+    /// Machine-stable status kind for source status rows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status_kind: Option<String>,
 }
 
 impl ElementInfo {
@@ -62,6 +80,12 @@ impl ElementInfo {
             selected: Some(selected),
             focused: None,
             index: Some(index),
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -75,6 +99,12 @@ impl ElementInfo {
             selected: None,
             focused: Some(focused),
             index: None,
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -88,6 +118,12 @@ impl ElementInfo {
             selected: None,
             focused: None,
             index: Some(index),
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -101,6 +137,12 @@ impl ElementInfo {
             selected: None,
             focused: None,
             index: None,
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -114,6 +156,12 @@ impl ElementInfo {
             selected: None,
             focused: None,
             index: None,
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 }

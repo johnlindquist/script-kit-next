@@ -76,6 +76,12 @@ impl ScriptListApp {
             selected: Some(selected),
             focused: None,
             index: Some(display_index),
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -763,6 +769,12 @@ impl ScriptListApp {
                 selected: Some(index == selected_index),
                 focused: None,
                 index: Some(index),
+                role: None,
+                kind: None,
+                source: None,
+                source_name: None,
+                selectable: None,
+                status_kind: None,
             });
         }
 
@@ -830,6 +842,12 @@ impl ScriptListApp {
             selected: None,
             focused: Some(focused),
             index,
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -847,6 +865,12 @@ impl ScriptListApp {
             selected: Some(selected),
             focused: None,
             index: Some(index),
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         }
     }
 
@@ -913,6 +937,12 @@ impl ScriptListApp {
                         selected: Some(checkbox.is_checked()),
                         focused: Some(focused),
                         index: Some(index),
+                        role: None,
+                        kind: None,
+                        source: None,
+                        source_name: None,
+                        selectable: None,
+                        status_kind: None,
                     }
                 }
             };
@@ -1141,6 +1171,12 @@ impl ScriptListApp {
                     selected: Some(true),
                     focused: None,
                     index: Some(2),
+                    role: None,
+                    kind: None,
+                    source: None,
+                    source_name: None,
+                    selectable: None,
+                    status_kind: None,
                 },
             );
         }
@@ -1377,16 +1413,89 @@ impl ScriptListApp {
     }
 
     fn collect_script_list_elements(&self, limit: usize) -> (Vec<protocol::ElementInfo>, usize) {
-        let (row_names, selected_row_index) = self.script_list_visible_row_labels_from_cache();
+        let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
+        let selected_grouped_index =
+            crate::list_item::coerce_selection(&grouped_items, self.selected_index);
+        let total_rows = grouped_items
+            .iter()
+            .filter(|item| !matches!(item, crate::list_item::GroupedListItem::SectionHeader(..)))
+            .count();
+        let total_count = total_rows + 2;
+        let mut elements = Vec::with_capacity(limit.min(total_count));
 
-        let (elements, total_count) = self.collect_named_rows(
-            "filter",
-            self.filter_text.clone(),
-            "results",
-            &row_names,
-            selected_row_index.unwrap_or(usize::MAX),
+        Self::push_limited_element(
+            &mut elements,
             limit,
+            protocol::ElementInfo::input(
+                "filter",
+                Some(self.filter_text.as_str()),
+                self.focused_input != FocusedInput::None,
+            ),
         );
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::list("results", total_rows),
+        );
+
+        let mut row_index = 0usize;
+        for (grouped_index, item) in grouped_items.iter().enumerate() {
+            if elements.len() >= limit {
+                break;
+            }
+            match item {
+                crate::list_item::GroupedListItem::SectionHeader(..) => {}
+                crate::list_item::GroupedListItem::Item(result_idx) => {
+                    let Some(result) = flat_results.get(*result_idx) else {
+                        continue;
+                    };
+                    let label = Self::script_list_result_label(result);
+                    let source = result.root_unified_source();
+                    let mut element = protocol::ElementInfo {
+                        semantic_id: protocol::generate_semantic_id("choice", row_index, &label),
+                        element_type: protocol::ElementType::Choice,
+                        text: Some(label.clone()),
+                        value: Some(label),
+                        selected: Some(Some(grouped_index) == selected_grouped_index),
+                        focused: None,
+                        index: Some(row_index),
+                        role: Some("row".to_string()),
+                        kind: Some(result.type_label().to_ascii_lowercase()),
+                        source: source.map(|source| source.receipt_label().to_string()),
+                        source_name: result.source_name().map(str::to_string),
+                        selectable: Some(true),
+                        status_kind: None,
+                    };
+                    if matches!(result, scripts::SearchResult::File(_)) {
+                        element.kind = Some("file".to_string());
+                    }
+                    elements.push(element);
+                    row_index += 1;
+                }
+                crate::list_item::GroupedListItem::Status(status) => {
+                    elements.push(protocol::ElementInfo {
+                        semantic_id: protocol::generate_semantic_id(
+                            "status",
+                            row_index,
+                            status.source.receipt_label(),
+                        ),
+                        element_type: protocol::ElementType::Panel,
+                        text: Some(status.label.clone()),
+                        value: Some(status.label.clone()),
+                        selected: Some(false),
+                        focused: None,
+                        index: Some(row_index),
+                        role: Some("status".to_string()),
+                        kind: Some("sourceStatus".to_string()),
+                        source: Some(status.source.receipt_label().to_string()),
+                        source_name: Some(status.source_name.clone()),
+                        selectable: Some(false),
+                        status_kind: Some(status.status_kind.as_str().to_string()),
+                    });
+                    row_index += 1;
+                }
+            }
+        }
 
         // Emit JSON snapshot of all collected semantic IDs for agent introspection
         let semantic_ids: Vec<&str> = elements.iter().map(|e| e.semantic_id.as_str()).collect();

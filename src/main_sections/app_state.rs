@@ -45,7 +45,8 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) advanced_query: bool,
     pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
     pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
-    pub(crate) clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+    pub(crate) clipboard_history_options:
+        crate::clipboard_history::RootClipboardHistorySectionOptions,
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
     pub(crate) acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
@@ -276,7 +277,7 @@ impl MainMenuResultCacheState {
             .iter()
             .filter_map(|item| match item {
                 GroupedListItem::Item(result_idx) => self.search_result_for_flat_index(*result_idx),
-                GroupedListItem::SectionHeader(..) => None,
+                GroupedListItem::SectionHeader(..) | GroupedListItem::Status(..) => None,
             })
     }
 

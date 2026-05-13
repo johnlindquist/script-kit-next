@@ -27,6 +27,13 @@ fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
             GroupedListItem::SectionHeader(label, icon) => {
                 format!("h:{grouped_index}:{label}:{icon:?}")
             }
+            GroupedListItem::Status(status) => {
+                format!(
+                    "s:{grouped_index}:{}:{}",
+                    status.source.receipt_label(),
+                    status.label
+                )
+            }
             GroupedListItem::Item(flat_index) => app
                 .main_menu_result_caches
                 .search_result_for_flat_index(*flat_index)

@@ -68,6 +68,8 @@ pub const LIST_ITEM_HEIGHT: f32 = 40.0;
 /// - Use `list()` when you need variable heights (e.g., headers + items); it uses a SumTree
 ///   and scroll math is O(log n).
 pub const SECTION_HEADER_HEIGHT: f32 = 32.0;
+/// Fixed height for non-selectable source status rows.
+pub const SOURCE_STATUS_ROW_HEIGHT: f32 = 32.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ListItemMetricsOverride {
@@ -132,6 +134,11 @@ pub fn effective_list_item_height() -> f32 {
 #[inline]
 pub fn effective_section_header_height() -> f32 {
     resolved_list_item_metrics().section_header_height
+}
+
+#[inline]
+pub fn effective_source_status_row_height() -> f32 {
+    SOURCE_STATUS_ROW_HEIGHT
 }
 
 #[inline]
@@ -357,9 +364,43 @@ pub(crate) const FONT_MONO: &str = "JetBrains Mono";
 /// Used with GPUI's `list()` component when rendering grouped results (e.g., frecency with RECENT/MAIN sections).
 /// The usize in Item variant is the index into the flat results array.
 #[derive(Clone, Debug)]
+pub struct SourceChipStatusRow {
+    pub source: crate::menu_syntax::RootUnifiedSourceFilter,
+    pub source_name: String,
+    pub status_kind: SourceChipStatusKind,
+    pub label: String,
+    pub shown: usize,
+    pub loaded: usize,
+    pub total: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SourceChipStatusKind {
+    Showing,
+    Loading,
+    Exhausted,
+    Disabled,
+    ProviderUnavailable,
+}
+
+impl SourceChipStatusKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Showing => "showing",
+            Self::Loading => "loading",
+            Self::Exhausted => "exhausted",
+            Self::Disabled => "disabled",
+            Self::ProviderUnavailable => "providerUnavailable",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum GroupedListItem {
     /// A section header (e.g., "SUGGESTED", "MAIN")
     SectionHeader(String, Option<String>),
+    /// A non-selectable source-chip status row.
+    Status(SourceChipStatusRow),
     /// A regular list item - usize is the index in the flat results array
     Item(usize),
 }

@@ -380,6 +380,7 @@ impl UnifiedSearchConfig {
             promotion_policy: self.files.promotion.into(),
             query_intent: crate::file_search::RootFileQueryIntent::OrdinaryRoot,
             source_filter_browse_target_visible_rows: None,
+            source_chip_visible_limit: None,
         }
     }
 
