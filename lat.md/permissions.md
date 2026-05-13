@@ -50,5 +50,8 @@ These files implement the durable Permission Assistant contract.
 
 - [[src/platform/permiso/mod.rs#PermisoAssistant]] — public present/dismiss API and the `PermisoHandle` Drop teardown.
 - [[src/platform/permiso/panel.rs#PermisoPanel]] — Accessibility / ScreenRecording enum with `settings_url()` and `display_name()`.
-
-Further modules land with the WP2–WP7 work packages of `.goals/permiso-permission-assistant.md`: `permiso/host_app.rs` (bundle URL + icon), `permiso/locator.rs` (settings window snapshot + CG→AppKit math), `permiso/overlay_window.rs` (`NSPanel` subclass + animation), `permiso/drag_source.rs` (native `NSDraggingSource`), and `permiso_detect.rs` (passive permission status reads). Source-grade wiki refs land alongside those files so `lat check` keeps the architecture page in sync.
+- [[src/platform/permiso/host_app.rs#host_app_bundle_url]] — resolves the host `.app` bundle URL used for the drag payload.
+- [[src/platform/permiso/locator.rs#settings_window_snapshot]] — resolves the live System Settings privacy window without caching across ticks.
+- [[src/platform/permiso/overlay_window.rs#OverlayController]] — owns the passive overlay lifetime and positioning helpers.
+- [[src/platform/permiso/drag_source.rs#AppDragSourceView]] — owns the native drag-source row and file URL payload.
+- [[src/platform/permiso_detect.rs#PermissionStatus]] — shared read model for passive permission checks.

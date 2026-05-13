@@ -171,6 +171,25 @@ pub fn list_input_device_menu_items(
     Ok(build_device_menu_items(&devices, selected_device_id))
 }
 
+pub fn microphone_permission_status() -> crate::dictation::DictationMicrophonePermissionStatus {
+    // Read-only AVFoundation preflight: authorizationStatusForMediaType only,
+    // never asks macOS for a permission prompt from setup.
+    match crate::platform::permiso_detect::microphone_authorized() {
+        crate::platform::permiso_detect::PermissionStatus::Authorized => {
+            crate::dictation::DictationMicrophonePermissionStatus::Granted
+        }
+        crate::platform::permiso_detect::PermissionStatus::Denied => {
+            crate::dictation::DictationMicrophonePermissionStatus::Denied
+        }
+        crate::platform::permiso_detect::PermissionStatus::NotDetermined => {
+            crate::dictation::DictationMicrophonePermissionStatus::NotDetermined
+        }
+        crate::platform::permiso_detect::PermissionStatus::Unknown => {
+            crate::dictation::DictationMicrophonePermissionStatus::Unknown
+        }
+    }
+}
+
 /// Persist a picker selection to config-backed preferences.
 pub fn apply_device_selection(action: &DictationDeviceSelectionAction) -> Result<()> {
     match action {

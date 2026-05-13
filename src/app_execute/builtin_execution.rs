@@ -3018,6 +3018,60 @@ impl ScriptListApp {
                             Self::builtin_success(dctx, "open_accessibility_settings")
                         }
                     }
+                    PermissionCommandType::AllowAccessibility => {
+                        match platform::permiso::PermisoAssistant::present_retained(
+                            platform::permiso::PermisoPanel::Accessibility,
+                        ) {
+                            Ok(()) => {
+                                self.show_hud(
+                                    "Drag Script Kit into Accessibility".to_string(),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                                Self::builtin_success(dctx, "allow_accessibility")
+                            }
+                            Err(error) => {
+                                let message = format!(
+                                    "Failed to open Permission Assistant: {}",
+                                    error
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_LAUNCH_FAILED,
+                                    message,
+                                    "allow_accessibility_failed",
+                                )
+                            }
+                        }
+                    }
+                    PermissionCommandType::AllowScreenRecording => {
+                        match platform::permiso::PermisoAssistant::present_retained(
+                            platform::permiso::PermisoPanel::ScreenRecording,
+                        ) {
+                            Ok(()) => {
+                                self.show_hud(
+                                    "Drag Script Kit into Screen Recording".to_string(),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                                Self::builtin_success(dctx, "allow_screen_recording")
+                            }
+                            Err(error) => {
+                                let message = format!(
+                                    "Failed to open Permission Assistant: {}",
+                                    error
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_LAUNCH_FAILED,
+                                    message,
+                                    "allow_screen_recording_failed",
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -3090,6 +3144,10 @@ impl ScriptListApp {
 
                         Self::builtin_success(dctx, "choose_theme")
                     }
+                    SettingsCommandType::DictationSetup => {
+                        self.open_dictation_model_prompt(cx);
+                        Self::builtin_success(dctx, "dictation_setup")
+                    }
                     SettingsCommandType::DisableWindowSnapping
                     | SettingsCommandType::SnapModeSimple
                     | SettingsCommandType::SnapModeExpanded
@@ -3105,7 +3163,18 @@ impl ScriptListApp {
                             SettingsCommandType::SnapModePrecision => {
                                 window_control::SnapMode::Precision
                             }
-                            _ => unreachable!("snap mode command arm only handles snap commands"),
+                            SettingsCommandType::DictationSetup => {
+                                unreachable!("dictation setup handled before snap mode arm")
+                            }
+                            SettingsCommandType::SelectMicrophone => {
+                                unreachable!("select microphone handled outside snap mode arm")
+                            }
+                            SettingsCommandType::ChooseTheme => {
+                                unreachable!("choose theme handled outside snap mode arm")
+                            }
+                            SettingsCommandType::ResetWindowPositions => {
+                                unreachable!("reset windows handled outside snap mode arm")
+                            }
                         };
 
                         let previous = window_control::current_snap_mode();
@@ -4312,6 +4381,9 @@ impl ScriptListApp {
                 // Preflight: on the start edge, verify we have somewhere to
                 // deliver transcribed text before beginning capture.
                 if !crate::dictation::is_dictation_recording() {
+                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
+                        return Self::builtin_success(dctx, "dictation_setup_opened");
+                    }
                     // Check that the Parakeet model is downloaded before
                     // starting capture — no silent Whisper fallback.
                     if !crate::dictation::is_parakeet_model_available() {
@@ -4424,6 +4496,9 @@ impl ScriptListApp {
                 // use the target-aware validator so TabAiHarness is
                 // accepted without needing the harness to be open yet.
                 if !crate::dictation::is_dictation_recording() {
+                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
+                        return Self::builtin_success(dctx, "dictation_setup_opened");
+                    }
                     if !crate::dictation::is_parakeet_model_available() {
                         if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
                             .load(std::sync::atomic::Ordering::Acquire)
@@ -4534,6 +4609,9 @@ impl ScriptListApp {
                 );
 
                 if !crate::dictation::is_dictation_recording() {
+                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
+                        return Self::builtin_success(dctx, "dictation_setup_opened");
+                    }
                     if !crate::dictation::is_parakeet_model_available() {
                         if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
                             .load(std::sync::atomic::Ordering::Acquire)
@@ -4640,6 +4718,9 @@ impl ScriptListApp {
                 );
 
                 if !crate::dictation::is_dictation_recording() {
+                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
+                        return Self::builtin_success(dctx, "dictation_setup_opened");
+                    }
                     if !crate::dictation::is_parakeet_model_available() {
                         if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
                             .load(std::sync::atomic::Ordering::Acquire)
@@ -5648,7 +5729,7 @@ impl ScriptListApp {
             DictationModelStatus::NotDownloaded => (
                 "Download local dictation model".to_string(),
                 format!(
-                    "{archive_size} download \u{00b7} fully local transcription \u{00b7} resumable if interrupted"
+                    "{archive_size} download \u{00b7} transcription is local after Parakeet installs \u{00b7} resumable if interrupted"
                 ),
                 vec![
                     Choice {
@@ -5783,7 +5864,7 @@ impl ScriptListApp {
             ),
             DictationModelStatus::Available => (
                 "Dictation model ready".to_string(),
-                "Everything is local now. Press Enter on Done or use the dictation hotkey to start recording."
+                "Start dictation from the launcher or configured hotkey; no default is assumed."
                     .to_string(),
                 vec![Choice {
                     name: "Done".to_string(),
@@ -5937,6 +6018,25 @@ impl ScriptListApp {
     /// - the launcher/main filter is active, or
     /// - a Script Kit prompt is active and can accept dictated text, or
     /// - the frontmost-app tracker already has a previously tracked external target.
+    fn open_dictation_setup_if_microphone_not_ready(&mut self, cx: &mut Context<Self>) -> bool {
+        let permission = crate::dictation::microphone_permission_status();
+        if matches!(
+            permission,
+            crate::dictation::DictationMicrophonePermissionStatus::Granted
+                | crate::dictation::DictationMicrophonePermissionStatus::Unknown
+        ) {
+            return false;
+        }
+
+        self.show_hud(
+            "Dictation needs microphone permission".to_string(),
+            Some(HUD_SHORT_MS),
+            cx,
+        );
+        self.open_dictation_model_prompt(cx);
+        true
+    }
+
     fn ensure_dictation_delivery_target_available(&self) -> anyhow::Result<()> {
         if self.can_accept_dictation_into_main_filter() || self.can_accept_dictation_into_prompt() {
             return Ok(());

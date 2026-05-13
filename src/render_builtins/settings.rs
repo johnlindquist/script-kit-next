@@ -10,9 +10,12 @@ struct SettingsItem {
 #[derive(Clone)]
 enum SettingsAction {
     ChooseTheme,
+    DictationSetup,
     SelectMicrophone,
     ClearSuggested,
     CheckPermissions,
+    AllowAccessibility,
+    AllowScreenRecording,
     RequestAccessibilityPermission,
     OpenAccessibilitySettings,
     DisableWindowSnapping,
@@ -48,6 +51,12 @@ fn get_settings_items() -> Vec<SettingsItem> {
             action: SettingsAction::ChooseTheme,
         },
         SettingsItem {
+            name: "Dictation Setup",
+            description: "Check model, microphone, and hotkey readiness",
+            icon: "mic",
+            action: SettingsAction::DictationSetup,
+        },
+        SettingsItem {
             name: "Select Microphone",
             description: "Choose which microphone to use for dictation",
             icon: "mic",
@@ -64,6 +73,18 @@ fn get_settings_items() -> Vec<SettingsItem> {
             description: "Run a check for the macOS permissions Script Kit needs",
             icon: "circle-check",
             action: SettingsAction::CheckPermissions,
+        },
+        SettingsItem {
+            name: "Allow Accessibility",
+            description: "Open the Permission Assistant for Accessibility",
+            icon: "accessibility",
+            action: SettingsAction::AllowAccessibility,
+        },
+        SettingsItem {
+            name: "Allow Screen Recording",
+            description: "Open the Permission Assistant for Screen Recording",
+            icon: "monitor",
+            action: SettingsAction::AllowScreenRecording,
         },
         SettingsItem {
             name: "Request Accessibility Permission",
@@ -173,6 +194,28 @@ impl ScriptListApp {
                 );
                 self.open_theme_chooser_view(cx);
             }
+            SettingsAction::DictationSetup => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id("builtin/dictation-setup"),
+                    name: "Dictation Setup".to_string(),
+                    description: "Check dictation model, microphone, and hotkey readiness"
+                        .to_string(),
+                    keywords: vec![
+                        "dictation".to_string(),
+                        "setup".to_string(),
+                        "microphone".to_string(),
+                        "parakeet".to_string(),
+                        "hotkey".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::SettingsCommand(
+                        crate::builtins::SettingsCommandType::DictationSetup,
+                    ),
+                    icon: Some("mic".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
             SettingsAction::SelectMicrophone => {
                 tracing::info!(
                     correlation_id = "settings-hub",
@@ -245,6 +288,53 @@ impl ScriptListApp {
                         crate::builtins::PermissionCommandType::CheckPermissions,
                     ),
                     icon: Some("circle-check".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::AllowAccessibility => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id(
+                        "builtin/allow-accessibility",
+                    ),
+                    name: "Allow Accessibility".to_string(),
+                    description: "Open the Permission Assistant for Accessibility".to_string(),
+                    keywords: vec![
+                        "allow".to_string(),
+                        "accessibility".to_string(),
+                        "permission".to_string(),
+                        "privacy".to_string(),
+                        "assistant".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::PermissionCommand(
+                        crate::builtins::PermissionCommandType::AllowAccessibility,
+                    ),
+                    icon: Some("accessibility".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::AllowScreenRecording => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id(
+                        "builtin/allow-screen-recording",
+                    ),
+                    name: "Allow Screen Recording".to_string(),
+                    description: "Open the Permission Assistant for Screen Recording".to_string(),
+                    keywords: vec![
+                        "allow".to_string(),
+                        "screen".to_string(),
+                        "recording".to_string(),
+                        "permission".to_string(),
+                        "privacy".to_string(),
+                        "assistant".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::PermissionCommand(
+                        crate::builtins::PermissionCommandType::AllowScreenRecording,
+                    ),
+                    icon: Some("monitor".to_string()),
                     group: crate::builtins::BuiltInGroup::Core,
                 };
 

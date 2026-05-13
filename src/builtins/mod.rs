@@ -171,6 +171,8 @@ pub enum PermissionCommandType {
     CheckPermissions,
     RequestAccessibility,
     OpenAccessibilitySettings,
+    AllowAccessibility,
+    AllowScreenRecording,
 }
 /// Frecency/suggested items command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +188,8 @@ pub enum SettingsCommandType {
     ChooseTheme,
     /// Select microphone for dictation
     SelectMicrophone,
+    /// Open dictation setup and readiness guidance
+    DictationSetup,
     /// Disable drag snapping entirely
     DisableWindowSnapping,
     /// Use the simplest snap target set
@@ -521,6 +525,8 @@ impl BuiltInEntry {
                 PermissionCommandType::CheckPermissions => "Check Permissions",
                 PermissionCommandType::RequestAccessibility => "Request Accessibility Access",
                 PermissionCommandType::OpenAccessibilitySettings => "Open Accessibility Settings",
+                PermissionCommandType::AllowAccessibility => "Allow Accessibility",
+                PermissionCommandType::AllowScreenRecording => "Allow Screen Recording",
             },
             BuiltInFeature::FrecencyCommand(action) => match action {
                 FrecencyCommandType::ClearSuggested => "Clear Suggested Items",
@@ -529,6 +535,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ResetWindowPositions => "Reset Window Positions",
                 SettingsCommandType::ChooseTheme => "Open Theme Designer",
                 SettingsCommandType::SelectMicrophone => "Select Microphone",
+                SettingsCommandType::DictationSetup => "Open Dictation Setup",
                 SettingsCommandType::DisableWindowSnapping => "Disable Window Snapping",
                 SettingsCommandType::SnapModeSimple => "Set Snap Mode: Simple",
                 SettingsCommandType::SnapModeExpanded => "Set Snap Mode: Expanded",
@@ -647,6 +654,8 @@ impl BuiltInEntry {
                 PermissionCommandType::CheckPermissions => "Check Access",
                 PermissionCommandType::RequestAccessibility => "Request Access",
                 PermissionCommandType::OpenAccessibilitySettings => "Accessibility",
+                PermissionCommandType::AllowAccessibility => "Accessibility",
+                PermissionCommandType::AllowScreenRecording => "Screen Recording",
             },
             BuiltInFeature::FrecencyCommand(action) => match action {
                 FrecencyCommandType::ClearSuggested => "Clear Suggested",
@@ -655,6 +664,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ResetWindowPositions => "Reset Windows",
                 SettingsCommandType::ChooseTheme => "Theme",
                 SettingsCommandType::SelectMicrophone => "Microphone",
+                SettingsCommandType::DictationSetup => "Dictation Setup",
                 SettingsCommandType::DisableWindowSnapping => "Snap Off",
                 SettingsCommandType::SnapModeSimple => "Simple Snap",
                 SettingsCommandType::SnapModeExpanded => "Expanded Snap",
@@ -1469,6 +1479,37 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
+            "builtin/allow-accessibility",
+            "Allow Accessibility",
+            "Open the Permission Assistant for Accessibility",
+            vec![
+                "allow",
+                "accessibility",
+                "permission",
+                "privacy",
+                "assistant",
+            ],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::AllowAccessibility),
+            "accessibility",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/allow-screen-recording",
+            "Allow Screen Recording",
+            "Open the Permission Assistant for Screen Recording",
+            vec![
+                "allow",
+                "screen",
+                "recording",
+                "permission",
+                "privacy",
+                "assistant",
+            ],
+            BuiltInFeature::PermissionCommand(PermissionCommandType::AllowScreenRecording),
+            "monitor",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
             "builtin/check-permissions",
             "Check Permissions",
             "Run a check for all required macOS permissions",
@@ -1573,6 +1614,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
             "palette",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictation-setup",
+            "Dictation Setup",
+            "Check dictation model, microphone, and hotkey readiness",
+            vec!["dictation", "setup", "microphone", "parakeet", "hotkey"],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::DictationSetup),
+            "mic",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
