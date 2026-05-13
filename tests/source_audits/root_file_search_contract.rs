@@ -1304,6 +1304,56 @@ mod tests {
     }
 
     #[test]
+    fn root_file_action_enter_routes_activation_before_close() {
+        let actions_dialog = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("read src/app_impl/actions_dialog.rs");
+        let app_view_state = fs::read_to_string("src/main_sections/app_view_state.rs")
+            .expect("read src/main_sections/app_view_state.rs");
+        let render_script_list = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("read src/render_script_list/mod.rs");
+        let stdin_route = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+            .expect("read src/main_entry/runtime_stdin_match_simulate_key.rs");
+        let normalized_actions = actions_dialog
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let normalized_state = app_view_state
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let normalized_script_list = render_script_list
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let normalized_stdin = stdin_route.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized_state.contains("Execute { action_id: String, should_close: bool, }"),
+            "ActionsRoute::Execute should carry should_close so callers can execute before closing clears captured root subjects"
+        );
+        assert!(
+            normalized_actions.contains("pub(crate) fn execute_actions_route_action")
+                && normalized_actions.contains("ActionsDialogActivation::Executed { action_id, should_close, }")
+                && normalized_actions.contains("self.handle_actions_dialog_activation("),
+            "route executions should reuse the activation handler that captures root context before close"
+        );
+        assert!(
+            normalized_script_list.contains(
+                "ActionsRoute::Execute { action_id, should_close, } => { this.execute_actions_route_action( ActionsDialogHost::MainList, action_id, should_close, window, cx,"
+            ),
+            "MainList physical Enter should execute root-file actions through the activation route"
+        );
+        assert!(
+            normalized_stdin.contains(
+                "crate::ActionsRoute::Execute { action_id, should_close, } =>"
+            ) && normalized_stdin.contains(
+                "view.execute_actions_route_action( host, action_id, should_close, window, ctx,"
+            ),
+            "simulated Enter should use the same activation route as physical Enter"
+        );
+    }
+
+    #[test]
     fn root_file_actions_context_cleared_by_detached_on_close() {
         let source = fs::read_to_string("src/app_impl/actions_toggle.rs")
             .expect("read src/app_impl/actions_toggle.rs");

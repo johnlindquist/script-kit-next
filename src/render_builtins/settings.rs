@@ -408,10 +408,14 @@ impl ScriptListApp {
                         cx.stop_propagation();
                         return;
                     }
-                    ActionsRoute::Execute { action_id } => {
-                        this.execute_action_for_actions_host(
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        this.execute_actions_route_action(
                             ActionsDialogHost::BuiltinList,
                             action_id,
+                            should_close,
                             window,
                             cx,
                         );

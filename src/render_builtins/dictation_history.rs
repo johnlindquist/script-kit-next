@@ -93,7 +93,17 @@ impl ScriptListApp {
                         cx.stop_propagation();
                         return;
                     }
-                    ActionsRoute::Execute { action_id } => {
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        if should_close {
+                            this.close_actions_popup(
+                                ActionsDialogHost::DictationHistory,
+                                window,
+                                cx,
+                            );
+                        }
                         this.handle_action(action_id, window, cx);
                         cx.stop_propagation();
                         return;

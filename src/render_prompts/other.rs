@@ -74,7 +74,13 @@ impl ScriptListApp {
             window,
             cx,
         ) {
-            ActionsRoute::Execute { action_id } => {
+            ActionsRoute::Execute {
+                action_id,
+                should_close,
+            } => {
+                if should_close {
+                    self.close_actions_popup(ActionsDialogHost::ChatPrompt, window, cx);
+                }
                 // Handle chat-specific actions
                 self.execute_chat_action(&action_id, cx);
                 return;

@@ -2135,9 +2135,16 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
-                                ActionsRoute::Execute { action_id } => {
-                                    this.execute_action_for_actions_host(
-                                        host, action_id, window, cx,
+                                ActionsRoute::Execute {
+                                    action_id,
+                                    should_close,
+                                } => {
+                                    this.execute_actions_route_action(
+                                        host,
+                                        action_id,
+                                        should_close,
+                                        window,
+                                        cx,
                                     );
                                     cx.stop_propagation();
                                     return;

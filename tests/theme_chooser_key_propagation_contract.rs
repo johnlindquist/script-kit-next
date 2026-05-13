@@ -39,7 +39,7 @@ fn handled_theme_chooser_keys_stop_propagation() {
 
     for marker in [
         "ActionsRoute::Handled =>",
-        "ActionsRoute::Execute { action_id } =>",
+        "ActionsRoute::Execute {\n                        action_id,\n                        should_close,\n                    } =>",
         "if is_key_escape(key) && !this.show_actions_popup",
         "if has_cmd && key.eq_ignore_ascii_case(\"w\")",
         "\"theme_chooser_keyboard_preview\"",

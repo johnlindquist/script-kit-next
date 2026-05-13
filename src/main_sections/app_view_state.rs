@@ -1360,8 +1360,11 @@ enum ActionsRoute {
     NotHandled,
     /// Key was handled by the actions dialog - caller should return/stop propagation
     Handled,
-    /// User selected an action - caller should execute it via trigger_action_by_name
-    Execute { action_id: String },
+    /// User selected an action - caller should execute the activation.
+    Execute {
+        action_id: String,
+        should_close: bool,
+    },
 }
 
 /// File-search preview thumbnail lifecycle state.

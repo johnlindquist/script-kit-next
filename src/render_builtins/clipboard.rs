@@ -97,10 +97,14 @@ impl ScriptListApp {
                     ActionsRoute::Handled => {
                         return;
                     }
-                    ActionsRoute::Execute { action_id } => {
-                        this.execute_action_for_actions_host(
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        this.execute_actions_route_action(
                             ActionsDialogHost::ClipboardHistory,
                             action_id,
+                            should_close,
                             window,
                             cx,
                         );
