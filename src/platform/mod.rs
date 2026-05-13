@@ -17,6 +17,7 @@
 
 mod display;
 pub(crate) mod gpui_event_simulator;
+pub mod permiso;
 
 include!("app_window_management.rs");
 include!("visibility_focus.rs");
