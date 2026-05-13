@@ -378,6 +378,7 @@ impl UnifiedSearchConfig {
                 && self.files.enabled
                 && self.files.directory_browse,
             promotion_policy: self.files.promotion.into(),
+            source_filter_browse_target_visible_rows: None,
         }
     }
 

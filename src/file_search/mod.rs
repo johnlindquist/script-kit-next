@@ -162,6 +162,7 @@ pub struct RootFileSectionOptions {
     pub global_search_enabled: bool,
     pub directory_browse_enabled: bool,
     pub promotion_policy: RootFilePromotionPolicy,
+    pub source_filter_browse_target_visible_rows: Option<usize>,
 }
 
 impl Default for RootFileSectionOptions {
@@ -172,6 +173,7 @@ impl Default for RootFileSectionOptions {
             global_search_enabled: true,
             directory_browse_enabled: true,
             promotion_policy: RootFilePromotionPolicy::Never,
+            source_filter_browse_target_visible_rows: None,
         }
     }
 }
