@@ -832,16 +832,25 @@ impl ScriptListApp {
                 true
             }
             crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID => {
-                if let Err(error) = crate::file_search::quick_look(&file.path) {
-                    logging::log(
-                        "ROOT_FILE_SEARCH",
-                        &format!("failed_to_quick_look path={} error={}", file.path, error),
-                    );
-                    self.show_hud(
-                        format!("Failed to preview {}", file.name),
-                        Some(HUD_MEDIUM_MS),
-                        cx,
-                    );
+                match crate::file_search::quick_look(&file.path) {
+                    Ok(()) => {
+                        self.show_hud(
+                            format!("Previewing {}", file.name),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        logging::log(
+                            "ROOT_FILE_SEARCH",
+                            &format!("failed_to_quick_look path={} error={}", file.path, error),
+                        );
+                        self.show_hud(
+                            format!("Failed to preview {}: {}", file.name, error),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                    }
                 }
                 true
             }

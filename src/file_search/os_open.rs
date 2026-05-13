@@ -165,10 +165,15 @@ pub fn move_to_trash(path: &str) -> Result<(), String> {
 pub fn quick_look(path: &str) -> Result<(), String> {
     use std::process::Command;
 
+    if !Path::new(path).exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
     #[cfg(target_os = "macos")]
     {
         Command::new("qlmanage")
-            .args(["-p", path])
+            .arg("-p")
+            .arg(path)
             .spawn()
             .map_err(|e| format!("Failed to preview file: {}", e))?;
         Ok(())
@@ -466,9 +471,20 @@ pub fn duplicate_path(path: &str) -> Result<String, String> {
 mod tests {
     use super::{
         duplicate_path, escape_windows_cmd_open_target, move_destination_default_directory,
-        terminal_working_directory,
+        quick_look, terminal_working_directory,
     };
     use tempfile::tempdir;
+
+    #[test]
+    fn quick_look_missing_path_returns_error_without_panic() {
+        let missing = format!(
+            "/tmp/script-kit-gpui-missing-quick-look-{}",
+            std::process::id()
+        );
+
+        let error = quick_look(&missing).expect_err("missing path should return an error");
+        assert!(error.contains("Path does not exist"));
+    }
 
     #[test]
     fn test_terminal_working_directory_returns_parent_for_file_paths() {

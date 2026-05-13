@@ -1467,6 +1467,64 @@ mod tests {
     }
 
     #[test]
+    fn root_file_quick_look_uses_shared_os_helper_without_file_search_state() {
+        let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let branch = selection_source
+            .split("ROOT_FILE_QUICK_LOOK_ACTION_ID =>")
+            .nth(1)
+            .and_then(|rest| rest.split("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID =>").next())
+            .expect("root-file Quick Look branch");
+
+        assert!(
+            branch.contains("crate::file_search::quick_look(&file.path)"),
+            "root-file Quick Look should use the shared OS helper against the captured file path"
+        );
+        for forbidden in [
+            "file_search_actions_path",
+            "quick_look_entry",
+            "record_root_file_open_use",
+            "execute_root_file_open",
+            "close_and_reset_window",
+            "open_file_search",
+        ] {
+            assert!(
+                !branch.contains(forbidden),
+                "root-file Quick Look must not use {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_file_quick_look_helper_checks_missing_path_before_nonblocking_spawn() {
+        let source = fs::read_to_string("src/file_search/os_open.rs")
+            .expect("read src/file_search/os_open.rs");
+        let branch = source
+            .split("pub fn quick_look(path: &str) -> Result<(), String> {")
+            .nth(1)
+            .and_then(|rest| rest.split("/// Show the \"Open With\" dialog").next())
+            .expect("quick_look helper body");
+        let normalized = branch.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains("if !Path::new(path).exists()")
+                && normalized.contains("return Err(format!(\"Path does not exist: {}\", path));"),
+            "quick_look should return a controlled error for missing paths"
+        );
+        assert!(
+            normalized.contains("Command::new(\"qlmanage\")")
+                && normalized.contains(".arg(\"-p\")")
+                && normalized.contains(".arg(path)")
+                && normalized.contains(".spawn()"),
+            "macOS Quick Look should spawn qlmanage directly without shell quoting"
+        );
+        assert!(
+            !normalized.contains(".wait()"),
+            "Quick Look should not block waiting for qlmanage to exit"
+        );
+    }
+
+    #[test]
     fn root_file_parent_folder_handoff_keeps_home_display_shortening_scoped() {
         let file_search_source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
