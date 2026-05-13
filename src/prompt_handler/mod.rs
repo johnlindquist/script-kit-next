@@ -3279,11 +3279,24 @@ impl ScriptListApp {
                 let is_focused = window_visible && self.focused_input != FocusedInput::None;
 
                 let menu_syntax_main_hint = if matches!(self.current_view, AppView::ScriptList) {
-                    let advanced_query_results_empty = self
+                    // Run 12 — also treat the empty-result gate as true when
+                    // the parser returns Incomplete but the user is mid-typing
+                    // a non-source head (`has:`, `:type:`, etc.). Source heads
+                    // stay tied to visible rows so `c: sub` does not report a
+                    // no-match hint beside real Clipboard History results.
+                    let parser_thinks_empty = self
                         .menu_syntax_mode
                         .advanced_query_for(&self.filter_text)
                         .is_some()
                         && visible_choice_count == 0;
+                    let detector_owns_head =
+                        crate::menu_syntax::main_hint::has_active_head(&self.filter_text);
+                    let source_head_has_results =
+                        crate::menu_syntax::main_hint::active_head_is_source_filter(
+                            &self.filter_text,
+                        ) && visible_choice_count > 0;
+                    let advanced_query_results_empty =
+                        parser_thinks_empty || (detector_owns_head && !source_head_has_results);
                     self.menu_syntax_main_hint_snapshot(
                         &self.filter_text,
                         advanced_query_results_empty,
@@ -3343,8 +3356,9 @@ impl ScriptListApp {
                 } else {
                     None
                 };
-                let actions_dialog = if self.show_actions_popup || crate::actions::is_actions_window_open() {
-                    self.actions_dialog
+                let actions_dialog =
+                    if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                        self.actions_dialog
                         .clone()
                         .or_else(|| crate::actions::get_actions_dialog_entity(cx))
                         .map(|dialog| {
@@ -3378,9 +3392,9 @@ impl ScriptListApp {
                             "visibleActions": visible_actions,
                         })
                     })
-                } else {
-                    None
-                };
+                    } else {
+                        None
+                    };
 
                 // Create the response
                 let response = Message::state_result(

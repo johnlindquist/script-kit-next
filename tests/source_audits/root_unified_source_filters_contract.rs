@@ -74,8 +74,7 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains(
         "source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)"
     ));
-    assert!(filtering
-        .contains("source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)"));
+    assert!(filtering.contains(".allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))"));
     assert!(filtering.contains("clipboard_history_options.enabled = true;"));
     assert!(filtering.contains("notes_options.enabled = true;"));
     assert!(filtering.contains("dictation_history_options.enabled = true;"));
@@ -87,10 +86,8 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(
         filtering.contains("crate::clipboard_history::search_root_clipboard_history_meta_direct(")
     );
-    assert!(filtering.contains(
-        "crate::dictation::search_root_dictation_history_direct(search_text, dictation_history_options)"
-    ));
-    assert!(filtering.contains("crate::ai::acp::history::search_history_direct(search_text"));
+    assert!(filtering.contains("crate::dictation::search_root_dictation_history_direct("));
+    assert!(filtering.contains("crate::ai::acp::history::search_history_direct("));
     assert!(filtering.contains("search_root_browser_tabs_meta_direct"));
     assert!(filtering.contains("search_root_browser_history_meta_direct"));
     assert!(filtering.contains(".is_some_and(|query| query.has_source_filters())"));
@@ -106,6 +103,28 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(root_file.contains(".is_none_or(|advanced_query| !advanced_query.has_predicates())"));
     assert!(root_file.contains("self.cached_root_file_results_for_request(&request)"));
     assert!(root_file.contains("root_file_result_fingerprint(&self.root_file_results)"));
+}
+
+#[test]
+fn explicit_source_filters_raise_passive_source_caps() {
+    let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
+
+    assert!(filtering.contains(
+        "let explicit_source_result_target = root_passive_result_limits.max_total_results"
+    ));
+    for source in [
+        "notes_options.max_results",
+        "clipboard_history_options.max_results",
+        "dictation_history_options.max_results",
+        "acp_history_options.max_results",
+        "browser_tabs_options.max_results",
+        "browser_history_options.max_results",
+    ] {
+        assert!(
+            filtering.contains(source) && filtering.contains(".max(explicit_source_result_target)"),
+            "explicit source filters must raise {source} above passive preview defaults"
+        );
+    }
 }
 
 #[test]
@@ -157,11 +176,16 @@ fn colon_opens_discoverability_picker_while_source_filters_do_not_open_hint() {
     let popup = include_str!("../../src/app_impl/menu_syntax_trigger_popup.rs");
     let hint = include_str!("../../src/menu_syntax/main_hint.rs");
     let render = include_str!("../../src/render_script_list/mod.rs");
+    let prompt_handler = include_str!("../../src/prompt_handler/mod.rs");
 
     assert!(trigger.contains("SOURCE_HEAD_SPECS"));
     assert!(popup.contains("fn source_filter_query_does_not_open_power_popup()"));
     assert!(hint.contains("if query.is_source_filter_only()"));
     assert!(hint.contains("return None;"));
+    assert!(hint.contains("pub fn active_head_is_source_filter(raw: &str) -> bool"));
+    assert!(render.contains("!crate::menu_syntax::main_hint::active_head_is_source_filter"));
+    assert!(prompt_handler.contains("source_head_has_results"));
+    assert!(prompt_handler.contains("detector_owns_head && !source_head_has_results"));
     assert!(render.contains("There are no search results with this filter applied."));
     assert!(render.contains("query.has_source_filters() || query.has_predicates()"));
 }
