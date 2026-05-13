@@ -1153,8 +1153,17 @@ impl ScriptListApp {
                     window,
                     cx,
                 ) {
-                    ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, window, cx);
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        this.execute_actions_route_action(
+                            ActionsDialogHost::MainList,
+                            action_id,
+                            should_close,
+                            window,
+                            cx,
+                        );
                         cx.notify();
                         return;
                     }

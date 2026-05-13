@@ -185,6 +185,8 @@ When `AppView::ScriptList` focuses a committed root unified source row, Cmd+K re
 
 The shared actions dialog remains only the host: it owns presentation, popup lifecycle, search inside actions, and focus restoration. Source-specific IDs, labels, sections, and execution are owned by the root result catalog in `[[src/app_impl/root_unified_result_actions.rs#RootUnifiedResultAction]]`; unknown root IDs log and no-op instead of falling through to generic script `handle_action`.
 
+Plain Enter and action-row shortcuts route through the same activation handler used by click callbacks. The route carries whether the popup should close so MainList root actions can execute against the captured subject before close/reset clears pending context.
+
 Scripts and scriptlets remain delegated to the existing MainList script action owner so SDK-defined and script-specific actions are preserved. Dedicated built-in views such as Clipboard History, Dictation History, File Search, ACP History, Browser History, Browser Tabs, App Launcher, and Window Switcher keep their existing action hosts; the root result action path is scoped to `ActionsDialogHost::MainList`.
 
 Windows source filters use the same primary `SearchResult::Window` rows as the window switcher search model. In agentic sessions, `SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER` can seed metadata-only `WindowInfo::for_test` rows so `w:` action receipts do not depend on macOS Accessibility state.

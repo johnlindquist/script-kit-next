@@ -76,7 +76,13 @@ where
     }
 
     match app.route_key_to_actions_dialog(key, key_char, modifiers, cfg.host, window, cx) {
-        ActionsRoute::Execute { action_id } => {
+        ActionsRoute::Execute {
+            action_id,
+            should_close,
+        } => {
+            if should_close {
+                app.close_actions_popup(cfg.host, window, cx);
+            }
             on_actions_dialog_execute(app, &action_id, cx);
             stop_if_configured(cx);
             return true;

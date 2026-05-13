@@ -2193,7 +2193,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 );
                                                 actions_popup_consumed_key = true;
                                             }
-                                            crate::ActionsRoute::Execute { action_id } => {
+                                            crate::ActionsRoute::Execute {
+                                                action_id,
+                                                should_close,
+                                            } => {
                                                 logging::log(
                                                     "STDIN",
                                                     &format!(
@@ -2201,8 +2204,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                         action_id, host
                                                     ),
                                                 );
-                                                view.execute_action_for_actions_host(
-                                                    host, action_id, window, ctx,
+                                                view.execute_actions_route_action(
+                                                    host,
+                                                    action_id,
+                                                    should_close,
+                                                    window,
+                                                    ctx,
                                                 );
                                                 actions_popup_consumed_key = true;
                                             }

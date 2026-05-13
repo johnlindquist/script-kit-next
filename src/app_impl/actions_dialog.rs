@@ -199,6 +199,25 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn execute_actions_route_action(
+        &mut self,
+        host: ActionsDialogHost,
+        action_id: String,
+        should_close: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.handle_actions_dialog_activation(
+            host,
+            crate::actions::ActionsDialogActivation::Executed {
+                action_id,
+                should_close,
+            },
+            window,
+            cx,
+        );
+    }
+
     pub(crate) fn execute_action_for_actions_host(
         &mut self,
         host: ActionsDialogHost,
@@ -666,10 +685,10 @@ impl ScriptListApp {
                             action_id, should_close, host
                         ),
                     );
-                    if should_close {
-                        self.close_actions_popup(host, window, cx);
-                    }
-                    return ActionsRoute::Execute { action_id };
+                    return ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    };
                 }
                 crate::actions::ActionsDialogActivation::NoSelection => {
                     return ActionsRoute::Handled;
@@ -777,10 +796,10 @@ impl ScriptListApp {
                     action_id,
                     should_close,
                 } => {
-                    if should_close {
-                        self.close_actions_popup(host, window, cx);
-                    }
-                    return ActionsRoute::Execute { action_id };
+                    return ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    };
                 }
                 crate::actions::ActionsDialogActivation::NoSelection => {
                     return ActionsRoute::Handled;

@@ -50,7 +50,7 @@ fn current_app_commands_routes_actions_before_local_keys_and_consumes_handled_ro
     );
     for needle in [
         "ActionsRoute::Handled =>",
-        "ActionsRoute::Execute { action_id } =>",
+        "ActionsRoute::Execute {\n                        action_id,\n                        should_close,\n                    } =>",
         "cx.stop_propagation();\n                        return;",
     ] {
         assert!(

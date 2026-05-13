@@ -89,7 +89,17 @@
                     ActionsRoute::Handled => {
                         return;
                     }
-                    ActionsRoute::Execute { action_id } => {
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        if should_close {
+                            this.close_actions_popup(
+                                ActionsDialogHost::ClipboardHistory,
+                                window,
+                                cx,
+                            );
+                        }
                         this.handle_action(action_id, window, cx);
                         return;
                     }

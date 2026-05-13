@@ -103,7 +103,13 @@
                         // Key was consumed by actions dialog
                         return;
                     }
-                    ActionsRoute::Execute { action_id } => {
+                    ActionsRoute::Execute {
+                        action_id,
+                        should_close,
+                    } => {
+                        if should_close {
+                            this.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
+                        }
                         // User selected an action - execute it
                         // Use handle_action instead of trigger_action_by_name to support
                         // both built-in actions (open_file, quick_look, etc.) and SDK actions
