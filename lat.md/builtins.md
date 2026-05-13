@@ -131,6 +131,8 @@ Explicit Files source-filter queries also own a source-specific length floor. A 
 
 The root-file `Browse Parent Folder` action is file-only. It clears the stale MainList highlight before handing off to dedicated File Search and displays home-scoped parent folders with `~`, while the File Search provider still resolves the query to an absolute filesystem path.
 
+The root-file `Quick Look` action is also MainList-scoped. Both the actions dialog and the direct `Cmd+Y` shortcut call the shared file OS helper with the captured file path, report missing-path or launch failures through HUD feedback, and do not route through dedicated File Search or clipboard preview state.
+
 ## Root Unified Search ACP History
 
 ACP conversation rows are a passive launcher source backed by saved conversation history.
