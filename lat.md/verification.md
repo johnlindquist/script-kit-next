@@ -180,6 +180,12 @@ The filter lives in [.config/nextest.toml](../.config/nextest.toml). Keep newly 
 
 The CI Rust test job installs the repo-pinned Bun version before `nextest` because config-backed preference tests read the generated `config.ts` through the same Bun loader used by the app.
 
+## Design Picker persistence
+
+Design Picker persistence verification keeps the `getState`/`kit/state` `design` envelope and the on-disk catalog id contract honest across previews, explicit commits, and the Cmd+1 cycle path.
+
+The agentic contract tests under `tests/design_picker_state_receipt_contract.rs` and `tests/design_picker_visual_matrix_script_contract.rs` exercise the receipt shape end-to-end: previews leave persisted state untouched, explicit Enter or row-click commits write the canonical catalog id, and Escape/Cmd+W restoration is preview-only. The visual matrix contract additionally pins the ScriptList screenshot for every shipped catalog id under fixed dictation/clipboard fixtures so renderer drift is caught before the receipt drifts. See [[designs#Persistence]] for the receipt fields and the lifecycle each path follows.
+
 ## Legacy sources
 
 These docs and commands seeded the verification summary and remain in place while the lattice absorbs the durable rules.

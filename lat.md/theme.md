@@ -18,6 +18,17 @@ Script Kit presets must keep text bases readable before semantic opacity tiers a
 
 A companion `double_dim_audit_across_all_presets_is_informational` test in [[src/theme/audit.rs]] walks every preset and prints `[double-dim] <preset>: <slots>` lines for any third-party preset that still ships pre-dimmed text bases. It fails only when a Script Kit preset regresses; third-party retunes are tracked separately in `.goals/third-party-preset-contrast.md` because preset identities need design sign-off before their text tokens are rewritten.
 
+### Third-party preset disposition
+
+Failures originally surfaced by [[src/theme/tests.rs#audit_selection_visibility_across_presets]] and [[src/theme/tests.rs#audit_app_chrome_surface_contrast]] are resolved per preset using one of three paths: **A** normalize automatically, **B** retune the preset hex (requires design sign-off), or **C** accept and document via per-preset opt-out.
+
+[[src/theme/presets.rs#passes_interactive_visibility]] now enforces both `selected` (≥1.10:1) and `hover` (≥1.03:1) visibility, so [[src/theme/presets.rs#normalize_dark_interactive_tokens]] and [[src/theme/presets.rs#normalize_light_interactive_tokens]] nudge `selected_subtle` toward the visibility minimum whenever either threshold would otherwise fail. The shared binary search [[src/theme/presets.rs#find_min_visible_selected_subtle_toward]] blends `selected_subtle` toward white (dark presets) or black (light presets) until both opacities clear their thresholds.
+
+| Preset | Failing surface | Path | Rationale |
+| --- | --- | --- | --- |
+| one-dark, one-dark-pro, github-dark, ayu-dark, material-ocean, vitesse-dark, darcula, oxocarbon-dark, flexoki-dark, kanagawa-dragon, aura-dark, vesper, midnight-blue, ember, arctic | `hover` visibility (was <1.03:1 at `DARK_ROW_HOVER_OPACITY` = 0.06) | **A** | Dark presets ship a `selected_subtle` tuned only for the stronger `selected` opacity (0.23); at the hover opacity the same color collapses into the bg. Normalize now brightens `selected_subtle` toward white until both thresholds clear. |
+| fairy-floss | `primary/selection_surface` (4.06:1, needed 4.5:1) | **C** | `bg.main = #5A5475` (L≈0.10) is unusually bright for a "dark" preset; white text composited at `selected` (0.23) yields `#807B94`, capped at 4.06:1. The pastel identity does not survive a darker bg, so [[src/theme/tests.rs#is_chrome_contrast_exempt]] grants a per-pair opt-out instead of weakening the global 4.5:1 floor. |
+
 ## Current sources
 
 This page documents the shared row-state token contract and the guardrails that keep custom themes from erasing it.

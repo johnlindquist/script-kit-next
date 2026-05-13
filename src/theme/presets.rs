@@ -810,6 +810,11 @@ fn build_light_theme(colors: ColorScheme) -> Theme {
 /// any light surface.
 const MIN_SELECTION_VISIBILITY_RATIO: f32 = 1.10;
 
+/// Minimum contrast ratio for hover at the (lower) hover opacity.  Hover is
+/// deliberately whisper-subtle, but must still register as a perceptible
+/// state change; 1.03:1 matches the third-party-preset audit threshold.
+const MIN_HOVER_VISIBILITY_RATIO: f32 = 1.03;
+
 /// Normalize `selected_subtle` and `on_accent` for light themes so the shared
 /// chrome contract (selection highlights, hover states, accent badges) stays
 /// legible regardless of which preset is active.
@@ -823,12 +828,9 @@ fn normalize_light_interactive_tokens(
     // surface, rather than preserving tinted preset-specific text colors.
     colors.text.primary = super::helpers::hard_readable_text_hex(bg);
 
-    // --- selected_subtle: ensure selection highlight is visible ---------------
-    let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
-    let vis_ratio = selection_visibility_ratio(composited, bg);
-
-    if vis_ratio < MIN_SELECTION_VISIBILITY_RATIO {
-        let fixed = find_min_visible_selected_subtle(bg, opacity.selected);
+    // --- selected_subtle: ensure both selection AND hover highlights register ---
+    if !passes_interactive_visibility(colors.accent.selected_subtle, bg, opacity) {
+        let fixed = find_min_visible_selected_subtle(bg, opacity);
         colors.accent.selected_subtle = fixed;
     }
 
@@ -852,15 +854,21 @@ fn normalize_dark_interactive_tokens(
 ) -> ColorScheme {
     let bg = colors.background.main;
     colors.text.primary = super::helpers::hard_readable_text_hex(bg);
-    let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
-    let vis_ratio = selection_visibility_ratio(composited, bg);
-
-    if vis_ratio < MIN_SELECTION_VISIBILITY_RATIO {
-        let fixed = find_min_visible_selected_subtle_dark(bg, opacity.selected);
+    if !passes_interactive_visibility(colors.accent.selected_subtle, bg, opacity) {
+        let fixed = find_min_visible_selected_subtle_dark(bg, opacity);
         colors.accent.selected_subtle = fixed;
     }
 
     colors
+}
+
+/// Returns true when `subtle` composited at the theme's selected and hover
+/// opacities both clear their respective visibility thresholds against `bg`.
+fn passes_interactive_visibility(subtle: u32, bg: u32, opacity: &BackgroundOpacity) -> bool {
+    let sel = composite_over(subtle, opacity.selected, bg);
+    let hov = composite_over(subtle, opacity.hover, bg);
+    selection_visibility_ratio(sel, bg) >= MIN_SELECTION_VISIBILITY_RATIO
+        && selection_visibility_ratio(hov, bg) >= MIN_HOVER_VISIBILITY_RATIO
 }
 
 /// Composite a foreground color at `alpha` over an opaque background.
@@ -882,62 +890,39 @@ fn selection_visibility_ratio(composited: u32, bg: u32) -> f32 {
     (lighter + 0.05) / (darker + 0.05)
 }
 
-/// Binary search for the darkest (closest to bg) `selected_subtle` value that
-/// still produces a visible selection highlight at the given opacity.
-/// For light themes: blends toward black.
-fn find_min_visible_selected_subtle(bg: u32, opacity_selected: f32) -> u32 {
-    let bg_r = ((bg >> 16) & 0xFF) as f32;
-    let bg_g = ((bg >> 8) & 0xFF) as f32;
-    let bg_b = (bg & 0xFF) as f32;
-
-    let make_color = |t: f32| -> u32 {
-        // Blend from bg toward black (0x000000) by factor t
-        let r = (bg_r * (1.0 - t)).round() as u32;
-        let g = (bg_g * (1.0 - t)).round() as u32;
-        let b = (bg_b * (1.0 - t)).round() as u32;
-        (r << 16) | (g << 8) | b
-    };
-
-    let check = |t: f32| -> bool {
-        let subtle = make_color(t);
-        let composited = composite_over(subtle, opacity_selected, bg);
-        selection_visibility_ratio(composited, bg) >= MIN_SELECTION_VISIBILITY_RATIO
-    };
-
-    // Binary search for minimum t that passes
-    let mut lo: f32 = 0.0;
-    let mut hi: f32 = 1.0;
-    for _ in 0..32 {
-        let mid = (lo + hi) / 2.0;
-        if check(mid) {
-            hi = mid;
-        } else {
-            lo = mid;
-        }
-    }
-    make_color(hi)
+/// Binary search for the closest-to-bg `selected_subtle` that still clears
+/// both the selection and hover visibility thresholds at the theme's
+/// selected/hover opacities.  For light themes: blends toward black.
+fn find_min_visible_selected_subtle(bg: u32, opacity: &BackgroundOpacity) -> u32 {
+    find_min_visible_selected_subtle_toward(bg, opacity, 0x000000)
 }
 
-/// Binary search for the closest-to-bg `selected_subtle` that still produces
-/// visible selection on a dark background.  Blends toward white.
-fn find_min_visible_selected_subtle_dark(bg: u32, opacity_selected: f32) -> u32 {
+/// Binary search counterpart for dark themes: blends toward white.
+fn find_min_visible_selected_subtle_dark(bg: u32, opacity: &BackgroundOpacity) -> u32 {
+    find_min_visible_selected_subtle_toward(bg, opacity, 0xFFFFFF)
+}
+
+/// Generic blend-toward-target binary search shared by light/dark normalization.
+fn find_min_visible_selected_subtle_toward(
+    bg: u32,
+    opacity: &BackgroundOpacity,
+    target: u32,
+) -> u32 {
     let bg_r = ((bg >> 16) & 0xFF) as f32;
     let bg_g = ((bg >> 8) & 0xFF) as f32;
     let bg_b = (bg & 0xFF) as f32;
+    let tgt_r = ((target >> 16) & 0xFF) as f32;
+    let tgt_g = ((target >> 8) & 0xFF) as f32;
+    let tgt_b = (target & 0xFF) as f32;
 
     let make_color = |t: f32| -> u32 {
-        // Blend from bg toward white (0xFFFFFF) by factor t
-        let r = (bg_r + (255.0 - bg_r) * t).round() as u32;
-        let g = (bg_g + (255.0 - bg_g) * t).round() as u32;
-        let b = (bg_b + (255.0 - bg_b) * t).round() as u32;
+        let r = (bg_r + (tgt_r - bg_r) * t).round() as u32;
+        let g = (bg_g + (tgt_g - bg_g) * t).round() as u32;
+        let b = (bg_b + (tgt_b - bg_b) * t).round() as u32;
         (r << 16) | (g << 8) | b
     };
 
-    let check = |t: f32| -> bool {
-        let subtle = make_color(t);
-        let composited = composite_over(subtle, opacity_selected, bg);
-        selection_visibility_ratio(composited, bg) >= MIN_SELECTION_VISIBILITY_RATIO
-    };
+    let check = |t: f32| -> bool { passes_interactive_visibility(make_color(t), bg, opacity) };
 
     let mut lo: f32 = 0.0;
     let mut hi: f32 = 1.0;

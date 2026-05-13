@@ -19,6 +19,7 @@ Root tool-facing documents still matter here. `README.md`, `CLAUDE.md`, `AGENTS.
 - [[notes]]
 - [[ai]]
 - [[design]]
+- [[designs]]
 - [[storybook]]
 - [[theme]]
 - [[windowing]]
@@ -34,6 +35,7 @@ Root tool-facing documents still matter here. `README.md`, `CLAUDE.md`, `AGENTS.
 - [[distribution]]
 - [[sharing]]
 - [[migration]]
+- [[permissions]]
 
 ## Current migration scope
 
