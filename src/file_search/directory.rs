@@ -235,17 +235,32 @@ pub fn parent_dir_display(dir_with_slash: &str) -> Option<String> {
     None
 }
 
-/// Shorten a path for display by using ~ for home directory
+pub fn shorten_home_prefix_for_display_with_home(path: &str, home: &str) -> String {
+    if home.is_empty() {
+        return path.to_string();
+    }
+
+    if path == home {
+        return "~".to_string();
+    }
+
+    let home_with_slash = ensure_trailing_slash(home);
+    if let Some(stripped) = path.strip_prefix(&home_with_slash) {
+        return format!("~/{}", stripped);
+    }
+
+    path.to_string()
+}
+
+/// Shorten a path for display by using ~ for the home directory.
 #[allow(dead_code)]
 pub fn shorten_path(path: &str) -> String {
-    if let Some(home) = dirs::home_dir() {
-        if let Some(home_str) = home.to_str() {
-            if let Some(stripped) = path.strip_prefix(home_str) {
-                return format!("~{}", stripped);
-            }
-        }
-    }
-    path.to_string()
+    dirs::home_dir()
+        .and_then(|home| {
+            home.to_str()
+                .map(|home_str| shorten_home_prefix_for_display_with_home(path, home_str))
+        })
+        .unwrap_or_else(|| path.to_string())
 }
 
 /// Expand a path string, replacing ~ with the home directory

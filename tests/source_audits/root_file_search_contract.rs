@@ -1451,14 +1451,45 @@ mod tests {
 
         assert!(
             actions_normalized.contains("ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID")
-                && actions_normalized.contains("!is_dir"),
-            "Browse Parent Folder should only be rendered for regular root file rows"
+                && actions_normalized.contains("!is_dir")
+                && actions_normalized.contains("\"Browse Parent Folder\"")
+                && actions_normalized.contains("shorten_path(&parent_query)"),
+            "Browse Parent Folder should only be rendered for regular root file rows with a shortened parent display"
         );
         assert!(
             selection_normalized.contains("root_file_browse_parent_folder_query")
                 && selection_normalized.contains("parent_folder_search_query(&file.path)")
+                && selection_normalized
+                    .contains("self.clear_main_list_selection_for_root_file_handoff();")
                 && selection_normalized.contains("self.open_file_search(query, cx);"),
-            "Browse Parent Folder should hand off to dedicated File Search at the containing folder"
+            "Browse Parent Folder should clear stale MainList selection and hand off to dedicated File Search at the containing folder"
+        );
+    }
+
+    #[test]
+    fn root_file_parent_folder_handoff_keeps_home_display_shortening_scoped() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let directory_source = fs::read_to_string("src/file_search/directory.rs")
+            .expect("read src/file_search/directory.rs");
+        let file_search_normalized = file_search_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let directory_normalized = directory_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            file_search_normalized.contains("Some(shorten_path(&ensure_trailing_slash(parent)))"),
+            "Browse Parent Folder should hand off with a display-safe parent query"
+        );
+        assert!(
+            directory_normalized.contains("shorten_home_prefix_for_display_with_home")
+                && directory_normalized.contains("path == home")
+                && directory_normalized.contains("home_with_slash"),
+            "home-prefix shortening should require exact home or home path-boundary matches"
         );
     }
 

@@ -752,6 +752,13 @@ impl ScriptListApp {
         }
     }
 
+    fn clear_main_list_selection_for_root_file_handoff(&mut self) {
+        self.selected_index = 0;
+        self.main_list_state
+            .scroll_to_reveal_item(self.selected_index);
+        self.last_scrolled_index = Some(self.selected_index);
+    }
+
     pub(crate) fn try_navigate_root_file_directory_with_tab(
         &mut self,
         has_shift: bool,
@@ -861,6 +868,7 @@ impl ScriptListApp {
                     return true;
                 };
                 self.pending_root_file_actions_file = None;
+                self.clear_main_list_selection_for_root_file_handoff();
                 self.open_file_search(query, cx);
                 true
             }
