@@ -131,16 +131,29 @@ fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
     ] {
         let source = read(path);
         let escape_start = source
-            .find("SimulateKey: Escape - clear filter, go back, or hide")
+            .find("SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide")
             .unwrap_or_else(|| panic!("SimulateKey escape handler must exist in {path}"));
-        let escape_body = &source[escape_start..source.len().min(escape_start + 800)];
+        let escape_body = &source[escape_start..source.len().min(escape_start + 1800)];
+        for marker in [
+            "is_menu_syntax_trigger_popup_window_open",
+            "!view.filter_text.is_empty()",
+            "view.opened_from_main_menu",
+            "view.go_back_or_close(window, ctx)",
+        ] {
+            assert!(
+                escape_body.contains(marker),
+                "{path} SimulateKey escape branch missing `{marker}`"
+            );
+        }
+
+        let popup_ix = escape_body
+            .find("is_menu_syntax_trigger_popup_window_open")
+            .unwrap();
+        let filter_ix = escape_body.find("!view.filter_text.is_empty()").unwrap();
+        let origin_ix = escape_body.find("view.opened_from_main_menu").unwrap();
         assert!(
-            escape_body.contains("view.opened_from_main_menu"),
-            "{path} SimulateKey escape must check opened_from_main_menu before hiding"
-        );
-        assert!(
-            escape_body.contains("view.go_back_or_close(window, ctx)"),
-            "{path} SimulateKey escape must delegate to go_back_or_close when opened_from_main_menu"
+            popup_ix < filter_ix && filter_ix < origin_ix,
+            "{path} SimulateKey Escape order must be popup -> filter -> launch origin"
         );
     }
 }

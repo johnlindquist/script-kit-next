@@ -203,6 +203,10 @@ pub fn build_trigger_picker_snapshot(
         return Some(build_capture_picker_snapshot(filter.as_deref(), ctx));
     }
 
+    if advanced_query_active_token(input).starts_with("has:") {
+        return Some(build_advanced_query_snapshot(input, ctx));
+    }
+
     let parsed = if capture_targets.is_empty() {
         parse(input)
     } else {
@@ -298,6 +302,9 @@ fn build_advanced_query_snapshot(input: &str, ctx: &TriggerPickerContext) -> Tri
 
 fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
     let active = advanced_query_active_token(input);
+    if let Some(rows) = has_field_value_rows_for_active_token(&active) {
+        return rows;
+    }
     let rows = static_qualifier_rows();
     if active.is_empty() {
         return rows;
@@ -310,10 +317,46 @@ fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
 fn advanced_query_active_token(input: &str) -> String {
     let stripped = input.strip_prefix(':').unwrap_or(input);
     let active = stripped.split_whitespace().last().unwrap_or_default();
+    if active.to_ascii_lowercase().starts_with("has:") {
+        return active.to_ascii_lowercase();
+    }
     if active.contains(':') && !active.ends_with(':') {
         return String::new();
     }
     active.to_ascii_lowercase()
+}
+
+fn has_field_value_rows_for_active_token(active: &str) -> Option<Vec<TriggerPickerRow>> {
+    let partial = active.strip_prefix("has:")?;
+    Some(
+        crate::menu_syntax::has_fields::HAS_FIELD_SPECS
+            .iter()
+            .filter(|spec| {
+                partial.is_empty()
+                    || spec.token.to_ascii_lowercase().starts_with(active)
+                    || spec
+                        .aliases
+                        .iter()
+                        .any(|alias| alias.to_ascii_lowercase().starts_with(partial))
+            })
+            .map(|spec| TriggerPickerRow {
+                id: format!("qualifier:{}", spec.token),
+                mode: TriggerPickerMode::AdvancedQuery,
+                kind: TriggerPickerRowKind::QualifierValue,
+                title: spec.token.to_string(),
+                token: Some(spec.token.to_string()),
+                subtitle: spec.subtitle.map(str::to_string),
+                detail: spec.detail.map(str::to_string),
+                example: Some(spec.token.to_string()),
+                badges: Vec::new(),
+                action: TriggerPickerAction::InsertToken {
+                    token: spec.token.to_string(),
+                    keep_open: false,
+                },
+                enabled: true,
+            })
+            .collect(),
+    )
 }
 
 fn qualifier_row_matches_active_token(row: &TriggerPickerRow, active: &str) -> bool {

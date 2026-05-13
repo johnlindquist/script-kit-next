@@ -192,6 +192,7 @@
                                 logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
+                                ctx.notify();
                             }
                             ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
                                 // Canonical dispatch lives in the shared helper — see
