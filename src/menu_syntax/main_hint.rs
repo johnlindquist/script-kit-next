@@ -151,6 +151,19 @@ pub struct MenuSyntaxMainHintSnapshot {
     pub examples: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub warning: Option<String>,
+    /// Run 12 — the active grammar head the user is typing, with the
+    /// trailing punctuation included (`has:`, `c:`, `:type:`, `:tag:`,
+    /// `:shortcut:`, `;`, `!`). Display-only receipt: never mutates
+    /// parser predicates; never reclassifies input. Populated by
+    /// [[active_head_context_for_filter]] so automation can verify
+    /// head-aware copy without screenshots or popup scraping.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_head: Option<String>,
+    /// The partial value the user has typed after [[Self::active_head]],
+    /// e.g. `"sh"` for `has:sh` or `"zzz"` for `c:zzz`. Empty when the
+    /// cursor sits immediately after the head (e.g. bare `has:`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_head_value_partial: Option<String>,
     pub accessibility_label: String,
 }
 
@@ -183,10 +196,22 @@ pub fn build_menu_syntax_main_hint(
 
     if ctx.advanced_query_results_empty {
         if let Some(query) = ctx.mode.advanced_query_for(ctx.raw_filter_text) {
-            if query.is_source_filter_only() {
+            // Source-only browse (bare `c:` / `c: ` / `v: `) keeps its
+            // existing no-hint behavior. Source-attached queries with
+            // free text (`c:zzz`) fall through to the head-aware empty
+            // branch, which renders compact source-specific copy.
+            if query.is_source_filter_only() && query.free_text.is_empty() {
                 return None;
             }
-            return advanced_query_empty_hint(ctx.raw_filter_text, query);
+            let active = active_head_context_for_filter(ctx.raw_filter_text);
+            return advanced_query_empty_hint(ctx.raw_filter_text, query, active.as_ref());
+        }
+        // No parsed AdvancedQuery (e.g. bare `has:` is Incomplete; bare
+        // `c:` is a source filter), but the user IS typing a known head.
+        // Synthesize a head-aware empty hint from the active-head detector
+        // alone so completions and zero-result copy work for in-flight input.
+        if let Some(active) = active_head_context_for_filter(ctx.raw_filter_text) {
+            return synthetic_active_head_empty_hint(ctx.raw_filter_text, &active);
         }
     }
 
@@ -270,6 +295,8 @@ fn advanced_query_guide_hint(
                 ";todo Send proposal #client/acme".to_string(),
             ],
             warning: None,
+            active_head: None,
+            active_head_value_partial: None,
             accessibility_label: String::new(),
         }));
     }
@@ -347,6 +374,8 @@ fn advanced_query_guide_hint(
             ":shortcut:any".to_string(),
         ],
         warning: None,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
 }
@@ -431,6 +460,8 @@ fn capture_picker_companion_hint(
                 ";link https://zed.dev #rust title:\"GPUI notes\"".to_string(),
             ]),
         warning: None,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
 }
@@ -474,6 +505,8 @@ fn capture_create_handler_hint(
         example: None,
         examples: Vec::new(),
         warning: None,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     })
 }
@@ -638,6 +671,8 @@ fn capture_composer_hint(
         ),
         examples: target_examples(target),
         warning: ranking_warning,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
 }
@@ -895,6 +930,8 @@ fn command_picker_companion_hint(
                 warning: row.detail.clone().or_else(|| {
                     Some("Ambiguous command head; give one command a unique alias.".to_string())
                 }),
+                active_head: None,
+                active_head_value_partial: None,
                 accessibility_label: String::new(),
             }));
         }
@@ -935,6 +972,8 @@ fn command_picker_companion_hint(
             ">test-menu-syntax -- --watch".to_string(),
         ],
         warning: None,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
 }
@@ -1011,14 +1050,232 @@ fn command_composer_hint(
             format!(">{} -- --help", invocation.head),
         ],
         warning,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
+}
+
+/// Extract the free-text words that trail `head + value_token` in the raw
+/// filter. Used by synthetic empty hints to render full
+/// "No scriptlets match `zzz`." copy even when the parser declines to
+/// promote the input to a full `AdvancedQuery`.
+fn free_words_after_qualifier(raw: &str, head: &str, value_token: &str) -> String {
+    let lower = raw.to_ascii_lowercase();
+    let needle = format!(
+        "{}{}",
+        head.to_ascii_lowercase(),
+        value_token.to_ascii_lowercase()
+    );
+    if let Some(pos) = lower.find(&needle) {
+        let after = &raw[pos + needle.len()..];
+        return after.trim().to_string();
+    }
+    String::new()
+}
+
+/// Build an empty hint snapshot from the active-head detector alone,
+/// for inputs the parser cannot turn into an `AdvancedQuery` yet
+/// (bare `has:`, `has:sh` without a leading `:`, source-only `c:`, etc.).
+/// Keeps the snapshot kind `AdvancedQueryEmpty` so automation consumers
+/// keep working without a new variant.
+fn synthetic_active_head_empty_hint(
+    raw_filter_text: &str,
+    active: &ActiveHeadContext,
+) -> Option<MenuSyntaxMainHintSnapshot> {
+    let raw_active_head = Some(active.head.clone());
+    let raw_active_partial = active.value_partial_opt();
+
+    match active.kind {
+        ActiveHeadKind::Has => {
+            let matching = has_field_rows_for_partial(&active.value_partial);
+            let has_unknown = matching.is_empty() && !active.value_partial.is_empty();
+
+            let (title, primary_hint, examples, rows) = if has_unknown {
+                let field = &active.value_partial;
+                (
+                    format!("No scripts or scriptlets have a `{field}` field."),
+                    "Try `has:shortcut`, `has:alias`, or `has:menuSyntax`.".to_string(),
+                    has_unknown_example_tokens(),
+                    vec![
+                        hint_row("Typed field", field),
+                        hint_row("Known fields", "has:shortcut, has:alias, has:menuSyntax"),
+                    ],
+                )
+            } else if active.value_partial.is_empty() {
+                let all = has_field_rows_for_partial("");
+                (
+                    "Filter by metadata field".to_string(),
+                    "Choose a field from the list or finish typing a metadata key.".to_string(),
+                    all.iter().map(|r| r.label.clone()).collect(),
+                    all,
+                )
+            } else {
+                (
+                    "Filter by metadata field".to_string(),
+                    "Choose a field from the list or finish typing a metadata key.".to_string(),
+                    matching.iter().map(|r| r.label.clone()).collect(),
+                    matching,
+                )
+            };
+
+            Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                status_chips: Vec::new(),
+                capture_validation: None,
+                unresolved_dates: Vec::new(),
+                menu_syntax_ai_proposal: None,
+                raw_filter_text: raw_filter_text.to_string(),
+                title,
+                subtitle: None,
+                mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                rows,
+                fragment_preview: None,
+                primary_hint: Some(primary_hint),
+                secondary_hint: None,
+                example: examples.first().cloned(),
+                examples,
+                warning: None,
+                active_head: raw_active_head,
+                active_head_value_partial: raw_active_partial,
+                accessibility_label: String::new(),
+            }))
+        }
+        ActiveHeadKind::Source => {
+            // Only render source-attached zero copy when there IS a typed
+            // partial. Bare source heads (`c:`) keep the prior no-hint
+            // behavior owned by [[lat.md/menu-syntax#Source Filter Legend]].
+            if active.value_partial.is_empty() {
+                return None;
+            }
+            let spec = source_head_spec_for_token(&active.head)?;
+            let label = source_zero_copy_label(spec);
+            let value = &active.value_partial;
+            let example = format!("{} {}", spec.short.unwrap_or(spec.canonical), "order id");
+            Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                status_chips: Vec::new(),
+                capture_validation: None,
+                unresolved_dates: Vec::new(),
+                menu_syntax_ai_proposal: None,
+                raw_filter_text: raw_filter_text.to_string(),
+                title: format!("No {label} match `{value}`."),
+                subtitle: None,
+                mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                rows: Vec::new(),
+                fragment_preview: None,
+                primary_hint: Some("Press Esc to clear the filter.".to_string()),
+                secondary_hint: None,
+                example: Some(example.clone()),
+                examples: vec![example],
+                warning: None,
+                active_head: raw_active_head,
+                active_head_value_partial: raw_active_partial,
+                accessibility_label: String::new(),
+            }))
+        }
+        ActiveHeadKind::TypeQualifier => {
+            // Parser may return Incomplete for `:type:scriptlet zzz` etc.
+            // when free text trails the qualifier; synthesize a
+            // kind-aware empty hint so the receipt copy still works.
+            let head_token = active.value_partial.trim();
+            if head_token.is_empty() {
+                return None;
+            }
+            let kind_label = match head_token.to_ascii_lowercase().as_str() {
+                "script" | "scripts" => "scripts",
+                "scriptlet" | "scriptlets" => "scriptlets",
+                "skill" | "skills" => "skills",
+                "agent" | "agents" => "agents",
+                "builtin" | "builtins" | "built-in" | "built-ins" => "built-ins",
+                "app" | "apps" => "apps",
+                "window" | "windows" => "windows",
+                "file" | "files" => "files",
+                "note" | "notes" => "notes",
+                _ => "matching items",
+            };
+            // The active_head detector cuts value_partial at the first
+            // whitespace, so it never includes the trailing free-text
+            // words (`:type:scriptlet zzz` → value_partial="scriptlet").
+            // Pull free words straight from the raw input so the title
+            // can render them.
+            let free_words = free_words_after_qualifier(raw_filter_text, &active.head, head_token);
+            let title = if free_words.is_empty() {
+                format!("No {kind_label} match this filter.")
+            } else {
+                format!("No {kind_label} match `{free_words}`.")
+            };
+            let primary_hint = format!("Remove `type:{head_token}` to widen.");
+            let example_token = format!("type:{head_token} shell");
+            Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                status_chips: Vec::new(),
+                capture_validation: None,
+                unresolved_dates: Vec::new(),
+                menu_syntax_ai_proposal: None,
+                raw_filter_text: raw_filter_text.to_string(),
+                title,
+                subtitle: None,
+                mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                rows: Vec::new(),
+                fragment_preview: None,
+                primary_hint: Some(primary_hint),
+                secondary_hint: None,
+                example: Some(example_token.clone()),
+                examples: vec![example_token],
+                warning: None,
+                active_head: raw_active_head,
+                active_head_value_partial: raw_active_partial,
+                accessibility_label: String::new(),
+            }))
+        }
+        ActiveHeadKind::ShortcutQualifier => {
+            let value = active.value_partial.trim();
+            if value.is_empty() {
+                return None;
+            }
+            let title = format!("No shortcut-backed scripts or scriptlets match `{value}`.");
+            let primary_hint = "Remove `shortcut:any` to widen.".to_string();
+            Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                status_chips: Vec::new(),
+                capture_validation: None,
+                unresolved_dates: Vec::new(),
+                menu_syntax_ai_proposal: None,
+                raw_filter_text: raw_filter_text.to_string(),
+                title,
+                subtitle: None,
+                mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                rows: Vec::new(),
+                fragment_preview: None,
+                primary_hint: Some(primary_hint),
+                secondary_hint: None,
+                example: Some("shortcut:any".to_string()),
+                examples: vec!["shortcut:any".to_string()],
+                warning: None,
+                active_head: raw_active_head,
+                active_head_value_partial: raw_active_partial,
+                accessibility_label: String::new(),
+            }))
+        }
+        _ => None,
+    }
 }
 
 fn advanced_query_empty_hint(
     raw_filter_text: &str,
     query: &AdvancedQuery,
+    active: Option<&ActiveHeadContext>,
 ) -> Option<MenuSyntaxMainHintSnapshot> {
+    // Head-aware branches first so the snapshot drops generic
+    // tag/type leak from the previous shape. Each branch builds a
+    // dedicated `AdvancedQueryEmpty` snapshot; fall back to the
+    // generic copy at the bottom for predicates we have no specialized
+    // story for yet.
     let mut rows = Vec::new();
     if !query.predicates.is_empty() {
         rows.push(MenuSyntaxMainHintRow {
@@ -1036,6 +1293,203 @@ fn advanced_query_empty_hint(
         rows.push(hint_row("Search words", &query.free_text));
     }
 
+    let raw_active_head = active.map(|a| a.head.clone());
+    let raw_active_partial = active.and_then(|a| a.value_partial_opt());
+
+    // `has:<field>` family — the screenshot regression. Examples and
+    // rows must come from HAS_FIELD_SPECS only.
+    let has_field_value = has_field_predicate(query)
+        .map(str::to_string)
+        .or_else(|| match active {
+            Some(a) if matches!(a.kind, ActiveHeadKind::Has) => Some(a.value_partial.clone()),
+            _ => None,
+        });
+    if let Some(field_value) = has_field_value {
+        let matching = has_field_rows_for_partial(&field_value);
+        let has_unknown = matching.is_empty() && !field_value.is_empty();
+
+        let (title, primary_hint, examples) = if has_unknown {
+            (
+                format!("No scripts or scriptlets have a `{field_value}` field."),
+                "Try `has:shortcut`, `has:alias`, or `has:menuSyntax`.".to_string(),
+                has_unknown_example_tokens(),
+            )
+        } else if field_value.is_empty() {
+            (
+                "Filter by metadata field".to_string(),
+                "Choose a field from the list or finish typing a metadata key.".to_string(),
+                has_field_rows_for_partial("")
+                    .into_iter()
+                    .map(|r| r.label)
+                    .collect(),
+            )
+        } else {
+            (
+                "Filter by metadata field".to_string(),
+                "Choose a field from the list or finish typing a metadata key.".to_string(),
+                matching.iter().map(|r| r.label.clone()).collect(),
+            )
+        };
+
+        let mut all_rows = rows.clone();
+        if has_unknown {
+            all_rows.push(hint_row("Typed field", &field_value));
+            all_rows.push(hint_row(
+                "Known fields",
+                "has:shortcut, has:alias, has:menuSyntax",
+            ));
+        } else {
+            all_rows.extend(matching.into_iter());
+        }
+
+        return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+            kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+            status_chips: Vec::new(),
+            capture_validation: None,
+            unresolved_dates: Vec::new(),
+            menu_syntax_ai_proposal: None,
+            raw_filter_text: raw_filter_text.to_string(),
+            title,
+            subtitle: None,
+            mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+            status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+            rows: all_rows,
+            fragment_preview: None,
+            primary_hint: Some(primary_hint),
+            secondary_hint: None,
+            example: examples.first().cloned(),
+            examples,
+            warning: None,
+            active_head: raw_active_head,
+            active_head_value_partial: raw_active_partial,
+            accessibility_label: String::new(),
+        }));
+    }
+
+    // Source-attached query (e.g. `c:zzz`, `v:foo`, `f:bar`).
+    if let Some(active_ctx) = active {
+        if matches!(active_ctx.kind, ActiveHeadKind::Source) && !active_ctx.value_partial.is_empty()
+        {
+            if let Some(spec) = source_head_spec_for_token(&active_ctx.head) {
+                let label = source_zero_copy_label(spec);
+                let value = &active_ctx.value_partial;
+                let title = format!("No {label} match `{value}`.");
+                let primary_hint = "Press Esc to clear the filter.".to_string();
+                let example = format!("{} {}", spec.short.unwrap_or(spec.canonical), "order id");
+                return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+                    kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+                    status_chips: Vec::new(),
+                    capture_validation: None,
+                    unresolved_dates: Vec::new(),
+                    menu_syntax_ai_proposal: None,
+                    raw_filter_text: raw_filter_text.to_string(),
+                    title,
+                    subtitle: None,
+                    mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+                    status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+                    rows,
+                    fragment_preview: None,
+                    primary_hint: Some(primary_hint),
+                    secondary_hint: None,
+                    example: Some(example.clone()),
+                    examples: vec![example],
+                    warning: None,
+                    active_head: raw_active_head,
+                    active_head_value_partial: raw_active_partial,
+                    accessibility_label: String::new(),
+                }));
+            }
+        }
+    }
+
+    // `:type:<kind>` family — title and copy use the kind label.
+    if let Some(kind) = type_predicate_kind(query) {
+        let kind_label = artifact_kind_zero_copy_label(kind);
+        let raw_kind = match kind {
+            ArtifactKind::Script => "script",
+            ArtifactKind::Scriptlet => "scriptlet",
+            ArtifactKind::Skill => "skill",
+            ArtifactKind::Agent => "agent",
+            ArtifactKind::Builtin => "builtin",
+            ArtifactKind::App => "app",
+            ArtifactKind::Window => "window",
+            ArtifactKind::File => "file",
+            ArtifactKind::Note => "note",
+            ArtifactKind::AcpHistory => "acp-history",
+            ArtifactKind::ClipboardHistory => "clipboard-history",
+            ArtifactKind::DictationHistory => "dictation-history",
+            ArtifactKind::BrowserTab => "browser-tab",
+            ArtifactKind::BrowserHistory => "browser-history",
+            ArtifactKind::Fallback => "fallback",
+            ArtifactKind::Issue => "issue",
+        };
+        let words = query.free_text.trim();
+        let title = if words.is_empty() {
+            format!("No {kind_label} match this filter.")
+        } else {
+            format!("No {kind_label} match `{words}`.")
+        };
+        let primary_hint = format!("Remove `type:{raw_kind}` to widen.");
+        let example_token = format!("type:{raw_kind} shell");
+        return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+            kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+            status_chips: Vec::new(),
+            capture_validation: None,
+            unresolved_dates: Vec::new(),
+            menu_syntax_ai_proposal: None,
+            raw_filter_text: raw_filter_text.to_string(),
+            title,
+            subtitle: None,
+            mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+            status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+            rows,
+            fragment_preview: None,
+            primary_hint: Some(primary_hint),
+            secondary_hint: None,
+            example: Some(example_token.clone()),
+            examples: vec![example_token],
+            warning: None,
+            active_head: raw_active_head,
+            active_head_value_partial: raw_active_partial,
+            accessibility_label: String::new(),
+        }));
+    }
+
+    // `:shortcut:` family.
+    if shortcut_predicate(query).is_some() {
+        let words = query.free_text.trim();
+        let title = if words.is_empty() {
+            "No shortcut-backed scripts or scriptlets match this filter.".to_string()
+        } else {
+            format!("No shortcut-backed scripts or scriptlets match `{words}`.")
+        };
+        let primary_hint = "Remove `shortcut:any` to widen.".to_string();
+        return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
+            kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
+            status_chips: Vec::new(),
+            capture_validation: None,
+            unresolved_dates: Vec::new(),
+            menu_syntax_ai_proposal: None,
+            raw_filter_text: raw_filter_text.to_string(),
+            title,
+            subtitle: None,
+            mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+            status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
+            rows,
+            fragment_preview: None,
+            primary_hint: Some(primary_hint),
+            secondary_hint: None,
+            example: Some("shortcut:any".to_string()),
+            examples: vec!["shortcut:any".to_string()],
+            warning: None,
+            active_head: raw_active_head,
+            active_head_value_partial: raw_active_partial,
+            accessibility_label: String::new(),
+        }));
+    }
+
+    // `:tag:` / `:#tag` family — keep tag-specific copy and examples
+    // since the previous behavior remains the right fix for this case.
     let tag = query.predicates.iter().find_map(predicate_tag);
     let title = tag
         .map(|tag| format!("No launcher items tagged #{tag}"))
@@ -1046,6 +1500,14 @@ fn advanced_query_empty_hint(
     let primary_hint = tag
         .map(|tag| format!("Try another tag, remove `:#{tag}`, or change the search words."))
         .unwrap_or_else(|| "Remove a filter or change the search words.".to_string());
+    let (example, examples) = if let Some(tag) = tag {
+        (
+            Some(format!(":#{tag}")),
+            vec![format!(":#{tag}"), format!(":tag:{tag}")],
+        )
+    } else {
+        (None, Vec::new())
+    };
 
     Some(finalize_hint(MenuSyntaxMainHintSnapshot {
         kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
@@ -1061,16 +1523,12 @@ fn advanced_query_empty_hint(
         rows,
         fragment_preview: None,
         primary_hint: Some(primary_hint),
-        secondary_hint: Some(
-            "Use `:#work` to filter by tag. Plain `#work` is normal launcher search.".to_string(),
-        ),
-        example: Some(":type:script deploy".to_string()),
-        examples: vec![
-            ":#work".to_string(),
-            ":tag:work".to_string(),
-            ":type:script deploy".to_string(),
-        ],
+        secondary_hint: None,
+        example,
+        examples,
         warning: None,
+        active_head: raw_active_head,
+        active_head_value_partial: raw_active_partial,
         accessibility_label: String::new(),
     }))
 }
@@ -1546,6 +2004,330 @@ fn predicate_tag(predicate: &Predicate) -> Option<&str> {
         Predicate::Negate(inner) => predicate_tag(inner),
         _ => None,
     }
+}
+
+/// Display-only classification of the active grammar head the user is
+/// typing. Drives head-aware copy and `examples` in the main hint and
+/// surfaces as the camelCase `activeHead` / `activeHeadValuePartial`
+/// receipts on [[MenuSyntaxMainHintSnapshot]]. Detection never mutates
+/// parser predicates and never reclassifies input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ActiveHeadContext {
+    head: String,
+    value_partial: String,
+    kind: ActiveHeadKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum ActiveHeadKind {
+    Has,
+    Source,
+    Capture,
+    Command,
+    TypeQualifier,
+    TagQualifier,
+    ShortcutQualifier,
+    OtherQualifier,
+}
+
+impl ActiveHeadContext {
+    fn value_partial_opt(&self) -> Option<String> {
+        if self.value_partial.is_empty() {
+            None
+        } else {
+            Some(self.value_partial.clone())
+        }
+    }
+}
+
+/// Detect the active head and value partial from the raw filter text.
+/// Display-only; uses simple prefix matching, not the parser, so it
+/// covers in-flight input like `c:zzz` even when no Predicate exists.
+/// Public predicate: true when the raw filter text is mid-typing a known
+/// grammar head (`has:`, `c:`, `:type:`, etc). Used by the getState path
+/// to extend the empty-hint gate when the parser returns Incomplete.
+pub fn has_active_head(raw: &str) -> bool {
+    active_head_context_for_filter(raw).is_some()
+}
+
+/// True only for source-filter heads such as `c:`, `clipboard:`, `f:`,
+/// and `files:`. Render uses this to avoid showing source no-match copy
+/// before async/passive source results have been allowed to paint.
+pub fn active_head_is_source_filter(raw: &str) -> bool {
+    active_head_context_for_filter(raw)
+        .is_some_and(|active| matches!(active.kind, ActiveHeadKind::Source))
+}
+
+fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
+    let trimmed = raw.trim_start();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    // ; capture head — capture composer takes over once a known target
+    // is followed by a body, but `;daily` and `;unknownTarget` still
+    // expose `;` as the active head for receipt purposes.
+    if let Some(rest) = trimmed.strip_prefix(';') {
+        let value_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let value = &rest[..value_end];
+        return Some(ActiveHeadContext {
+            head: ";".to_string(),
+            value_partial: value.to_string(),
+            kind: ActiveHeadKind::Capture,
+        });
+    }
+
+    // ! command head
+    if let Some(rest) = trimmed.strip_prefix('!') {
+        let value_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let value = &rest[..value_end];
+        return Some(ActiveHeadContext {
+            head: "!".to_string(),
+            value_partial: value.to_string(),
+            kind: ActiveHeadKind::Command,
+        });
+    }
+
+    // `:type:` / `:tag:` / `:shortcut:` qualifier heads. Only fires when
+    // the input opens with a single colon prefix and a known qualifier
+    // head is the active token. Falls through to bare-source heads
+    // (`has:sh`, `c:zzz`) below.
+    if let Some(after_colon) = trimmed.strip_prefix(':') {
+        let active_token_end = after_colon
+            .find(char::is_whitespace)
+            .unwrap_or(after_colon.len());
+        let token = &after_colon[..active_token_end];
+        if let Some(value) = qualifier_value_partial(token, "type") {
+            return Some(ActiveHeadContext {
+                head: ":type:".to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::TypeQualifier,
+            });
+        }
+        if let Some(value) = qualifier_value_partial(token, "tag") {
+            return Some(ActiveHeadContext {
+                head: ":tag:".to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::TagQualifier,
+            });
+        }
+        if let Some(value) = qualifier_value_partial(token, "shortcut") {
+            return Some(ActiveHeadContext {
+                head: ":shortcut:".to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::ShortcutQualifier,
+            });
+        }
+        if let Some(value) = qualifier_value_partial(token, "has") {
+            return Some(ActiveHeadContext {
+                head: "has:".to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::Has,
+            });
+        }
+        // Source heads after a leading colon, e.g. `:c:zzz` — treat as
+        // an OtherQualifier for receipts but do not over-specialize copy.
+        let lower_token = token.to_ascii_lowercase();
+        if let Some(spec) = source_head_spec_for_token(&extract_head_prefix(&lower_token)) {
+            let head = spec.short.unwrap_or(spec.canonical);
+            let value = token
+                .split_once(':')
+                .map(|(_, rest)| rest.to_string())
+                .unwrap_or_default();
+            return Some(ActiveHeadContext {
+                head: head.to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::Source,
+            });
+        }
+    }
+
+    // Bare `has:sh` (no leading `:`).
+    if trimmed.len() >= 4 && trimmed[..4].eq_ignore_ascii_case("has:") {
+        let value = &trimmed[4..];
+        let value_end = value.find(char::is_whitespace).unwrap_or(value.len());
+        return Some(ActiveHeadContext {
+            head: "has:".to_string(),
+            value_partial: value[..value_end].to_string(),
+            kind: ActiveHeadKind::Has,
+        });
+    }
+
+    // Source heads (`c:`, `clipboard:`, etc.) used as the very first
+    // token of the filter. The active partial is everything up to the
+    // first whitespace.
+    let first_token_end = trimmed.find(char::is_whitespace).unwrap_or(trimmed.len());
+    let first_token = &trimmed[..first_token_end];
+    if let Some(colon_idx) = first_token.find(':') {
+        let head_with_colon = &first_token[..=colon_idx];
+        if let Some(spec) = source_head_spec_for_token(head_with_colon) {
+            let display_head = spec
+                .short
+                .filter(|short| {
+                    first_token
+                        .to_ascii_lowercase()
+                        .starts_with(&short.to_ascii_lowercase())
+                })
+                .unwrap_or(spec.canonical);
+            let value = &first_token[colon_idx + 1..];
+            return Some(ActiveHeadContext {
+                head: display_head.to_string(),
+                value_partial: value.to_string(),
+                kind: ActiveHeadKind::Source,
+            });
+        }
+    }
+
+    None
+}
+
+/// Case-insensitive lookup against [[crate::menu_syntax::payload::SOURCE_HEAD_SPECS]].
+fn source_head_spec_for_token(
+    token: &str,
+) -> Option<&'static crate::menu_syntax::payload::SourceHeadSpec> {
+    let lower = token.to_ascii_lowercase();
+    crate::menu_syntax::SOURCE_HEAD_SPECS.iter().find(|spec| {
+        spec.canonical.eq_ignore_ascii_case(&lower)
+            || spec
+                .short
+                .is_some_and(|short| short.eq_ignore_ascii_case(&lower))
+    })
+}
+
+/// If `token` begins with `<head>:` (case-insensitively), return the
+/// remainder after the trailing colon. Used by [[active_head_context_for_filter]].
+fn qualifier_value_partial(token: &str, head: &str) -> Option<String> {
+    let head_with_colon = format!("{head}:");
+    if token.len() < head_with_colon.len() {
+        return None;
+    }
+    let prefix = &token[..head_with_colon.len()];
+    if !prefix.eq_ignore_ascii_case(&head_with_colon) {
+        return None;
+    }
+    Some(token[head_with_colon.len()..].to_string())
+}
+
+/// Truncate `token` at the first colon (inclusive) so we can hand the
+/// committed head to [[crate::menu_syntax::source_heads::source_head_for_token]].
+fn extract_head_prefix(token: &str) -> String {
+    if let Some(colon_idx) = token.find(':') {
+        token[..=colon_idx].to_string()
+    } else {
+        token.to_string()
+    }
+}
+
+/// Build at most `limit` `has:<field>` rows whose canonical or alias
+/// matches `partial` (case-insensitively, prefix or substring). When
+/// `partial` is empty, return the entire shipped catalog. Used by both
+/// the main hint and the (existing) trigger popup completion path.
+fn has_field_rows_for_partial(partial: &str) -> Vec<MenuSyntaxMainHintRow> {
+    use crate::menu_syntax::has_fields::{HasFieldOwner, HAS_FIELD_SPECS};
+    let probe = partial.trim().to_ascii_lowercase();
+    HAS_FIELD_SPECS
+        .iter()
+        .filter(|spec| {
+            if probe.is_empty() {
+                return true;
+            }
+            spec.canonical.to_ascii_lowercase().contains(&probe)
+                || spec
+                    .aliases
+                    .iter()
+                    .any(|alias: &&str| alias.to_ascii_lowercase().contains(&probe))
+        })
+        .map(|spec| {
+            let mut chips = Vec::new();
+            for owner in spec.owners {
+                let label = match owner {
+                    HasFieldOwner::Script => "script",
+                    HasFieldOwner::Scriptlet => "scriptlet",
+                };
+                chips.push(chip(label, MenuSyntaxMainHintTone::Neutral));
+            }
+            MenuSyntaxMainHintRow {
+                label: spec.token.to_string(),
+                value: spec.subtitle.unwrap_or(spec.label).to_string(),
+                chips,
+            }
+        })
+        .collect()
+}
+
+/// The catalog tokens to fall back on for `examples` when the partial
+/// matches nothing in the catalog (e.g. `has:notAField`). Mirrors the
+/// goal's "Try `has:shortcut`, `has:alias`, or `has:menuSyntax`." nudge.
+fn has_unknown_example_tokens() -> Vec<String> {
+    vec![
+        "has:shortcut".to_string(),
+        "has:alias".to_string(),
+        "has:menuSyntax".to_string(),
+    ]
+}
+
+/// Sentence-natural label for a source's zero-result copy, e.g.
+/// "clipboard entries" instead of "Clipboard". Falls back to the
+/// descriptor label lowercased when no override is registered.
+fn source_zero_copy_label(spec: &crate::menu_syntax::payload::SourceHeadSpec) -> String {
+    use crate::menu_syntax::payload::RootUnifiedSourceFilter;
+    match spec.source {
+        RootUnifiedSourceFilter::ClipboardHistory => "clipboard entries".to_string(),
+        RootUnifiedSourceFilter::Conversations => "AI conversations".to_string(),
+        RootUnifiedSourceFilter::Notes => "notes".to_string(),
+        RootUnifiedSourceFilter::Files => "files".to_string(),
+        RootUnifiedSourceFilter::BrowserTabs => "browser tabs".to_string(),
+        RootUnifiedSourceFilter::BrowserHistory => "browser history entries".to_string(),
+        RootUnifiedSourceFilter::Apps => "apps".to_string(),
+        RootUnifiedSourceFilter::Scripts => "scripts".to_string(),
+        RootUnifiedSourceFilter::Commands => "commands".to_string(),
+        RootUnifiedSourceFilter::Dictation => "dictation entries".to_string(),
+        RootUnifiedSourceFilter::Windows => "windows".to_string(),
+        RootUnifiedSourceFilter::Processes => "processes".to_string(),
+    }
+}
+
+fn artifact_kind_zero_copy_label(kind: &ArtifactKind) -> &'static str {
+    match kind {
+        ArtifactKind::Script => "scripts",
+        ArtifactKind::Scriptlet => "scriptlets",
+        ArtifactKind::Skill => "skills",
+        ArtifactKind::Agent => "agents",
+        ArtifactKind::Builtin => "built-ins",
+        ArtifactKind::App => "apps",
+        ArtifactKind::Window => "windows",
+        ArtifactKind::File => "files",
+        ArtifactKind::Note => "notes",
+        ArtifactKind::AcpHistory => "AI conversations",
+        ArtifactKind::ClipboardHistory => "clipboard entries",
+        ArtifactKind::DictationHistory => "dictation entries",
+        ArtifactKind::BrowserTab => "browser tabs",
+        ArtifactKind::BrowserHistory => "browser history entries",
+        ArtifactKind::Fallback => "fallbacks",
+        ArtifactKind::Issue => "issues",
+    }
+}
+
+fn type_predicate_kind(query: &AdvancedQuery) -> Option<&ArtifactKind> {
+    query.predicates.iter().find_map(|p| match p {
+        Predicate::Type(k) => Some(k),
+        _ => None,
+    })
+}
+
+fn shortcut_predicate(query: &AdvancedQuery) -> Option<&ShortcutPredicate> {
+    query.predicates.iter().find_map(|p| match p {
+        Predicate::HasShortcut(s) => Some(s),
+        _ => None,
+    })
+}
+
+fn has_field_predicate(query: &AdvancedQuery) -> Option<&str> {
+    query.predicates.iter().find_map(|p| match p {
+        Predicate::Has(field) => Some(field.as_str()),
+        _ => None,
+    })
 }
 
 #[cfg(test)]
@@ -2614,6 +3396,8 @@ mod tests {
             example: None,
             examples: Vec::new(),
             warning: None,
+            active_head: None,
+            active_head_value_partial: None,
             accessibility_label: String::new(),
         };
         let json = serde_json::to_string(&snapshot).unwrap();
@@ -2736,5 +3520,226 @@ mod tests {
         .expect("hint");
         let json = serde_json::to_string(&hint).unwrap();
         assert!(!json.contains("fragmentPreview"), "{json}");
+    }
+
+    // ----- Run 12: head-aware empty hint regression coverage -----
+
+    fn empty_hint_for(raw: &str) -> MenuSyntaxMainHintSnapshot {
+        let mode = MenuSyntaxMode::from_input(raw);
+        build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
+            raw_filter_text: raw,
+            mode: &mode,
+            popup_snapshot: None,
+            popup_selected_row_id: None,
+            scripts: &[],
+            scriptlets: &[],
+            advanced_query_results_empty: true,
+            menu_syntax_ai_proposal: None,
+        })
+        .expect("empty hint")
+    }
+
+    #[test]
+    fn has_bare_head_lists_catalog_examples() {
+        let hint = empty_hint_for("has:");
+        assert!(
+            !hint.examples.is_empty(),
+            "bare has: must list catalog examples"
+        );
+        for token in &hint.examples {
+            assert!(
+                token.starts_with("has:"),
+                "examples must be has:<field> tokens, got {token}"
+            );
+        }
+        assert!(hint.examples.iter().any(|e| e == "has:shortcut"));
+    }
+
+    #[test]
+    fn has_partial_sh_lists_only_shortcut() {
+        let hint = empty_hint_for("has:sh");
+        assert!(
+            hint.examples.iter().all(|e| e == "has:shortcut"),
+            "has:sh examples must be exactly [has:shortcut], got {:?}",
+            hint.examples
+        );
+        assert!(
+            !hint.examples.iter().any(|e| e.contains("#work")
+                || e.contains("tag:work")
+                || e.contains("type:script deploy")),
+            "has:sh must not leak generic tag/type examples: {:?}",
+            hint.examples
+        );
+        assert_eq!(hint.active_head.as_deref(), Some("has:"));
+        assert_eq!(hint.active_head_value_partial.as_deref(), Some("sh"));
+    }
+
+    #[test]
+    fn has_partial_examples_do_not_leak_tag_or_type_examples() {
+        let hint = empty_hint_for("has:shortcut");
+        for token in &hint.examples {
+            assert!(!token.contains("#work"), "{token}");
+            assert!(!token.contains("tag:work"), "{token}");
+            assert!(!token.contains("type:script deploy"), "{token}");
+        }
+    }
+
+    #[test]
+    fn has_field_rows_match_popup_tokens() {
+        let rows = has_field_rows_for_partial("sh");
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].label, "has:shortcut");
+    }
+
+    #[test]
+    fn has_unknown_field_empty_copy_suggests_known_has_fields() {
+        let hint = empty_hint_for("has:notAField");
+        assert!(
+            hint.title.contains("notAField"),
+            "title must name the typed field, got: {}",
+            hint.title
+        );
+        let primary = hint.primary_hint.as_deref().unwrap_or_default();
+        assert!(primary.contains("has:shortcut"));
+        assert!(primary.contains("has:alias"));
+        assert!(primary.contains("has:menuSyntax"));
+        assert_eq!(
+            hint.examples,
+            vec![
+                "has:shortcut".to_string(),
+                "has:alias".to_string(),
+                "has:menuSyntax".to_string(),
+            ]
+        );
+        assert!(
+            !primary.contains("Remove a filter"),
+            "must not fall back to generic copy"
+        );
+        assert_eq!(hint.active_head.as_deref(), Some("has:"));
+        assert_eq!(hint.active_head_value_partial.as_deref(), Some("notAField"));
+    }
+
+    #[test]
+    fn has_unknown_field_empty_copy_is_field_specific() {
+        let hint = empty_hint_for("has:weird");
+        assert_eq!(hint.title, "No scripts or scriptlets have a `weird` field.");
+    }
+
+    #[test]
+    fn clipboard_source_zero_copy_names_clipboard_entries() {
+        let hint = empty_hint_for("c:zzz");
+        assert_eq!(hint.title, "No clipboard entries match `zzz`.");
+        assert_eq!(
+            hint.primary_hint.as_deref(),
+            Some("Press Esc to clear the filter.")
+        );
+        assert_eq!(hint.active_head.as_deref(), Some("c:"));
+        assert_eq!(hint.active_head_value_partial.as_deref(), Some("zzz"));
+    }
+
+    #[test]
+    fn source_attached_clipboard_zero_copy_is_contextual() {
+        let hint = empty_hint_for("clipboard:zzz");
+        assert_eq!(hint.title, "No clipboard entries match `zzz`.");
+        assert_eq!(
+            hint.primary_hint.as_deref(),
+            Some("Press Esc to clear the filter.")
+        );
+        for token in &hint.examples {
+            assert!(!token.contains("#work"));
+            assert!(!token.contains("type:"));
+        }
+    }
+
+    #[test]
+    fn type_scriptlet_zero_copy_removes_type_filter() {
+        let hint = empty_hint_for(":type:scriptlet zzz");
+        assert_eq!(hint.title, "No scriptlets match `zzz`.");
+        assert_eq!(
+            hint.primary_hint.as_deref(),
+            Some("Remove `type:scriptlet` to widen.")
+        );
+        for token in &hint.examples {
+            assert!(
+                !token.contains("#work"),
+                "type:scriptlet examples must not leak tag copy: {token}"
+            );
+            assert!(
+                !token.contains("tag:work"),
+                "type:scriptlet examples must not leak tag copy: {token}"
+            );
+        }
+    }
+
+    #[test]
+    fn snapshot_serializes_active_head_camel_case() {
+        let hint = empty_hint_for("has:sh");
+        let json = serde_json::to_value(&hint).unwrap();
+        assert_eq!(
+            json.get("activeHead").and_then(|v| v.as_str()),
+            Some("has:")
+        );
+        assert_eq!(
+            json.get("activeHeadValuePartial").and_then(|v| v.as_str()),
+            Some("sh"),
+        );
+    }
+
+    #[test]
+    fn has_context_never_serializes_tag_examples() {
+        for raw in ["has:", "has:s", "has:sh", "has:shortcut"] {
+            let hint = empty_hint_for(raw);
+            let json = serde_json::to_string(&hint).unwrap();
+            assert!(
+                !json.contains(":#work"),
+                "{raw} hint leaked :#work — payload: {json}"
+            );
+            assert!(
+                !json.contains(":tag:work"),
+                "{raw} hint leaked :tag:work — payload: {json}"
+            );
+            assert!(
+                !json.contains(":type:script deploy"),
+                "{raw} hint leaked :type:script deploy — payload: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn advanced_empty_primary_copy_is_single_sentence() {
+        // Compact recovery sentence: empty states omit the legacy
+        // multi-sentence secondary hint.
+        let hint = empty_hint_for("has:sh");
+        assert!(hint.secondary_hint.is_none());
+    }
+
+    #[test]
+    fn active_head_detector_classifies_known_heads() {
+        let ctx = active_head_context_for_filter("has:sh").expect("has:");
+        assert_eq!(ctx.head, "has:");
+        assert_eq!(ctx.value_partial, "sh");
+
+        let ctx = active_head_context_for_filter("c:zzz").expect("c:");
+        assert_eq!(ctx.head, "c:");
+        assert_eq!(ctx.value_partial, "zzz");
+
+        let ctx = active_head_context_for_filter("clipboard:zzz").expect("clipboard:");
+        assert!(ctx.head == "c:" || ctx.head == "clipboard:");
+
+        let ctx = active_head_context_for_filter(":type:scriptlet").expect(":type:");
+        assert_eq!(ctx.head, ":type:");
+        assert_eq!(ctx.value_partial, "scriptlet");
+
+        let ctx = active_head_context_for_filter(":tag:work").expect(":tag:");
+        assert_eq!(ctx.head, ":tag:");
+        assert_eq!(ctx.value_partial, "work");
+
+        let ctx = active_head_context_for_filter(";daily").expect(";");
+        assert_eq!(ctx.head, ";");
+        assert_eq!(ctx.value_partial, "daily");
+
+        let ctx = active_head_context_for_filter("!ps").expect("!");
+        assert_eq!(ctx.head, "!");
+        assert_eq!(ctx.value_partial, "ps");
     }
 }

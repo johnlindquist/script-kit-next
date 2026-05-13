@@ -282,7 +282,12 @@ fn build_advanced_query_snapshot(input: &str, ctx: &TriggerPickerContext) -> Tri
     if advanced_query_active_token(input).is_empty() {
         rows.extend(recent_query_rows(&ctx.recent_queries));
     }
-    rows.push(footer_open_help_row());
+    // Run 12 — the advanced-query popup no longer pushes a generic
+    // help-launcher footer row. The main-hint surface now
+    // owns context-aware copy for `has:`, source heads, and `:type:`
+    // / `:tag:` / `:shortcut:` so a footer help row is redundant.
+    // Capture create-handler footers remain via
+    // [[footer_create_handler_row]].
 
     TriggerPickerSnapshot {
         mode: TriggerPickerMode::AdvancedQuery,
@@ -1193,22 +1198,6 @@ fn fuzzy_subsequence_gap_penalty(needle: &str, haystack: &str) -> Option<i32> {
     None
 }
 
-fn footer_open_help_row() -> TriggerPickerRow {
-    TriggerPickerRow {
-        id: "footer:help".to_string(),
-        mode: TriggerPickerMode::AdvancedQuery,
-        kind: TriggerPickerRowKind::FooterAction,
-        title: "Open Menu Syntax help".to_string(),
-        token: None,
-        subtitle: None,
-        detail: Some("Qualifier reference, examples, and capture docs".to_string()),
-        example: None,
-        badges: Vec::new(),
-        action: TriggerPickerAction::OpenHelp,
-        enabled: true,
-    }
-}
-
 fn footer_create_handler_row(target: Option<String>) -> TriggerPickerRow {
     let (title, detail) = match target.as_deref() {
         Some(t) => (
@@ -1455,16 +1444,23 @@ mod tests {
     }
 
     #[test]
-    fn colon_footer_routes_to_help() {
+    fn advanced_query_popup_has_no_help_footer_by_default() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
-        let footer = snap
-            .rows
-            .iter()
-            .find(|r| r.id == "footer:help")
-            .expect("help footer");
-        assert_eq!(footer.kind, TriggerPickerRowKind::FooterAction);
-        assert_eq!(footer.action, TriggerPickerAction::OpenHelp);
+        assert!(
+            snap.rows
+                .iter()
+                .all(|r| r.id != "footer:help" && r.action != TriggerPickerAction::OpenHelp),
+            "advanced-query popup must not emit a generic help footer; main-hint owns context copy",
+        );
+
+        // `has:` also must not show the help footer — main-hint shows
+        // catalog rows instead.
+        let snap = build_trigger_picker_snapshot("has:", &ctx).expect("snapshot");
+        assert!(
+            snap.rows.iter().all(|r| r.id != "footer:help"),
+            "advanced-query `has:` popup must not emit a help footer",
+        );
     }
 
     #[test]

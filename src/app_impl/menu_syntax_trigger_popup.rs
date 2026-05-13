@@ -691,10 +691,10 @@ mod tests {
     #[test]
     fn preserve_skips_footer_actions_for_default_selection() {
         let footer = TriggerPickerRow {
-            id: "footer:help".to_string(),
+            id: "footer:test".to_string(),
             mode: TriggerPickerMode::AdvancedQuery,
             kind: TriggerPickerRowKind::FooterAction,
-            title: "Open Menu Syntax help".to_string(),
+            title: "Footer action".to_string(),
             token: None,
             subtitle: None,
             detail: None,
@@ -706,7 +706,7 @@ mod tests {
         let next = snapshot(vec![footer.clone(), qualifier_row("type", true)]);
 
         assert_eq!(
-            preserve_or_pick_first_enabled(&next, Some("footer:help")),
+            preserve_or_pick_first_enabled(&next, Some("footer:test")),
             Some("type".to_string()),
             "enabled footer rows stay clickable but cannot become the default keyboard selection"
         );
@@ -791,7 +791,7 @@ mod tests {
             id: "help".to_string(),
             mode: TriggerPickerMode::AdvancedQuery,
             kind: TriggerPickerRowKind::FooterAction,
-            title: "Open Menu Syntax help".to_string(),
+            title: "Footer action".to_string(),
             token: None,
             subtitle: None,
             detail: None,

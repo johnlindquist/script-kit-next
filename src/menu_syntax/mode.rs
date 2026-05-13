@@ -187,6 +187,11 @@ pub fn prefix_span_for_input_with_targets(
     if raw.is_empty() {
         return None;
     }
+    if let Some(source_head) = source_filter_head_span(raw).into_iter().next() {
+        if source_head.range.start == 0 {
+            return Some(source_head.range);
+        }
+    }
     let bytes = raw.as_bytes();
     if bytes[0] == b':' {
         let head_end = raw.find(char::is_whitespace).unwrap_or(raw.len());
@@ -256,6 +261,7 @@ pub fn input_spans_for_input_with_targets(
             role: MenuSyntaxFragmentRole::Prefix,
         });
     }
+    spans.extend(source_filter_head_span(raw));
 
     let invocation = match parse_with_capture_targets(raw, registered_targets) {
         MenuSyntaxParse::Capture(invocation) => Some(invocation),
@@ -327,6 +333,37 @@ fn capture_token_spans(raw: &str) -> Vec<MenuSyntaxInputSpan> {
             Some(MenuSyntaxInputSpan {
                 range: token.range,
                 role,
+            })
+        })
+        .collect()
+}
+
+fn source_filter_head_span(raw: &str) -> Vec<MenuSyntaxInputSpan> {
+    raw_tokens(raw, 0)
+        .into_iter()
+        .filter_map(|token| {
+            if token.text.starts_with('"') || token.text.starts_with('\'') {
+                return None;
+            }
+            let (head_start_offset, body) = token
+                .text
+                .strip_prefix('-')
+                .map(|rest| (1, rest))
+                .unwrap_or((0, token.text));
+            let head = body.find(':').map(|colon_idx| &body[..=colon_idx])?;
+            let descriptor = super::payload::SOURCE_HEAD_SPECS.iter().find(|spec| {
+                spec.canonical.eq_ignore_ascii_case(head)
+                    || spec
+                        .short
+                        .is_some_and(|short| short.eq_ignore_ascii_case(head))
+            })?;
+            if !descriptor.planned {
+                return None;
+            }
+            let start = token.range.start + head_start_offset;
+            Some(MenuSyntaxInputSpan {
+                range: start..start + head.len(),
+                role: MenuSyntaxFragmentRole::Prefix,
             })
         })
         .collect()
@@ -619,6 +656,13 @@ mod tests {
     }
 
     #[test]
+    fn prefix_span_highlights_source_filter_head() {
+        assert_eq!(prefix_span_for_input("f: project"), Some(0..2));
+        assert_eq!(prefix_span_for_input("files:project"), Some(0..6));
+        assert_eq!(prefix_span_for_input("c:sub"), Some(0..2));
+    }
+
+    #[test]
     fn prefix_span_highlights_plus_capture() {
         assert_eq!(prefix_span_for_input(";todo Renew passport"), Some(0..5));
         assert_eq!(prefix_span_for_input(";note"), Some(0..5));
@@ -676,6 +720,18 @@ mod tests {
                 .map(|span| span.range.clone()),
             prefix_span_for_input_with_targets("+github issue", &targets)
         );
+    }
+
+    #[test]
+    fn input_spans_highlight_source_filter_heads_anywhere() {
+        let raw = "budget f: c:sub -notes:done";
+        let spans = input_spans_for_input(raw);
+        let highlighted = spans
+            .iter()
+            .filter(|span| span.role == MenuSyntaxFragmentRole::Prefix)
+            .map(|span| &raw[span.range.clone()])
+            .collect::<Vec<_>>();
+        assert_eq!(highlighted, vec!["f:", "c:", "notes:"]);
     }
 
     #[test]

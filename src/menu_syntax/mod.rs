@@ -14,6 +14,7 @@ pub mod filter;
 pub mod fragments;
 pub mod grammar_payload;
 pub mod handler_index;
+pub mod has_fields;
 pub mod history;
 pub mod ics;
 pub mod main_hint;

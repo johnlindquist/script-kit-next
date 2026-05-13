@@ -124,7 +124,10 @@ impl ScriptListApp {
                 dictation_history_options,
             ) {
             if explicit_dictation {
-                crate::dictation::search_root_dictation_history_direct(search_text, dictation_history_options)
+                crate::dictation::search_root_dictation_history_direct(
+                    search_text,
+                    dictation_history_options,
+                )
             } else {
                 crate::dictation::search_root_dictation_history_cached(
                     search_text,
@@ -142,7 +145,10 @@ impl ScriptListApp {
                 acp_history_options,
             ) {
             if explicit_conversations {
-                crate::ai::acp::history::search_history_direct(search_text, acp_history_options.max_results)
+                crate::ai::acp::history::search_history_direct(
+                    search_text,
+                    acp_history_options.max_results,
+                )
             } else {
                 crate::ai::acp::history::search_history_cached(
                     search_text,
@@ -195,8 +201,7 @@ impl ScriptListApp {
         } else {
             Vec::new()
         };
-        let browser_history_status =
-            crate::browser_history::root_browser_history_snapshot_status();
+        let browser_history_status = crate::browser_history::root_browser_history_snapshot_status();
 
         let frame = crate::RootPassiveFrame {
             key,
@@ -589,7 +594,10 @@ impl ScriptListApp {
                 crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, &raw_filter_text)
                     .to_string();
             let search_text = search_text_owned.as_str();
-            let advanced_query_owned = self.menu_syntax_mode.advanced_query_for(&raw_filter_text).cloned();
+            let advanced_query_owned = self
+                .menu_syntax_mode
+                .advanced_query_for(&raw_filter_text)
+                .cloned();
             let source_filters = advanced_query_owned
                 .as_ref()
                 .map(|query| query.source_filters.clone())
@@ -601,12 +609,14 @@ impl ScriptListApp {
             let mut root_file_options = unified_search.root_file_section_options();
             let mut notes_options = unified_search.notes_section_options();
             let mut acp_history_options = unified_search.acp_history_section_options();
-            let mut clipboard_history_options = self.config.root_clipboard_history_section_options();
+            let mut clipboard_history_options =
+                self.config.root_clipboard_history_section_options();
             let mut dictation_history_options = unified_search.dictation_history_section_options();
             let mut browser_tabs_options = unified_search.browser_tabs_section_options();
             let mut browser_history_options = unified_search.browser_history_section_options();
             let root_passive_source_order = unified_search.passive_source_order();
             let root_passive_result_limits = unified_search.passive_result_limits();
+            let explicit_source_result_target = root_passive_result_limits.max_total_results;
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
                 root_file_options.files_enabled = true;
                 root_file_options.global_search_enabled = true;
@@ -616,30 +626,46 @@ impl ScriptListApp {
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {
                 notes_options.enabled = true;
                 notes_options.min_query_chars = 0;
+                notes_options.max_results =
+                    notes_options.max_results.max(explicit_source_result_target);
             }
             if source_filters
                 .includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)
             {
                 clipboard_history_options.enabled = true;
                 clipboard_history_options.min_query_chars = 0;
+                clipboard_history_options.max_results = clipboard_history_options
+                    .max_results
+                    .max(explicit_source_result_target);
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation) {
                 dictation_history_options.enabled = true;
                 dictation_history_options.min_query_chars = 0;
+                dictation_history_options.max_results = dictation_history_options
+                    .max_results
+                    .max(explicit_source_result_target);
             }
-            if source_filters
-                .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)
-            {
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations) {
                 acp_history_options.enabled = true;
                 acp_history_options.min_query_chars = 0;
+                acp_history_options.max_results = acp_history_options
+                    .max_results
+                    .max(explicit_source_result_target);
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs) {
                 browser_tabs_options.enabled = true;
                 browser_tabs_options.min_query_chars = 0;
+                browser_tabs_options.max_results = browser_tabs_options
+                    .max_results
+                    .max(explicit_source_result_target);
             }
-            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory) {
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory)
+            {
                 browser_history_options.enabled = true;
                 browser_history_options.min_query_chars = 0;
+                browser_history_options.max_results = browser_history_options
+                    .max_results
+                    .max(explicit_source_result_target);
             }
             let root_passive_frame = self.root_passive_frame_for_current_query(
                 search_text,
@@ -655,7 +681,8 @@ impl ScriptListApp {
             let root_file_frame = (matches!(
                 self.root_file_search_mode,
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery)
-            ) && source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))
+            ) && source_filters
+                .allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))
             .then(|| {
                 self.root_file_frame_for_current_query(
                     search_text,
