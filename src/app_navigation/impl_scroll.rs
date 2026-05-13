@@ -107,6 +107,66 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
 }
 
 impl ScriptListApp {
+    pub(crate) fn main_list_scroll_receipt(&mut self) -> serde_json::Value {
+        let viewport_height = self.main_list_state.viewport_bounds().size.height;
+        let footer_height = main_list_footer_overlay_total_padding();
+        let scroll_offset = self.main_list_state.logical_scroll_top();
+        let (content_height, selected_row_top, selected_row_bottom, item_count) = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let content_height = script_list_content_height(&grouped_items);
+            let selected_row_top = grouped_items
+                .get(self.selected_index)
+                .map(|_| script_list_pixel_top_for_item(&grouped_items, self.selected_index));
+            let selected_row_bottom = grouped_items.get(self.selected_index).map(|item| {
+                selected_row_top.unwrap_or(0.0) + script_list_row_height(item)
+            });
+            (
+                content_height,
+                selected_row_top,
+                selected_row_bottom,
+                grouped_items.len(),
+            )
+        };
+        let scroll_top = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            script_list_pixel_top_for_offset(&grouped_items, scroll_offset)
+        };
+        let viewport_height_px = viewport_height.as_f32().max(0.0);
+        let footer_height_px = footer_height.as_f32().max(0.0);
+        let safe_viewport_height = (viewport_height_px - footer_height_px).max(0.0);
+        let max_scroll_top = (content_height - safe_viewport_height).max(0.0);
+        let selected_row_top_in_view = selected_row_top.map(|top| top - scroll_top);
+        let selected_row_bottom_in_view = selected_row_bottom.map(|bottom| bottom - scroll_top);
+        let selected_row_visible = selected_row_top_in_view
+            .zip(selected_row_bottom_in_view)
+            .map(|(top, bottom)| top >= 0.0 && bottom <= viewport_height_px)
+            .unwrap_or(false);
+        let selected_row_above_footer = selected_row_bottom_in_view
+            .map(|bottom| bottom <= safe_viewport_height)
+            .unwrap_or(false);
+
+        serde_json::json!({
+            "scrollTop": scroll_top,
+            "scrollTopItem": scroll_offset.item_ix,
+            "scrollTopOffset": scroll_offset.offset_in_item.as_f32(),
+            "contentHeight": content_height,
+            "viewportHeight": viewport_height_px,
+            "footerHeight": footer_height_px,
+            "safeViewportHeight": safe_viewport_height,
+            "maxScrollTop": max_scroll_top,
+            "selectedIndex": self.selected_index,
+            "selectedRowTop": selected_row_top_in_view,
+            "selectedRowBottom": selected_row_bottom_in_view,
+            "selectedRowVisible": selected_row_visible,
+            "selectedRowAboveFooter": selected_row_above_footer,
+            "itemCount": item_count,
+        })
+    }
+
+    pub(crate) fn reveal_main_list_selection_above_footer(&mut self, reason: &str) {
+        self.scroll_to_selected_if_needed(reason);
+    }
+
     pub(crate) fn sync_main_list_selection_to_visible_window(&mut self, reason: &'static str) {
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
         let safe_height = viewport_height - main_list_footer_overlay_total_padding();

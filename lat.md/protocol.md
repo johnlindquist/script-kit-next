@@ -62,6 +62,8 @@ The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `cap
 
 `stateResult` carries both `choiceCount` (total dataset) and `visibleChoiceCount` (filter-aware). Automation harnesses verifying empty-filter-result acceptance clauses must key on `visibleChoiceCount`, never `choiceCount` — the latter is unchanged by the active filter and so cannot drop to zero on a filter miss. Both field names are pinned at source level in `tests/state_result_visible_choice_count_contract.rs`.
 
+`stateResult.mainListScroll` is present for the main ScriptList surface. It reports content-light scroll geometry and selected-row visibility relative to the footer-safe viewport so automation can prove lazy root Files rows do not hide the selected item under the native footer.
+
 `stateResult.surfaceContract` carries the active main-window launcher surface contract snapshot when `getState` resolves to the main window. The snapshot is built from `AppView::surface_contract()` and exposes `surfaceKind`, vocabulary fields, focus policy, keyboard policy, actions policy, proof policy, visual policy, `automationSemanticSurface`, and the active view's `nativeFooterSurface`, matching the generated surface matrix. Secondary-window target diagnostics omit the field because they are not AppView receipts. Pinned by `tests/state_result_surface_contract_snapshot.rs`.
 
 `stateResult.activePopupContract` carries the attached shared actions popup contract when `show_actions_popup` or `actions_dialog` is active. It reports `SurfaceKind::ActionsDialog` separately from the host `surfaceContract`, so agents can prove overlay keyboard/actions/proof policy without treating the popup as the main route.
@@ -148,6 +150,7 @@ The MCP server is a separate HTTP entrypoint layered on top of the same app stat
 - It uses bearer-token authentication from `~/.scriptkit/agent-token`.
 - It writes discovery metadata to `~/.scriptkit/server.json`.
 - The live RPC surface is JSON-RPC 2.0 over HTTP with `initialize`, `tools/list`, `tools/call`, `resources/list`, and `resources/read`.
+- The Codex setup guide lives at [docs/codex-mcp-setup.md](../docs/codex-mcp-setup.md); it registers the app's HTTP `/rpc` endpoint with `codex mcp add --url ... --bearer-token-env-var SCRIPT_KIT_MCP_TOKEN`, not a stdio command.
 - Startup retains the `ServerHandle` through [[src/mcp_server/mod.rs#retain_server_handle]] so the listener remains alive after app setup returns.
 - Accepted sockets are forced back to blocking mode before request parsing and response writes so large JSON receipts, including optional image payloads, do not fail with transient nonblocking write errors inherited from the listener.
 

@@ -25,7 +25,9 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "menu_syntax_main_hint",
     "capture_history_picker",
     "main_window_preflight",
+    "actions_dialog",
     "root_file_search",
+    "main_list_scroll",
     "screenshot_identity",
 ];
 

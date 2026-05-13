@@ -56,7 +56,7 @@ fn root_unified_dictation_history_uses_passive_grouping_contract() {
 
     assert!(grouping.contains("fn append_root_dictation_history_section("));
     assert!(grouping.contains(
-        "append_root_passive_section(grouped, flat_results, \"Dictation History\", rows)"
+        "append_root_passive_section(grouped, flat_results, \"Dictation History\", rows"
     ));
     assert!(grouping.contains("root_dictation_history_query_is_eligible("));
     assert!(
