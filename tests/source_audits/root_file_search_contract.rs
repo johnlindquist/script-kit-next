@@ -1526,8 +1526,10 @@ mod tests {
             .expect("merge_root_global_file_results_with_recent source should be present");
 
         assert!(
-            recent_source.contains("take(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT)"),
-            "empty-root Recent Files should stay visually capped even when the cached seed pool is deeper"
+            recent_source.contains("source_filter_browse_target_visible_rows")
+                && recent_source
+                    .contains("unwrap_or(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT)"),
+            "empty-root Recent Files should stay capped while explicit source-filter browse can raise the cap"
         );
         assert!(
             !merge_helper.contains("ROOT_FILE_RECENT_RENDER_LIMIT"),

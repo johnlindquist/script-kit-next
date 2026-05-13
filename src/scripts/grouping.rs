@@ -1023,7 +1023,11 @@ fn append_recent_root_file_section(
     let eligible_recent_files = recent_file_results
         .iter()
         .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
-        .take(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT)
+        .take(
+            options
+                .source_filter_browse_target_visible_rows
+                .unwrap_or(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT),
+        )
         .collect::<Vec<_>>();
     if eligible_recent_files.is_empty() {
         return;
@@ -4289,6 +4293,89 @@ mod advanced_query_tests {
             file_count,
             crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT,
             "empty-root Recent Files should remain visually capped"
+        );
+    }
+
+    #[test]
+    fn source_filter_files_empty_browse_uses_browse_target_not_recent_render_cap() {
+        let recent_files = (0..crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT + 8)
+            .map(|idx| {
+                root_file(
+                    &format!("/Users/example/Desktop/recent-{idx}.md"),
+                    &format!("recent-{idx}.md"),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut source_filters = crate::menu_syntax::RootUnifiedSourceFilterSet::default();
+        source_filters.insert(crate::menu_syntax::RootUnifiedSourceFilter::Files);
+        let target = crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT + 8;
+
+        let (_grouped, flat) =
+            get_grouped_results_with_validation_query_and_root_files_with_options(
+                &[],
+                &[],
+                &[],
+                &[],
+                &[],
+                &[],
+                &FrecencyStore::new(),
+                "",
+                &SuggestedConfig::default(),
+                &[],
+                None,
+                None,
+                None,
+                None,
+                &source_filters,
+                None,
+                false,
+                &[],
+                &recent_files,
+                crate::file_search::RootFileSectionOptions {
+                    source_filter_browse_target_visible_rows: Some(target),
+                    ..Default::default()
+                },
+                &[],
+                crate::notes::RootNotesSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::clipboard_history::RootClipboardHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::dictation::RootDictationHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::ai::acp::history::RootAcpHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::browser_tabs::RootBrowserTabsSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &[],
+                crate::browser_history::RootBrowserHistorySectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
+                &crate::config::UnifiedSearchPassiveSource::DEFAULT_ORDER,
+                crate::config::UnifiedSearchPassiveResultLimitsConfig::default(),
+            );
+
+        let file_count = flat
+            .iter()
+            .filter(|result| matches!(result, SearchResult::File(_)))
+            .count();
+        assert_eq!(
+            file_count, target,
+            "explicit Files source-only browse should use the source-filter target, not the empty-root cap"
         );
     }
 

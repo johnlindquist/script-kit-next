@@ -125,7 +125,7 @@ Global root file rows are frozen in a per-query frame. Provider completion may u
 
 Source-filter heads can make Files the only participating root source. When `files:` or `f:` appears anywhere as a standalone token, grouping suppresses primary and fallback rows, strips the token before provider search, and keys the file frame by both stripped query and source-filter set so delayed provider results cannot replace a different source-only frame. These filters are transparent refinements, not power-user UI mode switches, so `png files:` renders File rows without the menu-syntax hint; a bare leading `:` is reserved for filter discovery and insertion.
 
-When the stripped query is empty, `files:` and `f:` browse the frecency-backed Recent Files set even if ordinary root file search is disabled. Disabled recent-file refreshes leave the hydration revision invalid so an explicit source-only Files filter can load current recents immediately instead of reusing an empty disabled frame.
+When the stripped query is empty, `files:` and `f:` browse the frecency-backed Recent Files set even if ordinary root file search is disabled. Explicit source-only Files browse uses the deeper recent-file seed target instead of the ordinary empty-root render cap, while plain empty root still renders the capped Recent Files set. Disabled recent-file refreshes leave the hydration revision invalid so an explicit source-only Files filter can load current recents immediately instead of reusing an empty disabled frame.
 
 ## Root Unified Search ACP History
 
