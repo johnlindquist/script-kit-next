@@ -65,6 +65,12 @@ fn element(
         selected,
         focused,
         index,
+        role: None,
+        kind: None,
+        source: None,
+        source_name: None,
+        selectable: None,
+        status_kind: None,
     }
 }
 

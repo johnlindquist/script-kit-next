@@ -262,6 +262,8 @@ impl ScriptListApp {
             root_file_options.recent_files_enabled = true;
             root_file_options.query_intent =
                 crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
+            root_file_options.source_chip_visible_limit =
+                Some(crate::file_search::ROOT_FILE_SOURCE_CHIP_PAGE_SIZE);
         }
         if !root_file_options.files_enabled
             || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)
@@ -389,9 +391,9 @@ impl ScriptListApp {
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_file_search_cancel = Some(cancel.clone());
-        let publish_active_results = source_filters.includes(
-            crate::menu_syntax::RootUnifiedSourceFilter::Files,
-        ) || matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
+        let publish_active_results = source_filters
+            .includes(crate::menu_syntax::RootUnifiedSourceFilter::Files)
+            || matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
         let request_cache_key = request.cache_key();
 
         cx.spawn(async move |this, cx| {
@@ -552,7 +554,9 @@ fn emit_root_file_search_test_fixture(
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
             return true;
         }
-        let _ = tx.send(crate::file_search::SearchEvent::Result(result.into_file_result()));
+        let _ = tx.send(crate::file_search::SearchEvent::Result(
+            result.into_file_result(),
+        ));
     }
     let _ = tx.send(crate::file_search::SearchEvent::Done);
     true

@@ -2282,6 +2282,7 @@ fn source_zero_copy_label(spec: &crate::menu_syntax::payload::SourceHeadSpec) ->
         RootUnifiedSourceFilter::Apps => "apps".to_string(),
         RootUnifiedSourceFilter::Scripts => "scripts".to_string(),
         RootUnifiedSourceFilter::Commands => "commands".to_string(),
+        RootUnifiedSourceFilter::AiVault => "AI Vault sessions".to_string(),
         RootUnifiedSourceFilter::Dictation => "dictation entries".to_string(),
         RootUnifiedSourceFilter::Windows => "windows".to_string(),
         RootUnifiedSourceFilter::Processes => "processes".to_string(),

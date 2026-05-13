@@ -49,6 +49,12 @@ pub(crate) fn collect_select_prompt_elements(
             selected: Some(is_selected),
             focused: Some(is_focused),
             index: Some(display_idx),
+            role: None,
+            kind: None,
+            source: None,
+            source_name: None,
+            selectable: None,
+            status_kind: None,
         });
     }
 

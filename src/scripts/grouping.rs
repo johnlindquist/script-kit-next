@@ -19,7 +19,7 @@ use crate::app_launcher::AppInfo;
 use crate::builtins::{menu_bar_items_to_entries, BuiltInEntry};
 use crate::config::SuggestedConfig;
 use crate::frecency::FrecencyStore;
-use crate::list_item::GroupedListItem;
+use crate::list_item::{GroupedListItem, SourceChipStatusKind, SourceChipStatusRow};
 use crate::menu_bar::MenuBarItem;
 use crate::plugins::PluginSkill;
 
@@ -526,6 +526,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             root_file_options,
         );
     }
+    if root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault) {
+        append_root_ai_vault_section(&mut grouped);
+    }
     let mut passive_budget =
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
     for source in root_passive_source_order {
@@ -663,6 +666,14 @@ fn filter_grouped_results_by_root_sources(
                     filtered_grouped.push(GroupedListItem::Item(*new_index));
                 }
             }
+            GroupedListItem::Status(status) => {
+                if root_source_filters.allows(status.source) {
+                    if let Some(header) = pending_header.take() {
+                        filtered_grouped.push(header);
+                    }
+                    filtered_grouped.push(GroupedListItem::Status(status.clone()));
+                }
+            }
         }
     }
 
@@ -722,18 +733,22 @@ fn append_root_passive_section(
     flat_results: &mut Vec<SearchResult>,
     label: &'static str,
     rows: Vec<SearchResult>,
+    status: Option<SourceChipStatusRow>,
 ) {
-    if rows.is_empty() {
+    if rows.is_empty() && status.is_none() {
         return;
     }
 
     let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
-    let mut grouped_rows = Vec::with_capacity(rows.len() + 1);
+    let mut grouped_rows = Vec::with_capacity(rows.len() + 2);
     grouped_rows.push(GroupedListItem::SectionHeader(label.to_string(), None));
     for row in rows {
         let idx = flat_results.len();
         flat_results.push(row);
         grouped_rows.push(GroupedListItem::Item(idx));
+    }
+    if let Some(status) = status {
+        grouped_rows.push(GroupedListItem::Status(status));
     }
     grouped.splice(insertion_index..insertion_index, grouped_rows);
 }
@@ -780,7 +795,7 @@ fn append_root_acp_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "AI Conversations", rows);
+    append_root_passive_section(grouped, flat_results, "AI Conversations", rows, None);
 }
 
 fn append_root_notes_section(
@@ -824,7 +839,7 @@ fn append_root_notes_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Notes", rows);
+    append_root_passive_section(grouped, flat_results, "Notes", rows, None);
 }
 
 fn append_root_clipboard_history_section(
@@ -871,7 +886,7 @@ fn append_root_clipboard_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
+    append_root_passive_section(grouped, flat_results, "Clipboard History", rows, None);
 }
 
 fn append_root_dictation_history_section(
@@ -915,7 +930,7 @@ fn append_root_dictation_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Dictation History", rows);
+    append_root_passive_section(grouped, flat_results, "Dictation History", rows, None);
 }
 
 fn append_root_browser_tabs_section(
@@ -957,7 +972,7 @@ fn append_root_browser_tabs_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows);
+    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, None);
 }
 
 fn append_root_browser_history_section(
@@ -1001,7 +1016,7 @@ fn append_root_browser_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Browser History", rows);
+    append_root_passive_section(grouped, flat_results, "Browser History", rows, None);
 }
 
 fn append_recent_root_file_section(
@@ -1020,6 +1035,10 @@ fn append_recent_root_file_section(
         return;
     }
 
+    let loaded_recent_files = recent_file_results
+        .iter()
+        .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
+        .count();
     let eligible_recent_files = recent_file_results
         .iter()
         .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
@@ -1029,13 +1048,21 @@ fn append_recent_root_file_section(
                 .unwrap_or(crate::file_search::ROOT_FILE_RECENT_RENDER_LIMIT),
         )
         .collect::<Vec<_>>();
-    if eligible_recent_files.is_empty() {
+    let source_status = options.source_chip_visible_limit.map(|_| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Files,
+            eligible_recent_files.len(),
+            loaded_recent_files,
+            false,
+        )
+    });
+    if eligible_recent_files.is_empty() && source_status.is_none() {
         return;
     }
 
     let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
 
-    let mut recent_group = Vec::with_capacity(eligible_recent_files.len() + 1);
+    let mut recent_group = Vec::with_capacity(eligible_recent_files.len() + 2);
     recent_group.push(GroupedListItem::SectionHeader(
         "Recent Files".to_string(),
         None,
@@ -1048,8 +1075,96 @@ fn append_recent_root_file_section(
         }));
         recent_group.push(GroupedListItem::Item(idx));
     }
+    if let Some(status) = source_status {
+        recent_group.push(GroupedListItem::Status(status));
+    }
 
     grouped.splice(insertion_index..insertion_index, recent_group);
+}
+
+fn source_chip_status_row(
+    source: crate::menu_syntax::RootUnifiedSourceFilter,
+    status_kind: SourceChipStatusKind,
+    shown: usize,
+    loaded: usize,
+    total: Option<usize>,
+    label: String,
+) -> SourceChipStatusRow {
+    SourceChipStatusRow {
+        source,
+        source_name: source.label().to_string(),
+        status_kind,
+        label,
+        shown,
+        loaded,
+        total,
+    }
+}
+
+fn source_chip_result_status(
+    source: crate::menu_syntax::RootUnifiedSourceFilter,
+    shown: usize,
+    loaded: usize,
+    loading: bool,
+) -> SourceChipStatusRow {
+    if loading {
+        return source_chip_status_row(
+            source,
+            SourceChipStatusKind::Loading,
+            shown,
+            loaded,
+            None,
+            "Loading more...".to_string(),
+        );
+    }
+
+    if shown == 0 {
+        return source_chip_status_row(
+            source,
+            SourceChipStatusKind::Exhausted,
+            shown,
+            loaded,
+            Some(loaded),
+            "No results".to_string(),
+        );
+    }
+
+    let capped = loaded > shown;
+    let label = if capped {
+        format!("Showing {shown} of {loaded}")
+    } else {
+        format!("Showing {shown} of {loaded} · No more results")
+    };
+    source_chip_status_row(
+        source,
+        if capped {
+            SourceChipStatusKind::Showing
+        } else {
+            SourceChipStatusKind::Exhausted
+        },
+        shown,
+        loaded,
+        Some(loaded),
+        label,
+    )
+}
+
+fn append_root_ai_vault_section(grouped: &mut Vec<GroupedListItem>) {
+    let insertion_index = grouped.len();
+    grouped.splice(
+        insertion_index..insertion_index,
+        [
+            GroupedListItem::SectionHeader("AI Vault".to_string(), None),
+            GroupedListItem::Status(source_chip_status_row(
+                crate::menu_syntax::RootUnifiedSourceFilter::AiVault,
+                SourceChipStatusKind::Disabled,
+                0,
+                0,
+                Some(0),
+                "AI Vault is disabled".to_string(),
+            )),
+        ],
+    );
 }
 
 fn append_root_file_section(
@@ -1094,19 +1209,22 @@ fn append_root_file_section(
                 filter_text,
                 options.query_intent,
             );
-            crate::file_search::rank_root_file_results(
-                &merged,
-                filter_text,
-                crate::file_search::ROOT_FILE_RENDER_LIMIT,
-                |key| frecency_store.get_score(key),
-            )
+            let visible_limit = options
+                .source_chip_visible_limit
+                .unwrap_or(crate::file_search::ROOT_FILE_RENDER_LIMIT);
+            crate::file_search::rank_root_file_results(&merged, filter_text, visible_limit, |key| {
+                frecency_store.get_score(key)
+            })
         }
         crate::file_search::RootFileSectionMode::DirectoryBrowse => {
             let child_filter = root_directory_browse_child_filter(filter_text);
+            let visible_limit = options
+                .source_chip_visible_limit
+                .unwrap_or(crate::file_search::ROOT_FILE_BROWSE_RENDER_LIMIT);
             crate::file_search::root_directory_file_matches(
                 root_file_results,
                 child_filter.as_deref(),
-                crate::file_search::ROOT_FILE_BROWSE_RENDER_LIMIT,
+                visible_limit,
             )
         }
     };
@@ -1115,7 +1233,27 @@ fn append_root_file_section(
     } else {
         root_file_search_handoff_result(filter_text, mode)
     };
-    if files.is_empty() && handoff.is_none() {
+    let source_status = options.source_chip_visible_limit.map(|_| {
+        let loaded = match mode {
+            crate::file_search::RootFileSectionMode::GlobalQuery => {
+                merge_root_global_file_results_with_recent(
+                    root_file_results,
+                    root_recent_file_results,
+                    filter_text,
+                    options.query_intent,
+                )
+                .len()
+            }
+            crate::file_search::RootFileSectionMode::DirectoryBrowse => root_file_results.len(),
+        };
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Files,
+            files.len(),
+            loaded,
+            root_file_search_loading,
+        )
+    });
+    if files.is_empty() && handoff.is_none() && source_status.is_none() {
         return;
     }
 
@@ -1129,7 +1267,7 @@ fn append_root_file_section(
     );
     let insertion_index = root_file_section_insertion_index(grouped, flat_results, promote);
 
-    let mut file_group = Vec::with_capacity(files.len() + 2);
+    let mut file_group = Vec::with_capacity(files.len() + 3);
     file_group.push(GroupedListItem::SectionHeader(
         root_file_section_title(mode, root_file_search_loading).to_string(),
         None,
@@ -1143,6 +1281,9 @@ fn append_root_file_section(
         let idx = flat_results.len();
         flat_results.push(handoff);
         file_group.push(GroupedListItem::Item(idx));
+    }
+    if let Some(status) = source_status {
+        file_group.push(GroupedListItem::Status(status));
     }
     grouped.splice(insertion_index..insertion_index, file_group);
 }
@@ -1231,6 +1372,7 @@ fn root_file_passive_insertion_index(
         .iter()
         .position(|item| match item {
             GroupedListItem::Item(_) => false,
+            GroupedListItem::Status(_) => false,
             GroupedListItem::SectionHeader(label, None) => {
                 label.starts_with("Use \"") && label.ends_with("\" with...")
             }

@@ -16,6 +16,7 @@ pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
 fn script_list_row_height(item: &GroupedListItem) -> f32 {
     match item {
         GroupedListItem::SectionHeader(..) => crate::list_item::effective_section_header_height(),
+        GroupedListItem::Status(..) => crate::list_item::effective_source_status_row_height(),
         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
     }
 }
@@ -317,7 +318,10 @@ impl ScriptListApp {
                         while idx < last
                             && matches!(
                                 grouped_items.get(idx),
-                                Some(GroupedListItem::SectionHeader(..))
+                                Some(
+                                    GroupedListItem::SectionHeader(..)
+                                        | GroupedListItem::Status(..)
+                                )
                             )
                         {
                             idx += 1;
@@ -328,7 +332,10 @@ impl ScriptListApp {
                         while idx > first
                             && matches!(
                                 grouped_items.get(idx),
-                                Some(GroupedListItem::SectionHeader(..))
+                                Some(
+                                    GroupedListItem::SectionHeader(..)
+                                        | GroupedListItem::Status(..)
+                                )
                             )
                         {
                             idx -= 1;
@@ -340,7 +347,7 @@ impl ScriptListApp {
 
                     let resolved_index = if matches!(
                         grouped_items.get(new_index),
-                        Some(GroupedListItem::SectionHeader(..))
+                        Some(GroupedListItem::SectionHeader(..) | GroupedListItem::Status(..))
                     ) {
                         clamped_index
                     } else {

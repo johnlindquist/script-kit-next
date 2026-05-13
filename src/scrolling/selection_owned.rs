@@ -5,6 +5,7 @@ use gpui::{ListOffset, Pixels};
 fn row_height(row: &GroupedListItem) -> f32 {
     match row {
         GroupedListItem::SectionHeader(..) => crate::list_item::effective_section_header_height(),
+        GroupedListItem::Status(..) => crate::list_item::effective_source_status_row_height(),
         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
     }
 }

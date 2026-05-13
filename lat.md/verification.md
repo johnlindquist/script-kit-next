@@ -46,6 +46,8 @@ Root unified-search safety is verified with grouping, config, and selection-key 
 
 Files must remain passive by default: they can beat fallback handoff rows, but not command, script, app, skill, or window rows unless an explicit exact-only promotion policy allows it. Global root file provider completion must not mutate the active visible frame for the same filter text.
 
+Explicit source heads may raise that source's visible rows and add non-selectable source status rows, but those rows must stay out of `SearchResult` execution, actions subjects, and selection coercion. `getElements` should expose them as status metadata so runtime proof can assert source-only paging without relying on screenshots.
+
 Use `cargo test --test source_audits root_file_search_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If `cargo test --lib root_file` hits the known local SIGBUS before tests execute, keep the failure log and rely on the focused source-audit proof plus `cargo check --lib`.
 
 ## Root Unified Search Frame Stability

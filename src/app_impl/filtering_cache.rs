@@ -624,6 +624,8 @@ impl ScriptListApp {
                 root_file_options.recent_files_enabled = true;
                 root_file_options.query_intent =
                     crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
+                root_file_options.source_chip_visible_limit =
+                    Some(crate::file_search::ROOT_FILE_SOURCE_CHIP_PAGE_SIZE);
                 if search_text.trim().is_empty() && !advanced_predicate_active {
                     root_file_options.source_filter_browse_target_visible_rows =
                         Some(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);

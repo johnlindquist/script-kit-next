@@ -136,6 +136,8 @@ pub const ROOT_FILE_RECENT_RENDER_LIMIT: usize = ROOT_FILE_RENDER_LIMIT;
 pub const ROOT_FILE_RECENT_SEED_LIMIT: usize = ROOT_FILE_RENDER_LIMIT * 4;
 /// Maximum frecency paths to hydrate while refreshing root recent files.
 pub const ROOT_FILE_RECENT_HYDRATE_LIMIT: usize = ROOT_FILE_RECENT_SEED_LIMIT * 3;
+/// Initial visible rows for explicit root Files source-chip searches.
+pub const ROOT_FILE_SOURCE_CHIP_PAGE_SIZE: usize = ROOT_FILE_RECENT_SEED_LIMIT;
 /// Maximum directory children collected for root launcher directory browsing.
 pub const ROOT_FILE_BROWSE_SOURCE_LIMIT: usize = 96;
 /// Maximum directory children rendered for root launcher directory browsing.
@@ -164,6 +166,7 @@ pub struct RootFileSectionOptions {
     pub promotion_policy: RootFilePromotionPolicy,
     pub query_intent: RootFileQueryIntent,
     pub source_filter_browse_target_visible_rows: Option<usize>,
+    pub source_chip_visible_limit: Option<usize>,
 }
 
 impl Default for RootFileSectionOptions {
@@ -176,6 +179,7 @@ impl Default for RootFileSectionOptions {
             promotion_policy: RootFilePromotionPolicy::Never,
             query_intent: RootFileQueryIntent::OrdinaryRoot,
             source_filter_browse_target_visible_rows: None,
+            source_chip_visible_limit: None,
         }
     }
 }
