@@ -11,3 +11,4 @@ The suite must serialize provider-slot and `SCRIPT_KIT_*_JSON` mutation because 
 - [[acp-portal-contract]] - ACP portal contract coverage for exact replacement, preview text, and host query seeding.
 - [[acp-dictation]] - ACP dictation delivery coverage for transcript handoff and focus behavior.
 - [[dictation-setup-nux]] - Dictation setup NUX flow coverage for first-run model download, mic permission, and ready-state receipts.
+- [[permission-assistant]] - Permission Assistant coverage for passive macOS permission detection, native overlay entry points, and teardown.

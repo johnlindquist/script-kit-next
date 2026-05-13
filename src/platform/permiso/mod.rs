@@ -1,8 +1,50 @@
+pub mod drag_source;
+pub mod host_app;
+pub mod locator;
+pub mod overlay_window;
 pub mod panel;
 
 pub use panel::PermisoPanel;
 
 pub struct PermisoAssistant;
+pub struct PermisoHandle {
+    controller: Option<overlay_window::OverlayController>,
+}
+
+static ACTIVE_PERMISO_HANDLE: std::sync::OnceLock<parking_lot::Mutex<Option<PermisoHandle>>> =
+    std::sync::OnceLock::new();
+
+fn active_permiso_handle() -> &'static parking_lot::Mutex<Option<PermisoHandle>> {
+    ACTIVE_PERMISO_HANDLE.get_or_init(|| parking_lot::Mutex::new(None))
+}
+
+impl Drop for PermisoHandle {
+    fn drop(&mut self) {
+        if let Some(controller) = self.controller.as_mut() {
+            controller.dismiss();
+        }
+    }
+}
+
+impl PermisoAssistant {
+    pub fn present(panel: PermisoPanel) -> anyhow::Result<PermisoHandle> {
+        present_settings_url(panel)?;
+        let controller = overlay_window::OverlayController::present(panel)?;
+        Ok(PermisoHandle {
+            controller: Some(controller),
+        })
+    }
+
+    pub fn present_retained(panel: PermisoPanel) -> anyhow::Result<()> {
+        let handle = Self::present(panel)?;
+        *active_permiso_handle().lock() = Some(handle);
+        Ok(())
+    }
+
+    pub fn dismiss_active() {
+        *active_permiso_handle().lock() = None;
+    }
+}
 
 #[cfg(target_os = "macos")]
 pub fn present_settings_url(panel: PermisoPanel) -> anyhow::Result<()> {
