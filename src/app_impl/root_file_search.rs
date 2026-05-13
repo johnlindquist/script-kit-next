@@ -249,11 +249,14 @@ impl ScriptListApp {
         let search_text =
             crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, query).to_string();
         let trimmed = search_text.trim();
-        let source_filters = self
-            .menu_syntax_mode
-            .advanced_query_for(query)
+        let advanced_query_owned = self.menu_syntax_mode.advanced_query_for(query).cloned();
+        let source_filters = advanced_query_owned
+            .as_ref()
             .map(|advanced_query| advanced_query.source_filters.clone())
             .unwrap_or_default();
+        let advanced_predicate_active = advanced_query_owned
+            .as_ref()
+            .is_some_and(|advanced_query| advanced_query.has_predicates());
         let mut root_file_options = self.config.get_unified_search().root_file_section_options();
         if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Files) {
             root_file_options.files_enabled = true;
@@ -263,7 +266,12 @@ impl ScriptListApp {
             root_file_options.query_intent =
                 crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
             root_file_options.source_chip_visible_limit =
-                Some(crate::file_search::ROOT_FILE_SOURCE_CHIP_PAGE_SIZE);
+                Some(self.root_file_source_chip_visible_limit_for(
+                    query,
+                    trimmed,
+                    advanced_predicate_active,
+                    self.root_file_search_mode,
+                ));
         }
         if !root_file_options.files_enabled
             || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)

@@ -527,7 +527,9 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             root_file_options,
         );
     }
-    if root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault) {
+    if root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)
+        && root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)
+    {
         append_root_ai_vault_section(&mut grouped);
     }
     let mut passive_budget =
@@ -811,7 +813,7 @@ fn append_root_acp_history_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 
@@ -864,7 +866,7 @@ fn append_root_notes_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 
@@ -918,7 +920,7 @@ fn append_root_clipboard_history_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 
@@ -974,7 +976,7 @@ fn append_root_dictation_history_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 
@@ -1027,7 +1029,7 @@ fn append_root_browser_tabs_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 
@@ -1081,7 +1083,7 @@ fn append_root_browser_history_section(
     }
 
     let limit = budget.limit_for_source(options.max_results);
-    if limit == 0 {
+    if limit == 0 && !explicit_source_filter {
         return;
     }
 

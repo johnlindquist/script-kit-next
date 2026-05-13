@@ -624,11 +624,16 @@ impl ScriptListApp {
                 root_file_options.recent_files_enabled = true;
                 root_file_options.query_intent =
                     crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
-                root_file_options.source_chip_visible_limit =
-                    Some(crate::file_search::ROOT_FILE_SOURCE_CHIP_PAGE_SIZE);
+                let visible_limit = self.root_file_source_chip_visible_limit_for(
+                    &raw_filter_text,
+                    search_text,
+                    advanced_predicate_active,
+                    self.root_file_search_mode,
+                );
+                root_file_options.source_chip_visible_limit = Some(visible_limit);
                 if search_text.trim().is_empty() && !advanced_predicate_active {
                     root_file_options.source_filter_browse_target_visible_rows =
-                        Some(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
+                        Some(visible_limit);
                 }
             }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes) {

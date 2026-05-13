@@ -168,6 +168,50 @@ mod tests {
     }
 
     #[test]
+    fn root_file_source_chip_pages_on_near_bottom_selection() {
+        let state_source =
+            fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+        let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+        let movement_source = fs::read_to_string("src/app_navigation/impl_movement.rs")
+            .expect("read src/app_navigation/impl_movement.rs");
+        let file_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+
+        assert!(
+            file_source.contains("ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS")
+                && file_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE"),
+            "explicit Files source-chip paging should have separate initial and incremental budgets"
+        );
+        assert!(
+            state_source.contains("root_file_source_chip_page_key")
+                && state_source.contains("root_file_source_chip_visible_limit")
+                && state_source.contains("root_file_source_chip_visible_limit_for("),
+            "Files source-chip visible limits should be query-keyed app state"
+        );
+        let normalized_filtering = filtering_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            filtering_source.contains("root_file_source_chip_visible_limit_for(")
+                && normalized_filtering
+                    .contains("root_file_options.source_chip_visible_limit = Some(visible_limit)")
+                && normalized_filtering.contains(
+                    "root_file_options.source_filter_browse_target_visible_rows = Some(visible_limit)"
+                ),
+            "explicit Files source filters should pass the current page budget into search and browse grouping"
+        );
+        assert!(
+            movement_source.contains("fn maybe_expand_root_file_source_chip_page")
+                && movement_source.contains("const PRELOAD_THRESHOLD: usize = 3")
+                && movement_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE")
+                && movement_source.contains("restore_main_menu_selection_from_snapshot(snapshot)"),
+            "selection near the bottom of explicit Files rows should increment the page and preserve selection"
+        );
+    }
+
+    #[test]
     fn root_global_file_search_caches_results_without_active_frame_publish() {
         let source = fs::read_to_string("src/app_impl/root_file_search.rs")
             .expect("read src/app_impl/root_file_search.rs");

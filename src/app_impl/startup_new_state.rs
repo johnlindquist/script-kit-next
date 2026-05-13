@@ -51,6 +51,9 @@
             root_file_search_loading: false,
             root_file_provider_loading: false,
             root_file_frame: None,
+            root_file_source_chip_page_key: None,
+            root_file_source_chip_visible_limit:
+                crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS,
             root_passive_frame: None,
             pending_root_file_actions_file: None,
             pending_root_unified_actions_subject: None,

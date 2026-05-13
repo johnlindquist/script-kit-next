@@ -137,7 +137,9 @@ pub const ROOT_FILE_RECENT_SEED_LIMIT: usize = ROOT_FILE_RENDER_LIMIT * 4;
 /// Maximum frecency paths to hydrate while refreshing root recent files.
 pub const ROOT_FILE_RECENT_HYDRATE_LIMIT: usize = ROOT_FILE_RECENT_SEED_LIMIT * 3;
 /// Initial visible rows for explicit root Files source-chip searches.
-pub const ROOT_FILE_SOURCE_CHIP_PAGE_SIZE: usize = ROOT_FILE_RECENT_SEED_LIMIT;
+pub const ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS: usize = ROOT_FILE_RENDER_LIMIT * 2;
+/// Additional rows revealed when explicit root Files source-chip searches page.
+pub const ROOT_FILE_SOURCE_CHIP_PAGE_SIZE: usize = ROOT_FILE_RENDER_LIMIT * 2;
 /// Maximum directory children collected for root launcher directory browsing.
 pub const ROOT_FILE_BROWSE_SOURCE_LIMIT: usize = 96;
 /// Maximum directory children rendered for root launcher directory browsing.
