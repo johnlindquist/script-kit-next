@@ -500,6 +500,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             windows,
             filter_text,
             advanced_query,
+            root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Windows),
         );
     }
 
@@ -547,6 +548,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_browser_tab_hits,
                     root_browser_tabs_options.clone(),
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::Notes => {
@@ -561,6 +564,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_note_hits,
                     root_notes_options,
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::ClipboardHistory => {
@@ -577,6 +582,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_clipboard_history_hits,
                     root_clipboard_history_options,
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::DictationHistory => {
@@ -593,6 +600,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_dictation_history_hits,
                     root_dictation_history_options,
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::AcpHistory => {
@@ -609,6 +618,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_acp_history_hits,
                     root_acp_history_options,
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
@@ -625,6 +636,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     root_browser_history_hits,
                     root_browser_history_options.clone(),
                     &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory),
                 );
             }
         }
@@ -677,8 +690,36 @@ fn filter_grouped_results_by_root_sources(
         }
     }
 
+    append_base_source_status_rows(
+        &mut filtered_grouped,
+        &filtered_results,
+        root_source_filters,
+    );
     *flat_results = filtered_results;
     *grouped = filtered_grouped;
+}
+
+fn append_base_source_status_rows(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &[SearchResult],
+    root_source_filters: &crate::menu_syntax::RootUnifiedSourceFilterSet,
+) {
+    for source in root_source_filters.positive_includes() {
+        match source {
+            crate::menu_syntax::RootUnifiedSourceFilter::Apps
+            | crate::menu_syntax::RootUnifiedSourceFilter::Scripts
+            | crate::menu_syntax::RootUnifiedSourceFilter::Commands => {
+                let shown = flat_results
+                    .iter()
+                    .filter(|result| result.root_unified_source() == Some(source))
+                    .count();
+                grouped.push(GroupedListItem::Status(source_chip_result_status(
+                    source, shown, shown, false,
+                )));
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -761,6 +802,7 @@ fn append_root_acp_history_section(
     hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     options: crate::ai::acp::history::RootAcpHistorySectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
         || !crate::ai::acp::history::root_acp_history_query_is_eligible(filter_text, options)
@@ -795,7 +837,15 @@ fn append_root_acp_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "AI Conversations", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Conversations,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "AI Conversations", rows, status);
 }
 
 fn append_root_notes_section(
@@ -806,6 +856,7 @@ fn append_root_notes_section(
     hits: &[crate::notes::RootNoteSearchHit],
     options: crate::notes::RootNotesSectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some() || !crate::notes::root_notes_query_is_eligible(filter_text, options)
     {
@@ -839,7 +890,15 @@ fn append_root_notes_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Notes", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Notes,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Notes", rows, status);
 }
 
 fn append_root_clipboard_history_section(
@@ -850,6 +909,7 @@ fn append_root_clipboard_history_section(
     hits: &[crate::clipboard_history::ClipboardEntryMeta],
     options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
         || !crate::clipboard_history::root_clipboard_history_query_is_eligible(filter_text, options)
@@ -886,7 +946,15 @@ fn append_root_clipboard_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Clipboard History", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Clipboard History", rows, status);
 }
 
 fn append_root_dictation_history_section(
@@ -897,6 +965,7 @@ fn append_root_dictation_history_section(
     hits: &[crate::dictation::RootDictationHistorySearchHit],
     options: crate::dictation::RootDictationHistorySectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
         || !crate::dictation::root_dictation_history_query_is_eligible(filter_text, options)
@@ -930,7 +999,15 @@ fn append_root_dictation_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Dictation History", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Dictation,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Dictation History", rows, status);
 }
 
 fn append_root_browser_tabs_section(
@@ -941,6 +1018,7 @@ fn append_root_browser_tabs_section(
     hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
     options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
         || !crate::browser_tabs::root_browser_tabs_query_is_eligible(filter_text, options.clone())
@@ -972,7 +1050,15 @@ fn append_root_browser_tabs_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, status);
 }
 
 fn append_root_browser_history_section(
@@ -983,6 +1069,7 @@ fn append_root_browser_history_section(
     hits: &[crate::browser_history::RootBrowserHistorySearchHit],
     options: crate::browser_history::RootBrowserHistorySectionOptions,
     budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some()
         || !crate::browser_history::root_browser_history_query_is_eligible(
@@ -1016,7 +1103,15 @@ fn append_root_browser_history_section(
         .collect::<Vec<_>>();
 
     budget.consume(rows.len());
-    append_root_passive_section(grouped, flat_results, "Browser History", rows, None);
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Browser History", rows, status);
 }
 
 fn append_recent_root_file_section(
@@ -1092,12 +1187,20 @@ fn source_chip_status_row(
 ) -> SourceChipStatusRow {
     SourceChipStatusRow {
         source,
-        source_name: source.label().to_string(),
+        source_name: source_chip_source_name(source).to_string(),
         status_kind,
         label,
         shown,
         loaded,
         total,
+    }
+}
+
+fn source_chip_source_name(source: crate::menu_syntax::RootUnifiedSourceFilter) -> &'static str {
+    match source {
+        crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory => "Clipboard History",
+        crate::menu_syntax::RootUnifiedSourceFilter::Dictation => "Dictation History",
+        other => other.label(),
     }
 }
 
@@ -1387,21 +1490,31 @@ fn append_root_windows_section(
     windows: &[crate::window_control::WindowInfo],
     filter_text: &str,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    explicit_source_filter: bool,
 ) {
     if advanced_query.is_some_and(|query| query.has_predicates()) {
         return;
     }
 
     let matches = fuzzy_search_windows(windows, filter_text);
-    if matches.is_empty() {
+    if matches.is_empty() && !explicit_source_filter {
         return;
     }
 
     grouped.push(GroupedListItem::SectionHeader("Windows".to_string(), None));
+    let shown = matches.len();
     for window_match in matches {
         let idx = flat_results.len();
         flat_results.push(SearchResult::Window(window_match));
         grouped.push(GroupedListItem::Item(idx));
+    }
+    if explicit_source_filter {
+        grouped.push(GroupedListItem::Status(source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Windows,
+            shown,
+            shown,
+            false,
+        )));
     }
 }
 
