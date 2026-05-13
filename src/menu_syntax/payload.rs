@@ -326,6 +326,19 @@ impl RootUnifiedSourceFilterSet {
         self.include.contains(&source)
     }
 
+    pub fn has_positive_includes(&self) -> bool {
+        self.include
+            .iter()
+            .any(|source| !self.exclude.contains(source))
+    }
+
+    pub fn positive_includes(&self) -> impl Iterator<Item = RootUnifiedSourceFilter> + '_ {
+        self.include
+            .iter()
+            .copied()
+            .filter(|source| !self.exclude.contains(source))
+    }
+
     pub fn effective_is_empty(&self) -> bool {
         self.active()
             && self

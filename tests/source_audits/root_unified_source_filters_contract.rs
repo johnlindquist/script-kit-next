@@ -154,6 +154,15 @@ fn grouping_suppresses_primary_and_disallowed_sources_when_filter_active() {
     assert!(grouping.contains(
         "root_source_filters\n                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)"
     ));
+    assert!(grouping.contains("append_base_source_status_rows"));
+    assert!(grouping.contains("root_source_filters.positive_includes()"));
+    assert!(grouping.contains("GroupedListItem::Status(source_chip_result_status("));
+    assert!(grouping.contains(
+        "root_source_filters\n                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)"
+    ));
+    assert!(grouping.contains(
+        "root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Windows)"
+    ));
 }
 
 #[test]
