@@ -162,6 +162,7 @@ pub struct RootFileSectionOptions {
     pub global_search_enabled: bool,
     pub directory_browse_enabled: bool,
     pub promotion_policy: RootFilePromotionPolicy,
+    pub query_intent: RootFileQueryIntent,
     pub source_filter_browse_target_visible_rows: Option<usize>,
 }
 
@@ -173,6 +174,7 @@ impl Default for RootFileSectionOptions {
             global_search_enabled: true,
             directory_browse_enabled: true,
             promotion_policy: RootFilePromotionPolicy::Never,
+            query_intent: RootFileQueryIntent::OrdinaryRoot,
             source_filter_browse_target_visible_rows: None,
         }
     }
@@ -186,6 +188,19 @@ pub enum RootFileSectionMode {
     /// Direct child listing for an explicit directory path query.
     DirectoryBrowse,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootFileQueryIntent {
+    OrdinaryRoot,
+    ExplicitFilesSourceFilter,
+}
+
+impl Default for RootFileQueryIntent {
+    fn default() -> Self {
+        Self::OrdinaryRoot
+    }
+}
+
 /// Check if the query looks like an advanced mdfind query (with operators)
 /// If so, pass it through directly; otherwise wrap as filename query
 pub(crate) fn looks_like_advanced_mdquery(q: &str) -> bool {
@@ -286,14 +301,31 @@ fn root_file_path_context_mdquery_branches(terms: &[String]) -> Vec<String> {
 
 /// Returns true when the root launcher should ask Spotlight for file rows.
 pub fn root_file_global_query_is_eligible(query: &str) -> bool {
+    root_file_global_query_is_eligible_for_intent(query, RootFileQueryIntent::OrdinaryRoot)
+}
+
+pub fn root_file_global_query_is_eligible_for_intent(
+    query: &str,
+    intent: RootFileQueryIntent,
+) -> bool {
     let q = query.trim();
-    root_file_query_has_safe_global_length(q)
+    root_file_query_has_safe_global_length_for_intent(q, intent)
         && !looks_like_advanced_mdquery(q)
         && !is_directory_path(q)
 }
 
 fn root_file_query_has_safe_global_length(query: &str) -> bool {
     query.chars().count() >= ROOT_FILE_MIN_QUERY_CHARS || root_file_short_digit_token_query(query)
+}
+
+fn root_file_query_has_safe_global_length_for_intent(
+    query: &str,
+    intent: RootFileQueryIntent,
+) -> bool {
+    root_file_query_has_safe_global_length(query)
+        || (intent == RootFileQueryIntent::ExplicitFilesSourceFilter
+            && query.chars().count() == 2
+            && query.chars().all(|ch| ch.is_ascii_alphanumeric()))
 }
 
 fn root_file_short_digit_token_query(query: &str) -> bool {
@@ -305,6 +337,11 @@ fn root_file_short_digit_token_query(query: &str) -> bool {
 /// Returns true when the root launcher should ask Spotlight for file rows.
 pub fn should_search_root_files(query: &str) -> bool {
     root_file_global_query_is_eligible(query)
+}
+
+/// Returns true when the root launcher should ask Spotlight for file rows for a known intent.
+pub fn should_search_root_files_for_intent(query: &str, intent: RootFileQueryIntent) -> bool {
+    root_file_global_query_is_eligible_for_intent(query, intent)
 }
 
 /// Returns true when a file row belongs in the root launcher's global Files section.
@@ -371,7 +408,14 @@ pub fn root_directory_browse_source_key(query: &str) -> Option<(String, bool)> {
 
 /// Returns the root file section mode implied by a query's syntax.
 pub fn root_file_section_mode_for_query(query: &str) -> Option<RootFileSectionMode> {
-    if should_search_root_files(query) {
+    root_file_section_mode_for_query_with_intent(query, RootFileQueryIntent::OrdinaryRoot)
+}
+
+pub fn root_file_section_mode_for_query_with_intent(
+    query: &str,
+    intent: RootFileQueryIntent,
+) -> Option<RootFileSectionMode> {
+    if should_search_root_files_for_intent(query, intent) {
         Some(RootFileSectionMode::GlobalQuery)
     } else if looks_like_root_directory_browse_query(query) {
         Some(RootFileSectionMode::DirectoryBrowse)
@@ -725,8 +769,16 @@ pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
 
 /// Return true when a recent file can seed a non-empty global root Files section.
 pub fn root_file_recent_seed_matches_query(file: &FileResult, query: &str) -> bool {
+    root_file_recent_seed_matches_query_for_intent(file, query, RootFileQueryIntent::OrdinaryRoot)
+}
+
+pub fn root_file_recent_seed_matches_query_for_intent(
+    file: &FileResult,
+    query: &str,
+    intent: RootFileQueryIntent,
+) -> bool {
     let query = query.trim();
-    if query.is_empty() || !root_file_global_query_is_eligible(query) {
+    if query.is_empty() || !root_file_global_query_is_eligible_for_intent(query, intent) {
         return false;
     }
 
@@ -1274,6 +1326,31 @@ mod tests {
         assert!(!should_search_root_files("2"));
         assert!(!should_search_root_files("~/q2"));
         assert!(!should_search_root_files("kMDItemFSName == 'q2'"));
+    }
+
+    #[test]
+    fn explicit_files_source_filter_allows_two_letter_file_queries() {
+        assert!(!should_search_root_files("sc"));
+        assert!(should_search_root_files_for_intent(
+            "sc",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
+        assert!(should_search_root_files_for_intent(
+            "SC",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
+        assert!(!should_search_root_files_for_intent(
+            "s",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
+        assert!(!should_search_root_files_for_intent(
+            "~/sc",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
+        assert!(!should_search_root_files_for_intent(
+            "kMDItemFSName == 'sc'",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
     }
 
     #[test]

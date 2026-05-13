@@ -392,7 +392,8 @@ mod tests {
         );
         assert!(
             append_source
-                .contains("let handoff = root_file_search_handoff_result(filter_text, mode);")
+                .contains("let handoff = if suppress_handoff")
+                && append_source.contains("root_file_search_handoff_result(filter_text, mode)")
                 && append_source.contains("files.is_empty() && handoff.is_none()"),
             "Files section should still appear with the handoff row when Spotlight returns zero file rows"
         );
@@ -831,13 +832,15 @@ mod tests {
 
         assert!(
             helper.contains("filter_text: &str")
+                && helper.contains("query_intent: crate::file_search::RootFileQueryIntent")
                 && helper.contains("provider_results")
                 && helper.contains("recent_results")
-                && helper.contains("root_file_recent_seed_matches_query(file, filter_text)"),
+                && helper.contains("root_file_recent_seed_matches_query_for_intent("),
             "recent root file seeds should be filtered by the shared recent-seed predicate while provider rows stay unfiltered"
         );
         assert!(
-            recent_seed_helper.contains("root_file_global_query_is_eligible(query)")
+            recent_seed_helper.contains("RootFileQueryIntent::OrdinaryRoot")
+                && recent_seed_helper.contains("root_file_global_query_is_eligible_for_intent(query, intent)")
                 && recent_seed_helper.contains("root_file_name_seed_matches_query(&file.name, query)")
                 && recent_seed_helper.contains("root_file_path_context_matches_query(file, query)"),
             "recent seed eligibility should require a global query and allow filename-token or ordered directory-context matches"
@@ -880,7 +883,7 @@ mod tests {
         assert!(
             merge_helper.contains("root_global_file_result_is_eligible(file)")
                 && merge_helper
-                    .contains("root_file_recent_seed_matches_query(file, filter_text)"),
+                    .contains("root_file_recent_seed_matches_query_for_intent("),
             "global Files should filter app bundles before ranking while preserving recent seed gating"
         );
         assert!(
@@ -1161,8 +1164,9 @@ mod tests {
 
         assert!(
             normalized.contains(
-                "ActionsDialogHost::MainList => { if let Some(file) = self.selected_root_file_result_owned()"
-            ) && normalized.contains("self.toggle_root_file_actions(&file, window, cx);"),
+                "ActionsDialogHost::MainList => { if let Some(result) = self.selected_main_list_search_result_owned()"
+            ) && normalized.contains("root_unified_action_owner_for_result(&result)")
+                && normalized.contains("self.toggle_root_unified_result_actions(subject, window, cx);"),
             "MainList actions should branch to root-file actions for selected root file rows"
         );
         assert!(
@@ -1237,7 +1241,7 @@ mod tests {
         );
         assert!(
             actions_dialog_normalized.contains(
-                "let root_file_context = if should_close && matches!(host, ActionsDialogHost::MainList) && crate::action_helpers::is_root_file_action_id(&action_id)"
+                "let root_file_context = if root_unified_context.is_none() && should_close && matches!(host, ActionsDialogHost::MainList) && crate::action_helpers::is_root_file_action_id(&action_id)"
             ) && actions_dialog_normalized.contains(
                 "self.pending_root_file_actions_file .clone() .or_else(|| self.selected_root_file_result_owned())"
             ) && actions_dialog_normalized
@@ -1586,7 +1590,7 @@ mod tests {
             "non-empty global recent seeds should search the deeper recent pool, not just visible empty-root rows"
         );
         assert!(
-            merge_helper.contains("root_file_recent_seed_matches_query(file, filter_text)"),
+            merge_helper.contains("root_file_recent_seed_matches_query_for_intent("),
             "non-empty global recent seeds should keep bounded recent-seed eligibility"
         );
     }
