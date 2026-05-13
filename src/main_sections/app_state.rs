@@ -354,6 +354,41 @@ pub(crate) struct MainMenuSelectionSnapshot {
 }
 
 impl ScriptListApp {
+    pub(crate) fn root_file_source_chip_page_key_for(
+        raw_filter_text: &str,
+        stripped_query: &str,
+        advanced_predicate_active: bool,
+        mode: Option<crate::file_search::RootFileSectionMode>,
+    ) -> String {
+        format!(
+            "files|raw={}|query={}|pred={}|mode={:?}",
+            raw_filter_text, stripped_query, advanced_predicate_active, mode
+        )
+    }
+
+    pub(crate) fn root_file_source_chip_visible_limit_for(
+        &mut self,
+        raw_filter_text: &str,
+        stripped_query: &str,
+        advanced_predicate_active: bool,
+        mode: Option<crate::file_search::RootFileSectionMode>,
+    ) -> usize {
+        let key = Self::root_file_source_chip_page_key_for(
+            raw_filter_text,
+            stripped_query,
+            advanced_predicate_active,
+            mode,
+        );
+        if self.root_file_source_chip_page_key.as_deref() != Some(key.as_str()) {
+            self.root_file_source_chip_page_key = Some(key);
+            self.root_file_source_chip_visible_limit =
+                crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS;
+        }
+
+        self.root_file_source_chip_visible_limit
+            .max(crate::file_search::ROOT_FILE_SOURCE_CHIP_INITIAL_VISIBLE_ROWS)
+    }
+
     pub(crate) fn main_menu_selection_snapshot(&mut self) -> MainMenuSelectionSnapshot {
         self.get_grouped_results_cached();
         let selected_key = self
@@ -453,6 +488,10 @@ struct ScriptListApp {
     root_file_provider_loading: bool,
     /// Frozen global root file rows for the current root-search query frame.
     root_file_frame: Option<RootFileFrame>,
+    /// Page key for the explicit Files source-chip visible-row budget.
+    root_file_source_chip_page_key: Option<String>,
+    /// Current visible-row budget for the explicit Files source-chip page.
+    root_file_source_chip_visible_limit: usize,
     /// Frozen cache-refreshable passive rows for the current root-search query frame.
     root_passive_frame: Option<RootPassiveFrame>,
     /// File row captured when opening the root-file actions palette.
