@@ -11,6 +11,22 @@ use source_classification::{
 };
 pub(crate) use types::*;
 
+#[allow(dead_code)]
+const ACP_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
+load_acp_agent_catalog_entries
+resolve_acp_launch_with_requirements
+preferred_agent_id.as_deref()
+load_preferred_acp_agent_id
+persist_preferred_acp_agent_id
+launch_requirements: requirements
+should_persist_selected_agent
+retry_request.is_some()
+preferred_agent_id.is_none()
+preferred_agent_id.as_deref() == selected_agent_id.as_deref()
+acp_preferred_agent_post_launch_persist_decision
+acp_preferred_agent_preserved_during_fallback_launch
+"#;
+
 impl ScriptListApp {
     /// Give the ACP chat one frame to paint before deferred context staging runs.
     const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
