@@ -2475,6 +2475,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -2495,6 +2496,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3356,6 +3358,11 @@ impl ScriptListApp {
                 } else {
                     None
                 };
+                let main_list_scroll = if script_list_active {
+                    Some(self.main_list_scroll_receipt())
+                } else {
+                    None
+                };
                 let actions_dialog =
                     if self.show_actions_popup || crate::actions::is_actions_window_open() {
                         self.actions_dialog
@@ -3416,6 +3423,7 @@ impl ScriptListApp {
                     main_window_preflight,
                     actions_dialog,
                     root_file_search,
+                    main_list_scroll,
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
                 );
 

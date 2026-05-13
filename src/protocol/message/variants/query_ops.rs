@@ -166,6 +166,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         root_file_search: Option<serde_json::Value>,
+        /// Main ScriptList scroll geometry for state-first footer-safe reveal proofs.
+        /// Omitted outside ScriptList.
+        #[serde(
+            rename = "mainListScroll",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        main_list_scroll: Option<serde_json::Value>,
         /// Identity (bare filename) of the most recent Tab AI screenshot
         /// captured in this process lifetime. `None` when no capture has
         /// occurred. Lets automation verify the identity-threading chain

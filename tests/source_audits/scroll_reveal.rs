@@ -113,6 +113,33 @@ fn sync_list_state_re_reveals_after_reset() {
 }
 
 #[test]
+fn main_list_scroll_receipt_exposes_footer_safe_selected_row_geometry() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+
+    let fn_start = content
+        .find("pub(crate) fn main_list_scroll_receipt(")
+        .expect("main_list_scroll_receipt function not found");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 4200)];
+
+    for required in [
+        "\"scrollTop\"",
+        "\"contentHeight\"",
+        "\"viewportHeight\"",
+        "\"footerHeight\"",
+        "\"maxScrollTop\"",
+        "\"selectedRowVisible\"",
+        "\"selectedRowAboveFooter\"",
+        "main_list_footer_overlay_total_padding()",
+        "script_list_pixel_top_for_offset",
+    ] {
+        assert!(
+            fn_body.contains(required),
+            "main_list_scroll_receipt should expose `{required}`"
+        );
+    }
+}
+
+#[test]
 fn filter_replacement_sync_replaces_list_state_even_when_count_unchanged() {
     let content = read("src/app_navigation/impl_scroll.rs");
 

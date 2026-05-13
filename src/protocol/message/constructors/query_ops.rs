@@ -98,6 +98,7 @@ impl Message {
         main_window_preflight: Option<serde_json::Value>,
         actions_dialog: Option<serde_json::Value>,
         root_file_search: Option<serde_json::Value>,
+        main_list_scroll: Option<serde_json::Value>,
         screenshot_identity: Option<String>,
     ) -> Self {
         Message::StateResult {
@@ -119,6 +120,7 @@ impl Message {
             main_window_preflight,
             actions_dialog,
             root_file_search,
+            main_list_scroll,
             screenshot_identity,
         }
     }

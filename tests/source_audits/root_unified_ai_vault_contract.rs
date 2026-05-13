@@ -47,10 +47,14 @@ fn root_unified_ai_vault_contract() {
     assert!(!ai_vault.contains("preview:"));
 
     assert!(grouping.contains("append_root_ai_vault_section"));
+    assert!(grouping.contains(
+        "root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"
+    ));
+    assert!(grouping.contains(
+        "root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"
+    ));
     assert!(grouping.contains("SearchResult::AiVault"));
-    assert!(
-        grouping.contains("append_root_passive_section(grouped, flat_results, \"AI Vault\", rows)")
-    );
+    assert!(grouping.contains("RootUnifiedSourceFilter::AiVault"));
 
     for id in [
         "root_ai_vault_resume_preferred_terminal",

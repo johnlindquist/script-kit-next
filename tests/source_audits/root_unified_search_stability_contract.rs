@@ -405,6 +405,8 @@ fn root_file_state_receipt_separates_provider_loading_from_visible_loading() {
         "\"loading\": self.root_file_provider_loading",
         "\"visibleLoading\": self.root_file_search_loading",
         "\"cacheResultCount\": self.active_root_file_cache_result_count()",
+        "let main_list_scroll = if script_list_active",
+        "Some(self.main_list_scroll_receipt())",
     ] {
         assert!(
             prompt_handler.contains(required),

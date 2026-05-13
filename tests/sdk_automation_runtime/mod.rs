@@ -156,6 +156,7 @@ fn state_result_serializes_all_fields() {
         None,
         None,
         None,
+        None,
         Some("tab-ai-screenshot-20260418T063000.000Z-11474-42.png".to_string()),
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
@@ -194,6 +195,7 @@ fn state_result_round_trips() {
         None,
         false,
         true,
+        None,
         None,
         None,
         None,

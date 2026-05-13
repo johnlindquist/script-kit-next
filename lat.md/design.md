@@ -84,6 +84,8 @@ When debugging bottom-of-list behavior, the launcher wheel handler should emit `
 
 The footer-safe reveal should also keep a small visual gap above the blur instead of aligning the last row flush to the footer edge.
 
+Root Files source-filter updates use the same footer-safe reveal after row replacement. Lazy source-chip paging and active provider publish restore the selected file key, validate it against the regrouped rows, then reveal that selected row above the native footer instead of resetting the list to the top.
+
 ## Chrome style
 
 The visual system uses whisper-thin borders, low-opacity fills, and stable spacing instead of card-heavy composition. Theme work should route through the shared opacity and chrome tokens in `src/theme/opacity.rs` and `src/theme/chrome.rs`.

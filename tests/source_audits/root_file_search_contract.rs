@@ -162,8 +162,10 @@ mod tests {
                 && root_source.contains("self.main_menu_selection_snapshot()")
                 && root_source.contains("self.restore_main_menu_selection_from_snapshot(snapshot)")
                 && root_source.contains("self.sync_list_state_for_filter_replacement();")
-                && root_source.contains("self.validate_selection_bounds(cx);"),
-            "async root file publish path should rebuild rows, restore the previous key, then validate bounds"
+                && root_source.contains("self.validate_selection_bounds(cx);")
+                && root_source
+                    .contains("self.reveal_main_list_selection_above_footer(\"root_file_active_publish\")"),
+            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then reveal the selected row above the footer"
         );
     }
 
@@ -206,8 +208,30 @@ mod tests {
             movement_source.contains("fn maybe_expand_root_file_source_chip_page")
                 && movement_source.contains("const PRELOAD_THRESHOLD: usize = 3")
                 && movement_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE")
-                && movement_source.contains("restore_main_menu_selection_from_snapshot(snapshot)"),
-            "selection near the bottom of explicit Files rows should increment the page and preserve selection"
+                && movement_source.contains("restore_main_menu_selection_from_snapshot(snapshot)")
+                && movement_source.contains(
+                    "reveal_main_list_selection_above_footer(\"root_file_source_chip_page_expand\")"
+                ),
+            "selection near the bottom of explicit Files rows should increment the page, preserve selection, and reveal it above the footer"
+        );
+    }
+
+    #[test]
+    fn root_source_filter_lazy_scroll_proof_is_state_first() {
+        let script = fs::read_to_string("scripts/agentic/root-source-filter-lazy-scroll.ts")
+            .expect("read lazy scroll proof script");
+
+        assert!(
+            script.contains("mainListScroll")
+                && script.contains("selectedRowVisible")
+                && script.contains("selectedRowAboveFooter")
+                && script.contains("getState")
+                && script.contains("getElements"),
+            "lazy scroll proof should assert state and element receipts for selected-row visibility"
+        );
+        assert!(
+            !script.contains("captureScreenshot") && !script.contains("simulateClick"),
+            "lazy scroll proof should stay state-first and not rely on screenshots or mouse clicks"
         );
     }
 

@@ -108,6 +108,7 @@ impl ScriptListApp {
         self.get_grouped_results_cached();
         self.restore_main_menu_selection_from_snapshot(snapshot);
         self.validate_selection_bounds(cx);
+        self.reveal_main_list_selection_above_footer("root_file_source_chip_page_expand");
         self.invalidate_main_window_preflight();
         cx.notify();
         true
