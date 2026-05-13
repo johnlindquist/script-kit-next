@@ -129,6 +129,8 @@ When the stripped query is empty, `files:` and `f:` browse the frecency-backed R
 
 Explicit Files source-filter queries also own a source-specific length floor. A stripped two-character ASCII alphanumeric query such as `f: sc` or `files:sc` may search Files, while the same plain root query `sc` remains below the ordinary global file-search threshold and `f: ` continues to browse Recent Files.
 
+The root-file `Browse Parent Folder` action is file-only. It clears the stale MainList highlight before handing off to dedicated File Search and displays home-scoped parent folders with `~`, while the File Search provider still resolves the query to an absolute filesystem path.
+
 ## Root Unified Search ACP History
 
 ACP conversation rows are a passive launcher source backed by saved conversation history.

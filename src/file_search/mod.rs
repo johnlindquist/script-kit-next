@@ -498,7 +498,8 @@ pub use crate::scripts::input_detection::is_directory_path;
 pub use directory::{
     ensure_trailing_slash, expand_path, list_directory, list_directory_filtered,
     list_directory_streaming, list_directory_streaming_with_options, list_directory_with_options,
-    parent_dir_display, parse_directory_path, shorten_path, ParsedDirPath,
+    parent_dir_display, parse_directory_path, shorten_home_prefix_for_display_with_home,
+    shorten_path, ParsedDirPath,
 };
 pub use mdfind::{
     new_cancel_token, search_files, search_files_streaming, search_files_streaming_with_options,
@@ -515,7 +516,7 @@ pub fn parent_folder_search_query(path: &str) -> Option<String> {
         return None;
     }
     let parent = parent.to_str()?;
-    Some(ensure_trailing_slash(parent))
+    Some(shorten_path(&ensure_trailing_slash(parent)))
 }
 
 /// Build a root-launcher file result from live metadata for a previously seen path.
@@ -2683,6 +2684,45 @@ mod tests {
     fn parent_folder_search_query_rejects_relative_leaf_without_parent() {
         assert_eq!(parent_folder_search_query("readme.md"), None);
     }
+
+    #[test]
+    fn parent_folder_search_query_shortens_home_prefix_for_display() {
+        let home = dirs::home_dir()
+            .and_then(|path| path.to_str().map(|value| value.to_string()))
+            .expect("home path should be valid UTF-8");
+        let file = format!("{home}/dev/script-kit-gpui/README.md");
+
+        assert_eq!(
+            parent_folder_search_query(&file),
+            Some("~/dev/script-kit-gpui/".to_string())
+        );
+    }
+
+    #[test]
+    fn shorten_home_prefix_for_display_respects_path_boundaries() {
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home(
+                "/Users/johnlindquist/dev/script-kit-gpui/",
+                "/Users/johnlindquist"
+            ),
+            "~/dev/script-kit-gpui/"
+        );
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home(
+                "/Users/johnlindquist",
+                "/Users/johnlindquist"
+            ),
+            "~"
+        );
+        assert_eq!(
+            shorten_home_prefix_for_display_with_home(
+                "/Users/johnlindquistness/dev/",
+                "/Users/johnlindquist"
+            ),
+            "/Users/johnlindquistness/dev/"
+        );
+    }
+
     #[test]
     fn test_parent_dir_display_root() {
         // "/" has no parent

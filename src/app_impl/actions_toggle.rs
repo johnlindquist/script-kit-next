@@ -1905,7 +1905,42 @@ mod root_file_action_tests {
             actions[1].id,
             crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID
         );
-        assert_eq!(actions.len(), 5);
+        assert_eq!(actions.len(), 6);
+    }
+
+    #[test]
+    fn root_file_actions_for_regular_file_displays_parent_folder_with_tilde_home() {
+        let home = dirs::home_dir()
+            .and_then(|path| path.to_str().map(|value| value.to_string()))
+            .expect("home path should be valid UTF-8");
+        let file = FileResult {
+            path: format!("{home}/dev/script-kit-gpui/README.md"),
+            name: "README.md".to_string(),
+            size: 0,
+            modified: 0,
+            file_type: FileType::Document,
+        };
+
+        let actions = root_file_actions_for(&file);
+        let browse_parent = actions
+            .iter()
+            .find(|action| {
+                action.id == crate::action_helpers::ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID
+            })
+            .expect("Browse Parent Folder action");
+
+        assert_eq!(browse_parent.title, "Browse Parent Folder");
+        assert_eq!(
+            browse_parent.description.as_deref(),
+            Some("Opens ~/dev/script-kit-gpui/ in File Search")
+        );
+        assert!(
+            !browse_parent
+                .description
+                .as_deref()
+                .unwrap_or_default()
+                .contains(&home)
+        );
     }
 
     #[test]
