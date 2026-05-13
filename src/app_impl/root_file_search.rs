@@ -260,6 +260,8 @@ impl ScriptListApp {
             root_file_options.global_search_enabled = true;
             root_file_options.directory_browse_enabled = true;
             root_file_options.recent_files_enabled = true;
+            root_file_options.query_intent =
+                crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
         }
         if !root_file_options.files_enabled
             || !source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Files)
@@ -300,7 +302,10 @@ impl ScriptListApp {
         let request = if !can_collect {
             None
         } else if root_file_options.global_search_enabled
-            && crate::file_search::should_search_root_files(trimmed)
+            && crate::file_search::should_search_root_files_for_intent(
+                trimmed,
+                root_file_options.query_intent,
+            )
         {
             Some(RootFileSearchRequest::GlobalQuery {
                 query: trimmed.to_string(),

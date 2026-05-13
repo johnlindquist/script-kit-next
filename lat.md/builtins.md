@@ -127,6 +127,8 @@ Source-filter heads can make Files the only participating root source. When `fil
 
 When the stripped query is empty, `files:` and `f:` browse the frecency-backed Recent Files set even if ordinary root file search is disabled. Explicit source-only Files browse uses the deeper recent-file seed target instead of the ordinary empty-root render cap, while plain empty root still renders the capped Recent Files set. Disabled recent-file refreshes leave the hydration revision invalid so an explicit source-only Files filter can load current recents immediately instead of reusing an empty disabled frame.
 
+Explicit Files source-filter queries also own a source-specific length floor. A stripped two-character ASCII alphanumeric query such as `f: sc` or `files:sc` may search Files, while the same plain root query `sc` remains below the ordinary global file-search threshold and `f: ` continues to browse Recent Files.
+
 ## Root Unified Search ACP History
 
 ACP conversation rows are a passive launcher source backed by saved conversation history.

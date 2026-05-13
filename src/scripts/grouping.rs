@@ -1092,6 +1092,7 @@ fn append_root_file_section(
                 root_file_results,
                 root_recent_file_results,
                 filter_text,
+                options.query_intent,
             );
             crate::file_search::rank_root_file_results(
                 &merged,
@@ -1266,6 +1267,7 @@ fn merge_root_global_file_results_with_recent(
     provider_results: &[crate::file_search::FileResult],
     recent_results: &[crate::file_search::FileResult],
     filter_text: &str,
+    query_intent: crate::file_search::RootFileQueryIntent,
 ) -> Vec<crate::file_search::FileResult> {
     let mut seen = std::collections::HashSet::new();
     let mut merged = Vec::with_capacity(provider_results.len() + recent_results.len());
@@ -1280,7 +1282,11 @@ fn merge_root_global_file_results_with_recent(
     }
     for file in recent_results.iter().filter(|file| {
         crate::file_search::root_global_file_result_is_eligible(file)
-            && crate::file_search::root_file_recent_seed_matches_query(file, filter_text)
+            && crate::file_search::root_file_recent_seed_matches_query_for_intent(
+                file,
+                filter_text,
+                query_intent,
+            )
     }) {
         if seen.insert(file.path.clone()) {
             merged.push(file.clone());

@@ -622,6 +622,8 @@ impl ScriptListApp {
                 root_file_options.global_search_enabled = true;
                 root_file_options.directory_browse_enabled = true;
                 root_file_options.recent_files_enabled = true;
+                root_file_options.query_intent =
+                    crate::file_search::RootFileQueryIntent::ExplicitFilesSourceFilter;
                 if search_text.trim().is_empty() && !advanced_predicate_active {
                     root_file_options.source_filter_browse_target_visible_rows =
                         Some(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT);
