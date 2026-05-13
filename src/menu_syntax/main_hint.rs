@@ -211,7 +211,9 @@ pub fn build_menu_syntax_main_hint(
         // Synthesize a head-aware empty hint from the active-head detector
         // alone so completions and zero-result copy work for in-flight input.
         if let Some(active) = active_head_context_for_filter(ctx.raw_filter_text) {
-            return synthetic_active_head_empty_hint(ctx.raw_filter_text, &active);
+            if let Some(hint) = synthetic_active_head_empty_hint(ctx.raw_filter_text, &active) {
+                return Some(hint);
+            }
         }
     }
 

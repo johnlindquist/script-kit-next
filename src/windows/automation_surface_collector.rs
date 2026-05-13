@@ -6,6 +6,10 @@
 //! Used by both `getElements` and `inspectAutomationWindow` so agents see one
 //! consistent semantic model regardless of which protocol command they use.
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+use crate::menu_syntax::TriggerPickerSnapshot;
 use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, ElementInfo, ElementType};
 
 /// Machine-readable indicator of the semantic element quality level.
@@ -30,6 +34,88 @@ pub struct SurfaceElementSnapshot {
     pub warnings: Vec<String>,
     /// Semantic quality level of this snapshot.
     pub quality: SnapshotQuality,
+}
+
+#[derive(Clone, Debug, Default)]
+struct PromptPopupElementSnapshot {
+    elements: Vec<ElementInfo>,
+    focused_semantic_id: Option<String>,
+    selected_semantic_id: Option<String>,
+}
+
+fn prompt_popup_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupElementSnapshot>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, PromptPopupElementSnapshot>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
+pub(crate) fn upsert_menu_syntax_prompt_popup_snapshot(
+    window_id: &str,
+    snapshot: &TriggerPickerSnapshot,
+    selected_row_id: Option<&str>,
+) {
+    let mut elements = Vec::new();
+    elements.push(element(
+        "panel:menu-syntax-trigger-popup",
+        ElementType::Panel,
+        Some("Menu Syntax".to_string()),
+        None,
+        None,
+        None,
+        None,
+    ));
+    elements.push(element(
+        "list:menu-syntax-trigger-popup",
+        ElementType::List,
+        Some(format!("{} rows", snapshot.rows.len())),
+        None,
+        None,
+        None,
+        None,
+    ));
+
+    let mut selected_semantic_id = None;
+    for (idx, row) in snapshot.rows.iter().enumerate() {
+        let is_selected = selected_row_id == Some(row.id.as_str());
+        let semantic_id = format!("choice:{}:{}", idx, row.id);
+        if is_selected {
+            selected_semantic_id = Some(semantic_id.clone());
+        }
+
+        let mut info = element(
+            &semantic_id,
+            ElementType::Choice,
+            Some(row.title.clone()),
+            row.token.clone(),
+            Some(is_selected),
+            None,
+            Some(idx),
+        );
+        info.role = row.subtitle.clone();
+        info.kind = Some(format!("{:?}", row.kind));
+        info.source_name = row.detail.clone().or_else(|| row.example.clone());
+        info.selectable = Some(row.enabled);
+        elements.push(info);
+    }
+
+    let focused_semantic_id = selected_semantic_id.clone();
+    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
+        cache.insert(
+            window_id.to_string(),
+            PromptPopupElementSnapshot {
+                elements,
+                focused_semantic_id,
+                selected_semantic_id,
+            },
+        );
+    }
+}
+
+#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
+pub(crate) fn remove_menu_syntax_prompt_popup_snapshot(window_id: &str) {
+    if let Ok(mut cache) = prompt_popup_semantic_cache().lock() {
+        cache.remove(window_id);
+    }
 }
 
 impl SurfaceElementSnapshot {
@@ -107,15 +193,15 @@ pub fn collect_surface_snapshot(
                 )
             })
         }
-        AutomationWindowKind::PromptPopup => {
-            collect_prompt_popup_snapshot(cx).unwrap_or_else(|| {
+        AutomationWindowKind::PromptPopup => collect_cached_prompt_popup_snapshot(&resolved.id)
+            .or_else(|| collect_prompt_popup_snapshot(cx))
+            .unwrap_or_else(|| {
                 panel_only_fallback(
                     "panel:prompt-popup",
                     resolved.title.clone(),
                     "panel_only_prompt_popup",
                 )
-            })
-        }
+            }),
         _ => return None,
     };
 
@@ -403,6 +489,22 @@ fn collect_prompt_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapsho
         return Some(snapshot);
     }
     None
+}
+
+fn collect_cached_prompt_popup_snapshot(window_id: &str) -> Option<SurfaceElementSnapshot> {
+    let cached = prompt_popup_semantic_cache()
+        .lock()
+        .ok()?
+        .get(window_id)
+        .cloned()?;
+    Some(SurfaceElementSnapshot {
+        total_count: cached.elements.len(),
+        elements: cached.elements,
+        focused_semantic_id: cached.focused_semantic_id,
+        selected_semantic_id: cached.selected_semantic_id,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    })
 }
 
 fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {

@@ -163,6 +163,9 @@ fn clear_menu_syntax_trigger_popup_slot() {
 /// Close the popup NSWindow if it is open and clear the singleton slot.
 /// Idempotent — safe to call when nothing is open.
 pub(crate) fn close_menu_syntax_trigger_popup_window(cx: &mut App) {
+    crate::windows::automation_surface_collector::remove_menu_syntax_prompt_popup_snapshot(
+        MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+    );
     crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
     if let Some(storage) = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
@@ -237,6 +240,11 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
+                    crate::windows::automation_surface_collector::upsert_menu_syntax_prompt_popup_snapshot(
+                        MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+                        &snapshot.snapshot,
+                        snapshot.selected_row_id.as_deref(),
+                    );
                     set_inline_popup_window_bounds(window, bounds, cx);
                     crate::windows::set_automation_bounds(
                         MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
@@ -255,12 +263,18 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
                 }
 
                 crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
+                crate::windows::automation_surface_collector::remove_menu_syntax_prompt_popup_snapshot(
+                    MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+                );
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
                 crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
+                crate::windows::automation_surface_collector::remove_menu_syntax_prompt_popup_snapshot(
+                    MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+                );
                 *guard = None;
             }
         }
@@ -299,6 +313,11 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
         });
         return Err(error.context("failed to register menu-syntax trigger popup window"));
     }
+    crate::windows::automation_surface_collector::upsert_menu_syntax_prompt_popup_snapshot(
+        MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+        &snapshot.snapshot,
+        snapshot.selected_row_id.as_deref(),
+    );
 
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(MenuSyntaxTriggerPopupSlot {
@@ -452,6 +471,9 @@ impl MenuSyntaxTriggerPopupWindow {
             self.mouse_armed_row = None;
             self.accept_row(index, cx);
             clear_menu_syntax_trigger_popup_slot();
+            crate::windows::automation_surface_collector::remove_menu_syntax_prompt_popup_snapshot(
+                MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+            );
             crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
             window.remove_window();
         } else {
@@ -740,6 +762,8 @@ impl ScriptListApp {
             TriggerPickerIntentOutcome::Close => {
                 self.menu_syntax_trigger_popup_state = Default::default();
                 close_menu_syntax_trigger_popup_window(cx);
+                self.invalidate_grouped_cache();
+                self.reconcile_script_list_after_filter_change("menu_syntax_trigger_popup_close", cx);
                 cx.notify();
             }
             TriggerPickerIntentOutcome::OpenCaptures { .. }
@@ -749,6 +773,8 @@ impl ScriptListApp {
                 // of lingering with a stale snapshot.
                 self.menu_syntax_trigger_popup_state = Default::default();
                 close_menu_syntax_trigger_popup_window(cx);
+                self.invalidate_grouped_cache();
+                self.reconcile_script_list_after_filter_change("menu_syntax_trigger_popup_close_deferred", cx);
                 cx.notify();
             }
             TriggerPickerIntentOutcome::CreateHandler { target } => {

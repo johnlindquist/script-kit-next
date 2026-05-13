@@ -23,7 +23,7 @@ impl ScriptListApp {
     /// Called after `computed_filter_text` changes (both debounced and immediate).
     /// Syncs the GPUI list model, resets selection to the first selectable row,
     /// reveals it, and rebuilds preflight — all outside `render()`.
-    fn reconcile_script_list_after_filter_change(
+    pub(crate) fn reconcile_script_list_after_filter_change(
         &mut self,
         reason: &'static str,
         cx: &mut Context<Self>,

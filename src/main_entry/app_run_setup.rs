@@ -2119,6 +2119,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
+                                ctx.notify();
                             }
                             ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
                                 // All payload normalization (`builtinId` vs
@@ -2352,7 +2353,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     view.execute_selected(ctx);
                                                 }
                                                 "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter, go back, or hide");
+                                                    logging::log("STDIN", "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide");
+                                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                                                        if view.apply_menu_syntax_trigger_popup_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Close,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            return;
+                                                        }
+                                                    }
                                                     if !view.filter_text.is_empty() {
                                                         view.clear_filter(window, ctx);
                                                     } else if view.opened_from_main_menu {
@@ -2529,7 +2539,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             }
                                         });
                                     }
-                                    AppView::ArgPrompt { id, .. } => {
+                                    AppView::ArgPrompt { id, .. }
+                                    | AppView::MiniPrompt { id, .. } => {
                                         // Arg prompt key handling via SimulateKey
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ArgPrompt (actions_popup={})", key_lower, view.show_actions_popup));
 
@@ -2594,15 +2605,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     }
                                                 }
                                                 "enter" => {
-                                                    logging::log("STDIN", "SimulateKey: Enter - submit selection");
-                                                    let filtered = view.filtered_arg_choices();
-                                                    if let Some((_, choice)) = filtered.get(view.arg_selected_index) {
-                                                        let value = choice.value.clone();
-                                                        view.submit_prompt_response(prompt_id, Some(value), ctx);
-                                                    } else if !view.arg_input.is_empty() {
-                                                        let value = view.arg_input.text().to_string();
-                                                        view.submit_prompt_response(prompt_id, Some(value), ctx);
-                                                    }
+                                                    logging::log("STDIN", "SimulateKey: Enter - submit mini prompt selection");
+                                                    view.submit_arg_prompt_from_current_state(&prompt_id, ctx);
                                                 }
                                                 "escape" => {
                                                     logging::log("STDIN", "SimulateKey: Escape - cancel script");
