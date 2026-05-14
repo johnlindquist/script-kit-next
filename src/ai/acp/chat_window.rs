@@ -932,8 +932,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                 let maybe_markdown = {
                     let view = entity.read(cx);
                     view.thread().and_then(|thread| {
-                        let messages = thread.read(cx).messages.clone();
-                        super::export::build_acp_conversation_markdown(&messages)
+                        super::export::build_acp_conversation_markdown_from_thread(&thread.read(cx))
                     })
                 };
                 if let Some(md) = maybe_markdown {
@@ -947,8 +946,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                 let maybe_markdown = {
                     let view = entity.read(cx);
                     view.thread().and_then(|thread| {
-                        let messages = thread.read(cx).messages.clone();
-                        super::export::build_acp_conversation_markdown(&messages)
+                        super::export::build_acp_conversation_markdown_from_thread(&thread.read(cx))
                     })
                 };
                 if let Some(markdown) = maybe_markdown {

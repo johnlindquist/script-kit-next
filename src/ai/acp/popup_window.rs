@@ -16,6 +16,7 @@
 //! `CONTEXT_PICKER_ROW_HEIGHT` applied automatically.
 
 use crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT;
+use gpui::{AnyWindowHandle, Bounds, Pixels};
 
 // Re-export constants under ACP-compatible names. Consumers continue to
 // reference them via `super::popup_window::DENSE_PICKER_*` without knowing the
@@ -56,6 +57,75 @@ pub(crate) use crate::components::inline_popup_window::{
 /// popup's taller header rows).
 pub(crate) fn dense_picker_height(item_count: usize) -> f32 {
     dense_picker_height_for_row_height(item_count, CONTEXT_PICKER_ROW_HEIGHT)
+}
+
+pub(crate) fn automation_bounds(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
+fn resolve_acp_popup_parent_automation_id(
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+) -> anyhow::Result<String> {
+    for window in crate::windows::list_automation_windows() {
+        if crate::windows::get_runtime_window_handle(&window.id)
+            .is_some_and(|handle| handle == parent_window_handle)
+        {
+            return Ok(window.id);
+        }
+    }
+
+    if crate::get_main_window_handle().is_some_and(|handle| handle == parent_window_handle) {
+        let parent_id = "main".to_string();
+        crate::windows::upsert_runtime_window_handle(&parent_id, parent_window_handle);
+        let preserved_semantic_surface = crate::windows::list_automation_windows()
+            .into_iter()
+            .find(|window| window.id == parent_id)
+            .and_then(|window| window.semantic_surface)
+            .unwrap_or_else(|| "acpChat".to_string());
+        crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+            id: parent_id.clone(),
+            kind: crate::protocol::AutomationWindowKind::Main,
+            title: Some("Script Kit".to_string()),
+            focused: true,
+            visible: true,
+            semantic_surface: Some(preserved_semantic_surface),
+            bounds: Some(automation_bounds(parent_bounds)),
+            parent_window_id: None,
+            parent_kind: None,
+        });
+        return Ok(parent_id);
+    }
+
+    anyhow::bail!("Cannot register ACP prompt popup: parent automation identity is required");
+}
+
+pub(crate) fn register_acp_prompt_popup_automation_window(
+    automation_id: &'static str,
+    title: &'static str,
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    popup_bounds: Bounds<Pixels>,
+) -> anyhow::Result<()> {
+    let parent_id = resolve_acp_popup_parent_automation_id(parent_window_handle, parent_bounds)?;
+    crate::windows::register_attached_popup(
+        automation_id.to_string(),
+        crate::protocol::AutomationWindowKind::PromptPopup,
+        Some(title.to_string()),
+        Some("promptPopup".to_string()),
+        Some(automation_bounds(popup_bounds)),
+        Some(parent_id.as_str()),
+    )
+}
+
+pub(crate) fn unregister_acp_prompt_popup_automation_window(automation_id: &'static str) {
+    crate::windows::remove_runtime_window_handle(automation_id);
+    crate::windows::remove_automation_window(automation_id);
 }
 
 #[cfg(test)]

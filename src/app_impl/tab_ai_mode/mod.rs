@@ -1,6 +1,7 @@
 use super::*;
 
 mod acp_context_staging;
+mod acp_entry;
 mod acp_launch;
 mod acp_setup;
 mod source_classification;
@@ -165,7 +166,10 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_tab_ai_acp_with_options(entry_intent, false, cx);
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest::main_launcher(entry_intent, false),
+            cx,
+        );
     }
 
     /// Entry point for direct prompt handoffs that should not inherit the
@@ -175,7 +179,10 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_tab_ai_acp_with_options(entry_intent, true, cx);
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest::main_launcher(entry_intent, true),
+            cx,
+        );
     }
 
     /// Reattach flow for the "Return to Panel" action on a detached ACP chat.
@@ -235,7 +242,22 @@ impl ScriptListApp {
                 .is_some_and(|value| !value.trim().is_empty()),
             return_focus_target = ?self.tab_ai_harness_return_focus_target,
         );
-        self.open_tab_ai_acp_with_options(entry_intent, suppress_focused_part, cx);
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest {
+                origin: acp_entry::AcpEntryOrigin::MainLauncher,
+                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                seed_text: entry_intent,
+                seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
+                suppress_focused_part,
+                context_staging: if suppress_focused_part {
+                    acp_entry::AcpContextStaging::SuppressFocused
+                } else {
+                    acp_entry::AcpContextStaging::AmbientOrFocused
+                },
+                return_origin: Some(source_view.clone()),
+            },
+            cx,
+        );
         if !matches!(self.current_view, AppView::AcpChatView { .. }) {
             self.tab_ai_harness_return_view = previous_return_view;
             self.tab_ai_harness_return_focus_target = previous_return_focus_target;
@@ -404,7 +426,18 @@ impl ScriptListApp {
             pending_script_list_trigger = ?self.tab_ai_harness_script_list_trigger,
             semantic_id = %target.semantic_id,
         );
-        self.open_tab_ai_acp_with_explicit_target(target, cx);
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest {
+                origin: acp_entry::AcpEntryOrigin::ActionsDialog,
+                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                seed_text: None,
+                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                suppress_focused_part: true,
+                context_staging: acp_entry::AcpContextStaging::ActionsPayload { target },
+                return_origin: Some(source_view.clone()),
+            },
+            cx,
+        );
         if !matches!(self.current_view, AppView::AcpChatView { .. }) {
             self.tab_ai_harness_return_view = previous_return_view;
             self.tab_ai_harness_return_focus_target = previous_return_focus_target;
@@ -593,7 +626,20 @@ impl ScriptListApp {
             }
         }
 
-        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(None, cx);
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest {
+                origin: acp_entry::AcpEntryOrigin::PluginSkill {
+                    skill_id: skill.skill_id.clone(),
+                },
+                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                seed_text: None,
+                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                suppress_focused_part: true,
+                context_staging: acp_entry::AcpContextStaging::SuppressFocused,
+                return_origin: Some(self.current_view.clone()),
+            },
+            cx,
+        );
 
         if let AppView::AcpChatView { entity } = &self.current_view {
             let staged = entity.update(cx, |chat, cx| {
@@ -1283,9 +1329,16 @@ impl ScriptListApp {
             input_len = entry_intent.as_ref().map(|text| text.len()).unwrap_or(0),
         );
 
-        self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(
-            entry_intent,
-            true,
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest {
+                origin: acp_entry::AcpEntryOrigin::LauncherTab,
+                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                seed_text: entry_intent,
+                seed_policy: acp_entry::AcpSeedPolicy::AutoSubmitFirstTurn,
+                suppress_focused_part: true,
+                context_staging: acp_entry::AcpContextStaging::SuppressFocused,
+                return_origin: Some(self.current_view.clone()),
+            },
             cx,
         );
         true
@@ -1464,7 +1517,27 @@ impl ScriptListApp {
             source_view = %source_view,
         );
 
-        self.open_tab_ai_acp_with_entry_intent_preserving_return(None, cx);
+        let origin = if matches!(self.current_view, AppView::FileSearchView { .. }) {
+            acp_entry::AcpEntryOrigin::FileSearch
+        } else {
+            acp_entry::AcpEntryOrigin::MainLauncher
+        };
+        self.open_acp_chat_from_entry_request(
+            acp_entry::AcpEntryRequest {
+                origin,
+                target: acp_entry::AcpThreadTarget::ExistingDetachedOrEmbedded,
+                seed_text: None,
+                seed_policy: acp_entry::AcpSeedPolicy::ComposerOnly,
+                suppress_focused_part: false,
+                context_staging: if matches!(self.current_view, AppView::FileSearchView { .. }) {
+                    acp_entry::AcpContextStaging::FileSearchSelection
+                } else {
+                    acp_entry::AcpContextStaging::AmbientOrFocused
+                },
+                return_origin: Some(self.current_view.clone()),
+            },
+            cx,
+        );
         true
     }
 

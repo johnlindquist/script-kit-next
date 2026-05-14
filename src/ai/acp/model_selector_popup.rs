@@ -15,6 +15,8 @@ use gpui_component::{IconName, IconNamed};
 
 use super::view::AcpChatView;
 
+pub(crate) const ACP_MODEL_SELECTOR_POPUP_AUTOMATION_ID: &str = "acp-model-selector-popup";
+
 #[derive(Clone)]
 pub(crate) struct AcpModelSelectorPopupEntry {
     pub(crate) id: String,
@@ -37,16 +39,23 @@ pub(crate) struct AcpModelSelectorPopupRequest {
     pub(crate) snapshot: AcpModelSelectorPopupSnapshot,
 }
 
-#[derive(Clone, Copy)]
 struct AcpModelSelectorPopupSlot {
     handle: WindowHandle<AcpModelSelectorPopupWindow>,
     parent_window_handle: AnyWindowHandle,
+    _registration: super::popup_registry::AcpPopupRegistration,
 }
 
 static ACP_MODEL_SELECTOR_POPUP_WINDOW: OnceLock<Mutex<Option<AcpModelSelectorPopupSlot>>> =
     OnceLock::new();
 
+fn unregister_model_selector_popup_automation_window() {
+    super::popup_window::unregister_acp_prompt_popup_automation_window(
+        ACP_MODEL_SELECTOR_POPUP_AUTOMATION_ID,
+    );
+}
+
 pub(crate) fn close_model_selector_popup_window(cx: &mut App) {
+    unregister_model_selector_popup_automation_window();
     if let Some(storage) = ACP_MODEL_SELECTOR_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(slot) = guard.take() {
@@ -56,6 +65,20 @@ pub(crate) fn close_model_selector_popup_window(cx: &mut App) {
             }
         }
     }
+}
+
+fn register_model_selector_popup_automation_window(
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    popup_bounds: Bounds<Pixels>,
+) -> anyhow::Result<()> {
+    super::popup_window::register_acp_prompt_popup_automation_window(
+        ACP_MODEL_SELECTOR_POPUP_AUTOMATION_ID,
+        "ACP Model Selector",
+        parent_window_handle,
+        parent_bounds,
+        popup_bounds,
+    )
 }
 
 /// Check if the model selector popup window is currently open.
@@ -77,7 +100,7 @@ pub(crate) fn get_model_selector_popup_snapshot(
 ) -> Option<AcpModelSelectorPopupSnapshot> {
     let storage = ACP_MODEL_SELECTOR_POPUP_WINDOW.get()?;
     let guard = storage.lock().ok()?;
-    let slot = (*guard)?;
+    let slot = guard.as_ref()?;
     slot.handle
         .read_with(cx, |popup, _cx| popup.snapshot.clone())
         .ok()
@@ -89,7 +112,7 @@ pub(crate) fn get_model_selector_popup_snapshot(
 pub(crate) fn batch_select_model_by_value(value: &str, cx: &mut App) -> Option<String> {
     let storage = ACP_MODEL_SELECTOR_POPUP_WINDOW.get()?;
     let guard = storage.lock().ok()?;
-    let slot = (*guard)?;
+    let slot = guard.as_ref()?;
     let snap = slot
         .handle
         .read_with(cx, |popup, _cx| popup.snapshot.clone())
@@ -163,7 +186,7 @@ pub(crate) fn sync_model_selector_popup_window(
     let bounds = popup_bounds(parent_bounds, &snapshot);
     let storage = ACP_MODEL_SELECTOR_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
-        if let Some(slot) = *guard {
+        if let Some(slot) = guard.as_ref() {
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
@@ -172,14 +195,28 @@ pub(crate) fn sync_model_selector_popup_window(
                 });
 
                 if update_result.is_ok() {
+                    if let Err(error) = register_model_selector_popup_automation_window(
+                        parent_window_handle,
+                        parent_bounds,
+                        bounds,
+                    ) {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            event = "acp_model_selector_popup_registry_failed",
+                            error = %error,
+                            "Failed to refresh ACP model selector popup automation registry entry"
+                        );
+                    }
                     return Ok(());
                 }
 
+                unregister_model_selector_popup_automation_window();
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
+                unregister_model_selector_popup_automation_window();
                 *guard = None;
             }
         }
@@ -197,13 +234,30 @@ pub(crate) fn sync_model_selector_popup_window(
         let _ = handle.update(cx, |_popup, window, _cx| {
             window.remove_window();
         });
+        unregister_model_selector_popup_automation_window();
         return Err(error.context("failed to configure ACP model selector popup window"));
+    }
+
+    let any_handle: AnyWindowHandle = handle.into();
+    let registration = super::popup_registry::AcpPopupRegistration::register(
+        ACP_MODEL_SELECTOR_POPUP_AUTOMATION_ID,
+        any_handle,
+    );
+    if let Err(error) =
+        register_model_selector_popup_automation_window(parent_window_handle, parent_bounds, bounds)
+    {
+        unregister_model_selector_popup_automation_window();
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
+        });
+        return Err(error);
     }
 
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(AcpModelSelectorPopupSlot {
             handle,
             parent_window_handle,
+            _registration: registration,
         });
     }
 

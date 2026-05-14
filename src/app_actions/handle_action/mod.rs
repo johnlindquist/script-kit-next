@@ -1,5 +1,5 @@
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
-use crate::ai::acp::export::build_acp_conversation_markdown;
+use crate::ai::acp::export::build_acp_conversation_markdown_from_thread;
 
 /// A code block extracted from markdown with optional language hint.
 struct CodeBlock {
@@ -929,7 +929,7 @@ impl ScriptListApp {
                 };
 
                 entity.update(cx, |view, cx| {
-                    view.stage_agent_switch_retry(next_agent_id.clone(), cx);
+                    view.relaunch_for_agent_switch_preserving_draft(next_agent_id.clone(), cx);
                 });
 
                 tracing::info!(
@@ -1022,7 +1022,7 @@ impl ScriptListApp {
             // (screenshot/context needs, runtime recovery context, etc.)
             // so the reopen path consumes a truthful retry payload.
             entity.update(cx, |view, cx| {
-                view.stage_agent_switch_retry(next_agent_id.clone(), cx);
+                view.relaunch_for_agent_switch_preserving_draft(next_agent_id.clone(), cx);
             });
 
             tracing::info!(
@@ -1414,11 +1414,18 @@ impl ScriptListApp {
             }
             "acp_export_markdown" => {
                 let entity = entity.clone();
-                let messages = {
+                let markdown = {
                     let view = entity.read(cx);
-                    view.thread().map(|thread| thread.read(cx).messages.clone())
+                    view.thread().and_then(|thread| {
+                        build_acp_conversation_markdown_from_thread(&thread.read(cx))
+                    })
                 };
-                let message_count = messages.as_ref().map(Vec::len).unwrap_or(0);
+                let message_count = {
+                    let view = entity.read(cx);
+                    view.thread()
+                        .map(|thread| thread.read(cx).messages.len())
+                        .unwrap_or(0)
+                };
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
@@ -1427,10 +1434,7 @@ impl ScriptListApp {
                     "Starting ACP export-as-markdown"
                 );
 
-                let Some(markdown) = messages
-                    .as_ref()
-                    .and_then(|msgs| build_acp_conversation_markdown(msgs))
-                else {
+                let Some(markdown) = markdown else {
                     let reason = if message_count == 0 {
                         "no_messages"
                     } else {
@@ -1465,11 +1469,18 @@ impl ScriptListApp {
             }
             "acp_save_as_note" => {
                 let entity = entity.clone();
-                let messages = {
+                let markdown = {
                     let view = entity.read(cx);
-                    view.thread().map(|thread| thread.read(cx).messages.clone())
+                    view.thread().and_then(|thread| {
+                        build_acp_conversation_markdown_from_thread(&thread.read(cx))
+                    })
                 };
-                let message_count = messages.as_ref().map(Vec::len).unwrap_or(0);
+                let message_count = {
+                    let view = entity.read(cx);
+                    view.thread()
+                        .map(|thread| thread.read(cx).messages.len())
+                        .unwrap_or(0)
+                };
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
@@ -1478,10 +1489,7 @@ impl ScriptListApp {
                     "Starting ACP save-as-note"
                 );
 
-                let Some(markdown) = messages
-                    .as_ref()
-                    .and_then(|msgs| build_acp_conversation_markdown(msgs))
-                else {
+                let Some(markdown) = markdown else {
                     let reason = if message_count == 0 {
                         "no_messages"
                     } else {

@@ -12,6 +12,8 @@ use gpui_component::scroll::ScrollableElement;
 use super::history::{AcpHistoryEntry, AcpHistorySearchField, AcpHistorySearchHit};
 use super::view::{AcpChatView, AcpHistoryMenuState};
 
+pub(crate) const ACP_HISTORY_POPUP_AUTOMATION_ID: &str = "acp-history-popup";
+
 const HISTORY_POPUP_MIN_WIDTH: f32 = crate::actions::constants::POPUP_WIDTH;
 const HISTORY_POPUP_MAX_WIDTH: f32 = 420.0;
 const HISTORY_POPUP_SIDE_MARGIN: f32 = 8.0;
@@ -39,12 +41,7 @@ pub(crate) struct AcpHistoryPopupEntry {
 impl AcpHistoryPopupEntry {
     pub(crate) fn from_hit(hit: AcpHistorySearchHit) -> Self {
         let entry = &hit.entry;
-        let date = entry
-            .timestamp
-            .split('T')
-            .next()
-            .unwrap_or(&entry.timestamp)
-            .to_string();
+        let date = crate::formatting::format_rfc3339_date_for_display(&entry.timestamp);
         let match_label = match hit.matched_field {
             AcpHistorySearchField::Title => "title",
             AcpHistorySearchField::Preview => "reply",
@@ -77,10 +74,10 @@ pub(crate) struct AcpHistoryPopupRequest {
     pub(crate) snapshot: AcpHistoryPopupSnapshot,
 }
 
-#[derive(Clone, Copy)]
 struct AcpHistoryPopupSlot {
     handle: WindowHandle<AcpHistoryPopupWindow>,
     parent_window_handle: AnyWindowHandle,
+    _registration: super::popup_registry::AcpPopupRegistration,
 }
 
 static ACP_HISTORY_POPUP_WINDOW: OnceLock<Mutex<Option<AcpHistoryPopupSlot>>> = OnceLock::new();
@@ -100,6 +97,7 @@ pub(super) enum AcpHistoryPopupKeyIntent {
 }
 
 pub(crate) fn close_history_popup_window(cx: &mut App) {
+    unregister_history_popup_automation_window();
     if let Some(storage) = ACP_HISTORY_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(slot) = guard.take() {
@@ -111,12 +109,50 @@ pub(crate) fn close_history_popup_window(cx: &mut App) {
     }
 }
 
+fn unregister_history_popup_automation_window() {
+    super::popup_window::unregister_acp_prompt_popup_automation_window(
+        ACP_HISTORY_POPUP_AUTOMATION_ID,
+    );
+}
+
 fn clear_history_popup_window_slot() {
     if let Some(storage) = ACP_HISTORY_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             *guard = None;
         }
     }
+}
+
+pub(crate) fn get_history_popup_snapshot(cx: &gpui::App) -> Option<AcpHistoryPopupSnapshot> {
+    let storage = ACP_HISTORY_POPUP_WINDOW.get()?;
+    let guard = storage.lock().ok()?;
+    let slot = guard.as_ref()?;
+    slot.handle
+        .read_with(cx, |popup, _cx| popup.snapshot.clone())
+        .ok()
+}
+
+pub(crate) fn is_history_popup_window_open() -> bool {
+    if let Some(storage) = ACP_HISTORY_POPUP_WINDOW.get() {
+        if let Ok(guard) = storage.lock() {
+            return guard.is_some();
+        }
+    }
+    false
+}
+
+fn register_history_popup_automation_window(
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    popup_bounds: Bounds<Pixels>,
+) -> anyhow::Result<()> {
+    super::popup_window::register_acp_prompt_popup_automation_window(
+        ACP_HISTORY_POPUP_AUTOMATION_ID,
+        "ACP History Popup",
+        parent_window_handle,
+        parent_bounds,
+        popup_bounds,
+    )
 }
 
 fn popup_height(snapshot: &AcpHistoryPopupSnapshot) -> f32 {
@@ -173,7 +209,7 @@ pub(crate) fn sync_history_popup_window(
     let bounds = popup_bounds(parent_bounds, &snapshot);
     let storage = ACP_HISTORY_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
-        if let Some(slot) = *guard {
+        if let Some(slot) = guard.as_ref() {
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
@@ -182,14 +218,28 @@ pub(crate) fn sync_history_popup_window(
                 });
 
                 if update_result.is_ok() {
+                    if let Err(error) = register_history_popup_automation_window(
+                        parent_window_handle,
+                        parent_bounds,
+                        bounds,
+                    ) {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            event = "acp_history_popup_registry_failed",
+                            error = %error,
+                            "Failed to refresh ACP history popup automation registry entry"
+                        );
+                    }
                     return Ok(());
                 }
 
+                unregister_history_popup_automation_window();
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
+                unregister_history_popup_automation_window();
                 *guard = None;
             }
         }
@@ -214,13 +264,30 @@ pub(crate) fn sync_history_popup_window(
         let _ = handle.update(cx, |_popup, window, _cx| {
             window.remove_window();
         });
+        unregister_history_popup_automation_window();
         return Err(error.context("failed to configure ACP history popup window"));
+    }
+
+    let any_handle: AnyWindowHandle = handle.into();
+    let registration = super::popup_registry::AcpPopupRegistration::register(
+        ACP_HISTORY_POPUP_AUTOMATION_ID,
+        any_handle,
+    );
+    if let Err(error) =
+        register_history_popup_automation_window(parent_window_handle, parent_bounds, bounds)
+    {
+        unregister_history_popup_automation_window();
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
+        });
+        return Err(error);
     }
 
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(AcpHistoryPopupSlot {
             handle,
             parent_window_handle,
+            _registration: registration,
         });
     }
 
@@ -459,6 +526,7 @@ impl AcpHistoryPopupWindow {
 
         window.defer(cx, |_window, _cx| {
             clear_history_popup_window_slot();
+            unregister_history_popup_automation_window();
             _window.remove_window();
         });
     }

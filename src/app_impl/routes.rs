@@ -48,6 +48,8 @@ pub enum AppRoute {
     /// Open the "Do in current app" commands list via the existing
     /// menu-bar helper.
     OpenCurrentAppCommands,
+    /// Execute a regular launcher built-in by its canonical command id.
+    ExecuteBuiltin(&'static str),
 }
 
 /// The filterable views reachable from `triggerBuiltin`. A separate
@@ -104,6 +106,7 @@ impl FilterableView {
 /// * `AppRoute::OpenFileSearch` → `"OpenFileSearch"`
 /// * `AppRoute::OpenTabAi` → `"OpenTabAi"`
 /// * `AppRoute::OpenCurrentAppCommands` → `"OpenCurrentAppCommands"`
+/// * `AppRoute::ExecuteBuiltin(id)` → `"ExecuteBuiltin::{id}"`
 ///
 /// Changing these strings is a breaking change to the route
 /// golden fixture and will fail
@@ -115,6 +118,7 @@ pub fn render_route(route: &AppRoute) -> String {
         AppRoute::OpenFileSearch => "OpenFileSearch".to_string(),
         AppRoute::OpenTabAi => "OpenTabAi".to_string(),
         AppRoute::OpenCurrentAppCommands => "OpenCurrentAppCommands".to_string(),
+        AppRoute::ExecuteBuiltin(id) => format!("ExecuteBuiltin::{id}"),
     }
 }
 
@@ -130,6 +134,13 @@ pub fn parse_route(rendered: &str) -> Option<AppRoute> {
         "OpenFileSearch" => Some(AppRoute::OpenFileSearch),
         "OpenTabAi" => Some(AppRoute::OpenTabAi),
         "OpenCurrentAppCommands" => Some(AppRoute::OpenCurrentAppCommands),
+        other if other.starts_with("ExecuteBuiltin::builtin/") => {
+            Some(AppRoute::ExecuteBuiltin(Box::leak(
+                other["ExecuteBuiltin::".len()..]
+                    .to_string()
+                    .into_boxed_str(),
+            )))
+        }
         other => {
             let view_name = other.strip_prefix("ShowFilterableView::")?;
             let view = FilterableView::ALL
@@ -168,6 +179,16 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
             AppRoute::ShowFilterableView(FilterableView::ProcessManager)
         }
         TriggerBuiltin::CurrentAppCommands => AppRoute::OpenCurrentAppCommands,
+        TriggerBuiltin::NewScript => AppRoute::ExecuteBuiltin("builtin/new-script"),
+        TriggerBuiltin::SdkReference => AppRoute::ExecuteBuiltin("builtin/sdk-reference"),
+        TriggerBuiltin::BrowseKitStore => AppRoute::ExecuteBuiltin("builtin/browse-kit-store"),
+        TriggerBuiltin::ManageInstalledKits => {
+            AppRoute::ExecuteBuiltin("builtin/manage-installed-kits")
+        }
+        TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
+        TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
+        TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),
+        TriggerBuiltin::Webcam => AppRoute::ExecuteBuiltin("builtin/webcam"),
     }
 }
 
@@ -216,6 +237,7 @@ mod tests {
                 AppRoute::OpenFileSearch => "OpenFileSearch",
                 AppRoute::OpenTabAi => "OpenTabAi",
                 AppRoute::OpenCurrentAppCommands => "OpenCurrentAppCommands",
+                AppRoute::ExecuteBuiltin(id) => id,
             };
             *counts.entry(tag).or_default() += 1;
         }
@@ -229,6 +251,14 @@ mod tests {
             ("OpenFileSearch", 1usize),
             ("OpenTabAi", 1),
             ("OpenCurrentAppCommands", 1),
+            ("builtin/browse-kit-store", 1),
+            ("builtin/choose-theme", 1),
+            ("builtin/manage-installed-kits", 1),
+            ("builtin/new-script", 1),
+            ("builtin/quick-terminal", 1),
+            ("builtin/sdk-reference", 1),
+            ("builtin/settings", 1),
+            ("builtin/webcam", 1),
         ]
         .into_iter()
         .collect();

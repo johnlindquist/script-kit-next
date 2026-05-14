@@ -16,10 +16,78 @@ use crate::components::inline_dropdown::{
     InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
     CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
+use crate::components::inline_picker::{
+    InlinePickerHighlights, InlinePickerRow, InlinePickerRowKind,
+};
 
 use super::view::AcpChatView;
 
 const ACP_MENTION_POPUP_AUTOMATION_ID: &str = "acp-mention-popup";
+
+pub(crate) fn acp_context_picker_item_to_inline_picker_row(
+    item: &ContextPickerItem,
+) -> InlinePickerRow {
+    let (kind, title, token, token_highlights, enabled) = match &item.kind {
+        ContextPickerItemKind::SlashCommand(payload) => (
+            InlinePickerRowKind::SlashCommand,
+            SharedString::from(format!("/{}", payload.slash_name())),
+            Some(SharedString::from(payload.owner_label())),
+            item.meta_highlight_indices.clone(),
+            true,
+        ),
+        ContextPickerItemKind::Inert => (
+            InlinePickerRowKind::Context,
+            item.label.clone(),
+            Some(item.meta.clone()),
+            item.meta_highlight_indices.clone(),
+            false,
+        ),
+        _ => (
+            InlinePickerRowKind::Context,
+            item.label.clone(),
+            Some(item.meta.clone()),
+            item.meta_highlight_indices.clone(),
+            true,
+        ),
+    };
+
+    let title_highlights = if matches!(&kind, InlinePickerRowKind::SlashCommand) {
+        item.label_highlight_indices
+            .iter()
+            .map(|ix| ix.saturating_add(1))
+            .map(|ix| ix..ix.saturating_add(1))
+            .collect()
+    } else {
+        item.label_highlight_indices
+            .iter()
+            .map(|ix| *ix..(*ix).saturating_add(1))
+            .collect()
+    };
+
+    InlinePickerRow {
+        id: item.id.clone(),
+        kind,
+        title,
+        token,
+        subtitle: None,
+        detail: Some(item.description.clone()),
+        example: None,
+        leading: None,
+        badges: Vec::new(),
+        accessory: None,
+        highlights: InlinePickerHighlights {
+            title: title_highlights,
+            token: token_highlights
+                .into_iter()
+                .map(|ix| ix..ix.saturating_add(1))
+                .collect(),
+            subtitle: Vec::new(),
+            detail: Vec::new(),
+        },
+        enabled,
+        disabled_reason: (!enabled).then(|| SharedString::from("Inert context picker row")),
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct AcpMentionPopupSnapshot {
@@ -41,10 +109,10 @@ pub(crate) struct AcpMentionPopupRequest {
     pub(crate) top: f32,
 }
 
-#[derive(Clone, Copy)]
 struct AcpMentionPopupSlot {
     handle: WindowHandle<AcpMentionPopupWindow>,
     parent_window_handle: AnyWindowHandle,
+    _registration: super::popup_registry::AcpPopupRegistration,
 }
 
 static ACP_MENTION_POPUP_WINDOW: OnceLock<Mutex<Option<AcpMentionPopupSlot>>> = OnceLock::new();
@@ -57,9 +125,14 @@ fn clear_mention_popup_window_slot() {
     }
 }
 
+fn unregister_mention_popup_automation_window() {
+    super::popup_window::unregister_acp_prompt_popup_automation_window(
+        ACP_MENTION_POPUP_AUTOMATION_ID,
+    );
+}
+
 pub(crate) fn close_mention_popup_window(cx: &mut App) {
-    crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
-    crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
+    unregister_mention_popup_automation_window();
     if let Some(storage) = ACP_MENTION_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(slot) = guard.take() {
@@ -87,7 +160,7 @@ pub(crate) fn is_mention_popup_window_open() -> bool {
 pub(crate) fn get_mention_popup_snapshot(cx: &gpui::App) -> Option<AcpMentionPopupSnapshot> {
     let storage = ACP_MENTION_POPUP_WINDOW.get()?;
     let guard = storage.lock().ok()?;
-    let slot = (*guard)?;
+    let slot = guard.as_ref()?;
     slot.handle
         .read_with(cx, |popup, _cx| popup.snapshot.clone())
         .ok()
@@ -99,7 +172,7 @@ pub(crate) fn get_mention_popup_snapshot(cx: &gpui::App) -> Option<AcpMentionPop
 pub(crate) fn batch_select_mention_item_by_value(value: &str, cx: &mut App) -> Option<String> {
     let storage = ACP_MENTION_POPUP_WINDOW.get()?;
     let guard = storage.lock().ok()?;
-    let slot = (*guard)?;
+    let slot = guard.as_ref()?;
     let snap = slot
         .handle
         .read_with(cx, |popup, _cx| popup.snapshot.clone())
@@ -141,66 +214,17 @@ fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
 }
 
-fn automation_bounds(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
-    crate::protocol::AutomationWindowBounds {
-        x: f32::from(bounds.origin.x) as f64,
-        y: f32::from(bounds.origin.y) as f64,
-        width: f32::from(bounds.size.width) as f64,
-        height: f32::from(bounds.size.height) as f64,
-    }
-}
-
-fn resolve_mention_popup_parent_automation_id(
-    parent_window_handle: AnyWindowHandle,
-    parent_bounds: Bounds<Pixels>,
-) -> anyhow::Result<String> {
-    for window in crate::windows::list_automation_windows() {
-        if crate::windows::get_runtime_window_handle(&window.id)
-            .is_some_and(|handle| handle == parent_window_handle)
-        {
-            return Ok(window.id);
-        }
-    }
-
-    if crate::get_main_window_handle().is_some_and(|handle| handle == parent_window_handle) {
-        let parent_id = "main".to_string();
-        crate::windows::upsert_runtime_window_handle(&parent_id, parent_window_handle);
-        let preserved_semantic_surface = crate::windows::list_automation_windows()
-            .into_iter()
-            .find(|window| window.id == parent_id)
-            .and_then(|window| window.semantic_surface)
-            .unwrap_or_else(|| "acpChat".to_string());
-        crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
-            id: parent_id.clone(),
-            kind: crate::protocol::AutomationWindowKind::Main,
-            title: Some("Script Kit".to_string()),
-            focused: true,
-            visible: true,
-            semantic_surface: Some(preserved_semantic_surface),
-            bounds: Some(automation_bounds(parent_bounds)),
-            parent_window_id: None,
-            parent_kind: None,
-        });
-        return Ok(parent_id);
-    }
-
-    anyhow::bail!("Cannot register ACP mention popup: parent automation identity is required");
-}
-
 fn register_mention_popup_automation_window(
     parent_window_handle: AnyWindowHandle,
     parent_bounds: Bounds<Pixels>,
     popup_bounds: Bounds<Pixels>,
 ) -> anyhow::Result<()> {
-    let parent_id =
-        resolve_mention_popup_parent_automation_id(parent_window_handle, parent_bounds)?;
-    crate::windows::register_attached_popup(
-        ACP_MENTION_POPUP_AUTOMATION_ID.to_string(),
-        crate::protocol::AutomationWindowKind::PromptPopup,
-        Some("ACP Mention Picker".to_string()),
-        Some("promptPopup".to_string()),
-        Some(automation_bounds(popup_bounds)),
-        Some(parent_id.as_str()),
+    super::popup_window::register_acp_prompt_popup_automation_window(
+        ACP_MENTION_POPUP_AUTOMATION_ID,
+        "ACP Mention Picker",
+        parent_window_handle,
+        parent_bounds,
+        popup_bounds,
     )
 }
 
@@ -238,7 +262,7 @@ pub(crate) fn sync_mention_popup_window(
 
     let storage = ACP_MENTION_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
-        if let Some(slot) = *guard {
+        if let Some(slot) = guard.as_ref() {
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
@@ -262,15 +286,13 @@ pub(crate) fn sync_mention_popup_window(
                     return Ok(());
                 }
 
-                crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
-                crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
+                unregister_mention_popup_automation_window();
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
-                crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
-                crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
+                unregister_mention_popup_automation_window();
                 *guard = None;
             }
         }
@@ -292,11 +314,14 @@ pub(crate) fn sync_mention_popup_window(
     }
 
     let any_handle: AnyWindowHandle = handle.into();
-    crate::windows::upsert_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID, any_handle);
+    let registration = super::popup_registry::AcpPopupRegistration::register(
+        ACP_MENTION_POPUP_AUTOMATION_ID,
+        any_handle,
+    );
     if let Err(error) =
         register_mention_popup_automation_window(parent_window_handle, parent_bounds, bounds)
     {
-        crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
+        unregister_mention_popup_automation_window();
         let _ = handle.update(cx, |_popup, window, _cx| {
             window.remove_window();
         });
@@ -307,6 +332,7 @@ pub(crate) fn sync_mention_popup_window(
         *guard = Some(AcpMentionPopupSlot {
             handle,
             parent_window_handle,
+            _registration: registration,
         });
     }
 
@@ -426,6 +452,7 @@ impl AcpMentionPopupWindow {
             self.mouse_armed_row = None;
             self.activate_item(index, cx);
             clear_mention_popup_window_slot();
+            unregister_mention_popup_automation_window();
             window.remove_window();
         } else {
             self.mouse_armed_row = Some((index, item_id));
@@ -456,43 +483,25 @@ impl AcpMentionPopupWindow {
         is_selected: bool,
         colors: InlineDropdownColors,
     ) -> gpui::Stateful<gpui::Div> {
-        if self.snapshot.trigger == ContextPickerTrigger::Slash {
-            if let ContextPickerItemKind::SlashCommand(payload) = &item.kind {
-                let label = SharedString::from(format!("/{}", payload.slash_name()));
-                let shifted_label_hits = item
-                    .label_highlight_indices
-                    .iter()
-                    .map(|ix| ix + 1)
-                    .collect::<Vec<_>>();
-
-                return render_soft_compact_picker_row(
-                    SharedString::from(format!("acp-mention-popup-row-{idx}")),
-                    label,
-                    Some(SharedString::from(payload.owner_label())),
-                    &shifted_label_hits,
-                    &[],
-                    is_selected,
-                    colors,
-                );
-            }
-
-            return render_soft_compact_picker_row(
-                SharedString::from(format!("acp-mention-popup-row-{idx}")),
-                item.label.clone(),
-                None,
-                &item.label_highlight_indices,
-                &[],
-                is_selected,
-                colors,
-            );
-        }
-
+        let row = acp_context_picker_item_to_inline_picker_row(item);
+        let label_hits = row
+            .highlights
+            .title
+            .iter()
+            .map(|range| range.start)
+            .collect::<Vec<_>>();
+        let meta_hits = row
+            .highlights
+            .token
+            .iter()
+            .map(|range| range.start)
+            .collect::<Vec<_>>();
         render_soft_compact_picker_row(
             SharedString::from(format!("acp-mention-popup-row-{idx}")),
-            item.label.clone(),
-            Some(item.meta.clone()),
-            &item.label_highlight_indices,
-            &item.meta_highlight_indices,
+            row.title,
+            row.token,
+            &label_hits,
+            &meta_hits,
             is_selected,
             colors,
         )
