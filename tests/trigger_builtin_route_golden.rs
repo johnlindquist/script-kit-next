@@ -135,6 +135,7 @@ fn fixture_covers_every_app_route_kind() {
     let mut saw_open_file_search = false;
     let mut saw_open_tab_ai = false;
     let mut saw_open_current_app_commands = false;
+    let mut saw_execute_builtin = false;
     let mut seen_views: std::collections::HashSet<FilterableView> = Default::default();
 
     for (_line_no, case) in cases {
@@ -148,6 +149,7 @@ fn fixture_covers_every_app_route_kind() {
             AppRoute::OpenFileSearch => saw_open_file_search = true,
             AppRoute::OpenTabAi => saw_open_tab_ai = true,
             AppRoute::OpenCurrentAppCommands => saw_open_current_app_commands = true,
+            AppRoute::ExecuteBuiltin(_) => saw_execute_builtin = true,
         }
     }
 
@@ -162,6 +164,10 @@ fn fixture_covers_every_app_route_kind() {
     assert!(
         saw_open_current_app_commands,
         "routes.jsonl needs at least one OpenCurrentAppCommands case"
+    );
+    assert!(
+        saw_execute_builtin,
+        "routes.jsonl needs at least one ExecuteBuiltin case"
     );
     for &v in FilterableView::ALL {
         assert!(

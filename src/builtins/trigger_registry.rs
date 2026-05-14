@@ -35,6 +35,14 @@ pub enum TriggerBuiltin {
     TabAi,
     ProcessManager,
     CurrentAppCommands,
+    NewScript,
+    SdkReference,
+    BrowseKitStore,
+    ManageInstalledKits,
+    Settings,
+    ChooseTheme,
+    QuickTerminal,
+    Webcam,
 }
 
 impl TriggerBuiltin {
@@ -51,6 +59,14 @@ impl TriggerBuiltin {
         TriggerBuiltin::TabAi,
         TriggerBuiltin::ProcessManager,
         TriggerBuiltin::CurrentAppCommands,
+        TriggerBuiltin::NewScript,
+        TriggerBuiltin::SdkReference,
+        TriggerBuiltin::BrowseKitStore,
+        TriggerBuiltin::ManageInstalledKits,
+        TriggerBuiltin::Settings,
+        TriggerBuiltin::ChooseTheme,
+        TriggerBuiltin::QuickTerminal,
+        TriggerBuiltin::Webcam,
     ];
 
     /// Canonical command id — matches the `builtin/...` ids used elsewhere
@@ -67,6 +83,14 @@ impl TriggerBuiltin {
             TriggerBuiltin::TabAi => "builtin/ai-chat",
             TriggerBuiltin::ProcessManager => "builtin/process-manager",
             TriggerBuiltin::CurrentAppCommands => "builtin/current-app-commands",
+            TriggerBuiltin::NewScript => "builtin/new-script",
+            TriggerBuiltin::SdkReference => "builtin/sdk-reference",
+            TriggerBuiltin::BrowseKitStore => "builtin/browse-kit-store",
+            TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
+            TriggerBuiltin::Settings => "builtin/settings",
+            TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
+            TriggerBuiltin::QuickTerminal => "builtin/quick-terminal",
+            TriggerBuiltin::Webcam => "builtin/webcam",
         }
     }
 
@@ -125,6 +149,16 @@ impl TriggerBuiltin {
                 "app-commands",
                 "menu-commands",
             ],
+            TriggerBuiltin::NewScript => &["new-script", "newscript"],
+            TriggerBuiltin::SdkReference => &["sdk-reference", "sdkreference", "sdk-docs"],
+            TriggerBuiltin::BrowseKitStore => &["browse-kit-store", "kit-store", "kitstore"],
+            TriggerBuiltin::ManageInstalledKits => {
+                &["manage-installed-kits", "installed-kits", "installedkits"]
+            }
+            TriggerBuiltin::Settings => &["settings", "kit-settings", "script-kit-settings"],
+            TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
+            TriggerBuiltin::QuickTerminal => &["quick-terminal", "quickterminal"],
+            TriggerBuiltin::Webcam => &["webcam", "camera"],
         }
     }
 }
@@ -214,6 +248,14 @@ pub const TRIGGER_BUILTIN_COMMAND_IDS: &[&str] = &[
     "builtin/ai-chat",
     "builtin/process-manager",
     "builtin/current-app-commands",
+    "builtin/new-script",
+    "builtin/sdk-reference",
+    "builtin/browse-kit-store",
+    "builtin/manage-installed-kits",
+    "builtin/settings",
+    "builtin/choose-theme",
+    "builtin/quick-terminal",
+    "builtin/webcam",
 ];
 
 /// Accessor used by `tests/mcp_resource_drift.rs` and the
