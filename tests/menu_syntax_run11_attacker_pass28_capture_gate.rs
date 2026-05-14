@@ -7,11 +7,12 @@
 //! Probes the Pass-25 gate that the Pass-26 forbidden/NaN tightening flows
 //! through. Targets surface area never attacker-tested before.
 
+use script_kit_gpui::menu_syntax::capture_gate::{decide_capture_gate, CaptureGateDecision};
+use script_kit_gpui::menu_syntax::capture_schema::{
+    builtin_schema, CaptureFieldSchema, FieldRequirement,
+};
 use script_kit_gpui::menu_syntax::payload::{
     CaptureAlias, CaptureInvocation, DatePhrase, DateRole,
-};
-use script_kit_gpui::menu_syntax::{
-    builtin_schema, decide_capture_gate, CaptureFieldSchema, CaptureGateDecision, FieldRequirement,
 };
 
 fn empty(target: &str) -> CaptureInvocation {

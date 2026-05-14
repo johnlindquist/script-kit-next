@@ -11,7 +11,8 @@
 //! Receipt: `cargo test --test menu_syntax_date_proptest`.
 
 use chrono_tz::America::Denver;
-use script_kit_gpui::menu_syntax::{parse_date_phrase_result, DateRole, MenuSyntaxClock};
+use script_kit_gpui::menu_syntax::date::{parse_date_phrase_result, MenuSyntaxClock};
+use script_kit_gpui::menu_syntax::payload::DateRole;
 
 const ALPHABET: &[char] = &[
     // ASCII digits

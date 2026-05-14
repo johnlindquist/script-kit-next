@@ -523,6 +523,56 @@ mod tests {
     }
 
     #[test]
+    fn accept_has_shortcut_completion_closes_without_space() {
+        for input in ["has:short", "has:shortc"] {
+            let snap = build_trigger_picker_snapshot(input, &ctx()).expect("has snapshot");
+            let shortcut_idx = snap
+                .rows
+                .iter()
+                .position(|r| r.id == "qualifier:has:shortcut")
+                .expect("has:shortcut row");
+            let outcome = apply_intent(
+                InlinePickerKeyIntent::Accept,
+                &snap,
+                Some(shortcut_idx),
+                input,
+            );
+
+            match outcome {
+                TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                    assert_eq!(text, "has:shortcut");
+                    assert!(
+                        !keep_open,
+                        "Accept on concrete has:shortcut must close the picker"
+                    );
+                }
+                other => panic!("expected ReplaceInput for {input}, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn accept_preserves_open_value_rows() {
+        for (input, row_id, expected) in [
+            (":", "qualifier:source:", ":source:"),
+            (":", "qualifier:tag:", ":tag:"),
+            (":", "qualifier:#", ":#"),
+        ] {
+            let snap = build_trigger_picker_snapshot(input, &ctx()).expect("snapshot");
+            let row_idx = snap.rows.iter().position(|r| r.id == row_id).expect(row_id);
+            let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(row_idx), input);
+
+            match outcome {
+                TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                    assert_eq!(text, expected);
+                    assert!(keep_open, "{row_id} should keep the picker open");
+                }
+                other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
     fn fix_qualifier_rewrites_typo_in_place() {
         let snap = build_trigger_picker_snapshot(":typ:script", &ctx()).expect("typo snapshot");
         let fix_idx = snap

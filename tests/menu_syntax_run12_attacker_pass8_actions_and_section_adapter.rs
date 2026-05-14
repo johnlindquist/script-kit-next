@@ -10,11 +10,12 @@
 //! Categories: Boundary (8), Composition (7), Resurrection (7). Actions: 22.
 
 use script_kit_gpui::actions::{Action, ActionCategory};
+use script_kit_gpui::menu_syntax::actions::MenuSyntaxActionKind;
 use script_kit_gpui::menu_syntax::capture_schema::builtin_schema;
-use script_kit_gpui::menu_syntax::parse_advanced_query;
 use script_kit_gpui::menu_syntax::payload::{CaptureAlias, CaptureInvocation};
+use script_kit_gpui::menu_syntax::query::parse_advanced_query;
 use script_kit_gpui::menu_syntax::{
-    current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionKind, MenuSyntaxActionState,
+    current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionState,
 };
 use script_kit_gpui::menu_syntax_actions::{
     power_syntax_action_section, power_syntax_section_to_actions, PowerSyntaxActionSection,

@@ -15,11 +15,12 @@
 //!
 //! Receipt: `cargo test --test menu_syntax_actions_ordering_pin`.
 
+use script_kit_gpui::menu_syntax::actions::MenuSyntaxActionKind;
 use script_kit_gpui::menu_syntax::capture_schema::builtin_schema;
 use script_kit_gpui::menu_syntax::payload::{CaptureAlias, CaptureInvocation};
+use script_kit_gpui::menu_syntax::query::parse_advanced_query;
 use script_kit_gpui::menu_syntax::{
-    current_menu_syntax_actions as current_actions, parse_advanced_query, MenuSyntaxAction,
-    MenuSyntaxActionKind, MenuSyntaxActionState,
+    current_menu_syntax_actions as current_actions, MenuSyntaxAction, MenuSyntaxActionState,
 };
 
 fn capture_payload(target: &str, body: &str) -> CaptureInvocation {

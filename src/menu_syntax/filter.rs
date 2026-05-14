@@ -397,7 +397,9 @@ pub fn registered_capture_targets_from_scripts(scripts: &[Arc<Script>]) -> Vec<S
 mod tests {
     use super::*;
     use crate::metadata_parser::TypedMetadata;
-    use crate::scripts::{MatchIndices, ScriptMatch, ScriptMatchKind, SearchResult};
+    use crate::scripts::{
+        MatchIndices, ScriptMatch, ScriptMatchKind, ScriptletMatch, SearchResult,
+    };
     use serde_json::json;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -434,6 +436,15 @@ mod tests {
             match_indices: MatchIndices::default(),
             match_kind: ScriptMatchKind::Name,
             content_match: None,
+        })
+    }
+
+    fn scriptlet_match(scriptlet: Arc<Scriptlet>) -> SearchResult {
+        SearchResult::Scriptlet(ScriptletMatch {
+            scriptlet,
+            score: 100,
+            display_file_path: None,
+            match_indices: MatchIndices::default(),
         })
     }
 
@@ -478,6 +489,63 @@ mod tests {
         let filtered = apply_advanced_query(results, &query);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].name(), "has");
+    }
+
+    #[test]
+    fn has_shortcut_matches_scriptlet_or_snippet_shortcut_rows() {
+        let script_with = {
+            let mut script = make_script_with_extra("script shortcut", HashMap::new());
+            Arc::make_mut(&mut script).shortcut = Some("cmd+1".to_string());
+            script
+        };
+        let script_without = make_script_with_extra("script bare", HashMap::new());
+        let scriptlet_with = Arc::new(Scriptlet {
+            name: "Run Snippet".to_string(),
+            description: Some("Snippet with shortcut".to_string()),
+            code: "console.log('snippet')".to_string(),
+            tool: "ts".to_string(),
+            shortcut: Some("cmd+2".to_string()),
+            keyword: None,
+            group: Some("Snippets".to_string()),
+            plugin_id: "main".to_string(),
+            plugin_title: None,
+            file_path: Some("/tmp/snippets.md#run-snippet".to_string()),
+            command: None,
+            alias: None,
+        });
+        let scriptlet_without = Arc::new(Scriptlet {
+            name: "Bare Snippet".to_string(),
+            description: None,
+            code: "console.log('bare')".to_string(),
+            tool: "ts".to_string(),
+            shortcut: None,
+            keyword: None,
+            group: Some("Snippets".to_string()),
+            plugin_id: "main".to_string(),
+            plugin_title: None,
+            file_path: Some("/tmp/snippets.md#bare-snippet".to_string()),
+            command: None,
+            alias: None,
+        });
+
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![Predicate::Has("shortcut".to_string())],
+            source_filters: Default::default(),
+            raw: "has:shortcut".to_string(),
+        };
+        let filtered = apply_advanced_query(
+            vec![
+                script_match(script_with),
+                script_match(script_without),
+                scriptlet_match(scriptlet_with),
+                scriptlet_match(scriptlet_without),
+            ],
+            &query,
+        );
+        let names: Vec<_> = filtered.iter().map(|result| result.name()).collect();
+
+        assert_eq!(names, vec!["script shortcut", "Run Snippet"]);
     }
 
     #[test]

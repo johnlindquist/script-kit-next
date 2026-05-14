@@ -2,7 +2,7 @@ use super::capture::{is_capture_target_registered, parse_capture_with_targets, C
 use super::payload::{
     AdvancedQuery, ArgvInvocation, CaptureInvocation, IncompleteKind, IncompleteSyntax,
 };
-use super::query::parse_filter_query;
+use super::query::{parse_advanced_query, parse_filter_query};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuSyntaxParse {
@@ -56,6 +56,13 @@ pub fn parse_with_config_and_capture_targets(
 
     if let Some(first) = input.chars().next() {
         if first == ':' {
+            let query = parse_advanced_query(input);
+            let rest = input.strip_prefix(':').unwrap_or(input).trim();
+            if !rest.is_empty()
+                && (!query.predicates.is_empty() || !query.source_filters.is_empty())
+            {
+                return MenuSyntaxParse::AdvancedQuery(query);
+            }
             return MenuSyntaxParse::Incomplete(IncompleteSyntax {
                 kind: IncompleteKind::BareQueryPrefix,
                 hint: "Choose a filter: files, notes, clipboard, type, tag, shortcut".to_string(),
@@ -330,6 +337,32 @@ mod tests {
                 assert!(matches!(s.kind, IncompleteKind::BareQueryPrefix))
             }
             other => panic!("expected Incomplete, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn leading_colon_complete_type_filter_parses_advanced_query() {
+        match parse(":type:skill review") {
+            MenuSyntaxParse::AdvancedQuery(q) => {
+                assert_eq!(q.free_text, "review");
+                assert_eq!(q.predicates, vec![Predicate::Type(ArtifactKind::Skill)]);
+            }
+            other => panic!("expected AdvancedQuery, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn leading_colon_partial_filter_stays_incomplete() {
+        for raw in [":", ":typ", ":type:", ":type:s", ":has:sh", ":#"] {
+            match parse(raw) {
+                MenuSyntaxParse::Incomplete(s) => {
+                    assert!(
+                        matches!(s.kind, IncompleteKind::BareQueryPrefix),
+                        "expected BareQueryPrefix for {raw:?}, got {s:?}"
+                    );
+                }
+                other => panic!("expected BareQueryPrefix for {raw:?}, got {other:?}"),
+            }
         }
     }
 

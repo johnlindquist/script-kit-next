@@ -194,6 +194,26 @@ pub fn build_menu_syntax_main_hint(
         return capture_composer_hint(&ctx);
     }
 
+    if let Some(snapshot) = ctx.popup_snapshot {
+        if matches!(snapshot.mode, TriggerPickerMode::AdvancedQuery)
+            && !should_show_advanced_query_guide(ctx.raw_filter_text)
+        {
+            let active = active_head_context_for_filter(ctx.raw_filter_text);
+            if let Some(query) = ctx.mode.advanced_query_for(ctx.raw_filter_text) {
+                return Some(advanced_query_applied_hint(
+                    ctx.raw_filter_text,
+                    query,
+                    active.as_ref(),
+                ));
+            }
+            if let Some(active) = active.as_ref() {
+                if let Some(hint) = synthetic_active_head_empty_hint(ctx.raw_filter_text, active) {
+                    return Some(hint);
+                }
+            }
+        }
+    }
+
     if ctx.advanced_query_results_empty {
         if let Some(query) = ctx.mode.advanced_query_for(ctx.raw_filter_text) {
             // Source-only browse (bare `c:` / `c: ` / `v: `) keeps its
@@ -219,10 +239,10 @@ pub fn build_menu_syntax_main_hint(
 
     if let Some(snapshot) = ctx.popup_snapshot {
         match snapshot.mode {
-            TriggerPickerMode::AdvancedQuery
-                if should_show_advanced_query_guide(ctx.raw_filter_text) =>
-            {
-                return advanced_query_guide_hint(ctx.raw_filter_text, snapshot);
+            TriggerPickerMode::AdvancedQuery => {
+                if should_show_advanced_query_guide(ctx.raw_filter_text) {
+                    return advanced_query_guide_hint(ctx.raw_filter_text, snapshot);
+                }
             }
             TriggerPickerMode::Capture => return capture_picker_companion_hint(&ctx, snapshot),
             TriggerPickerMode::Command
@@ -380,6 +400,87 @@ fn advanced_query_guide_hint(
         active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
+}
+
+fn advanced_query_applied_hint(
+    raw_filter_text: &str,
+    query: &AdvancedQuery,
+    active: Option<&ActiveHeadContext>,
+) -> MenuSyntaxMainHintSnapshot {
+    let mut rows = Vec::new();
+    if !query.predicates.is_empty() {
+        rows.push(MenuSyntaxMainHintRow {
+            label: "Filters".to_string(),
+            value: query
+                .predicates
+                .iter()
+                .map(predicate_user_label)
+                .collect::<Vec<_>>()
+                .join(" · "),
+            chips: Vec::new(),
+        });
+    }
+    if !query.free_text.trim().is_empty() {
+        rows.push(hint_row("Search words", query.free_text.trim()));
+    }
+    rows.push(hint_row(
+        "Recovery",
+        "Remove a filter to widen the launcher results.",
+    ));
+
+    let (title, example) = match active {
+        Some(active) if matches!(active.kind, ActiveHeadKind::TypeQualifier) => {
+            let value = active.value_partial.trim();
+            let kind_label = type_value_label(value);
+            (
+                format!("Filtering to {kind_label}"),
+                Some(if value.is_empty() {
+                    ":type:script review".to_string()
+                } else if active.head.eq_ignore_ascii_case(":kind:") {
+                    format!(":kind:{value} review")
+                } else {
+                    format!(":type:{value} review")
+                }),
+            )
+        }
+        Some(active) if matches!(active.kind, ActiveHeadKind::ShortcutQualifier) => (
+            "Filtering by shortcut".to_string(),
+            Some(":shortcut:any review".to_string()),
+        ),
+        Some(active) if matches!(active.kind, ActiveHeadKind::TagQualifier) => (
+            "Filtering by tag".to_string(),
+            Some(format!(":{} review", active.value_partial.trim())),
+        ),
+        _ => (
+            "Refine launcher search".to_string(),
+            Some(":type:script review".to_string()),
+        ),
+    };
+
+    finalize_hint(MenuSyntaxMainHintSnapshot {
+        kind: MenuSyntaxMainHintKind::AdvancedQueryGuide,
+        status_chips: Vec::new(),
+        capture_validation: None,
+        unresolved_dates: Vec::new(),
+        menu_syntax_ai_proposal: None,
+        raw_filter_text: raw_filter_text.to_string(),
+        title,
+        subtitle: Some("Filters narrow launcher results before search words run.".to_string()),
+        mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
+        status_chip: Some(chip("filtering", MenuSyntaxMainHintTone::Neutral)),
+        rows,
+        fragment_preview: None,
+        primary_hint: Some(
+            "Keep typing to narrow results, or remove a filter to widen.".to_string(),
+        ),
+        secondary_hint: None,
+        example: example.clone(),
+        examples: example.into_iter().collect(),
+        warning: None,
+        active_head: active.map(|a| a.head.clone()),
+        active_head_value_partial: active.and_then(|a| a.value_partial_opt()),
+        accessibility_label: String::new(),
+    })
 }
 
 fn capture_picker_companion_hint(
@@ -1186,18 +1287,7 @@ fn synthetic_active_head_empty_hint(
             if head_token.is_empty() {
                 return None;
             }
-            let kind_label = match head_token.to_ascii_lowercase().as_str() {
-                "script" | "scripts" => "scripts",
-                "scriptlet" | "scriptlets" => "scriptlets",
-                "skill" | "skills" => "skills",
-                "agent" | "agents" => "agents",
-                "builtin" | "builtins" | "built-in" | "built-ins" => "built-ins",
-                "app" | "apps" => "apps",
-                "window" | "windows" => "windows",
-                "file" | "files" => "files",
-                "note" | "notes" => "notes",
-                _ => "matching items",
-            };
+            let kind_label = type_value_label(head_token);
             // The active_head detector cuts value_partial at the first
             // whitespace, so it never includes the trailing free-text
             // words (`:type:scriptlet zzz` → value_partial="scriptlet").
@@ -1211,6 +1301,17 @@ fn synthetic_active_head_empty_hint(
             };
             let primary_hint = format!("Remove `type:{head_token}` to widen.");
             let example_token = format!("type:{head_token} shell");
+            let mut rows = vec![
+                hint_row("Filter", &format!("type:{head_token}")),
+                hint_row("Scope", &format!("{kind_label} only")),
+            ];
+            if !free_words.is_empty() {
+                rows.push(hint_row("Search words", &free_words));
+            }
+            rows.push(hint_row(
+                "Recovery",
+                &format!("Remove `type:{head_token}` to widen results"),
+            ));
             Some(finalize_hint(MenuSyntaxMainHintSnapshot {
                 kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                 status_chips: Vec::new(),
@@ -1222,7 +1323,7 @@ fn synthetic_active_head_empty_hint(
                 subtitle: None,
                 mode_chip: Some(chip(": refine", MenuSyntaxMainHintTone::Accent)),
                 status_chip: Some(chip("no matches", MenuSyntaxMainHintTone::Muted)),
-                rows: Vec::new(),
+                rows,
                 fragment_preview: None,
                 primary_hint: Some(primary_hint),
                 secondary_hint: None,
@@ -1341,7 +1442,7 @@ fn advanced_query_empty_hint(
                 "has:shortcut, has:alias, has:menuSyntax",
             ));
         } else {
-            all_rows.extend(matching.into_iter());
+            all_rows.extend(matching);
         }
 
         return Some(finalize_hint(MenuSyntaxMainHintSnapshot {
@@ -2107,6 +2208,13 @@ fn active_head_context_for_filter(raw: &str) -> Option<ActiveHeadContext> {
                 kind: ActiveHeadKind::TypeQualifier,
             });
         }
+        if let Some(value) = qualifier_value_partial(token, "kind") {
+            return Some(ActiveHeadContext {
+                head: ":kind:".to_string(),
+                value_partial: value,
+                kind: ActiveHeadKind::TypeQualifier,
+            });
+        }
         if let Some(value) = qualifier_value_partial(token, "tag") {
             return Some(ActiveHeadContext {
                 head: ":tag:".to_string(),
@@ -2309,6 +2417,32 @@ fn artifact_kind_zero_copy_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::BrowserHistory => "browser history entries",
         ArtifactKind::Fallback => "fallbacks",
         ArtifactKind::Issue => "issues",
+    }
+}
+
+fn type_value_label(value: &str) -> &'static str {
+    match value.to_ascii_lowercase().as_str() {
+        "script" | "scripts" => "scripts",
+        "scriptlet" | "scriptlets" => "scriptlets",
+        "skill" | "skills" => "skills",
+        "agent" | "agents" => "agents",
+        "builtin" | "builtins" | "built-in" | "built-ins" => "built-ins",
+        "app" | "apps" => "apps",
+        "window" | "windows" => "windows",
+        "file" | "files" => "files",
+        "note" | "notes" => "notes",
+        "clipboard" | "clipboard-history" | "clipboardhistory" => "clipboard entries",
+        "dictation" | "dictation-history" | "dictationhistory" | "transcript" | "transcripts" => {
+            "dictation entries"
+        }
+        "browser-tab" | "browser-tabs" | "browsertab" | "browsertabs" | "tab" | "tabs" => {
+            "browser tabs"
+        }
+        "browser" | "browser-history" | "browserhistory" | "web" => "browser history entries",
+        "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => "AI conversations",
+        "fallback" | "fallbacks" => "fallbacks",
+        "issue" | "issues" | "scriptissue" | "script-issue" => "issues",
+        _ => "matching items",
     }
 }
 
@@ -3540,6 +3674,69 @@ mod tests {
             menu_syntax_ai_proposal: None,
         })
         .expect("empty hint")
+    }
+
+    fn applied_hint_for(raw: &str) -> MenuSyntaxMainHintSnapshot {
+        let mode = MenuSyntaxMode::from_input(raw);
+        let snapshot =
+            build_trigger_picker_snapshot(raw, &TriggerPickerContext::default()).expect("snapshot");
+        build_menu_syntax_main_hint(MenuSyntaxMainHintContext {
+            raw_filter_text: raw,
+            mode: &mode,
+            popup_snapshot: Some(&snapshot),
+            popup_selected_row_id: None,
+            scripts: &[],
+            scriptlets: &[],
+            advanced_query_results_empty: false,
+            menu_syntax_ai_proposal: None,
+        })
+        .expect("applied hint")
+    }
+
+    #[test]
+    fn type_skill_applied_hint_has_non_empty_body_when_results_exist() {
+        let hint = applied_hint_for(":type:skill review");
+
+        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
+        assert_eq!(hint.title, "Filtering to skills");
+        assert!(
+            !hint.rows.is_empty(),
+            "applied :type:skill hint body must not be empty: {hint:?}"
+        );
+        assert!(hint.rows.iter().any(|row| {
+            row.label == "Filters" && row.value.to_ascii_lowercase().contains("skill")
+        }));
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Search words" && row.value == "review"));
+    }
+
+    #[test]
+    fn type_filter_zero_result_hint_has_rows_for_skill() {
+        let hint = empty_hint_for(":type:skill review");
+
+        assert!(
+            !hint.rows.is_empty(),
+            "zero-result :type:skill hint must have body rows"
+        );
+        assert_eq!(hint.active_head.as_deref(), Some(":type:"));
+        assert_eq!(hint.active_head_value_partial.as_deref(), Some("skill"));
+        assert!(hint.rows.iter().any(|row| row.label == "Filter"));
+        assert!(hint.rows.iter().any(|row| row.label == "Recovery"));
+    }
+
+    #[test]
+    fn kind_alias_type_filter_hint_has_non_empty_body() {
+        let hint = applied_hint_for(":kind:skill review");
+
+        assert_eq!(hint.kind, MenuSyntaxMainHintKind::AdvancedQueryGuide);
+        assert_eq!(hint.title, "Filtering to skills");
+        assert_eq!(hint.active_head.as_deref(), Some(":kind:"));
+        assert!(
+            !hint.rows.is_empty(),
+            "applied :kind:skill hint body must not be empty: {hint:?}"
+        );
     }
 
     #[test]

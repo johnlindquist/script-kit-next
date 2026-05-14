@@ -7,10 +7,11 @@
 //! One `[?]` near-anomaly surfaced (filed in stories.md as
 //! `dynamic-schema-no-dedup-across-required-optional`).
 
-use script_kit_gpui::menu_syntax::payload::{DateRole, MenuSyntaxHandlerSpec};
-use script_kit_gpui::menu_syntax::{
-    dynamic_capture_schema_from_spec, parse_field_requirement_token, FieldRequirement,
+use script_kit_gpui::menu_syntax::capture_schema::FieldRequirement;
+use script_kit_gpui::menu_syntax::metadata::{
+    dynamic_capture_schema_from_spec, parse_field_requirement_token,
 };
+use script_kit_gpui::menu_syntax::payload::{DateRole, MenuSyntaxHandlerSpec};
 
 fn capture_spec_with(
     target: &str,
@@ -145,7 +146,7 @@ fn composition_13_first_non_empty_target_is_used() {
 }
 
 #[test]
-fn composition_14_duplicate_required_tokens_dedupe_keep_first_PINNED() {
+fn composition_14_duplicate_required_tokens_dedupe_keep_first_pinned() {
     // Run 11 Pass #33 (Fix): `[?] dynamic-schema-no-dedup-across-required-optional`
     // CLOSED. Within-list dedup keeps the first occurrence; three identical
     // `body` tokens collapse to a single `FieldRequirement::Body`.
@@ -156,7 +157,7 @@ fn composition_14_duplicate_required_tokens_dedupe_keep_first_PINNED() {
 }
 
 #[test]
-fn composition_14b_cross_list_required_wins_over_optional_and_forbidden_PINNED() {
+fn composition_14b_cross_list_required_wins_over_optional_and_forbidden_pinned() {
     // Cross-list precedence: required > optional > forbidden. A `kv:amount`
     // declared in all three lists ends up only in `required`. This is the
     // coherence-bug shape `doctor.rs` should also warn about, but the
@@ -192,7 +193,7 @@ fn composition_14b_cross_list_required_wins_over_optional_and_forbidden_PINNED()
 }
 
 #[test]
-fn composition_14c_optional_wins_over_forbidden_when_required_silent_PINNED() {
+fn composition_14c_optional_wins_over_forbidden_when_required_silent_pinned() {
     // When a token only appears in optional + forbidden (not required),
     // optional wins. Falsifier: if dedup ran the other direction, the
     // forbidden Url would survive instead.
@@ -206,7 +207,7 @@ fn composition_14c_optional_wins_over_forbidden_when_required_silent_PINNED() {
 }
 
 #[test]
-fn composition_14d_distinct_fields_across_lists_all_survive_PINNED() {
+fn composition_14d_distinct_fields_across_lists_all_survive_pinned() {
     // Falsifier for over-dedup: when no token overlaps across lists, all
     // three lists keep their full content.
     let spec = capture_spec_with("expense", vec!["body"], vec!["tag"], vec!["url"]);
@@ -235,7 +236,7 @@ fn composition_16_target_lowercased_in_output_schema() {
 }
 
 #[test]
-fn composition_17_long_required_list_dedupes_to_single_entry_PINNED() {
+fn composition_17_long_required_list_dedupes_to_single_entry_pinned() {
     // Run 11 Pass #33 (Fix): post-dedup a 50-token list of identical
     // `kv:k` entries collapses to one. Falsifier: removing the dedup loop
     // would push this back to 50.
@@ -314,7 +315,7 @@ fn resurrection_22_empty_required_list_yields_empty_required_vec() {
 }
 
 #[test]
-fn resurrection_23_kv_in_both_required_and_optional_required_wins_PINNED() {
+fn resurrection_23_kv_in_both_required_and_optional_required_wins_pinned() {
     // Run 11 Pass #33 (Fix): same kv key in both required and optional →
     // required wins, optional is dropped. The doctor surface should still
     // warn about this as an authoring smell, but the extractor resolves

@@ -797,4 +797,68 @@ mod tests {
     fn input_spans_empty_for_plain_text() {
         assert!(input_spans_for_input("hello world #not-capture").is_empty());
     }
+
+    #[test]
+    fn source_head_span_does_not_claim_home_path() {
+        assert!(
+            input_spans_for_input("~/").is_empty(),
+            "`~/` is a home-path/file-search handoff, not source-head chrome"
+        );
+        assert_eq!(prefix_span_for_input("~/"), None);
+    }
+
+    #[test]
+    fn source_head_span_clears_after_f_head_replaced_by_home_path() {
+        let f_spans = input_spans_for_input("f: xy");
+        assert_eq!(f_spans.len(), 1);
+        assert_eq!(f_spans[0].range, 0..2);
+        assert_eq!(&"f: xy"[f_spans[0].range.clone()], "f:");
+
+        assert!(
+            input_spans_for_input("~/").is_empty(),
+            "replacing `f:` with `~/` must produce an empty decoration set"
+        );
+    }
+
+    #[test]
+    fn source_head_spans_clear_for_plain_path_and_text_replacements() {
+        let replacements = ["~/", "/tmp", "plain text"];
+
+        for spec in crate::menu_syntax::payload::SOURCE_HEAD_SPECS
+            .iter()
+            .filter(|spec| spec.planned)
+        {
+            for head in [Some(spec.canonical), spec.short].into_iter().flatten() {
+                let source_input = format!("{head} xy");
+                assert!(
+                    !input_spans_for_input(&source_input).is_empty(),
+                    "{head} should produce source-head chrome before replacement"
+                );
+
+                for replacement in replacements {
+                    assert!(
+                        input_spans_for_input(replacement).is_empty(),
+                        "{head} -> {replacement} must clear input chrome"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn power_syntax_spans_clear_for_plain_path_and_text_replacements() {
+        for source_input in [";todo capture", ">command arg"] {
+            assert!(
+                !input_spans_for_input(source_input).is_empty(),
+                "{source_input} should produce power-syntax chrome before replacement"
+            );
+        }
+
+        for replacement in ["~/", "/tmp", "plain text"] {
+            assert!(
+                input_spans_for_input(replacement).is_empty(),
+                "{replacement} must clear prior power-syntax input chrome"
+            );
+        }
+    }
 }

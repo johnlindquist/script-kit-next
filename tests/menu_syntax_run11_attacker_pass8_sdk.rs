@@ -16,10 +16,10 @@
 //!
 //! Receipt: `cargo test --test menu_syntax_run11_attacker_pass8_sdk`.
 
-use script_kit_gpui::menu_syntax::{
+use script_kit_gpui::menu_syntax::metadata::{
     handler_specs_from_extra_map, handler_specs_from_value, handler_specs_from_yaml_like_string,
-    MenuSyntaxHandlerSpec,
 };
+use script_kit_gpui::menu_syntax::MenuSyntaxHandlerSpec;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -140,7 +140,7 @@ fn composition_02_mixed_family_array_keeps_all_entries() {
 }
 
 #[test]
-fn composition_03_contradictory_defaultHandler_both_true_both_kept() {
+fn composition_03_contradictory_default_handler_both_true_both_kept() {
     let value = json!([
         {"family": "capture.v1", "targets": ["todo"], "defaultHandler": true},
         {"family": "capture.v1", "targets": ["todo"], "defaultHandler": true},
@@ -178,7 +178,7 @@ fn composition_05_array_inside_object_form_handled_only_at_top_level() {
 }
 
 #[test]
-fn composition_06_extra_map_without_menuSyntax_key_returns_empty() {
+fn composition_06_extra_map_without_menu_syntax_key_returns_empty() {
     let mut extra: HashMap<String, Value> = HashMap::new();
     extra.insert("otherKey".to_string(), json!([{"family": "capture.v1"}]));
     assert!(handler_specs_from_extra_map(&extra).is_empty());
@@ -287,7 +287,7 @@ fn determinism_02_helper_equivalent_literal_matches_typed_helper_output() {
 }
 
 #[test]
-fn determinism_03_alsoTargets_helper_output_matches_concatenated_literal() {
+fn determinism_03_also_targets_helper_output_matches_concatenated_literal() {
     // `captureTarget("note", { alsoTargets: ["journal"] })` produces
     // targets: ["note", "journal"]. Pin the order.
     let helper_output = json!({

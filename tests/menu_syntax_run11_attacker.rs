@@ -13,11 +13,17 @@
 //! No anomaly found → ship as `Prompt: Probe …`.
 //! Anomaly found → file `[?]` story and ship as `Prompt: Reproduce …`.
 
+use script_kit_gpui::menu_syntax::actions::MenuSyntaxActionKind;
+use script_kit_gpui::menu_syntax::capture::{parse_capture, CaptureParse};
+use script_kit_gpui::menu_syntax::capture_schema::{builtin_schema, FieldRequirement};
+use script_kit_gpui::menu_syntax::date::{
+    parse_date_phrase_result, DateParseResult, MenuSyntaxClock,
+};
+use script_kit_gpui::menu_syntax::payload::{
+    AdvancedQuery, CaptureAlias, CaptureInvocation, DateRole,
+};
 use script_kit_gpui::menu_syntax::{
-    builtin_schema, current_menu_syntax_actions, parse_capture, parse_date_phrase_result,
-    AdvancedQuery, CaptureAlias, CaptureInvocation, CaptureParse, DateParseResult, DateRole,
-    FieldRequirement, MenuSyntaxAction, MenuSyntaxActionKind, MenuSyntaxActionState,
-    MenuSyntaxClock,
+    current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionState,
 };
 
 fn denver_clock() -> MenuSyntaxClock {

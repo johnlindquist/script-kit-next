@@ -203,7 +203,7 @@ pub fn build_trigger_picker_snapshot(
         return Some(build_capture_picker_snapshot(filter.as_deref(), ctx));
     }
 
-    if advanced_query_active_token(input).starts_with("has:") {
+    if should_show_has_field_completion(input) {
         return Some(build_advanced_query_snapshot(input, ctx));
     }
 
@@ -214,6 +214,7 @@ pub fn build_trigger_picker_snapshot(
     };
 
     match parsed {
+        MenuSyntaxParse::AdvancedQuery(_) if is_complete_has_field_query(input) => None,
         MenuSyntaxParse::AdvancedQuery(query) if query.is_source_filter_only() => None,
         MenuSyntaxParse::AdvancedQuery(_) => Some(build_advanced_query_snapshot(input, ctx)),
         MenuSyntaxParse::Capture(inv) => {
@@ -324,6 +325,34 @@ fn advanced_query_active_token(input: &str) -> String {
         return String::new();
     }
     active.to_ascii_lowercase()
+}
+
+fn should_show_has_field_completion(input: &str) -> bool {
+    let active = advanced_query_active_token(input);
+    let Some(value) = active.strip_prefix("has:") else {
+        return false;
+    };
+    if value.is_empty() {
+        return true;
+    }
+    crate::menu_syntax::has_fields::lookup_has_field(value).is_none()
+        && crate::menu_syntax::has_fields::HAS_FIELD_SPECS
+            .iter()
+            .any(|spec| {
+                spec.canonical.to_ascii_lowercase().starts_with(value)
+                    || spec
+                        .aliases
+                        .iter()
+                        .any(|alias| alias.to_ascii_lowercase().starts_with(value))
+            })
+}
+
+fn is_complete_has_field_query(input: &str) -> bool {
+    let active = advanced_query_active_token(input);
+    let Some(value) = active.strip_prefix("has:") else {
+        return false;
+    };
+    crate::menu_syntax::has_fields::lookup_has_field(value).is_some()
 }
 
 fn has_field_value_rows_for_active_token(active: &str) -> Option<Vec<TriggerPickerRow>> {
@@ -1503,6 +1532,23 @@ mod tests {
         assert!(
             snap.rows.iter().all(|r| r.id != "footer:help"),
             "advanced-query `has:` popup must not emit a help footer",
+        );
+    }
+
+    #[test]
+    fn complete_has_shortcut_does_not_open_completion_popup() {
+        let ctx = ctx_empty();
+        assert!(
+            build_trigger_picker_snapshot("has:shortcut", &ctx).is_none(),
+            "complete has:shortcut is a search predicate, not a completion state"
+        );
+        assert!(
+            build_trigger_picker_snapshot("has:shortcut ", &ctx).is_none(),
+            "trailing space after complete has:shortcut must not reopen completion"
+        );
+        assert!(
+            build_trigger_picker_snapshot("has:shortc", &ctx).is_some(),
+            "partial has:shortc should still offer has:shortcut"
         );
     }
 

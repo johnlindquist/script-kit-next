@@ -175,9 +175,28 @@ fn classify_qualifier(token: &str) -> Option<Predicate> {
         "desc" | "description" => (!value.is_empty()).then_some(Predicate::Desc(value)),
         "alias" => (!value.is_empty()).then_some(Predicate::Alias(value)),
         "tag" => (!value.is_empty()).then_some(Predicate::Tag(value)),
-        "has" => (!value.is_empty()).then_some(Predicate::Has(value)),
+        "has" => classify_has_predicate_value(&value).map(Predicate::Has),
         _ => None,
     }
+}
+
+fn classify_has_predicate_value(value: &str) -> Option<String> {
+    let value = crate::menu_syntax::has_fields::canonical_has_field_value(value, true)?;
+    let lower = value.to_ascii_lowercase();
+    if crate::menu_syntax::has_fields::lookup_has_field(&lower).is_some() {
+        return Some(value);
+    }
+
+    let partial_known_field = crate::menu_syntax::has_fields::HAS_FIELD_SPECS
+        .iter()
+        .any(|spec| {
+            spec.canonical.to_ascii_lowercase().starts_with(&lower)
+                || spec
+                    .aliases
+                    .iter()
+                    .any(|alias| alias.to_ascii_lowercase().starts_with(&lower))
+        });
+    (!partial_known_field).then_some(value)
 }
 
 fn tokenize(input: &str) -> Vec<String> {
@@ -357,6 +376,26 @@ mod tests {
             ]
         );
         assert_eq!(parsed.free_text, "event");
+    }
+
+    #[test]
+    fn has_shortcut_complete_and_trailing_space_parse_same() {
+        let complete = parse_filter_query("has:shortcut").expect("complete has shortcut");
+        let trailing = parse_filter_query("has:shortcut ").expect("trailing has shortcut");
+
+        assert_eq!(complete.free_text, "");
+        assert_eq!(trailing.free_text, "");
+        assert_eq!(
+            complete.predicates,
+            vec![Predicate::Has("shortcut".to_string())]
+        );
+        assert_eq!(trailing.predicates, complete.predicates);
+    }
+
+    #[test]
+    fn partial_has_shortcut_values_do_not_claim_filter_query() {
+        assert!(parse_filter_query("has:short").is_none());
+        assert!(parse_filter_query("has:shortc").is_none());
     }
 
     #[test]

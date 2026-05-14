@@ -3,9 +3,9 @@
 //! Receipt: `cargo test --test menu_syntax_recurrence_golden`.
 
 use chrono_tz::America::Denver;
-use script_kit_gpui::menu_syntax::{
-    parse_capture, resolve_capture_dates_with_accepts, CaptureParse, MenuSyntaxClock,
-    ResolvedCaptureInvocation,
+use script_kit_gpui::menu_syntax::capture::{parse_capture, CaptureParse};
+use script_kit_gpui::menu_syntax::date::{
+    resolve_capture_dates_with_accepts, MenuSyntaxClock, ResolvedCaptureInvocation,
 };
 
 fn clock() -> MenuSyntaxClock {
