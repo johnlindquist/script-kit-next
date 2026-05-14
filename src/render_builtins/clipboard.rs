@@ -1,4 +1,62 @@
 impl ScriptListApp {
+    fn clipboard_history_matches_filter(
+        entry: &clipboard_history::ClipboardEntryMeta,
+        filter_lower: &str,
+    ) -> bool {
+        entry.text_preview.to_lowercase().contains(filter_lower)
+            || entry
+                .ocr_text
+                .as_deref()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains(filter_lower)
+    }
+
+    fn clipboard_history_visible_rows(
+        &self,
+        filter: &str,
+    ) -> Vec<(usize, clipboard_history::ClipboardEntryMeta)> {
+        if filter.is_empty() {
+            self.cached_clipboard_entries
+                .iter()
+                .cloned()
+                .enumerate()
+                .collect()
+        } else {
+            let filter_lower = filter.to_lowercase();
+            self.cached_clipboard_entries
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|(_, entry)| Self::clipboard_history_matches_filter(entry, &filter_lower))
+                .collect()
+        }
+    }
+
+    fn clipboard_history_selected_visible_row(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<(usize, clipboard_history::ClipboardEntryMeta)> {
+        self.clipboard_history_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn clipboard_history_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        (
+            self.cached_clipboard_entries.len(),
+            self.clipboard_history_visible_rows(filter).len(),
+        )
+    }
+
+    fn clipboard_history_visible_row_labels(&self, filter: &str) -> Vec<String> {
+        self.clipboard_history_visible_rows(filter)
+            .into_iter()
+            .map(|(_, entry)| entry.text_preview)
+            .collect()
+    }
+
     /// Render clipboard history view
     /// P0 FIX: Data comes from self.cached_clipboard_entries, view passes only state
     fn render_clipboard_history(

@@ -211,6 +211,8 @@ impl ScriptListApp {
             path: install_path,
             repo_url,
             git_hash,
+            // LAT_WHITELIST_RFC3339_STORAGE: raw RFC3339 belongs in the kit registry only;
+            // display surfaces must format timestamps through crate::formatting.
             installed_at: chrono::Utc::now().to_rfc3339(),
         };
         kits.push(installed.clone());
@@ -295,6 +297,64 @@ impl ScriptListApp {
             }
             cx.notify();
         }
+    }
+
+    fn kit_store_browse_visible_rows<'a>(
+        results: &'a [KitStoreSearchResult],
+    ) -> Vec<(usize, &'a KitStoreSearchResult)> {
+        results.iter().enumerate().collect()
+    }
+
+    fn kit_store_installed_visible_rows<'a>(
+        kits: &'a [script_kit_gpui::kit_store::InstalledKit],
+    ) -> Vec<(usize, &'a script_kit_gpui::kit_store::InstalledKit)> {
+        kits.iter().enumerate().collect()
+    }
+
+    fn kit_store_browse_selected_visible_result(
+        results: &[KitStoreSearchResult],
+        selected_index: usize,
+    ) -> Option<KitStoreSearchResult> {
+        Self::kit_store_browse_visible_rows(results)
+            .get(selected_index)
+            .map(|(_, result)| (*result).clone())
+    }
+
+    fn kit_store_installed_selected_visible_kit(
+        kits: &[script_kit_gpui::kit_store::InstalledKit],
+        selected_index: usize,
+    ) -> Option<script_kit_gpui::kit_store::InstalledKit> {
+        Self::kit_store_installed_visible_rows(kits)
+            .get(selected_index)
+            .map(|(_, kit)| (*kit).clone())
+    }
+
+    fn kit_store_browse_dataset_and_visible_counts(
+        results: &[KitStoreSearchResult],
+    ) -> (usize, usize) {
+        (results.len(), Self::kit_store_browse_visible_rows(results).len())
+    }
+
+    fn kit_store_installed_dataset_and_visible_counts(
+        kits: &[script_kit_gpui::kit_store::InstalledKit],
+    ) -> (usize, usize) {
+        (kits.len(), Self::kit_store_installed_visible_rows(kits).len())
+    }
+
+    fn kit_store_browse_visible_row_labels(results: &[KitStoreSearchResult]) -> Vec<String> {
+        Self::kit_store_browse_visible_rows(results)
+            .into_iter()
+            .map(|(_, result)| result.full_name.clone())
+            .collect()
+    }
+
+    fn kit_store_installed_visible_row_labels(
+        kits: &[script_kit_gpui::kit_store::InstalledKit],
+    ) -> Vec<String> {
+        Self::kit_store_installed_visible_rows(kits)
+            .into_iter()
+            .map(|(_, kit)| kit.name.clone())
+            .collect()
     }
 
     fn kit_store_install_selected_result(
@@ -460,7 +520,7 @@ impl ScriptListApp {
             ..
         } = &self.current_view
         {
-            results.get(*selected_index).cloned()
+            Self::kit_store_browse_selected_visible_result(results, *selected_index)
         } else {
             None
         };
@@ -480,7 +540,7 @@ impl ScriptListApp {
             ..
         } = &self.current_view
         {
-            kits.get(*selected_index).cloned()
+            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
         } else {
             None
         };
@@ -500,7 +560,7 @@ impl ScriptListApp {
             ..
         } = &self.current_view
         {
-            kits.get(*selected_index).cloned()
+            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
         } else {
             None
         };
@@ -735,7 +795,7 @@ impl ScriptListApp {
                         ..
                     } = &this.current_view
                     {
-                        results.get(*selected_index).cloned()
+                        Self::kit_store_browse_selected_visible_result(results, *selected_index)
                     } else {
                         None
                     };
@@ -1147,13 +1207,15 @@ impl ScriptListApp {
                             }
                         }
                         _ if is_key_enter(key) => {
-                            let selected = kits.get(*selected_index).cloned();
+                            let selected =
+                                Self::kit_store_installed_selected_visible_kit(kits, *selected_index);
                             if let Some(selected) = selected {
                                 this.kit_store_update_selected_kit(&selected, cx);
                             }
                         }
                         "delete" | "backspace" => {
-                            let selected = kits.get(*selected_index).cloned();
+                            let selected =
+                                Self::kit_store_installed_selected_visible_kit(kits, *selected_index);
                             if let Some(selected) = selected {
                                 this.kit_store_remove_selected_kit(&selected, cx);
                             }

@@ -1,4 +1,34 @@
 impl ScriptListApp {
+    fn acp_history_visible_rows(filter: &str) -> Vec<crate::ai::acp::history::AcpHistoryEntry> {
+        crate::ai::acp::history::search_history(filter, 100)
+            .into_iter()
+            .map(|hit| hit.entry)
+            .collect()
+    }
+
+    fn acp_history_selected_visible_row(
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<crate::ai::acp::history::AcpHistoryEntry> {
+        Self::acp_history_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn acp_history_dataset_and_visible_counts(filter: &str) -> (usize, usize) {
+        (
+            crate::ai::acp::history::load_history().len(),
+            Self::acp_history_visible_rows(filter).len(),
+        )
+    }
+
+    fn acp_history_visible_row_labels(filter: &str) -> Vec<String> {
+        Self::acp_history_visible_rows(filter)
+            .into_iter()
+            .map(|entry| entry.title_display().to_string())
+            .collect()
+    }
+
     /// Render the ACP conversation history browser (list + preview).
     fn render_acp_history(
         &mut self,

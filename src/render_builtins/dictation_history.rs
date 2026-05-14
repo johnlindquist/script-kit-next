@@ -1,4 +1,34 @@
 impl ScriptListApp {
+    fn dictation_history_visible_rows(filter: &str) -> Vec<crate::dictation::DictationHistoryEntry> {
+        crate::dictation::search_history(filter, 100)
+            .into_iter()
+            .map(|hit| hit.entry)
+            .collect()
+    }
+
+    fn dictation_history_selected_visible_row(
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<crate::dictation::DictationHistoryEntry> {
+        Self::dictation_history_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn dictation_history_dataset_and_visible_counts(filter: &str) -> (usize, usize) {
+        (
+            crate::dictation::load_history().len(),
+            Self::dictation_history_visible_rows(filter).len(),
+        )
+    }
+
+    fn dictation_history_visible_row_labels(filter: &str) -> Vec<String> {
+        Self::dictation_history_visible_rows(filter)
+            .into_iter()
+            .map(|entry| entry.preview)
+            .collect()
+    }
+
     fn dictation_history_meta(entry: &crate::dictation::DictationHistoryEntry) -> String {
         format!(
             "{} · {} · {}",

@@ -154,8 +154,16 @@ fn get_settings_items() -> Vec<SettingsItem> {
 
 impl ScriptListApp {
     fn settings_visible_row_names(&self, filter: &str) -> Vec<String> {
+        self.settings_visible_row_labels(filter)
+    }
+
+    fn settings_filtered_rows<'a>(&self, items: &'a [SettingsItem], filter: &str) -> Vec<&'a SettingsItem> {
+        filtered_settings_items(items, filter)
+    }
+
+    fn settings_visible_row_labels(&self, filter: &str) -> Vec<String> {
         let items = get_settings_items();
-        filtered_settings_items(&items, filter)
+        self.settings_filtered_rows(&items, filter)
             .into_iter()
             .map(|item| item.name.to_string())
             .collect()
@@ -163,8 +171,19 @@ impl ScriptListApp {
 
     fn settings_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
         let items = get_settings_items();
-        let visible_count = filtered_settings_items(&items, filter).len();
+        let visible_count = self.settings_filtered_rows(&items, filter).len();
         (items.len(), visible_count)
+    }
+
+    fn settings_selected_visible_row(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<String> {
+        let items = get_settings_items();
+        self.settings_filtered_rows(&items, filter)
+            .get(selected_index)
+            .map(|item| item.name.to_string())
     }
 
     fn settings_selected_visible_row_name(
@@ -172,10 +191,7 @@ impl ScriptListApp {
         filter: &str,
         selected_index: usize,
     ) -> Option<String> {
-        let items = get_settings_items();
-        filtered_settings_items(&items, filter)
-            .get(selected_index)
-            .map(|item| item.name.to_string())
+        self.settings_selected_visible_row(filter, selected_index)
     }
 
     /// Execute a settings action selected from the settings hub.

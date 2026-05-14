@@ -139,6 +139,8 @@ Agentic-testing runs generate one bounded improvement pass with `$agentic-testin
 
 Menu-syntax trigger popups are `promptPopup` windows with a specialized element cache. [[src/windows/automation_surface_collector.rs#upsert_menu_syntax_prompt_popup_snapshot]] records the live `TriggerPickerSnapshot` rows for targeted `getElements`, so agentic proofs can assert popup tokens such as `has:shortcut` and `;note` from semantic receipts rather than pixels.
 
+ScriptList `getState` includes `filterInputDecorations`, a receipt read from the live GPUI input state rather than recomputing tokenizer spans. It reports the rendered input text plus chip ranges and roles, so state-first proofs can catch stale decoration bugs such as `f:` surviving after the input becomes `~/` or `/tmp`.
+
 ### Non-obvious constraints
 
 Attached popups must preserve parent identity and `parent_capture_with_crop`. Detached surfaces must preserve exact-id stability. Main should stay state-first unless a visual assertion explicitly requires capture.
@@ -157,17 +159,23 @@ Root unified search has a dedicated state-first proof for target stability after
 
 Screenshot proof must include content-level validation before a PNG can count as reviewable evidence.
 
-The Rust capture path in [[src/platform/screenshots_window_open.rs]] runs a macOS Screen Recording preflight before xcap capture, then audits the RGBA buffer before PNG encoding. Captures with no sampled pixels, no non-transparent pixels, no non-black pixels, or a near-black low-variety buffer fail with `automation.capture_screenshot.permission_failed` or `automation.capture_screenshot.blank_image_rejected` instead of writing misleading proof.
+The Rust capture path in [[src/platform/screenshots_window_open.rs]] runs a macOS Screen Recording preflight before xcap capture, then audits the RGBA buffer before PNG encoding. Captures with no sampled pixels, no non-transparent pixels, solid-like single-bucket frames, or dark-empty low-variety frames fail with `automation.capture_screenshot.permission_failed` or `automation.capture_screenshot.blank_image_rejected` instead of writing misleading proof. The audit records `maxLuma` and `nonBlackRatio` so valid dark UI with sparse visible chrome is distinct from an all-black permission failure.
 
 The same non-prompting Screen Recording preflight is surfaced through `computer/list_permissions`, so MCP clients can diagnose missing capture permission before attempting screenshot proof.
 
-The Bun proof helper in [[scripts/agentic/verify-shot.ts]] independently audits generated PNGs and records `screenshotReceipt.contentAudit`. Its default output root is `.test-screenshots/`, and a blank audit flips the screenshot receipt to an infrastructure failure even when the capture command wrote a file.
+The Bun proof helper in [[scripts/agentic/verify-shot.ts]] independently audits generated PNGs and records `screenshotReceipt.contentAudit`. Its default output root is `.test-screenshots/`, and a blank audit flips the screenshot receipt to an infrastructure failure even when the capture command wrote a file. [[scripts/agentic/verify-shot-blank-rejection-matrix.ts]] generates transparent, solid black, solid white, solid gray, and valid-dark-UI PNG fixtures so the blank/solid/dark-positive split stays deterministic.
+
+## Surface Navigator inventory audit
+
+The image-library matrix must be checked against live surface contracts, not only hardcoded lists.
+
+[[scripts/agentic/surface-navigator-inventory-audit.ts]] opens each registered `triggerBuiltin` surface that can expose a main-window `surfaceContract`, compares live `automationSemanticSurface` values against `FILTERABLE_SURFACE_MATRIX` and `ATTACHED_POPUP_SURFACE_MATRIX`, and fails on missing live screenshotable surfaces, stale matrix entries, or `collector_used_current_view_fallback` warnings. `SURFACE_NAVIGATOR_EXEMPTIONS` is the only place to document intentionally excluded surfaces such as File Search or Quick Terminal.
 
 ## Window metadata
 
 `AutomationWindowInfo.semanticSurface` re-keys as the main window's active subview changes — defaults to `scriptList`, flips to the subview tag on `triggerBuiltin`.
 
-Subview tags currently wired through `triggerBuiltin`: `fileSearch`, `clipboardHistory`, `appLauncher`, `browserTabs`, `emojiPicker`, `windowSwitcher`, `processManager`, `currentAppCommands`, `designGallery`, `acpChat`. Each arm in the stdin dispatchers must have a matching `AppView` variant in `AppView::surface_contract()` — without it the surface stays at the prior value. `acpChat` is the Main-hosted ACP chat surface (flipped via `triggerBuiltin tab-ai` / `tabai`); detached ACP popups use the popup-level surface class documented in [[lat.md/automation#Automation#Surface-proof CLI#Surface classes]] and are not keyed through this map.
+Subview tags currently wired through `triggerBuiltin`: `fileSearch`, `clipboardHistory`, `appLauncher`, `browserTabs`, `emojiPicker`, `windowSwitcher`, `processManager`, `currentAppCommands`, `designGallery`, `settings`, `kitStoreBrowse`, `kitStoreInstalled`, and `acpChat`. Each arm in the stdin dispatchers must have a matching `AppView` variant in `AppView::surface_contract()` — without it the surface stays at the prior value. `acpChat` is the Main-hosted ACP chat surface (flipped via `triggerBuiltin tab-ai` / `tabai`); detached ACP popups use the popup-level surface class documented in [[lat.md/automation#Automation#Surface-proof CLI#Surface classes]] and are not keyed through this map.
 
 The re-key goes through [[src/app_impl/trigger_builtin_dispatch.rs#ScriptListApp#rekey_main_automation_surface_after_trigger_builtin_dispatch]], which delegates to [[src/app_impl/automation_surface.rs#ScriptListApp#rekey_main_automation_surface_from_current_view]] after dispatch mutates `current_view`. The stdin dispatchers call the triggerBuiltin helper after `dispatch_trigger_builtin`, so they do not recompute bounds, focus, title, or raw surface tags they do not own. The `AppView → semanticSurface` mapping lives inside `SurfaceKind::surface_contract()` next to the enum in `src/main_sections/app_view_state.rs`; `semantic_surface_for_main_view()` delegates to that registry.
 

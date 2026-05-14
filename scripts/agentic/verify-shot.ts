@@ -213,6 +213,8 @@ interface ScreenshotContentAudit {
   nonTransparentPixels: number;
   uniqueBucketCount: number;
   meanLuma: number;
+  maxLuma: number;
+  nonBlackRatio: number;
   blank: boolean;
 }
 
@@ -688,6 +690,7 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
   let nonBlackPixels = 0;
   let nonTransparentPixels = 0;
   let lumaSum = 0;
+  let maxLuma = 0;
   const buckets = new Set<string>();
 
   for (let y = 0; y < height; y++) {
@@ -716,7 +719,9 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
       sampledPixels += 1;
       if (a > 0) nonTransparentPixels += 1;
       if (a > 0 && (r > 8 || g > 8 || b > 8)) nonBlackPixels += 1;
-      lumaSum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      lumaSum += luma;
+      maxLuma = Math.max(maxLuma, luma);
       buckets.add(`${r >> 5}:${g >> 5}:${b >> 5}:${a === 0 ? 0 : 1}`);
     }
 
@@ -725,11 +730,19 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
 
   const meanLuma = sampledPixels > 0 ? lumaSum / sampledPixels : 0;
   const uniqueBucketCount = buckets.size;
+  const nonBlackRatio =
+    sampledPixels > 0 ? nonBlackPixels / sampledPixels : 0;
+  const solidLike = uniqueBucketCount <= 1;
+  const darkEmptyLike =
+    uniqueBucketCount <= 2 &&
+    meanLuma < 5.0 &&
+    nonBlackRatio < 0.001 &&
+    maxLuma < 16.0;
   const blank =
     sampledPixels === 0 ||
     nonTransparentPixels === 0 ||
-    nonBlackPixels === 0 ||
-    (uniqueBucketCount <= 2 && meanLuma < 5);
+    solidLike ||
+    darkEmptyLike;
 
   return {
     sampledPixels,
@@ -737,6 +750,8 @@ function auditPngContent(filePath: string): ScreenshotContentAudit {
     nonTransparentPixels,
     uniqueBucketCount,
     meanLuma,
+    maxLuma,
+    nonBlackRatio,
     blank,
   };
 }

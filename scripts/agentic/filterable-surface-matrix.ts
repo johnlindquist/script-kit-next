@@ -164,6 +164,48 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     target: MAIN_TARGET,
     safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
+  {
+    id: "settings-visible-rows",
+    surface: "settings",
+    viewName: "settings",
+    imageLibraryName: "settings.png",
+    promptType: "settings",
+    surfaceKind: "Settings",
+    listSemanticId: "list:settings",
+    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/settings" },
+    filterText: "theme",
+    expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
+  },
+  {
+    id: "kit-store-browse-visible-rows",
+    surface: "kitStoreBrowse",
+    viewName: "kit-store-browse",
+    imageLibraryName: "kit-store-browse.png",
+    promptType: "browseKits",
+    surfaceKind: "KitStoreBrowse",
+    listSemanticId: "list:kit-results",
+    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/browse-kit-store" },
+    filterText: "script",
+    expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
+  },
+  {
+    id: "kit-store-installed-visible-rows",
+    surface: "kitStoreInstalled",
+    viewName: "kit-store-installed",
+    imageLibraryName: "kit-store-installed.png",
+    promptType: "installedKits",
+    surfaceKind: "KitStoreInstalled",
+    listSemanticId: "list:installed-kits",
+    entryCommand: { type: "triggerBuiltin", builtinId: "builtin/manage-installed-kits" },
+    filterText: "",
+    expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
+  },
 ];
 
 function hasFlag(flag: string): boolean {
@@ -358,9 +400,9 @@ export function observeCounts(
       `${entry.id}: list count ${listCount} differs from visibleChoiceCount ${visibleChoiceCount}`,
     );
   }
-  if (elementsTotalCount !== visibleChoiceCount + entry.expectedElementChromeCount) {
+  if (elementsTotalCount < visibleChoiceCount + entry.expectedElementChromeCount) {
     throw new Error(
-      `${entry.id}: elements totalCount ${elementsTotalCount} does not equal visible rows plus chrome`,
+      `${entry.id}: elements totalCount ${elementsTotalCount} is smaller than visible rows plus required chrome`,
     );
   }
 

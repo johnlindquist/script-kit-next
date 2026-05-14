@@ -14,14 +14,22 @@ pub(crate) struct PixelAudit {
     pub non_transparent: u64,
     pub unique_bucket_count: usize,
     pub mean_luma: f64,
+    pub max_luma: f64,
+    pub non_black_ratio: f64,
 }
 
 impl PixelAudit {
     pub(crate) fn is_blank_like(&self) -> bool {
+        let solid_like = self.unique_bucket_count <= 1;
+        let dark_empty_like = self.unique_bucket_count <= 2
+            && self.mean_luma < 5.0
+            && self.non_black_ratio < 0.001
+            && self.max_luma < 16.0;
+
         self.sampled == 0
             || self.non_transparent == 0
-            || self.non_black == 0
-            || (self.unique_bucket_count <= 2 && self.mean_luma < 5.0)
+            || solid_like
+            || dark_empty_like
     }
 }
 
@@ -30,6 +38,7 @@ pub(crate) fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
     let mut non_black = 0_u64;
     let mut non_transparent = 0_u64;
     let mut luma_sum = 0_f64;
+    let mut max_luma = 0_f64;
     let mut buckets = std::collections::HashSet::new();
 
     for pixel in image.pixels() {
@@ -44,7 +53,9 @@ pub(crate) fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
             non_black += 1;
         }
 
-        luma_sum += 0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b);
+        let luma = 0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b);
+        luma_sum += luma;
+        max_luma = max_luma.max(luma);
 
         let bucket = (r / 32, g / 32, b / 32, if a == 0 { 0 } else { 1 });
         buckets.insert(bucket);
@@ -59,6 +70,12 @@ pub(crate) fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
             0.0
         } else {
             luma_sum / sampled as f64
+        },
+        max_luma,
+        non_black_ratio: if sampled == 0 {
+            0.0
+        } else {
+            non_black as f64 / sampled as f64
         },
     }
 }
@@ -1104,6 +1121,19 @@ mod tests {
         assert_eq!(audit.sampled, 64);
         assert_eq!(audit.non_transparent, 64);
         assert_eq!(audit.non_black, 0);
+        assert_eq!(audit.max_luma, 0.0);
+        assert_eq!(audit.non_black_ratio, 0.0);
+        assert!(audit.is_blank_like());
+    }
+
+    #[test]
+    fn pixel_audit_rejects_opaque_white_image() {
+        let image = ImageBuffer::from_pixel(8, 8, Rgba([255, 255, 255, 255]));
+        let audit = audit_screenshot_pixels(&image);
+
+        assert_eq!(audit.unique_bucket_count, 1);
+        assert_eq!(audit.non_black, 64);
+        assert_eq!(audit.non_black_ratio, 1.0);
         assert!(audit.is_blank_like());
     }
 
@@ -1114,6 +1144,22 @@ mod tests {
 
         assert_eq!(audit.non_transparent, 0);
         assert!(audit.is_blank_like());
+    }
+
+    #[test]
+    fn pixel_audit_accepts_valid_dark_ui_pixels() {
+        let mut image = ImageBuffer::from_pixel(16, 16, Rgba([0, 0, 0, 255]));
+        for x in 4..12 {
+            image.put_pixel(x, 8, Rgba([40, 40, 40, 255]));
+        }
+
+        let audit = audit_screenshot_pixels(&image);
+
+        assert!(audit.unique_bucket_count <= 2);
+        assert!(audit.mean_luma < 5.0);
+        assert!(audit.non_black_ratio >= 0.001);
+        assert!(audit.max_luma >= 16.0);
+        assert!(!audit.is_blank_like());
     }
 
     #[test]

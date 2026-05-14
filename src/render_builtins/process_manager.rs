@@ -434,23 +434,10 @@ impl ScriptListApp {
                                     .unwrap_or(&process_info.script_path);
                                 let name = script_name.to_string();
 
-                                let elapsed = chrono::Utc::now()
-                                    .signed_duration_since(process_info.started_at);
-                                let duration_str = if elapsed.num_hours() > 0 {
-                                    format!(
-                                        "{}h {}m",
-                                        elapsed.num_hours(),
-                                        elapsed.num_minutes() % 60
-                                    )
-                                } else if elapsed.num_minutes() > 0 {
-                                    format!(
-                                        "{}m {}s",
-                                        elapsed.num_minutes(),
-                                        elapsed.num_seconds() % 60
-                                    )
-                                } else {
-                                    format!("{}s", elapsed.num_seconds())
-                                };
+                                let duration_str = crate::formatting::format_running_duration(
+                                    chrono::Utc::now(),
+                                    process_info.started_at,
+                                );
 
                                 let description =
                                     format!("PID {} • running {}", process_info.pid, duration_str);

@@ -80,6 +80,42 @@ pub(crate) fn design_gallery_filtered_len(filter: &str) -> usize {
 }
 
 impl ScriptListApp {
+    fn design_gallery_visible_rows(filter: &str) -> Vec<GalleryItem> {
+        let items = build_gallery_items();
+        if filter.is_empty() {
+            items
+        } else {
+            let filter_lower = filter.to_lowercase();
+            items
+                .into_iter()
+                .filter(|item| gallery_item_matches(item, &filter_lower))
+                .collect()
+        }
+    }
+
+    fn design_gallery_selected_visible_row(
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<GalleryItem> {
+        Self::design_gallery_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn design_gallery_dataset_and_visible_counts(filter: &str) -> (usize, usize) {
+        (
+            design_gallery_total_items(),
+            Self::design_gallery_visible_rows(filter).len(),
+        )
+    }
+
+    fn design_gallery_visible_row_labels(filter: &str) -> Vec<String> {
+        Self::design_gallery_visible_rows(filter)
+            .iter()
+            .map(design_gallery_item_label)
+            .collect()
+    }
+
     /// Render design gallery view with group header and icon variations
     fn render_design_gallery(
         &mut self,
