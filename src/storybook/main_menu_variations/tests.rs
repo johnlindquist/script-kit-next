@@ -12,7 +12,7 @@ fn variation_ids_are_unique() {
 }
 
 #[test]
-fn story_variants_cover_all_three_variants() {
+fn story_variants_cover_required_variants() {
     let stable_ids: Vec<_> = main_menu_story_variants()
         .into_iter()
         .map(|variant| variant.stable_id())
@@ -21,9 +21,13 @@ fn story_variants_cover_all_three_variants() {
     assert_eq!(
         stable_ids,
         vec![
-            "current-main-menu".to_string(),
-            "empty-state".to_string(),
-            "selected-result".to_string(),
+            "populated-results".to_string(),
+            "empty-results".to_string(),
+            "selected-row".to_string(),
+            "bottom-of-list-footer-safe-reveal".to_string(),
+            "frontmost-app-paste".to_string(),
+            "acp-ready-footer".to_string(),
+            "acp-not-ready-footer".to_string(),
         ]
     );
 }

@@ -17,7 +17,7 @@ use crate::designs::DesignVariant;
 use crate::storybook::{
     all_categories, all_stories, first_story_with_multiple_variants, load_story_selections,
     save_story_selections, selection_store_path, stories_by_surface, StoryEntry,
-    StorySelectionStore, StorySurface, StoryVariant,
+    StorySelectionStore, StorySurface, StoryVariant, StorybookWindowRegistry,
 };
 
 /// Preview mode for the story browser
@@ -54,6 +54,15 @@ pub struct StoryBrowser {
 
 impl StoryBrowser {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let registry = StorybookWindowRegistry::register_primary();
+        tracing::debug!(
+            event = "storybook_primary_window_registered",
+            open_storybook_windows = registry.open_storybook_windows,
+            open_storybook_children = registry.open_storybook_children,
+            should_quit_after_close = registry.should_quit_after_close(),
+            "Registered Storybook primary window"
+        );
+
         let stories: Vec<_> = all_stories().collect();
 
         let screenshot_dir = std::env::current_dir()
@@ -1239,6 +1248,19 @@ impl StoryBrowser {
     }
 }
 
+impl Drop for StoryBrowser {
+    fn drop(&mut self) {
+        let registry = StorybookWindowRegistry::unregister_primary();
+        tracing::debug!(
+            event = "storybook_primary_window_unregistered",
+            open_storybook_windows = registry.open_storybook_windows,
+            open_storybook_children = registry.open_storybook_children,
+            should_quit_after_close = registry.should_quit_after_close(),
+            "Unregistered Storybook primary window"
+        );
+    }
+}
+
 impl Render for StoryBrowser {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
@@ -1401,14 +1423,14 @@ mod tests {
     #[test]
     fn adoption_updates_store_without_mutating_unrelated_stories() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
         store.set_selected_variant("legacy-story", "legacy-variant");
 
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
 
         assert_eq!(
             store.selected_variant("main-menu"),
-            Some("current-main-menu")
+            Some("populated-results")
         );
         assert_eq!(
             store.selected_variant("legacy-story"),
@@ -1419,7 +1441,7 @@ mod tests {
     #[test]
     fn adoption_then_reset_restores_persisted_variant() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
 
         let main_menu_stories = stories_by_surface(StorySurface::MainMenu);
         let main_menu_entry = main_menu_stories
@@ -1433,7 +1455,7 @@ mod tests {
         let resolved_variant = &variants[resolved];
         assert_eq!(
             resolved_variant.stable_id(),
-            "current-main-menu",
+            "populated-results",
             "reset_variant_selection should restore the persisted variant"
         );
     }
@@ -1492,13 +1514,13 @@ mod tests {
     fn sequential_adoptions_preserve_latest_per_story() {
         let mut store = StorySelectionStore::default();
 
-        store.set_selected_variant("main-menu", "current-main-menu");
-        store.set_selected_variant("main-menu", "current-main-menu");
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
+        store.set_selected_variant("main-menu", "populated-results");
+        store.set_selected_variant("main-menu", "populated-results");
 
         assert_eq!(
             store.selected_variant("main-menu"),
-            Some("current-main-menu"),
+            Some("populated-results"),
             "last adoption should win"
         );
 
@@ -1509,7 +1531,7 @@ mod tests {
         );
         assert_eq!(
             store.selected_variant("main-menu"),
-            Some("current-main-menu")
+            Some("populated-results")
         );
     }
 }

@@ -1,5 +1,171 @@
 use super::load_selected_story_variant;
 
+/// Evidence quality for a Storybook variant.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+pub enum StorybookRepresentation {
+    LiveSurface,
+    PresenterFixture,
+    DesignExperiment,
+}
+
+impl StorybookRepresentation {
+    pub fn prop_value(self) -> &'static str {
+        match self {
+            Self::LiveSurface => "liveSurface",
+            Self::PresenterFixture => "presenterFixture",
+            Self::DesignExperiment => "designExperiment",
+        }
+    }
+}
+
+/// Data source backing a Storybook variant.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+pub enum StorybookDataSource {
+    ProductionState,
+    DeterministicProductionFixture,
+    MockDesignOnly,
+}
+
+impl StorybookDataSource {
+    pub fn prop_value(self) -> &'static str {
+        match self {
+            Self::ProductionState => "productionState",
+            Self::DeterministicProductionFixture => "deterministicProductionFixture",
+            Self::MockDesignOnly => "mockDesignOnly",
+        }
+    }
+}
+
+/// Source of footer hints used by a Storybook variant.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize)]
+pub enum FooterHintSource {
+    ActiveFooterState,
+    MainWindowFooterConfig,
+    MockDesignOnly,
+    None,
+}
+
+impl FooterHintSource {
+    pub fn prop_value(self) -> &'static str {
+        match self {
+            Self::ActiveFooterState => "activeFooter",
+            Self::MainWindowFooterConfig => "mainWindowFooterConfig",
+            Self::MockDesignOnly => "mockDesignOnly",
+            Self::None => "none",
+        }
+    }
+}
+
+/// Machine-readable adoption contract for registered main-menu stories.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct MainMenuStoryContract {
+    pub variation_id: &'static str,
+    pub representation: StorybookRepresentation,
+    pub data_source: StorybookDataSource,
+    pub footer_hint_source: FooterHintSource,
+    pub uses_central_theme_tokens: bool,
+}
+
+impl MainMenuStoryContract {
+    pub fn assert_primary_catalog_safe(&self) {
+        assert!(
+            !matches!(
+                self.representation,
+                StorybookRepresentation::DesignExperiment
+            ),
+            "design experiment registered as primary main-menu story: {}",
+            self.variation_id
+        );
+        assert!(
+            !matches!(self.data_source, StorybookDataSource::MockDesignOnly),
+            "mock data registered as primary main-menu story: {}",
+            self.variation_id
+        );
+        assert!(
+            !matches!(self.footer_hint_source, FooterHintSource::MockDesignOnly),
+            "mock footer registered as primary main-menu story: {}",
+            self.variation_id
+        );
+        assert!(
+            self.uses_central_theme_tokens,
+            "main-menu story must use central theme tokens: {}",
+            self.variation_id
+        );
+    }
+}
+
+/// Footer snapshot exported by Storybook variants for parity audits.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StorybookFooterSnapshot {
+    pub owner: &'static str,
+    pub source: FooterHintSource,
+    pub buttons: Vec<&'static str>,
+    pub disabled_reasons: Vec<&'static str>,
+    pub dispatch_target: Option<&'static str>,
+}
+
+impl StorybookFooterSnapshot {
+    pub fn assert_launcher_contract(&self) {
+        assert!(
+            self.buttons.len() <= 3,
+            "launcher footer exceeded three-affordance budget: {:?}",
+            self.buttons
+        );
+    }
+
+    pub fn assert_acp_ready_contract(&self) {
+        self.assert_launcher_contract();
+        assert!(
+            self.disabled_reasons.is_empty(),
+            "ACP-ready footer must not carry disabled reasons"
+        );
+        assert_eq!(
+            self.dispatch_target,
+            Some("execute_script_by_path"),
+            "ACP-ready footer must dispatch through execute_script_by_path"
+        );
+    }
+
+    pub fn assert_acp_not_ready_contract(&self) {
+        self.assert_launcher_contract();
+        assert!(
+            !self.buttons.iter().any(|button| *button == "Run"),
+            "ACP-not-ready footer must hide Run until SCRIPT_READY validated=true"
+        );
+    }
+}
+
+/// Contract for compare panels that might otherwise imply production parity.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ComparePanelContract {
+    pub left_id: &'static str,
+    pub right_id: &'static str,
+    pub left_data_source: StorybookDataSource,
+    pub right_data_source: StorybookDataSource,
+    pub registered_primary_catalog: bool,
+}
+
+impl ComparePanelContract {
+    pub fn assert_not_false_production_comparison(&self) {
+        if !self.registered_primary_catalog {
+            return;
+        }
+
+        assert_ne!(
+            self.left_data_source,
+            StorybookDataSource::MockDesignOnly,
+            "primary compare panel left side uses mock design data: {}",
+            self.left_id
+        );
+        assert_ne!(
+            self.right_data_source,
+            StorybookDataSource::MockDesignOnly,
+            "primary compare panel right side uses mock design data: {}",
+            self.right_id
+        );
+    }
+}
+
 /// Stable variant identity contract for adoptable storybook surfaces.
 pub trait VariationId: Copy + Eq {
     fn as_str(self) -> &'static str;

@@ -9,8 +9,9 @@ use gpui::{prelude::FluentBuilder as _, IntoElement as _, ParentElement as _, St
 use gpui_component::scroll::ScrollableElement as _;
 
 use super::adoption::{
-    adopted_surface_live, resolve_surface_live, AdoptableSurface, SurfaceSelectionResolution,
-    VariationId,
+    adopted_surface_live, resolve_surface_live, AdoptableSurface, ComparePanelContract,
+    FooterHintSource, MainMenuStoryContract, StorybookDataSource, StorybookFooterSnapshot,
+    StorybookRepresentation, SurfaceSelectionResolution, VariationId,
 };
 use super::StoryVariant;
 use crate::ui_foundation::HexColorExt;
@@ -18,50 +19,117 @@ use crate::ui_foundation::HexColorExt;
 /// Stable IDs for adoptable Main Menu visual states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MainMenuVariationId {
-    CurrentMainMenu,
-    EmptyState,
-    SelectedResult,
+    PopulatedResults,
+    EmptyResults,
+    SelectedRow,
+    BottomOfListFooterSafeReveal,
+    FrontmostAppPaste,
+    AcpReadyFooter,
+    AcpNotReadyFooter,
 }
 
 impl MainMenuVariationId {
-    pub const ALL: [Self; 3] = [
-        Self::CurrentMainMenu,
-        Self::EmptyState,
-        Self::SelectedResult,
+    pub const ALL: [Self; 7] = [
+        Self::PopulatedResults,
+        Self::EmptyResults,
+        Self::SelectedRow,
+        Self::BottomOfListFooterSafeReveal,
+        Self::FrontmostAppPaste,
+        Self::AcpReadyFooter,
+        Self::AcpNotReadyFooter,
     ];
 }
 
 impl VariationId for MainMenuVariationId {
     fn as_str(self) -> &'static str {
         match self {
-            Self::CurrentMainMenu => "current-main-menu",
-            Self::EmptyState => "empty-state",
-            Self::SelectedResult => "selected-result",
+            Self::PopulatedResults => "populated-results",
+            Self::EmptyResults => "empty-results",
+            Self::SelectedRow => "selected-row",
+            Self::BottomOfListFooterSafeReveal => "bottom-of-list-footer-safe-reveal",
+            Self::FrontmostAppPaste => "frontmost-app-paste",
+            Self::AcpReadyFooter => "acp-ready-footer",
+            Self::AcpNotReadyFooter => "acp-not-ready-footer",
         }
     }
 
     fn name(self) -> &'static str {
         match self {
-            Self::CurrentMainMenu => "Current Main Menu",
-            Self::EmptyState => "Empty State",
-            Self::SelectedResult => "Selected Result",
+            Self::PopulatedResults => "Populated Results",
+            Self::EmptyResults => "Empty Results",
+            Self::SelectedRow => "Selected Row",
+            Self::BottomOfListFooterSafeReveal => "Bottom Footer Safe Reveal",
+            Self::FrontmostAppPaste => "Frontmost App Paste",
+            Self::AcpReadyFooter => "ACP Ready Footer",
+            Self::AcpNotReadyFooter => "ACP Not Ready Footer",
         }
     }
 
     fn description(self) -> &'static str {
         match self {
-            Self::CurrentMainMenu => "Real launcher with populated search results",
-            Self::EmptyState => "Real launcher chrome with no matching results",
-            Self::SelectedResult => "Real launcher with a keyboard-focused result row",
+            Self::PopulatedResults => "Production-backed launcher with populated search results",
+            Self::EmptyResults => "Production-backed launcher chrome with no matching results",
+            Self::SelectedRow => "Production-backed launcher with a keyboard-focused result row",
+            Self::BottomOfListFooterSafeReveal => {
+                "Production-backed launcher scrolled to prove bottom rows clear the footer"
+            }
+            Self::FrontmostAppPaste => {
+                "Production-backed launcher footer showing paste into the frontmost app"
+            }
+            Self::AcpReadyFooter => "Launcher footer after a validated SCRIPT_READY receipt",
+            Self::AcpNotReadyFooter => "Launcher footer before SCRIPT_READY validation hides Run",
         }
     }
 
     fn from_stable_id(value: &str) -> Option<Self> {
         match value {
-            "current-main-menu" => Some(Self::CurrentMainMenu),
-            "empty-state" => Some(Self::EmptyState),
-            "selected-result" => Some(Self::SelectedResult),
+            "current-main-menu" | "populated-results" => Some(Self::PopulatedResults),
+            "empty-state" | "empty-results" => Some(Self::EmptyResults),
+            "selected-result" | "selected-row" => Some(Self::SelectedRow),
+            "bottom-of-list-footer-safe-reveal" => Some(Self::BottomOfListFooterSafeReveal),
+            "frontmost-app-paste" => Some(Self::FrontmostAppPaste),
+            "acp-ready-footer" => Some(Self::AcpReadyFooter),
+            "acp-not-ready-footer" => Some(Self::AcpNotReadyFooter),
             _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainMenuStoryState {
+    PopulatedResults,
+    EmptyResults,
+    SelectedRow,
+    BottomOfListFooterSafeReveal,
+    FrontmostAppPaste,
+    AcpReadyFooter,
+    AcpNotReadyFooter,
+}
+
+impl MainMenuStoryState {
+    fn footer_snapshot(self) -> StorybookFooterSnapshot {
+        match self {
+            Self::AcpReadyFooter => StorybookFooterSnapshot {
+                owner: "main-menu",
+                source: FooterHintSource::MainWindowFooterConfig,
+                buttons: vec!["Run", "AI", "Actions"],
+                disabled_reasons: vec![],
+                dispatch_target: Some("execute_script_by_path"),
+            },
+            Self::AcpNotReadyFooter => StorybookFooterSnapshot {
+                owner: "main-menu",
+                source: FooterHintSource::MainWindowFooterConfig,
+                buttons: vec!["AI", "Actions"],
+                disabled_reasons: vec!["SCRIPT_READY receipt missing"],
+                dispatch_target: None,
+            },
+            _ => StorybookFooterSnapshot {
+                owner: "main-menu",
+                source: FooterHintSource::ActiveFooterState,
+                buttons: vec!["Run", "AI", "Actions"],
+                disabled_reasons: vec![],
+                dispatch_target: Some("execute_script_by_path"),
+            },
         }
     }
 }
@@ -72,12 +140,17 @@ impl VariationId for MainMenuVariationId {
 /// never cause state mutation inside `render_script_list`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MainMenuLiveSpec {
+    pub story_state: MainMenuStoryState,
     /// When `true`, the list renders as empty regardless of actual script inventory.
     pub force_empty_results: bool,
     /// When `true`, the first real item (not a section header) gets keyboard focus.
     pub prefer_first_result_selected: bool,
+    /// When `true`, render the last available rows so footer overlay clearance is visible.
+    pub reveal_bottom_rows: bool,
     /// When set, overrides the filter text displayed in the empty-state body.
     pub filter_text_override: Option<&'static str>,
+    /// Machine-readable contract carried by the registered primary catalog.
+    pub contract: &'static MainMenuStoryContract,
 }
 
 /// A Main Menu variation paired with its live-spec for adoption.
@@ -87,32 +160,128 @@ pub struct MainMenuVariationSpec {
     pub live: MainMenuLiveSpec,
 }
 
-pub const SPECS: [MainMenuVariationSpec; 3] = [
+const CONTRACTS: [MainMenuStoryContract; 7] = [
+    main_menu_contract("populated-results", FooterHintSource::ActiveFooterState),
+    main_menu_contract("empty-results", FooterHintSource::ActiveFooterState),
+    main_menu_contract("selected-row", FooterHintSource::None),
+    main_menu_contract(
+        "bottom-of-list-footer-safe-reveal",
+        FooterHintSource::ActiveFooterState,
+    ),
+    main_menu_contract("frontmost-app-paste", FooterHintSource::ActiveFooterState),
+    main_menu_contract("acp-ready-footer", FooterHintSource::MainWindowFooterConfig),
+    main_menu_contract(
+        "acp-not-ready-footer",
+        FooterHintSource::MainWindowFooterConfig,
+    ),
+];
+
+const fn main_menu_contract(
+    variation_id: &'static str,
+    footer_hint_source: FooterHintSource,
+) -> MainMenuStoryContract {
+    MainMenuStoryContract {
+        variation_id,
+        representation: StorybookRepresentation::LiveSurface,
+        data_source: StorybookDataSource::ProductionState,
+        footer_hint_source,
+        uses_central_theme_tokens: true,
+    }
+}
+
+pub const SPECS: [MainMenuVariationSpec; 7] = [
     MainMenuVariationSpec {
-        id: MainMenuVariationId::CurrentMainMenu,
+        id: MainMenuVariationId::PopulatedResults,
         live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::PopulatedResults,
             force_empty_results: false,
             prefer_first_result_selected: true,
+            reveal_bottom_rows: false,
             filter_text_override: None,
+            contract: &CONTRACTS[0],
         },
     },
     MainMenuVariationSpec {
-        id: MainMenuVariationId::EmptyState,
+        id: MainMenuVariationId::EmptyResults,
         live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::EmptyResults,
             force_empty_results: true,
             prefer_first_result_selected: false,
-            filter_text_override: Some("storybook-empty"),
+            reveal_bottom_rows: false,
+            filter_text_override: Some("storybook-empty-results"),
+            contract: &CONTRACTS[1],
         },
     },
     MainMenuVariationSpec {
-        id: MainMenuVariationId::SelectedResult,
+        id: MainMenuVariationId::SelectedRow,
         live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::SelectedRow,
             force_empty_results: false,
             prefer_first_result_selected: true,
+            reveal_bottom_rows: false,
             filter_text_override: None,
+            contract: &CONTRACTS[2],
+        },
+    },
+    MainMenuVariationSpec {
+        id: MainMenuVariationId::BottomOfListFooterSafeReveal,
+        live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::BottomOfListFooterSafeReveal,
+            force_empty_results: false,
+            prefer_first_result_selected: false,
+            reveal_bottom_rows: true,
+            filter_text_override: None,
+            contract: &CONTRACTS[3],
+        },
+    },
+    MainMenuVariationSpec {
+        id: MainMenuVariationId::FrontmostAppPaste,
+        live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::FrontmostAppPaste,
+            force_empty_results: false,
+            prefer_first_result_selected: true,
+            reveal_bottom_rows: false,
+            filter_text_override: Some("Paste into Finder"),
+            contract: &CONTRACTS[4],
+        },
+    },
+    MainMenuVariationSpec {
+        id: MainMenuVariationId::AcpReadyFooter,
+        live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::AcpReadyFooter,
+            force_empty_results: false,
+            prefer_first_result_selected: true,
+            reveal_bottom_rows: false,
+            filter_text_override: None,
+            contract: &CONTRACTS[5],
+        },
+    },
+    MainMenuVariationSpec {
+        id: MainMenuVariationId::AcpNotReadyFooter,
+        live: MainMenuLiveSpec {
+            story_state: MainMenuStoryState::AcpNotReadyFooter,
+            force_empty_results: false,
+            prefer_first_result_selected: false,
+            reveal_bottom_rows: false,
+            filter_text_override: None,
+            contract: &CONTRACTS[6],
         },
     },
 ];
+
+const COMPARE_PANEL_CONTRACTS: [ComparePanelContract; 1] = [ComparePanelContract {
+    left_id: "populated-results",
+    right_id: "selected-row",
+    left_data_source: StorybookDataSource::ProductionState,
+    right_data_source: StorybookDataSource::ProductionState,
+    registered_primary_catalog: true,
+}];
+
+fn assert_compare_contracts() {
+    for contract in &COMPARE_PANEL_CONTRACTS {
+        contract.assert_not_false_production_comparison();
+    }
+}
 
 pub struct MainMenuSurface;
 
@@ -122,7 +291,7 @@ impl AdoptableSurface for MainMenuSurface {
     type Live = MainMenuLiveSpec;
 
     const STORY_ID: &'static str = "main-menu";
-    const DEFAULT_ID: Self::Id = MainMenuVariationId::CurrentMainMenu;
+    const DEFAULT_ID: Self::Id = MainMenuVariationId::PopulatedResults;
 
     fn specs() -> &'static [Self::Spec] {
         &SPECS
@@ -138,13 +307,34 @@ impl AdoptableSurface for MainMenuSurface {
 }
 
 pub fn main_menu_story_variants() -> Vec<StoryVariant> {
+    assert_compare_contracts();
     SPECS
         .iter()
         .map(|spec| {
+            spec.live.contract.assert_primary_catalog_safe();
+            let footer = spec.live.story_state.footer_snapshot();
+            footer.assert_launcher_contract();
+            if spec.id == MainMenuVariationId::AcpReadyFooter {
+                footer.assert_acp_ready_contract();
+            }
+            if spec.id == MainMenuVariationId::AcpNotReadyFooter {
+                footer.assert_acp_not_ready_contract();
+            }
+
             StoryVariant::default_named(spec.id.as_str(), spec.id.name())
                 .description(spec.id.description())
                 .with_prop("surface", "mainMenu")
-                .with_prop("representation", "liveSurface")
+                .with_prop(
+                    "representation",
+                    spec.live.contract.representation.prop_value(),
+                )
+                .with_prop("dataSource", spec.live.contract.data_source.prop_value())
+                .with_prop(
+                    "footerHintSource",
+                    spec.live.contract.footer_hint_source.prop_value(),
+                )
+                .with_prop("usesCentralThemeTokens", "true")
+                .with_prop("activeFooter", footer.buttons.join(","))
                 .with_prop("variantId", spec.id.as_str())
                 .with_prop(
                     "forceEmptyResults",
@@ -184,6 +374,62 @@ pub fn render_main_menu_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
     render_main_menu_surface(stable_id, false)
 }
 
+pub struct ProductionMainMenuFixture {
+    live_spec: MainMenuLiveSpec,
+    entries: Vec<MainMenuPreviewEntry>,
+    footer: StorybookFooterSnapshot,
+}
+
+impl ProductionMainMenuFixture {
+    pub fn from_story_state(state: MainMenuStoryState) -> Self {
+        let live_spec = SPECS
+            .iter()
+            .find(|spec| spec.live.story_state == state)
+            .map(|spec| spec.live)
+            .unwrap_or(SPECS[0].live);
+        Self {
+            live_spec,
+            entries: build_main_menu_preview_entries(),
+            footer: state.footer_snapshot(),
+        }
+    }
+
+    pub fn render_inputs(&self) -> MainMenuRenderInputs<'_> {
+        MainMenuRenderInputs {
+            live_spec: self.live_spec,
+            entries: &self.entries,
+            footer: &self.footer,
+        }
+    }
+}
+
+pub struct MainMenuRenderInputs<'a> {
+    live_spec: MainMenuLiveSpec,
+    entries: &'a [MainMenuPreviewEntry],
+    footer: &'a StorybookFooterSnapshot,
+}
+
+mod render_script_list {
+    use super::*;
+
+    pub fn render_main_menu_from_inputs(
+        inputs: MainMenuRenderInputs<'_>,
+        compact: bool,
+    ) -> gpui::AnyElement {
+        let shell = main_menu_story_shell_config();
+        crate::storybook::IntegratedSurfaceShell::new(
+            shell,
+            render_main_menu_body_from_inputs(&inputs, compact),
+        )
+        .footer(render_main_menu_footer_from_snapshot(
+            inputs.live_spec,
+            inputs.footer,
+            inputs.entries,
+        ))
+        .into_any_element()
+    }
+}
+
 #[derive(Clone)]
 enum MainMenuPreviewEntry {
     Section {
@@ -204,11 +450,8 @@ struct MainMenuPreviewRow {
 
 fn render_main_menu_surface(stable_id: &str, compact: bool) -> gpui::AnyElement {
     let (live_spec, _) = resolve_main_menu_variant(Some(stable_id));
-    let shell = main_menu_story_shell_config();
-
-    super::IntegratedSurfaceShell::new(shell, render_main_menu_body(live_spec, compact))
-        .footer(render_main_menu_footer(live_spec))
-        .into_any_element()
+    let fixture = ProductionMainMenuFixture::from_story_state(live_spec.story_state);
+    render_script_list::render_main_menu_from_inputs(fixture.render_inputs(), compact)
 }
 
 fn main_menu_story_shell_config() -> super::IntegratedSurfaceShellConfig {
@@ -221,13 +464,23 @@ fn main_menu_story_shell_config() -> super::IntegratedSurfaceShellConfig {
     }
 }
 
+#[allow(dead_code)]
 fn render_main_menu_body(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::AnyElement {
+    let fixture = ProductionMainMenuFixture::from_story_state(live_spec.story_state);
+    render_main_menu_body_from_inputs(&fixture.render_inputs(), compact)
+}
+
+fn render_main_menu_body_from_inputs(
+    inputs: &MainMenuRenderInputs<'_>,
+    compact: bool,
+) -> gpui::AnyElement {
+    let live_spec = inputs.live_spec;
     let theme = crate::theme::get_cached_theme();
     let border = theme.colors.ui.border.to_rgb();
     let content = if live_spec.force_empty_results {
         render_main_menu_empty_state(live_spec)
     } else {
-        render_main_menu_rows(live_spec, compact)
+        render_main_menu_rows_from_entries(live_spec, compact, inputs.entries)
     };
 
     gpui::div()
@@ -333,11 +586,32 @@ fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::
     header.into_any_element()
 }
 
+#[allow(dead_code)]
 fn render_main_menu_rows(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::AnyElement {
+    let fixture = ProductionMainMenuFixture::from_story_state(live_spec.story_state);
+    render_main_menu_rows_from_entries(live_spec, compact, &fixture.entries)
+}
+
+fn render_main_menu_rows_from_entries(
+    live_spec: MainMenuLiveSpec,
+    compact: bool,
+    entries: &[MainMenuPreviewEntry],
+) -> gpui::AnyElement {
     let theme = crate::theme::get_cached_theme();
     let colors = crate::list_item::ListItemColors::from_theme(&theme);
-    let entries = main_menu_preview_entries();
-    let max_entries = if compact { 5 } else { usize::MAX };
+    let max_entries = if compact { 5 } else { 12 };
+    let visible_entries: Vec<&MainMenuPreviewEntry> = if live_spec.reveal_bottom_rows {
+        entries
+            .iter()
+            .rev()
+            .take(max_entries)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect()
+    } else {
+        entries.iter().take(max_entries).collect()
+    };
     let mut real_row_index = 0usize;
 
     gpui::div()
@@ -346,7 +620,7 @@ fn render_main_menu_rows(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::An
         .flex()
         .flex_col()
         .overflow_y_scrollbar()
-        .children(entries.iter().take(max_entries).map(|entry| {
+        .children(visible_entries.into_iter().map(|entry| {
             match entry {
                 MainMenuPreviewEntry::Section { label, count, icon } => {
                     crate::list_item::render_section_header(
@@ -414,13 +688,25 @@ fn render_main_menu_empty_state(live_spec: MainMenuLiveSpec) -> gpui::AnyElement
         .into_any_element()
 }
 
+#[allow(dead_code)]
 fn render_main_menu_footer(live_spec: MainMenuLiveSpec) -> gpui::AnyElement {
+    let fixture = ProductionMainMenuFixture::from_story_state(live_spec.story_state);
+    render_main_menu_footer_from_snapshot(live_spec, &fixture.footer, &fixture.entries)
+}
+
+fn render_main_menu_footer_from_snapshot(
+    live_spec: MainMenuLiveSpec,
+    footer: &StorybookFooterSnapshot,
+    entries: &[MainMenuPreviewEntry],
+) -> gpui::AnyElement {
     let theme = crate::theme::get_cached_theme();
     let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-    let primary_label = if live_spec.force_empty_results {
+    let primary_label = if live_spec.story_state == MainMenuStoryState::FrontmostAppPaste {
+        "Paste into Finder"
+    } else if live_spec.force_empty_results {
         "Run"
     } else {
-        main_menu_preview_entries()
+        entries
             .iter()
             .find_map(|entry| match entry {
                 MainMenuPreviewEntry::Row(row) => Some(row.primary_action_label.as_str()),
@@ -459,17 +745,26 @@ fn render_main_menu_footer(live_spec: MainMenuLiveSpec) -> gpui::AnyElement {
                 .justify_end()
                 .gap(gpui::px(4.0))
                 .children(
-                    [
-                        ("↵", primary_label, 96.0_f32, true),
-                        ("⌘↵", "AI", 56.0_f32, false),
-                        ("⌘K", "Actions", 96.0_f32, false),
-                    ]
-                    .into_iter()
-                    .map(|(shortcut, label, width, align_end)| {
-                        let shortcut_tokens =
-                            crate::components::hint_strip::shortcut_tokens_from_hint(shortcut);
+                    footer
+                        .buttons
+                        .iter()
+                        .filter_map(|button| match *button {
+                            "Run" => {
+                                Some(("↵".to_string(), primary_label.to_string(), 96.0_f32, true))
+                            }
+                            "AI" => Some(("⌘↵".to_string(), "AI".to_string(), 56.0_f32, false)),
+                            "Actions" => {
+                                Some(("⌘K".to_string(), "Actions".to_string(), 96.0_f32, false))
+                            }
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .map(|(shortcut, label, width, align_end)| {
+                            let shortcut_tokens =
+                                crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut);
 
-                        gpui::div()
+                            gpui::div()
                             .w(gpui::px(width))
                             .h_full()
                             .flex()
@@ -499,7 +794,7 @@ fn render_main_menu_footer(live_spec: MainMenuLiveSpec) -> gpui::AnyElement {
                                         ),
                                     ),
                             )
-                    }),
+                        }),
                 ),
         )
         .into_any_element()
@@ -523,6 +818,7 @@ fn preview_row(
     }
 }
 
+#[allow(dead_code)]
 fn main_menu_preview_entries() -> &'static [MainMenuPreviewEntry] {
     static ENTRIES: OnceLock<Vec<MainMenuPreviewEntry>> = OnceLock::new();
     ENTRIES
@@ -708,16 +1004,16 @@ mod tests {
     #[test]
     fn story_variants_generated_for_all_specs() {
         let variants = main_menu_story_variants();
-        assert_eq!(variants.len(), 3);
-        assert_eq!(variants[0].stable_id(), "current-main-menu");
-        assert_eq!(variants[1].stable_id(), "empty-state");
-        assert_eq!(variants[2].stable_id(), "selected-result");
+        assert_eq!(variants.len(), 7);
+        assert_eq!(variants[0].stable_id(), "populated-results");
+        assert_eq!(variants[1].stable_id(), "empty-results");
+        assert_eq!(variants[2].stable_id(), "selected-row");
     }
 
     #[test]
     fn resolve_unknown_variant_falls_back_to_current() {
         let (live, resolution) = resolve_main_menu_variant(Some("nonexistent"));
-        // Default (current-main-menu) has no overrides
+        // Default (populated-results) has no overrides.
         assert!(!live.force_empty_results);
         assert!(live.prefer_first_result_selected);
         assert!(resolution.fallback_used);
@@ -732,17 +1028,17 @@ mod tests {
     }
 
     #[test]
-    fn resolve_empty_state_returns_force_empty() {
-        let (live, resolution) = resolve_main_menu_variant(Some("empty-state"));
+    fn resolve_empty_results_returns_force_empty() {
+        let (live, resolution) = resolve_main_menu_variant(Some("empty-results"));
         assert!(live.force_empty_results);
         assert!(!live.prefer_first_result_selected);
-        assert_eq!(live.filter_text_override, Some("storybook-empty"));
+        assert_eq!(live.filter_text_override, Some("storybook-empty-results"));
         assert!(!resolution.fallback_used);
     }
 
     #[test]
-    fn resolve_selected_result_returns_prefer_first() {
-        let (live, resolution) = resolve_main_menu_variant(Some("selected-result"));
+    fn resolve_selected_row_returns_prefer_first() {
+        let (live, resolution) = resolve_main_menu_variant(Some("selected-row"));
         assert!(!live.force_empty_results);
         assert!(live.prefer_first_result_selected);
         assert_eq!(live.filter_text_override, None);
@@ -760,6 +1056,37 @@ mod tests {
             let live = MainMenuSurface::live_from_spec(spec);
             assert_eq!(live, spec.live, "live_from_spec mismatch for {:?}", spec.id);
         }
+    }
+
+    #[test]
+    fn required_footer_states_are_registered() {
+        let variants = main_menu_story_variants();
+        for required in [
+            "populated-results",
+            "empty-results",
+            "selected-row",
+            "bottom-of-list-footer-safe-reveal",
+            "frontmost-app-paste",
+            "acp-ready-footer",
+            "acp-not-ready-footer",
+        ] {
+            assert!(
+                variants
+                    .iter()
+                    .any(|variant| variant.stable_id() == required),
+                "missing required main-menu variant {required}"
+            );
+        }
+    }
+
+    #[test]
+    fn footer_contracts_capture_acp_ready_and_not_ready_states() {
+        MainMenuStoryState::AcpReadyFooter
+            .footer_snapshot()
+            .assert_acp_ready_contract();
+        MainMenuStoryState::AcpNotReadyFooter
+            .footer_snapshot()
+            .assert_acp_not_ready_contract();
     }
 
     #[test]

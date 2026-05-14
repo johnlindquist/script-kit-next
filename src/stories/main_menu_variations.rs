@@ -37,7 +37,7 @@ impl Story for MainMenuStory {
     }
 
     fn render(&self) -> AnyElement {
-        render_main_menu_story_preview("current-main-menu")
+        render_main_menu_story_preview("populated-results")
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
@@ -54,6 +54,6 @@ mod tests {
     fn main_menu_story_is_compare_ready() {
         let story = MainMenuStory;
         assert_eq!(story.surface(), StorySurface::MainMenu);
-        assert_eq!(story.variants().len(), 3);
+        assert_eq!(story.variants().len(), 7);
     }
 }

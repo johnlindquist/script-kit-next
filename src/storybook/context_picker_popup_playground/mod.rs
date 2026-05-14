@@ -9,11 +9,15 @@ use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::scroll::ScrollableElement as _;
 
-use crate::components::inline_dropdown::{
-    render_dense_monoline_picker_row, render_dense_monoline_picker_row_with_accessory,
-    render_dense_monoline_picker_row_with_leading_visual, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis, GHOST, HINT, MUTED_OP,
+use crate::ai::acp::picker_popup::acp_context_picker_item_to_inline_picker_row;
+use crate::ai::window::context_picker::types::{
+    ContextPickerItem, ContextPickerItemKind, PortalKind, SlashCommandPayload,
 };
+use crate::components::inline_dropdown::{
+    render_soft_compact_picker_row, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
+    InlineDropdownSynopsis, GHOST, HINT, MUTED_OP, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+};
+use crate::components::inline_picker::{inline_picker_normalize_selected_index, InlinePickerRow};
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
@@ -220,6 +224,7 @@ struct PickerRow {
     description: &'static str,
     section: &'static str,
     accessory: &'static str,
+    #[allow(dead_code)]
     leading_mark: &'static str,
 }
 
@@ -1316,31 +1321,49 @@ fn render_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
         return render_empty_dropdown(spec, colors);
     }
 
-    let rows = rows_for_trigger(spec.trigger);
+    let source_rows = rows_for_trigger(spec.trigger);
+    let context_items = source_rows
+        .iter()
+        .map(|row| picker_row_to_context_item(spec, row))
+        .collect::<Vec<_>>();
+    let rows: Vec<InlinePickerRow> = context_items
+        .iter()
+        .map(acp_context_picker_item_to_inline_picker_row)
+        .collect();
+    let requested_selected = source_rows
+        .iter()
+        .position(|row| row.id == spec.selected_row_id);
+    let selected_index = inline_picker_normalize_selected_index(&rows, requested_selected);
     let mut children: Vec<AnyElement> = Vec::new();
     let mut last_section: Option<&str> = None;
 
-    for row in rows.iter() {
-        if show_sections(spec) && last_section != Some(row.section) {
-            last_section = Some(row.section);
-            let count = rows
+    for (idx, row) in rows.iter().enumerate() {
+        let source_row = &source_rows[idx];
+        if show_sections(spec) && last_section != Some(source_row.section) {
+            last_section = Some(source_row.section);
+            let count = source_rows
                 .iter()
-                .filter(|candidate| candidate.section == row.section)
+                .filter(|candidate| candidate.section == source_row.section)
                 .count();
-            children.push(render_section_header(row.section, count));
+            children.push(render_section_header(source_row.section, count));
         }
 
-        children.push(render_row(spec, row, colors));
+        children.push(render_row(spec, row, selected_index == Some(idx), colors));
     }
 
-    let selected_row = rows
-        .iter()
-        .find(|row| row.id == spec.selected_row_id)
+    let selected_row = selected_index
+        .and_then(|idx| rows.get(idx))
         .unwrap_or(&rows[0]);
     let synopsis = show_synopsis(spec).then(|| InlineDropdownSynopsis {
-        label: SharedString::from(selected_row.label),
-        meta: SharedString::from(selected_row.meta),
-        description: SharedString::from(selected_row.description),
+        label: selected_row.title.clone(),
+        meta: selected_row
+            .token
+            .clone()
+            .unwrap_or_else(|| SharedString::from("")),
+        description: selected_row
+            .detail
+            .clone()
+            .unwrap_or_else(|| SharedString::from("")),
     });
 
     InlineDropdown::new(
@@ -1412,60 +1435,61 @@ fn render_empty_dropdown(
 
 fn render_row(
     spec: ContextPickerPopupPlaygroundSpec,
-    row: &PickerRow,
+    row: &InlinePickerRow,
+    is_selected: bool,
     colors: InlineDropdownColors,
 ) -> AnyElement {
-    let is_selected = row.id == spec.selected_row_id;
-    let label_hits = highlight_indices(row.label, spec.query);
-    let meta_hits = highlight_indices(row.meta, spec.query);
+    let _ = spec;
+    let label_hits = row
+        .highlights
+        .title
+        .iter()
+        .map(|range| range.start)
+        .collect::<Vec<_>>();
+    let meta_hits = row
+        .highlights
+        .token
+        .iter()
+        .map(|range| range.start)
+        .collect::<Vec<_>>();
 
-    match spec.style {
-        ContextPickerPopupStyle::LeadingVisuals => {
-            render_dense_monoline_picker_row_with_leading_visual(
-                SharedString::from(row.id),
-                SharedString::from(row.label),
-                SharedString::from(row.meta),
-                &label_hits,
-                &meta_hits,
-                is_selected,
-                colors.foreground,
-                colors.muted_foreground,
-                colors.accent,
-                render_leading_visual(row, spec.trigger, is_selected),
-            )
-            .into_any_element()
+    render_soft_compact_picker_row(
+        row.id.clone(),
+        row.title.clone(),
+        row.token.clone(),
+        &label_hits,
+        &meta_hits,
+        is_selected,
+        colors,
+    )
+    .h(px(SOFT_COMPACT_PICKER_ROW_HEIGHT))
+    .into_any_element()
+}
+
+fn picker_row_to_context_item(
+    spec: ContextPickerPopupPlaygroundSpec,
+    row: &PickerRow,
+) -> ContextPickerItem {
+    let label_highlight_indices = highlight_indices(row.label, spec.query);
+    let meta_highlight_indices = highlight_indices(row.meta, spec.query);
+    let kind = match spec.trigger {
+        ContextPickerPopupTrigger::Slash => {
+            ContextPickerItemKind::SlashCommand(SlashCommandPayload::Default {
+                name: row.meta.trim_start_matches('/').to_string(),
+            })
         }
-        ContextPickerPopupStyle::AccessoryBadges => {
-            render_dense_monoline_picker_row_with_accessory(
-                SharedString::from(row.id),
-                SharedString::from(row.label),
-                SharedString::from(""),
-                &label_hits,
-                &[],
-                is_selected,
-                colors.foreground,
-                colors.muted_foreground,
-                colors.accent,
-                Some(render_accessory_badge(
-                    row.accessory,
-                    spec.trigger,
-                    is_selected,
-                )),
-            )
-            .into_any_element()
-        }
-        _ => render_dense_monoline_picker_row(
-            SharedString::from(row.id),
-            SharedString::from(row.label),
-            SharedString::from(row.meta),
-            &label_hits,
-            &meta_hits,
-            is_selected,
-            colors.foreground,
-            colors.muted_foreground,
-            colors.accent,
-        )
-        .into_any_element(),
+        ContextPickerPopupTrigger::Mention => ContextPickerItemKind::Portal(PortalKind::FileSearch),
+    };
+
+    ContextPickerItem {
+        id: SharedString::from(row.id),
+        label: SharedString::from(row.label),
+        description: SharedString::from(row.description),
+        meta: SharedString::from(row.meta),
+        kind,
+        score: 100,
+        label_highlight_indices,
+        meta_highlight_indices,
     }
 }
 
@@ -1497,6 +1521,7 @@ fn render_section_header(label: &str, count: usize) -> AnyElement {
         .into_any_element()
 }
 
+#[allow(dead_code)]
 fn render_accessory_badge(
     label: &str,
     trigger: ContextPickerPopupTrigger,
@@ -1546,6 +1571,7 @@ fn render_accessory_badge(
         .into_any_element()
 }
 
+#[allow(dead_code)]
 fn render_leading_visual(
     row: &PickerRow,
     trigger: ContextPickerPopupTrigger,

@@ -9,6 +9,55 @@
 //! - [`story_container`], [`story_section`], etc. - Layout helpers
 //!
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static OPEN_STORYBOOK_WINDOWS: AtomicUsize = AtomicUsize::new(0);
+static OPEN_STORYBOOK_CHILDREN: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorybookWindowRegistry {
+    pub open_storybook_windows: usize,
+    pub open_storybook_children: usize,
+}
+
+impl StorybookWindowRegistry {
+    pub fn snapshot() -> Self {
+        Self {
+            open_storybook_windows: OPEN_STORYBOOK_WINDOWS.load(Ordering::SeqCst),
+            open_storybook_children: OPEN_STORYBOOK_CHILDREN.load(Ordering::SeqCst),
+        }
+    }
+
+    pub fn register_primary() -> Self {
+        OPEN_STORYBOOK_WINDOWS.fetch_add(1, Ordering::SeqCst);
+        Self::snapshot()
+    }
+
+    pub fn register_child() -> Self {
+        OPEN_STORYBOOK_CHILDREN.fetch_add(1, Ordering::SeqCst);
+        Self::snapshot()
+    }
+
+    pub fn unregister_primary() -> Self {
+        let _ = OPEN_STORYBOOK_WINDOWS.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+            Some(count.saturating_sub(1))
+        });
+        Self::snapshot()
+    }
+
+    pub fn unregister_child() -> Self {
+        let _ = OPEN_STORYBOOK_CHILDREN.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+            Some(count.saturating_sub(1))
+        });
+        Self::snapshot()
+    }
+
+    pub fn should_quit_after_close(&self) -> bool {
+        self.open_storybook_windows == 0 && self.open_storybook_children == 0
+    }
+}
+
 pub mod acp_chat_raycast_weight_studies;
 pub mod acp_chat_states;
 pub mod actions_dialog_presenter;
