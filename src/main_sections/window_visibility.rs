@@ -385,12 +385,15 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     );
 
     // 4. Cancel prompt and reset UI
-    app_entity.update(cx, |view, ctx| {
+    let should_reset_to_mini_bounds = app_entity.update(cx, |view, ctx| {
+        let was_mini = view.main_window_mode == MainWindowMode::Mini;
         if view.is_in_prompt() {
             logging::log("VISIBILITY", "Canceling prompt before hiding");
             view.cancel_script_execution(ctx);
         }
         view.reset_to_script_list(ctx);
+        let post_reset_is_mini = view.main_window_mode == MainWindowMode::Mini;
+        was_mini || post_reset_is_mini
     });
     // After the view has been reset back to ScriptList, re-key the
     // automation surface so the next list snapshot reports the truth.
@@ -434,8 +437,9 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // bounds during the hidden phase. Without this, a window grown by a
     // subview (fileSearch/emoji picker → 750×500) leaks its grown bounds
     // through the automation registry until the next `show()` self-heals.
-    // Gated on `MainWindowMode::Mini` so Full-mode sizing is never clobbered.
-    if app_entity.read(cx).main_window_mode == MainWindowMode::Mini {
+    // Uses the pre-reset mini snapshot too, so Full/mini normalization inside
+    // reset_to_script_list cannot skip hidden mini-bound cleanup.
+    if should_reset_to_mini_bounds {
         crate::window_resize::resize_to_mini_main_window_sync(Default::default());
         sync_main_automation_window(current_main_automation_bounds(), false, false);
     }

@@ -196,6 +196,72 @@ fn generate_script_via_ai_backend(
 }
 
 impl ScriptListApp {
+    pub(crate) fn capture_mini_ai_close_snapshot(
+        &mut self,
+        source: MiniAiCloseSource,
+        cx: &mut Context<Self>,
+    ) -> MiniAiCloseSnapshot {
+        let (prompt_id, draft_len, pending_submit) = match &self.current_view {
+            AppView::ChatPrompt { id, entity } if id.starts_with("inline-ai") => {
+                let chat = entity.read(cx);
+                (id.clone(), chat.draft_len(), chat.pending_submit())
+            }
+            _ => ("inline-ai".to_string(), 0, false),
+        };
+
+        let snapshot = MiniAiCloseSnapshot {
+            prompt_id,
+            main_window_mode: self.main_window_mode,
+            source,
+            draft_len,
+            pending_submit,
+            handoff_source: Some("mini_ai_launcher".to_string()),
+            return_origin: Some("scriptList".to_string()),
+        };
+
+        tracing::info!(
+            target: "script_kit::mini_ai",
+            event = "mini_ai_close_snapshot",
+            prompt_id = %snapshot.prompt_id,
+            main_window_mode = ?snapshot.main_window_mode,
+            source = snapshot.source.as_str(),
+            draft_len = snapshot.draft_len,
+            pending_submit = snapshot.pending_submit,
+            handoff_source = ?snapshot.handoff_source,
+            return_origin = ?snapshot.return_origin,
+            "Mini AI close snapshot"
+        );
+        self.mini_ai_last_close_snapshot = Some(snapshot.clone());
+        snapshot
+    }
+
+    pub(crate) fn mini_ai_state_snapshot(&self, cx: &Context<Self>) -> serde_json::Value {
+        let current = match &self.current_view {
+            AppView::ChatPrompt { id, entity } if id.starts_with("inline-ai") => {
+                let chat = entity.read(cx);
+                Some((id.clone(), chat.draft_len(), chat.pending_submit()))
+            }
+            _ => None,
+        };
+        let last_source = self
+            .mini_ai_last_close_snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.source.as_str());
+        serde_json::json!({
+            "visible": current.is_some(),
+            "promptId": current.as_ref().map(|(id, _, _)| id.clone()),
+            "mainWindowMode": match self.main_window_mode {
+                MainWindowMode::Mini => "mini",
+                MainWindowMode::Full => "full",
+            },
+            "draftLen": current.as_ref().map(|(_, draft_len, _)| *draft_len).or_else(|| self.mini_ai_last_close_snapshot.as_ref().map(|snapshot| snapshot.draft_len)).unwrap_or(0),
+            "pendingSubmit": current.as_ref().map(|(_, _, pending)| *pending).or_else(|| self.mini_ai_last_close_snapshot.as_ref().map(|snapshot| snapshot.pending_submit)).unwrap_or(false),
+            "handoffSource": self.mini_ai_last_close_snapshot.as_ref().and_then(|snapshot| snapshot.handoff_source.clone()).or_else(|| Some("mini_ai_launcher".to_string())),
+            "returnOrigin": self.mini_ai_last_close_snapshot.as_ref().and_then(|snapshot| snapshot.return_origin.clone()).or_else(|| Some("scriptList".to_string())),
+            "lastCloseSource": last_source,
+        })
+    }
+
     pub(crate) fn is_in_prompt(&self) -> bool {
         !matches!(
             self.current_view,
@@ -353,9 +419,25 @@ impl ScriptListApp {
         // Mark as opened from main menu so ESC returns to main menu
         self.opened_from_main_menu = true;
 
+        let main_window_mode = self.main_window_mode;
+        let handoff_source = Some("mini_ai_launcher".to_string());
+        let return_origin = Some("scriptList".to_string());
+
         // Create escape callback that signals via channel
         let escape_sender = self.inline_chat_escape_sender.clone();
         let escape_callback: ChatEscapeCallback = std::sync::Arc::new(move |_id| {
+            tracing::info!(
+                target: "script_kit::mini_ai",
+                event = "mini_ai_window_close_requested",
+                prompt_id = "inline-ai",
+                main_window_mode = ?main_window_mode,
+                source = MiniAiCloseSource::Escape.as_str(),
+                draft_len = 0usize,
+                pending_submit = false,
+                handoff_source = ?handoff_source,
+                return_origin = ?return_origin,
+                "Mini AI close requested"
+            );
             let _ = escape_sender.try_send(());
         });
 
@@ -414,7 +496,10 @@ impl ScriptListApp {
             };
             self.focused_input = FocusedInput::None;
             self.pending_focus = Some(FocusTarget::ChatPrompt);
-            resize_to_view_sync(ViewType::DivPrompt, 0);
+            resize_to_view_sync(
+                super::ui_window::compact_ai_view_type_for_mode(self.main_window_mode),
+                0,
+            );
             cx.notify();
             return;
         }
@@ -468,17 +553,20 @@ impl ScriptListApp {
 
         // Wire on_show_actions so ChatPrompt can request the actions dialog from within
         // (e.g., footer button). ⌘K is also intercepted at the parent level as a fallback.
-        let app_weak = cx.entity().downgrade();
+        let actions_sender = self.inline_chat_actions_sender.clone();
         entity.update(cx, |chat, _cx| {
-            chat.set_on_show_actions(std::sync::Arc::new(move |_prompt_id| {
+            chat.set_on_show_actions(std::sync::Arc::new(move |prompt_id| {
                 tracing::info!(
-                    event = "on_show_actions.triggered",
-                    source = "inline-ai",
-                    "ChatPrompt requested actions dialog via callback"
+                    target: "script_kit::mini_ai",
+                    event = "mini_ai_actions_requested",
+                    source = "chat_prompt",
+                    prompt_id = %prompt_id,
+                    "Mini AI requested actions popup"
                 );
-                // Note: actual toggle is handled by the parent key interceptor since
-                // the callback lacks window access. This log confirms wiring is live.
-                let _ = &app_weak;
+                let _ = actions_sender.try_send(MiniAiUiRequest::ToggleActions {
+                    prompt_id: prompt_id.to_string(),
+                    source: "mini_ai_chat",
+                });
             }));
         });
 
@@ -488,7 +576,10 @@ impl ScriptListApp {
         };
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::ChatPrompt);
-        resize_to_view_sync(ViewType::DivPrompt, 0);
+        resize_to_view_sync(
+            super::ui_window::compact_ai_view_type_for_mode(self.main_window_mode),
+            0,
+        );
         cx.notify();
     }
 

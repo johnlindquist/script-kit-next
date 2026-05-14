@@ -76,6 +76,22 @@ These rules describe the behavior constraints new windows and overlays should fo
 - Main-window hide paths are main-panel-only dismissals. They must use `defer_hide_main_window` rather than `cx.hide()` / `ctx.hide()`, because app-level hide can conceal independent secondary hosts such as Notes if secondary-window detection is stale or racing.
 - HUD messages are standalone feedback and must not reveal the launcher. `PromptMessage::ShowHud` clears script-requested hide restore intent before delegating to the HUD manager, pinned by `tests/hud_visibility_decoupled_contract.rs`.
 
+## Mini Main Window Contract
+
+Mini mode is an atomic main-window contract covering mode state, bounds, active prompt render mode, popup cleanup, and native footer sync.
+
+`set_main_window_mode` is the window-backed mode toggle owner. It short-circuits unchanged modes, updates active ChatPrompt mini rendering, closes shared or detached actions popups, runs deferred sizing, syncs the native footer, and emits `main_window_mode_changed`.
+
+Prompt sizing follows the same split. `MiniPrompt` resolves through `ViewType::MiniPrompt`; inline Mini AI and mini-hosted ACP resolve through `ViewType::MiniAiChat`; Full ChatPrompt and ACP continue to use `ViewType::DivPrompt`.
+
+Hide/reset paths snapshot Mini state before `reset_to_script_list`, then reset hidden bounds when either the pre-reset or post-reset mode is Mini. This prevents reset normalization from leaking wide hidden bounds into automation receipts.
+
+## Mini Popup Dismiss Parity
+
+Mini and Full footer dismissals share one close-only behavior when an actions popup is already open.
+
+For any non-Actions footer target, `dispatch_main_window_footer_action` closes both the shared dialog host and the detached hostless actions window when present, logs `main_window_footer_action_closed_actions_only` with `main_window_mode`, and returns without dispatching the clicked footer action.
+
 ## Main Panel Invariants Contract
 
 The main NSPanel's floating-panel posture is a runtime invariant, not just a sequence of one-time AppKit calls.
