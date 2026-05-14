@@ -45,6 +45,32 @@ Storybook changes need machine-readable catalog checks plus visual verification 
 
 At minimum, `--catalog-json` should expose story roles, surfaces, comparable status, representation metadata, and adopted surface coverage. Visual work should add screenshot capture or layout proof for the affected story before deleting older coverage.
 
+## Main Menu Adoption Parity
+
+Main-menu Storybook variants are primary catalog coverage, so each one must declare and satisfy a production adoption contract.
+
+Every registered main-menu state uses `MainMenuStoryContract` in [[src/storybook/adoption.rs#MainMenuStoryContract]] and is rejected if it is a design experiment, mock-only data source, or mock-only footer source. The required states are populated results, empty results, selected row, bottom-of-list footer-safe reveal, frontmost-app paste, ACP-ready footer, and ACP-not-ready footer.
+
+Main-menu Storybook rows route through `ProductionMainMenuFixture` and `render_script_list::render_main_menu_from_inputs` in [[src/storybook/main_menu_variations/mod.rs#ProductionMainMenuFixture]]. This keeps the primary story catalog production-backed while archived design experiments stay outside the primary registry.
+
+## Compare Mode Fixture Contract
+
+Compare panels must say whether each side is production state, deterministic production fixture data, or design-only mock data.
+
+`ComparePanelContract` in [[src/storybook/adoption.rs#ComparePanelContract]] prevents any primary-catalog comparison from claiming production parity while either side uses mock design-only data. Mock comparison panels can remain useful as design experiments, but they must not be registered as primary main-menu coverage.
+
+## Storybook Window Lifecycle
+
+Storybook-owned windows use a counted registry so closing a child preview does not look like the app's final window closed.
+
+`StorybookWindowRegistry` in [[src/storybook/mod.rs#StorybookWindowRegistry]] tracks primary Storybook browser windows separately from child preview and popup windows. `should_quit_after_close` returns true only when both counts are zero, keeping multi-surface labs alive while any Storybook-owned surface remains open.
+
+## Theme Reveal Synchronization
+
+Storybook theme reveal must apply selected theme state before preview windows become visible.
+
+Theme-sensitive Storybook proofs should compare the browser and preview token snapshots before reveal, then close child previews without terminating the primary browser. This keeps dark/light preview state, chooser selection, and secondary-window chrome synchronized across the visual lab.
+
 ## Related Pages
 
 These pages define the visual and routing constraints Storybook must represent.

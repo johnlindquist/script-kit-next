@@ -32,6 +32,7 @@ pub struct StoryCatalogEntry {
     pub category: String,
     pub role: String,
     pub surface: String,
+    pub adopted_surface_coverage: String,
     pub comparable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub selected_variant_id: Option<String>,
@@ -78,6 +79,7 @@ pub fn build_story_catalog_snapshot(selection_store: &StorySelectionStore) -> St
                 category: story.category().to_string(),
                 role: story.catalog_role().label().to_string(),
                 surface,
+                adopted_surface_coverage: "adoptedSurfaceCoverage".to_string(),
                 comparable,
                 selected_variant_id: selection_store
                     .selected_variant(story.id())
@@ -224,13 +226,13 @@ mod tests {
         assert!(main_menu_story
             .variants
             .iter()
-            .any(|variant| variant.id == "current-main-menu"));
+            .any(|variant| variant.id == "populated-results"));
     }
 
     #[test]
     fn catalog_snapshot_marks_persisted_selection() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
 
         let snapshot = build_story_catalog_snapshot(&store);
         let main_menu_story = snapshot
@@ -241,14 +243,14 @@ mod tests {
 
         assert_eq!(
             main_menu_story.selected_variant_id.as_deref(),
-            Some("current-main-menu")
+            Some("populated-results")
         );
     }
 
     #[test]
     fn catalog_snapshot_serializes_to_camel_case_json() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
         let snapshot = build_story_catalog_snapshot(&store);
         let json = serde_json::to_string(&snapshot).expect("serialize catalog snapshot");
 
@@ -303,7 +305,7 @@ mod tests {
     #[test]
     fn catalog_snapshot_marks_persisted_main_menu_selection() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "populated-results");
 
         let snapshot = build_story_catalog_snapshot(&store);
 
@@ -314,7 +316,7 @@ mod tests {
             .expect("main-menu story should be registered");
         assert_eq!(
             main_menu_story.selected_variant_id.as_deref(),
-            Some("current-main-menu"),
+            Some("populated-results"),
             "Main menu story should reflect the persisted selection"
         );
     }
@@ -346,8 +348,8 @@ mod tests {
         let current = main_menu_story
             .variants
             .iter()
-            .find(|v| v.id == "current-main-menu")
-            .expect("current-main-menu variant should exist");
+            .find(|v| v.id == "populated-results")
+            .expect("populated-results variant should exist");
 
         assert!(
             !current.props.is_empty(),
@@ -392,7 +394,7 @@ mod tests {
     #[test]
     fn resolution_snapshot_tracks_persisted_selection() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("main-menu", "empty-state");
+        store.set_selected_variant("main-menu", "empty-results");
 
         let snapshot = build_adopted_surface_resolution_snapshot(&store);
         let main_menu = snapshot
@@ -403,9 +405,9 @@ mod tests {
 
         assert_eq!(
             main_menu.requested_variant_id.as_deref(),
-            Some("empty-state")
+            Some("empty-results")
         );
-        assert_eq!(main_menu.resolved_variant_id, "empty-state");
+        assert_eq!(main_menu.resolved_variant_id, "empty-results");
         assert!(!main_menu.fallback_used);
     }
 
@@ -425,7 +427,7 @@ mod tests {
             main_menu.requested_variant_id.as_deref(),
             Some("nonexistent-variant")
         );
-        assert_eq!(main_menu.resolved_variant_id, "current-main-menu");
+        assert_eq!(main_menu.resolved_variant_id, "populated-results");
         assert!(main_menu.fallback_used);
     }
 

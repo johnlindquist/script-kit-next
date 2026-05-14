@@ -10,6 +10,8 @@ When Enter will paste into another app, the footer should swap the generic `Run`
 
 When the ACP chat surface is active, the footer hides the `Run` button until a validated `SCRIPT_READY path=... validated=true` receipt exists in the assistant output. Once a receipt is present, `Run` dispatches `execute_script_by_path` for that specific script path rather than the generic `execute_selected`. This prevents running the wrong target during script generation.
 
+Main-menu Storybook states must source footer hints through the same production footer contract as runtime launcher states. Paste states need frontmost-app-specific copy, ACP-ready states need a validated `SCRIPT_READY` path and `execute_script_by_path`, and ACP-not-ready states must hide `Run` until validation.
+
 ## Select prompt contract
 
 Select prompts use the minimal list shell while making row identity, keyboard ownership, and selection ownership explicit.
@@ -20,11 +22,13 @@ Keyboard routing is classified through [[src/prompts/select/render.rs#classify_s
 
 Select rows still render through [[src/components/unified_list_item/render.rs#UnifiedListItem]], but pass `.with_direct_hover(false)` so the prompt's modality-adjusted row state owns hover paint. This avoids a double-hover path where GPUI hover styling could contradict keyboard modality.
 
-Footer ownership stays single-source. Prompt entities route native-footer fallback through `main_window_footer_slot_for_prompt_surface`, so only the layout shell reads the active native surface and stale native state fails closed to a spacer instead of drawing a second footer row.
+Footer ownership stays single-source. Prompt layout slots render a native spacer only after the expected native footer host is installed; stale native state or host failure falls back to the GPUI footer.
 
 Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. Domain-specific built-ins register native footer buttons before replacing their GPUI fallback strip with the spacer; explicit footerless exceptions must stay off the native footer map, and generated surface contracts expose each `AppView` variant's native footer id for agents.
 
 `AppView::native_footer_surface()` owns the footer surface id map. `ui_window.rs` asks that method before building `MainWindowFooterConfig`, so future route changes cannot fork footer ownership away from the view contract registry.
+
+`getState.activeFooter` reports the resolved footer owner, native surface ids, host-install state, fallback visibility, rendered buttons, and disabled reasons. Runtime proofs treat more than one visible footer row as a regression.
 
 Native footer buttons own their full visual item slots. The AppKit bridge checks footer item geometry before normal `hitTest:`, returns the contained `ScriptKitFooterButton`, and keeps passive left-info chrome transparent while background footer space still falls through for list scrolling.
 
@@ -48,7 +52,7 @@ Native `form()` fields resolve text, placeholder, label, cursor, and checkbox ma
 
 Editor prompt chrome keeps the code editor body separate from wrapper-owned footer and layout metadata. Snippet choice popups use inline dropdown chrome tokens, and editor layout probes report an `EditorContent` prompt branch instead of main-menu list/preview components.
 
-Terminal prompt chrome distinguishes SDK `term()` from Quick Terminal without changing their footer contracts. SDK terminals keep the GPUI hint strip, Quick Terminal reserves native-footer space, and layout probes report `TerminalContent` instead of launcher list/preview components.
+Terminal prompt chrome distinguishes SDK `term()` from Quick Terminal without changing their footer contracts. SDK terminals keep the GPUI hint strip, Quick Terminal uses native footer space only after the host is installed, and host failure falls back to the terminal GPUI hint strip.
 
 Select and drop prompts keep ownership of their prompt surfaces in layout metadata rather than falling back to launcher list/preview probes. Select rows pair pointer chrome with mouse activation so keyboard and mouse selection ownership stay aligned.
 
@@ -60,11 +64,15 @@ SDK `mic()` is still a media stub, not a rendered prompt surface. It must remain
 
 Drop prompts own file-submit semantics in both GPUI and native footer chrome. Their primary footer action is `Submit`, the actions footer remains `⌘K Actions`, launcher AI is omitted, and footer Run routes to `DropPrompt::submit` before any launcher execution fallback.
 
+When no files are dropped, Drop keeps the Submit affordance visible but marks it disabled with `actionDisabled:"no_files"`, so an empty DropPrompt cannot silently no-op.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
 
 That preference should only apply when the normalized query text matches exactly. Unrelated queries still use the normal fuzzy-plus-frecency ranking, and unsupported result types fall back to plain text history without inventing a fake remembered target.
+
+Source-filter queries are not ordinary launcher history mode. While a committed source head such as `f:`, `files:`, `c:`, or `tabs:` is active, Up and Down stay inside ScriptList row navigation instead of recalling or clearing input history.
 
 ## Footer-safe list reveal
 
@@ -78,7 +86,11 @@ History key repeat is paced by the launcher render loop. A recalled filter must 
 
 The launcher scrollbar should read from the real list handle instead of a second visual-only thumb model. If the handle moves selection-owned content directly, the launcher must immediately reanchor selection back into the visible window before execution shortcuts run.
 
+Render-time reanchor is only for settled handle movement. When a filter replacement or source-chip page expansion has cleared the reveal cache, render leaves `selected_index` alone so the deferred programmatic reveal can scroll to the intended row instead of snapping selection back to the top of the old viewport.
+
 That same scrollbar must size and clip itself against the footer-safe viewport rather than the full list pane. Otherwise the thumb grows too large, drifts against the true scroll range, and stays visible underneath the footer overlay.
+
+The scrollbar content height mirrors row content height only; footer padding is reveal clearance, not scrollable row content. Adding the footer overlay height to `scroll_size` makes the thumb stop short of the bottom because the scrollbar believes extra content remains.
 
 When debugging bottom-of-list behavior, the launcher wheel handler should emit `SCROLL_STATE` fields for wheel delta, selection before/after, logical scroll top before/after, and propagation so scroll drift can be proven from logs.
 
@@ -182,9 +194,13 @@ Row rendering for those popups is owned by [[src/components/inline_dropdown/mod.
 
 ACP popup files should source shared row renderers and row-height constants directly from `inline_dropdown`. The ACP-local `context_picker_row` module must not become the owner of popup row mechanics again.
 
+Context-picker Storybook coverage follows the same route: fixture rows map through `acp_context_picker_item_to_inline_picker_row`, normalize selection with `inline_picker_normalize_selected_index`, and render with `render_soft_compact_picker_row` at the shared soft-compact row height. Storybook must not re-own popup row mechanics.
+
 Menu-syntax popup rows keep footer actions explicit but clickable. Keyboard default selection skips footer rows via [[src/app_impl/menu_syntax_trigger_popup.rs#trigger_popup_row_is_default_selectable]], while mouse clicks on enabled footer rows still route through the same accept outcome as keyboard activation.
 
 Menu-syntax trigger popup footers are pinned below the paged normal row body. [[src/app_impl/menu_syntax_trigger_popup_window.rs#trigger_popup_normal_row_capacity]] subtracts footer rows from the shared visible-row budget so long `:` / `;` / `!` lists cannot hide the footer or create duplicate footer chrome. When footer rows are present, the menu-syntax popup suppresses the shared synopsis strip so the action footer remains the only bottom chrome.
+
+Menu-syntax trigger popups report `activeFooter.owner:"popup"` while their footer rows are open, so automation can distinguish popup-owned footer rows from prompt or native main-window footer ownership.
 
 Menu-syntax popup updates preserve the current visible page before handing the new snapshot back to `inline_dropdown_visible_range_from_start`. This keeps arrow navigation from shifting the window on every row movement once the selection has left the first page.
 
