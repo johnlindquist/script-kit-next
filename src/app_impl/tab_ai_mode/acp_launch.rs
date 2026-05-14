@@ -326,8 +326,13 @@ impl ScriptListApp {
         let selected_agent_id = acp_launch_resolution
             .selected_agent_id()
             .map(str::to_string);
+        let implicit_codex_default_active = retry_request.is_none()
+            && preferred_agent_id.is_none()
+            && selected_agent_id.as_deref() == Some(crate::ai::acp::config::CODEX_ACP_AGENT_ID)
+            && crate::ai::acp::config::codex_acp_default_probe_state()
+                .should_be_implicit_codex_default;
         let should_persist_selected_agent = retry_request.is_some()
-            || preferred_agent_id.is_none()
+            || (preferred_agent_id.is_none() && !implicit_codex_default_active)
             || preferred_agent_id.as_deref() == selected_agent_id.as_deref();
 
         tracing::info!(
@@ -336,6 +341,8 @@ impl ScriptListApp {
             had_retry_request = retry_request.is_some(),
             preferred_agent_id = ?preferred_agent_id,
             selected_agent_id = ?selected_agent_id,
+            implicit_codex_default_active,
+            blocker = ?acp_launch_resolution.blocker,
             should_persist_selected_agent,
             needs_embedded_context = requirements.needs_embedded_context,
             needs_image = requirements.needs_image,

@@ -21,6 +21,7 @@ load_preferred_acp_agent_id
 persist_preferred_acp_agent_id
 launch_requirements: requirements
 should_persist_selected_agent
+implicit_codex_default_active
 retry_request.is_some()
 preferred_agent_id.is_none()
 preferred_agent_id.as_deref() == selected_agent_id.as_deref()

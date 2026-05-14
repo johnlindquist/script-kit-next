@@ -12,6 +12,7 @@ use crate::ai::ModelInfo;
 static CACHED_AGENT_CONFIG: OnceLock<AcpAgentConfig> = OnceLock::new();
 
 const CLAUDE_MCP_SYNC_SCHEMA_VERSION: u32 = 1;
+pub(crate) const CODEX_ACP_AGENT_ID: &str = "codex-acp";
 
 /// Configuration for a generic ACP-compatible AI agent.
 ///
@@ -88,6 +89,37 @@ pub struct AcpModelEntry {
 
 const DEFAULT_CONTEXT_WINDOW: u32 = 128_000;
 const CODEX_ACP_NPX_PACKAGE: &str = "@zed-industries/codex-acp";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CodexAcpDefaultProbeState {
+    pub codex_cli_ready: bool,
+    pub npx_ready: bool,
+    pub codex_acp_binary_ready: bool,
+    pub adapter_ready: bool,
+    pub should_be_implicit_codex_default: bool,
+}
+
+pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
+    codex_acp_default_probe_state_from_parts(
+        command_exists("codex"),
+        command_exists("npx"),
+        command_exists(CODEX_ACP_AGENT_ID),
+    )
+}
+
+fn codex_acp_default_probe_state_from_parts(
+    codex_cli_ready: bool,
+    npx_ready: bool,
+    codex_acp_binary_ready: bool,
+) -> CodexAcpDefaultProbeState {
+    CodexAcpDefaultProbeState {
+        codex_cli_ready,
+        npx_ready,
+        codex_acp_binary_ready,
+        adapter_ready: npx_ready || codex_acp_binary_ready,
+        should_be_implicit_codex_default: codex_cli_ready,
+    }
+}
 
 /// Default Claude Code models available via the ACP adapter.
 fn default_claude_code_models() -> Vec<AcpModelEntry> {
@@ -519,7 +551,11 @@ fn normalize_well_known_agent_config_with_probe(
     codex_acp_ready: bool,
     npx_ready: bool,
 ) -> AcpAgentConfig {
-    if agent.id == "codex-acp" && agent.command == "codex-acp" && !codex_acp_ready && npx_ready {
+    if agent.id == CODEX_ACP_AGENT_ID
+        && agent.command == CODEX_ACP_AGENT_ID
+        && !codex_acp_ready
+        && npx_ready
+    {
         agent.command = "npx".to_string();
         agent.args = codex_acp_npx_args(&agent.args);
     }
@@ -527,10 +563,10 @@ fn normalize_well_known_agent_config_with_probe(
 }
 
 fn normalize_well_known_agent_config(agent: AcpAgentConfig) -> AcpAgentConfig {
-    if agent.id == "codex-acp" {
+    if agent.id == CODEX_ACP_AGENT_ID {
         normalize_well_known_agent_config_with_probe(
             agent,
-            command_exists("codex-acp"),
+            command_exists(CODEX_ACP_AGENT_ID),
             command_exists("npx"),
         )
     } else {
@@ -546,8 +582,8 @@ fn install_state_from_probe(
 ) -> super::catalog::AcpAgentInstallState {
     use super::catalog::AcpAgentInstallState;
 
-    let ready = if agent.id == "codex-acp" {
-        let adapter_ready = command_ready || (agent.command == "codex-acp" && npx_ready);
+    let ready = if agent.id == CODEX_ACP_AGENT_ID {
+        let adapter_ready = command_ready || (agent.command == CODEX_ACP_AGENT_ID && npx_ready);
         adapter_ready && codex_ready
     } else {
         command_ready
@@ -563,7 +599,7 @@ fn install_state_from_probe(
 }
 
 fn install_state_for_agent(agent: &AcpAgentConfig) -> super::catalog::AcpAgentInstallState {
-    let is_codex_acp = agent.id == "codex-acp";
+    let is_codex_acp = agent.id == CODEX_ACP_AGENT_ID;
     install_state_from_probe(
         agent,
         command_exists(&agent.command),
@@ -614,7 +650,7 @@ fn gemini_cli_agent_config() -> AcpAgentConfig {
 
 fn codex_acp_agent_config() -> AcpAgentConfig {
     AcpAgentConfig {
-        id: "codex-acp".to_string(),
+        id: CODEX_ACP_AGENT_ID.to_string(),
         display_name: "Codex".to_string(),
         command: "npx".to_string(),
         args: vec![CODEX_ACP_NPX_PACKAGE.to_string()],
@@ -717,7 +753,7 @@ pub(crate) fn open_acp_agents_catalog_in_editor() -> anyhow::Result<PathBuf> {
 /// Sources (in priority order):
 /// 1. Legacy Claude Code config (synthesized from `claudeCode` settings).
 /// 2. `~/.scriptkit/acp/agents.json` (user-managed catalog file).
-/// 3. Built-in auto-detection (`opencode`, `gemini`, `codex-acp` on PATH).
+/// 3. Built-in auto-detection (`opencode`, `gemini`, local `codex` CLI).
 pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
     let mut agents = Vec::new();
 
@@ -779,9 +815,19 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
     }
 
     // 5. Built-in Codex ACP detection.
-    if command_exists("codex-acp") && !agents.iter().any(|a| a.id == "codex-acp") {
+    let codex_probe = codex_acp_default_probe_state();
+    if codex_probe.codex_cli_ready && !agents.iter().any(|a| a.id == CODEX_ACP_AGENT_ID) {
         agents.push(codex_acp_agent_config());
     }
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_codex_default_probe",
+        codex_cli_ready = codex_probe.codex_cli_ready,
+        npx_ready = codex_probe.npx_ready,
+        codex_acp_binary_ready = codex_probe.codex_acp_binary_ready,
+        adapter_ready = codex_probe.adapter_ready,
+        should_be_implicit_codex_default = codex_probe.should_be_implicit_codex_default,
+    );
 
     tracing::info!(
         target: "script_kit::tab_ai",
@@ -846,6 +892,21 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 auth_state = ?auth_state,
                 config_state = ?config_state,
             );
+            if agent.id == CODEX_ACP_AGENT_ID {
+                let codex_probe = codex_acp_default_probe_state();
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_codex_default_readiness",
+                    codex_cli_ready = codex_probe.codex_cli_ready,
+                    npx_ready = codex_probe.npx_ready,
+                    codex_acp_binary_ready = codex_probe.codex_acp_binary_ready,
+                    adapter_ready = codex_probe.adapter_ready,
+                    should_be_implicit_codex_default = codex_probe.should_be_implicit_codex_default,
+                    install_state = ?install_state,
+                    auth_state = ?auth_state,
+                    config_state = ?config_state,
+                );
+            }
 
             super::catalog::AcpAgentCatalogEntry {
                 id: agent.id.clone().into(),
@@ -1291,6 +1352,27 @@ mod tests {
             install_state_from_probe(&legacy, false, true, true),
             crate::ai::acp::catalog::AcpAgentInstallState::Ready
         );
+    }
+
+    #[test]
+    fn codex_default_probe_tracks_cli_and_adapter_separately() {
+        let ready = codex_acp_default_probe_state_from_parts(true, true, false);
+        assert!(ready.codex_cli_ready);
+        assert!(ready.npx_ready);
+        assert!(!ready.codex_acp_binary_ready);
+        assert!(ready.adapter_ready);
+        assert!(ready.should_be_implicit_codex_default);
+
+        let adapter_blocked = codex_acp_default_probe_state_from_parts(true, false, false);
+        assert!(adapter_blocked.codex_cli_ready);
+        assert!(!adapter_blocked.adapter_ready);
+        assert!(
+            adapter_blocked.should_be_implicit_codex_default,
+            "local codex should still own default setup even when adapter install is blocked"
+        );
+
+        let no_codex = codex_acp_default_probe_state_from_parts(false, true, false);
+        assert!(!no_codex.should_be_implicit_codex_default);
     }
 
     #[test]

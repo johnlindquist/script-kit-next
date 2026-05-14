@@ -4,6 +4,7 @@
 //! surfaces no longer rely on Claude-specific copy or loaders.
 
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const SETUP_RENDER_SOURCE: &str = include_str!("../src/ai/window/render_setup.rs");
 const SETUP_SOURCE: &str = include_str!("../src/ai/window/setup.rs");
@@ -214,6 +215,41 @@ fn catalog_loader_merges_codex_starter_for_agent_selector() {
     assert!(
         ACP_CONFIG_SOURCE.contains("codex_acp_agent_config()"),
         "starter ACP agents must include the Codex ACP adapter config"
+    );
+}
+
+#[test]
+fn codex_detection_uses_local_codex_cli_not_adapter_binary_only() {
+    assert!(
+        ACP_CONFIG_SOURCE.contains("codex_acp_default_probe_state"),
+        "catalog loading must expose a Codex default probe"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("command_exists(\"codex\")"),
+        "Codex implicit default must be based on the local codex CLI"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("command_exists(\"npx\")"),
+        "Codex adapter readiness must account for npx"
+    );
+    assert!(
+        !ACP_CONFIG_SOURCE.contains(
+            "if command_exists(\"codex-acp\") && !agents.iter().any(|a| a.id == \"codex-acp\")"
+        ),
+        "Codex must not be discoverable only when codex-acp itself is on PATH"
+    );
+}
+
+#[test]
+fn tab_ai_mode_does_not_persist_implicit_codex_default() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("implicit_codex_default_active"),
+        "tab_ai_mode must distinguish implicit Codex default from explicit preference"
+    );
+    assert!(
+        ACP_LAUNCH_SOURCE.contains("preferred_agent_id.is_none()")
+            && ACP_LAUNCH_SOURCE.contains("&& !implicit_codex_default_active"),
+        "implicit Codex selection must not be persisted as the user's explicit agent"
     );
 }
 
