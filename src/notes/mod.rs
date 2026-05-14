@@ -54,9 +54,10 @@ pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 #[allow(unused_imports)]
 pub(crate) use storage::{
-    delete_note_cart_item, get_all_notes, list_note_cart_items, root_notes_query_is_eligible,
-    save_note_cart_item, search_notes, search_root_notes_meta, search_root_notes_meta_cached,
-    search_root_notes_meta_direct, RootNoteSearchHit, RootNotesSectionOptions,
+    delete_note_cart_item, delete_note_cart_items, get_all_notes, list_note_cart_items,
+    list_note_cart_items_deduped, root_notes_query_is_eligible, save_note_cart_item, search_notes,
+    search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
+    RootNoteSearchHit, RootNotesSectionOptions,
 };
 
 // Re-export key types - suppress unused warnings since these are public API

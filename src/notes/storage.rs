@@ -812,6 +812,14 @@ pub fn list_note_cart_items(note_id: NoteId) -> Result<Vec<super::model::NoteCar
     Ok(items)
 }
 
+/// List cart items for a note, dropping duplicate payloads while preserving order.
+pub fn list_note_cart_items_deduped(note_id: NoteId) -> Result<Vec<super::model::NoteCartItem>> {
+    let mut items = list_note_cart_items(note_id)?;
+    let mut seen = std::collections::HashSet::new();
+    items.retain(|item| seen.insert(item.dedup_key()));
+    Ok(items)
+}
+
 /// Delete a cart item by ID.
 pub fn delete_note_cart_item(item_id: &str) -> Result<()> {
     let db = get_db()?;
@@ -827,6 +835,43 @@ pub fn delete_note_cart_item(item_id: &str) -> Result<()> {
 
     info!(cart_item_id = %item_id, "Cart item deleted");
     Ok(())
+}
+
+/// Delete multiple cart items for a note in one note-scoped transaction.
+pub fn delete_note_cart_items(note_id: NoteId, item_ids: &[String]) -> Result<usize> {
+    if item_ids.is_empty() {
+        return Ok(0);
+    }
+
+    let db = get_db()?;
+    let mut conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let tx = conn
+        .transaction()
+        .context("Failed to start note cart item delete transaction")?;
+
+    let mut deleted = 0usize;
+    for item_id in item_ids {
+        deleted += tx
+            .execute(
+                "DELETE FROM note_cart_items WHERE note_id = ?1 AND id = ?2",
+                params![note_id.as_str(), item_id],
+            )
+            .context("Failed to delete note-scoped cart item")?;
+    }
+
+    tx.commit()
+        .context("Failed to commit note cart item delete transaction")?;
+
+    info!(
+        note_id = %note_id,
+        requested = item_ids.len(),
+        deleted,
+        "Note cart items deleted"
+    );
+    Ok(deleted)
 }
 
 /// Convert a database row to a NoteCartItem.

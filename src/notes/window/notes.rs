@@ -256,7 +256,11 @@ impl NotesApp {
             }
         }
 
+        let prev_note_id = self.selected_note_id;
         self.selected_note_id = Some(id);
+        if prev_note_id != Some(id) {
+            self.clear_notes_hosted_acp_context_for_note(prev_note_id, cx);
+        }
 
         // Load content into editor
         let note_list = if self.view_mode == NotesViewMode::Trash {
