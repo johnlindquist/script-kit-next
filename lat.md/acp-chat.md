@@ -400,6 +400,24 @@ Switching agents from the ACP actions menu relaunches ACP with the newly selecte
 
 That relaunch must suppress any fresh focused-chip staging from the launcher surface that originally opened ACP. Otherwise the reopen path can inject a new inline `@mention` from the current Script List selection even though the user only asked to change agents.
 
+### Agent switch: retry draft restore wins over focused context
+
+When an ACP agent switch relaunch carries `AcpRetryRequest { draft_state: Some(..) }`, the restored draft is authoritative.
+
+The relaunch path must restore the captured input text, cursor, pending context parts, pasted-token metadata, typed mention aliases, and inline-owned tokens, and it must not stage the host's freshly focused part for that relaunch.
+
+Fresh focused-part staging is allowed only when there is no retry draft state.
+
+Guardrail: `src/app_impl/tab_ai_mode` keeps this as a named helper, `should_stage_focused_part_for_retry_draft_restore`, and `tests/acp_switch_actions.rs::acp_agent_switch_relaunch_preserves_existing_draft_state` audits the source tree so future module moves do not silently drop the invariant.
+
+### Retry payload staging boundary
+
+Switch-agent actions must not close or reopen the ACP harness until retry payload staging has been requested.
+
+`handle_action/mod.rs` calls `AcpChatView::relaunch_for_agent_switch_preserving_draft(...)` before `close_tab_ai_harness_terminal(...)` and before reopening ACP. The wrapper is the public staging boundary; it stages an `AcpRetryRequest` via `stage_agent_switch_retry(...)`, preserving selected replacement agent id, launch capability requirements, and live draft state including composer input and pending context parts.
+
+The staged skill revalidation side of this boundary is covered by [[lat.md/tests/acp-portal-contract#ACP Portal Contract#Plugin skill target-thread contract#Agent switch revalidates staged skill]].
+
 The embedded actions popup must preserve the route-backed ACP dialog after construction. [[src/app_impl/actions_toggle.rs#ScriptListApp#toggle_actions]] skips generic scriptlet and Power Syntax rebuild hooks for ACP so `Change Agent` and `Change Model` cannot be replaced by global launcher actions.
 
 Notes-hosted ACP uses the same preservation contract through `AcpViewDraftSnapshot`. Agent switch captures input, caret, pending context parts, and portal/pasted-token state from the originating Notes ACP view before dropping it, relaunches without initial-input replacement, and restores the snapshot into the fresh view after host callbacks are wired.
