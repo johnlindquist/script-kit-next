@@ -4,8 +4,14 @@ use super::message_parts::{
 use super::model::ChatId;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
+use std::fs::{self, OpenOptions};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
-pub const AI_PREFLIGHT_AUDIT_SCHEMA_VERSION: u32 = 1;
+pub const AI_PREFLIGHT_AUDIT_SCHEMA_VERSION: u32 = 2;
+pub const AI_PREFLIGHT_AUDIT_MAX_BYTES: u64 = 5 * 1024 * 1024;
+const AI_PREFLIGHT_AUDIT_COMPACT_KEEP: usize = 2_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -22,6 +28,10 @@ pub struct ActionableContextFailure {
 pub struct AiPreflightAudit {
     pub schema_version: u32,
     pub correlation_id: String,
+    #[serde(default)]
+    pub preflight_generation: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub draft_fingerprint: Option<String>,
     pub chat_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
@@ -62,6 +72,8 @@ impl AiPreflightAudit {
         Self {
             schema_version: AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
             correlation_id,
+            preflight_generation: 0,
+            draft_fingerprint: Some(stable_draft_fingerprint(raw_content, authored_content)),
             chat_id: chat_id.as_str(),
             message_id: None,
             decision: receipt.decision.clone(),
@@ -78,6 +90,136 @@ impl AiPreflightAudit {
     pub fn attach_message_id(&mut self, message_id: &str) {
         self.message_id = Some(message_id.to_string());
     }
+}
+
+fn stable_draft_fingerprint(raw_content: &str, authored_content: &str) -> String {
+    format!(
+        "raw:{}:authored:{}",
+        raw_content.len(),
+        authored_content.len()
+    )
+}
+
+pub fn default_preflight_audit_log_path() -> PathBuf {
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+    home.join(".scriptkit")
+        .join("logs")
+        .join("ai-preflight-audits.jsonl")
+}
+
+pub fn append_preflight_audit(
+    path: Option<&Path>,
+    audit: &AiPreflightAudit,
+) -> anyhow::Result<PathBuf> {
+    if audit.schema_version != AI_PREFLIGHT_AUDIT_SCHEMA_VERSION {
+        anyhow::bail!(
+            "unsupported preflight audit schema version {}",
+            audit.schema_version
+        );
+    }
+
+    let path = path
+        .map(PathBuf::from)
+        .unwrap_or_else(default_preflight_audit_log_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    compact_preflight_audits_if_needed(&path)?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .append(true)
+        .open(&path)?;
+    ensure_jsonl_append_boundary(&mut file)?;
+    writeln!(file, "{}", serde_json::to_string(audit)?)?;
+    Ok(path)
+}
+
+fn ensure_jsonl_append_boundary(file: &mut fs::File) -> anyhow::Result<()> {
+    let len = file.metadata()?.len();
+    if len == 0 {
+        return Ok(());
+    }
+    file.seek(SeekFrom::End(-1))?;
+    let mut last = [0u8; 1];
+    file.read_exact(&mut last)?;
+    file.seek(SeekFrom::End(0))?;
+    if last[0] != b'\n' {
+        writeln!(file)?;
+    }
+    Ok(())
+}
+
+pub fn read_preflight_audits(path: Option<&Path>) -> anyhow::Result<Vec<AiPreflightAudit>> {
+    let path = path
+        .map(PathBuf::from)
+        .unwrap_or_else(default_preflight_audit_log_path);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let file = OpenOptions::new().read(true).open(&path)?;
+    let reader = BufReader::new(file);
+    let mut seen = BTreeSet::new();
+    let mut audits = Vec::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        let audit: AiPreflightAudit = match serde_json::from_str(&line) {
+            Ok(audit) => audit,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::ai_preflight",
+                    %error,
+                    "Skipping malformed preflight audit log entry"
+                );
+                continue;
+            }
+        };
+        if audit.schema_version != AI_PREFLIGHT_AUDIT_SCHEMA_VERSION {
+            tracing::warn!(
+                target: "script_kit::ai_preflight",
+                schema_version = audit.schema_version,
+                "Skipping unsupported preflight audit schema version"
+            );
+            continue;
+        }
+        if seen.insert(audit.correlation_id.clone()) {
+            audits.push(audit);
+        }
+    }
+
+    Ok(audits)
+}
+
+pub fn compact_preflight_audits_if_needed(path: &Path) -> anyhow::Result<()> {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    if metadata.len() <= AI_PREFLIGHT_AUDIT_MAX_BYTES {
+        return Ok(());
+    }
+
+    let audits = read_preflight_audits(Some(path))?;
+    let start = audits.len().saturating_sub(AI_PREFLIGHT_AUDIT_COMPACT_KEEP);
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+    for audit in audits.into_iter().skip(start) {
+        writeln!(file, "{}", serde_json::to_string(&audit)?)?;
+    }
+    Ok(())
 }
 
 pub fn actionable_context_failure(failure: &ContextResolutionFailure) -> ActionableContextFailure {
@@ -215,6 +357,8 @@ mod tests {
         let audit = AiPreflightAudit {
             schema_version: AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
             correlation_id: "corr-1".to_string(),
+            preflight_generation: 1,
+            draft_fingerprint: Some("raw:19:authored:19".to_string()),
             chat_id: "chat-1".to_string(),
             message_id: None,
             decision: PreparedMessageDecision::Blocked,
@@ -293,6 +437,8 @@ mod tests {
         let audit = AiPreflightAudit {
             schema_version: AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
             correlation_id: "corr-2".to_string(),
+            preflight_generation: 1,
+            draft_fingerprint: Some("raw:5:authored:5".to_string()),
             chat_id: "chat-2".to_string(),
             message_id: None,
             decision: PreparedMessageDecision::Ready,

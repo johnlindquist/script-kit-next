@@ -218,6 +218,7 @@ pub enum TransactionErrorCode {
     ElementNotFound,
     SelectionNotFound,
     InvalidCondition,
+    RequestIdConflict,
     UnsupportedCommand,
     UnsupportedPrompt,
     ActionFailed,
@@ -294,6 +295,8 @@ impl TransactionError {
 pub struct UiStateSnapshot {
     pub window_visible: bool,
     pub window_focused: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -304,6 +307,14 @@ pub struct UiStateSnapshot {
     pub visible_semantic_ids: Vec<String>,
     #[serde(default)]
     pub choice_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acp_status: Option<String>,
+    #[serde(default)]
+    pub acp_context_ready: bool,
+    #[serde(default)]
+    pub acp_picker_open: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acp_cursor_index: Option<usize>,
 }
 
 /// A single poll observation during a waitFor command.
@@ -333,6 +344,8 @@ pub enum TransactionTraceStatus {
 pub struct TransactionCommandTrace {
     pub index: usize,
     pub command: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command_payload: Option<BatchCommand>,
     pub started_at_ms: u64,
     pub elapsed_ms: u64,
     pub before: UiStateSnapshot,
@@ -347,7 +360,11 @@ pub struct TransactionCommandTrace {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionTrace {
+    #[serde(default = "default_transaction_trace_schema_version")]
+    pub schema_version: u32,
     pub request_id: String,
+    #[serde(default)]
+    pub command_fingerprint: String,
     pub status: TransactionTraceStatus,
     pub started_at_ms: u64,
     pub total_elapsed_ms: u64,
@@ -355,6 +372,12 @@ pub struct TransactionTrace {
     pub failed_at: Option<usize>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub commands: Vec<TransactionCommandTrace>,
+}
+
+pub const TRANSACTION_TRACE_SCHEMA_VERSION: u32 = 1;
+
+fn default_transaction_trace_schema_version() -> u32 {
+    TRANSACTION_TRACE_SCHEMA_VERSION
 }
 
 /// Result entry for a single command within a batch.

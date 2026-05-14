@@ -671,7 +671,9 @@ fn wait_for_request_defaults_trace_off() {
 #[test]
 fn wait_for_result_with_trace_serializes_correctly() {
     let trace = crate::protocol::TransactionTrace {
+        schema_version: 1,
         request_id: "wf-trace".to_string(),
+        command_fingerprint: "fp-wf-trace".to_string(),
         status: crate::protocol::TransactionTraceStatus::Timeout,
         started_at_ms: 1000,
         total_elapsed_ms: 100,
@@ -679,6 +681,7 @@ fn wait_for_result_with_trace_serializes_correctly() {
         commands: vec![crate::protocol::TransactionCommandTrace {
             index: 0,
             command: "waitFor".to_string(),
+            command_payload: None,
             started_at_ms: 1000,
             elapsed_ms: 100,
             before: crate::protocol::UiStateSnapshot::default(),
@@ -762,7 +765,9 @@ fn batch_request_parses_trace_on_failure() {
 #[test]
 fn batch_result_with_trace_serializes_correctly() {
     let trace = crate::protocol::TransactionTrace {
+        schema_version: 1,
         request_id: "b-trace".to_string(),
+        command_fingerprint: "fp-b-trace".to_string(),
         status: crate::protocol::TransactionTraceStatus::Failed,
         started_at_ms: 2000,
         total_elapsed_ms: 150,
@@ -770,6 +775,7 @@ fn batch_result_with_trace_serializes_correctly() {
         commands: vec![crate::protocol::TransactionCommandTrace {
             index: 0,
             command: "waitFor".to_string(),
+            command_payload: None,
             started_at_ms: 2000,
             elapsed_ms: 150,
             before: crate::protocol::UiStateSnapshot::default(),

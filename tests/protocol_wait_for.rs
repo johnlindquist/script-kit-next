@@ -209,7 +209,9 @@ fn wait_for_result_with_trace_receipt_serializes() {
     };
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "w-traced".to_string(),
+        command_fingerprint: "fp-w-traced".to_string(),
         status: TransactionTraceStatus::Timeout,
         started_at_ms: 100,
         total_elapsed_ms: 1000,
@@ -217,6 +219,7 @@ fn wait_for_result_with_trace_receipt_serializes() {
         commands: vec![TransactionCommandTrace {
             index: 0,
             command: "waitFor".to_string(),
+            command_payload: None,
             started_at_ms: 100,
             elapsed_ms: 1000,
             before: UiStateSnapshot {
@@ -405,7 +408,9 @@ fn wait_for_result_success_receipt_with_trace() {
     use script_kit_gpui::protocol::{TransactionTrace, TransactionTraceStatus};
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "w-ok".to_string(),
+        command_fingerprint: "fp-w-ok".to_string(),
         status: TransactionTraceStatus::Ok,
         started_at_ms: 50,
         total_elapsed_ms: 17,
