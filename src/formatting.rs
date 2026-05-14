@@ -85,6 +85,25 @@ pub fn format_absolute_unix_millis(unix_timestamp_ms: i64) -> String {
         .unwrap_or_else(|| "unknown time".to_string())
 }
 
+/// Format an RFC3339 timestamp as a local display date.
+pub fn format_rfc3339_date_for_display(timestamp: &str) -> String {
+    DateTime::parse_from_rfc3339(timestamp)
+        .map(|dt| dt.with_timezone(&Local).format("%b %-d, %Y").to_string())
+        .unwrap_or_else(|_| timestamp.to_string())
+}
+
+/// Format how long a process has been running using a caller-supplied clock.
+pub fn format_running_duration(now: DateTime<Utc>, started_at: DateTime<Utc>) -> String {
+    let elapsed = now.signed_duration_since(started_at);
+    if elapsed.num_hours() > 0 {
+        format!("{}h {}m", elapsed.num_hours(), elapsed.num_minutes() % 60)
+    } else if elapsed.num_minutes() > 0 {
+        format!("{}m {}s", elapsed.num_minutes(), elapsed.num_seconds() % 60)
+    } else {
+        format!("{}s", elapsed.num_seconds().max(0))
+    }
+}
+
 /// Format a `std::time::Duration` as a compact human-readable label.
 ///
 /// Output: "345ms" for sub-second, "5s" for whole seconds.
@@ -257,6 +276,21 @@ mod tests {
         let past = Utc::now() - TimeDelta::days(14);
         let result = format_relative_time_short_dt(past);
         assert_eq!(result, "2 weeks ago");
+    }
+
+    #[test]
+    fn test_rfc3339_date_display_formats_local_date() {
+        assert_ne!(
+            format_rfc3339_date_for_display("2026-05-14T12:34:56Z"),
+            "2026-05-14T12:34:56Z"
+        );
+    }
+
+    #[test]
+    fn test_running_duration_formats_compactly() {
+        let started = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let now = started + TimeDelta::minutes(62) + TimeDelta::seconds(4);
+        assert_eq!(format_running_duration(now, started), "1h 2m");
     }
 
     #[test]

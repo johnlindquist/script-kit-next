@@ -8125,6 +8125,7 @@ export interface PromptState {
   promptType: string;
   surfaceContract?: LauncherSurfaceContractSnapshot;
   activePopupContract?: LauncherSurfaceContractSnapshot;
+  activeFooter?: ActiveFooterSnapshot;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8149,6 +8150,28 @@ export interface LauncherSurfaceContractSnapshot {
   visualPolicy: string;
   automationSemanticSurface: string;
   nativeFooterSurface?: string | null;
+}
+
+export interface ActiveFooterButtonSnapshot {
+  action: string;
+  key: string;
+  label: string;
+  enabled: boolean;
+  selected: boolean;
+  actionDisabled?: string | null;
+}
+
+export interface ActiveFooterSnapshot {
+  schemaVersion: number;
+  owner: 'native' | 'prompt' | 'popup' | 'content' | 'none' | string;
+  expectedSurface?: string | null;
+  requestedSurface?: string | null;
+  activeSurface?: string | null;
+  nativeFooterHostInstalled: boolean;
+  gpuiFallbackVisible: boolean;
+  buttonCount: number;
+  buttons: ActiveFooterButtonSnapshot[];
+  mismatch?: string | null;
 }
 
 export type ElementType = 'choice' | 'input' | 'button' | 'panel' | 'list' | 'unknown';
@@ -8249,6 +8272,7 @@ type StateResultMessage = {
   promptType: string;
   surfaceContract?: LauncherSurfaceContractSnapshot;
   activePopupContract?: LauncherSurfaceContractSnapshot;
+  activeFooter?: ActiveFooterSnapshot;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8349,6 +8373,7 @@ globalThis.getState = async function getState(): Promise<PromptState> {
           promptType: state.promptType,
           surfaceContract: state.surfaceContract,
           activePopupContract: state.activePopupContract,
+          activeFooter: state.activeFooter,
           promptId: state.promptId,
           placeholder: state.placeholder,
           inputValue: state.inputValue,

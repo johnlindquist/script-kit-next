@@ -562,6 +562,42 @@ ACP automation receipts are assembled by named snapshot builders so state-first 
 
 `AcpChatView::collect_acp_state_snapshot` delegates setup, live thread state, picker state, input layout, context summary, and runtime setup-card inclusion to named helpers. This keeps `getAcpState` and `getAcpTestProbe` schema behavior stable while making future additions explicit.
 
+## AI preflight generation guards
+
+AI preflight receipts are derived state for the current draft generation and must not survive into a newer Loading pass.
+
+[[src/ai/window/context_preflight.rs#AiApp#schedule_context_preflight]] replaces the full `ContextPreflightState` with the new generation plus `Loading`, leaving `pending_context_parts` untouched while clearing stale counts, receipts, and recommendations. Async preflight completion keeps the same generation check before publishing Ready state.
+
+## Persistent preflight audits
+
+Preflight audits have a bounded JSONL log that tolerates malformed lines and schema drift while preserving correlation-level dedupe.
+
+[[src/ai/preflight_audit.rs#append_preflight_audit]] writes schema-versioned audit lines to the default `~/.scriptkit/logs/ai-preflight-audits.jsonl` path after compaction. [[src/ai/preflight_audit.rs#read_preflight_audits]] streams the log, warns on malformed or unsupported entries, and dedupes by correlation id.
+
+## Prompt compiler pane
+
+Prompt compiler previews carry the compile identity so stale generation, model, or config results can be rejected before display.
+
+[[src/ai/window/prompt_compiler/model.rs#PromptCompilerContext]] records the draft generation, model id, and optional compiler config fingerprint for each preview. [[src/ai/window/prompt_compiler/model.rs#PromptCompilerPreview#from_receipt_with_context]] is the context-aware builder used by the pane.
+
+## Context rail surface contract
+
+Context rail recommendation buttons are only valid for the generation and action ids that are still surfaced in the current rail snapshot.
+
+[[src/ai/window/render_main_panel.rs#AiApp#render_context_recommendations]] passes the rendered generation and action id into [[src/ai/window/context_preflight.rs#AiApp#apply_context_recommendation]]. The apply path drops stale generations and action ids that are no longer surfaced before it can mutate pending context parts.
+
+## Mini AI And Full ACP Handoff Parity
+
+Mini AI may stay ChatPrompt-backed, but it must expose the same minimum handoff fields that make Full ACP return paths auditable.
+
+The `getState.miniAi` receipt carries `handoffSource` and `returnOrigin` beside visibility, prompt id, main-window mode, draft length, pending submit, and last close source. Mini AI uses `mini_ai_launcher` and `scriptList` for launcher-origin handoff receipts.
+
+## Mini AI Snapshot And Close Telemetry
+
+Mini AI close telemetry is source-rich enough for state-first runtime proof without screenshots.
+
+The close path builds `MiniAiCloseSnapshot` with `prompt_id`, `main_window_mode`, `source`, `draft_len`, `pending_submit`, `handoff_source`, and `return_origin`, stores the last snapshot for `getState.miniAi`, and emits `mini_ai_close_snapshot` before returning to the launcher.
+
 ## Telemetry
 
 End-to-end turn telemetry is emitted under `acp_*` event/message names rather than a symmetric `start`/`chunk`/`end` trio. Every turn has an observable submit edge, a per-kind chunk fanout, and a termination edge.

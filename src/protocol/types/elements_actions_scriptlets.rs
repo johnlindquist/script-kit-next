@@ -67,6 +67,9 @@ pub struct ElementInfo {
     /// Machine-stable status kind for source status rows.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status_kind: Option<String>,
+    /// Machine-stable disabled reason for action-like elements.
+    #[serde(rename = "actionDisabled", skip_serializing_if = "Option::is_none")]
+    pub action_disabled: Option<String>,
 }
 
 impl ElementInfo {
@@ -86,6 +89,7 @@ impl ElementInfo {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -105,6 +109,7 @@ impl ElementInfo {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -124,6 +129,7 @@ impl ElementInfo {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -143,6 +149,7 @@ impl ElementInfo {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -162,6 +169,7 @@ impl ElementInfo {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 }

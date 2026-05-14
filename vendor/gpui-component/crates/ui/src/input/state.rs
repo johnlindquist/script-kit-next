@@ -318,6 +318,7 @@ pub struct InputState {
     pub(crate) code_editor_dynamic_bottom_margin: bool,
     pub(super) text_align: TextAlign,
     pub(super) highlight_ranges: Vec<(Range<usize>, Hsla)>,
+    pub(super) highlight_range_roles: Vec<String>,
 
     /// The mask pattern for formatting the input text
     pub(crate) mask_pattern: MaskPattern,
@@ -430,6 +431,7 @@ impl InputState {
             mask_pattern: MaskPattern::default(),
             text_align: TextAlign::Left,
             highlight_ranges: Vec::new(),
+            highlight_range_roles: Vec::new(),
             lsp: Lsp::default(),
             diagnostic_popover: None,
             context_menu: None,
@@ -544,7 +546,39 @@ impl InputState {
 
     /// Set byte ranges that should render in custom colors for plain inputs.
     pub fn set_highlight_ranges(&mut self, ranges: Vec<(Range<usize>, Hsla)>) {
+        self.highlight_range_roles = vec!["highlight".to_string(); ranges.len()];
         self.highlight_ranges = ranges;
+    }
+
+    /// Set byte ranges plus semantic role names for state receipts.
+    pub fn set_highlight_ranges_with_roles(
+        &mut self,
+        ranges: Vec<(Range<usize>, Hsla, String)>,
+    ) {
+        self.highlight_range_roles = ranges
+            .iter()
+            .map(|(_, _, role)| role.clone())
+            .collect();
+        self.highlight_ranges = ranges
+            .into_iter()
+            .map(|(range, color, _)| (range, color))
+            .collect();
+    }
+
+    /// Remove all custom highlight ranges. Empty is a meaningful replacement.
+    pub fn clear_highlight_ranges(&mut self) {
+        self.highlight_ranges.clear();
+        self.highlight_range_roles.clear();
+    }
+
+    /// Current custom highlight ranges used by the rendered input element.
+    pub fn highlight_ranges(&self) -> &[(Range<usize>, Hsla)] {
+        &self.highlight_ranges
+    }
+
+    /// Semantic role names aligned with [`Self::highlight_ranges`].
+    pub fn highlight_range_roles(&self) -> &[String] {
+        &self.highlight_range_roles
     }
 
     /// Set enable/disable line number, only for [`InputMode::CodeEditor`] mode.

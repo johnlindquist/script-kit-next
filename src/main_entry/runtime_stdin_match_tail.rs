@@ -4,6 +4,20 @@
                                     logging::log("STDIN", &format!("Failed to open notes window: {}", e));
                                 }
                             }
+                            ExternalCommand::OpenAbout => {
+                                logging::log("STDIN", "Opening About surface via stdin command");
+                                script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown();
+                                platform::show_main_window_without_activation();
+                                window.activate_window();
+                                sync_main_automation_window(current_main_automation_bounds(), true, true);
+                                view.open_about_surface(
+                                    std::sync::Arc::new(std::sync::RwLock::new(
+                                        crate::updates::UpdateState::Idle,
+                                    )),
+                                    ctx,
+                                );
+                            }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);

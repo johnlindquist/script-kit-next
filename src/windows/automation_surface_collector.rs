@@ -157,6 +157,7 @@ fn element(
         source_name: None,
         selectable: None,
         status_kind: None,
+        action_disabled: None,
     }
 }
 
@@ -485,6 +486,9 @@ fn collect_prompt_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapsho
     if let Some(snapshot) = collect_model_selector_snapshot(cx) {
         return Some(snapshot);
     }
+    if let Some(snapshot) = collect_history_popup_snapshot(cx) {
+        return Some(snapshot);
+    }
     if let Some(snapshot) = collect_confirm_popup_snapshot(cx) {
         return Some(snapshot);
     }
@@ -599,6 +603,60 @@ fn collect_model_selector_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
             ElementType::Choice,
             Some(entry.display.to_string()),
             Some(entry.id.clone()),
+            Some(is_selected),
+            None,
+            Some(idx),
+        ));
+    }
+
+    Some(SurfaceElementSnapshot {
+        total_count: elements.len(),
+        elements,
+        focused_semantic_id: selected_semantic_id.clone(),
+        selected_semantic_id,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    })
+}
+
+fn collect_history_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
+    let snap = crate::ai::acp::history_popup::get_history_popup_snapshot(cx)?;
+
+    let mut elements = vec![element(
+        "panel:history-popup",
+        ElementType::Panel,
+        Some(snap.title.to_string()),
+        Some(snap.query.to_string()),
+        None,
+        None,
+        None,
+    )];
+
+    let entry_count = snap.entries.len();
+    elements.push(element(
+        "list:history-entries",
+        ElementType::List,
+        Some(format!("{entry_count} sessions")),
+        None,
+        None,
+        None,
+        None,
+    ));
+
+    let mut selected_semantic_id = None;
+    for (idx, entry) in snap.entries.iter().enumerate() {
+        let is_selected = idx == snap.selected_index;
+        let semantic_id = format!("choice:{}:{}", idx, entry.hit.entry.session_id);
+
+        if is_selected {
+            selected_semantic_id = Some(semantic_id.clone());
+        }
+
+        elements.push(element(
+            &semantic_id,
+            ElementType::Choice,
+            Some(entry.title.to_string()),
+            Some(entry.hit.entry.session_id.clone()),
             Some(is_selected),
             None,
             Some(idx),

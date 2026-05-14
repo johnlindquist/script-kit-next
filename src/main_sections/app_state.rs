@@ -84,6 +84,44 @@ pub(crate) struct RootFileFrame {
     pub(crate) recent_file_results: Vec<crate::file_search::FileResult>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MiniAiCloseSource {
+    Escape,
+    Actions,
+    ModeToggle,
+    Hide,
+}
+
+impl MiniAiCloseSource {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Escape => "escape",
+            Self::Actions => "actions",
+            Self::ModeToggle => "mode_toggle",
+            Self::Hide => "hide",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MiniAiCloseSnapshot {
+    pub(crate) prompt_id: String,
+    pub(crate) main_window_mode: MainWindowMode,
+    pub(crate) source: MiniAiCloseSource,
+    pub(crate) draft_len: usize,
+    pub(crate) pending_submit: bool,
+    pub(crate) handoff_source: Option<String>,
+    pub(crate) return_origin: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum MiniAiUiRequest {
+    ToggleActions {
+        prompt_id: String,
+        source: &'static str,
+    },
+}
+
 impl MainMenuFallbackState {
     fn is_active(&self) -> bool {
         self.active && !self.cached_items.is_empty()
@@ -141,6 +179,7 @@ struct MainMenuResultCacheState {
     filter_cache_key: String,
     cached_grouped_items: Arc<[GroupedListItem]>,
     cached_grouped_flat_results: Arc<[scripts::SearchResult]>,
+    cached_grouped_source_statuses: Arc<[crate::list_item::SourceChipStatusRow]>,
     cached_grouped_first_selectable_index: Option<usize>,
     cached_grouped_last_selectable_index: Option<usize>,
     grouped_cache_key: String,
@@ -153,6 +192,7 @@ impl Default for MainMenuResultCacheState {
             filter_cache_key: String::from(MAIN_MENU_RESULT_CACHE_UNINITIALIZED_KEY),
             cached_grouped_items: Arc::from([]),
             cached_grouped_flat_results: Arc::from([]),
+            cached_grouped_source_statuses: Arc::from([]),
             cached_grouped_first_selectable_index: None,
             cached_grouped_last_selectable_index: None,
             grouped_cache_key: String::from(MAIN_MENU_RESULT_CACHE_UNINITIALIZED_KEY),
@@ -203,6 +243,10 @@ impl MainMenuResultCacheState {
 
     fn grouped_flat_results(&self) -> &[scripts::SearchResult] {
         &self.cached_grouped_flat_results
+    }
+
+    fn grouped_source_statuses(&self) -> &[crate::list_item::SourceChipStatusRow] {
+        &self.cached_grouped_source_statuses
     }
 
     fn grouped_flat_result_count(&self) -> usize {
@@ -321,13 +365,36 @@ impl MainMenuResultCacheState {
         computed_filter_text: String,
         grouped_items: Vec<GroupedListItem>,
         flat_results: Vec<scripts::SearchResult>,
-        first_selectable_index: Option<usize>,
-        last_selectable_index: Option<usize>,
+        _first_selectable_index: Option<usize>,
+        _last_selectable_index: Option<usize>,
     ) {
+        let mut display_items = Vec::with_capacity(grouped_items.len());
+        let mut source_statuses = Vec::new();
+        for item in grouped_items {
+            match item {
+                GroupedListItem::Status(status) => source_statuses.push(status),
+                GroupedListItem::SectionHeader(..) | GroupedListItem::Item(_) => {
+                    display_items.push(item)
+                }
+            }
+        }
+
+        let mut first_selectable_index = None;
+        let mut last_selectable_index = None;
+        for (index, grouped_item) in display_items.iter().enumerate() {
+            if matches!(grouped_item, GroupedListItem::Item(_)) {
+                if first_selectable_index.is_none() {
+                    first_selectable_index = Some(index);
+                }
+                last_selectable_index = Some(index);
+            }
+        }
+
         self.cached_grouped_first_selectable_index = first_selectable_index;
         self.cached_grouped_last_selectable_index = last_selectable_index;
-        self.cached_grouped_items = grouped_items.into();
+        self.cached_grouped_items = display_items.into();
         self.cached_grouped_flat_results = flat_results.into();
+        self.cached_grouped_source_statuses = source_statuses.into();
         self.grouped_cache_key = computed_filter_text;
     }
 
@@ -871,6 +938,12 @@ struct ScriptListApp {
     /// Receiver for inline chat escape signals
     /// Checked by timer to trigger view reset
     inline_chat_escape_receiver: mpsc::Receiver<()>,
+    /// Sender for inline chat UI requests that need parent window access.
+    inline_chat_actions_sender: mpsc::SyncSender<MiniAiUiRequest>,
+    /// Receiver for inline chat UI requests that need parent window access.
+    inline_chat_actions_receiver: mpsc::Receiver<MiniAiUiRequest>,
+    /// Last close snapshot emitted by the inline Mini AI ChatPrompt path.
+    mini_ai_last_close_snapshot: Option<MiniAiCloseSnapshot>,
     /// Sender for inline chat continue signals
     /// The ChatPrompt continue callback uses this to signal "Continue in Harness Terminal"
     #[allow(dead_code)]

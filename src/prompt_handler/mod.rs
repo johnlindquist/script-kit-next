@@ -299,6 +299,11 @@ enum AcpReadTarget {
         info: crate::protocol::AutomationWindowInfo,
         entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
     },
+    /// Read from the Notes-hosted embedded ACP chat entity.
+    Notes {
+        info: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+    },
 }
 
 /// Resolved automation target for batch/waitFor operations.
@@ -576,6 +581,7 @@ fn resolve_automation_read_target(
             // batch-execution time since the popup could change between resolution and use.
             let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
+                || crate::ai::acp::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open();
             if any_open {
                 tracing::info!(
@@ -620,6 +626,7 @@ fn resolve_acp_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
+    cx: &gpui::App,
 ) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
     // No explicit target → default to main window (preserves existing behavior).
     let Some(target) = target else {
@@ -685,6 +692,39 @@ fn resolve_acp_read_target(
                 }
             }
         }
+        crate::protocol::AutomationWindowKind::Notes => {
+            match crate::notes::get_notes_app_entity_and_handle()
+                .and_then(|(entity, _handle)| entity.read(cx).embedded_acp_chat_entity())
+            {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.acp_target.notes_resolved"
+                    );
+                    Ok(AcpReadTarget::Notes {
+                        info: resolved,
+                        entity,
+                    })
+                }
+                None => {
+                    tracing::warn!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        "automation.acp_target.notes_no_entity"
+                    );
+                    Err(crate::protocol::TransactionError::action_failed(format!(
+                        "{op} resolved Notes target {} but no embedded ACP view is available",
+                        resolved.id
+                    )))
+                }
+            }
+        }
         crate::protocol::AutomationWindowKind::Ai => {
             // The embedded AI surface is a subview of the main window — its ACP
             // state IS main's ACP state. Route to the Main collector. This entry
@@ -712,7 +752,7 @@ fn resolve_acp_read_target(
                 "automation.acp_target.non_acp_rejected"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports only Main and AcpDetached targets; resolved {} ({:?})",
+                "{op} supports only Main, AcpDetached, and Notes targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
@@ -745,6 +785,11 @@ fn build_acp_resolved_target(
             }
         }
         AcpReadTarget::Detached { info, .. } => (
+            info.id.clone(),
+            info.kind.as_camel_case().to_string(),
+            info.title.clone(),
+        ),
+        AcpReadTarget::Notes { info, .. } => (
             info.id.clone(),
             info.kind.as_camel_case().to_string(),
             info.title.clone(),
@@ -806,11 +851,13 @@ fn build_notes_ui_snapshot(
     crate::protocol::UiStateSnapshot {
         window_visible: true,
         window_focused: true,
+        prompt_type: Some("notes".to_string()),
         input_value: Some(editor_text),
         selected_value: None,
         choice_count: 0,
         visible_semantic_ids: semantic_ids,
         focused_semantic_id: focused_id,
+        ..Default::default()
     }
 }
 
@@ -828,6 +875,7 @@ fn build_acp_detached_ui_snapshot(
     crate::protocol::UiStateSnapshot {
         window_visible: true,
         window_focused: true,
+        prompt_type: Some("acpChat".to_string()),
         input_value: Some(state.input_text.clone()),
         selected_value: state
             .picker
@@ -840,6 +888,10 @@ fn build_acp_detached_ui_snapshot(
             .map(|el| el.semantic_id.clone())
             .collect(),
         focused_semantic_id: surface.focused_semantic_id,
+        acp_status: Some(state.status.clone()),
+        acp_context_ready: state.context_ready,
+        acp_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
+        acp_cursor_index: Some(state.cursor_index),
     }
 }
 
@@ -934,6 +986,173 @@ fn prompt_message_from_protocol_message(
     message: crate::protocol::Message,
 ) -> Option<PromptMessage> {
     match message {
+        Message::Arg {
+            id,
+            placeholder,
+            choices,
+            actions,
+        } => Some(PromptMessage::ShowArg {
+            id,
+            placeholder,
+            choices,
+            actions,
+        }),
+        Message::Div {
+            id,
+            html,
+            container_classes,
+            actions,
+            placeholder,
+            hint,
+            footer,
+            container_bg,
+            container_padding,
+            opacity,
+        } => Some(PromptMessage::ShowDiv {
+            id,
+            html,
+            container_classes,
+            actions,
+            placeholder,
+            hint,
+            footer,
+            container_bg,
+            container_padding,
+            opacity,
+        }),
+        Message::Form { id, html, actions } => Some(PromptMessage::ShowForm { id, html, actions }),
+        Message::Term {
+            id,
+            command,
+            actions,
+        } => Some(PromptMessage::ShowTerm {
+            id,
+            command,
+            actions,
+        }),
+        Message::Editor {
+            id,
+            content,
+            language,
+            template,
+            on_init: _,
+            on_submit: _,
+            actions,
+        } => Some(PromptMessage::ShowEditor {
+            id,
+            content,
+            language,
+            template,
+            actions,
+        }),
+        Message::Path {
+            id,
+            start_path,
+            hint,
+        } => Some(PromptMessage::ShowPath {
+            id,
+            start_path,
+            hint,
+        }),
+        Message::Env {
+            id,
+            key,
+            prompt,
+            title,
+            secret,
+        } => Some(PromptMessage::ShowEnv {
+            id,
+            key,
+            prompt,
+            title,
+            secret: secret.unwrap_or(false),
+        }),
+        Message::Drop { id } => Some(PromptMessage::ShowDrop {
+            id,
+            placeholder: None,
+            hint: None,
+        }),
+        Message::Template { id, template } => Some(PromptMessage::ShowTemplate { id, template }),
+        Message::Select {
+            id,
+            placeholder,
+            choices,
+            multiple,
+        } => Some(PromptMessage::ShowSelect {
+            id,
+            placeholder: Some(placeholder),
+            choices,
+            multiple: multiple.unwrap_or(false),
+        }),
+        Message::Micro {
+            id,
+            placeholder,
+            choices,
+        } => Some(PromptMessage::ShowMicro {
+            id,
+            placeholder,
+            choices,
+        }),
+        Message::Chat {
+            id,
+            placeholder,
+            messages,
+            hint,
+            footer,
+            actions,
+            model,
+            models,
+            save_history,
+            use_builtin_ai,
+        } => Some(PromptMessage::ShowChat {
+            id,
+            placeholder,
+            messages,
+            hint,
+            footer,
+            actions,
+            model,
+            models,
+            save_history,
+            use_builtin_ai,
+        }),
+        Message::ChatMessage { id, message } => Some(PromptMessage::ChatAddMessage { id, message }),
+        Message::ChatStreamStart {
+            id,
+            message_id,
+            position,
+        } => Some(PromptMessage::ChatStreamStart {
+            id,
+            message_id,
+            position,
+        }),
+        Message::ChatStreamChunk {
+            id,
+            message_id,
+            chunk,
+        } => Some(PromptMessage::ChatStreamChunk {
+            id,
+            message_id,
+            chunk,
+        }),
+        Message::ChatStreamComplete { id, message_id } => {
+            Some(PromptMessage::ChatStreamComplete { id, message_id })
+        }
+        Message::ChatClear { id } => Some(PromptMessage::ChatClear { id }),
+        Message::ChatSetError {
+            id,
+            message_id,
+            error,
+        } => Some(PromptMessage::ChatSetError {
+            id,
+            message_id,
+            error,
+        }),
+        Message::ChatClearError { id, message_id } => {
+            Some(PromptMessage::ChatClearError { id, message_id })
+        }
+        Message::Webcam { id } => Some(PromptMessage::WebcamComingSoon { id }),
+        Message::Mic { id } => Some(PromptMessage::MicComingSoon { id }),
         Message::GetState { request_id, target } => {
             Some(PromptMessage::GetState { request_id, target })
         }
@@ -1724,12 +1943,7 @@ impl ScriptListApp {
                 self.pending_placeholder = Some(pending_placeholder);
                 self.pending_focus = Some(FocusTarget::MainFilter);
                 // Resize window based on number of choices
-                let view_type = if choice_count == 0 {
-                    ViewType::ArgPromptNoChoices
-                } else {
-                    ViewType::ArgPromptWithChoices
-                };
-                resize_to_view_sync(view_type, choice_count);
+                resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
                 cx.notify();
             }
             PromptMessage::ShowMini {
@@ -2462,6 +2676,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 String::new(),
                                 0,
                                 0,
@@ -2469,6 +2684,8 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 resolved.visible,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -2489,6 +2706,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 String::new(),
                                 0,
                                 0,
@@ -2496,6 +2714,8 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -2735,58 +2955,38 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let entries = &self.cached_clipboard_entries;
-                        let filtered_count = if filter.is_empty() {
-                            entries.len()
-                        } else {
-                            let filter_lower = filter.to_lowercase();
-                            entries
-                                .iter()
-                                .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
-                                .count()
-                        };
+                        let (dataset_count, visible_count) =
+                            self.clipboard_history_dataset_and_visible_counts(filter);
+                        let selected_value = self
+                            .clipboard_history_selected_visible_row(filter, *selected_index)
+                            .map(|(_, entry)| entry.text_preview);
                         (
                             "clipboardHistory".to_string(),
                             None,
                             None,
                             filter.clone(),
-                            entries.len(),
-                            filtered_count,
+                            dataset_count,
+                            visible_count,
                             *selected_index as i32,
-                            None,
+                            selected_value,
                         )
                     }
                     AppView::AcpHistoryView {
                         filter,
                         selected_index,
                     } => {
-                        let entries = crate::ai::acp::history::load_history();
-                        let filtered_entries: Vec<&crate::ai::acp::history::AcpHistoryEntry> =
-                            if filter.is_empty() {
-                                entries.iter().collect()
-                            } else {
-                                let filter_lower = filter.to_lowercase();
-                                entries
-                                    .iter()
-                                    .filter(|entry| {
-                                        entry.first_message.to_lowercase().contains(&filter_lower)
-                                            || entry
-                                                .timestamp
-                                                .to_lowercase()
-                                                .contains(&filter_lower)
-                                    })
-                                    .collect()
-                            };
-                        let selected_value = filtered_entries
-                            .get(*selected_index)
-                            .map(|entry| entry.first_message.clone());
+                        let (dataset_count, visible_count) =
+                            Self::acp_history_dataset_and_visible_counts(filter);
+                        let selected_value =
+                            Self::acp_history_selected_visible_row(filter, *selected_index)
+                                .map(|entry| entry.title_display().to_string());
                         (
                             "acpHistory".to_string(),
                             None,
                             None,
                             filter.clone(),
-                            entries.len(),
-                            filtered_entries.len(),
+                            dataset_count,
+                            visible_count,
                             *selected_index as i32,
                             selected_value,
                         )
@@ -2821,17 +3021,18 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let hits = crate::dictation::search_history(filter, 100);
-                        let selected_value = hits
-                            .get(*selected_index)
-                            .map(|hit| hit.entry.preview.clone());
+                        let (dataset_count, visible_count) =
+                            Self::dictation_history_dataset_and_visible_counts(filter);
+                        let selected_value =
+                            Self::dictation_history_selected_visible_row(filter, *selected_index)
+                                .map(|entry| entry.preview);
                         (
                             "dictationHistory".to_string(),
                             None,
                             None,
                             filter.clone(),
-                            hits.len(),
-                            hits.len(),
+                            dataset_count,
+                            visible_count,
                             *selected_index as i32,
                             selected_value,
                         )
@@ -2840,25 +3041,25 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let entries = if filter.is_empty() {
-                            crate::notes::get_all_notes().unwrap_or_default()
-                        } else {
-                            crate::notes::search_notes(filter).unwrap_or_default()
-                        };
-                        let selected_value = entries.get(*selected_index).map(|entry| {
-                            if entry.title.trim().is_empty() {
-                                "Untitled Note".to_string()
-                            } else {
-                                entry.title.clone()
-                            }
-                        });
+                        let (dataset_count, visible_count) =
+                            Self::notes_browse_dataset_and_visible_counts(filter);
+                        let selected_value =
+                            Self::notes_browse_selected_visible_row(filter, *selected_index).map(
+                                |entry| {
+                                    if entry.title.trim().is_empty() {
+                                        "Untitled Note".to_string()
+                                    } else {
+                                        entry.title
+                                    }
+                                },
+                            );
                         (
                             "notesBrowse".to_string(),
                             None,
                             None,
                             filter.clone(),
-                            entries.len(),
-                            entries.len(),
+                            dataset_count,
+                            visible_count,
                             *selected_index as i32,
                             selected_value,
                         )
@@ -2914,21 +3115,18 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let total = self.cached_browser_tabs.len();
-                        let filtered = crate::browser_tabs::fuzzy_search_browser_tabs(
-                            &self.cached_browser_tabs,
-                            filter,
-                        );
-                        let selected_value = filtered
-                            .get(*selected_index)
-                            .map(|entry| entry.tab.display_title().to_string());
+                        let (dataset_count, visible_count) =
+                            self.browser_tabs_dataset_and_visible_counts(filter);
+                        let selected_value = self
+                            .browser_tabs_selected_visible_row(filter, *selected_index)
+                            .map(|tab| tab.display_title().to_string());
                         (
                             "browserTabs".to_string(),
                             None,
                             None,
                             filter.clone(),
-                            total,
-                            filtered.len(),
+                            dataset_count,
+                            visible_count,
                             *selected_index as i32,
                             selected_value,
                         )
@@ -2937,8 +3135,11 @@ impl ScriptListApp {
                         filter,
                         selected_index,
                     } => {
-                        let dataset_count = crate::design_gallery_total_items();
-                        let visible_count = crate::design_gallery_filtered_len(filter);
+                        let (dataset_count, visible_count) =
+                            Self::design_gallery_dataset_and_visible_counts(filter);
+                        let selected_value =
+                            Self::design_gallery_selected_visible_row(filter, *selected_index)
+                                .map(|item| crate::design_gallery_item_label(&item));
                         (
                             "designGallery".to_string(),
                             None,
@@ -2947,7 +3148,7 @@ impl ScriptListApp {
                             dataset_count,
                             visible_count,
                             *selected_index as i32,
-                            None,
+                            selected_value,
                         )
                     }
                     #[cfg(feature = "storybook")]
@@ -3073,29 +3274,45 @@ impl ScriptListApp {
                         query,
                         selected_index,
                         results,
-                    } => (
-                        "browseKits".to_string(),
-                        None,
-                        None,
-                        query.clone(),
-                        results.len(),
-                        results.len(),
-                        *selected_index as i32,
-                        None,
-                    ),
+                    } => {
+                        let (total, visible_count) =
+                            Self::kit_store_browse_dataset_and_visible_counts(results);
+                        let selected_value = Self::kit_store_browse_selected_visible_result(
+                            results,
+                            *selected_index,
+                        )
+                        .map(|result| result.full_name);
+                        (
+                            "browseKits".to_string(),
+                            None,
+                            None,
+                            query.clone(),
+                            total,
+                            visible_count,
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::InstalledKitsView {
                         selected_index,
                         kits,
-                    } => (
-                        "installedKits".to_string(),
-                        None,
-                        None,
-                        String::new(),
-                        kits.len(),
-                        kits.len(),
-                        *selected_index as i32,
-                        None,
-                    ),
+                    } => {
+                        let (total, visible_count) =
+                            Self::kit_store_installed_dataset_and_visible_counts(kits);
+                        let selected_value =
+                            Self::kit_store_installed_selected_visible_kit(kits, *selected_index)
+                                .map(|kit| kit.name);
+                        (
+                            "installedKits".to_string(),
+                            None,
+                            None,
+                            String::new(),
+                            total,
+                            visible_count,
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::ProcessManagerView {
                         filter,
                         selected_index,
@@ -3279,6 +3496,32 @@ impl ScriptListApp {
                 // When window is visible and we're tracking an input, we're focused.
                 let window_visible = script_kit_gpui::is_main_window_visible();
                 let is_focused = window_visible && self.focused_input != FocusedInput::None;
+                let filter_input_decorations = {
+                    let input_state = self.gpui_input_state.read(cx);
+                    let text = input_state.value().to_string();
+                    let roles = input_state.highlight_range_roles();
+                    let chips = input_state
+                        .highlight_ranges()
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(index, (range, _color))| {
+                            let chip_text = text.get(range.clone())?.to_string();
+                            let role = roles
+                                .get(index)
+                                .cloned()
+                                .unwrap_or_else(|| "highlight".to_string());
+                            Some(serde_json::json!({
+                                "text": chip_text,
+                                "range": [range.start, range.end],
+                                "role": role,
+                            }))
+                        })
+                        .collect::<Vec<_>>();
+                    Some(serde_json::json!({
+                        "text": text,
+                        "chips": chips,
+                    }))
+                };
 
                 let menu_syntax_main_hint = if matches!(self.current_view, AppView::ScriptList) {
                     // Run 12 — also treat the empty-result gate as true when
@@ -3297,8 +3540,17 @@ impl ScriptListApp {
                         crate::menu_syntax::main_hint::active_head_is_source_filter(
                             &self.filter_text,
                         ) && visible_choice_count > 0;
-                    let advanced_query_results_empty =
-                        parser_thinks_empty || (detector_owns_head && !source_head_has_results);
+                    let advanced_query_has_results = (self
+                        .menu_syntax_mode
+                        .advanced_query_for(&self.filter_text)
+                        .is_some()
+                        || crate::menu_syntax::query::parse_filter_query(&self.filter_text)
+                            .is_some())
+                        && visible_choice_count > 0;
+                    let advanced_query_results_empty = parser_thinks_empty
+                        || (detector_owns_head
+                            && !source_head_has_results
+                            && !advanced_query_has_results);
                     self.menu_syntax_main_hint_snapshot(
                         &self.filter_text,
                         advanced_query_results_empty,
@@ -3410,6 +3662,7 @@ impl ScriptListApp {
                     prompt_id,
                     Some(self.current_surface_contract_snapshot()),
                     self.active_popup_contract_snapshot(),
+                    Some(self.active_footer_snapshot(cx)),
                     placeholder,
                     input_value,
                     choice_count,
@@ -3418,6 +3671,8 @@ impl ScriptListApp {
                     selected_value,
                     is_focused,
                     window_visible,
+                    Some(self.mini_ai_state_snapshot(cx)),
+                    filter_input_decorations,
                     menu_syntax_main_hint,
                     capture_history_picker,
                     main_window_preflight,
@@ -3468,19 +3723,23 @@ impl ScriptListApp {
 
                 // Resolve target: Main → main window, AcpDetached → detached entity,
                 // anything else → structured error.
-                let acp_target =
-                    match resolve_acp_read_target(&request_id, "getAcpState", target.as_ref()) {
-                        Ok(t) => t,
-                        Err(error) => {
-                            let mut state = protocol::AcpStateSnapshot::default();
-                            state.warnings = vec![format!("target_unsupported: {}", error.message)];
-                            let response = Message::acp_state_result(request_id.clone(), state);
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(response);
-                            }
-                            return;
+                let acp_target = match resolve_acp_read_target(
+                    &request_id,
+                    "getAcpState",
+                    target.as_ref(),
+                    cx,
+                ) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        let mut state = protocol::AcpStateSnapshot::default();
+                        state.warnings = vec![format!("target_unsupported: {}", error.message)];
+                        let response = Message::acp_state_result(request_id.clone(), state);
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
                         }
-                    };
+                        return;
+                    }
+                };
 
                 let resolved_target =
                     build_acp_resolved_target(&request_id, "getAcpState", &acp_target);
@@ -3488,6 +3747,10 @@ impl ScriptListApp {
                 let mut state = match &acp_target {
                     AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
                     AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.collect_acp_state_snapshot(cx)
+                    }
+                    AcpReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
                         view.collect_acp_state_snapshot(cx)
                     }
@@ -3555,6 +3818,7 @@ impl ScriptListApp {
                     &request_id,
                     "performAcpSetupAction",
                     target.as_ref(),
+                    cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
@@ -3594,6 +3858,7 @@ impl ScriptListApp {
                     resolved_target = match &acp_target {
                         AcpReadTarget::Main { .. } => "main",
                         AcpReadTarget::Detached { .. } => "detached",
+                        AcpReadTarget::Notes { .. } => "notes",
                     },
                     "automation.acp_action_target_resolved"
                 );
@@ -3612,11 +3877,18 @@ impl ScriptListApp {
                     AcpReadTarget::Detached { entity, .. } => entity.update(cx, |view, cx| {
                         view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                     }),
+                    AcpReadTarget::Notes { entity, .. } => entity.update(cx, |view, cx| {
+                        view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
+                    }),
                 };
 
                 let mut state = match &acp_target {
                     AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
                     AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.collect_acp_state_snapshot(cx)
+                    }
+                    AcpReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
                         view.collect_acp_state_snapshot(cx)
                     }
@@ -3660,6 +3932,7 @@ impl ScriptListApp {
                     &request_id,
                     "resetAcpTestProbe",
                     target.as_ref(),
+                    cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
@@ -3685,6 +3958,11 @@ impl ScriptListApp {
                             view.reset_test_probe();
                         });
                     }
+                    AcpReadTarget::Notes { entity, .. } => {
+                        entity.update(cx, |view, _cx| {
+                            view.reset_test_probe();
+                        });
+                    }
                 };
 
                 // Respond with the current (now-empty) probe snapshot.
@@ -3693,6 +3971,10 @@ impl ScriptListApp {
                         self.collect_acp_test_probe(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
                     }
                     AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.test_probe_snapshot(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                    }
+                    AcpReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
                     }
@@ -3743,6 +4025,7 @@ impl ScriptListApp {
                     &request_id,
                     "getAcpTestProbe",
                     target.as_ref(),
+                    cx,
                 ) {
                     Ok(t) => t,
                     Err(error) => {
@@ -3762,6 +4045,10 @@ impl ScriptListApp {
                 let mut probe = match &acp_target {
                     AcpReadTarget::Main { .. } => self.collect_acp_test_probe(tail, cx),
                     AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.test_probe_snapshot(tail, cx)
+                    }
+                    AcpReadTarget::Notes { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(tail, cx)
                     }
@@ -4018,6 +4305,25 @@ impl ScriptListApp {
                 let timeout_ms = timeout.unwrap_or(5_000);
                 let poll_ms = poll_interval.unwrap_or(25);
                 let rid = request_id.clone();
+                let command_fingerprint =
+                    match protocol::transaction_executor::stable_wait_fingerprint(
+                        &condition, timeout_ms, poll_ms,
+                    ) {
+                        Ok(fingerprint) => fingerprint,
+                        Err(error) => {
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(Message::wait_for_result(
+                                    request_id.clone(),
+                                    false,
+                                    0,
+                                    Some(crate::protocol::TransactionError::action_failed(
+                                        format!("failed to fingerprint waitFor: {error}"),
+                                    )),
+                                ));
+                            }
+                            return;
+                        }
+                    };
 
                 let is_acp_condition = is_acp_wait_condition(&condition);
 
@@ -4025,8 +4331,11 @@ impl ScriptListApp {
                 // conditions accept Main, AcpDetached, and Notes.
                 let resolved_target: AutomationReadTarget = if target.is_some() {
                     if is_acp_condition {
-                        match resolve_acp_read_target(&rid, "waitFor", target.as_ref()) {
+                        match resolve_acp_read_target(&rid, "waitFor", target.as_ref(), cx) {
                             Ok(AcpReadTarget::Detached { entity, info }) => {
+                                AutomationReadTarget::AcpDetached { entity, info }
+                            }
+                            Ok(AcpReadTarget::Notes { entity, info }) => {
                                 AutomationReadTarget::AcpDetached { entity, info }
                             }
                             Ok(AcpReadTarget::Main { info }) => AutomationReadTarget::Main { info },
@@ -4096,7 +4405,9 @@ impl ScriptListApp {
                     let trace = if include_trace {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         Some(protocol::TransactionTrace {
+                            schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                             request_id: rid.clone(),
+                            command_fingerprint: command_fingerprint.clone(),
                             status: protocol::TransactionTraceStatus::Ok,
                             started_at_ms,
                             total_elapsed_ms: 0,
@@ -4104,11 +4415,18 @@ impl ScriptListApp {
                             commands: vec![protocol::TransactionCommandTrace {
                                 index: 0,
                                 command: "waitFor".to_string(),
+                                command_payload: None,
                                 started_at_ms,
                                 elapsed_ms: 0,
                                 before: protocol::UiStateSnapshot::default(),
                                 after: protocol::UiStateSnapshot::default(),
-                                polls: Vec::new(),
+                                polls: vec![protocol::WaitPollObservation {
+                                    attempt: 1,
+                                    elapsed_ms: 0,
+                                    condition_satisfied: true,
+                                    snapshot: protocol::UiStateSnapshot::default(),
+                                    matched_semantic_ids: Vec::new(),
+                                }],
                                 error: None,
                             }],
                         })
@@ -4190,7 +4508,9 @@ impl ScriptListApp {
                                     );
                                 let trace = if include_trace {
                                     Some(protocol::TransactionTrace {
+                                        schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                         request_id: rid.clone(),
+                                        command_fingerprint: command_fingerprint.clone(),
                                         status: protocol::TransactionTraceStatus::Timeout,
                                         started_at_ms,
                                         total_elapsed_ms: elapsed_ms,
@@ -4198,6 +4518,7 @@ impl ScriptListApp {
                                         commands: vec![protocol::TransactionCommandTrace {
                                             index: 0,
                                             command: "waitFor".to_string(),
+                                            command_payload: None,
                                             started_at_ms,
                                             elapsed_ms,
                                             before: before_snapshot.clone(),
@@ -4276,7 +4597,10 @@ impl ScriptListApp {
                                             );
                                         let trace = if include_trace {
                                             Some(protocol::TransactionTrace {
+                                                schema_version:
+                                                    protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                                 request_id: rid.clone(),
+                                                command_fingerprint: command_fingerprint.clone(),
                                                 status: protocol::TransactionTraceStatus::Ok,
                                                 started_at_ms,
                                                 total_elapsed_ms: elapsed_ms,
@@ -4284,6 +4608,7 @@ impl ScriptListApp {
                                                 commands: vec![protocol::TransactionCommandTrace {
                                                     index: 0,
                                                     command: "waitFor".to_string(),
+                                                    command_payload: None,
                                                     started_at_ms,
                                                     elapsed_ms,
                                                     before: before_snapshot.clone(),
@@ -4331,7 +4656,10 @@ impl ScriptListApp {
                                         );
                                     let trace = if include_trace {
                                         Some(protocol::TransactionTrace {
+                                            schema_version:
+                                                protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                             request_id: rid.clone(),
+                                            command_fingerprint: command_fingerprint.clone(),
                                             status: protocol::TransactionTraceStatus::Failed,
                                             started_at_ms,
                                             total_elapsed_ms: elapsed_ms,
@@ -4339,6 +4667,7 @@ impl ScriptListApp {
                                             commands: vec![protocol::TransactionCommandTrace {
                                                 index: 0,
                                                 command: "waitFor".to_string(),
+                                                command_payload: None,
                                                 started_at_ms,
                                                 elapsed_ms,
                                                 before: before_snapshot.clone(),
@@ -4391,6 +4720,96 @@ impl ScriptListApp {
                 });
                 let rid = request_id.clone();
                 let sender = self.response_sender.clone();
+                let command_fingerprint =
+                    match protocol::transaction_executor::stable_transaction_fingerprint(
+                        &commands,
+                        Some(&opts),
+                    ) {
+                        Ok(fingerprint) => fingerprint,
+                        Err(error) => {
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(Message::batch_result(
+                                    request_id.clone(),
+                                    false,
+                                    vec![crate::protocol::BatchResultEntry {
+                                        index: 0,
+                                        success: false,
+                                        command: "batch".to_string(),
+                                        elapsed: Some(0),
+                                        value: None,
+                                        error: Some(
+                                            crate::protocol::TransactionError::action_failed(
+                                                format!(
+                                                    "failed to fingerprint transaction: {error}"
+                                                ),
+                                            ),
+                                        ),
+                                    }],
+                                    Some(0),
+                                    0,
+                                ));
+                            }
+                            return;
+                        }
+                    };
+
+                match protocol::transaction_trace::read_latest_transaction_trace(None, Some(&rid)) {
+                    Ok(Some(existing)) if existing.command_fingerprint == command_fingerprint => {
+                        let output = protocol::transaction_executor::BatchOutput::from_trace(
+                            existing.clone(),
+                        );
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::batch_result_with_trace(
+                                output.request_id,
+                                output.success,
+                                output.results,
+                                output.failed_at,
+                                output.total_elapsed,
+                                Some(existing),
+                            ));
+                        }
+                        return;
+                    }
+                    Ok(Some(existing)) if !existing.command_fingerprint.is_empty() => {
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::batch_result(
+                                request_id.clone(),
+                                false,
+                                vec![crate::protocol::BatchResultEntry {
+                                    index: 0,
+                                    success: false,
+                                    command: "batch".to_string(),
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(
+                                        crate::protocol::TransactionError::action_failed(format!(
+                                            "requestId {rid} was already used for a different transaction payload"
+                                        )),
+                                    ),
+                                }],
+                                Some(0),
+                                0,
+                            ));
+                        }
+                        return;
+                    }
+                    Ok(Some(_legacy)) => {
+                        tracing::warn!(
+                            target: "script_kit::transaction",
+                            request_id = %rid,
+                            "Ignoring legacy transaction trace without fingerprint"
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::transaction",
+                            request_id = %rid,
+                            error = %error,
+                            "Failed to inspect prior transaction trace"
+                        );
+                    }
+                }
 
                 // Resolve target: accept Main, AcpDetached, and Notes.
                 let batch_target: AutomationReadTarget = if target.is_some() {
@@ -4772,7 +5191,9 @@ impl ScriptListApp {
                             let started_at_ms = protocol::transaction_trace::now_epoch_ms()
                                 .saturating_sub(total_elapsed);
                             Some(protocol::TransactionTrace {
+                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                 request_id: rid.clone(),
+                                command_fingerprint: command_fingerprint.clone(),
                                 status: if success {
                                     protocol::TransactionTraceStatus::Ok
                                 } else {
@@ -4785,6 +5206,7 @@ impl ScriptListApp {
                                     protocol::TransactionCommandTrace {
                                         index: r.index,
                                         command: r.command.clone(),
+                                command_payload: None,
                                         started_at_ms,
                                         elapsed_ms: r.elapsed.unwrap_or(0),
                                         before: protocol::UiStateSnapshot::default(),
@@ -4848,9 +5270,23 @@ impl ScriptListApp {
                                     let nh = notes_handle;
                                     let result = nh.update(cx, |_root, window, cx| {
                                         ne.update(cx, |app, cx| {
-                                            app.editor_state.update(cx, |state, inner_cx| {
-                                                state.set_value(text.clone(), window, inner_cx);
-                                            });
+                                            let embedded_acp = (app.surface_mode()
+                                                == crate::notes::NotesSurfaceMode::Acp)
+                                                .then(|| app.embedded_acp_chat_entity())
+                                                .flatten();
+                                            if let Some(chat) = embedded_acp {
+                                                chat.update(cx, |chat, cx| {
+                                                    chat.set_input_in_window(
+                                                        text.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                });
+                                            } else {
+                                                app.editor_state.update(cx, |state, inner_cx| {
+                                                    state.set_value(text.clone(), window, inner_cx);
+                                                });
+                                            }
                                         });
                                         tracing::info!(
                                             target: "script_kit::transaction",
@@ -4991,7 +5427,9 @@ impl ScriptListApp {
                             let started_at_ms = protocol::transaction_trace::now_epoch_ms()
                                 .saturating_sub(total_elapsed);
                             Some(protocol::TransactionTrace {
+                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                 request_id: rid.clone(),
+                                command_fingerprint: command_fingerprint.clone(),
                                 status: if success {
                                     protocol::TransactionTraceStatus::Ok
                                 } else {
@@ -5004,6 +5442,7 @@ impl ScriptListApp {
                                     protocol::TransactionCommandTrace {
                                         index: r.index,
                                         command: r.command.clone(),
+                                command_payload: None,
                                         started_at_ms,
                                         elapsed_ms: r.elapsed.unwrap_or(0),
                                         before: protocol::UiStateSnapshot::default(),
@@ -5301,7 +5740,9 @@ impl ScriptListApp {
                         let started_at_ms = 0u64;
                         let trace = if include_trace {
                             Some(protocol::TransactionTrace {
+                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                 request_id: rid.clone(),
+                                command_fingerprint: command_fingerprint.clone(),
                                 status: if success { protocol::TransactionTraceStatus::Ok } else { protocol::TransactionTraceStatus::Failed },
                                 started_at_ms,
                                 total_elapsed_ms: total_elapsed,
@@ -5310,6 +5751,7 @@ impl ScriptListApp {
                                     protocol::TransactionCommandTrace {
                                         index: r.index,
                                         command: r.command.clone(),
+                                command_payload: None,
                                         started_at_ms,
                                         elapsed_ms: r.elapsed.unwrap_or(0),
                                         before: protocol::UiStateSnapshot::default(),
@@ -5569,7 +6011,9 @@ impl ScriptListApp {
                         let started_at_ms = 0u64;
                         let trace = if include_trace {
                             Some(protocol::TransactionTrace {
+                                schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                                 request_id: rid.clone(),
+                                command_fingerprint: command_fingerprint.clone(),
                                 status: if success { protocol::TransactionTraceStatus::Ok } else { protocol::TransactionTraceStatus::Failed },
                                 started_at_ms,
                                 total_elapsed_ms: total_elapsed,
@@ -5578,6 +6022,7 @@ impl ScriptListApp {
                                     protocol::TransactionCommandTrace {
                                         index: r.index,
                                         command: r.command.clone(),
+                                command_payload: None,
                                         started_at_ms,
                                         elapsed_ms: r.elapsed.unwrap_or(0),
                                         before: protocol::UiStateSnapshot::default(),
@@ -5968,7 +6413,9 @@ impl ScriptListApp {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms()
                             .saturating_sub(total_elapsed);
                         Some(protocol::TransactionTrace {
+                            schema_version: protocol::TRANSACTION_TRACE_SCHEMA_VERSION,
                             request_id: rid.clone(),
+                            command_fingerprint: command_fingerprint.clone(),
                             status: if success {
                                 protocol::TransactionTraceStatus::Ok
                             } else {
@@ -5981,6 +6428,7 @@ impl ScriptListApp {
                                 protocol::TransactionCommandTrace {
                                     index: r.index,
                                     command: r.command.clone(),
+                                    command_payload: commands.get(r.index).cloned(),
                                     started_at_ms,
                                     elapsed_ms: r.elapsed.unwrap_or(0),
                                     before: protocol::UiStateSnapshot::default(),
@@ -5993,6 +6441,19 @@ impl ScriptListApp {
                     } else {
                         None
                     };
+
+                    if let Some(ref trace) = trace {
+                        if let Err(error) =
+                            protocol::transaction_trace::append_transaction_trace(None, trace)
+                        {
+                            tracing::warn!(
+                                target: "script_kit::transaction",
+                                request_id = %rid,
+                                error = %error,
+                                "Failed to append transaction trace"
+                            );
+                        }
+                    }
 
                     tracing::info!(
                         category = "AUTOMATION",
@@ -6457,6 +6918,21 @@ impl ScriptListApp {
                 // Store SDK actions for the actions panel (Cmd+K)
                 self.sdk_actions = actions;
 
+                let escape_sender = self.inline_chat_escape_sender.clone();
+                let escape_main_window_mode = self.main_window_mode;
+                let escape_callback: prompts::ChatEscapeCallback =
+                    std::sync::Arc::new(move |prompt_id| {
+                        tracing::info!(
+                            target: "script_kit::mini_ai",
+                            event = "mini_ai_window_close_requested",
+                            prompt_id = %prompt_id,
+                            main_window_mode = ?escape_main_window_mode,
+                            source = MiniAiCloseSource::Escape.as_str(),
+                            "SDK ChatPrompt close requested"
+                        );
+                        let _ = escape_sender.try_send(());
+                    });
+
                 // Create submit callback for chat prompt
                 let response_sender = self.response_sender.clone();
                 let chat_submit_callback: prompts::ChatSubmitCallback =
@@ -6493,7 +6969,9 @@ impl ScriptListApp {
                     focus_handle,
                     chat_submit_callback,
                     std::sync::Arc::clone(&self.theme),
-                );
+                )
+                .with_escape_callback(escape_callback)
+                .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
 
                 // Apply model configuration from SDK
                 if !models.is_empty() {
@@ -6570,15 +7048,20 @@ impl ScriptListApp {
                 // has a live callback. ⌘K is also intercepted at the parent level.
                 logging::bench_log("ChatPrompt_creating");
                 let entity = cx.new(|_| chat_prompt);
-                let app_weak = cx.entity().downgrade();
+                let actions_sender = self.inline_chat_actions_sender.clone();
                 entity.update(cx, |chat, _cx| {
-                    chat.set_on_show_actions(std::sync::Arc::new(move |_prompt_id| {
+                    chat.set_on_show_actions(std::sync::Arc::new(move |prompt_id| {
                         tracing::info!(
+                            target: "script_kit::mini_ai",
                             event = "on_show_actions.triggered",
                             source = "sdk-chat",
+                            prompt_id = %prompt_id,
                             "ChatPrompt requested actions dialog via callback"
                         );
-                        let _ = &app_weak;
+                        let _ = actions_sender.try_send(MiniAiUiRequest::ToggleActions {
+                            prompt_id: prompt_id.to_string(),
+                            source: "sdk_chat",
+                        });
                     }));
                 });
                 self.current_view = AppView::ChatPrompt { id, entity };
@@ -6586,7 +7069,10 @@ impl ScriptListApp {
                 self.pending_focus = Some(FocusTarget::ChatPrompt);
                 logging::bench_log("ChatPrompt_created");
 
-                resize_to_view_sync(ViewType::DivPrompt, 0);
+                resize_to_view_sync(
+                    crate::ui_window::compact_ai_view_type_for_mode(self.main_window_mode),
+                    0,
+                );
                 logging::bench_log("resize_queued");
                 cx.notify();
                 logging::bench_end("hotkey_to_chat_visible");
@@ -7393,6 +7879,125 @@ impl ScriptListApp {
         })
     }
 
+    fn footer_action_name(action: crate::footer_popup::FooterAction) -> String {
+        match action {
+            crate::footer_popup::FooterAction::Run => "run",
+            crate::footer_popup::FooterAction::Actions => "actions",
+            crate::footer_popup::FooterAction::Ai => "ai",
+            crate::footer_popup::FooterAction::Apply => "apply",
+            crate::footer_popup::FooterAction::Close => "close",
+        }
+        .to_string()
+    }
+
+    fn active_footer_button_snapshot(
+        button: &crate::footer_popup::FooterButtonConfig,
+    ) -> crate::protocol::ActiveFooterButtonSnapshot {
+        crate::protocol::ActiveFooterButtonSnapshot {
+            action: Self::footer_action_name(button.action),
+            key: button.key.to_string(),
+            label: button.label.to_string(),
+            enabled: button.enabled,
+            selected: button.selected,
+            action_disabled: button.disabled_reason.map(str::to_string),
+        }
+    }
+
+    pub(crate) fn active_footer_snapshot(
+        &self,
+        cx: &gpui::App,
+    ) -> crate::protocol::ActiveFooterSnapshot {
+        let expected_surface = self.current_view.native_footer_surface();
+        let host = crate::footer_popup::main_window_footer_host_snapshot();
+        let popup_open = self.show_actions_popup
+            || self.actions_dialog.is_some()
+            || self.menu_syntax_trigger_popup_state.snapshot.is_some()
+            || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
+        let config = self.main_window_footer_config_with_cx(Some(cx));
+        let native_buttons: Vec<_> = config
+            .as_ref()
+            .map(|cfg| {
+                cfg.buttons
+                    .iter()
+                    .map(Self::active_footer_button_snapshot)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let native_ready = expected_surface.is_some()
+            && host.native_host_installed
+            && host.installed_surface == expected_surface;
+
+        let prompt_owned = matches!(
+            self.current_view,
+            AppView::TermPrompt { .. }
+                | AppView::SdkReferenceView { .. }
+                | AppView::ScriptTemplateCatalogView { .. }
+        );
+        let content_owned = matches!(self.current_view, AppView::About { .. });
+        let footerless = matches!(self.current_view, AppView::MicroPrompt { .. });
+
+        let owner = if popup_open {
+            "popup"
+        } else if native_ready {
+            "native"
+        } else if expected_surface.is_some() || prompt_owned {
+            "prompt"
+        } else if content_owned {
+            "content"
+        } else if footerless {
+            "none"
+        } else {
+            "none"
+        };
+
+        let buttons = match owner {
+            "native" | "prompt" if expected_surface.is_some() => native_buttons,
+            "prompt" => vec![
+                crate::protocol::ActiveFooterButtonSnapshot {
+                    action: "actions".to_string(),
+                    key: "⌘K".to_string(),
+                    label: "Actions".to_string(),
+                    enabled: true,
+                    selected: false,
+                    action_disabled: None,
+                },
+                crate::protocol::ActiveFooterButtonSnapshot {
+                    action: "close".to_string(),
+                    key: "Esc".to_string(),
+                    label: "Close".to_string(),
+                    enabled: true,
+                    selected: false,
+                    action_disabled: None,
+                },
+            ],
+            _ => Vec::new(),
+        };
+
+        let mismatch = match (expected_surface, host.installed_surface) {
+            (Some(expected), Some(active)) if expected != active => {
+                Some(format!("expected:{expected};active:{active}"))
+            }
+            (Some(expected), None) if host.requested_surface == Some(expected) => {
+                Some(format!("native_host_missing:{expected}"))
+            }
+            _ => None,
+        };
+
+        crate::protocol::ActiveFooterSnapshot {
+            schema_version: crate::protocol::ACTIVE_FOOTER_SCHEMA_VERSION,
+            owner: owner.to_string(),
+            expected_surface: expected_surface.map(str::to_string),
+            requested_surface: host.requested_surface.map(str::to_string),
+            active_surface: host.installed_surface.map(str::to_string),
+            native_footer_host_installed: native_ready,
+            gpui_fallback_visible: owner == "prompt",
+            button_count: buttons.len(),
+            buttons,
+            mismatch,
+        }
+    }
+
     /// Get the current input/filter value.
     ///
     /// Verbatim-echo contract: this is the sole reader that produces
@@ -7454,6 +8059,7 @@ impl ScriptListApp {
         protocol::UiStateSnapshot {
             window_visible,
             window_focused,
+            prompt_type: Some(self.app_view_name()),
             input_value: if input_value.is_empty() {
                 None
             } else {
@@ -7463,6 +8069,7 @@ impl ScriptListApp {
             focused_semantic_id,
             visible_semantic_ids,
             choice_count,
+            ..Default::default()
         }
     }
 
@@ -7562,6 +8169,11 @@ impl ScriptListApp {
             AppView::AcpChatView { entity } => {
                 let entity = entity.clone();
                 entity.update(cx, |view, cx| view.set_input(text.to_string(), cx));
+                cx.notify();
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                let entity = entity.clone();
+                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
             }
             _ => {

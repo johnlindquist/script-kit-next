@@ -153,7 +153,7 @@ impl ScriptListApp {
 
         // Reset pin state when window is closed
         self.is_pinned = false;
-        self.main_window_mode = MainWindowMode::Full;
+        self.set_main_window_mode_state_only(MainWindowMode::Full, cx, "close_and_reset_window");
 
         // Close child windows FIRST if open (they are children of main window)
         // Actions window

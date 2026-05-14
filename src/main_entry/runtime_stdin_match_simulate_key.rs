@@ -181,6 +181,16 @@
                                                     view.move_selection_down(ctx);
                                                 }
                                                 "enter" => {
+                                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                                                        if view.apply_menu_syntax_trigger_popup_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax popup");
+                                                            return;
+                                                        }
+                                                    }
                                                     logging::log("STDIN", "SimulateKey: Enter - execute selected");
                                                     view.execute_selected(ctx);
                                                 }
@@ -577,7 +587,13 @@
                                         } else {
                                             // Route setup keys (tab, arrows, enter, escape) to ChatPrompt
                                             entity.update(ctx, |chat, cx| {
-                                                if chat.handle_setup_key(&key_lower, has_shift, cx) {
+                                                if key_lower == "escape" {
+                                                    chat.handle_escape(cx);
+                                                    logging::log(
+                                                        "STDIN",
+                                                        "SimulateKey: Escape handled by ChatPrompt",
+                                                    );
+                                                } else if chat.handle_setup_key(&key_lower, has_shift, cx) {
                                                     logging::log("STDIN", &format!("SimulateKey: Setup handled '{}'", key_lower));
                                                 } else {
                                                     logging::log("STDIN", &format!("SimulateKey: Unhandled '{}' in ChatPrompt", key_lower));

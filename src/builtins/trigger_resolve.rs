@@ -194,6 +194,7 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
         TriggerBuiltin::Settings => "Settings",
         TriggerBuiltin::ChooseTheme => "ChooseTheme",
+        TriggerBuiltin::MiniMainWindow => "MiniMainWindow",
         TriggerBuiltin::QuickTerminal => "QuickTerminal",
         TriggerBuiltin::Webcam => "Webcam",
     }

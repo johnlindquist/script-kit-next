@@ -55,6 +55,7 @@ pub(crate) fn collect_select_prompt_elements(
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         });
     }
 
