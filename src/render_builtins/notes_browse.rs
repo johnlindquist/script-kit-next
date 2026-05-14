@@ -19,6 +19,39 @@ impl ScriptListApp {
         }
     }
 
+    fn notes_browse_visible_rows(filter: &str) -> Vec<crate::notes::Note> {
+        Self::notes_browse_filtered_notes(filter)
+    }
+
+    fn notes_browse_selected_visible_row(
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<crate::notes::Note> {
+        Self::notes_browse_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn notes_browse_dataset_and_visible_counts(filter: &str) -> (usize, usize) {
+        (
+            Self::notes_browse_filtered_notes("").len(),
+            Self::notes_browse_visible_rows(filter).len(),
+        )
+    }
+
+    fn notes_browse_visible_row_labels(filter: &str) -> Vec<String> {
+        Self::notes_browse_visible_rows(filter)
+            .into_iter()
+            .map(|note| {
+                if note.title.trim().is_empty() {
+                    "Untitled Note".to_string()
+                } else {
+                    note.title
+                }
+            })
+            .collect()
+    }
+
     fn notes_browse_preview(content: &str) -> String {
         const LIMIT: usize = 280;
         let trimmed = content.trim();

@@ -1,4 +1,35 @@
 impl ScriptListApp {
+    fn browser_tabs_visible_rows(&self, filter: &str) -> Vec<crate::browser_tabs::BrowserTabInfo> {
+        crate::browser_tabs::fuzzy_search_browser_tabs(&self.cached_browser_tabs, filter)
+            .into_iter()
+            .map(|entry| entry.tab)
+            .collect()
+    }
+
+    fn browser_tabs_selected_visible_row(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<crate::browser_tabs::BrowserTabInfo> {
+        self.browser_tabs_visible_rows(filter)
+            .get(selected_index)
+            .cloned()
+    }
+
+    fn browser_tabs_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        (
+            self.cached_browser_tabs.len(),
+            self.browser_tabs_visible_rows(filter).len(),
+        )
+    }
+
+    fn browser_tabs_visible_row_labels(&self, filter: &str) -> Vec<String> {
+        self.browser_tabs_visible_rows(filter)
+            .into_iter()
+            .map(|tab| tab.display_title().to_string())
+            .collect()
+    }
+
     fn render_browser_tabs(
         &mut self,
         filter: String,

@@ -9,12 +9,13 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - `BuiltInFeature` is the authoritative enum for built-in command kinds.
 - `get_builtin_entries(...)` materializes the searchable built-in catalog from config-gated feature flags.
 - Built-ins now cover more than the old clipboard or app-launcher set: Agent Chat and history, notes commands, system actions, script creation, settings, utility flows, dictation targets and history, kit store commands, and current-app automation helpers.
-- New-user Suggested defaults are exact built-in names, not aliases: Agent Chat, Do in Current App, New Script, Clipboard History, Open Notes, Search Files, Search Browser Tabs, Quick Terminal, and SDK Reference. They only seed the Suggested section when frecency is empty.
+- New-user Suggested defaults use stable built-in identities, not transient display aliases: Agent Chat, Do in Current App, New Script, Clipboard History, Open Notes, Search Files, Search Browser Tabs, Quick Terminal, and SDK Reference. The current-app row can display as `<App> Commands` while still seeding from the stable `builtin/do-in-current-app` identity.
 - Direct-provider API key setup commands are no longer exposed as built-ins or Settings actions; agent setup is driven by the Agent Catalog and `config.ts` preferences instead.
 - The launcher now includes a browser-tabs builtin that enumerates tabs from running Safari and Chromium-family browsers, filters them with the shared fuzzy-ranking model, and activates the chosen tab on `Enter`.
 - ACP attachment portals also include a browser-history picker that snapshots recent history from supported browsers, caches that snapshot briefly for reopen speed, collapses duplicate rows by normalized page identity before ranking matches, and drives wheel scrolling through the shared selected-row path so large history sets stay responsive.
 - Root launcher search can also opt into passive Dictation History, Browser Tabs, and Browser History rows backed by local metadata. These sources are disabled by default; browser sources never read page content, favicons, cookies, downloads, or network data.
 - Hidden internal built-ins can still resolve by canonical command ID when hotkeys or other programmatic callers need them without exposing them in launcher search.
+- The app launcher installed-app catalog scans configured macOS app roots recursively through [[src/app_launcher/scanning.rs#collect_app_paths]], so vendor subfolders under `/Applications` such as `Universal Audio/` are indexed. The scanner treats each `.app` bundle as a leaf and does not descend into `Contents/`, keeping app internals out of the launcher dataset.
 - `config.ts` supports a top-level `hiddenCommands: string[]` array of canonical command IDs (e.g. `"builtin/clipboard-history"`, `"script/foo"`). Hidden commands are filtered out of launcher materialization at startup but stay resolvable via `triggerBuiltin` and hotkeys. The older per-command `commands.*.hidden` override continues to work and is OR'd with `hiddenCommands`.
 - User-facing command IDs are canonicalized through the built-in config path instead of being treated as free-form labels.
 - Execution routes through the built-in execution pipeline and can branch into view changes, popups, ACP handoffs, note flows, system actions, or current-app automation.
@@ -40,6 +41,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 These files define the built-in catalog and its execution paths.
 
 - [src/builtins/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/builtins/mod.rs) - Built-in enums, grouping, entry construction, action text, and the current built-in catalog.
+- [src/app_launcher/scanning.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_launcher/scanning.rs) - Installed macOS app catalog scanning, including recursive vendor-folder discovery and `.app` leaf handling.
 - [src/app_execute/builtin_execution.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_execute/builtin_execution.rs) - Built-in execution paths, including ACP, notes, dictation, utility routing, and the PID-aware current-app session refresh guards.
 - [src/app_impl/lifecycle_reset.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/lifecycle_reset.rs) - Shared lifecycle reset helpers, including the immediate Reset Windows return-to-menu behavior.
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs) - Frontmost-app identity tracking and PID-aware menu cache ownership so refreshes cannot republish stale menu trees for the wrong app.
@@ -63,6 +65,7 @@ These files define the built-in catalog and its execution paths.
 These source files back the built-in behavior described here.
 
 - [src/builtins/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/builtins/mod.rs)
+- [src/app_launcher/scanning.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_launcher/scanning.rs)
 - [src/app_execute/builtin_execution.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_execute/builtin_execution.rs)
 - [src/app_impl/lifecycle_reset.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/lifecycle_reset.rs)
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs)
@@ -127,13 +130,15 @@ Source-filter heads can make Files the only participating root source. When `fil
 
 When the stripped query is empty, `files:` and `f:` browse the frecency-backed Recent Files set even if ordinary root file search is disabled. Explicit source-only Files browse uses the deeper recent-file seed target instead of the ordinary empty-root render cap, while plain empty root still renders the capped Recent Files set. Disabled recent-file refreshes leave the hydration revision invalid so an explicit source-only Files filter can load current recents immediately instead of reusing an empty disabled frame.
 
-Explicit Files source-filter queries also own a source-specific length floor. A stripped two-character ASCII alphanumeric query such as `f: sc` or `files:sc` may search Files, while the same plain root query `sc` remains below the ordinary global file-search threshold and `f: ` continues to browse Recent Files.
+Explicit Files source-filter queries also own a source-specific length floor. A stripped one-character ASCII alphanumeric query such as `f:s` or `files:s` may search Files, while the same plain root query `s` remains below the ordinary global file-search threshold and `f: ` continues to browse Recent Files.
 
-Explicit positive source-filter queries render source-chip status rows for Files, passive sources, base launcher sources, and Windows. The status row is grouped display state only: it is non-selectable, stays out of executable results, and appears in `getElements` as `role:"status"` / `kind:"sourceStatus"` so automation can prove capped, loading, empty, or exhausted source states without treating the row as an action target. `f:<text>` and `files:<text>` start on a 12-row source-chip page and automatically reveal the next page when keyboard selection reaches the final few Files rows, while plain root searches keep the ordinary six-row passive cap.
+Explicit positive source-filter queries expose source-chip status metadata for Files, passive sources, base launcher sources, and Windows. Status is informational metadata, not a ScriptList row: it stays out of executable results, selection, list item counts, mini-window sizing, and scroll height, while `getElements` still exposes it as `role:"status"` / `kind:"sourceStatus"` so automation can prove capped, loading, empty, or exhausted source states without treating status as an action target. Source-filter mode also disables launcher input-history recall so Up and Down remain list navigation, even when selection is at the first selectable row. `f:<text>` and `files:<text>` start on a 12-row source-chip page and automatically reveal the next page when keyboard selection reaches the final few Files rows, while plain root searches keep the ordinary six-row passive cap. Page expansion must sync the ScriptList row count and use a deferred footer-safe reveal so lazy provider rows cannot leave the selected file below the footer or snap selection back to the first visible row.
 
 The root-file `Browse Parent Folder` action is file-only. It clears the stale MainList highlight before handing off to dedicated File Search and displays home-scoped parent folders with `~`, while the File Search provider still resolves the query to an absolute filesystem path.
 
 The root-file `Quick Look` action is also MainList-scoped. Both the actions dialog and the direct `Cmd+Y` shortcut call the shared file OS helper with the captured file path, report missing-path or launch failures through HUD feedback, and do not route through dedicated File Search or clipboard preview state.
+
+The `~` / `~/...` mini File Search handoff clears menu-syntax input decorations before the first File Search paint. Source heads such as `f:` enable Files source filtering; home-path syntax is separate and must never inherit source-chip chrome from the launcher input.
 
 ## Root Unified Search ACP History
 
@@ -271,7 +276,9 @@ Kit Store browse and installed views keep their domain actions in the native foo
 
 Browse maps native `Run` to Install and `Close` to Back, or Clear Search while a query is active; Installed maps `Run` to Update and `Apply` to Remove. The renderer still supplies GPUI hint strips as fallback elements, but `main_window_footer_slot` replaces them with the shared spacer whenever the native footer is active.
 
-Stdin-driven view transitions explicitly resync the native footer before notifying, so automation entry paths cannot leave the previous launcher footer visible over Kit Store surfaces.
+Stdin-driven view transitions explicitly resync the native footer before notifying, but the active native surface is only published after the AppKit host is installed. If host installation fails, the GPUI fallback footer remains visible.
+
+Automation checks `activeFooter.owner:"native"`, `nativeFooterHostInstalled:true`, and one visible footer row for Kit Store surfaces. Any missing footer or stacked footer row is a contract failure.
 
 ## Design Gallery Footer
 
@@ -279,11 +286,37 @@ Design Gallery keeps its single Select affordance in the native footer slot, pre
 
 The gallery registers the `design_gallery` native footer surface and renders only a `↵ Select` fallback hint through `main_window_footer_slot`. Native footer Run is handled by a gallery-specific guard before launcher fallback, preserving the current no-op Select behavior until a real selection action exists.
 
+Like Kit Store, Design Gallery publishes native footer ownership only after the host is installed. Host failure leaves the GPUI Select fallback visible instead of suppressing the footer with a blank spacer.
+
+## Theme Chooser Footer
+
+Theme Chooser owns only the native main-window footer so its Apply and navigation chrome cannot stack with a GPUI footer fragment.
+
+`ThemeChooserView` maps to the `theme_chooser` native footer surface through `AppView::native_footer_surface()`. The legacy GPUI footer-return fragment is not wired, and automation expects one native footer row with no prompt fallback row.
+
 ## Settings Hub
 
 Settings is a mini built-in list for operational configuration actions, with renderer, automation, and state receipts sharing the same filtered-row projection.
 
-The Settings renderer owns typed filtering, keyboard selection, row activation, and actions-popup routing while keeping footer ownership behind `main_window_footer_slot`. `getElements` and `getState` read the same helper family as render, so automation sees the same setting rows and selected value that the user sees on screen.
+The Settings renderer owns typed filtering, keyboard selection, row activation, and actions-popup routing while keeping footer ownership behind `main_window_footer_slot`. `getElements` and `getState` read the same helper family as render, so automation sees the same setting rows and selected value that the user sees on screen. Its surface contract now reports `SurfaceKind::Settings` and `automationSemanticSurface:"settings"`, so matrix proofs can distinguish it from generic `scriptList`.
+
+## Process Manager List Ownership
+
+Process Manager is the reference visible-row owner for mini built-in lists.
+
+Renderer keyboard movement, wheel selection, `getState`, `getElements`, and destructive stop actions all resolve through the Process Manager filtered-entry helpers instead of indexing the backing process vector directly. Runtime duration display routes through `crate::formatting::format_running_duration`, keeping elapsed-time text out of renderer-local chrono math.
+
+## Kit Store List Ownership
+
+Kit Store browse and installed views share the Process Manager visible-row pattern.
+
+Browse and Installed expose `kit_store_*_visible_rows`, selected-visible helpers, dataset/visible count helpers, and row-label helpers. Footer actions, keyboard Enter/Delete, click handlers, `getState`, and `getElements` resolve selected kits through those helpers so selection stays tied to the visible projection. Raw `installed_at` remains RFC3339 storage only and display code must format timestamps through the shared formatting module.
+
+## Adjacent List Ownership
+
+Adjacent built-in list surfaces expose the same visible-row helper shape for automation and state receipts.
+
+Clipboard History, Browser Tabs, Design Gallery, Dictation History, Notes Browse, and ACP History each own helper families for visible rows, selected visible row, dataset/visible counts, and row labels. `getState` and `getElements` route through those helpers so state receipts, element receipts, and render-time selection use the same filter projection. About is explicitly exempt via `ABOUT_SURFACE_EXEMPTION` because it is static content with no list selection owner.
 
 ## Trigger-builtin registry
 
