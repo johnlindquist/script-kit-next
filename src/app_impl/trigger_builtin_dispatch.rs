@@ -152,6 +152,22 @@ impl ScriptListApp {
                 }
                 self.update_window_size_deferred(window, cx);
             }
+            AppRoute::ExecuteBuiltin(command_id) => {
+                if let Some(entry) = self
+                    .builtin_entries
+                    .iter()
+                    .find(|entry| entry.id == command_id)
+                    .cloned()
+                {
+                    self.execute_builtin(&entry, cx);
+                } else {
+                    tracing::warn!(
+                        target: "script_kit::trigger_builtin",
+                        command_id,
+                        "triggerBuiltin ExecuteBuiltin route missing launcher entry"
+                    );
+                }
+            }
         }
     }
 

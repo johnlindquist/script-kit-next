@@ -1535,7 +1535,7 @@ impl ScriptListApp {
         }
     }
 
-    fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
+    pub(crate) fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
         self.execute_builtin_with_query(entry, None, cx);
     }
 

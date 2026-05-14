@@ -371,7 +371,12 @@ impl ScriptListApp {
 
         let mut buttons = vec![
             FooterButtonConfig::new(FooterAction::Run, "↵", run_label).enabled(!footer_disabled),
-            FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "AI").enabled(!footer_disabled),
+            FooterButtonConfig::new(
+                FooterAction::Ai,
+                "⌘↵",
+                crate::ai::acp::labels::AGENT_CHAT_LABEL,
+            )
+            .enabled(!footer_disabled),
         ];
 
         if self.current_view_supports_shared_actions() {
@@ -452,6 +457,7 @@ impl ScriptListApp {
 
     fn main_window_footer_buttons_for_current_view(
         &self,
+        cx: Option<&gpui::App>,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
         // ConfirmPrompt: Apply (Confirm) + Close (Cancel) labeled per options.
         if let AppView::ConfirmPrompt {
@@ -590,18 +596,32 @@ impl ScriptListApp {
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
-            let enabled = !footer_disabled;
+            let has_files = match (&self.current_view, cx) {
+                (AppView::DropPrompt { entity, .. }, Some(cx)) => {
+                    !entity.read(cx).dropped_files.is_empty()
+                }
+                _ => false,
+            };
+            let submit_button = if footer_disabled {
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(false)
+            } else if has_files {
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(true)
+            } else {
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Submit")
+                    .disabled_reason("no_files")
+            };
             let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(enabled),
+                submit_button,
                 FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                     .selected(actions_open)
-                    .enabled(enabled),
+                    .enabled(!footer_disabled),
             ];
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
                 button_count = buttons.len(),
+                has_files,
                 "Resolved DropPrompt footer buttons"
             );
             return buttons;
@@ -715,10 +735,17 @@ impl ScriptListApp {
     pub(crate) fn main_window_footer_config(
         &self,
     ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
+        self.main_window_footer_config_with_cx(None)
+    }
+
+    pub(crate) fn main_window_footer_config_with_cx(
+        &self,
+        cx: Option<&gpui::App>,
+    ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
         use crate::footer_popup::MainWindowFooterConfig;
 
         let surface = self.main_window_footer_surface()?;
-        let buttons = self.main_window_footer_buttons_for_current_view();
+        let buttons = self.main_window_footer_buttons_for_current_view(cx);
 
         tracing::info!(
             target: "script_kit::footer_popup",
@@ -733,7 +760,13 @@ impl ScriptListApp {
     }
 
     pub(crate) fn main_window_uses_native_footer(&self) -> bool {
-        crate::is_main_window_visible() && self.main_window_footer_config().is_some()
+        crate::is_main_window_visible()
+            && self
+                .main_window_footer_surface()
+                .is_some_and(|expected_surface| {
+                    crate::footer_popup::active_main_window_footer_surface()
+                        == Some(expected_surface)
+                })
     }
 
     /// When the native main-window footer is active, replace the GPUI footer
@@ -785,7 +818,7 @@ impl ScriptListApp {
         self.ensure_main_footer_action_listener(window, cx);
 
         let mut config = if crate::is_main_window_visible() {
-            self.main_window_footer_config()
+            self.main_window_footer_config_with_cx(Some(&*cx))
         } else {
             None
         };

@@ -101,6 +101,19 @@ type AcpPortalHandler = std::sync::Arc<
     dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
 >;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PortalRefusal {
+    NoHost,
+    UnsupportedByHost,
+    OpenFailed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PortalOpenResult {
+    Opened,
+    Refused(PortalRefusal),
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum AcpFooterHost {
     Inline,
@@ -362,6 +375,18 @@ impl AcpRetryRequest {
 #[derive(Debug, Clone)]
 pub(crate) struct AcpHistoryResumeRequest {
     pub session_id: String,
+}
+
+/// Snapshot of ACP view-local draft state for host relaunches.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AcpViewDraftSnapshot {
+    pub thread: Option<super::thread::AcpThreadDraftSnapshot>,
+    pending_portal_session: Option<AcpPendingPortalSession>,
+    pasted_text_tokens: Vec<crate::pasted_text::PastedTextToken>,
+    pasted_image_tokens: Vec<crate::pasted_image::PastedImageToken>,
+    typed_mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+    inline_owned_context_tokens: HashSet<String>,
 }
 
 /// Structured state for the inline ACP history popup.
@@ -1957,7 +1982,7 @@ impl AcpChatView {
         query: String,
         hits: Vec<super::history::AcpHistorySearchHit>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_history_portal_opened",
@@ -1975,6 +2000,7 @@ impl AcpChatView {
         });
         self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
+        true
     }
 
     pub(crate) fn sync_history_popup_state_from_window(
@@ -3125,6 +3151,17 @@ impl AcpChatView {
         contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
         cx: &mut Context<Self>,
     ) -> bool {
+        matches!(
+            self.open_portal_contract_result(contract, cx),
+            PortalOpenResult::Opened
+        )
+    }
+
+    fn open_portal_contract_result(
+        &mut self,
+        contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
+        cx: &mut Context<Self>,
+    ) -> PortalOpenResult {
         use crate::ai::acp::portal_contract::{
             decide_portal_open, next_portal_state, AcpPortalOpenRefusal, AcpPortalSessionEvent,
             AcpPortalSessionState,
@@ -3151,7 +3188,7 @@ impl AcpChatView {
                     event = "acp_portal_blocked_by_host_capability",
                     kind = ?portal_kind,
                 );
-                return false;
+                return PortalOpenResult::Refused(PortalRefusal::UnsupportedByHost);
             }
             Err(AcpPortalOpenRefusal::MissingHostCallback) => {
                 tracing::warn!(
@@ -3159,7 +3196,7 @@ impl AcpChatView {
                     event = "acp_portal_open_blocked_missing_host_callback",
                     kind = ?portal_kind,
                 );
-                return false;
+                return PortalOpenResult::Refused(PortalRefusal::NoHost);
             }
         }
 
@@ -3169,7 +3206,7 @@ impl AcpChatView {
                 event = "acp_portal_open_blocked_missing_host_callback",
                 kind = ?portal_kind,
             );
-            return false;
+            return PortalOpenResult::Refused(PortalRefusal::NoHost);
         };
         self.stage_pending_portal_session(contract, cx);
         if let Some(session) = self.pending_portal_session.as_mut() {
@@ -3187,7 +3224,7 @@ impl AcpChatView {
             callback(portal_kind, cx);
         });
         cx.notify();
-        true
+        PortalOpenResult::Opened
     }
 
     fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
@@ -3525,6 +3562,24 @@ impl AcpChatView {
         Ok(())
     }
 
+    pub(crate) fn clear_hosted_context_parts_from_host(
+        &mut self,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.typed_mention_aliases.clear();
+        self.inline_owned_context_tokens.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
+        self.pending_portal_session = None;
+        self.live_thread().update(cx, |thread, cx| {
+            thread.replace_pending_context_parts(Vec::new(), source, cx)
+        });
+        self.sync_inline_mentions(cx);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
     /// Stage a plugin skill exactly like accepting it from the ACP slash picker.
     ///
     /// Main-menu skill launch is an external handoff, so it replaces stale
@@ -3559,6 +3614,23 @@ impl AcpChatView {
         let command_text = build_skill_slash_command_text(&skill.skill_id);
         let cursor_after = command_text.chars().count();
         let part = build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
+        let thread_id = self.live_thread().read(cx).ui_thread_id().to_string();
+        let skill_file_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            skill.path.hash(&mut hasher);
+            std::fs::metadata(&skill.path)
+                .ok()
+                .and_then(|metadata| metadata.modified().ok())
+                .hash(&mut hasher);
+            hasher.finish().to_string()
+        };
+        let identity = super::thread::SkillContextIdentity {
+            thread_id,
+            skill_id: skill.skill_id.clone(),
+            skill_file_hash,
+            staged_by: super::thread::SkillContextStagedBy::MainMenu,
+        };
 
         self.last_accepted_item = Some(crate::protocol::AcpAcceptedItem {
             label: skill.title.clone(),
@@ -3568,7 +3640,7 @@ impl AcpChatView {
         });
 
         self.live_thread().update(cx, |thread, cx| {
-            thread.replace_pending_context_parts(vec![part], "main_menu_selected_skill", cx);
+            thread.add_or_replace_skill_context(identity, part, cx);
             thread.input.set_text(command_text.clone());
             thread.input.set_cursor(cursor_after);
             thread.mark_context_bootstrap_ready(cx);
@@ -6050,6 +6122,46 @@ impl AcpChatView {
         }
     }
 
+    pub(crate) fn capture_draft_snapshot(&self, cx: &App) -> AcpViewDraftSnapshot {
+        AcpViewDraftSnapshot {
+            thread: self.thread().map(|thread| thread.read(cx).draft_snapshot()),
+            pending_portal_session: self.pending_portal_session.clone(),
+            pasted_text_tokens: self.pasted_text_tokens.clone(),
+            pasted_image_tokens: self.pasted_image_tokens.clone(),
+            typed_mention_aliases: self.typed_mention_aliases.clone(),
+            inline_owned_context_tokens: self.inline_owned_context_tokens.clone(),
+        }
+    }
+
+    pub(crate) fn restore_draft_snapshot(
+        &mut self,
+        snapshot: AcpViewDraftSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.last_accepted_item = None;
+        self.pending_history_resume = None;
+        self.pending_portal_session = snapshot.pending_portal_session;
+        self.setup_agent_picker = None;
+        self.pasted_text_tokens = snapshot.pasted_text_tokens;
+        self.pasted_image_tokens = snapshot.pasted_image_tokens;
+        self.typed_mention_aliases = snapshot.typed_mention_aliases;
+        self.inline_owned_context_tokens = snapshot.inline_owned_context_tokens;
+
+        if let Some(thread_snapshot) = snapshot.thread {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.restore_draft_snapshot(thread_snapshot, cx);
+            });
+        }
+
+        self.sync_inline_mentions(cx);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
     pub(crate) fn restore_retry_draft_state(
         &mut self,
         draft_state: AcpRetryDraftState,
@@ -6118,6 +6230,19 @@ impl AcpChatView {
             has_draft_state,
         );
         cx.notify();
+    }
+
+    pub(crate) fn relaunch_for_agent_switch_preserving_draft(
+        &mut self,
+        next_agent_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(thread) = self.thread() {
+            thread.update(cx, |thread, cx| {
+                thread.revalidate_skill_context_for_agent(&next_agent_id, cx);
+            });
+        }
+        self.stage_agent_switch_retry(next_agent_id, cx);
     }
 
     /// Queue an explicit relaunch payload from the current setup state.

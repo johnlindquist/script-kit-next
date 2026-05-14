@@ -26,8 +26,12 @@ Main ACP, detached ACP, and Notes-hosted ACP must all seed portal queries from t
 
 `[[src/app_impl/attachment_portal.rs]]`, `[[src/ai/acp/chat_window.rs]]`, and `[[src/notes/window/acp_host.rs]]` now read staged query text from `[[src/ai/acp/view.rs]]` accessors backed by `pending_portal_session.contract.query`, while detached ACP and Notes remain history-only hosts for this cycle.
 
+Notes-hosted ACP reads that staged query from the originating embedded ACP view captured by the portal callback, not from whatever `NotesApp.embedded_acp_chat` happens to hold when the popup opens.
+
 ## Host transitions
 
 Host cleanup can close menus and popups, but it must not drop a staged portal contract before the user cancels or accepts the portal.
 
 `[[src/ai/acp/view.rs]]` now leaves `pending_portal_session` intact during `prepare_for_host_hide()`, and `[[src/notes/window/acp_host.rs]]` reopens Notes history portals against the originating ACP view instead of re-looking up whatever chat happens to be embedded later.
+
+When Notes refuses an unsupported portal or history-popup opening fails, it calls `cancel_pending_portal_session(...)` for the staged kind so ACP returns to an idle terminal state instead of keeping an orphaned portal contract.

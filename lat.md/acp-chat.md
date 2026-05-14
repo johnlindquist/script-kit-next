@@ -18,6 +18,47 @@ Large launcher pastes bypass Script List filtering when the clipboard payload is
 
 Some adjacent flows still route to `QuickTerminalView` instead of Agent Chat when the task needs a PTY-backed harness surface. That boundary matters because `QuickTerminalView` is the verification-oriented terminal wrapper, not the chat UI.
 
+### Canonical Cmd+Enter entry request
+
+Cmd+Enter-style handoffs enter Agent Chat through a typed request so origin, target thread, seeding, context staging, and return-origin policy stay together.
+
+The canonical request shape lives in [[src/app_impl/tab_ai_mode/acp_entry.rs#AcpEntryRequest]]. [[src/app_impl/tab_ai_mode/acp_entry.rs#ScriptListApp#open_acp_chat_from_entry_request]] checks the shared launcher-entry block predicate, seeds the return origin from the source view, and then delegates to the existing ACP launch implementation.
+
+### Entry-point parity matrix
+
+The Agent Chat entry matrix keeps every origin on the same product surface while preserving host-specific ownership boundaries.
+
+| Origin | Target thread | Context staging | Seed policy | Label | HUD |
+|---|---|---|---|---|---|
+| Main launcher Cmd+Enter | Existing detached or embedded | Ambient or focused | Launcher return-origin | Agent Chat | Agent Chat |
+| Launcher Tab | Existing detached or embedded | Suppress focused on empty Tab | Seed or submit launcher input | Agent Chat | Agent Chat |
+| File Search Cmd+Enter | Existing detached or embedded | File Search selection through shared staging | Composer-only unless explicit text exists | Agent Chat | Agent Chat |
+| Actions Cmd+Enter | Existing detached or embedded | Actions payload as a focused target | Composer-only | Agent Chat | Agent Chat |
+| Plugin skill | Existing detached or embedded | One SkillFile plus slash token | Composer-only | Agent Chat / skill label | Slash label |
+| Notes Cmd+Enter | Notes-owned embedded | Notes context cart parts | Notes focus return | Agent Chat in Notes | Agent Chat |
+| Dictation | Embedded main | Transcript prompt, focused context suppressed | Auto-submit for harness target | Agent Chat | n/a |
+| Large paste | Embedded main | TextBlock attachment and compact inline token | Composer-only | Agent Chat | n/a |
+
+### Plugin Skill Thread Affinity
+
+Plugin skill handoff stages the skill into the ACP thread that will receive focus, so detached reuse cannot mutate a stale launcher cache.
+
+[[src/app_impl/tab_ai_mode/mod.rs#ScriptListApp#open_acp_with_selected_skill]] resolves a detached `AcpChatView` first when one is open, otherwise it opens embedded Agent Chat and stages on that view. [[src/ai/acp/view.rs#AcpChatView#stage_selected_plugin_skill_from_main_menu]] binds the skill context to the live thread id and uses [[src/ai/acp/thread.rs#AcpThread#add_or_replace_skill_context]] so repeated slash/main-menu staging keeps one SkillFile.
+
+Agent switches call [[src/ai/acp/view.rs#AcpChatView#relaunch_for_agent_switch_preserving_draft]], which revalidates staged skill context before queuing the relaunch payload and preserving the draft state.
+
+### Conversation Export Single Path
+
+ACP transcript and automation exports use one conversation builder so messages and staged context parts are deduped consistently across hosts.
+
+[[src/ai/acp/conversation_export.rs#AcpThread#export_conversation]] returns messages and pending context parts with stable export ids. Markdown copy/save paths call [[src/ai/acp/export.rs#build_acp_conversation_markdown_from_thread]] instead of cloning message vectors and serializing host-local transcripts.
+
+### Agent Chat Labels And Shortcut Hints
+
+User-facing Agent Chat labels and shortcut hints come from a central module so internal ACP names do not leak into footers or HUD copy.
+
+The constants live in [[src/ai/acp/labels.rs]]. Main-window footer buttons use `AGENT_CHAT_LABEL`, and universal prompt hints use `AGENT_CHAT_CMD_ENTER_HINT`. ACP footers continue to expose ACP-local actions and omit the global launcher `Cmd+Enter` entry button.
+
 ## New-script session contract
 
 ACP primes `/new-script` in the slash picker on fresh opens and gates the footer Run button on a validated `SCRIPT_READY` receipt.
@@ -44,6 +85,8 @@ The native footer pulse deliberately animates opacity/color only on a stable App
 
 Agent Chat footers expose ACP actions, not launcher AI entry. [[src/app_impl/ui_window.rs#ScriptListApp#acp_footer_buttons]] omits the global `⌘↵ AI` button, and external ACP footer hosts mirror that in [[src/ai/acp/view.rs#AcpChatView#render_external_host_footer_from_snapshot]].
 
+Notes-hosted ACP uses the same external footer status mapper, so tool-only, thought-only, permission-wait, and context-capture activity can surface in the embedded footer without borrowing the main launcher's native footer state.
+
 Plain Escape in Agent Chat cancels a streaming turn before it can close the surface. [[src/ai/acp/view.rs#AcpChatView#cancel_streaming_from_escape]] routes `AcpThreadStatus::Streaming` to [[src/ai/acp/thread.rs#AcpThread#cancel_streaming]] so the active dot and composer return to idle without hiding the chat.
 
 Embedded host interceptors in [[src/app_impl/startup.rs]] and [[src/app_impl/startup_new_actions.rs]] call the same helper before their idle Escape return-to-menu path, because focused child routing is not guaranteed for every Escape key event.
@@ -55,6 +98,14 @@ Automation `simulateKey` routes in [[src/main_entry/runtime_stdin.rs]] and [[src
 Protocol-driven ACP input preserves the same popup refresh path as user input.
 
 The stdin `setAcpInput` command routes through `AcpChatView::set_input_in_window`, which caches the parent GPUI window before calling `set_input`. That keeps slash and mention picker refreshes protocol-only while still giving the attached Prompt Popup enough parent-window geometry to sync its popup window. The ACP mention picker registers that popup as `AutomationWindowKind::PromptPopup` through the shared attached-popup registry and removes the entry when the popup closes. Protocol `setAcpInput "/"` is the active screenshot-library path for the ACP slash Prompt Popup after repeated fresh proof, and the matrix pins its promoted id to `acp-mention-popup`. [[tests/agentic_prompt_popup_fixture_contract.rs#protocol_acp_input_refreshes_prompt_popup_session]] pins the input refresh, and [[tests/agentic_prompt_popup_fixture_contract.rs#prompt_popup_target_is_promoted_to_exact_id_with_crop_bounds]] pins popup registry coverage.
+
+### ACP popup automation parity
+
+Mention, model-selector, and local history popups are all attached PromptPopup automation windows.
+
+The exact ids are `acp-mention-popup`, `acp-model-selector-popup`, and `acp-history-popup`. Each popup registers through the shared ACP popup facade, upserts a runtime window handle for exact-id capture, and unregisters the automation entry on close or direct `window.remove_window()` paths. The prompt-popup element collector reads mention, model selector, and history snapshots before falling back to confirm popup semantics, so `getElements(target=PromptPopup)` stays row-aware for all three ACP picker families.
+
+Notes-hosted ACP actions and history popups are parented to the Notes window and operate on the originating embedded ACP view. Actions dispatch carries a weak view target plus Notes ACP generation, while history portals read the staged query from the originating view rather than re-reading the current embedded cache.
 
 ## Detached window behavior
 
@@ -197,6 +248,8 @@ When a capture session is active, the hook stops it before injecting the synthet
 Fresh-view spawn is the single point of construction: [[src/ai/acp/hosted.rs#spawn_hosted_view]] always runs `cx.new(|cx| AcpChatView::new(thread, cx))`, and [[src/ai/acp/view.rs#AcpChatView#new]] initializes `pending_portal_session: None` in every arm, so a newly-spawned Notes host starts clean even if the main-host view had a portal staged moments before. [[src/notes/window/acp_host.rs#NotesApp#open_or_focus_embedded_acp]] emits the `notes_acp_surface_opened` tracing event — the audit-visible stand-in for an `acp_host=notes` receipt while `AcpState` carries no `host` field.
 
 `prepare_for_host_hide` clears the ephemeral popup state (attach menu, model selector, permission options, mention session, history menu, setup agent picker) but deliberately leaves `pending_portal_session` alone, matching [[tests/acp-portal-contract#Host transitions#Host hide keeps the staged session]] — the staged portal contract must survive host hides so reattach can deliver the token. It also clears a bare `@` or `/` composer trigger so the thread-change observer cannot re-fire on a later notify (agent preflight, model discovery, etc.) and pop the mention/slash picker back open over the newly-visible main menu.
+
+History replay is generation guarded at the ACP thread layer. `load_saved_messages(...)` bumps `transcript_generation`, clears transient stream/tool/permission/model-usage state, resets message ids, and only then loads saved transcript messages; `bind_stream(...)` discards late events from older generations before `apply_event(...)` can mutate the replayed transcript.
 
 ## App-owned surface placement machine
 
@@ -348,6 +401,8 @@ Switching agents from the ACP actions menu relaunches ACP with the newly selecte
 That relaunch must suppress any fresh focused-chip staging from the launcher surface that originally opened ACP. Otherwise the reopen path can inject a new inline `@mention` from the current Script List selection even though the user only asked to change agents.
 
 The embedded actions popup must preserve the route-backed ACP dialog after construction. [[src/app_impl/actions_toggle.rs#ScriptListApp#toggle_actions]] skips generic scriptlet and Power Syntax rebuild hooks for ACP so `Change Agent` and `Change Model` cannot be replaced by global launcher actions.
+
+Notes-hosted ACP uses the same preservation contract through `AcpViewDraftSnapshot`. Agent switch captures input, caret, pending context parts, and portal/pasted-token state from the originating Notes ACP view before dropping it, relaunches without initial-input replacement, and restores the snapshot into the fresh view after host callbacks are wired.
 
 ### Config reload isolation during streaming
 
