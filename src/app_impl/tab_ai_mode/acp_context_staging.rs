@@ -1,6 +1,14 @@
 use super::source_classification::{build_tab_ai_apply_back_hint, detect_tab_ai_source_type};
 use super::*;
 
+fn should_stage_focused_part_for_retry_draft_restore(has_retry_draft_state: bool) -> bool {
+    // A retry-draft restore is authoritative: it already contains the user's
+    // draft text, cursor, pending context parts, pasted-token metadata, typed
+    // aliases, and inline-owned tokens. Do not mix in a freshly focused host
+    // target during an agent-switch relaunch.
+    !has_retry_draft_state
+}
+
 impl ScriptListApp {
     /// Stage synchronous context parts onto the ACP thread/view immediately
     /// after the view switch.
@@ -27,6 +35,15 @@ impl ScriptListApp {
         source_view: &AppView,
         cx: &mut Context<Self>,
     ) -> bool {
+        let has_retry_draft_state = retry_draft_state.is_some();
+        let should_stage_focused_part =
+            should_stage_focused_part_for_retry_draft_restore(has_retry_draft_state);
+        let focused_part = if should_stage_focused_part {
+            focused_part
+        } else {
+            None
+        };
+
         // Restore retry draft state (suppresses focused part + ask-anything).
         if let Some(draft_state) = retry_draft_state {
             view_entity_for_staging.update(cx, |view, cx| {
