@@ -928,8 +928,18 @@ impl AiApp {
 
         let receipt = self.active_prompt_compiler_receipt();
         if let Some(receipt) = receipt {
-            let preview =
-                crate::ai::window::prompt_compiler::PromptCompilerPreview::from_receipt(receipt);
+            let preview = crate::ai::window::prompt_compiler::PromptCompilerPreview::from_receipt_with_context(
+                crate::ai::window::prompt_compiler::PromptCompilerContext {
+                    generation: self.context_preflight.generation,
+                    model_id: self
+                        .selected_model
+                        .as_ref()
+                        .map(|model| model.id.clone())
+                        .unwrap_or_else(|| "unavailable".to_string()),
+                    compiler_config_fingerprint: None,
+                },
+                receipt,
+            );
 
             // Summary line
             let summary: SharedString = format!(
@@ -1145,6 +1155,8 @@ impl AiApp {
             .gap(S1);
 
         for recommendation in &self.context_preflight.recommendations {
+            let generation = self.context_preflight.generation;
+            let action_id = recommendation.action_id().to_string();
             let kind = recommendation.kind;
             let label: SharedString = format!("Attach {}", recommendation.label()).into();
             let reason: SharedString = recommendation.reason.clone().into();
@@ -1161,7 +1173,7 @@ impl AiApp {
                 div()
                     .id(SharedString::from(format!(
                         "context-recommendation-{}",
-                        recommendation.action_id()
+                        action_id
                     )))
                     .flex()
                     .items_center()
@@ -1194,7 +1206,7 @@ impl AiApp {
                         div()
                             .id(SharedString::from(format!(
                                 "context-recommendation-attach-{}",
-                                recommendation.action_id()
+                                action_id
                             )))
                             .cursor_pointer()
                             .rounded(R_SM)
@@ -1202,7 +1214,7 @@ impl AiApp {
                             .py(S1)
                             .bg(accent.opacity(OPACITY_HOVER))
                             .on_click(cx.listener(move |this, _, _, cx| {
-                                this.apply_context_recommendation(kind, cx);
+                                this.apply_context_recommendation(generation, &action_id, kind, cx);
                             }))
                             .child(
                                 div()

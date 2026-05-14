@@ -337,7 +337,11 @@ impl AiApp {
             return;
         }
 
-        self.context_preflight.status = ContextPreflightStatus::Loading;
+        self.context_preflight = ContextPreflightState {
+            generation,
+            status: ContextPreflightStatus::Loading,
+            ..Default::default()
+        };
         cx.notify();
 
         // Capture a lightweight live snapshot for the recommendation engine.
@@ -434,12 +438,42 @@ impl AiApp {
     /// Accept a context recommendation: add the part and log the action.
     pub(super) fn apply_context_recommendation(
         &mut self,
+        generation: u64,
+        action_id: &str,
         kind: crate::ai::context_contract::ContextAttachmentKind,
         cx: &mut Context<Self>,
     ) {
+        if self.context_preflight.generation != generation {
+            tracing::info!(
+                target: "ai",
+                expected_generation = generation,
+                current_generation = self.context_preflight.generation,
+                action_id,
+                "ai_context_recommendation_stale_dropped"
+            );
+            return;
+        }
+
+        let still_surfaced = self
+            .context_preflight
+            .recommendation_resolution
+            .surfaced
+            .iter()
+            .any(|item| item.action_id == action_id);
+        if !still_surfaced {
+            tracing::warn!(
+                target: "ai",
+                generation,
+                action_id,
+                "ai_context_recommendation_not_surfaced_dropped"
+            );
+            return;
+        }
+
         tracing::info!(
             target: "ai",
-            action_id = kind.spec().action_id,
+            generation,
+            action_id,
             label = kind.spec().label,
             "ai_context_recommendation_applied"
         );

@@ -5,7 +5,7 @@
 //! elapsed timings, and actionable failure suggestions.
 
 use crate::protocol::transaction_trace::{
-    append_transaction_trace, now_epoch_ms, should_include_trace,
+    append_transaction_trace, now_epoch_ms, read_latest_transaction_trace, should_include_trace,
 };
 use crate::protocol::types::batch_wait::{
     BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, TransactionCommandTrace,
@@ -68,13 +68,37 @@ fn matches_state(snapshot: &UiStateSnapshot, spec: &StateMatchSpec) -> bool {
             return false;
         }
     }
+    if let Some(ref expected) = spec.prompt_type {
+        if snapshot.prompt_type.as_deref() != Some(expected.as_str()) {
+            return false;
+        }
+    }
     if let Some(expected) = spec.window_visible {
         if snapshot.window_visible != expected {
             return false;
         }
     }
-    // prompt_type is not in UiStateSnapshot, skip it
     true
+}
+
+fn unsupported_wait_condition(condition: &WaitCondition) -> Option<TransactionError> {
+    match condition {
+        WaitCondition::Detailed(WaitDetailedCondition::AcpSetupVisible)
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupReasonCode { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupPrimaryAction { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupAgentPickerOpen)
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupSelectedAgent { .. }) => {
+            Some(TransactionError {
+                code: TransactionErrorCode::InvalidCondition,
+                message: format!("Wait condition is not wired to transaction runtime state: {condition:?}"),
+                suggestion: Some(
+                    "Use getAcpState/performAcpSetupAction for setup-card assertions until setup wait snapshots are supported."
+                        .to_string(),
+                ),
+            })
+        }
+        _ => None,
+    }
 }
 
 fn matches_condition<P: TransactionStateProvider>(
@@ -120,6 +144,37 @@ fn matches_condition<P: TransactionStateProvider>(
         WaitCondition::Detailed(WaitDetailedCondition::StateMatch { state }) => {
             (matches_state(snapshot, state), Vec::new())
         }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpReady) => {
+            (snapshot.acp_context_ready, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpPickerOpen) => {
+            (snapshot.acp_picker_open, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpPickerClosed) => {
+            (!snapshot.acp_picker_open, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpItemAccepted) => {
+            let probe = provider.acp_test_probe(1);
+            (!probe.accepted_items.is_empty(), Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index }) => {
+            (snapshot.acp_cursor_index == Some(*index), Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpStatus { status }) => (
+            snapshot.acp_status.as_deref() == Some(status.as_str()),
+            Vec::new(),
+        ),
+        WaitCondition::Detailed(WaitDetailedCondition::AcpInputMatch { text }) => (
+            snapshot.input_value.as_deref() == Some(text.as_str()),
+            Vec::new(),
+        ),
+        WaitCondition::Detailed(WaitDetailedCondition::AcpInputContains { substring }) => (
+            snapshot
+                .input_value
+                .as_deref()
+                .is_some_and(|value| value.contains(substring)),
+            Vec::new(),
+        ),
 
         // ── ACP proof conditions (evaluated against test probe) ──────
         WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey { key }) => {
@@ -160,8 +215,13 @@ fn matches_condition<P: TransactionStateProvider>(
             (ok, Vec::new())
         }
 
-        // ACP live-state conditions (not yet wired to UiStateSnapshot).
-        _ => (false, Vec::new()),
+        WaitCondition::Detailed(WaitDetailedCondition::AcpSetupVisible)
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupReasonCode { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupPrimaryAction { .. })
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupAgentPickerOpen)
+        | WaitCondition::Detailed(WaitDetailedCondition::AcpSetupSelectedAgent { .. }) => {
+            (false, Vec::new())
+        }
     }
 }
 
@@ -241,6 +301,25 @@ fn run_wait_for_command<P: TransactionStateProvider>(
     let before = provider.snapshot();
     let mut polls = Vec::new();
 
+    if let Some(error) = unsupported_wait_condition(condition) {
+        return WaitResult {
+            success: false,
+            elapsed_ms: 0,
+            error: Some(error.clone()),
+            trace: TransactionCommandTrace {
+                index,
+                command: "waitFor".to_string(),
+                command_payload: None,
+                started_at_ms,
+                elapsed_ms: 0,
+                before: before.clone(),
+                after: before,
+                polls,
+                error: Some(error),
+            },
+        };
+    }
+
     tracing::info!(
         target: "script_kit::transaction",
         index = index,
@@ -276,6 +355,7 @@ fn run_wait_for_command<P: TransactionStateProvider>(
                 trace: TransactionCommandTrace {
                     index,
                     command: "waitFor".to_string(),
+                    command_payload: None,
                     started_at_ms,
                     elapsed_ms,
                     before,
@@ -308,6 +388,7 @@ fn run_wait_for_command<P: TransactionStateProvider>(
                 trace: TransactionCommandTrace {
                     index,
                     command: "waitFor".to_string(),
+                    command_payload: None,
                     started_at_ms,
                     elapsed_ms,
                     before,
@@ -319,6 +400,55 @@ fn run_wait_for_command<P: TransactionStateProvider>(
         }
 
         std::thread::sleep(Duration::from_millis(poll_interval.max(1)));
+    }
+}
+
+pub fn stable_transaction_fingerprint(
+    commands: &[BatchCommand],
+    options: Option<&BatchOptions>,
+) -> Result<String> {
+    let payload = serde_json::json!({
+        "commands": commands,
+        "options": options,
+    });
+    Ok(serde_json::to_string(&payload)?)
+}
+
+pub fn stable_wait_fingerprint(
+    condition: &WaitCondition,
+    timeout: u64,
+    poll_interval: u64,
+) -> Result<String> {
+    let payload = serde_json::json!({
+        "condition": condition,
+        "timeout": timeout,
+        "pollInterval": poll_interval,
+    });
+    Ok(serde_json::to_string(&payload)?)
+}
+
+impl BatchOutput {
+    pub fn from_trace(trace: TransactionTrace) -> Self {
+        let success = trace.status == TransactionTraceStatus::Ok;
+        Self {
+            request_id: trace.request_id.clone(),
+            success,
+            results: trace
+                .commands
+                .iter()
+                .map(|command| BatchResultEntry {
+                    index: command.index,
+                    success: command.error.is_none(),
+                    command: command.command.clone(),
+                    elapsed: Some(command.elapsed_ms),
+                    value: None,
+                    error: command.error.clone(),
+                })
+                .collect(),
+            failed_at: trace.failed_at,
+            total_elapsed: trace.total_elapsed_ms,
+            trace: Some(trace),
+        }
     }
 }
 
@@ -359,11 +489,40 @@ pub fn execute_wait_for<P: TransactionStateProvider>(
 ) -> Result<WaitForOutput> {
     let timeout = timeout.unwrap_or(DEFAULT_WAIT_TIMEOUT_MS);
     let poll_interval = poll_interval.unwrap_or(DEFAULT_WAIT_POLL_INTERVAL_MS);
+    let command_fingerprint = stable_wait_fingerprint(condition, timeout, poll_interval)?;
+
+    if let Some(existing) = read_latest_transaction_trace(None, Some(&request_id))? {
+        if existing.command_fingerprint.is_empty() {
+            tracing::warn!(
+                target: "script_kit::transaction",
+                request_id = %request_id,
+                "Ignoring legacy transaction trace without fingerprint"
+            );
+        } else if existing.command_fingerprint == command_fingerprint {
+            let success = existing.status == TransactionTraceStatus::Ok;
+            return Ok(WaitForOutput {
+                request_id,
+                success,
+                elapsed: existing.total_elapsed_ms,
+                error: existing
+                    .commands
+                    .iter()
+                    .find_map(|command| command.error.clone()),
+                trace: Some(existing),
+            });
+        } else {
+            return Err(anyhow::anyhow!(
+                "requestId {request_id} was already used for a different transaction payload"
+            ));
+        }
+    }
 
     let result = run_wait_for_command(provider, 0, condition, timeout, poll_interval);
 
     let trace = TransactionTrace {
+        schema_version: crate::protocol::types::batch_wait::TRANSACTION_TRACE_SCHEMA_VERSION,
         request_id: request_id.clone(),
+        command_fingerprint,
         status: if result.success {
             TransactionTraceStatus::Ok
         } else {
@@ -405,6 +564,22 @@ pub fn execute_batch<P: TransactionStateProvider>(
     trace_mode: TransactionTraceMode,
 ) -> Result<BatchOutput> {
     let stop_on_error = options.is_none_or(|o| o.stop_on_error);
+    let command_fingerprint = stable_transaction_fingerprint(commands, options)?;
+    if let Some(existing) = read_latest_transaction_trace(None, Some(&request_id))? {
+        if existing.command_fingerprint.is_empty() {
+            tracing::warn!(
+                target: "script_kit::transaction",
+                request_id = %request_id,
+                "Ignoring legacy transaction trace without fingerprint"
+            );
+        } else if existing.command_fingerprint == command_fingerprint {
+            return Ok(BatchOutput::from_trace(existing));
+        } else {
+            return Err(anyhow::anyhow!(
+                "requestId {request_id} was already used for a different transaction payload"
+            ));
+        }
+    }
     let started_at_ms = now_epoch_ms();
     let started = Instant::now();
     let mut results = Vec::new();
@@ -457,6 +632,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
                 command_traces.push(TransactionCommandTrace {
                     index,
                     command: command_name(command).to_string(),
+                    command_payload: Some(command.clone()),
                     started_at_ms: cmd_started_at,
                     elapsed_ms,
                     before,
@@ -491,7 +667,9 @@ pub fn execute_batch<P: TransactionStateProvider>(
                     value: None,
                     error: wr.error.clone(),
                 });
-                command_traces.push(wr.trace);
+                let mut trace = wr.trace;
+                trace.command_payload = Some(command.clone());
+                command_traces.push(trace);
 
                 if !wr.success {
                     failed_at = Some(index);
@@ -551,6 +729,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
                 command_traces.push(TransactionCommandTrace {
                     index,
                     command: command_name(command).to_string(),
+                    command_payload: Some(command.clone()),
                     started_at_ms: cmd_started_at,
                     elapsed_ms,
                     before,
@@ -619,6 +798,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
                 command_traces.push(TransactionCommandTrace {
                     index,
                     command: command_name(command).to_string(),
+                    command_payload: Some(command.clone()),
                     started_at_ms: cmd_started_at,
                     elapsed_ms,
                     before,
@@ -681,7 +861,9 @@ pub fn execute_batch<P: TransactionStateProvider>(
     );
 
     let trace = TransactionTrace {
+        schema_version: crate::protocol::types::batch_wait::TRANSACTION_TRACE_SCHEMA_VERSION,
         request_id: request_id.clone(),
+        command_fingerprint,
         status: if success {
             TransactionTraceStatus::Ok
         } else {

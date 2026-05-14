@@ -3,6 +3,6 @@ mod model;
 mod tests;
 
 pub(crate) use model::{
-    PromptCompilerDecision, PromptCompilerPreview, PromptCompilerRow, PromptCompilerRowKind,
-    PromptCompilerSnapshot,
+    PromptCompilerContext, PromptCompilerDecision, PromptCompilerError, PromptCompilerPreview,
+    PromptCompilerRow, PromptCompilerRowKind, PromptCompilerSnapshot,
 };

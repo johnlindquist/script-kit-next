@@ -369,7 +369,9 @@ fn batch_result_failure_with_trace_receipt() {
     };
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "txn-fail-trace".to_string(),
+        command_fingerprint: "fp-txn-fail-trace".to_string(),
         status: TransactionTraceStatus::Failed,
         started_at_ms: 100,
         total_elapsed_ms: 1003,
@@ -378,6 +380,7 @@ fn batch_result_failure_with_trace_receipt() {
             TransactionCommandTrace {
                 index: 0,
                 command: "setInput".to_string(),
+                command_payload: None,
                 started_at_ms: 100,
                 elapsed_ms: 2,
                 before: UiStateSnapshot::default(),
@@ -393,6 +396,7 @@ fn batch_result_failure_with_trace_receipt() {
             TransactionCommandTrace {
                 index: 1,
                 command: "waitFor".to_string(),
+                command_payload: None,
                 started_at_ms: 102,
                 elapsed_ms: 1001,
                 before: UiStateSnapshot {

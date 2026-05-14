@@ -32,11 +32,35 @@ pub(crate) struct PromptCompilerRow {
     pub(crate) detail: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PromptCompilerContext {
+    pub(crate) generation: u64,
+    pub(crate) model_id: String,
+    pub(crate) compiler_config_fingerprint: Option<String>,
+}
+
+impl PromptCompilerContext {
+    pub(crate) fn matches(&self, other: &Self) -> bool {
+        self.generation == other.generation
+            && self.model_id == other.model_id
+            && self.compiler_config_fingerprint == other.compiler_config_fingerprint
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PromptCompilerError {
+    ConfigLoadFailed(String),
+    ModelUnavailable(String),
+    CompileFailed(String),
+}
+
 /// Human-readable view model derived from a `PreparedMessageReceipt`.
 ///
 /// `final_user_content` exactly matches the payload that submit stores/sends.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PromptCompilerPreview {
+    pub(crate) context: PromptCompilerContext,
+    pub(crate) error: Option<PromptCompilerError>,
     pub(crate) decision: PromptCompilerDecision,
     pub(crate) raw_content: String,
     pub(crate) prompt_prefix: String,
@@ -53,6 +77,20 @@ impl PromptCompilerPreview {
     /// Build a preview from an existing receipt. Pure data transformation —
     /// no IO, no side-effects.
     pub(crate) fn from_receipt(receipt: &PreparedMessageReceipt) -> Self {
+        Self::from_receipt_with_context(
+            PromptCompilerContext {
+                generation: 0,
+                model_id: "unknown".to_string(),
+                compiler_config_fingerprint: None,
+            },
+            receipt,
+        )
+    }
+
+    pub(crate) fn from_receipt_with_context(
+        context: PromptCompilerContext,
+        receipt: &PreparedMessageReceipt,
+    ) -> Self {
         let mut rows = Vec::new();
 
         // Duplicate-dropped rows (from assembly dedup)
@@ -109,6 +147,8 @@ impl PromptCompilerPreview {
         };
 
         Self {
+            context,
+            error: None,
             decision,
             raw_content: receipt.raw_content.clone(),
             prompt_prefix: receipt.context.prompt_prefix.clone(),

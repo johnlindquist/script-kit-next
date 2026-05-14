@@ -393,7 +393,9 @@ fn trace_log_round_trips_through_jsonl() {
     let path = dir.path().join("transactions.jsonl");
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "txn-rt".to_string(),
+        command_fingerprint: "fp-rt".to_string(),
         status: TransactionTraceStatus::Ok,
         started_at_ms: 1000,
         total_elapsed_ms: 42,
@@ -420,7 +422,9 @@ fn trace_log_returns_latest_when_multiple_entries() {
 
     for i in 0..3 {
         let trace = TransactionTrace {
+            schema_version: 1,
             request_id: format!("txn-{i}"),
+            command_fingerprint: format!("fp-{i}"),
             status: TransactionTraceStatus::Ok,
             started_at_ms: i * 100,
             total_elapsed_ms: i * 10,
@@ -458,7 +462,9 @@ fn trace_log_returns_none_for_missing_request_id() {
     let path = dir.path().join("transactions.jsonl");
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "txn-exists".to_string(),
+        command_fingerprint: "fp-exists".to_string(),
         status: TransactionTraceStatus::Ok,
         started_at_ms: 0,
         total_elapsed_ms: 0,

@@ -6,9 +6,18 @@
 use crate::protocol::types::batch_wait::{TransactionTrace, TransactionTraceMode};
 use anyhow::{Context, Result};
 use std::fs::{self, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+pub const TRANSACTION_TRACE_MAX_BYTES: u64 = 10 * 1024 * 1024;
+const TRANSACTION_TRACE_COMPACT_KEEP: usize = 2_000;
+
+fn trace_log_mutex() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
 
 /// Returns the current epoch time in milliseconds.
 pub fn now_epoch_ms() -> u64 {
@@ -32,6 +41,7 @@ pub fn default_transaction_log_path() -> PathBuf {
 ///
 /// Creates parent directories if they don't exist. Returns the path written to.
 pub fn append_transaction_trace(path: Option<&Path>, trace: &TransactionTrace) -> Result<PathBuf> {
+    let _guard = trace_log_mutex().lock().expect("trace log mutex poisoned");
     let path = path
         .map(PathBuf::from)
         .unwrap_or_else(default_transaction_log_path);
@@ -41,11 +51,15 @@ pub fn append_transaction_trace(path: Option<&Path>, trace: &TransactionTrace) -
             .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
 
+    compact_transaction_trace_log_if_needed(&path)?;
+
     let mut file = OpenOptions::new()
         .create(true)
+        .read(true)
         .append(true)
         .open(&path)
         .with_context(|| format!("failed to open {}", path.display()))?;
+    ensure_jsonl_append_boundary(&mut file)?;
 
     let line = serde_json::to_string(trace).context("failed to serialize transaction trace")?;
     writeln!(file, "{line}").context("failed to write transaction trace")?;
@@ -61,11 +75,74 @@ pub fn append_transaction_trace(path: Option<&Path>, trace: &TransactionTrace) -
     Ok(path)
 }
 
+fn ensure_jsonl_append_boundary(file: &mut fs::File) -> Result<()> {
+    let len = file.metadata()?.len();
+    if len == 0 {
+        return Ok(());
+    }
+    file.seek(SeekFrom::End(-1))?;
+    let mut last = [0u8; 1];
+    file.read_exact(&mut last)?;
+    file.seek(SeekFrom::End(0))?;
+    if last[0] != b'\n' {
+        writeln!(file)?;
+    }
+    Ok(())
+}
+
+pub fn compact_transaction_trace_log_if_needed(path: &Path) -> Result<()> {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to stat {}", path.display()))
+        }
+    };
+    if metadata.len() <= TRANSACTION_TRACE_MAX_BYTES {
+        return Ok(());
+    }
+
+    let file = OpenOptions::new()
+        .read(true)
+        .open(path)
+        .with_context(|| format!("failed to open {}", path.display()))?;
+    let reader = BufReader::new(file);
+    let mut traces = Vec::new();
+    for line in reader.lines() {
+        let line = line.context("failed to read transaction trace log during compaction")?;
+        if line.trim().is_empty() {
+            continue;
+        }
+        match serde_json::from_str::<TransactionTrace>(&line) {
+            Ok(trace) => traces.push(trace),
+            Err(error) => tracing::warn!(
+                target: "script_kit::transaction",
+                log_path = %path.display(),
+                %error,
+                "Skipping malformed transaction trace log entry during compaction"
+            ),
+        }
+    }
+    let start = traces.len().saturating_sub(TRANSACTION_TRACE_COMPACT_KEEP);
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)
+        .with_context(|| format!("failed to compact {}", path.display()))?;
+    for trace in traces.into_iter().skip(start) {
+        let line = serde_json::to_string(&trace).context("failed to serialize compacted trace")?;
+        writeln!(file, "{line}").context("failed to write compacted transaction trace")?;
+    }
+    Ok(())
+}
+
 /// Read the most recent transaction trace, optionally filtered by request_id.
 pub fn read_latest_transaction_trace(
     path: Option<&Path>,
     request_id: Option<&str>,
 ) -> Result<Option<TransactionTrace>> {
+    let _guard = trace_log_mutex().lock().expect("trace log mutex poisoned");
     let path = path
         .map(PathBuf::from)
         .unwrap_or_else(default_transaction_log_path);
@@ -80,12 +157,9 @@ pub fn read_latest_transaction_trace(
         .with_context(|| format!("failed to open {}", path.display()))?;
 
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader
-        .lines()
-        .collect::<std::io::Result<Vec<_>>>()
-        .context("failed to read transaction trace log")?;
-
-    for line in lines.into_iter().rev() {
+    let mut latest = None;
+    for line in reader.lines() {
+        let line = line.context("failed to read transaction trace log")?;
         if line.trim().is_empty() {
             continue;
         }
@@ -102,11 +176,11 @@ pub fn read_latest_transaction_trace(
             }
         };
         if request_id.is_none() || request_id == Some(trace.request_id.as_str()) {
-            return Ok(Some(trace));
+            latest = Some(trace);
         }
     }
 
-    Ok(None)
+    Ok(latest)
 }
 
 /// Returns true when trace policy says to include the trace in the result.

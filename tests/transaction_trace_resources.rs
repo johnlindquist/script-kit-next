@@ -140,7 +140,9 @@ fn latest_resource_reads_persisted_trace() {
     let log_path = dir.path().join("transactions.jsonl");
 
     let trace = TransactionTrace {
+        schema_version: 1,
         request_id: "resource-test-1".to_string(),
+        command_fingerprint: "fp-resource-test-1".to_string(),
         status: TransactionTraceStatus::Ok,
         started_at_ms: 1000,
         total_elapsed_ms: 42,
@@ -170,7 +172,9 @@ fn latest_resource_filters_by_request_id() {
     let log_path = dir.path().join("transactions.jsonl");
 
     let trace_a = TransactionTrace {
+        schema_version: 1,
         request_id: "txn-a".to_string(),
+        command_fingerprint: "fp-txn-a".to_string(),
         status: TransactionTraceStatus::Ok,
         started_at_ms: 1000,
         total_elapsed_ms: 10,
@@ -178,7 +182,9 @@ fn latest_resource_filters_by_request_id() {
         commands: Vec::new(),
     };
     let trace_b = TransactionTrace {
+        schema_version: 1,
         request_id: "txn-b".to_string(),
+        command_fingerprint: "fp-txn-b".to_string(),
         status: TransactionTraceStatus::Failed,
         started_at_ms: 2000,
         total_elapsed_ms: 20,

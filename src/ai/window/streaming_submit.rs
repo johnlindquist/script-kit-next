@@ -161,6 +161,7 @@ impl AiApp {
             has_context_parts,
             receipt.clone(),
         );
+        preflight_audit.preflight_generation = self.context_preflight.generation;
         self.last_preflight_audit = Some(preflight_audit.clone());
 
         if let Err(error) = crate::ai::save_message_preparation_audit(&preflight_audit) {
@@ -169,6 +170,14 @@ impl AiApp {
                 correlation_id = %preflight_audit.correlation_id,
                 error = %error,
                 "Failed to persist preflight audit"
+            );
+        }
+        if let Err(error) = crate::ai::append_preflight_audit(None, &preflight_audit) {
+            tracing::warn!(
+                chat_id = %chat_id,
+                correlation_id = %preflight_audit.correlation_id,
+                error = %error,
+                "Failed to append preflight audit log"
             );
         }
 

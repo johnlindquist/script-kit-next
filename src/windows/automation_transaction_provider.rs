@@ -36,6 +36,7 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
         UiStateSnapshot {
             window_visible: true,
             window_focused: true,
+            prompt_type: Some("acpChat".to_string()),
             input_value: Some(state.input_text.clone()),
             selected_value: state
                 .picker
@@ -48,6 +49,10 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
                 .map(|el| el.semantic_id.clone())
                 .collect(),
             focused_semantic_id: surface.focused_semantic_id,
+            acp_status: Some(state.status.clone()),
+            acp_context_ready: state.context_ready,
+            acp_picker_open: state.picker.as_ref().is_some_and(|picker| picker.open),
+            acp_cursor_index: Some(state.cursor_index),
         }
     }
 
@@ -135,6 +140,7 @@ impl<'a> TransactionStateProvider for ActionsDialogTransactionProvider<'a> {
         UiStateSnapshot {
             window_visible: true,
             window_focused: true,
+            prompt_type: Some("actionsDialog".to_string()),
             input_value: Some(dialog.search_text.clone()),
             selected_value: dialog.get_selected_action_id(),
             choice_count: dialog.filtered_actions.len(),
@@ -144,6 +150,7 @@ impl<'a> TransactionStateProvider for ActionsDialogTransactionProvider<'a> {
                 .map(|el| el.semantic_id.clone())
                 .collect(),
             focused_semantic_id: surface.focused_semantic_id,
+            ..Default::default()
         }
     }
 
