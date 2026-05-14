@@ -10,6 +10,17 @@ fn mini_main_window_sizing_from_grouped_items(
     crate::window_resize::mini_main_window_sizing_from_grouped_items(grouped_items)
 }
 
+pub(crate) fn compact_ai_view_type_for_mode(mode: MainWindowMode) -> ViewType {
+    match mode {
+        MainWindowMode::Mini => ViewType::MiniAiChat,
+        MainWindowMode::Full => ViewType::DivPrompt,
+    }
+}
+
+pub(crate) fn mini_prompt_view_type() -> ViewType {
+    ViewType::MiniPrompt
+}
+
 fn footer_frontmost_app_name() -> Option<String> {
     crate::frontmost_app_tracker::get_last_real_app().and_then(|app| {
         let trimmed = app.name.trim();
@@ -178,18 +189,28 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
-        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
-        if actions_open && !action.is_actions() {
+        let shared_actions_open = self.show_actions_popup;
+        let detached_actions_open = crate::actions::is_actions_window_open();
+        if (shared_actions_open || detached_actions_open) && !action.is_actions() {
+            let mut closed = false;
             if let super::actions_dialog::ActionsSupport::SharedDialog(host) =
                 self.actions_support_for_view()
             {
                 self.close_actions_popup(host, window, cx);
+                closed = true;
+            }
+            if detached_actions_open {
+                crate::actions::close_actions_window(cx);
+                closed = true;
+            }
+            if shared_actions_open || detached_actions_open {
                 tracing::info!(
                     target: "script_kit::footer_popup",
                     event = "main_window_footer_action_closed_actions_only",
                     source,
                     action = ?action,
-                    host = ?host,
+                    main_window_mode = ?self.main_window_mode,
+                    closed,
                     "Closed actions dialog from footer outside-click target without dispatching action"
                 );
             }
@@ -631,10 +652,9 @@ impl ScriptListApp {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
-            let buttons = vec![
-                FooterButtonConfig::new(FooterAction::Run, "↵", "Select")
-                    .enabled(!footer_disabled),
-            ];
+            let buttons =
+                vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Select")
+                    .enabled(!footer_disabled)];
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
@@ -934,9 +954,9 @@ impl ScriptListApp {
             AppView::MiniPrompt { choices, .. } => {
                 let filtered = self.get_filtered_arg_choices(choices);
                 if filtered.is_empty() && choices.is_empty() {
-                    Some((ViewType::ArgPromptNoChoices, 0))
+                    Some((mini_prompt_view_type(), 0))
                 } else {
-                    Some((ViewType::ArgPromptWithChoices, filtered.len().min(5)))
+                    Some((mini_prompt_view_type(), filtered.len().min(5)))
                 }
             }
             AppView::MicroPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
@@ -948,7 +968,9 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
-            AppView::ChatPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Chat prompt uses div size
+            AppView::ChatPrompt { .. } => {
+                Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
+            }
             AppView::TermPrompt { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::ActionsDialog => {
                 // Actions dialog is an overlay, don't resize
@@ -1104,9 +1126,7 @@ impl ScriptListApp {
             AppView::BrowseKitsView { results, .. } => {
                 Some((ViewType::MiniMainWindow, results.len()))
             }
-            AppView::InstalledKitsView { kits, .. } => {
-                Some((ViewType::MiniMainWindow, kits.len()))
-            }
+            AppView::InstalledKitsView { kits, .. } => Some((ViewType::MiniMainWindow, kits.len())),
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
                 let count = crate::ai::presets::load_presets()
@@ -1160,9 +1180,89 @@ impl ScriptListApp {
                         .unwrap_or(0)
                 },
             )),
-            AppView::AcpChatView { .. } => Some((ViewType::DivPrompt, 0)),
+            AppView::AcpChatView { .. } => {
+                Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
+            }
             AppView::ConfirmPrompt { .. } => Some((ViewType::DivPrompt, 0)),
         }
+    }
+
+    pub(crate) fn set_main_window_mode(
+        &mut self,
+        mode: MainWindowMode,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+        source: &'static str,
+    ) {
+        let old = self.main_window_mode;
+        if old == mode {
+            return;
+        }
+
+        self.main_window_mode = mode;
+
+        if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat, _cx| {
+                chat.set_mini_mode(mode == MainWindowMode::Mini);
+            });
+        }
+
+        let shared_actions_open = self.show_actions_popup;
+        let detached_actions_open = crate::actions::is_actions_window_open();
+        if shared_actions_open {
+            if let super::actions_dialog::ActionsSupport::SharedDialog(host) =
+                self.actions_support_for_view()
+            {
+                self.close_actions_popup(host, window, cx);
+            } else {
+                self.clear_actions_popup_state();
+            }
+        }
+        if detached_actions_open {
+            crate::actions::close_actions_window(cx);
+        }
+
+        self.update_window_size_deferred(window, cx);
+        self.sync_main_footer_popup(window, cx);
+        tracing::info!(
+            target: "script_kit::window_mode",
+            event = "main_window_mode_changed",
+            source,
+            old = ?old,
+            new = ?mode,
+            view = ?self.current_view,
+            "Main window mode changed atomically"
+        );
+    }
+
+    pub(crate) fn set_main_window_mode_state_only(
+        &mut self,
+        mode: MainWindowMode,
+        cx: &mut Context<Self>,
+        source: &'static str,
+    ) {
+        let old = self.main_window_mode;
+        if old == mode {
+            return;
+        }
+
+        self.main_window_mode = mode;
+        if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat, _cx| {
+                chat.set_mini_mode(mode == MainWindowMode::Mini);
+            });
+        }
+        tracing::info!(
+            target: "script_kit::window_mode",
+            event = "main_window_mode_changed",
+            source,
+            old = ?old,
+            new = ?mode,
+            view = ?self.current_view,
+            "Main window mode changed without window handle"
+        );
     }
 
     /// Calculate sizing only when the current view still matches the caller's
@@ -1309,13 +1409,25 @@ impl ScriptListApp {
                 sizing,
                 f32::from(target_height),
             );
-            crate::window_resize::resize_first_window_to_size(target_height, Some(target_width));
+            let width = if self.main_window_mode == MainWindowMode::Mini {
+                crate::window_resize::width_for_view(ViewType::MiniMainWindow)
+                    .unwrap_or(target_width)
+            } else {
+                target_width
+            };
+            crate::window_resize::resize_first_window_to_size(target_height, Some(width));
             return;
         }
 
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             let target_height = crate::window_resize::height_for_view(view_type, item_count);
-            crate::window_resize::resize_first_window_to_size(target_height, Some(target_width));
+            let width = if self.main_window_mode == MainWindowMode::Mini {
+                crate::window_resize::width_for_view(ViewType::MiniMainWindow)
+                    .unwrap_or(target_width)
+            } else {
+                target_width
+            };
+            crate::window_resize::resize_first_window_to_size(target_height, Some(width));
         }
     }
 
@@ -1388,6 +1500,10 @@ impl ScriptListApp {
             }
             AppView::AcpChatView { entity } => {
                 entity.update(cx, |view, cx| view.set_input(text, cx));
+                true
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
                 true
             }
             AppView::FileSearchView {

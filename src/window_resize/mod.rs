@@ -534,7 +534,7 @@ fn height_for_view_with_layout(
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
-        ViewType::MiniMainWindow => {
+        ViewType::MiniMainWindow | ViewType::MiniAiChat => {
             // Flat item_count fallback: assumes all items are selectable (no section headers).
             // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
             let visible_items = item_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
@@ -559,6 +559,13 @@ fn height_for_view_with_layout(
             let total_height = ARG_HEADER_HEIGHT + list_height + WINDOW_BORDER_Y;
             clamp_height(px(total_height))
         }
+        ViewType::MiniPrompt => {
+            let visible_items = item_count.clamp(1, 5) as f32;
+            let list_height =
+                (visible_items * LIST_ITEM_HEIGHT) + ARG_LIST_PADDING_Y + ARG_DIVIDER_HEIGHT;
+            let total_height = ARG_HEADER_HEIGHT + list_height + WINDOW_BORDER_Y;
+            clamp_height(px(total_height))
+        }
         // Input-only prompt - compact
         ViewType::ArgPromptNoChoices => MIN_HEIGHT,
         // Full content views (editor, terminal) - max height
@@ -575,6 +582,10 @@ pub enum ViewType {
     ScriptList,
     /// Script list in compact main-window mode - dynamic height based on item count
     MiniMainWindow,
+    /// Mini prompt rendered in the compact main-window width.
+    MiniPrompt,
+    /// Mini inline AI chat rendered in the compact main-window width.
+    MiniAiChat,
     /// Arg prompt with choices - dynamic height based on item count
     ArgPromptWithChoices,
     /// Arg prompt without choices (input only) - compact height
@@ -605,7 +616,9 @@ pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
 /// or `None` when the current width should be preserved.
 pub fn width_for_view(view_type: ViewType) -> Option<f32> {
     match view_type {
-        ViewType::MiniMainWindow => Some(MINI_MAIN_WINDOW_WIDTH),
+        ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat => {
+            Some(MINI_MAIN_WINDOW_WIDTH)
+        }
         // When leaving mini mode, restore full width
         ViewType::ScriptList => Some(FULL_MAIN_WINDOW_WIDTH),
         _ => None,
@@ -655,7 +668,10 @@ pub fn defer_resize_to_view(
 pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
     let target_height = height_for_view(view_type, item_count);
     let target_width = width_for_view(view_type);
-    if matches!(view_type, ViewType::MiniMainWindow) {
+    if matches!(
+        view_type,
+        ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat
+    ) {
         let visible_rows = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
         debug!(
             view_type = ?view_type,
@@ -1110,6 +1126,14 @@ mod resize_tests {
     fn test_width_for_view_mini_main_window() {
         assert_eq!(
             width_for_view(ViewType::MiniMainWindow),
+            Some(MINI_MAIN_WINDOW_WIDTH)
+        );
+        assert_eq!(
+            width_for_view(ViewType::MiniPrompt),
+            Some(MINI_MAIN_WINDOW_WIDTH)
+        );
+        assert_eq!(
+            width_for_view(ViewType::MiniAiChat),
             Some(MINI_MAIN_WINDOW_WIDTH)
         );
     }
