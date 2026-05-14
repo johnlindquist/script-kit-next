@@ -272,6 +272,13 @@ impl NotesApp {
                         cx.stop_propagation();
                         return;
                     }
+                    let cancelled_streaming =
+                        entity.update(cx, |chat, cx| chat.cancel_streaming_from_escape(cx));
+                    if cancelled_streaming {
+                        tracing::info!(event = "notes_acp_escape_cancelled_streaming");
+                        cx.stop_propagation();
+                        return;
+                    }
                 }
                 self.switch_to_notes_surface(window, cx);
                 cx.stop_propagation();
@@ -287,16 +294,13 @@ impl NotesApp {
                 // Cmd+W: close the Notes window (same as Notes mode).
                 if key.eq_ignore_ascii_case("w") && !modifiers.shift {
                     self.save_current_note();
-                    if let Some(ref entity) = self.embedded_acp_chat {
-                        entity.update(cx, |chat, cx| {
-                            chat.prepare_for_host_hide(cx);
-                        });
-                    }
+                    self.prepare_embedded_acp_for_window_close("notes_acp_cmd_w", cx);
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
                         crate::window_state::WindowRole::Notes,
                         wb,
                     );
+                    window.close_all_dialogs(cx);
                     window.remove_window();
                     super::window_ops::restore_launcher_after_notes_close_if_needed(cx);
                     cx.stop_propagation();

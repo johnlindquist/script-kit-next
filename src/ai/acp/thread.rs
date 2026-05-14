@@ -112,6 +112,15 @@ pub(crate) struct AcpToolCallState {
     message_index: usize,
 }
 
+/// Snapshot of composer draft state that can survive ACP view relaunch.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AcpThreadDraftSnapshot {
+    pub input: String,
+    pub input_cursor: usize,
+    pub pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+    pub pending_context_consumed: bool,
+}
+
 /// Initialization parameters for creating an `AcpThread`.
 #[derive(Debug, Clone)]
 pub(crate) struct AcpThreadInit {
@@ -164,6 +173,20 @@ struct ResolvedPendingContext {
 struct PreparedTurnBlocks {
     blocks: Vec<ContentBlock>,
     receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum SkillContextStagedBy {
+    MainMenu,
+    SlashPicker,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct SkillContextIdentity {
+    pub(crate) thread_id: String,
+    pub(crate) skill_id: String,
+    pub(crate) skill_file_hash: String,
+    pub(crate) staged_by: SkillContextStagedBy,
 }
 
 /// GPUI entity that owns one ACP conversation thread.
@@ -254,6 +277,9 @@ pub(crate) struct AcpThread {
     /// Handle to the permission listener task.
     permission_task: Option<Task<()>>,
 
+    /// Generation guard for async stream delivery into the transcript.
+    transcript_generation: u64,
+
     /// Monotonically increasing message ID counter.
     next_message_id: u64,
 
@@ -311,6 +337,7 @@ impl AcpThread {
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
+            transcript_generation: 0,
             next_message_id: 1,
             selected_model_display_name: {
                 let id = init.selected_model_id.as_deref();
@@ -1005,6 +1032,7 @@ impl AcpThread {
     /// Spawn a task that pumps events from the ACP worker into thread state.
     fn bind_stream(&mut self, rx: AcpEventRx, cx: &mut Context<Self>) {
         let entity = cx.entity().downgrade();
+        let generation = self.transcript_generation;
         self.stream_task = Some(cx.spawn(async move |_this, cx| {
             while let Ok(event) = rx.recv().await {
                 let should_stop = matches!(
@@ -1021,6 +1049,15 @@ impl AcpThread {
                 cx.update(|cx| {
                     if let Some(entity) = entity_ref.upgrade() {
                         entity.update(cx, |this, cx| {
+                            if this.transcript_generation != generation {
+                                tracing::debug!(
+                                    target: "script_kit::tab_ai",
+                                    event = "acp_stream_event_discarded_stale_generation",
+                                    expected_generation = generation,
+                                    actual_generation = this.transcript_generation,
+                                );
+                                return;
+                            }
                             this.apply_event(event, cx);
                         });
                     }
@@ -1031,6 +1068,16 @@ impl AcpThread {
                 }
             }
         }));
+    }
+
+    fn bump_transcript_generation(&mut self, reason: &'static str) {
+        self.transcript_generation = self.transcript_generation.wrapping_add(1);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_thread_transcript_generation_bumped",
+            reason,
+            generation = self.transcript_generation,
+        );
     }
 
     /// Spawn a long-lived task that listens for permission requests.
@@ -1719,6 +1766,19 @@ impl AcpThread {
         saved: &[super::history::SavedMessage],
         cx: &mut Context<Self>,
     ) {
+        self.bump_transcript_generation("load_saved_messages");
+        self.stream_task = None;
+        self.stream_started_at = None;
+        self.pending_permission = None;
+        self.status = AcpThreadStatus::Idle;
+        self.active_plan_entries.clear();
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        self.active_mode_id = None;
+        self.available_commands.clear();
+        self.usage_tokens = None;
+        self.usage_cost_usd = None;
+        self.next_message_id = 1;
         self.clear_all_pending_context("load_saved_messages");
         self.messages.clear();
         for msg in saved {
@@ -1737,6 +1797,33 @@ impl AcpThread {
         }
         self.context_bootstrap_state = AcpContextBootstrapState::Ready;
         self.context_bootstrap_note = None;
+        cx.notify();
+    }
+
+    pub(crate) fn draft_snapshot(&self) -> AcpThreadDraftSnapshot {
+        AcpThreadDraftSnapshot {
+            input: self.input.text().to_string(),
+            input_cursor: self.input.cursor(),
+            pending_context_parts: self.pending_context_parts.clone(),
+            pending_context_consumed: self.pending_context_consumed,
+        }
+    }
+
+    pub(crate) fn restore_draft_snapshot(
+        &mut self,
+        snapshot: AcpThreadDraftSnapshot,
+        cx: &mut Context<Self>,
+    ) {
+        let input_len = snapshot.input.chars().count();
+        let cursor = snapshot.input_cursor.min(input_len);
+        self.input.set_text(snapshot.input);
+        self.input.set_cursor(cursor);
+        self.pending_context_parts = snapshot.pending_context_parts;
+        self.pending_context_consumed = snapshot.pending_context_consumed;
+        self.pending_context_blocks.clear();
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+        self.queued_submit_while_bootstrapping = false;
         cx.notify();
     }
 
@@ -1838,6 +1925,66 @@ impl AcpThread {
             ambient_label = ?ambient_label,
             pending_part_count = self.pending_context_parts.len(),
             pending_block_count = self.pending_context_blocks.len(),
+        );
+        cx.notify();
+    }
+
+    pub(crate) fn add_or_replace_skill_context(
+        &mut self,
+        identity: SkillContextIdentity,
+        part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        let crate::ai::message_parts::AiContextPart::SkillFile {
+            path, slash_name, ..
+        } = &part
+        else {
+            self.add_context_part(part, cx);
+            return;
+        };
+
+        self.pending_context_parts.retain(|existing| {
+            !matches!(
+                existing,
+                crate::ai::message_parts::AiContextPart::SkillFile {
+                    path: existing_path,
+                    slash_name: existing_slash,
+                    ..
+                } if existing_path == path || existing_slash == slash_name
+            )
+        });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_skill_context_bound_to_thread",
+            thread_id = %identity.thread_id,
+            skill_id = %identity.skill_id,
+            skill_file_hash = %identity.skill_file_hash,
+            staged_by = ?identity.staged_by,
+        );
+        self.add_context_part(part, cx);
+    }
+
+    pub(crate) fn revalidate_skill_context_for_agent(
+        &mut self,
+        new_agent_id: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let skill_count = self
+            .pending_context_parts
+            .iter()
+            .filter(|part| {
+                matches!(
+                    part,
+                    crate::ai::message_parts::AiContextPart::SkillFile { .. }
+                )
+            })
+            .count();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_skill_context_revalidated_for_agent_switch",
+            new_agent_id,
+            skill_count,
         );
         cx.notify();
     }
@@ -1992,6 +2139,7 @@ impl AcpThread {
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
+            transcript_generation: 0,
             next_message_id: 1,
             available_models: Vec::new(),
             selected_model_id: None,
@@ -2215,6 +2363,7 @@ mod tests {
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
+            transcript_generation: 0,
             next_message_id: 1,
             available_models: Vec::new(),
             selected_model_id: None,

@@ -691,7 +691,7 @@ impl NotesApp {
 
         // 2. Persisted cart items in sort_order.
         if let Some(note_id) = selected_note.map(|n| n.id) {
-            match crate::notes::storage::list_note_cart_items(note_id) {
+            match crate::notes::storage::list_note_cart_items_deduped(note_id) {
                 Ok(items) => {
                     for item in &items {
                         parts.push(item.to_ai_context_part());
@@ -745,6 +745,20 @@ impl NotesApp {
             }
         };
 
+        let cart_item_ids = self
+            .selected_note_id
+            .and_then(|note_id| {
+                crate::notes::storage::list_note_cart_items(note_id)
+                    .ok()
+                    .map(|items| {
+                        items
+                            .into_iter()
+                            .map(|item| item.id)
+                            .collect::<Vec<String>>()
+                    })
+            })
+            .unwrap_or_default();
+        let selected_note_id = self.selected_note_id;
         let part_count = parts.len();
 
         tracing::info!(
@@ -783,6 +797,18 @@ impl NotesApp {
             );
             self.show_action_feedback("Agent unavailable", true);
             return false;
+        }
+
+        if let Some(note_id) = selected_note_id {
+            if let Err(err) = crate::notes::storage::delete_note_cart_items(note_id, &cart_item_ids)
+            {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_cart_handoff_consume_failed",
+                    note_id = %note_id,
+                    error = %err,
+                );
+            }
         }
 
         tracing::info!(

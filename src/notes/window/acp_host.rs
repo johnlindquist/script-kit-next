@@ -13,14 +13,6 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) -> Result<gpui::Entity<crate::ai::acp::view::AcpChatView>, String> {
         if let Some(entity) = self.embedded_acp_chat.as_ref().cloned() {
-            if let Some(input) = initial_input.clone().filter(|s| !s.trim().is_empty()) {
-                entity.update(cx, |chat, cx| {
-                    if !chat.is_setup_mode() {
-                        chat.set_input(input, cx);
-                    }
-                });
-            }
-
             tracing::info!(
                 event = "notes_embedded_acp_view_ensured",
                 created = false,
@@ -34,6 +26,7 @@ impl NotesApp {
             crate::ai::acp::hosted::spawn_hosted_view(initial_input.clone(), requirements, cx)?;
         self.wire_acp_host_callbacks(&view, cx);
         self.embedded_acp_chat = Some(view.clone());
+        self.notes_acp_generation = self.notes_acp_generation.wrapping_add(1);
 
         tracing::info!(
             event = "notes_embedded_acp_view_ensured",
@@ -110,6 +103,48 @@ impl NotesApp {
             target: "script_kit::tab_ai",
             event = "notes_embedded_acp_closed_via_host",
             reason,
+        );
+    }
+
+    pub(super) fn prepare_embedded_acp_for_window_close(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(ref entity) = self.embedded_acp_chat {
+            entity.update(cx, |chat, cx| {
+                chat.prepare_for_host_hide(cx);
+            });
+        }
+
+        if crate::actions::is_actions_window_open() {
+            crate::actions::close_actions_window(cx);
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_embedded_acp_prepared_for_window_close",
+            reason,
+        );
+    }
+
+    pub(super) fn clear_notes_hosted_acp_context_for_note(
+        &mut self,
+        note_id: Option<NoteId>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(note_id) = note_id else {
+            return;
+        };
+        if let Some(ref entity) = self.embedded_acp_chat {
+            entity.update(cx, |chat, cx| {
+                chat.clear_hosted_context_parts_from_host("notes_note_switch_detach", cx);
+            });
+        }
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_hosted_acp_context_cleared_for_note",
+            note_id = %note_id,
         );
     }
 
@@ -215,9 +250,14 @@ impl NotesApp {
                     hit_count = hits.len(),
                 );
 
-                chat.update(cx, |view, cx| {
-                    view.open_history_portal_with_entries(query, hits, cx);
+                let opened = chat.update(cx, |view, cx| {
+                    view.open_history_portal_with_entries(query, hits, cx)
                 });
+                if !opened {
+                    chat.update(cx, |view, cx| {
+                        let _ = view.cancel_pending_portal_session(PortalKind::AcpHistory, cx);
+                    });
+                }
             }
             PortalKind::FileSearch
             | PortalKind::BrowserHistory
@@ -232,6 +272,9 @@ impl NotesApp {
                     opened = false,
                     reason = "unsupported_in_notes_host",
                 );
+                chat.update(cx, |view, cx| {
+                    let _ = view.cancel_pending_portal_session(kind, cx);
+                });
             }
             PortalKind::ClipboardHistory => {
                 tracing::info!(
@@ -240,6 +283,9 @@ impl NotesApp {
                     opened = false,
                     reason = "unsupported_in_notes_host",
                 );
+                chat.update(cx, |view, cx| {
+                    let _ = view.cancel_pending_portal_session(PortalKind::ClipboardHistory, cx);
+                });
             }
         }
     }
@@ -329,6 +375,12 @@ impl NotesApp {
         let Some(ref acp_view) = self.embedded_acp_chat else {
             return;
         };
+        let actions_target = acp_view.downgrade();
+        let actions_generation = self.notes_acp_generation;
+
+        if let Some(thread) = acp_view.read(cx).thread() {
+            thread.update(cx, |thread, cx| thread.refresh_models(cx));
+        }
 
         // Read ACP context from the cached view.
         let (selected_agent_id, catalog_entries, selected_model_id, available_models) = {
@@ -457,7 +509,14 @@ impl NotesApp {
                         );
                         return;
                     }
-                    dispatch_notes_acp_action(this.upgrade(), &action_id, window, app_cx);
+                    dispatch_notes_acp_action(
+                        this.upgrade(),
+                        actions_target.clone(),
+                        actions_generation,
+                        &action_id,
+                        window,
+                        app_cx,
+                    );
                 });
             }
         })
@@ -509,6 +568,12 @@ impl NotesApp {
     pub(crate) fn surface_mode(&self) -> NotesSurfaceMode {
         self.surface_mode
     }
+
+    pub(crate) fn embedded_acp_chat_entity(
+        &self,
+    ) -> Option<Entity<crate::ai::acp::view::AcpChatView>> {
+        self.embedded_acp_chat.clone()
+    }
 }
 
 /// Dispatch an ACP action from the Notes-hosted actions dialog popup.
@@ -518,11 +583,33 @@ impl NotesApp {
 /// can interact with the ACP view entity and the Notes host state.
 fn dispatch_notes_acp_action(
     entity: Option<Entity<NotesApp>>,
+    acp_target: gpui::WeakEntity<crate::ai::acp::view::AcpChatView>,
+    acp_generation: u64,
     action_id: &str,
     window: &mut Window,
     cx: &mut gpui::App,
 ) {
     let Some(entity) = entity else { return };
+    let Some(acp_entity) = acp_target.upgrade() else {
+        tracing::warn!(
+            target: "script_kit::tab_ai",
+            event = "notes_acp_action_stale_view",
+            action_id = %action_id,
+            reason = "target_dropped",
+        );
+        return;
+    };
+    if entity.read(cx).notes_acp_generation != acp_generation {
+        tracing::warn!(
+            target: "script_kit::tab_ai",
+            event = "notes_acp_action_stale_view",
+            action_id = %action_id,
+            reason = "generation_mismatch",
+            expected_generation = acp_generation,
+            actual_generation = entity.read(cx).notes_acp_generation,
+        );
+        return;
+    }
 
     tracing::info!(
         event = "notes_acp_action_dispatched",
@@ -546,17 +633,10 @@ fn dispatch_notes_acp_action(
         return;
     }
 
-    // Read the embedded ACP entity from NotesApp.
-    let acp_entity = entity.read(cx).embedded_acp_chat.clone();
-    let Some(acp_entity) = acp_entity else {
-        tracing::warn!(event = "notes_acp_action_no_view", action_id = %action_id);
-        return;
-    };
-
     // Handle agent switch by persisting the explicit preference and
     // relaunching the embedded ACP surface with the current draft input.
     if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
-        let (current_selected_agent_id, available_agents, current_notes_acp_draft_input) = {
+        let (current_selected_agent_id, available_agents, draft_snapshot) = {
             let view = acp_entity.read(cx);
             match &view.session {
                 crate::ai::acp::AcpChatSession::Setup(state) => (
@@ -565,15 +645,14 @@ fn dispatch_notes_acp_action(
                         .as_ref()
                         .map(|agent| agent.id.to_string()),
                     state.catalog_entries.clone(),
-                    None,
+                    view.capture_draft_snapshot(cx),
                 ),
                 crate::ai::acp::AcpChatSession::Live(thread) => {
                     let thread = thread.read(cx);
                     (
                         thread.selected_agent_id().map(str::to_string),
                         thread.available_agents().to_vec(),
-                        Some(thread.input.text().trim().to_string())
-                            .filter(|input| !input.is_empty()),
+                        view.capture_draft_snapshot(cx),
                     )
                 }
             }
@@ -596,7 +675,9 @@ fn dispatch_notes_acp_action(
         }
 
         let next_agent_id = agent_id.to_string();
-        let has_draft_input = current_notes_acp_draft_input.is_some();
+        let has_draft_input = draft_snapshot.thread.as_ref().is_some_and(|thread| {
+            !thread.input.is_empty() || !thread.pending_context_parts.is_empty()
+        });
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -627,15 +708,30 @@ fn dispatch_notes_acp_action(
         }
 
         entity.update(cx, |app: &mut NotesApp, cx| {
-            if let Some(ref embedded_acp_chat) = app.embedded_acp_chat {
-                embedded_acp_chat.update(cx, |chat, cx| {
-                    chat.prepare_for_host_hide(cx);
-                });
+            if app.notes_acp_generation != acp_generation {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_acp_switch_agent_stale_view",
+                    agent_id = %next_agent_id,
+                    expected_generation = acp_generation,
+                    actual_generation = app.notes_acp_generation,
+                );
+                return;
             }
+            acp_entity.update(cx, |chat, cx| {
+                chat.prepare_for_host_hide(cx);
+            });
             app.embedded_acp_chat = None;
 
-            let relaunch_result =
-                app.open_or_focus_embedded_acp(current_notes_acp_draft_input.clone(), window, cx);
+            let relaunch_result = app.open_or_focus_embedded_acp(None, window, cx);
+            if relaunch_result.is_ok() {
+                if let Some(ref new_view) = app.embedded_acp_chat {
+                    let snapshot = draft_snapshot.clone();
+                    new_view.update(cx, |chat, cx| {
+                        chat.restore_draft_snapshot(snapshot, cx);
+                    });
+                }
+            }
 
             match relaunch_result {
                 Ok(()) => tracing::info!(
@@ -696,8 +792,9 @@ fn dispatch_notes_acp_action(
             let maybe_markdown = {
                 let view = acp_entity.read(cx);
                 view.thread().and_then(|thread| {
-                    let messages = thread.read(cx).messages.clone();
-                    crate::ai::acp::export::build_acp_conversation_markdown(&messages)
+                    crate::ai::acp::export::build_acp_conversation_markdown_from_thread(
+                        &thread.read(cx),
+                    )
                 })
             };
             if let Some(md) = maybe_markdown {
