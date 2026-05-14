@@ -438,7 +438,9 @@ The agent selector must expose starter ACP agents even before their binaries are
 
 Codex install readiness is based on the actual launch shape: [[src/ai/acp/config.rs#install_state_for_agent]] requires both the Codex CLI and an adapter path (`npx` or `codex-acp`) before reporting the Codex starter as ready.
 
-Explicit agent switches use explicit preflight resolution. If the chosen agent is not ready, ACP shows that agent's setup blocker instead of falling back to another ready agent and persisting the fallback as the user's selection.
+When the local `codex` CLI exists and no explicit agent preference or active profile override is present, Agent Chat treats Codex as the implicit default. [[src/ai/acp/config.rs#codex_acp_default_probe_state]] records Codex CLI, `npx`, and adapter-binary readiness separately, while [[src/ai/acp/preflight.rs#resolve_acp_launch_with_requirements]] keeps `codex-acp` selected for either ready launch or a deterministic blocker/setup card. This implicit default is not persisted as `ai.selectedAcpAgentId`; only explicit selection or the existing successful explicit path writes the preference.
+
+Explicit agent switches use explicit preflight resolution. If the chosen agent is uninstalled, unauthenticated, misconfigured, or missing a required capability, ACP shows that agent's blocker instead of falling back to another ready agent and persisting the fallback as the user's selection.
 
 ## Model selection
 
@@ -451,6 +453,8 @@ When a session is created, the ACP client reads `NewSessionResponse.models` (an 
 ### Preflight on thread open and actions-dialog open
 
 `AcpRuntime::prepare_session` dispatches an `AcpCommand::PrepareSession` that runs `session/new` without sending a prompt, emits `ModelsAvailable` (or `SetupRequired` on auth failure), and drops the event sender.
+
+Default preflight has one implicit-agent rule: installed local Codex owns first-run Agent Chat when the user has no explicit ACP agent preference. If Codex is launchable, Agent Chat starts `codex-acp`; if auth, config, capability requirements, or adapter install blocks it, the setup card still reports `selectedAgentId: "codex-acp"` instead of silently falling through to another ready agent.
 
 The handler shares the same `ensure_session_and_announce_models` helper as the prompt-turn path, so binding bookkeeping and auth-failure handling stay identical across both entry points.
 

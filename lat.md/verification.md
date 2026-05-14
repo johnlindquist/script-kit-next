@@ -27,6 +27,7 @@ Use the smallest check that exercises the touched code:
 - `SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui` for direct runtime inspection when you need the app open
 - `bun scripts/agentic/filterable-surface-matrix.ts --session <name>` for migrated filterable launcher surfaces whose `getState.visibleChoiceCount` must match `getElements` list rows.
 - Tray-opened current-app command work should use the real agentic runtime path and cover app-switch mid-interaction, same-bundle relaunches that change PID, PID-aware tracker cache invalidation and republish, cold live captures that must discard stale results and retry boundedly, refresh-on-filter, guarded execution, and the existing empty/no-match states.
+- Current-app launcher-label or menu-shortcut parsing changes should at least run `cargo test --test current_app_commands -- --nocapture`, `cargo check --lib`, `git diff --check`, and `lat check`; narrow filters are acceptable while iterating on `current_app_commands_launcher_label` or `keyboard_shortcut`.
 
 Shell helper changes outside the Rust app should keep their proof narrow too. For zsh helpers such as `cpath`, prefer the dedicated sourced-shell test plus one real-shell smoke check that covers raw paths, directory-plus-term search like `cpath .notes scroll`, and `ls -l` or `eza -l` style listing input before calling the work done.
 
@@ -45,6 +46,12 @@ Directory-context recent seed changes must assert that ordered parent-directory 
 Agentic surface tooling is verified with integration/source-audit tests plus Bun runtime proofs on this host, avoiding the known `cargo test --lib` SIGBUS path.
 
 Run `cargo test --test source_audits verify_shot_pixel_audit_contract`, `cargo test --test source_audits timestamp_formatting_contract`, `cargo test --test acp_mention_popup_registry_lifecycle_contract --test acp_popup_automation_parity_contract --test kit_store_visible_rows_contract --test settings_visible_rows_contract --test agentic_surface_navigator_inventory_contract`, `bun scripts/agentic/verify-shot-blank-rejection-matrix.ts`, `bun scripts/agentic/verify-shot-live-dark-surface.ts`, `bun scripts/agentic/surface-navigator-inventory-audit.ts --json`, `cargo fmt --check`, `git diff --check`, and `lat check`.
+
+## Agent Chat Codex Setup
+
+Codex default setup changes require source-contract tests plus a state-first setup receipt.
+
+Run the focused ACP config/preflight tests, `cargo test --test acp_onboarding`, and `lat check`. Runtime proof should prefer `bun scripts/agentic/index.ts acp-setup-recovery --select-agent codex-acp --json` so the receipt proves `selectedAgentId: "codex-acp"`, catalog membership, compatible agents, and idempotent `performAcpSetupAction(selectAgent)` without screenshots.
 
 ## Root File Directory Context Ranking
 

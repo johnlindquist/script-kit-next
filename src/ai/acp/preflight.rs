@@ -89,6 +89,20 @@ fn best_launchable_candidate(
     candidates.into_iter().next().cloned()
 }
 
+fn implicit_codex_default_candidate(
+    agents: &[AcpAgentCatalogEntry],
+    preferred_agent_id: Option<&str>,
+    codex_cli_ready: bool,
+) -> Option<AcpAgentCatalogEntry> {
+    if preferred_agent_id.is_some() || !codex_cli_ready {
+        return None;
+    }
+    agents
+        .iter()
+        .find(|entry| entry.id.as_ref() == super::config::CODEX_ACP_AGENT_ID)
+        .cloned()
+}
+
 /// Why an ACP launch cannot proceed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AcpLaunchBlocker {
@@ -164,9 +178,25 @@ pub(crate) fn resolve_default_acp_launch(
     agents: &[AcpAgentCatalogEntry],
     preferred_agent_id: Option<&str>,
 ) -> AcpLaunchResolution {
+    let codex_probe = super::config::codex_acp_default_probe_state();
+    resolve_default_acp_launch_with_codex_probe(
+        agents,
+        preferred_agent_id,
+        codex_probe.should_be_implicit_codex_default,
+    )
+}
+
+fn resolve_default_acp_launch_with_codex_probe(
+    agents: &[AcpAgentCatalogEntry],
+    preferred_agent_id: Option<&str>,
+    implicit_codex_default: bool,
+) -> AcpLaunchResolution {
     let selected = preferred_agent_id
         .and_then(|preferred| agents.iter().find(|entry| entry.id.as_ref() == preferred))
         .cloned()
+        .or_else(|| {
+            implicit_codex_default_candidate(agents, preferred_agent_id, implicit_codex_default)
+        })
         .or_else(|| best_launchable_candidate(agents, None))
         .or_else(|| agents.first().cloned());
 
@@ -194,6 +224,26 @@ pub(crate) fn resolve_default_acp_launch(
         _ => None,
     };
 
+    if selected_agent.id.as_ref() == super::config::CODEX_ACP_AGENT_ID
+        && preferred_agent_id.is_none()
+        && implicit_codex_default
+    {
+        if blocker.is_none() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_codex_default_selected",
+                selected_agent_id = selected_agent.id.as_ref(),
+            );
+        } else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_codex_default_setup_blocked",
+                selected_agent_id = selected_agent.id.as_ref(),
+                blocker = ?blocker,
+            );
+        }
+    }
+
     AcpLaunchResolution {
         selected_agent: Some(selected_agent),
         blocker,
@@ -204,33 +254,46 @@ pub(crate) fn resolve_default_acp_launch(
 /// Resolve which agent to launch using capability requirements.
 ///
 /// Selection priority:
-/// 1. Preferred agent ID (if launchable AND satisfies requirements)
-/// 2. Best ranked launchable agent that satisfies requirements
-/// 3. Preferred agent ID (if launchable, even without capability match)
+/// 1. Preferred agent ID (if provided and found in catalog)
+/// 2. Implicit Codex default when local Codex CLI exists and no preference exists
+/// 3. Best ranked launchable agent that satisfies requirements
 /// 4. Best ranked launchable agent (capability mismatch blocker)
-/// 5. Preferred agent (even if not launchable — will get install/auth blocker)
-/// 6. First agent in catalog (will have a blocker)
-/// 7. None (empty catalog → NoAgentsAvailable)
+/// 5. First agent in catalog (will have a blocker)
+/// 6. None (empty catalog → NoAgentsAvailable)
 pub(crate) fn resolve_acp_launch_with_requirements(
     agents: &[AcpAgentCatalogEntry],
     preferred_agent_id: Option<&str>,
     requirements: AcpLaunchRequirements,
 ) -> AcpLaunchResolution {
+    let codex_probe = super::config::codex_acp_default_probe_state();
+    resolve_acp_launch_with_requirements_and_codex_probe(
+        agents,
+        preferred_agent_id,
+        requirements,
+        codex_probe.should_be_implicit_codex_default,
+    )
+}
+
+fn resolve_acp_launch_with_requirements_and_codex_probe(
+    agents: &[AcpAgentCatalogEntry],
+    preferred_agent_id: Option<&str>,
+    requirements: AcpLaunchRequirements,
+    implicit_codex_default: bool,
+) -> AcpLaunchResolution {
     let preferred = preferred_agent_id
         .and_then(|preferred| agents.iter().find(|entry| entry.id.as_ref() == preferred));
 
-    // Best case: preferred is launchable and satisfies requirements.
     let selected = preferred
-        .filter(|entry| entry.is_launchable() && entry.satisfies_requirements(requirements))
         .cloned()
+        // Implicit Codex default: if local Codex CLI is present and there is no
+        // explicit preference, keep Codex selected even when setup blocks it.
+        .or_else(|| {
+            implicit_codex_default_candidate(agents, preferred_agent_id, implicit_codex_default)
+        })
         // Fallback: best ranked launchable agent that satisfies requirements.
         .or_else(|| best_launchable_candidate(agents, Some(requirements)))
-        // Fallback: preferred is launchable but doesn't satisfy requirements.
-        .or_else(|| preferred.filter(|entry| entry.is_launchable()).cloned())
         // Fallback: best ranked launchable agent (will get CapabilityMismatch blocker).
         .or_else(|| best_launchable_candidate(agents, None))
-        // Fallback: preferred even if not launchable (will get install/auth blocker).
-        .or_else(|| preferred.cloned())
         // Last resort: first catalog entry.
         .or_else(|| agents.first().cloned());
 
@@ -243,6 +306,9 @@ pub(crate) fn resolve_acp_launch_with_requirements(
     };
 
     let blocker = blocker_for_selected_agent(&selected_agent, requirements);
+    let implicit_codex_selected = selected_agent.id.as_ref() == super::config::CODEX_ACP_AGENT_ID
+        && preferred_agent_id.is_none()
+        && implicit_codex_default;
 
     tracing::info!(
         target: "script_kit::tab_ai",
@@ -253,8 +319,30 @@ pub(crate) fn resolve_acp_launch_with_requirements(
         selected_agent_id = selected_agent.id.as_ref(),
         supports_embedded_context = ?selected_agent.supports_embedded_context,
         supports_image = ?selected_agent.supports_image,
+        implicit_codex_default,
+        implicit_codex_selected,
         blocker = ?blocker,
     );
+    if implicit_codex_selected {
+        if blocker.is_none() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_codex_default_selected",
+                selected_agent_id = selected_agent.id.as_ref(),
+                needs_embedded_context = requirements.needs_embedded_context,
+                needs_image = requirements.needs_image,
+            );
+        } else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_codex_default_setup_blocked",
+                selected_agent_id = selected_agent.id.as_ref(),
+                blocker = ?blocker,
+                needs_embedded_context = requirements.needs_embedded_context,
+                needs_image = requirements.needs_image,
+            );
+        }
+    }
 
     AcpLaunchResolution {
         selected_agent: Some(selected_agent),
@@ -594,7 +682,7 @@ mod tests {
     }
 
     #[test]
-    fn capability_aware_prefers_capable_over_preferred() {
+    fn capability_aware_keeps_preferred_with_capability_blocker() {
         let agents = vec![
             make_entry_with_capabilities(
                 "claude-code",
@@ -620,10 +708,11 @@ mod tests {
         let result = resolve_acp_launch_with_requirements(&agents, Some("claude-code"), reqs);
         assert_eq!(
             result.selected_agent_id(),
-            Some("opencode"),
-            "should fall back to capable agent"
+            Some("claude-code"),
+            "explicit preferred agent should win even when setup must explain the blocker"
         );
-        assert!(result.is_ready());
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::CapabilityMismatch));
+        assert!(!result.is_ready());
     }
 
     #[test]
@@ -737,6 +826,149 @@ mod tests {
             Some(AcpLaunchBlocker::AgentNotInstalled),
             "install blocker should take precedence over capability"
         );
+    }
+
+    #[test]
+    fn default_resolution_prefers_ready_codex_when_no_explicit_preference() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            None,
+            AcpLaunchRequirements::default(),
+            true,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert!(result.is_ready());
+    }
+
+    #[test]
+    fn default_resolution_keeps_codex_auth_blocker_when_codex_installed() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::NeedsAuthentication,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            None,
+            AcpLaunchRequirements::default(),
+            true,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert_eq!(
+            result.blocker,
+            Some(AcpLaunchBlocker::AuthenticationRequired)
+        );
+        assert!(!result.is_ready());
+    }
+
+    #[test]
+    fn default_resolution_keeps_codex_install_blocker_when_adapter_missing() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::NeedsInstall,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            None,
+            AcpLaunchRequirements::default(),
+            true,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentNotInstalled));
+    }
+
+    #[test]
+    fn explicit_preference_overrides_installed_codex_default() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            Some("opencode"),
+            AcpLaunchRequirements::default(),
+            true,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("opencode"));
+        assert!(result.is_ready());
+    }
+
+    #[test]
+    fn default_resolution_uses_existing_ranking_when_codex_cli_absent() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            None,
+            AcpLaunchRequirements::default(),
+            false,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("opencode"));
     }
 
     #[test]
