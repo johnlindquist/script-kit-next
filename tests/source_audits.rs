@@ -218,6 +218,12 @@ mod permiso_teardown_contract;
 #[path = "source_audits/permiso_no_prompt_contract.rs"]
 mod permiso_no_prompt_contract;
 
+#[path = "source_audits/verify_shot_pixel_audit_contract.rs"]
+mod verify_shot_pixel_audit_contract;
+
+#[path = "source_audits/timestamp_formatting_contract.rs"]
+mod timestamp_formatting_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

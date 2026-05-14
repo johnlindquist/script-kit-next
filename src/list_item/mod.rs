@@ -68,7 +68,7 @@ pub const LIST_ITEM_HEIGHT: f32 = 40.0;
 /// - Use `list()` when you need variable heights (e.g., headers + items); it uses a SumTree
 ///   and scroll math is O(log n).
 pub const SECTION_HEADER_HEIGHT: f32 = 32.0;
-/// Fixed height for non-selectable source status rows.
+/// Fixed height for transient source status rows before they are split out of the ScriptList row model.
 pub const SOURCE_STATUS_ROW_HEIGHT: f32 = 32.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -399,7 +399,7 @@ impl SourceChipStatusKind {
 pub enum GroupedListItem {
     /// A section header (e.g., "SUGGESTED", "MAIN")
     SectionHeader(String, Option<String>),
-    /// A non-selectable source-chip status row.
+    /// Transient source-chip status metadata produced during grouping.
     Status(SourceChipStatusRow),
     /// A regular list item - usize is the index in the flat results array
     Item(usize),

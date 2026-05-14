@@ -174,6 +174,10 @@ impl ScriptListApp {
             }
             self.validate_selection_bounds(cx);
             self.reveal_main_list_selection_above_footer("root_file_active_publish");
+            self.schedule_main_list_selection_reveal_above_footer(
+                "root_file_active_publish_deferred",
+                cx,
+            );
             self.invalidate_main_window_preflight();
             self.rebuild_main_window_preflight_if_needed();
         }

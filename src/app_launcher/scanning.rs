@@ -136,21 +136,7 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
 ///
 /// Uses parallel iteration (rayon) for icon extraction which is the bottleneck.
 fn scan_directory_with_db_update(dir: &Path) -> Result<Vec<AppInfo>> {
-    let entries = fs::read_dir(dir)
-        .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
-
-    // Collect app paths first (fast, just directory listing)
-    let app_paths: Vec<PathBuf> = entries
-        .flatten()
-        .filter_map(|entry| {
-            let path = entry.path();
-            if path.extension().map(|e| e == "app").unwrap_or(false) {
-                Some(path)
-            } else {
-                None
-            }
-        })
-        .collect();
+    let app_paths = collect_app_paths(dir)?;
 
     // Process apps in parallel using rayon (icon extraction is the bottleneck)
     let apps: Vec<AppInfo> = app_paths
@@ -246,25 +232,48 @@ fn scan_all_directories() -> Vec<AppInfo> {
 
 /// Scan a single directory for .app bundles (legacy, no DB update)
 fn scan_directory(dir: &Path) -> Result<Vec<AppInfo>> {
-    let mut apps = Vec::new();
+    let apps = collect_app_paths(dir)?
+        .into_iter()
+        .filter_map(|path| parse_app_bundle(&path))
+        .collect();
 
-    let entries = fs::read_dir(dir)
+    Ok(apps)
+}
+
+fn collect_app_paths(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut app_paths = Vec::new();
+    collect_app_paths_recursive(dir, &mut app_paths)
         .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+    Ok(app_paths)
+}
+
+fn collect_app_paths_recursive(dir: &Path, app_paths: &mut Vec<PathBuf>) -> Result<()> {
+    let entries = fs::read_dir(dir)?;
 
     for entry in entries.flatten() {
         let path = entry.path();
 
-        // Check if it's a .app bundle
-        if let Some(extension) = path.extension() {
-            if extension == "app" {
-                if let Some(app_info) = parse_app_bundle(&path) {
-                    apps.push(app_info);
-                }
+        if path.extension().map(|e| e == "app").unwrap_or(false) {
+            app_paths.push(path);
+            continue;
+        }
+
+        if entry
+            .file_type()
+            .map(|file_type| file_type.is_dir())
+            .unwrap_or(false)
+        {
+            if let Err(error) = collect_app_paths_recursive(&path, app_paths) {
+                trace!(
+                    directory = %path.display(),
+                    error = %error,
+                    "Skipping unreadable nested app scan directory"
+                );
             }
         }
     }
 
-    Ok(apps)
+    Ok(())
 }
 
 /// Parse a .app bundle to extract application information (legacy)

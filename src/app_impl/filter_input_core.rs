@@ -54,6 +54,14 @@ impl ScriptListApp {
         )
     }
 
+    pub(crate) fn source_filter_mode_blocks_input_history_recall(&self) -> bool {
+        matches!(self.current_view, AppView::ScriptList)
+            && self
+                .menu_syntax_mode
+                .advanced_query_for(&self.filter_text)
+                .is_some_and(|query| query.has_source_filters())
+    }
+
     pub(crate) fn single_line_filter_input_contains_newline(new_text: &str) -> bool {
         new_text.contains('\n') || new_text.contains('\r')
     }
@@ -237,6 +245,9 @@ impl ScriptListApp {
         self.filter_text = query.clone();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some("Search files...".to_string());
+        self.gpui_input_state.update(cx, |state, _cx| {
+            state.clear_highlight_ranges();
+        });
 
         self.current_view = AppView::FileSearchView {
             query: query.clone(),

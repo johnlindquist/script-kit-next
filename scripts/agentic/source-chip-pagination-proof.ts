@@ -116,6 +116,18 @@ function statusRows(elements: Json): Json[] {
   );
 }
 
+function assertStatusMetadata(status: Json | undefined, label: string) {
+  if (!status) {
+    throw new Error(`${label}: missing Files source status metadata`);
+  }
+  if (Object.prototype.hasOwnProperty.call(status, "index")) {
+    throw new Error(`${label}: source status must not occupy a list index ${JSON.stringify(status)}`);
+  }
+  if (status.selectable !== false) {
+    throw new Error(`${label}: source status must be non-selectable ${JSON.stringify(status)}`);
+  }
+}
+
 async function waitForFileRowsAtLeast(count: number): Promise<Json> {
   const deadline = Date.now() + timeoutMs;
   let last: Json | null = null;
@@ -161,8 +173,9 @@ async function main() {
       throw new Error(`expected initial page to show exactly 12 files, got ${beforeRows.length}`);
     }
     if (beforeStatus.length !== 1 || beforeStatus[0].selectable !== false) {
-      throw new Error(`expected one non-selectable Files status row before paging, got ${JSON.stringify(beforeStatus)}`);
+      throw new Error(`expected one non-selectable Files status metadata entry before paging, got ${JSON.stringify(beforeStatus)}`);
     }
+    assertStatusMetadata(beforeStatus[0], "before paging");
 
     for (let index = 0; index < 10; index += 1) {
       send({
@@ -178,8 +191,9 @@ async function main() {
     const afterRows = fileRows(after);
     const afterStatus = statusRows(after);
     if (afterStatus.length !== 1 || afterStatus[0].selectable !== false) {
-      throw new Error(`expected one non-selectable Files status row after paging, got ${JSON.stringify(afterStatus)}`);
+      throw new Error(`expected one non-selectable Files status metadata entry after paging, got ${JSON.stringify(afterStatus)}`);
     }
+    assertStatusMetadata(afterStatus[0], "after paging");
     const selected = after.elements.find((element: Json) => element.selected);
     if (!selected || selected.role !== "row" || selected.source !== "files") {
       throw new Error(`expected selected row to stay on a Files row, got ${JSON.stringify(selected)}`);

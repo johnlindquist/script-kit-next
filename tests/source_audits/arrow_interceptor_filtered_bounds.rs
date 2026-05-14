@@ -5,6 +5,40 @@ fn read_arrow_interceptor_source() -> String {
         .expect("Failed to read src/app_impl/startup_new_arrow.rs")
 }
 
+fn read_live_startup_source() -> String {
+    fs::read_to_string("src/app_impl/startup.rs").expect("Failed to read src/app_impl/startup.rs")
+}
+
+#[test]
+fn test_script_list_source_filters_block_input_history_recall() {
+    let generated_source = read_arrow_interceptor_source();
+    let live_source = read_live_startup_source();
+    let helper_source = fs::read_to_string("src/app_impl/filter_input_core.rs")
+        .expect("Failed to read src/app_impl/filter_input_core.rs");
+
+    assert!(
+        helper_source.contains("fn source_filter_mode_blocks_input_history_recall")
+            && helper_source.contains(".advanced_query_for(&self.filter_text)")
+            && helper_source.contains("query.has_source_filters()"),
+        "ScriptList history suppression should be a shared source-filter predicate, not duplicated arrow-handler parsing"
+    );
+
+    assert!(
+        generated_source.contains("!this.source_filter_mode_blocks_input_history_recall()")
+            && generated_source.contains("this.input_history.navigate_up()")
+            && generated_source.contains("this.input_history.navigate_down()"),
+        "generated arrow path must guard both Up and Down input-history recall behind the source-filter predicate"
+    );
+
+    assert!(
+        live_source.contains("let source_filter_mode =")
+            && live_source.contains("this.source_filter_mode_blocks_input_history_recall()")
+            && live_source.contains("if !source_filter_mode && (in_history || at_top_of_list)")
+            && live_source.contains("if !source_filter_mode && in_history"),
+        "live arrow path must route source-filter Up/Down to list movement instead of launcher input history"
+    );
+}
+
 #[test]
 fn test_emoji_picker_arrows_delegate_to_shared_navigation_helper() {
     let source = read_arrow_interceptor_source();

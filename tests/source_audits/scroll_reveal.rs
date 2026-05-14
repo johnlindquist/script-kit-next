@@ -48,6 +48,11 @@ fn scroll_to_selected_if_needed_logs_reason_on_reveal() {
         fn_body.contains("\"revealed selected item\""),
         "scroll_to_selected_if_needed must log reveal completion message"
     );
+    assert!(
+        fn_body.contains("main_list_footer_overlay_total_padding()")
+            && fn_body.contains("self.last_scrolled_index = None"),
+        "scroll_to_selected_if_needed must not mark a reveal complete before the viewport is measured"
+    );
 }
 
 #[test]
@@ -137,6 +142,22 @@ fn main_list_scroll_receipt_exposes_footer_safe_selected_row_geometry() {
             "main_list_scroll_receipt should expose `{required}`"
         );
     }
+}
+
+#[test]
+fn main_list_render_reanchor_skips_pending_programmatic_reveal() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+
+    let fn_start = content
+        .find("pub(crate) fn sync_main_list_selection_to_visible_window(")
+        .expect("sync_main_list_selection_to_visible_window function not found");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 1400)];
+
+    assert!(
+        fn_body.contains("reason == \"render\"")
+            && fn_body.contains("self.last_scrolled_index.is_none()"),
+        "render-time reanchor must not snap selection while a programmatic reveal is pending"
+    );
 }
 
 #[test]
@@ -311,7 +332,11 @@ fn script_list_scrollbar_overlay_uses_footer_safe_viewport_and_content_height() 
     );
     assert!(
         content.contains(".scroll_size(size(px(0.0), content_height))"),
-        "script list scrollbar overlay must override vendor scroll size with footer-aware content height"
+        "script list scrollbar overlay must override vendor scroll size with row content height"
+    );
+    assert!(
+        !content.contains("+ footer_overlay_height;"),
+        "script list scrollbar content height must not add footer padding or the thumb cannot reach the bottom"
     );
     assert!(
         !content.contains(".scrollbar_show(ScrollbarShow::Always)"),
