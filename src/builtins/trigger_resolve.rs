@@ -188,6 +188,14 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::TabAi => "TabAi",
         TriggerBuiltin::ProcessManager => "ProcessManager",
         TriggerBuiltin::CurrentAppCommands => "CurrentAppCommands",
+        TriggerBuiltin::NewScript => "NewScript",
+        TriggerBuiltin::SdkReference => "SdkReference",
+        TriggerBuiltin::BrowseKitStore => "BrowseKitStore",
+        TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
+        TriggerBuiltin::Settings => "Settings",
+        TriggerBuiltin::ChooseTheme => "ChooseTheme",
+        TriggerBuiltin::QuickTerminal => "QuickTerminal",
+        TriggerBuiltin::Webcam => "Webcam",
     }
 }
 
