@@ -86,6 +86,15 @@ fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
     }
 }
 
+fn default_suggested_lookup_name(result: &SearchResult) -> &str {
+    match result {
+        SearchResult::BuiltIn(bm) if bm.entry.id == "builtin/do-in-current-app" => {
+            crate::menu_bar::current_app_commands::DO_IN_CURRENT_APP_LABEL
+        }
+        _ => result.name(),
+    }
+}
+
 pub(super) fn build_grouped_view_results(
     results: Vec<SearchResult>,
     frecency_store: &FrecencyStore,
@@ -260,7 +269,9 @@ pub(super) fn build_grouped_view_results(
             let mut first_index_by_name: HashMap<&str, usize> =
                 HashMap::with_capacity(results.len());
             for (idx, result) in results.iter().enumerate() {
-                first_index_by_name.entry(result.name()).or_insert(idx);
+                first_index_by_name
+                    .entry(default_suggested_lookup_name(result))
+                    .or_insert(idx);
             }
 
             // Find indices of default suggested items by name (preserve order from DEFAULT_SUGGESTED_ITEMS)

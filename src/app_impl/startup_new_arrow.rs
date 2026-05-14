@@ -613,7 +613,9 @@
                                             .unwrap_or(true);
                                         let in_history = this.input_history.current_index().is_some();
 
-                                        if in_history || at_top_of_list {
+                                        if !this.source_filter_mode_blocks_input_history_recall()
+                                            && (in_history || at_top_of_list)
+                                        {
                                             if let Some(text) = this.input_history.navigate_up() {
                                                 logging::log(
                                                     HISTORY,
@@ -627,7 +629,9 @@
 
                                         this.move_selection_up(cx);
                                     } else if is_down {
-                                        if this.input_history.current_index().is_some() {
+                                        if !this.source_filter_mode_blocks_input_history_recall()
+                                            && this.input_history.current_index().is_some()
+                                        {
                                             if let Some(text) = this.input_history.navigate_down() {
                                                 logging::log(
                                                     HISTORY,

@@ -82,6 +82,7 @@ impl ScriptListApp {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -90,7 +91,7 @@ impl ScriptListApp {
         limit: usize,
         cx: &Context<Self>,
     ) -> ElementCollectionOutcome {
-        match &self.current_view {
+        let mut outcome = match &self.current_view {
             AppView::ScriptList => {
                 let (elements, total_count) = self.collect_script_list_elements(limit);
                 ElementCollectionOutcome::new(elements, total_count)
@@ -130,17 +131,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let entries = &self.cached_clipboard_entries;
-                let rows: Vec<String> = if filter.is_empty() {
-                    entries.iter().map(|e| e.text_preview.clone()).collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    entries
-                        .iter()
-                        .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
-                        .map(|e| e.text_preview.clone())
-                        .collect()
-                };
+                let rows = self.clipboard_history_visible_row_labels(filter);
                 self.collect_named_rows(
                     "clipboard-filter",
                     filter.clone(),
@@ -200,20 +191,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> = if filter.is_empty() {
-                    self.cached_browser_tabs
-                        .iter()
-                        .map(|tab| tab.display_title().to_string())
-                        .collect()
-                } else {
-                    crate::browser_tabs::fuzzy_search_browser_tabs(
-                        &self.cached_browser_tabs,
-                        filter,
-                    )
-                    .into_iter()
-                    .map(|entry| entry.tab.display_title().to_string())
-                    .collect()
-                };
+                let rows = self.browser_tabs_visible_row_labels(filter);
                 self.collect_named_rows(
                     "browser-tabs-filter",
                     filter.clone(),
@@ -258,21 +236,59 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let items = crate::build_gallery_items();
-                let rows: Vec<String> = if filter.is_empty() {
-                    items.iter().map(crate::design_gallery_item_label).collect()
-                } else {
-                    let filter_lower = filter.to_lowercase();
-                    items
-                        .iter()
-                        .filter(|item| crate::gallery_item_matches(item, &filter_lower))
-                        .map(crate::design_gallery_item_label)
-                        .collect()
-                };
+                let rows = Self::design_gallery_visible_row_labels(filter);
                 self.collect_named_rows(
                     "design-gallery-filter",
                     filter.clone(),
                     "design-gallery",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::AcpHistoryView {
+                filter,
+                selected_index,
+            } => {
+                let rows = Self::acp_history_visible_row_labels(filter);
+                self.collect_named_rows(
+                    "acp-history-filter",
+                    filter.clone(),
+                    "acp-history",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::DictationHistoryView {
+                filter,
+                selected_index,
+            } => {
+                let rows = Self::dictation_history_visible_row_labels(filter);
+                self.collect_named_rows(
+                    "dictation-history-filter",
+                    filter.clone(),
+                    "dictation-history",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::NotesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                let rows = Self::notes_browse_visible_row_labels(filter);
+                self.collect_named_rows(
+                    "notes-browse-filter",
+                    filter.clone(),
+                    "notes",
                     &rows,
                     *selected_index,
                     limit,
@@ -416,11 +432,27 @@ impl ScriptListApp {
                 selected_index,
                 results,
             } => {
-                let rows: Vec<String> = results.iter().map(|r| r.full_name.clone()).collect();
+                let rows = Self::kit_store_browse_visible_row_labels(results);
                 self.collect_named_rows(
                     "kit-search",
                     query.clone(),
                     "kit-results",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
+            }
+
+            AppView::InstalledKitsView {
+                selected_index,
+                kits,
+            } => {
+                let rows = Self::kit_store_installed_visible_row_labels(kits);
+                self.collect_named_rows(
+                    "installed-kits-filter",
+                    String::new(),
+                    "installed-kits",
                     &rows,
                     *selected_index,
                     limit,
@@ -682,6 +714,86 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, total_count)
                     .with_warning("collector_used_current_view_fallback")
             }
+        };
+
+        self.append_footer_elements(&mut outcome, limit, cx);
+        outcome
+    }
+
+    fn append_footer_elements(
+        &self,
+        outcome: &mut ElementCollectionOutcome,
+        limit: usize,
+        cx: &Context<Self>,
+    ) {
+        let footer = self.active_footer_snapshot(&**cx);
+        let row_kind = match footer.owner.as_str() {
+            "native" => Some("nativeFooterRow"),
+            "prompt" => Some("promptFooterRow"),
+            "popup" => Some("popupFooterRow"),
+            "content" => Some("contentFooterRow"),
+            _ => None,
+        };
+        let Some(row_kind) = row_kind else {
+            return;
+        };
+
+        outcome.total_count += 1 + footer.buttons.len();
+
+        if outcome.elements.len() >= limit {
+            outcome
+                .warnings
+                .push("footer_elements_truncated_by_limit".to_string());
+            return;
+        }
+
+        outcome.elements.push(protocol::ElementInfo {
+            semantic_id: format!("footer:{}:row", footer.owner),
+            element_type: protocol::ElementType::Panel,
+            text: Some(footer.owner.clone()),
+            value: footer.expected_surface.clone(),
+            selected: None,
+            focused: None,
+            index: None,
+            role: Some("footer".to_string()),
+            kind: Some(row_kind.to_string()),
+            source: None,
+            source_name: None,
+            selectable: Some(false),
+            status_kind: footer.mismatch.clone(),
+            action_disabled: None,
+        });
+
+        for (index, button) in footer.buttons.iter().enumerate() {
+            if outcome.elements.len() >= limit {
+                outcome
+                    .warnings
+                    .push("footer_elements_truncated_by_limit".to_string());
+                break;
+            }
+
+            let kind = match footer.owner.as_str() {
+                "native" => "nativeFooterButton",
+                "prompt" => "promptFooterButton",
+                "popup" => "popupFooterButton",
+                _ => "contentFooterButton",
+            };
+            outcome.elements.push(protocol::ElementInfo {
+                semantic_id: format!("footer:{}:{}", footer.owner, button.action),
+                element_type: protocol::ElementType::Button,
+                text: Some(format!("{} {}", button.key, button.label)),
+                value: Some(button.action.clone()),
+                selected: Some(button.selected),
+                focused: None,
+                index: Some(index),
+                role: Some("footer".to_string()),
+                kind: Some(kind.to_string()),
+                source: footer.expected_surface.clone(),
+                source_name: footer.requested_surface.clone(),
+                selectable: Some(button.enabled),
+                status_kind: button.action_disabled.clone(),
+                action_disabled: button.action_disabled.clone(),
+            });
         }
     }
 
@@ -775,6 +887,7 @@ impl ScriptListApp {
                 source_name: None,
                 selectable: None,
                 status_kind: None,
+            action_disabled: None,
             });
         }
 
@@ -848,6 +961,7 @@ impl ScriptListApp {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -871,6 +985,7 @@ impl ScriptListApp {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }
     }
 
@@ -943,6 +1058,7 @@ impl ScriptListApp {
                         source_name: None,
                         selectable: None,
                         status_kind: None,
+            action_disabled: None,
                     }
                 }
             };
@@ -1177,6 +1293,7 @@ impl ScriptListApp {
                     source_name: None,
                     selectable: None,
                     status_kind: None,
+            action_disabled: None,
                 },
             );
         }
@@ -1414,13 +1531,14 @@ impl ScriptListApp {
 
     fn collect_script_list_elements(&self, limit: usize) -> (Vec<protocol::ElementInfo>, usize) {
         let (grouped_items, flat_results) = self.cached_grouped_results_snapshot();
+        let source_statuses = self.cached_source_statuses_snapshot();
         let selected_grouped_index =
             crate::list_item::coerce_selection(&grouped_items, self.selected_index);
         let total_rows = grouped_items
             .iter()
-            .filter(|item| !matches!(item, crate::list_item::GroupedListItem::SectionHeader(..)))
+            .filter(|item| matches!(item, crate::list_item::GroupedListItem::Item(_)))
             .count();
-        let total_count = total_rows + 2;
+        let total_count = total_rows + source_statuses.len() + 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
         Self::push_limited_element(
@@ -1465,6 +1583,7 @@ impl ScriptListApp {
                         source_name: result.source_name().map(str::to_string),
                         selectable: Some(true),
                         status_kind: None,
+            action_disabled: None,
                     };
                     if matches!(result, scripts::SearchResult::File(_)) {
                         element.kind = Some("file".to_string());
@@ -1491,10 +1610,38 @@ impl ScriptListApp {
                         source_name: Some(status.source_name.clone()),
                         selectable: Some(false),
                         status_kind: Some(status.status_kind.as_str().to_string()),
+            action_disabled: None,
                     });
                     row_index += 1;
                 }
             }
+        }
+
+        for status in source_statuses.iter() {
+            if elements.len() >= limit {
+                break;
+            }
+            elements.push(protocol::ElementInfo {
+                semantic_id: protocol::generate_semantic_id(
+                    "status",
+                    row_index,
+                    status.source.receipt_label(),
+                ),
+                element_type: protocol::ElementType::Panel,
+                text: Some(status.label.clone()),
+                value: Some(status.label.clone()),
+                selected: Some(false),
+                focused: None,
+                index: None,
+                role: Some("status".to_string()),
+                kind: Some("sourceStatus".to_string()),
+                source: Some(status.source.receipt_label().to_string()),
+                source_name: Some(status.source_name.clone()),
+                selectable: Some(false),
+                status_kind: Some(status.status_kind.as_str().to_string()),
+            action_disabled: None,
+            });
+            row_index += 1;
         }
 
         // Emit JSON snapshot of all collected semantic IDs for agent introspection

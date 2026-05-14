@@ -496,10 +496,25 @@ impl ScriptListApp {
             );
         }
 
+        #[cfg(target_os = "macos")]
+        let tracked_frontmost_app = frontmost_app_tracker::get_last_real_app();
+        #[cfg(target_os = "macos")]
+        let current_app_commands_app_name = tracked_frontmost_app
+            .as_ref()
+            .map(|app| app.name.clone())
+            .filter(|name| !name.trim().is_empty());
+        #[cfg(not(target_os = "macos"))]
+        let current_app_commands_app_name: Option<String> = None;
+
+        let grouped_cache_key = match current_app_commands_app_name.as_deref() {
+            Some(app_name) => format!("{}\x1Fcurrent-app={app_name}", self.computed_filter_text),
+            None => self.computed_filter_text.clone(),
+        };
+
         // P3: Key off computed_filter_text for two-stage filtering
         if self
             .main_menu_result_caches
-            .has_grouped_results_for(&self.computed_filter_text)
+            .has_grouped_results_for(&grouped_cache_key)
         {
             // NOTE: Removed cache HIT log - fires every render frame, causing log spam.
             // Cache hits are normal operation. Only log cache MISS (below) for diagnostics.
@@ -540,7 +555,9 @@ impl ScriptListApp {
             Option<String>,
         ) = {
             let cached = frontmost_app_tracker::get_cached_menu_items();
-            let bundle_id = frontmost_app_tracker::get_last_real_app().map(|a| a.bundle_id);
+            let bundle_id = tracked_frontmost_app
+                .as_ref()
+                .map(|app| app.bundle_id.clone());
             // No conversion needed - tracker is compiled as part of binary crate
             // so it already returns binary crate types
             (cached, bundle_id)
@@ -720,10 +737,28 @@ impl ScriptListApp {
                 .as_ref()
                 .map(|frame| frame.recent_file_results.as_slice())
                 .unwrap_or(self.root_recent_file_results.as_slice());
+            let dynamic_builtin_entries =
+                current_app_commands_app_name.as_deref().map(|app_name| {
+                    let mut entries = self.builtin_entries.clone();
+                    let label =
+                        crate::menu_bar::current_app_commands::current_app_commands_launcher_label(
+                            Some(app_name),
+                        );
+                    if let Some(entry) = entries
+                        .iter_mut()
+                        .find(|entry| entry.id == "builtin/do-in-current-app")
+                    {
+                        entry.name = label;
+                    }
+                    entries
+                });
+            let builtins_for_grouping = dynamic_builtin_entries
+                .as_deref()
+                .unwrap_or(&self.builtin_entries);
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
-                &self.builtin_entries,
+                builtins_for_grouping,
                 &self.apps,
                 &self.cached_windows,
                 &self.skills,
@@ -785,9 +820,8 @@ impl ScriptListApp {
             }
         }
 
-        let computed_filter_text = self.computed_filter_text.clone();
         self.main_menu_result_caches.store_grouped_results(
-            computed_filter_text,
+            grouped_cache_key,
             grouped_items,
             flat_results,
             first_selectable_index,
@@ -825,6 +859,15 @@ impl ScriptListApp {
         &self,
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
         self.main_menu_result_caches.clone_grouped_results()
+    }
+
+    pub(crate) fn cached_source_statuses_snapshot(
+        &self,
+    ) -> Arc<[crate::list_item::SourceChipStatusRow]> {
+        self.main_menu_result_caches
+            .grouped_source_statuses()
+            .to_vec()
+            .into()
     }
 
     /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change)

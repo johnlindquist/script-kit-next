@@ -1771,6 +1771,8 @@ impl ScriptListApp {
                                             .unwrap_or(true);
                                         let in_history =
                                             this.input_history.current_index().is_some();
+                                        let source_filter_mode =
+                                            this.source_filter_mode_blocks_input_history_recall();
 
                                         tracing::info!(
                                             target: "script_kit::input_history",
@@ -1782,11 +1784,18 @@ impl ScriptListApp {
                                             first_item_position = ?first_item_position,
                                             at_top_of_list,
                                             in_history,
+                                            source_filter_mode,
                                             history_index = ?this.input_history.current_index(),
                                             grouped_item_count = grouped_items.len(),
-                                            route = if in_history || at_top_of_list { "history_up" } else { "list_up" },
+                                            route = if source_filter_mode {
+                                                "source_filter_list_up"
+                                            } else if in_history || at_top_of_list {
+                                                "history_up"
+                                            } else {
+                                                "list_up"
+                                            },
                                         );
-                                        if in_history || at_top_of_list {
+                                        if !source_filter_mode && (in_history || at_top_of_list) {
                                             if let Some(text) = this.input_history.navigate_up() {
                                                 let safe = logging::log_user_value(&text);
                                                 tracing::info!(
@@ -1843,6 +1852,8 @@ impl ScriptListApp {
                                         }
                                         let in_history =
                                             this.input_history.current_index().is_some();
+                                        let source_filter_mode =
+                                            this.source_filter_mode_blocks_input_history_recall();
                                         tracing::info!(
                                             target: "script_kit::input_history",
                                             event = "main_menu_arrow_history_decision",
@@ -1851,10 +1862,17 @@ impl ScriptListApp {
                                             context_depth = event.context_stack.len(),
                                             selected_index = this.selected_index,
                                             in_history,
+                                            source_filter_mode,
                                             history_index = ?this.input_history.current_index(),
-                                            route = if in_history { "history_down" } else { "list_down" },
+                                            route = if source_filter_mode {
+                                                "source_filter_list_down"
+                                            } else if in_history {
+                                                "history_down"
+                                            } else {
+                                                "list_down"
+                                            },
                                         );
-                                        if in_history {
+                                        if !source_filter_mode && in_history {
                                             if let Some(text) = this.input_history.navigate_down() {
                                                 let safe = logging::log_user_value(&text);
                                                 tracing::info!(

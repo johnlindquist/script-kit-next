@@ -53,7 +53,7 @@ fn grouped_cache_read_is_pure_before_recent_file_refresh() {
         .expect("read src/app_impl/filtering_cache.rs");
 
     let cache_check = filtering
-        .find(".has_grouped_results_for(&self.computed_filter_text)")
+        .find(".has_grouped_results_for(&grouped_cache_key)")
         .expect("grouped cache check should exist");
     let recent_refresh = filtering
         .find("self.refresh_root_recent_file_results();")

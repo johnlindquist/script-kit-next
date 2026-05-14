@@ -111,6 +111,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_scan_directory_finds_nested_vendor_apps() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let nested_app = temp
+            .path()
+            .join("Universal Audio")
+            .join("UAD Meter & Control Panel.app");
+        std::fs::create_dir_all(nested_app.join("Contents")).expect("create nested app");
+
+        let apps = scan_directory(temp.path()).expect("scan directory");
+
+        assert!(
+            apps.iter()
+                .any(|app| { app.name == "UAD Meter & Control Panel" && app.path == nested_app }),
+            "nested vendor .app bundles under Applications-style folders should be indexed"
+        );
+    }
+
+    #[test]
+    fn test_scan_directory_does_not_descend_inside_app_bundles() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let app = temp.path().join("Outer.app");
+        let nested_inside_bundle = app.join("Contents").join("Inner.app");
+        std::fs::create_dir_all(nested_inside_bundle.join("Contents"))
+            .expect("create app internals");
+
+        let apps = scan_directory(temp.path()).expect("scan directory");
+
+        assert!(apps.iter().any(|found| found.name == "Outer"));
+        assert!(
+            apps.iter().all(|found| found.name != "Inner"),
+            "scanner should treat .app bundles as leaves and skip bundle internals"
+        );
+    }
+
     #[cfg(feature = "slow-tests")]
     #[test]
     fn test_no_duplicate_apps() {

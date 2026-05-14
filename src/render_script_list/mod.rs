@@ -148,6 +148,22 @@ fn menu_syntax_input_span_color(
     }
 }
 
+fn menu_syntax_input_span_role_name(role: crate::menu_syntax::MenuSyntaxFragmentRole) -> &'static str {
+    match role {
+        crate::menu_syntax::MenuSyntaxFragmentRole::Prefix => "prefix",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Subject => "subject",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Date => "date",
+        crate::menu_syntax::MenuSyntaxFragmentRole::DateRange => "dateRange",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Duration => "duration",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Recurrence => "recurrence",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Kv => "kv",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Tag => "tag",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Url => "url",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Priority => "priority",
+        crate::menu_syntax::MenuSyntaxFragmentRole::Unresolved => "unresolved",
+    }
+}
+
 fn render_menu_syntax_hint_chip(
     theme: &crate::theme::Theme,
     chip: &crate::menu_syntax::MenuSyntaxMainHintChip,
@@ -708,27 +724,17 @@ impl ScriptListApp {
             || self
                 .menu_syntax_mode
                 .command_owns_input_for(&filter_text_for_render);
-        // Run 12 — also accept `AdvancedQueryEmpty` snapshots when a
-        // non-source active head is detected (`has:`, `:type:`, etc.) so the
-        // head-aware empty card paints even when fuzzy search would
-        // otherwise return incidental matches for the literal text.
-        // Without this, typing `has:` or `:type:scriptlet zzz` falls
-        // through to the regular list because launcher rows contain the
-        // word "has" or "type". Source heads (`c:`, `files:`) stay on the
-        // item-count path so source-backed results can render before a
-        // no-match card takes over.
+        // Keep guide cards available for bare/partial `:` refine entry, but
+        // let completed advanced queries render their filtered results first.
+        // Empty-state hint cards are handled by the item-count branch below.
         let advanced_query_guide_hint = (!menu_syntax_owns_main_list)
             .then(|| self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true))
             .flatten()
-            .filter(|hint| match hint.kind {
-                crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryGuide => true,
-                crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryEmpty => {
-                    hint.active_head.is_some()
-                        && !crate::menu_syntax::main_hint::active_head_is_source_filter(
-                            &filter_text_for_render,
-                        )
-                }
-                _ => false,
+            .filter(|hint| {
+                matches!(
+                    hint.kind,
+                    crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryGuide
+                )
             });
 
         let list_element: AnyElement = if menu_syntax_owns_main_list {
@@ -990,8 +996,7 @@ impl ScriptListApp {
                         }
                         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
                     })
-                    .sum::<f32>())
-                    + footer_overlay_height;
+                    .sum::<f32>());
 
                 div()
                     .absolute()
@@ -1446,11 +1451,12 @@ impl ScriptListApp {
             (
                 span.range,
                 rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
+                menu_syntax_input_span_role_name(span.role).to_string(),
             )
         })
         .collect();
         self.gpui_input_state.update(cx, |state, _cx| {
-            state.set_highlight_ranges(input_highlight_ranges);
+            state.set_highlight_ranges_with_roles(input_highlight_ranges);
         });
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content

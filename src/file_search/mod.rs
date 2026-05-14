@@ -147,16 +147,11 @@ pub const ROOT_FILE_BROWSE_RENDER_LIMIT: usize = 12;
 /// Minimum visible query length before root launcher file search starts.
 pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RootFilePromotionPolicy {
+    #[default]
     Never,
     ExactFilenameOnly,
-}
-
-impl Default for RootFilePromotionPolicy {
-    fn default() -> Self {
-        Self::Never
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,16 +190,11 @@ pub enum RootFileSectionMode {
     DirectoryBrowse,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RootFileQueryIntent {
+    #[default]
     OrdinaryRoot,
     ExplicitFilesSourceFilter,
-}
-
-impl Default for RootFileQueryIntent {
-    fn default() -> Self {
-        Self::OrdinaryRoot
-    }
 }
 
 /// Check if the query looks like an advanced mdfind query (with operators)
@@ -330,7 +320,7 @@ fn root_file_query_has_safe_global_length_for_intent(
 ) -> bool {
     root_file_query_has_safe_global_length(query)
         || (intent == RootFileQueryIntent::ExplicitFilesSourceFilter
-            && query.chars().count() == 2
+            && (1..=2).contains(&query.chars().count())
             && query.chars().all(|ch| ch.is_ascii_alphanumeric()))
 }
 
@@ -670,8 +660,8 @@ fn root_file_filename_terms_match(name: &str, terms: &[String]) -> bool {
         .and_then(|stem| stem.to_str())
         .unwrap_or(name);
 
-    root_file_text_matches_terms_in_order(name, &terms)
-        || root_file_text_matches_terms_in_order(stem, &terms)
+    root_file_text_matches_terms_in_order(name, terms)
+        || root_file_text_matches_terms_in_order(stem, terms)
 }
 
 fn root_file_path_context_matches_query(file: &FileResult, query: &str) -> bool {
@@ -1336,7 +1326,16 @@ mod tests {
     }
 
     #[test]
-    fn explicit_files_source_filter_allows_two_letter_file_queries() {
+    fn explicit_files_source_filter_allows_single_character_file_queries() {
+        assert!(!should_search_root_files("s"));
+        assert!(should_search_root_files_for_intent(
+            "s",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
+        assert!(should_search_root_files_for_intent(
+            "S",
+            RootFileQueryIntent::ExplicitFilesSourceFilter
+        ));
         assert!(!should_search_root_files("sc"));
         assert!(should_search_root_files_for_intent(
             "sc",
@@ -1344,10 +1343,6 @@ mod tests {
         ));
         assert!(should_search_root_files_for_intent(
             "SC",
-            RootFileQueryIntent::ExplicitFilesSourceFilter
-        ));
-        assert!(!should_search_root_files_for_intent(
-            "s",
             RootFileQueryIntent::ExplicitFilesSourceFilter
         ));
         assert!(!should_search_root_files_for_intent(

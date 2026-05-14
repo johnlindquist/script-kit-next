@@ -796,6 +796,7 @@ fn append_root_passive_section(
     grouped.splice(insertion_index..insertion_index, grouped_rows);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_acp_history_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -850,6 +851,7 @@ fn append_root_acp_history_section(
     append_root_passive_section(grouped, flat_results, "AI Conversations", rows, status);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_notes_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -903,6 +905,7 @@ fn append_root_notes_section(
     append_root_passive_section(grouped, flat_results, "Notes", rows, status);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_clipboard_history_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -959,6 +962,7 @@ fn append_root_clipboard_history_section(
     append_root_passive_section(grouped, flat_results, "Clipboard History", rows, status);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_dictation_history_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -1012,6 +1016,7 @@ fn append_root_dictation_history_section(
     append_root_passive_section(grouped, flat_results, "Dictation History", rows, status);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_browser_tabs_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -1063,6 +1068,7 @@ fn append_root_browser_tabs_section(
     append_root_passive_section(grouped, flat_results, "Browser Tabs", rows, status);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_browser_history_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
@@ -1272,6 +1278,7 @@ fn append_root_ai_vault_section(grouped: &mut Vec<GroupedListItem>) {
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 fn append_root_file_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,

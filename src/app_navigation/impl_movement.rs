@@ -106,9 +106,14 @@ impl ScriptListApp {
         self.root_file_frame = None;
         self.invalidate_grouped_cache();
         self.get_grouped_results_cached();
+        self.sync_list_state();
         self.restore_main_menu_selection_from_snapshot(snapshot);
         self.validate_selection_bounds(cx);
         self.reveal_main_list_selection_above_footer("root_file_source_chip_page_expand");
+        self.schedule_main_list_selection_reveal_above_footer(
+            "root_file_source_chip_page_expand_deferred",
+            cx,
+        );
         self.invalidate_main_window_preflight();
         cx.notify();
         true

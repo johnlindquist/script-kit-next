@@ -113,6 +113,27 @@ function getElements(tag: string): Json {
   return response;
 }
 
+function showWindow(tag: string): Json {
+  const response = rpc(
+    { type: "show", requestId: `root-source-lazy-show-${tag}-${Date.now()}` },
+    "windowVisibilityAck",
+  );
+  return response;
+}
+
+function waitForWindowVisible(tag: string): Json {
+  return rpc(
+    {
+      type: "waitFor",
+      requestId: `root-source-lazy-visible-${tag}-${Date.now()}`,
+      condition: { type: "stateMatch", state: { windowVisible: true } },
+      timeout: timeoutMs,
+      pollInterval: pollMs,
+    },
+    "waitForResult",
+  );
+}
+
 function fileRows(elements: Json): Json[] {
   return (elements.elements ?? []).filter(
     (element: Json) => element.role === "row" && element.source === "files" && element.selectable === true,
@@ -123,6 +144,18 @@ function statusRows(elements: Json): Json[] {
   return (elements.elements ?? []).filter(
     (element: Json) => element.role === "status" && element.kind === "sourceStatus" && element.source === "files",
   );
+}
+
+function assertStatusMetadata(status: Json | undefined, label: string) {
+  if (!status) {
+    throw new Error(`${label}: missing Files source status metadata`);
+  }
+  if (Object.prototype.hasOwnProperty.call(status, "index")) {
+    throw new Error(`${label}: source status must not occupy a list index ${JSON.stringify(status)}`);
+  }
+  if (status.selectable !== false) {
+    throw new Error(`${label}: source status must be non-selectable ${JSON.stringify(status)}`);
+  }
 }
 
 function requirePreflight(state: Json, label: string): Json {
@@ -177,13 +210,50 @@ async function waitForProviderSettled(input: string): Promise<Json> {
       last.inputValue === input &&
       last.rootFileSearch?.query === query &&
       last.rootFileSearch?.mode === "GlobalQuery" &&
-      last.rootFileSearch?.loading === false
+      last.rootFileSearch?.loading === false &&
+      last.mainListScroll &&
+      last.mainListScroll.viewportHeight > 0 &&
+      last.mainListScroll.safeViewportHeight > 0 &&
+      last.mainListScroll.selectedRowVisible === true &&
+      last.mainListScroll.selectedRowAboveFooter === true
     ) {
       return last;
     }
     await Bun.sleep(pollMs);
   }
   throw new Error(`timed out waiting for provider settle; last=${JSON.stringify(last)}`);
+}
+
+async function waitForMeasuredScrollState(input: string, tag: string): Promise<Json> {
+  const deadline = Date.now() + timeoutMs;
+  let last: Json | null = null;
+  while (Date.now() < deadline) {
+    last = getState(tag);
+    if (
+      last.inputValue === input &&
+      last.mainListScroll &&
+      last.mainListScroll.viewportHeight > 0 &&
+      last.mainListScroll.safeViewportHeight > 0
+    ) {
+      return last;
+    }
+    await Bun.sleep(pollMs);
+  }
+  throw new Error(`${input}: timed out waiting for measured mainListScroll; last=${JSON.stringify(last)}`);
+}
+
+async function waitForSelectedRowVisible(input: string, tag: string): Promise<Json> {
+  const deadline = Date.now() + timeoutMs;
+  let last: Json | null = null;
+  while (Date.now() < deadline) {
+    last = await waitForMeasuredScrollState(input, tag);
+    const scroll = last.mainListScroll;
+    if (scroll.selectedRowVisible === true && scroll.selectedRowAboveFooter === true) {
+      return last;
+    }
+    await Bun.sleep(pollMs);
+  }
+  throw new Error(`${input}: timed out waiting for selected row to be visible; last=${JSON.stringify(last)}`);
 }
 
 async function pressDown(times: number) {
@@ -212,8 +282,8 @@ function assertFilesSourceState(state: Json, input: string, expectedSearchText: 
   if (preflight.selectedResultRole !== "rootFile") {
     throw new Error(`${input}: selected row should be rootFile, got ${preflight.selectedResultRole}`);
   }
-  if (!String(preflight.selectedResultKey ?? "").startsWith("file:")) {
-    throw new Error(`${input}: selected key should be file:, got ${preflight.selectedResultKey}`);
+  if (!String(preflight.selectedResultKey ?? "").startsWith("file/")) {
+    throw new Error(`${input}: selected key should be file/, got ${preflight.selectedResultKey}`);
   }
   for (const result of preflight.visibleResults ?? []) {
     if (result.role !== "rootFile") {
@@ -224,6 +294,8 @@ function assertFilesSourceState(state: Json, input: string, expectedSearchText: 
 }
 
 async function runLazyCase(input: string, expectedSearchText: string) {
+  showWindow(input);
+  waitForWindowVisible(input);
   send({ type: "setFilter", text: input, requestId: `root-source-lazy-set-${Date.now()}` });
   waitForInput(input);
   const beforeElements = await waitForFileRowsAtLeast(12);
@@ -231,16 +303,19 @@ async function runLazyCase(input: string, expectedSearchText: string) {
     throw new Error(`${input}: expected initial Files page of 12 rows`);
   }
   if (statusRows(beforeElements).length !== 1) {
-    throw new Error(`${input}: expected one source status row before paging`);
+    throw new Error(`${input}: expected one source status metadata entry before paging`);
   }
+  assertStatusMetadata(statusRows(beforeElements)[0], `${input}: before`);
 
   await pressDown(10);
   const afterPageElements = await waitForFileRowsAtLeast(24);
-  const afterPageState = getState(`after-page-${input}`);
+  const afterPageState = await waitForSelectedRowVisible(input, `after-page-${input}`);
   assertFilesSourceState(afterPageState, input, expectedSearchText);
   const selectedKeyAfterPage = requirePreflight(afterPageState, input).selectedResultKey;
 
-  const settledState = expectedSearchText ? await waitForProviderSettled(input) : getState(`settled-${input}`);
+  const settledState = expectedSearchText
+    ? await waitForProviderSettled(input)
+    : await waitForSelectedRowVisible(input, `settled-${input}`);
   assertFilesSourceState(settledState, input, expectedSearchText);
   const selectedKeyAfterSettle = requirePreflight(settledState, input).selectedResultKey;
   if (selectedKeyAfterSettle !== selectedKeyAfterPage) {

@@ -384,7 +384,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
         },
         BuiltInEntry {
             id: "builtin/do-in-current-app".to_string(),
-            name: "Do in Current App".to_string(),
+            name: "Safari Commands".to_string(),
             description: "Use the current app's menu commands or generate automation".to_string(),
             keywords: vec!["current".to_string(), "app".to_string()],
             feature: BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
@@ -501,7 +501,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
         vec![
             "[Suggested]",
             "Agent Chat",
-            "Do in Current App",
+            "Safari Commands",
             "New Script",
             "Clipboard History",
             "Open Notes",

@@ -164,8 +164,9 @@ mod tests {
                 && root_source.contains("self.sync_list_state_for_filter_replacement();")
                 && root_source.contains("self.validate_selection_bounds(cx);")
                 && root_source
-                    .contains("self.reveal_main_list_selection_above_footer(\"root_file_active_publish\")"),
-            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then reveal the selected row above the footer"
+                    .contains("self.reveal_main_list_selection_above_footer(\"root_file_active_publish\")")
+                && root_source.contains("schedule_main_list_selection_reveal_above_footer"),
+            "async root file publish path should rebuild rows, restore the previous key, validate bounds, then reveal the selected row above the footer after viewport measurement"
         );
     }
 
@@ -209,10 +210,12 @@ mod tests {
                 && movement_source.contains("const PRELOAD_THRESHOLD: usize = 3")
                 && movement_source.contains("ROOT_FILE_SOURCE_CHIP_PAGE_SIZE")
                 && movement_source.contains("restore_main_menu_selection_from_snapshot(snapshot)")
+                && movement_source.contains("self.sync_list_state();")
+                && movement_source.contains("schedule_main_list_selection_reveal_above_footer")
                 && movement_source.contains(
                     "reveal_main_list_selection_above_footer(\"root_file_source_chip_page_expand\")"
                 ),
-            "selection near the bottom of explicit Files rows should increment the page, preserve selection, and reveal it above the footer"
+            "selection near the bottom of explicit Files rows should increment the page, sync the ListState row count, preserve selection, and reveal it above the footer after viewport measurement"
         );
     }
 
@@ -233,6 +236,50 @@ mod tests {
             !script.contains("captureScreenshot") && !script.contains("simulateClick"),
             "lazy scroll proof should stay state-first and not rely on screenshots or mouse clicks"
         );
+    }
+
+    #[test]
+    fn explicit_files_source_filter_single_character_threshold_stays_intent_scoped() {
+        let source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains(
+                "intent == RootFileQueryIntent::ExplicitFilesSourceFilter && (1..=2).contains(&query.chars().count()) && query.chars().all(|ch| ch.is_ascii_alphanumeric())"
+            ),
+            "single-character root Files search should be allowed only for explicit Files source-filter intent"
+        );
+        assert!(
+            normalized.contains("pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3"),
+            "ordinary root file search should keep its three-character threshold"
+        );
+        assert!(
+            source.contains("fn explicit_files_source_filter_allows_single_character_file_queries")
+                && source.contains("assert!(!should_search_root_files(\"s\"));")
+                && source.contains("RootFileQueryIntent::ExplicitFilesSourceFilter"),
+            "lib tests should pin f:s eligibility while plain s remains below the ordinary root threshold"
+        );
+    }
+
+    #[test]
+    fn files_source_filter_one_character_path_is_not_hard_coded_in_app_layers() {
+        for path in [
+            "src/app_impl/filter_input_core.rs",
+            "src/app_impl/root_file_search.rs",
+            "src/scripts/grouping.rs",
+        ] {
+            let source =
+                fs::read_to_string(path).unwrap_or_else(|err| panic!("read {path}: {err}"));
+            assert!(
+                !source.contains("new_text == \"f:s\"") && !source.contains("filter_text == \"f:s\""),
+                "{path} should route one-character Files source filters through parser/intent contracts, not f:s string checks"
+            );
+            assert!(
+                !source.contains("No files match"),
+                "{path} should not hide the f:s regression behind a hard-coded no-result message"
+            );
+        }
     }
 
     #[test]

@@ -167,7 +167,48 @@ impl ScriptListApp {
         self.scroll_to_selected_if_needed(reason);
     }
 
+    pub(crate) fn schedule_main_list_selection_reveal_above_footer(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        const ATTEMPTS: usize = 5;
+        const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(16);
+
+        self.last_scrolled_index = None;
+        cx.spawn(async move |this, cx| {
+            for _ in 0..ATTEMPTS {
+                cx.background_executor().timer(RETRY_DELAY).await;
+                let revealed = cx
+                    .update(|cx| {
+                        this.update(cx, |app, cx| {
+                            let viewport_height = app.main_list_state.viewport_bounds().size.height;
+                            if viewport_height <= main_list_footer_overlay_total_padding() {
+                                app.last_scrolled_index = None;
+                                cx.notify();
+                                return false;
+                            }
+
+                            app.last_scrolled_index = None;
+                            app.reveal_main_list_selection_above_footer(reason);
+                            cx.notify();
+                            true
+                        })
+                    })
+                    .unwrap_or(false);
+                if revealed {
+                    break;
+                }
+            }
+        })
+        .detach();
+    }
+
     pub(crate) fn sync_main_list_selection_to_visible_window(&mut self, reason: &'static str) {
+        if reason == "render" && self.last_scrolled_index.is_none() {
+            return;
+        }
+
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
         let safe_height = viewport_height - main_list_footer_overlay_total_padding();
         if safe_height <= gpui::px(0.0) {
@@ -242,7 +283,13 @@ impl ScriptListApp {
         // This scrolls the actual list() component used in render_script_list
         self.main_list_state.scroll_to_reveal_item(target);
         self.adjust_selected_item_above_footer_overlay(target);
-        self.last_scrolled_index = Some(target);
+        if self.main_list_state.viewport_bounds().size.height
+            > main_list_footer_overlay_total_padding()
+        {
+            self.last_scrolled_index = Some(target);
+        } else {
+            self.last_scrolled_index = None;
+        }
 
         let after_top = self.main_list_state.logical_scroll_top().item_ix;
 

@@ -8,6 +8,10 @@ fn source_filter_parser_is_inline_and_capture_safe() {
     assert!(query.contains("pub fn parse_filter_query("));
     assert!(query.contains("pub fn parse_source_filter_query("));
     assert!(query.contains("if input.starts_with(':')"));
+    assert!(
+        query.contains("free_parts.push(query);"),
+        "attached source-head text like f:s and files:s should become stripped free text"
+    );
     assert!(payload.contains("pub const SOURCE_HEAD_SPECS"));
     assert!(payload.contains("pub fn source_for_head(head_with_colon: &str)"));
     for alias in [
@@ -52,6 +56,23 @@ fn source_filter_parser_is_inline_and_capture_safe() {
     );
     assert!(mode.contains("free_text_for_search"));
     assert!(mode.contains("query.free_text.as_str()"));
+}
+
+#[test]
+fn parser_tests_pin_single_character_files_source_filters() {
+    let source = include_str!("../menu_syntax_source_filters.rs");
+
+    for case in [
+        "(\"f:s\", \"s\", RootUnifiedSourceFilter::Files)",
+        "(\"files:s\", \"s\", RootUnifiedSourceFilter::Files)",
+        "(\"f: s\", \"s\", RootUnifiedSourceFilter::Files)",
+        "(\"files: s\", \"s\", RootUnifiedSourceFilter::Files)",
+    ] {
+        assert!(
+            source.contains(case),
+            "menu syntax parser tests should pin single-character Files source-filter case {case}"
+        );
+    }
 }
 
 #[test]
@@ -130,6 +151,8 @@ fn explicit_source_filters_raise_passive_source_caps() {
 #[test]
 fn grouping_suppresses_primary_and_disallowed_sources_when_filter_active() {
     let grouping = include_str!("../../src/scripts/grouping.rs");
+    let app_state = include_str!("../../src/main_sections/app_state.rs");
+    let collect_elements = include_str!("../../src/app_layout/collect_elements.rs");
 
     assert!(
         grouping.contains("root_source_filters: &crate::menu_syntax::RootUnifiedSourceFilterSet")
@@ -157,6 +180,10 @@ fn grouping_suppresses_primary_and_disallowed_sources_when_filter_active() {
     assert!(grouping.contains("append_base_source_status_rows"));
     assert!(grouping.contains("root_source_filters.positive_includes()"));
     assert!(grouping.contains("GroupedListItem::Status(source_chip_result_status("));
+    assert!(app_state.contains("cached_grouped_source_statuses"));
+    assert!(app_state.contains("GroupedListItem::Status(status) => source_statuses.push(status)"));
+    assert!(collect_elements.contains("cached_source_statuses_snapshot()"));
+    assert!(collect_elements.contains("index: None"));
     assert!(grouping.contains("if limit == 0 && !explicit_source_filter"));
     assert!(grouping.contains(
         "root_source_filters\n                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)"
