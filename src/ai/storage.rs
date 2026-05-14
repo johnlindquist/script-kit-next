@@ -2373,8 +2373,10 @@ mod tests {
         };
 
         let mut audit = AiPreflightAudit {
-            schema_version: 1,
+            schema_version: crate::ai::preflight_audit::AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
             correlation_id: format!("test-roundtrip-{}", std::process::id()),
+            preflight_generation: 1,
+            draft_fingerprint: Some("raw:19:authored:19".to_string()),
             chat_id: chat_id.as_str(),
             message_id: None,
             decision: PreparedMessageDecision::Partial,

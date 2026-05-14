@@ -37,7 +37,7 @@ fn next_transfer_to_ai_window_ready_barrier_step(
 }
 
 impl ChatPrompt {
-    pub(super) fn handle_escape(&mut self, _cx: &mut Context<Self>) {
+    pub(crate) fn handle_escape(&mut self, _cx: &mut Context<Self>) {
         logging::log("CHAT", "Escape pressed - closing chat");
 
         // Save conversation to database if save_history is enabled

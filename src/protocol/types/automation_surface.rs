@@ -55,3 +55,35 @@ pub struct LauncherSurfaceContractSnapshot {
     pub automation_semantic_surface: String,
     pub native_footer_surface: Option<String>,
 }
+
+/// Schema version for the resolved active footer snapshot in `getState`.
+pub const ACTIVE_FOOTER_SCHEMA_VERSION: u32 = 1;
+
+/// Resolved footer owner visible to automation after native-host installation
+/// and prompt fallback policy have both been applied.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveFooterSnapshot {
+    pub schema_version: u32,
+    pub owner: String,
+    pub expected_surface: Option<String>,
+    pub requested_surface: Option<String>,
+    pub active_surface: Option<String>,
+    pub native_footer_host_installed: bool,
+    pub gpui_fallback_visible: bool,
+    pub button_count: usize,
+    pub buttons: Vec<ActiveFooterButtonSnapshot>,
+    pub mismatch: Option<String>,
+}
+
+/// Machine-readable footer button state for `getState.activeFooter`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveFooterButtonSnapshot {
+    pub action: String,
+    pub key: String,
+    pub label: String,
+    pub enabled: bool,
+    pub selected: bool,
+    pub action_disabled: Option<String>,
+}

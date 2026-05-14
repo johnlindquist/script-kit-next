@@ -648,7 +648,7 @@ app.run(move |cx: &mut App| {
                         // Update the app entity theme
                         view.update_theme(ctx);
                         view.sync_main_footer_popup(win, ctx);
-                        let mut footer_config = view.main_window_footer_config();
+                        let mut footer_config = view.main_window_footer_config_with_cx(Some(ctx));
                         if let Some(ref mut cfg) = footer_config {
                             view.enrich_footer_config_with_acp_info(cfg, ctx);
                         }
@@ -2349,6 +2349,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     view.move_selection_down(ctx);
                                                 }
                                                 "enter" => {
+                                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                                                        if view.apply_menu_syntax_trigger_popup_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax popup");
+                                                            return;
+                                                        }
+                                                    }
                                                     logging::log("STDIN", "SimulateKey: Enter - execute selected");
                                                     view.execute_selected(ctx);
                                                 }
@@ -2746,7 +2756,13 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else {
                                             // Route setup keys (tab, arrows, enter, escape) to ChatPrompt
                                             entity.update(ctx, |chat, cx| {
-                                                if chat.handle_setup_key(&key_lower, has_shift, cx) {
+                                                if key_lower == "escape" {
+                                                    chat.handle_escape(cx);
+                                                    logging::log(
+                                                        "STDIN",
+                                                        "SimulateKey: Escape handled by ChatPrompt",
+                                                    );
+                                                } else if chat.handle_setup_key(&key_lower, has_shift, cx) {
                                                     logging::log("STDIN", &format!("SimulateKey: Setup handled '{}'", key_lower));
                                                 } else {
                                                     logging::log("STDIN", &format!("SimulateKey: Unhandled '{}' in ChatPrompt", key_lower));
@@ -3073,6 +3089,20 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 if let Err(e) = notes::open_notes_window(ctx) {
                                     logging::log("STDIN", &format!("Failed to open notes window: {}", e));
                                 }
+                            }
+                            ExternalCommand::OpenAbout => {
+                                logging::log("STDIN", "Opening About surface via stdin command");
+                                script_kit_gpui::set_main_window_visible(true);
+                                script_kit_gpui::mark_window_shown();
+                                platform::show_main_window_without_activation();
+                                window.activate_window();
+                                sync_main_automation_window(current_main_automation_bounds(), true, true);
+                                view.open_about_surface(
+                                    std::sync::Arc::new(std::sync::RwLock::new(
+                                        crate::updates::UpdateState::Idle,
+                                    )),
+                                    ctx,
+                                );
                             }
                             ExternalCommand::OpenAi => {
                                 logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");

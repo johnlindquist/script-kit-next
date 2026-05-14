@@ -146,6 +146,7 @@ fn kit_sdk_prompt_state_exposes_surface_contract_snapshot() {
         KIT_SDK_SOURCE.contains("export interface LauncherSurfaceContractSnapshot")
             && KIT_SDK_SOURCE.contains("surfaceContract?: LauncherSurfaceContractSnapshot;")
             && KIT_SDK_SOURCE.contains("activePopupContract?: LauncherSurfaceContractSnapshot;")
+            && KIT_SDK_SOURCE.contains("activeFooter?: ActiveFooterSnapshot;")
             && KIT_SDK_SOURCE.contains("nativeFooterSurface?: string | null;")
             && KIT_SDK_SOURCE.contains("surfaceContract: state.surfaceContract,"),
         "Kit SDK getState typing must expose and forward stateResult.surfaceContract"

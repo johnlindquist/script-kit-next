@@ -697,6 +697,7 @@ fn acp_detached_full_quality_inspect_receipt() {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }],
         total_count: 1,
         focused_semantic_id: Some("input:acp-composer".into()),

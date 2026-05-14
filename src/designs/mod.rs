@@ -22,5 +22,6 @@ pub use traits::{
 };
 
 mod core;
+pub mod legacy_migration;
 
 pub use core::*;

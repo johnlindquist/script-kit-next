@@ -36,7 +36,7 @@ pub(crate) mod explicit_target_handoff;
 pub(crate) mod harness;
 pub mod message_parts;
 pub(crate) mod model;
-pub(crate) mod preflight_audit;
+pub mod preflight_audit;
 pub(crate) mod presets;
 pub(crate) mod providers;
 #[cfg(test)]
@@ -79,8 +79,8 @@ pub use self::message_parts::{
 };
 pub use self::model::{Chat, ChatId, ChatSource, Message, MessageRole};
 pub use self::preflight_audit::{
-    build_actionable_preflight_error, log_preflight_audit, ActionableContextFailure,
-    AiPreflightAudit, AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
+    append_preflight_audit, build_actionable_preflight_error, log_preflight_audit,
+    ActionableContextFailure, AiPreflightAudit, AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
 };
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 pub use self::script_generation::{

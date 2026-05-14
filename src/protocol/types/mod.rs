@@ -43,8 +43,9 @@ pub use automation_inspect_geometry::{
     target_bounds_in_screenshot_with_main,
 };
 pub use automation_surface::{
-    AutomationSurfaceSnapshot, LauncherSurfaceContractSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION,
-    LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
+    ActiveFooterButtonSnapshot, ActiveFooterSnapshot, AutomationSurfaceSnapshot,
+    LauncherSurfaceContractSnapshot, ACTIVE_FOOTER_SCHEMA_VERSION,
+    AUTOMATION_SURFACE_SCHEMA_VERSION, LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
 };
 pub use automation_window::{
     AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
@@ -54,7 +55,7 @@ pub use batch_wait::{
     BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, TransactionCommandTrace,
     TransactionError, TransactionErrorCode, TransactionTrace, TransactionTraceMode,
     TransactionTraceStatus, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
-    WaitNamedCondition, WaitPollObservation,
+    WaitNamedCondition, WaitPollObservation, TRANSACTION_TRACE_SCHEMA_VERSION,
 };
 pub use chat::{ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage};
 pub use elements_actions_scriptlets::{

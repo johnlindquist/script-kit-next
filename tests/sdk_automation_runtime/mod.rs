@@ -59,6 +59,7 @@ impl TransactionStateProvider for MockProvider {
             focused_semantic_id: self.focused_semantic_id.clone(),
             visible_semantic_ids: self.visible_semantic_ids.clone(),
             choice_count: self.choice_count,
+            ..Default::default()
         }
     }
 
@@ -135,12 +136,15 @@ fn state_result_serializes_all_fields() {
         example: None,
         examples: Vec::new(),
         warning: None,
+        active_head: None,
+        active_head_value_partial: None,
         accessibility_label: "Capture todo. Press Enter to capture.".to_string(),
     };
     let msg = Message::state_result(
         "gs-1".to_string(),
         "arg".to_string(),
         Some("prompt-1".to_string()),
+        None,
         None,
         None,
         Some("Pick one".to_string()),
@@ -151,6 +155,11 @@ fn state_result_serializes_all_fields() {
         Some("alpha".to_string()),
         true,
         true,
+        None,
+        Some(serde_json::json!({
+            "text": "alpha",
+            "chips": [],
+        })),
         Some(menu_syntax_main_hint),
         None,
         None,
@@ -170,6 +179,11 @@ fn state_result_serializes_all_fields() {
     assert_eq!(json["selectedValue"], "alpha");
     assert_eq!(json["isFocused"], true);
     assert_eq!(json["windowVisible"], true);
+    assert_eq!(json["filterInputDecorations"]["text"], "alpha");
+    assert!(json["filterInputDecorations"]["chips"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     assert_eq!(json["menuSyntaxMainHint"]["kind"], "CaptureComposer");
     assert_eq!(json["menuSyntaxMainHint"]["title"], "Capture todo");
     assert_eq!(json["menuSyntaxMainHint"]["modeChip"]["label"], "; capture");
@@ -188,6 +202,7 @@ fn state_result_round_trips() {
         None,
         None,
         None,
+        None,
         String::new(),
         0,
         0,
@@ -202,12 +217,19 @@ fn state_result_round_trips() {
         None,
         None,
         None,
+        None,
+        None,
     );
     let serialized = serde_json::to_string(&msg).expect("serialize");
     assert!(
         !serialized.contains("menuSyntaxMainHint"),
         "`menuSyntaxMainHint` must be omitted from JSON when `None` \
          so clients can treat absence as no grammar-owned state. Got: {serialized}"
+    );
+    assert!(
+        !serialized.contains("filterInputDecorations"),
+        "`filterInputDecorations` must be omitted from JSON when `None` \
+         so unsupported synthetic receipts do not widen the protocol. Got: {serialized}"
     );
     assert!(
         !serialized.contains("screenshotIdentity"),

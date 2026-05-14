@@ -9,9 +9,10 @@ use crate::computer_use::runtime_bridge::{
 use crate::computer_use::window_observation::{
     computer_use_window_observation_v1, window_capture_selection_candidates_v1,
     window_duplicate_groups_v1, window_enumeration_context_v1, window_list_candidate_v1,
-    window_own_process_policy_v1, window_title_fallbacks_v1,
-    WindowCaptureSelectionObservationInputV1, WindowDuplicateObservationInputV1,
-    WindowEnumerationObservationInputV1, WindowTitleFallbackObservationInputV1,
+    window_own_process_policy_v1, window_title_fallbacks_v1, WindowCaptureCandidateStatus,
+    WindowCaptureSelectionObservationInputV1, WindowDisqualificationReason,
+    WindowDuplicateObservationInputV1, WindowEnumerationObservationInputV1,
+    WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
@@ -455,18 +456,21 @@ fn core_graphics_windows_for_pid(
         &windows
             .iter()
             .map(|window| {
-                let observation = window
-                    .observation
-                    .as_ref()
-                    .expect("CoreGraphics windows are annotated before title fallback");
-
-                WindowTitleFallbackObservationInputV1 {
-                    title: window.title.clone(),
-                    capture_candidate_status: observation.capture_candidate.status.clone(),
-                    duplicate_group_status: observation
-                        .duplicate_group
-                        .as_ref()
-                        .map(|group| group.status.clone()),
+                if let Some(observation) = window.observation.as_ref() {
+                    WindowTitleFallbackObservationInputV1 {
+                        title: window.title.clone(),
+                        capture_candidate_status: observation.capture_candidate.status.clone(),
+                        duplicate_group_status: observation
+                            .duplicate_group
+                            .as_ref()
+                            .map(|group| group.status.clone()),
+                    }
+                } else {
+                    WindowTitleFallbackObservationInputV1 {
+                        title: window.title.clone(),
+                        capture_candidate_status: WindowCaptureCandidateStatus::Unknown,
+                        duplicate_group_status: None,
+                    }
                 }
             })
             .collect::<Vec<_>>(),
@@ -482,26 +486,33 @@ fn core_graphics_windows_for_pid(
         &windows
             .iter()
             .map(|window| {
-                let observation = window
-                    .observation
-                    .as_ref()
-                    .expect("CoreGraphics windows are annotated before capture selection");
-
-                WindowCaptureSelectionObservationInputV1 {
-                    capture_candidate_status: observation.capture_candidate.status.clone(),
-                    capture_candidate_reason: observation.capture_candidate.reason.clone(),
-                    duplicate_group_status: observation
-                        .duplicate_group
-                        .as_ref()
-                        .map(|group| group.status.clone()),
-                    title_fallback_status: observation
-                        .title_fallback
-                        .as_ref()
-                        .map(|fallback| fallback.status.clone()),
-                    own_process_window_policy_status: observation
-                        .own_process_window_policy
-                        .as_ref()
-                        .map(|policy| policy.status.clone()),
+                if let Some(observation) = window.observation.as_ref() {
+                    WindowCaptureSelectionObservationInputV1 {
+                        capture_candidate_status: observation.capture_candidate.status.clone(),
+                        capture_candidate_reason: observation.capture_candidate.reason.clone(),
+                        duplicate_group_status: observation
+                            .duplicate_group
+                            .as_ref()
+                            .map(|group| group.status.clone()),
+                        title_fallback_status: observation
+                            .title_fallback
+                            .as_ref()
+                            .map(|fallback| fallback.status.clone()),
+                        own_process_window_policy_status: observation
+                            .own_process_window_policy
+                            .as_ref()
+                            .map(|policy| policy.status.clone()),
+                    }
+                } else {
+                    WindowCaptureSelectionObservationInputV1 {
+                        capture_candidate_status: WindowCaptureCandidateStatus::Unknown,
+                        capture_candidate_reason: Some(
+                            WindowDisqualificationReason::MetadataIncomplete,
+                        ),
+                        duplicate_group_status: None,
+                        title_fallback_status: None,
+                        own_process_window_policy_status: None,
+                    }
                 }
             })
             .collect::<Vec<_>>(),

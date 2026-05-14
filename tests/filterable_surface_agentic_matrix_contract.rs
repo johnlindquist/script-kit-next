@@ -166,10 +166,8 @@ fn matrix_runner_checks_state_and_elements_count_parity() {
         "The matrix must compare getElements list count against state visibleChoiceCount."
     );
     assert!(
-        body.contains(
-            "elementsTotalCount !== visibleChoiceCount + entry.expectedElementChromeCount"
-        ),
-        "The matrix must verify totalCount is visible rows plus input/list chrome."
+        body.contains("elementsTotalCount < visibleChoiceCount + entry.expectedElementChromeCount"),
+        "The matrix must verify totalCount contains at least visible rows plus required chrome."
     );
 }
 

@@ -141,10 +141,7 @@ impl Render for ShortcutRecorder {
             );
 
             // Handle special keys
-            if mods.platform && key.eq_ignore_ascii_case("w") {
-                this.cancel();
-                cx.notify();
-            } else if is_key_escape(key) {
+            if (mods.platform && key.eq_ignore_ascii_case("w")) || is_key_escape(key) {
                 this.cancel();
                 cx.notify();
             } else if is_key_enter(key) && this.shortcut.is_complete() && this.conflict.is_none() {

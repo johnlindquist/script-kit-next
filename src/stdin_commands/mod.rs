@@ -412,6 +412,8 @@ pub enum ExternalCommand {
     },
     /// Open the Notes window (for testing)
     OpenNotes,
+    /// Open the About surface in the main window (for testing)
+    OpenAbout,
     /// Open the Agent Chat window (for testing)
     OpenAi,
     /// Open the Mini Agent Chat window (for testing)
@@ -677,6 +679,7 @@ impl ExternalCommand {
             Self::TriggerBuiltin { .. } => "triggerBuiltin",
             Self::SimulateKey { .. } => "simulateKey",
             Self::OpenNotes => "openNotes",
+            Self::OpenAbout => "openAbout",
             Self::OpenAi => "openAi",
             Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
@@ -713,6 +716,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "triggerBuiltin",
     "simulateKey",
     "openNotes",
+    "openAbout",
     "openAi",
     "openMiniAi",
     "openAiWithMockData",
@@ -1676,6 +1680,14 @@ mod tests {
         let json = r#"{"type": "openNotes"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenNotes));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_about_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "openAbout"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert!(matches!(cmd, ExternalCommand::OpenAbout));
         Ok(())
     }
 

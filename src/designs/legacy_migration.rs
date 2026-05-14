@@ -8,7 +8,7 @@
 //!
 // @lat: [[lat.md/designs#Legacy migration]]
 
-use crate::designs::core::registry::{lookup, DesignDef, FALLBACK_ID};
+use crate::designs::core::registry::{fallback, lookup, DesignDef, FALLBACK_ID};
 use crate::designs::DesignVariant;
 
 /// Map a legacy [`DesignVariant`] to its stable catalog id.
@@ -72,7 +72,7 @@ pub fn legacy_variant_def(variant: DesignVariant) -> &'static DesignDef {
                 variant, id, FALLBACK_ID
             ),
         );
-        lookup(FALLBACK_ID).expect("fallback must exist")
+        fallback()
     })
 }
 

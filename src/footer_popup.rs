@@ -72,6 +72,7 @@ pub(crate) struct FooterButtonConfig {
     pub label: SharedString,
     pub selected: bool,
     pub enabled: bool,
+    pub disabled_reason: Option<&'static str>,
 }
 
 impl FooterButtonConfig {
@@ -86,6 +87,7 @@ impl FooterButtonConfig {
             label: label.into(),
             selected: false,
             enabled: true,
+            disabled_reason: None,
         }
     }
 
@@ -96,6 +98,12 @@ impl FooterButtonConfig {
 
     pub(crate) fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
+        self
+    }
+
+    pub(crate) fn disabled_reason(mut self, reason: &'static str) -> Self {
+        self.disabled_reason = Some(reason);
+        self.enabled = false;
         self
     }
 }
@@ -192,19 +200,42 @@ static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
 
-static ACTIVE_MAIN_WINDOW_FOOTER_SURFACE: std::sync::Mutex<Option<&'static str>> =
-    std::sync::Mutex::new(None);
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct MainWindowFooterHostSnapshot {
+    pub requested_surface: Option<&'static str>,
+    pub installed_surface: Option<&'static str>,
+    pub native_host_installed: bool,
+}
 
-fn set_active_main_window_footer_surface(surface: Option<&'static str>) {
-    *ACTIVE_MAIN_WINDOW_FOOTER_SURFACE
+static MAIN_WINDOW_FOOTER_HOST_STATE: std::sync::Mutex<MainWindowFooterHostSnapshot> =
+    std::sync::Mutex::new(MainWindowFooterHostSnapshot {
+        requested_surface: None,
+        installed_surface: None,
+        native_host_installed: false,
+    });
+
+fn update_main_window_footer_host_state(
+    requested_surface: Option<&'static str>,
+    installed_surface: Option<&'static str>,
+    native_host_installed: bool,
+) {
+    *MAIN_WINDOW_FOOTER_HOST_STATE
         .lock()
-        .unwrap_or_else(|poison| poison.into_inner()) = surface;
+        .unwrap_or_else(|poison| poison.into_inner()) = MainWindowFooterHostSnapshot {
+        requested_surface,
+        installed_surface,
+        native_host_installed,
+    };
+}
+
+pub(crate) fn main_window_footer_host_snapshot() -> MainWindowFooterHostSnapshot {
+    *MAIN_WINDOW_FOOTER_HOST_STATE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
 }
 
 pub(crate) fn active_main_window_footer_surface() -> Option<&'static str> {
-    *ACTIVE_MAIN_WINDOW_FOOTER_SURFACE
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner())
+    main_window_footer_host_snapshot().installed_surface
 }
 
 pub(crate) fn footer_action_channel() -> &'static (
@@ -219,7 +250,8 @@ pub(crate) fn sync_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     _cx: &mut App,
 ) {
-    set_active_main_window_footer_surface(config.map(|cfg| cfg.surface));
+    let requested_surface = config.map(|cfg| cfg.surface);
+    update_main_window_footer_host_state(requested_surface, None, false);
 
     #[cfg(target_os = "macos")]
     {
@@ -236,10 +268,16 @@ pub(crate) fn sync_main_footer_popup(
         // being rendered/observed on the AppKit thread.
         unsafe {
             if let Some(config) = config {
-                ensure_main_footer_host(ns_window);
-                refresh_main_footer_host(ns_window, config);
+                let installed = ensure_main_footer_host(ns_window)
+                    && refresh_main_footer_host(ns_window, config);
+                update_main_window_footer_host_state(
+                    requested_surface,
+                    installed.then_some(config.surface),
+                    installed,
+                );
             } else {
                 remove_main_footer_host(ns_window);
+                update_main_window_footer_host_state(None, None, false);
             }
         }
     }
@@ -253,7 +291,8 @@ pub(crate) fn notify_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     _cx: &mut App,
 ) {
-    set_active_main_window_footer_surface(config.map(|cfg| cfg.surface));
+    let requested_surface = config.map(|cfg| cfg.surface);
+    update_main_window_footer_host_state(requested_surface, None, false);
 
     #[cfg(target_os = "macos")]
     {
@@ -265,9 +304,15 @@ pub(crate) fn notify_main_footer_popup(
         // being rendered/observed on the AppKit thread.
         unsafe {
             if let Some(config) = config {
-                refresh_main_footer_host(ns_window, config);
+                let installed = refresh_main_footer_host(ns_window, config);
+                update_main_window_footer_host_state(
+                    requested_surface,
+                    installed.then_some(config.surface),
+                    installed,
+                );
             } else {
                 remove_main_footer_host(ns_window);
+                update_main_window_footer_host_state(None, None, false);
             }
         }
     }
@@ -277,7 +322,7 @@ pub(crate) fn notify_main_footer_popup(
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
-    set_active_main_window_footer_surface(None);
+    update_main_window_footer_host_state(None, None, false);
 
     let Some(window_handle) = crate::get_main_window_handle() else {
         return;
@@ -324,23 +369,23 @@ fn main_window_ns_window(window: &mut Window) -> Option<id> {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn ensure_main_footer_host(ns_window: id) {
+unsafe fn ensure_main_footer_host(ns_window: id) -> bool {
     use cocoa::appkit::NSViewWidthSizable;
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
     if crate::platform::require_main_thread("ensure_main_footer_host") {
-        return;
+        return false;
     }
 
     let content_view: id = msg_send![ns_window, contentView];
     if content_view == nil {
-        return;
+        return false;
     }
 
     let existing = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
     if existing != nil {
-        return;
+        return true;
     }
 
     let content_bounds: NSRect = msg_send![content_view, bounds];
@@ -353,7 +398,7 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
     let footer_view: id = msg_send![footer_cls, alloc];
     let footer_view: id = msg_send![footer_view, initWithFrame: footer_frame];
     if footer_view == nil {
-        return;
+        return false;
     }
 
     let effect_identifier = ns_string(FOOTER_EFFECT_ID);
@@ -420,25 +465,27 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
         event = "native_footer_host_installed",
         "Installed native footer host inside the main window contentView"
     );
+
+    find_subview_by_identifier(content_view, FOOTER_EFFECT_ID) != nil
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) {
+unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) -> bool {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
     if crate::platform::require_main_thread("refresh_main_footer_host") {
-        return;
+        return false;
     }
 
     let content_view: id = msg_send![ns_window, contentView];
     if content_view == nil {
-        return;
+        return false;
     }
 
     let footer_view = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
     if footer_view == nil {
-        return;
+        return false;
     }
 
     let theme = crate::theme::get_cached_theme();
@@ -539,6 +586,8 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         dark = is_dark,
         "Refreshed native footer host"
     );
+
+    true
 }
 
 #[cfg(target_os = "macos")]

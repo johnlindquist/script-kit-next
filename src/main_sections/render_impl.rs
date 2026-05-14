@@ -80,7 +80,24 @@ impl Render for ScriptListApp {
                 "CHAT",
                 "Inline chat escape received - returning to main menu",
             );
+            self.capture_mini_ai_close_snapshot(MiniAiCloseSource::Escape, cx);
             self.go_back_or_close(window, cx);
+        }
+
+        while let Ok(request) = self.inline_chat_actions_receiver.try_recv() {
+            match request {
+                MiniAiUiRequest::ToggleActions { prompt_id, source } => {
+                    tracing::info!(
+                        target: "script_kit::mini_ai",
+                        event = "mini_ai_actions_dispatch",
+                        prompt_id = %prompt_id,
+                        source,
+                        main_window_mode = ?self.main_window_mode,
+                        "Dispatching Mini AI actions request through parent window"
+                    );
+                    self.dispatch_actions_toggle_for_current_view(window, cx, source);
+                }
+            }
         }
 
         // Check for inline chat continue (Continue in Harness Terminal → hide main window)
@@ -92,7 +109,7 @@ impl Render for ScriptListApp {
             // Reset state and visibility tracking
             script_kit_gpui::set_main_window_visible(false);
             self.is_pinned = false;
-            self.main_window_mode = MainWindowMode::Mini;
+            self.set_main_window_mode(MainWindowMode::Mini, window, cx, "inline_chat_continue");
             self.reset_to_script_list(cx);
             // Hide the main window directly via GPUI. We cannot use
             // defer_hide_main_window here because the window_manager may not

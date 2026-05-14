@@ -51,6 +51,7 @@ impl TransactionStateProvider for MockProvider {
             focused_semantic_id: self.focused_semantic_id.clone(),
             visible_semantic_ids: self.visible_semantic_ids.clone(),
             choice_count: self.choice_count,
+            ..Default::default()
         }
     }
 

@@ -688,7 +688,7 @@ pub(crate) fn render_hint_strip_leading_text(
         .into_any_element()
 }
 
-/// Number of footer hints the design spec mandates: `↵ Run`, `⌘↵ AI`, `⌘K Actions`.
+/// Number of footer hints the design spec mandates: `↵ Run`, Agent Chat, `⌘K Actions`.
 pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 
 /// The canonical three-key footer hints from `.impeccable.md`.
@@ -705,7 +705,7 @@ pub(crate) fn universal_prompt_hints_with_primary_label(
 ) -> Vec<SharedString> {
     vec![
         format!("↵ {}", primary_label.as_ref()).into(),
-        "⌘↵ AI".into(),
+        crate::ai::acp::labels::AGENT_CHAT_CMD_ENTER_HINT.into(),
         "⌘K Actions".into(),
     ]
 }
@@ -766,9 +766,9 @@ pub(crate) fn render_main_window_footer_slot_for_prompt_surface(
                 event = "native_footer_surface_mismatch",
                 expected_surface,
                 active_surface,
-                "Prompt renderer saw a different active native footer surface; reserving native footer space to avoid double footer"
+                "Prompt renderer saw a different installed native footer surface; rendering GPUI fallback so stale native state cannot suppress prompt chrome"
             );
-            render_native_main_window_footer_spacer()
+            render_gpui_footer()
         }
         None => render_gpui_footer(),
     }
@@ -1981,7 +1981,7 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn path_prompt_entity_uses_minimal_shell_and_hint_strip() {
+    fn path_prompt_entity_uses_minimal_shell_and_select_actions_hint_strip() {
         let source = include_str!("../prompts/path/render.rs");
 
         assert!(
@@ -1990,8 +1990,14 @@ mod prompt_layout_shell_tests {
             "path prompt entity should use the shared minimal list prompt shell"
         );
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "path prompt entity should use canonical three-key footer"
+            source.contains("path_prompt_hints()")
+                && source.contains("\"↵ Select\"")
+                && source.contains("\"⌘K Actions\""),
+            "path prompt entity should use Select + Actions footer hints"
+        );
+        assert!(
+            !source.contains("universal_prompt_hints()") && !source.contains("\"⌘↵ AI\""),
+            "path prompt entity should suppress launcher AI instead of using universal hints"
         );
         assert!(
             source.contains("prompt_text_palette("),

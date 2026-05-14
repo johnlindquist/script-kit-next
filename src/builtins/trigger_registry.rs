@@ -41,6 +41,7 @@ pub enum TriggerBuiltin {
     ManageInstalledKits,
     Settings,
     ChooseTheme,
+    MiniMainWindow,
     QuickTerminal,
     Webcam,
 }
@@ -65,6 +66,7 @@ impl TriggerBuiltin {
         TriggerBuiltin::ManageInstalledKits,
         TriggerBuiltin::Settings,
         TriggerBuiltin::ChooseTheme,
+        TriggerBuiltin::MiniMainWindow,
         TriggerBuiltin::QuickTerminal,
         TriggerBuiltin::Webcam,
     ];
@@ -89,6 +91,7 @@ impl TriggerBuiltin {
             TriggerBuiltin::ManageInstalledKits => "builtin/manage-installed-kits",
             TriggerBuiltin::Settings => "builtin/settings",
             TriggerBuiltin::ChooseTheme => "builtin/choose-theme",
+            TriggerBuiltin::MiniMainWindow => "builtin/mini-main-window",
             TriggerBuiltin::QuickTerminal => "builtin/quick-terminal",
             TriggerBuiltin::Webcam => "builtin/webcam",
         }
@@ -157,6 +160,7 @@ impl TriggerBuiltin {
             }
             TriggerBuiltin::Settings => &["settings", "kit-settings", "script-kit-settings"],
             TriggerBuiltin::ChooseTheme => &["choose-theme", "theme", "theme-designer"],
+            TriggerBuiltin::MiniMainWindow => &["mini-main-window", "mini-launcher", "mini"],
             TriggerBuiltin::QuickTerminal => &["quick-terminal", "quickterminal"],
             TriggerBuiltin::Webcam => &["webcam", "camera"],
         }

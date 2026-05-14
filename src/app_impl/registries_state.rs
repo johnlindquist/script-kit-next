@@ -231,7 +231,7 @@ impl ScriptListApp {
 
         // Reset view
         self.current_view = AppView::ScriptList;
-        self.main_window_mode = MainWindowMode::Mini;
+        self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "reset_to_script_list");
 
         if closing_acp_chat {
             self.acp_ready_script_path = None;
@@ -347,5 +347,4 @@ impl ScriptListApp {
         );
         cx.notify();
     }
-
 }

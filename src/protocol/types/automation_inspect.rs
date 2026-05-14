@@ -250,6 +250,7 @@ mod tests {
                 source_name: None,
                 selectable: None,
                 status_kind: None,
+                action_disabled: None,
             }],
             total_count: 1,
             focused_semantic_id: Some("panel:notes".to_string()),

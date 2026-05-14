@@ -821,6 +821,7 @@ fn prompt_popup_inspect_result_with_full_quality() {
             source_name: None,
             selectable: None,
             status_kind: None,
+            action_disabled: None,
         }],
         total_count: 1,
         focused_semantic_id: Some("button:0:confirm".into()),

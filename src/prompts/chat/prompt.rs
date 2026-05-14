@@ -157,6 +157,23 @@ impl ChatPrompt {
         self.on_show_actions = Some(callback);
     }
 
+    pub fn set_mini_mode(&mut self, mini: bool) {
+        self.mini_mode = mini;
+    }
+
+    pub fn set_input(&mut self, text: String, cx: &mut Context<Self>) {
+        self.input.set_text(text);
+        cx.notify();
+    }
+
+    pub fn draft_len(&self) -> usize {
+        self.input.text().chars().count()
+    }
+
+    pub fn pending_submit(&self) -> bool {
+        self.pending_submit
+    }
+
     /// Enable mini mode — renders input as a borderless text field matching the mini main window.
     pub fn with_mini_mode(mut self, mini: bool) -> Self {
         self.mini_mode = mini;

@@ -508,7 +508,12 @@ pub fn lookup(id: &str) -> Option<&'static DesignDef> {
 }
 
 pub fn fallback() -> &'static DesignDef {
-    lookup(FALLBACK_ID).expect("FALLBACK_ID must exist in CATALOG")
+    for design in CATALOG {
+        if design.id == FALLBACK_ID {
+            return design;
+        }
+    }
+    &CATALOG[0]
 }
 
 /// Resolve an id or return the fallback. Logs a warning when the input is

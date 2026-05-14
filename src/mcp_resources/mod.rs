@@ -2354,6 +2354,7 @@ fn stdin_verb_variant_hint(verb: &str) -> &'static str {
         "triggerBuiltin" => "TriggerBuiltin",
         "simulateKey" => "SimulateKey",
         "openNotes" => "OpenNotes",
+        "openAbout" => "OpenAbout",
         "openAi" => "OpenAi",
         "openMiniAi" => "OpenMiniAi",
         "openAiWithMockData" => "OpenAiWithMockData",

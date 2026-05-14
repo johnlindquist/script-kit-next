@@ -1680,10 +1680,10 @@ impl ScriptListApp {
         self.hovered_index = None;
         self.opened_from_main_menu = true;
         if expanded {
-            self.main_window_mode = MainWindowMode::Full;
+            self.set_main_window_mode_state_only(MainWindowMode::Full, cx, "open_builtin_filterable_view");
             resize_to_view_sync(ViewType::ScriptList, 0);
         } else {
-            self.main_window_mode = MainWindowMode::Mini;
+            self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_builtin_filterable_view");
             resize_to_view_sync(ViewType::MiniMainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
@@ -1721,7 +1721,7 @@ impl ScriptListApp {
         self.pending_filter_sync = true;
         self.pending_placeholder = Some("Search scripts, apps, and commands…".to_string());
         self.show_script_list_with_main_filter_focus();
-        self.main_window_mode = MainWindowMode::Mini;
+        self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_mini_main_window");
         self.hovered_index = None;
         self.selected_index = 0;
         self.opened_from_main_menu = true;
@@ -1779,10 +1779,10 @@ impl ScriptListApp {
         self.hovered_index = None;
         self.opened_from_main_menu = true;
         if expanded {
-            self.main_window_mode = MainWindowMode::Full;
+            self.set_main_window_mode_state_only(MainWindowMode::Full, cx, "open_builtin_filterable_view_with_filter");
             resize_to_view_sync(ViewType::ScriptList, 0);
         } else {
-            self.main_window_mode = MainWindowMode::Mini;
+            self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_builtin_filterable_view_with_filter");
             resize_to_view_sync(ViewType::MiniMainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
@@ -3335,7 +3335,7 @@ impl ScriptListApp {
                             placeholder: "Select microphone...".to_string(),
                             choices,
                         };
-                        resize_to_view_sync(ViewType::ArgPromptWithChoices, choice_count);
+                        resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
                         cx.notify();
 
                         Self::builtin_success(dctx, "select_microphone")

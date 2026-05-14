@@ -98,6 +98,14 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         active_popup_contract: Option<crate::protocol::LauncherSurfaceContractSnapshot>,
+        /// Resolved footer ownership after native host installation and
+        /// prompt fallback policy have been applied.
+        #[serde(
+            rename = "activeFooter",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        active_footer: Option<crate::protocol::ActiveFooterSnapshot>,
         /// Placeholder text if applicable
         #[serde(skip_serializing_if = "Option::is_none")]
         placeholder: Option<String>,
@@ -122,6 +130,16 @@ macro_rules! protocol_message_variants_query_ops {
         /// Whether the window is visible
         #[serde(rename = "windowVisible")]
         window_visible: bool,
+        /// Inline Mini AI state snapshot for handoff, draft, and close telemetry proofs.
+        #[serde(rename = "miniAi", default, skip_serializing_if = "Option::is_none")]
+        mini_ai: Option<serde_json::Value>,
+        /// Rendered filter input decoration ranges from the live input state.
+        #[serde(
+            rename = "filterInputDecorations",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        filter_input_decorations: Option<serde_json::Value>,
         /// Grammar-aware read-only hint shown in the main menu surface
         /// when Power Syntax owns input or a structured query is empty.
         #[serde(

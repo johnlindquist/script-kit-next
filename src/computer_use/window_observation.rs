@@ -435,7 +435,7 @@ pub fn window_capture_selection_candidates_v1(
 ) -> Vec<WindowCaptureSelectionCandidateV1> {
     windows
         .iter()
-        .map(|window| window_capture_selection_candidate_v1(window))
+        .map(window_capture_selection_candidate_v1)
         .collect()
 }
 
@@ -547,10 +547,9 @@ pub fn window_duplicate_groups_v1(
                         window_area(&candidate.bounds),
                         std::cmp::Reverse(candidate.z_order),
                     )
-                })
-                .expect("duplicate group has at least one window");
+                });
 
-            Some(WindowDuplicateGroupV1 {
+            preferred.map(|preferred| WindowDuplicateGroupV1 {
                 status: if std::ptr::eq(preferred, window) {
                     WindowDuplicateGroupStatus::Preferred
                 } else {

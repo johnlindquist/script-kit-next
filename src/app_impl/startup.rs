@@ -565,6 +565,7 @@ impl ScriptListApp {
 
         // Legacy chat channels (retained for inline chat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
+        let (inline_chat_actions_tx, inline_chat_actions_rx) = mpsc::sync_channel(4);
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
@@ -829,6 +830,9 @@ impl ScriptListApp {
             // Inline chat escape channel - for ChatPrompt escape callback to signal return to main menu
             inline_chat_escape_sender: inline_chat_escape_tx,
             inline_chat_escape_receiver: inline_chat_escape_rx,
+            inline_chat_actions_sender: inline_chat_actions_tx,
+            inline_chat_actions_receiver: inline_chat_actions_rx,
+            mini_ai_last_close_snapshot: None,
             // Inline chat continue channel - for ChatPrompt continue callback to hide main window
             inline_chat_continue_sender: inline_chat_continue_tx,
             inline_chat_continue_receiver: inline_chat_continue_rx,

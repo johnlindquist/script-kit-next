@@ -187,6 +187,7 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         }
         TriggerBuiltin::Settings => AppRoute::ExecuteBuiltin("builtin/settings"),
         TriggerBuiltin::ChooseTheme => AppRoute::ExecuteBuiltin("builtin/choose-theme"),
+        TriggerBuiltin::MiniMainWindow => AppRoute::ExecuteBuiltin("builtin/mini-main-window"),
         TriggerBuiltin::QuickTerminal => AppRoute::ExecuteBuiltin("builtin/quick-terminal"),
         TriggerBuiltin::Webcam => AppRoute::ExecuteBuiltin("builtin/webcam"),
     }

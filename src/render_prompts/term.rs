@@ -446,9 +446,10 @@ impl ScriptListApp {
             // use the GPUI route-aware hint strip with paste-back + close hints.
             .when_some(
                 if is_quick_terminal {
-                    self.main_window_footer_slot(
-                        crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
-                    )
+                    self.main_window_footer_slot(render_terminal_prompt_hint_strip(
+                        self.tab_ai_harness_apply_back_route.as_ref(),
+                        self.tab_ai_harness_return_view.as_ref(),
+                    ))
                 } else {
                     self.main_window_footer_slot(render_terminal_prompt_hint_strip(None, None))
                 },

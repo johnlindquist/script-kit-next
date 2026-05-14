@@ -9,6 +9,9 @@ enum FileSearchPresentation {
 }
 
 /// Application state - what view are we currently showing
+pub(crate) const ABOUT_SURFACE_EXEMPTION: &str =
+    "about is a static content surface with no list selection owner";
+
 #[derive(Debug, Clone)]
 enum AppView {
     /// Showing the script list
@@ -336,6 +339,9 @@ pub(crate) enum SurfaceKind {
     WindowSwitcher,
     BrowserTabs,
     GenericFilterableList,
+    Settings,
+    KitStoreBrowse,
+    KitStoreInstalled,
     ProcessManager,
     CurrentAppCommands,
     DesignGallery,
@@ -686,11 +692,12 @@ impl AppView {
             AppView::AppLauncherView { .. } => SurfaceKind::AppLauncher,
             AppView::WindowSwitcherView { .. } => SurfaceKind::WindowSwitcher,
             AppView::BrowserTabsView { .. } => SurfaceKind::BrowserTabs,
-            AppView::BrowseKitsView { .. }
-            | AppView::InstalledKitsView { .. }
-            | AppView::SearchAiPresetsView { .. }
-            | AppView::SettingsView { .. }
-            | AppView::FavoritesBrowseView { .. } => SurfaceKind::GenericFilterableList,
+            AppView::BrowseKitsView { .. } => SurfaceKind::KitStoreBrowse,
+            AppView::InstalledKitsView { .. } => SurfaceKind::KitStoreInstalled,
+            AppView::SettingsView { .. } => SurfaceKind::Settings,
+            AppView::SearchAiPresetsView { .. } | AppView::FavoritesBrowseView { .. } => {
+                SurfaceKind::GenericFilterableList
+            }
             AppView::ProcessManagerView { .. } => SurfaceKind::ProcessManager,
             AppView::CurrentAppCommandsView { .. } => SurfaceKind::CurrentAppCommands,
             AppView::DesignGalleryView { .. } => SurfaceKind::DesignGallery,
@@ -993,6 +1000,48 @@ impl SurfaceKind {
                 CompactLauncherVisual,
                 standard,
                 "scriptList",
+            ),
+            SurfaceKind::Settings => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                standard,
+                "settings",
+            ),
+            SurfaceKind::KitStoreBrowse => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                standard,
+                "kitStoreBrowse",
+            ),
+            SurfaceKind::KitStoreInstalled => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    NoPersistentPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
+                standard,
+                "kitStoreInstalled",
             ),
             SurfaceKind::ProcessManager => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(

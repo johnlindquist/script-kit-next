@@ -2,6 +2,7 @@
 use super::*;
 
 mod metadata;
+pub mod registry;
 mod render;
 mod tokens;
 mod variant;
