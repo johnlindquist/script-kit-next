@@ -6,10 +6,10 @@
 //! Categories: Boundary, Composition, Resurrection. Actions: 22.
 
 use chrono_tz::America::Denver;
-use script_kit_gpui::menu_syntax::{
-    parse_date_phrase_result, DateGranularity, DateParseResult, DateRole, MenuSyntaxClock,
-    ResolvedDate,
+use script_kit_gpui::menu_syntax::date::{
+    parse_date_phrase_result, DateGranularity, DateParseResult, MenuSyntaxClock, ResolvedDate,
 };
+use script_kit_gpui::menu_syntax::payload::DateRole;
 
 fn clock_at(iso: &str) -> MenuSyntaxClock {
     MenuSyntaxClock::fixed(iso, Denver).expect("fixed clock")

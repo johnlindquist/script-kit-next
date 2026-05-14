@@ -250,7 +250,7 @@ fn localization_04_command_head_with_zero_width_joiner_is_not_whitespace() {
 }
 
 #[test]
-fn localization_05_full_width_space_IS_whitespace_for_command_head() {
+fn localization_05_full_width_space_is_whitespace_for_command_head() {
     // U+3000 (IDEOGRAPHIC SPACE) is whitespace per `char::is_whitespace`.
     // Pin that the doctor catches this — it would silently break command
     // dispatch on the runtime side.

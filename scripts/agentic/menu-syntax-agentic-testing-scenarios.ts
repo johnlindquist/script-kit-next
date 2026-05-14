@@ -16,6 +16,26 @@ const screenshotRel = ".test-screenshots/menu-syntax-help-context-aware-has-sh.p
 const screenshotPath = join(repoRoot, screenshotRel);
 const baselineCopy = join(outDir, "baseline/menu-syntax-help-context-aware-has-sh.png");
 const helpFooterText = ["Open Menu Syntax", " help"].join("");
+const TYPE_FILTER_VALUES = [
+  "script",
+  "scriptlet",
+  "skill",
+  "agent",
+  "builtin",
+  "app",
+  "window",
+  "file",
+  "note",
+  "clipboard",
+  "clipboard-history",
+  "dictation",
+  "dictation-history",
+  "browser-tab",
+  "browser-history",
+  "acp-history",
+  "fallback",
+  "issue",
+];
 
 process.env.HOME = join(outDir, "home");
 process.env.SK_PATH = join(process.env.HOME, ".scriptkit");
@@ -247,6 +267,63 @@ function driveScenario(spec: Json): Json {
   };
 }
 
+function menuSyntaxHintBodyText(hint: Json): string {
+  return [
+    hint?.title,
+    hint?.subtitle,
+    hint?.primaryHint,
+    hint?.secondaryHint,
+    hint?.example,
+    ...(hint?.examples ?? []),
+    ...(hint?.rows ?? []).flatMap((row: Json) => [
+      row?.label,
+      row?.value,
+      ...(row?.chips ?? []).map((chip: Json) => chip?.label),
+    ]),
+    ...(hint?.fragmentPreview?.rows ?? []).flatMap((row: Json) => [
+      row?.label,
+      row?.value,
+      row?.source,
+    ]),
+  ]
+    .filter((part) => typeof part === "string" && part.trim().length > 0)
+    .join("\n");
+}
+
+function assertAdvancedQueryGuideHintBody(raw: string, tag: string): Json {
+  send({ type: "setFilter", text: raw, requestId: `ms-${tag}-set` });
+  waitForInput(raw, `ms-${tag}-wait`);
+  const state = getState(tag);
+  const hint = state.menuSyntaxMainHint;
+  assert(hint, `${raw}: expected menuSyntaxMainHint`);
+  assertEq(hint.kind, "AdvancedQueryGuide", `${raw}: menuSyntaxMainHint.kind`);
+  assert(
+    Array.isArray(hint.rows) && hint.rows.length > 0,
+    `${raw}: expected non-empty MenuSyntaxMainHintSnapshot.rows, got ${JSON.stringify(hint)}`,
+  );
+  const body = menuSyntaxHintBodyText(hint);
+  assert(body.trim().length > 0, `${raw}: expected non-empty MenuSyntaxMainHintSnapshot body`);
+  return { input: raw, kind: hint.kind, rows: hint.rows, body };
+}
+
+function runTypeFilterAppliedHintScenario(): Json {
+  showWindow("ms-type-filter-hints-show");
+  const receipts: Json[] = [];
+  for (const value of TYPE_FILTER_VALUES) {
+    receipts.push(assertAdvancedQueryGuideHintBody(`:type:${value} review`, `type-filter-${value}`));
+  }
+  for (const value of TYPE_FILTER_VALUES) {
+    receipts.push(assertAdvancedQueryGuideHintBody(`:kind:${value} review`, `kind-filter-${value}`));
+  }
+  receipts.push(assertAdvancedQueryGuideHintBody(":-type:app review", "negated-type-app"));
+  return {
+    scenario: "type-filter-applied-hint-body-non-empty",
+    protocol: ["show", "setFilter", "waitFor", "getState"],
+    values: TYPE_FILTER_VALUES,
+    receipts,
+  };
+}
+
 function captureScreenshot(): Json {
   mkdirSync(dirname(baselineCopy), { recursive: true });
   assert(existsSync(screenshotPath), `missing screenshot baseline ${screenshotRel}`);
@@ -405,15 +482,17 @@ async function main() {
         tag: "type-scriptlet",
         input: ":type:scriptlet zzz",
         expected: {
-          kind: "AdvancedQueryEmpty",
+          kind: "AdvancedQueryGuide",
           rawFilterText: ":type:scriptlet zzz",
           activeHead: ":type:",
           activeHeadValuePartial: "scriptlet",
-          title: "No scriptlets match `zzz`.",
-          primaryHint: "Remove `type:scriptlet` to widen.",
+          title: "Filtering to scriptlets",
+          primaryHint: "Keep typing to narrow results, or remove a filter to widen.",
         },
         check: (hint: Json) => {
-          assertEq(JSON.stringify(hint.examples ?? []), JSON.stringify(["type:scriptlet shell"]), "type:scriptlet examples");
+          assert((hint.rows ?? []).length > 0, "type:scriptlet applied hint rows must be non-empty");
+          assert((hint.rows ?? []).some((r: Json) => r.label === "Filters"), "type:scriptlet missing Filters row");
+          assert((hint.rows ?? []).some((r: Json) => r.label === "Search words" && r.value === "zzz"), "type:scriptlet missing search words row");
           assertNoText(hint.examples, [":#work", ":tag:work"], "type:scriptlet examples");
         },
       },
@@ -461,6 +540,7 @@ async function main() {
     ];
 
     receipt.scenarios = scenarios.map(driveScenario);
+    receipt.scenarios.push(runTypeFilterAppliedHintScenario());
 
     showWindow("ms-escape-show");
     send({ type: "setFilter", text: "has:sh", requestId: "ms-escape-setup-set" });

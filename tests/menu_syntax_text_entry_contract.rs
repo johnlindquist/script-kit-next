@@ -95,8 +95,8 @@ fn live_menu_syntax_ownership_bypasses_debounced_grouped_cache() {
         .find("let live_menu_syntax_owns_main_list =")
         .expect("grouped cache must check live menu syntax ownership");
     let cache_hit = source
-        .find(".has_grouped_results_for(&self.computed_filter_text)")
-        .expect("grouped cache should still key ordinary rows by computed filter text");
+        .find(".has_grouped_results_for(&grouped_cache_key)")
+        .expect("grouped cache should use the prepared grouped cache key");
 
     assert!(
         live_gate < cache_hit,
@@ -251,13 +251,18 @@ fn launcher_input_accents_power_syntax_prefixes() {
 
     assert!(
         render.contains("input_spans_for_input_with_targets(")
-            && render.contains("state.set_highlight_ranges(input_highlight_ranges)"),
-        "ScriptList input should accent the parsed power-syntax prefix span"
+            && render.contains("state.set_highlight_ranges_with_roles(input_highlight_ranges)"),
+        "ScriptList input should replace the rendered menu-syntax input chip set every render tick"
     );
     assert!(
         input_state.contains("highlight_ranges: Vec<(Range<usize>, Hsla)>")
             && input_state.contains("pub fn set_highlight_ranges"),
         "the input component should expose plain-text highlight ranges"
+    );
+    assert!(
+        input_state.contains("pub fn set_highlight_ranges_with_roles")
+            && input_state.contains("pub fn clear_highlight_ranges"),
+        "the input component should replace and clear rendered chip ranges, including empty sets"
     );
     assert!(
         input_element.contains("fn custom_highlight_styles")
@@ -435,14 +440,122 @@ fn menu_syntax_hint_surface_is_not_grouped_results() {
             && render.contains("hint.examples")
             && render.contains("advanced_query_guide_hint")
             && render.contains("MenuSyntaxMainHintKind::AdvancedQueryGuide")
+            && !render.contains("MenuSyntaxMainHintKind::AdvancedQueryEmpty =>")
             && render.contains("Plain #tag is launcher search"),
-        "hint cards should fill the list area, render persistent examples, and nudge top-level #tag search toward :#tag or ; capture labels"
+        "hint cards should fill the list area, render persistent examples, keep completed advanced-query results visible until item_count is zero, and nudge top-level #tag search toward :#tag or ; capture labels"
     );
     assert!(
         main_hint.contains("AdvancedQueryGuide")
             && main_hint.contains("Filter by tag")
             && main_hint.contains("Refine launcher search"),
         "bare/partial `:` states should get guide hints before they become zero-result structured queries"
+    );
+}
+
+#[test]
+fn has_shortcut_accept_transition_cannot_reopen_popup() {
+    let trigger_picker = fs::read_to_string("src/menu_syntax/trigger_picker.rs")
+        .expect("Failed to read src/menu_syntax/trigger_picker.rs");
+    let dispatcher = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+    let filter_change = fs::read_to_string("src/app_impl/filter_input_change.rs")
+        .expect("Failed to read src/app_impl/filter_input_change.rs");
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+    let simulate_key = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
+    let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
+        .expect("Failed to read src/main_entry/app_run_setup.rs");
+    let runtime_stdin = fs::read_to_string("src/main_entry/runtime_stdin.rs")
+        .expect("Failed to read src/main_entry/runtime_stdin.rs");
+
+    assert!(
+        trigger_picker.contains("fn should_show_has_field_completion(")
+            && trigger_picker.contains("lookup_has_field(value).is_none()")
+            && trigger_picker.contains("complete has:shortcut is a search predicate"),
+        "exact has:shortcut must be terminal search input, while has:short/has:shortc remain completion states"
+    );
+    assert!(
+        dispatcher.contains("self.filter_text = text.clone();")
+            && dispatcher.contains("self.pending_filter_sync = true;")
+            && dispatcher.contains("self.computed_filter_text = text.clone();")
+            && dispatcher.contains("self.set_menu_syntax_mode_from_filter(&text);")
+            && dispatcher.contains("self.invalidate_grouped_cache();")
+            && dispatcher.contains("close_menu_syntax_trigger_popup_window(cx);")
+            && dispatcher.contains("self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());"),
+        "Accept must atomically replace input, advance parser/cache state, close automation popup, and suppress immediate reopen"
+    );
+    assert!(
+        filter_change.contains("popup_suppressed_for_this_text")
+            && filter_change.contains("plan_trigger_popup_transition("),
+        "filter input changes must honor post-Accept suppression before re-running the popup state machine"
+    );
+    assert!(
+        startup.contains("InlinePickerKeyIntent::Accept")
+            && startup.contains("is_plain_enter")
+            && startup.contains("is_menu_syntax_trigger_popup_window_open()")
+            && startup_new_tab.contains("InlinePickerKeyIntent::Accept")
+            && startup_new_tab.contains("is_plain_enter")
+            && startup_new_tab.contains("is_menu_syntax_trigger_popup_window_open()"),
+        "physical Enter startup paths must route to menu-syntax popup Accept before ordinary launcher Enter"
+    );
+    for source in [&simulate_key, &app_run_setup, &runtime_stdin] {
+        let accept = source
+            .find("SimulateKey: Enter - accept menu-syntax popup")
+            .expect("simulateKey Enter must log popup acceptance");
+        let execute = source
+            .find("SimulateKey: Enter - execute selected")
+            .expect("simulateKey Enter must retain ordinary execution fallback");
+        assert!(
+            accept < execute,
+            "protocol simulateKey Enter must accept menu-syntax popup before ordinary launcher execution"
+        );
+    }
+}
+
+#[test]
+fn has_shortcut_results_stay_on_refine_result_path() {
+    let query = fs::read_to_string("src/menu_syntax/query.rs")
+        .expect("Failed to read src/menu_syntax/query.rs");
+    let filter = fs::read_to_string("src/menu_syntax/filter.rs")
+        .expect("Failed to read src/menu_syntax/filter.rs");
+    let filtering_cache = fs::read_to_string("src/app_impl/filtering_cache.rs")
+        .expect("Failed to read src/app_impl/filtering_cache.rs");
+    let render = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
+    let prompt_handler = fs::read_to_string("src/prompt_handler/mod.rs")
+        .expect("Failed to read src/prompt_handler/mod.rs");
+
+    assert!(
+        query.contains("fn classify_has_predicate_value(")
+            && query.contains("partial_has_shortcut_values_do_not_claim_filter_query")
+            && query.contains("has_shortcut_complete_and_trailing_space_parse_same"),
+        "parser must treat has:shortcut and has:shortcut-space as complete predicates while leaving has:short partial"
+    );
+    assert!(
+        filter.contains("Predicate::Has(field) => has_field(result, field)")
+            && filter.contains("\"shortcut\" => script.shortcut.is_some()")
+            && filter.contains("\"shortcut\" => scriptlet.shortcut.is_some()")
+            && filter.contains("has_shortcut_matches_scriptlet_or_snippet_shortcut_rows"),
+        "advanced-query filtering must find script and scriptlet shortcut rows without seed-data hacks"
+    );
+    assert!(
+        filtering_cache.contains("apply_advanced_query(results, query)")
+            && filtering_cache.contains("advanced_predicate_query"),
+        "grouped result count path must apply advanced predicates before render/getState count receipts"
+    );
+    assert!(
+        render.contains("MenuSyntaxMainHintKind::AdvancedQueryGuide")
+            && !render.contains("MenuSyntaxMainHintKind::AdvancedQueryEmpty =>")
+            && render.contains("item_count == 0"),
+        "render must keep completed advanced-query rows visible before falling back to empty hint cards"
+    );
+    assert!(
+        prompt_handler.contains("advanced_query_has_results")
+            && prompt_handler.contains("visible_choice_count > 0"),
+        "getState must not report a structured-empty hint when a completed advanced query has visible rows"
     );
 }
 

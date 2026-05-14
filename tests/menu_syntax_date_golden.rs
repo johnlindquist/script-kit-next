@@ -15,10 +15,11 @@
 //! Receipt: `cargo test --test menu_syntax_date_golden`.
 
 use chrono_tz::America::Denver;
-use script_kit_gpui::menu_syntax::{
-    parse_date_phrase_result, DateGranularity, DateParseResult, DateRole, MenuSyntaxClock,
-    ResolvedDate, UnresolvedDate,
+use script_kit_gpui::menu_syntax::date::{
+    parse_date_phrase_result, DateGranularity, DateParseResult, MenuSyntaxClock, ResolvedDate,
+    UnresolvedDate,
 };
+use script_kit_gpui::menu_syntax::payload::DateRole;
 
 fn clock_at(iso: &str) -> MenuSyntaxClock {
     MenuSyntaxClock::fixed(iso, Denver).expect("fixed clock")
@@ -311,7 +312,7 @@ fn shorthand_eom_handles_year_rollover_for_december() {
 }
 
 #[test]
-fn shorthand_case_insensitive_NOON_matches_noon() {
+fn shorthand_case_insensitive_noon_matches_noon() {
     let clock = clock_at("2026-04-25T08:00:00");
     let r = expect_resolved("NOON", &clock);
     assert!(r.iso.contains("T12:00:00"), "got {}", r.iso);

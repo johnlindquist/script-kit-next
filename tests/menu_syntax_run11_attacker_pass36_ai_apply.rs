@@ -134,7 +134,7 @@ fn boundary_04_tag_with_leading_hash_doubles_the_hash() {
 }
 
 #[test]
-fn boundary_05_add_date_phrase_with_quote_is_backslash_escaped_PINNED() {
+fn boundary_05_add_date_phrase_with_quote_is_backslash_escaped_pinned() {
     // Run 11 Pass #41 (Fix): the original Pass-36 [?] is closed. The
     // AddDate arm now routes the phrase through `quote_for_filter_value`
     // which backslash-escapes `"` and `\`. Phrases containing `"` produce
@@ -166,7 +166,7 @@ fn boundary_05_add_date_phrase_with_quote_is_backslash_escaped_PINNED() {
 }
 
 #[test]
-fn boundary_06_add_date_phrase_with_backslash_is_doubled_PINNED() {
+fn boundary_06_add_date_phrase_with_backslash_is_doubled_pinned() {
     // Run 11 Pass #41 (Fix): backslashes are now escaped FIRST (before
     // quote escaping) by `quote_for_filter_value`, so a literal `\` in
     // the phrase becomes `\\` in the output. A trailing `\` no longer

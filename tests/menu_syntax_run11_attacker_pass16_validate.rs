@@ -8,8 +8,8 @@
 //! `validate-ignores-schema-forbidden-fields`). Neither is a fix candidate
 //! for this pass — attacker mode never fixes; subsequent passes can.
 
-use script_kit_gpui::menu_syntax::{
-    builtin_schema, validate_capture_payload, CaptureFieldSchema, FieldRequirement,
+use script_kit_gpui::menu_syntax::capture_schema::{
+    builtin_schema, validate as validate_capture_payload, CaptureFieldSchema, FieldRequirement,
     ValidationResult,
 };
 // Re-import the underlying types used by the schema fixtures.
@@ -99,7 +99,7 @@ fn boundary_04_javascript_scheme_is_malformed() {
 }
 
 #[test]
-fn boundary_05_https_with_no_authority_is_well_formed_today_PROBE() {
+fn boundary_05_https_with_no_authority_is_well_formed_today_probe() {
     // Probe: the well-formedness check looks at the prefix only, so a bare
     // scheme "https://" passes. This is permissive — a future tightening
     // could parse host+path. Filed as `[?]` near-anomaly.
@@ -150,7 +150,7 @@ fn boundary_08_amount_scientific_notation_is_ready() {
 }
 
 #[test]
-fn boundary_09_amount_NaN_is_malformed_PINNED() {
+fn boundary_09_amount_nan_is_malformed_pinned() {
     // Pinned by Run 11 Pass 26 (commit forthcoming): closes
     // `validate-amount-accepts-nan-inf-as-numeric`. `looks_like_amount` now
     // requires `is_finite()` after parse, so NaN is Malformed.
@@ -166,7 +166,7 @@ fn boundary_09_amount_NaN_is_malformed_PINNED() {
 }
 
 #[test]
-fn boundary_10_amount_inf_is_malformed_PINNED() {
+fn boundary_10_amount_inf_is_malformed_pinned() {
     let schema = amount_schema();
     let mut inv = with_body("expense", "Lunch");
     inv.kv.push(("amount".to_string(), "inf".to_string()));
@@ -283,7 +283,7 @@ fn composition_17_validate_runs_url_check_even_for_schema_without_url_requiremen
 }
 
 #[test]
-fn composition_18_forbidden_field_is_malformed_PINNED() {
+fn composition_18_forbidden_field_is_malformed_pinned() {
     // Pinned by Run 11 Pass 26 (commit forthcoming): closes
     // `validate-ignores-schema-forbidden-fields`. validate() now sweeps
     // schema.forbidden after well-formedness; a +cal payload with priority

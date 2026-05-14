@@ -7,11 +7,11 @@
 //! fallthrough, and the per-state dispatch logic for CopyFilterExpression /
 //! DefaultTime / EditCommandArgv.
 
+use script_kit_gpui::menu_syntax::action_effects::{apply_safe_effect, ActionEffect};
 use script_kit_gpui::menu_syntax::actions::{MenuSyntaxActionKind, MenuSyntaxActionState};
 use script_kit_gpui::menu_syntax::payload::{
     AdvancedQuery, CaptureAlias, CaptureInvocation, Predicate,
 };
-use script_kit_gpui::menu_syntax::{apply_safe_effect, ActionEffect};
 
 fn capture(raw: &str, target: &str) -> CaptureInvocation {
     CaptureInvocation {
@@ -100,7 +100,7 @@ fn boundary_03_default_time_with_empty_phrase_serializes_empty_quotes() {
 }
 
 #[test]
-fn boundary_04_default_time_with_quote_in_phrase_is_backslash_escaped_PINNED() {
+fn boundary_04_default_time_with_quote_in_phrase_is_backslash_escaped_pinned() {
     // Run 11 Pass #41 (Fix): the original Pass-32 [?] is closed. The
     // DefaultTime arm now routes the phrase through `quote_for_filter_value`
     // which backslash-escapes `"` and `\`. A phrase containing `"` produces
