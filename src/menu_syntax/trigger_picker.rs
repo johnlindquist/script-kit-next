@@ -204,7 +204,7 @@ pub fn build_trigger_picker_snapshot(
     }
 
     if should_show_has_field_completion(input) {
-        return Some(build_advanced_query_snapshot(input, ctx));
+        return non_empty_snapshot(build_advanced_query_snapshot(input, ctx));
     }
 
     let parsed = if capture_targets.is_empty() {
@@ -216,7 +216,9 @@ pub fn build_trigger_picker_snapshot(
     match parsed {
         MenuSyntaxParse::AdvancedQuery(_) if is_complete_has_field_query(input) => None,
         MenuSyntaxParse::AdvancedQuery(query) if query.is_source_filter_only() => None,
-        MenuSyntaxParse::AdvancedQuery(_) => Some(build_advanced_query_snapshot(input, ctx)),
+        MenuSyntaxParse::AdvancedQuery(_) => {
+            non_empty_snapshot(build_advanced_query_snapshot(input, ctx))
+        }
         MenuSyntaxParse::Capture(inv) => {
             Some(build_capture_snapshot(Some(inv.target.as_str()), ctx))
         }
@@ -228,7 +230,9 @@ pub fn build_trigger_picker_snapshot(
             }
         }
         MenuSyntaxParse::Incomplete(s) => match s.kind {
-            IncompleteKind::BareQueryPrefix => Some(build_advanced_query_snapshot(input, ctx)),
+            IncompleteKind::BareQueryPrefix => {
+                non_empty_snapshot(build_advanced_query_snapshot(input, ctx))
+            }
             IncompleteKind::BareCapturePrefix => {
                 let filter = capture_picker_filter(input);
                 if filter.is_none() && unknown_plus_capture_body(input) {
@@ -395,7 +399,11 @@ fn qualifier_row_matches_active_token(row: &TriggerPickerRow, active: &str) -> b
         .unwrap_or_default()
         .trim_start_matches(':')
         .to_ascii_lowercase();
+    let title = row.title.to_ascii_lowercase();
     token.starts_with(active)
+        || title
+            .split_whitespace()
+            .any(|word| word.starts_with(active))
 }
 
 fn build_capture_snapshot(

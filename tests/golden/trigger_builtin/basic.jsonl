@@ -13,6 +13,9 @@
 {"input":{"name":"bad","builtinId":"builtin/also-bad"},"expected":"Unknown::Both::bad::builtin/also-bad"}
 {"input":{"name":"tab-ai"},"expected":"Resolved::TabAi::NameAlias"}
 {"input":{"builtinId":"builtin/ai-chat"},"expected":"Resolved::TabAi::BuiltinIdField"}
+{"input":{"name":"vault"},"expected":"Resolved::AiVault::NameAsCommandId"}
+{"input":{"name":"ai-vault"},"expected":"Resolved::AiVault::NameAlias"}
+{"input":{"builtinId":"builtin/vault"},"expected":"Resolved::AiVault::BuiltinIdField"}
 {"input":{"name":"processes"},"expected":"Resolved::ProcessManager::NameAlias"}
 {"input":{"name":"current-app"},"expected":"Resolved::CurrentAppCommands::NameAlias"}
 {"input":{"name":"current-app-commands"},"expected":"Resolved::CurrentAppCommands::NameAsCommandId"}

@@ -241,6 +241,22 @@ fn codex_detection_uses_local_codex_cli_not_adapter_binary_only() {
 }
 
 #[test]
+fn codex_setup_normalizes_stale_absolute_adapter_paths() {
+    assert!(
+        ACP_CONFIG_SOURCE.contains("looks_like_codex_acp_adapter_command"),
+        "Codex catalog normalization must recognize adapter commands by basename"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains(".file_name()"),
+        "absolute stale codex-acp paths must be detected by filename"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("missing_absolute_codex_acp_adapter_normalizes_to_npx_adapter"),
+        "config tests must pin stale absolute codex-acp migration to npx"
+    );
+}
+
+#[test]
 fn tab_ai_mode_does_not_persist_implicit_codex_default() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("implicit_codex_default_active"),

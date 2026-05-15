@@ -85,6 +85,7 @@ pub enum StorySurface {
     ShortcutRecorder,
     AcpChat,
     BuiltInBrowser,
+    QuickTerminal,
     AboutSurface,
 }
 
@@ -108,6 +109,7 @@ impl StorySurface {
             Self::ShortcutRecorder => "Shortcut Recorder",
             Self::AcpChat => "Agent Chat",
             Self::BuiltInBrowser => "Built-In Browser",
+            Self::QuickTerminal => "Quick Terminal",
             Self::AboutSurface => "About Surface",
         }
     }

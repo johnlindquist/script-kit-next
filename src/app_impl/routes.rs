@@ -181,6 +181,7 @@ pub const fn plan_trigger_builtin_route(id: TriggerBuiltin) -> AppRoute {
         TriggerBuiltin::CurrentAppCommands => AppRoute::OpenCurrentAppCommands,
         TriggerBuiltin::NewScript => AppRoute::ExecuteBuiltin("builtin/new-script"),
         TriggerBuiltin::SdkReference => AppRoute::ExecuteBuiltin("builtin/sdk-reference"),
+        TriggerBuiltin::AiVault => AppRoute::ExecuteBuiltin("builtin/vault"),
         TriggerBuiltin::BrowseKitStore => AppRoute::ExecuteBuiltin("builtin/browse-kit-store"),
         TriggerBuiltin::ManageInstalledKits => {
             AppRoute::ExecuteBuiltin("builtin/manage-installed-kits")
@@ -259,6 +260,7 @@ mod tests {
             ("builtin/quick-terminal", 1),
             ("builtin/sdk-reference", 1),
             ("builtin/settings", 1),
+            ("builtin/vault", 1),
             ("builtin/webcam", 1),
         ]
         .into_iter()

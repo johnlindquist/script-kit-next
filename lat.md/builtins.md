@@ -10,6 +10,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - `get_builtin_entries(...)` materializes the searchable built-in catalog from config-gated feature flags.
 - Built-ins now cover more than the old clipboard or app-launcher set: Agent Chat and history, notes commands, system actions, script creation, settings, utility flows, dictation targets and history, kit store commands, and current-app automation helpers.
 - New-user Suggested defaults use stable built-in identities, not transient display aliases: Agent Chat, Do in Current App, New Script, Clipboard History, Open Notes, Search Files, Search Browser Tabs, Quick Terminal, and SDK Reference. The current-app row can display as `<App> Commands` while still seeding from the stable `builtin/do-in-current-app` identity.
+- Current-app menu shortcuts decode Accessibility menu-item attributes through [[src/menu_bar/mod.rs#KeyboardShortcut#from_ax_components]] and search aliases through [[src/builtins/mod.rs#shortcut_search_tokens]]; AX modifier masks use implicit Command unless NoCommand is set, Carbon masks stay compatible, and virtual-key fallback plus special-key aliases keep Space/arrows/function keys searchable. Pinned by [[tests/current_app_commands.rs#keyboard_shortcut_decodes_ax_modifiers_with_implicit_command]] and [[tests/current_app_commands.rs#keyboard_shortcut_falls_back_to_virtual_key_and_searchable_special_key_tokens]].
 - Direct-provider API key setup commands are no longer exposed as built-ins or Settings actions; agent setup is driven by the Agent Catalog and `config.ts` preferences instead.
 - The launcher now includes a browser-tabs builtin that enumerates tabs from running Safari and Chromium-family browsers, filters them with the shared fuzzy-ranking model, and activates the chosen tab on `Enter`.
 - ACP attachment portals also include a browser-history picker that snapshots recent history from supported browsers, caches that snapshot briefly for reopen speed, collapses duplicate rows by normalized page identity before ranking matches, and drives wheel scrolling through the shared selected-row path so large history sets stay responsive.
@@ -115,6 +116,12 @@ Each saved entry also carries a human-readable metadata line in the browser. New
 When ACP opens dictation history as an attachment portal, that same browser switches its default `Enter` action from frontmost-app paste to attach. The selected transcript returns to ACP as a stable `kit://dictation-history?id=...` context part instead of collapsing back to the generic provider token.
 
 That is a materially broader contract than the older “few built-ins plus apps” description.
+
+## Root Unified Search AI Vault
+
+AI Vault is a source-filtered launcher route for cmux conversation session metadata.
+
+The launcher-visible `builtin/vault` entry and `triggerBuiltin` aliases `vault` / `ai-vault` resolve through [[src/builtins/trigger_registry.rs#TriggerBuiltin]] and execute through [[src/app_execute/builtin_execution.rs#ScriptListApp#open_ai_vault_source_filter]]. Running the command returns to `ScriptList` with the committed `vault: ` source head already applied, so users see the AI Vault source state and can continue typing a session query instead of hitting a silent no-op.
 
 ## Root Unified Search Files
 

@@ -207,6 +207,13 @@ pub fn normalize_generate_script_from_current_app_request(raw: Option<&str>) -> 
 /// The human-readable label used in the main command list.
 pub const DO_IN_CURRENT_APP_LABEL: &str = "Do in Current App";
 
+pub fn current_app_commands_launcher_label(app_name: Option<&str>) -> String {
+    match app_name.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(app_name) => format!("{app_name} Commands"),
+        None => "App Commands".to_string(),
+    }
+}
+
 /// The action selected by the "Do in Current App" intent router.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DoInCurrentAppAction {

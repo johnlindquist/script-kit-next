@@ -190,6 +190,7 @@ fn render_variant(id: TriggerBuiltin) -> &'static str {
         TriggerBuiltin::CurrentAppCommands => "CurrentAppCommands",
         TriggerBuiltin::NewScript => "NewScript",
         TriggerBuiltin::SdkReference => "SdkReference",
+        TriggerBuiltin::AiVault => "AiVault",
         TriggerBuiltin::BrowseKitStore => "BrowseKitStore",
         TriggerBuiltin::ManageInstalledKits => "ManageInstalledKits",
         TriggerBuiltin::Settings => "Settings",

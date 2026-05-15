@@ -70,6 +70,12 @@ mod tests {
         let _ = stories_by_surface(StorySurface::NotesWindow);
         let _ = stories_by_surface(StorySurface::AcpChat);
         let _ = stories_by_surface(StorySurface::BuiltInBrowser);
+        let _ = stories_by_surface(StorySurface::QuickTerminal);
+    }
+
+    #[test]
+    fn quick_terminal_surface_label_is_human_readable() {
+        assert_eq!(StorySurface::QuickTerminal.label(), "Quick Terminal");
     }
 
     #[test]
@@ -135,6 +141,10 @@ mod tests {
         assert!(
             !stories_by_surface(StorySurface::BuiltInBrowser).is_empty(),
             "Built-In Browser surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::QuickTerminal).is_empty(),
+            "Quick Terminal surface should have at least one story"
         );
     }
 

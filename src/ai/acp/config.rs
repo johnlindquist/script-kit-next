@@ -546,13 +546,24 @@ fn codex_acp_npx_args(existing_args: &[String]) -> Vec<String> {
     args
 }
 
+fn looks_like_codex_acp_adapter_command(command: &str) -> bool {
+    if command == CODEX_ACP_AGENT_ID {
+        return true;
+    }
+    Path::new(command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name == CODEX_ACP_AGENT_ID)
+        .unwrap_or(false)
+}
+
 fn normalize_well_known_agent_config_with_probe(
     mut agent: AcpAgentConfig,
     codex_acp_ready: bool,
     npx_ready: bool,
 ) -> AcpAgentConfig {
     if agent.id == CODEX_ACP_AGENT_ID
-        && agent.command == CODEX_ACP_AGENT_ID
+        && looks_like_codex_acp_adapter_command(&agent.command)
         && !codex_acp_ready
         && npx_ready
     {
@@ -1330,6 +1341,18 @@ mod tests {
             normalized.args,
             vec![CODEX_ACP_NPX_PACKAGE.to_string(), "--verbose".to_string()]
         );
+    }
+
+    #[test]
+    fn missing_absolute_codex_acp_adapter_normalizes_to_npx_adapter() {
+        let mut codex = codex_acp_agent_config();
+        codex.command = "/Users/example/dev/codex-acp/target/release/codex-acp".into();
+        codex.args = Vec::new();
+
+        let normalized = normalize_well_known_agent_config_with_probe(codex, false, true);
+
+        assert_eq!(normalized.command, "npx");
+        assert_eq!(normalized.args, vec![CODEX_ACP_NPX_PACKAGE]);
     }
 
     #[test]

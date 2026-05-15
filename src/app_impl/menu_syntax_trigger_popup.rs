@@ -958,6 +958,32 @@ mod tests {
     }
 
     #[test]
+    fn partial_colon_trigger_matches_browser_source_labels() {
+        let state = MenuSyntaxTriggerPopupState::default();
+        let transition = plan_trigger_popup_transition(&state, ":bro", &ctx());
+        match transition {
+            TriggerPopupTransition::Open { snapshot, .. } => {
+                let titles: Vec<&str> =
+                    snapshot.rows.iter().map(|row| row.title.as_str()).collect();
+                assert!(titles.contains(&"Browser Tabs"), "got {titles:?}");
+                assert!(titles.contains(&"Browser History"), "got {titles:?}");
+            }
+            other => panic!("expected Open for `:bro`, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn partial_colon_trigger_with_no_match_stays_closed() {
+        let state = MenuSyntaxTriggerPopupState::default();
+        let transition = plan_trigger_popup_transition(&state, ":zzzzzzz", &ctx());
+        assert_eq!(
+            transition,
+            TriggerPopupTransition::NoChange,
+            "bogus partial `:zzzzzzz` should not spuriously open a blank popup"
+        );
+    }
+
+    #[test]
     fn partial_plus_trigger_with_no_match_closes_popup() {
         // `+zzzzzzz` matches no known targets — popup should stay closed.
         let state = MenuSyntaxTriggerPopupState::default();

@@ -39,6 +39,16 @@ What's changed:
 
 ## Quick Start
 
+New to Script Kit GPUI? Start with the user guides:
+
+- [Getting Started](docs/guides/getting-started.md)
+- [Feature Tour](docs/guides/feature-tour.md)
+- [Main Menu Input](docs/guides/main-menu-input.md)
+- [SDK Scripting](docs/guides/sdk-scripting.md)
+- [MCP and Agent Context](docs/guides/mcp-and-agent-context.md)
+- [Dictation](docs/guides/dictation.md)
+- [Computer Use](docs/guides/computer-use.md)
+
 ### Prerequisites
 
 - **macOS** (Linux/Windows support planned)

@@ -47,6 +47,12 @@ Agentic surface tooling is verified with integration/source-audit tests plus Bun
 
 Run `cargo test --test source_audits verify_shot_pixel_audit_contract`, `cargo test --test source_audits timestamp_formatting_contract`, `cargo test --test acp_mention_popup_registry_lifecycle_contract --test acp_popup_automation_parity_contract --test kit_store_visible_rows_contract --test settings_visible_rows_contract --test agentic_surface_navigator_inventory_contract`, `bun scripts/agentic/verify-shot-blank-rejection-matrix.ts`, `bun scripts/agentic/verify-shot-live-dark-surface.ts`, `bun scripts/agentic/surface-navigator-inventory-audit.ts --json`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 
+## Cargo Test SIGBUS Guard
+
+Plain Rust tests must not resolve `#[test]` to GPUI's proc-macro test harness through `use gpui::*`.
+
+`gpui` intentionally avoids re-exporting the proc-macro named `test` from its prelude surface. Otherwise lib-test compilation can feed ordinary unit tests into `gpui_macros::test`, recurse through large function bodies in `syn`, and SIGBUS before normal compile errors are reported.
+
 ## Agent Chat Codex Setup
 
 Codex default setup changes require source-contract tests plus a state-first setup receipt.

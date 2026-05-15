@@ -436,7 +436,7 @@ The agent selector must expose starter ACP agents even before their binaries are
 
 `load_acp_agent_configs` merges the starter catalog into the loaded `~/.scriptkit/acp/agents.json` view, so OpenCode, Gemini CLI, and Codex are available to the selector as ready or install-needed entries. Fresh setup seeds Codex as `npx @zed-industries/codex-acp`; [[src/ai/acp/config.rs#normalize_well_known_agent_config]] also rewrites older `codex-acp` entries to that adapter path when the global adapter binary is absent.
 
-Codex install readiness is based on the actual launch shape: [[src/ai/acp/config.rs#install_state_for_agent]] requires both the Codex CLI and an adapter path (`npx` or `codex-acp`) before reporting the Codex starter as ready.
+Codex install readiness is based on the actual launch shape: [[src/ai/acp/config.rs#install_state_for_agent]] requires both the Codex CLI and an adapter path (`npx` or `codex-acp`) before reporting the Codex starter as ready. Persisted absolute paths whose filename is `codex-acp` normalize to `npx @zed-industries/codex-acp` when that old adapter binary is missing, so stale local build paths do not hide a working Codex install.
 
 When the local `codex` CLI exists and no explicit agent preference or active profile override is present, Agent Chat treats Codex as the implicit default. [[src/ai/acp/config.rs#codex_acp_default_probe_state]] records Codex CLI, `npx`, and adapter-binary readiness separately, while [[src/ai/acp/preflight.rs#resolve_acp_launch_with_requirements]] keeps `codex-acp` selected for either ready launch or a deterministic blocker/setup card. This implicit default is not persisted as `ai.selectedAcpAgentId`; only explicit selection or the existing successful explicit path writes the preference.
 
