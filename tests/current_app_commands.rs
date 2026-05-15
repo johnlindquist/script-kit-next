@@ -11,7 +11,7 @@ use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
     build_current_app_command_recipe, build_current_app_intent_trace_receipt,
     build_generate_script_prompt_from_snapshot, build_generated_script_prompt_from_recipe,
-    current_app_commands_session_identity_changed,
+    current_app_commands_launcher_label, current_app_commands_session_identity_changed,
     effective_do_in_current_app_query_for_submission, normalize_do_in_current_app_labeled_request,
     normalize_do_in_current_app_request, normalize_trace_current_app_intent_request,
     normalize_turn_this_into_a_command_request, parse_current_app_command_recipe_json,
@@ -53,6 +53,50 @@ fn current_app_commands_builtin_is_no_longer_registered() {
             .iter()
             .all(|e| e.id != "builtin/current-app-commands"),
         "builtin/current-app-commands should no longer be in the registry"
+    );
+}
+
+#[test]
+fn current_app_commands_launcher_label_names_tracked_app_without_changing_stable_id() {
+    assert_eq!(
+        current_app_commands_launcher_label(Some("Safari")),
+        "Safari Commands"
+    );
+    assert_eq!(
+        current_app_commands_launcher_label(Some("  Finder  ")),
+        "Finder Commands"
+    );
+    assert_eq!(
+        current_app_commands_launcher_label(Some("")),
+        "App Commands"
+    );
+    assert_eq!(current_app_commands_launcher_label(None), "App Commands");
+
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+    let entry = entries
+        .iter()
+        .find(|e| e.id == "builtin/do-in-current-app")
+        .expect("builtin/do-in-current-app must stay the stable launcher identity");
+    assert_eq!(entry.name, "Do in Current App");
+}
+
+#[test]
+fn root_launcher_renames_current_app_commands_row_from_frontmost_app_snapshot() {
+    let source = std::fs::read_to_string("src/app_impl/filtering_cache.rs")
+        .expect("must read filtering cache source");
+    let compacted: String = source.chars().filter(|ch| !ch.is_whitespace()).collect();
+
+    assert!(
+        compacted.contains("current_app_commands_launcher_label(Some(app_name)"),
+        "root launcher filtering should derive the visible current-app commands label from the tracked app"
+    );
+    assert!(
+        compacted.contains("entry.id==\"builtin/do-in-current-app\""),
+        "dynamic current-app relabeling must preserve the stable builtin/do-in-current-app id"
+    );
+    assert!(
+        compacted.contains("entry.name=label;"),
+        "dynamic current-app relabeling should affect only the visible row name"
     );
 }
 
@@ -498,6 +542,36 @@ fn menu_bar_entry_keywords_include_app_name_and_shortcut_aliases() {
         "keywords should contain cmdt; got: {:?}",
         entry.keywords
     );
+}
+
+#[test]
+fn keyboard_shortcut_decodes_ax_modifiers_with_implicit_command() {
+    let command_only = KeyboardShortcut::from_ax_values("T", 0);
+    assert_eq!(command_only.to_display_string(), "⌘T");
+
+    let command_shift_option_control = KeyboardShortcut::from_ax_values("T", 1 | 2 | 4);
+    assert_eq!(command_shift_option_control.to_display_string(), "⌃⌥⇧⌘T");
+
+    let no_command_option = KeyboardShortcut::from_ax_values("T", 2 | 8);
+    assert_eq!(no_command_option.to_display_string(), "⌥T");
+
+    let legacy_carbon_command_shift = KeyboardShortcut::from_ax_values("T", 256 | 512);
+    assert_eq!(legacy_carbon_command_shift.to_display_string(), "⇧⌘T");
+}
+
+#[test]
+fn keyboard_shortcut_falls_back_to_virtual_key_and_searchable_special_key_tokens() {
+    let shortcut = KeyboardShortcut::from_ax_components(None, Some(123), Some(0))
+        .expect("left-arrow virtual key should decode");
+    assert_eq!(shortcut.to_display_string(), "⌘←");
+
+    let shortcut = KeyboardShortcut::from_ax_values(" ", 0);
+    assert_eq!(shortcut.to_display_string(), "⌘Space");
+
+    let tokens = builtins::shortcut_search_tokens(&shortcut.to_display_string());
+    assert!(tokens.contains(&"cmdspace".to_string()));
+    assert!(tokens.contains(&"cmd space".to_string()));
+    assert!(tokens.contains(&"cmd+space".to_string()));
 }
 
 #[test]

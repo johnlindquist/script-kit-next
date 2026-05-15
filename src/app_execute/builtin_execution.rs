@@ -1750,6 +1750,35 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    fn open_ai_vault_source_filter(&mut self, cx: &mut Context<Self>) {
+        let filter_text = "vault: ".to_string();
+        self.cancel_history_filter_render_pending_if_obsolete(&filter_text);
+        self.filter_text = filter_text.clone();
+        self.computed_filter_text = filter_text.clone();
+        self.pending_programmatic_filter_echo = Some(filter_text.clone());
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Search AI Vault sessions...".to_string());
+        self.set_menu_syntax_mode_from_filter(&filter_text);
+        self.show_script_list_with_main_filter_focus();
+        self.hovered_index = None;
+        self.selected_index = 0;
+        self.opened_from_main_menu = true;
+        self.main_menu_fallback_state.clear();
+        self.invalidate_grouped_cache();
+        self.filter_coalescer.reset();
+        self.maybe_start_root_file_search(&filter_text, cx);
+        self.reconcile_script_list_after_filter_change("open_ai_vault_source_filter", cx);
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let item_count = grouped_items.len();
+        self.set_main_window_mode_state_only(
+            MainWindowMode::Mini,
+            cx,
+            "open_ai_vault_source_filter",
+        );
+        resize_to_view_sync(ViewType::MiniMainWindow, item_count);
+        cx.notify();
+    }
+
     /// Open a filterable builtin view with an initial filter value.
     ///
     /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
@@ -4869,6 +4898,17 @@ impl ScriptListApp {
                 );
 
                 Self::builtin_success(dctx, "open_acp_history")
+            }
+            builtins::BuiltInFeature::AiVault => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening AI Vault"
+                );
+
+                self.open_ai_vault_source_filter(cx);
+
+                Self::builtin_success(dctx, "open_ai_vault")
             }
             builtins::BuiltInFeature::DictationHistory => {
                 tracing::info!(

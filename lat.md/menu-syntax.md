@@ -6,7 +6,7 @@ Menu syntax is the ScriptList-owned parser layer for deterministic power-user co
 
 Power syntax treats first-character symbols as verbs while inline tokens refine the sentence.
 
-The canonical grammar is: `/` selects an agent skill in chat, `@` selects current context, `;` captures local structured data, `:` refines launcher search, `#` labels inside `;` and `:`, and `!` runs a registered Script Kit command. `+` remains a legacy capture alias while `~`, `>`, and `?` keep their existing launcher meanings.
+The canonical grammar is: `/` selects an agent skill in chat, `@` selects current context, `;` captures local structured data, `:` refines launcher search, `#` labels inside `;` and `:`, `!` opens command discovery, and `>head` invokes argv command syntax. `+` remains a legacy capture alias while bare `~`, bare `>`, and `?` keep their existing launcher meanings.
 
 Syntax only owns input when the first token clearly opts in. Plain text, URLs, `localhost:3000`, `C#`, `hello!`, unknown `;target` / legacy `+target` heads, and top-level `#tag` stay normal launcher search.
 
@@ -30,7 +30,7 @@ Prefix ownership is target-gated: `;target` is the canonical capture prefix, `+t
 
 Supported filters: `type:/kind:`, `shortcut:`, `source:`, `plugin:`, `name:`, `desc:`, `alias:`, `tag:`, `has:`, `meta.<path>:`, and leading `-` for negation. `shortcut:any` means any keyboard shortcut, `shortcut:none` means no shortcut, and literal shortcuts still match exactly. `:#tag` is sugar for `tag:<tag>`. `#tag` by itself remains plain launcher search; inside `;` capture it labels saved data, and after `:` it filters tagged launcher rows. `source:` is broad (includes `kit_name`); `plugin:` is precise (plugin pair only).
 
-Refine mode is search, not capture. A `:` filter popup can stay open for hints, but it does not blank the main launcher results; complete inputs like `:type:script deploy` and `has:shortcut` show the filtered catalog. Partial filter text narrows rows, and applying a filter replaces only the active token so existing filters stay intact.
+Refine mode is search, not capture. A `:` filter popup can stay open for hints, but it does not blank the main launcher results; complete inputs like `:type:script deploy` and `has:shortcut` show the filtered catalog. Partial filter text narrows rows by token or source label (for example `:bro` shows browser sources), no-match partials close the popup instead of rendering an empty child window, and applying a filter replaces only the active token so existing filters stay intact.
 
 Complete leading-colon filters parse as advanced queries, not bare picker input. Bare and partial states such as `:`, `:typ`, `:type:`, `:type:s`, `:has:sh`, and `:#` stay `BareQueryPrefix`, but committed predicates such as `:type:skill review`, `:kind:script deploy`, `:shortcut:any review`, and `:#work notes` become `AdvancedQuery`.
 
@@ -44,9 +44,9 @@ Input span rendering is replace-not-merge. [[src/menu_syntax/mode.rs#input_spans
 
 ## Command Invocation
 
-Command invocation makes `!` an explicit run surface for registered Script Kit commands, never a shell escape.
+Command invocation uses `>` as the parser-owned argv composer while `!` stays the command discovery/picker affordance; neither path is a shell escape.
 
-[[src/menu_syntax/command.rs#command_slug]] normalizes script and scriptlet names into command heads shared by the picker and executor. [[src/menu_syntax/execute.rs#command_env]] exposes `command.v1` metadata (`head`, `fields`, and `tags`) while argv after ` -- ` is passed to the resolved script/scriptlet. Unknown heads such as `!important` show no command match and do not spawn the typed text. Duplicate heads are disabled in the picker and treated as ambiguous at execution time rather than silently running the first match.
+[[src/menu_syntax/trigger_picker.rs#build_trigger_picker_snapshot]] treats `!` / `!partial` as command picker input, while [[src/menu_syntax/parse.rs#parse]] owns `>head` argv invocations. [[src/menu_syntax/command.rs#command_slug]] normalizes script and scriptlet names into command heads shared by the picker and executor. [[src/menu_syntax/execute.rs#command_env]] exposes `command.v1` metadata (`head`, `fields`, and `tags`) while argv after ` -- ` is passed to the resolved script/scriptlet. Unknown heads such as `>important` show no command match and do not spawn the typed text. Duplicate heads are disabled in the picker and treated as ambiguous at execution time rather than silently running the first match.
 
 ## Capture Metadata
 

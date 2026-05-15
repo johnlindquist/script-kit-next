@@ -85,6 +85,7 @@ pub mod mini_ai_chat_variations;
 pub mod notes_window_states;
 pub mod notes_window_variations;
 pub(crate) mod playground_overlay_metrics;
+pub mod quick_terminal_states;
 mod registry;
 mod selection;
 pub mod shortcut_recorder_states;
@@ -176,6 +177,10 @@ pub use notes_window_states::{
 pub use notes_window_variations::{
     adopted_notes_window_style, resolve_notes_window_style, NotesWindowSurface,
     NotesWindowVariationId, NotesWindowVariationSpec, SPECS as NOTES_WINDOW_VARIATION_SPECS,
+};
+pub use quick_terminal_states::{
+    quick_terminal_state_story_variants, render_quick_terminal_state_compare_thumbnail,
+    render_quick_terminal_state_preview, QuickTerminalStateId,
 };
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,

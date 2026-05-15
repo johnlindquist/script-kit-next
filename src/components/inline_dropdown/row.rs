@@ -527,6 +527,7 @@ pub(crate) fn render_compact_synopsis_strip(
     muted_foreground: Hsla,
 ) -> AnyElement {
     div()
+        .h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))
         .px(px(8.0))
         .py(px(5.0))
         .flex()

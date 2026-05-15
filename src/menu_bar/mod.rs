@@ -108,6 +108,7 @@ const AX_TITLE: &str = "AXTitle";
 const AX_ROLE: &str = "AXRole";
 const AX_ENABLED: &str = "AXEnabled";
 const AX_MENU_ITEM_CMD_CHAR: &str = "AXMenuItemCmdChar";
+const AX_MENU_ITEM_CMD_VIRTUAL_KEY: &str = "AXMenuItemCmdVirtualKey";
 const AX_MENU_ITEM_CMD_MODIFIERS: &str = "AXMenuItemCmdModifiers";
 /// AX role values
 const AX_ROLE_MENU_BAR_ITEM: &str = "AXMenuBarItem";
@@ -118,6 +119,10 @@ const CMD_KEY_MASK: u32 = 256;
 const SHIFT_KEY_MASK: u32 = 512;
 const OPTION_KEY_MASK: u32 = 2048;
 const CONTROL_KEY_MASK: u32 = 4096;
+const AX_SHIFT_MODIFIER_MASK: u32 = 1;
+const AX_OPTION_MODIFIER_MASK: u32 = 2;
+const AX_CONTROL_MODIFIER_MASK: u32 = 4;
+const AX_NO_COMMAND_MODIFIER_MASK: u32 = 8;
 /// Maximum depth for menu traversal (to prevent infinite recursion)
 const MAX_MENU_DEPTH: usize = 3;
 /// Separator title marker
@@ -161,9 +166,140 @@ impl KeyboardShortcut {
     /// * `cmd_modifiers` - The AXMenuItemCmdModifiers value (bitmask)
     pub fn from_ax_values(cmd_char: &str, cmd_modifiers: u32) -> Self {
         Self {
-            key: cmd_char.to_string(),
-            modifiers: ModifierFlags::from_bits_truncate(cmd_modifiers),
+            key: Self::normalize_ax_key(cmd_char).unwrap_or_else(|| cmd_char.to_string()),
+            modifiers: Self::decode_ax_modifiers(cmd_modifiers),
         }
+    }
+
+    pub fn from_ax_components(
+        cmd_char: Option<&str>,
+        cmd_virtual_key: Option<u32>,
+        cmd_modifiers: Option<u32>,
+    ) -> Option<Self> {
+        let key = cmd_char
+            .and_then(Self::normalize_ax_key)
+            .or_else(|| cmd_virtual_key.and_then(Self::key_for_virtual_key))?;
+        let modifiers = cmd_modifiers
+            .map(Self::decode_ax_modifiers)
+            .unwrap_or_else(ModifierFlags::empty);
+
+        Some(Self { key, modifiers })
+    }
+
+    fn decode_ax_modifiers(cmd_modifiers: u32) -> ModifierFlags {
+        let carbon_bits = CMD_KEY_MASK | SHIFT_KEY_MASK | OPTION_KEY_MASK | CONTROL_KEY_MASK;
+        if cmd_modifiers & carbon_bits != 0 {
+            return ModifierFlags::from_bits_truncate(cmd_modifiers);
+        }
+
+        let mut modifiers = ModifierFlags::empty();
+        if cmd_modifiers & AX_NO_COMMAND_MODIFIER_MASK == 0 {
+            modifiers |= ModifierFlags::COMMAND;
+        }
+        if cmd_modifiers & AX_SHIFT_MODIFIER_MASK != 0 {
+            modifiers |= ModifierFlags::SHIFT;
+        }
+        if cmd_modifiers & AX_OPTION_MODIFIER_MASK != 0 {
+            modifiers |= ModifierFlags::OPTION;
+        }
+        if cmd_modifiers & AX_CONTROL_MODIFIER_MASK != 0 {
+            modifiers |= ModifierFlags::CONTROL;
+        }
+        modifiers
+    }
+
+    fn normalize_ax_key(cmd_char: &str) -> Option<String> {
+        match cmd_char {
+            "" => None,
+            "\r" | "\n" => Some("↩".to_string()),
+            "\t" => Some("⇥".to_string()),
+            " " => Some("Space".to_string()),
+            "\u{1b}" => Some("⎋".to_string()),
+            "\u{8}" => Some("⌫".to_string()),
+            "\u{7f}" => Some("⌦".to_string()),
+            _ => Some(cmd_char.to_string()),
+        }
+    }
+
+    fn key_for_virtual_key(virtual_key: u32) -> Option<String> {
+        match virtual_key {
+            0 => Some("A"),
+            1 => Some("S"),
+            2 => Some("D"),
+            3 => Some("F"),
+            4 => Some("H"),
+            5 => Some("G"),
+            6 => Some("Z"),
+            7 => Some("X"),
+            8 => Some("C"),
+            9 => Some("V"),
+            11 => Some("B"),
+            12 => Some("Q"),
+            13 => Some("W"),
+            14 => Some("E"),
+            15 => Some("R"),
+            16 => Some("Y"),
+            17 => Some("T"),
+            18 => Some("1"),
+            19 => Some("2"),
+            20 => Some("3"),
+            21 => Some("4"),
+            22 => Some("6"),
+            23 => Some("5"),
+            24 => Some("="),
+            25 => Some("9"),
+            26 => Some("7"),
+            27 => Some("-"),
+            28 => Some("8"),
+            29 => Some("0"),
+            30 => Some("]"),
+            31 => Some("O"),
+            32 => Some("U"),
+            33 => Some("["),
+            34 => Some("I"),
+            35 => Some("P"),
+            36 => Some("↩"),
+            37 => Some("L"),
+            38 => Some("J"),
+            39 => Some("'"),
+            40 => Some("K"),
+            41 => Some(";"),
+            42 => Some("\\"),
+            43 => Some(","),
+            44 => Some("/"),
+            45 => Some("N"),
+            46 => Some("M"),
+            47 => Some("."),
+            48 => Some("⇥"),
+            49 => Some("Space"),
+            50 => Some("`"),
+            51 => Some("⌫"),
+            53 => Some("⎋"),
+            96 => Some("F5"),
+            97 => Some("F6"),
+            98 => Some("F7"),
+            99 => Some("F3"),
+            100 => Some("F8"),
+            101 => Some("F9"),
+            103 => Some("F11"),
+            109 => Some("F10"),
+            111 => Some("F12"),
+            114 => Some("Help"),
+            115 => Some("Home"),
+            116 => Some("PageUp"),
+            117 => Some("⌦"),
+            118 => Some("F4"),
+            119 => Some("End"),
+            120 => Some("F2"),
+            121 => Some("PageDown"),
+            122 => Some("F1"),
+            123 => Some("←"),
+            124 => Some("→"),
+            125 => Some("↓"),
+            126 => Some("↑"),
+            _ => None,
+        }
+        .map(str::to_string)
     }
 
     /// Convert to a human-readable display string (e.g., "⌘⇧S")
@@ -446,18 +582,15 @@ fn parse_menu_item(element: AXUIElementRef, path: Vec<usize>, depth: usize) -> O
     // Get keyboard shortcut
     let shortcut = {
         let cmd_char = get_ax_string_attribute(element, AX_MENU_ITEM_CMD_CHAR);
+        let cmd_virtual_key = get_ax_number_attribute(element, AX_MENU_ITEM_CMD_VIRTUAL_KEY);
         let cmd_modifiers = get_ax_number_attribute(element, AX_MENU_ITEM_CMD_MODIFIERS);
 
-        match (cmd_char, cmd_modifiers) {
-            (Some(key), Some(mods)) if !key.is_empty() => {
-                Some(KeyboardShortcut::from_ax_values(&key, mods as u32))
-            }
-            (Some(key), None) if !key.is_empty() => {
-                // Has key but no modifiers - unusual but possible
-                Some(KeyboardShortcut::new(key, ModifierFlags::empty()))
-            }
-            _ => None,
-        }
+        // Has key but no modifiers - unusual but possible
+        KeyboardShortcut::from_ax_components(
+            cmd_char.as_deref(),
+            cmd_virtual_key.map(|key| key as u32),
+            cmd_modifiers.map(|mods| mods as u32),
+        )
     };
 
     // Get children (submenu items) if not at max depth

@@ -1109,7 +1109,7 @@ pub fn resolve_targeted_os_window_id(
 }
 
 #[cfg(test)]
-mod tests {
+mod screenshots_window_open_tests {
     use super::*;
     use image::{ImageBuffer, Rgba};
 

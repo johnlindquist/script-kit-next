@@ -333,6 +333,7 @@ pub enum BuiltInFeature {
     Settings,
     /// ACP conversation history browser
     AcpHistory,
+    AiVault,
     /// SDK reference browser — in-product view over `kit://sdk-reference`
     SdkReference,
     /// Script template catalog — launcher view that picks a starter template
@@ -570,6 +571,7 @@ impl BuiltInEntry {
             BuiltInFeature::DictationHistory => "Open Dictation History",
             BuiltInFeature::Settings => "Open Script Kit Settings",
             BuiltInFeature::AcpHistory => "Open Conversation History",
+            BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
         }
@@ -699,6 +701,7 @@ impl BuiltInEntry {
             BuiltInFeature::DictationHistory => "History",
             BuiltInFeature::Settings => "Kit Settings",
             BuiltInFeature::AcpHistory => "History",
+            BuiltInFeature::AiVault => "Vault",
             BuiltInFeature::SdkReference => "SDK Docs",
             BuiltInFeature::NewScriptFromTemplate => "Templates",
         }
@@ -804,6 +807,26 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "history",
         ));
         debug!("Added ACP History built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/vault",
+            "AI Vault",
+            "Search cmux AI conversation vault sessions from the launcher",
+            vec![
+                "vault",
+                "ai",
+                "aivault",
+                "ai-vault",
+                "cmux",
+                "conversation",
+                "conversations",
+                "session",
+                "sessions",
+            ],
+            BuiltInFeature::AiVault,
+            "vault",
+        ));
+        debug!("Added AI Vault built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/sdk-reference",
@@ -2105,19 +2128,34 @@ pub fn shortcut_search_tokens(display: &str) -> Vec<String> {
     let display_lower = display.to_lowercase();
     let mut chord_parts: Vec<String> = Vec::new();
 
-    for ch in display_lower.chars() {
+    let mut chars = display_lower.chars().peekable();
+    while let Some(ch) = chars.next() {
         match ch {
             '⌘' => chord_parts.push("cmd".into()),
             '⌥' => chord_parts.push("option".into()),
             '⌃' => chord_parts.push("ctrl".into()),
             '⇧' => chord_parts.push("shift".into()),
             '↩' | '⏎' => chord_parts.push("return".into()),
+            '⇥' => chord_parts.push("tab".into()),
             '⌫' => chord_parts.push("delete".into()),
+            '⌦' => chord_parts.push("forwarddelete".into()),
+            '⎋' => chord_parts.push("escape".into()),
             '←' => chord_parts.push("left".into()),
             '→' => chord_parts.push("right".into()),
             '↑' => chord_parts.push("up".into()),
             '↓' => chord_parts.push("down".into()),
             '+' | ' ' => {}
+            other if other.is_ascii_alphanumeric() => {
+                let mut token = other.to_string();
+                while let Some(next) = chars.peek().copied() {
+                    if !next.is_ascii_alphanumeric() {
+                        break;
+                    }
+                    token.push(next);
+                    chars.next();
+                }
+                chord_parts.push(token);
+            }
             other => chord_parts.push(other.to_string()),
         }
     }

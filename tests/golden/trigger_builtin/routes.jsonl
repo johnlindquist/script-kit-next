@@ -10,9 +10,11 @@
 {"input":"builtin/current-app-commands","expected":"OpenCurrentAppCommands"}
 {"input":"builtin/new-script","expected":"ExecuteBuiltin::builtin/new-script"}
 {"input":"builtin/sdk-reference","expected":"ExecuteBuiltin::builtin/sdk-reference"}
+{"input":"builtin/vault","expected":"ExecuteBuiltin::builtin/vault"}
 {"input":"builtin/browse-kit-store","expected":"ExecuteBuiltin::builtin/browse-kit-store"}
 {"input":"builtin/manage-installed-kits","expected":"ExecuteBuiltin::builtin/manage-installed-kits"}
 {"input":"builtin/settings","expected":"ExecuteBuiltin::builtin/settings"}
 {"input":"builtin/choose-theme","expected":"ExecuteBuiltin::builtin/choose-theme"}
+{"input":"builtin/mini-main-window","expected":"ExecuteBuiltin::builtin/mini-main-window"}
 {"input":"builtin/quick-terminal","expected":"ExecuteBuiltin::builtin/quick-terminal"}
 {"input":"builtin/webcam","expected":"ExecuteBuiltin::builtin/webcam"}
