@@ -252,17 +252,25 @@ impl Message {
 
     /// Create a notify message
     pub fn notify(title: Option<String>, body: Option<String>) -> Self {
-        Message::Notify { title, body }
+        Message::Notify {
+            request_id: None,
+            title,
+            body,
+        }
     }
 
     /// Create a beep message
     pub fn beep() -> Self {
-        Message::Beep {}
+        Message::Beep { request_id: None }
     }
 
     /// Create a say message
     pub fn say(text: String, voice: Option<String>) -> Self {
-        Message::Say { text, voice }
+        Message::Say {
+            request_id: None,
+            text,
+            voice,
+        }
     }
 
     /// Create a set status message

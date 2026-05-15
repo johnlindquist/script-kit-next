@@ -10,7 +10,7 @@ fn test_jsonl_reader_skips_empty_lines() {
 
     // First message should be beep (skipping initial empty line)
     let msg1 = reader.next_message().unwrap();
-    assert!(matches!(msg1, Some(Message::Beep {})));
+    assert!(matches!(msg1, Some(Message::Beep { .. })));
 
     // Second message should be show (skipping intermediate empty lines)
     let msg2 = reader.next_message().unwrap();
@@ -35,7 +35,7 @@ fn test_jsonl_reader_graceful_skips_unknown() {
 
     // Should skip unknownType and return beep
     let msg1 = reader.next_message_graceful().unwrap();
-    assert!(matches!(msg1, Some(Message::Beep {})));
+    assert!(matches!(msg1, Some(Message::Beep { .. })));
 
     // Should skip anotherUnknown and return show
     let msg2 = reader.next_message_graceful().unwrap();
@@ -61,7 +61,7 @@ fn test_jsonl_reader_reports_invalid_payload() {
         .next_message_graceful_with_handler(|issue| issues.push(issue))
         .unwrap();
 
-    assert!(matches!(msg, Some(Message::Beep {})));
+    assert!(matches!(msg, Some(Message::Beep { .. })));
     assert_eq!(issues.len(), 1);
     assert_eq!(issues[0].kind, ParseIssueKind::InvalidPayload);
     assert_eq!(issues[0].message_type.as_deref(), Some("arg"));
@@ -88,7 +88,7 @@ fn test_jsonl_reader_reports_invalid_type_field() {
         .next_message_graceful_with_handler(|issue| issues.push(issue))
         .unwrap();
 
-    assert!(matches!(msg, Some(Message::Beep {})));
+    assert!(matches!(msg, Some(Message::Beep { .. })));
     assert_eq!(issues.len(), 2);
     assert_eq!(issues[0].kind, ParseIssueKind::InvalidTypeField);
     assert!(issues[0]
@@ -141,7 +141,7 @@ fn test_next_message_graceful_skips_oversized_line_and_recovers() {
         .expect("Reader should recover after oversized line");
 
     assert!(
-        matches!(msg, Some(Message::Beep {})),
+        matches!(msg, Some(Message::Beep { .. })),
         "Expected oversized line to be skipped"
     );
     assert_eq!(

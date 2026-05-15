@@ -430,6 +430,8 @@ macro_rules! protocol_message_variants_prompts_media {
     /// System notification
     #[serde(rename = "notify")]
     Notify {
+        #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         title: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -438,14 +440,27 @@ macro_rules! protocol_message_variants_prompts_media {
 
     /// System beep sound
     #[serde(rename = "beep")]
-    Beep {},
+    Beep {
+        #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
+    },
 
     /// Text-to-speech
     #[serde(rename = "say")]
     Say {
+        #[serde(rename = "requestId", skip_serializing_if = "Option::is_none")]
+        request_id: Option<String>,
         text: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         voice: Option<String>,
+    },
+
+    /// Runtime receipt for system feedback dispatch.
+    #[serde(rename = "systemFeedbackResult")]
+    SystemFeedbackResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        result: serde_json::Value,
     },
 
     /// Status bar update

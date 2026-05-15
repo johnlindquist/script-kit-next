@@ -1,9 +1,9 @@
-// Test that unimplemented SDK functions display warnings
+// Test explicit unsupported SDK behavior and dispatch-receipt feedback calls.
 import '../../scripts/kit-sdk';
 
 console.log('[TEST] Starting SDK warnings test');
 
-// Test fire-and-forget warnings (should warn but not error)
+// Feedback dispatch calls should not warn or throw.
 console.log('[TEST] Testing beep()...');
 await beep();
 
@@ -12,6 +12,14 @@ await say('test');
 
 console.log('[TEST] Testing notify()...');
 await notify('test notification');
+
+console.log('[TEST] Testing setStatus() - should return unsupported result...');
+const statusResult = await setStatus({ status: 'busy', message: 'test status' });
+console.log('[TEST] setStatus() result:', JSON.stringify(statusResult));
+
+console.log('[TEST] Testing menu() - should return unsupported result...');
+const menuResult = await menu('star');
+console.log('[TEST] menu() result:', JSON.stringify(menuResult));
 
 console.log('[TEST] Testing keyboard.type() - should throw...');
 try {

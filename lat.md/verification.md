@@ -4,6 +4,8 @@ This repo prefers the smallest runtime-backed verification that proves a change.
 
 Keyboard and mouse SDK helper tests should assert explicit unsupported rejection. UI behavior tests must use state-first receipts instead of `keyboard.*` or `mouse.*` helper calls, because those helpers do not provide native input receipts.
 
+System feedback SDK tests should distinguish protocol serialization from behavior. Platform feedback dispatch must resolve from app-originated `systemFeedbackResult` receipts, while unimplemented UI promises should return `ERR_UNSUPPORTED_SDK_FEATURE`.
+
 ## Main menu and footer
 
 `make smoke-main-menu` is the repo's fast launcher and footer smoke target. Use it for main window, footer, built-in menu, and plugin-skill routing changes.

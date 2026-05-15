@@ -635,6 +635,23 @@ impl SdkFunctionRef {
             unsupported_note: Some(note.into()),
         }
     }
+
+    fn experimental(
+        name: impl Into<String>,
+        signature: impl Into<String>,
+        description: impl Into<String>,
+        category: impl Into<String>,
+        note: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            signature: signature.into(),
+            description: description.into(),
+            category: category.into(),
+            support: SdkSupport::Experimental,
+            unsupported_note: Some(note.into()),
+        }
+    }
 }
 
 /// SDK inventory flagged unsupported by `scripts/kit-sdk.ts`. Sourced
@@ -649,8 +666,6 @@ impl SdkFunctionRef {
 /// binary so future agents can `rg` for it.
 #[allow(dead_code)]
 const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
-    "beep",
-    "say",
     "setStatus",
     "keyboard.type",
     "keyboard.tap",
@@ -672,7 +687,7 @@ const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
 /// constant is exposed for tests that want to pin the generic wording.
 #[allow(dead_code)]
 const SDK_UNSUPPORTED_IN_GPUI_NOTE: &str =
-    "Defined in scripts/kit-sdk.ts, but the GPUI app does not handle this message yet; it rejects explicitly, logs a warning, no-ops, or throws depending on the API.";
+    "Defined in scripts/kit-sdk.ts, but GPUI does not handle this behavior yet; the SDK fails explicitly instead of sending a misleading fire-and-forget message.";
 
 /// Needles for scanning starter-template bodies for references to
 /// unsupported SDK APIs. A template that contains any of these
@@ -955,9 +970,23 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
         ),
         SdkFunctionRef::supported(
             "notify",
-            "notify(message: string | { title?: string; body?: string }): void",
-            "Show an OS-level system notification (macOS Notification Center). Distinct from hud(message), which is an in-launcher overlay.",
+            "await notify(message: string | { title?: string; body?: string }): Promise<SystemFeedbackResult>",
+            "Request an OS-level system notification (macOS Notification Center). Returns a dispatch receipt; delivery remains OS dependent. Distinct from hud(message), which is an in-launcher overlay.",
             "feedback",
+        ),
+        SdkFunctionRef::experimental(
+            "beep",
+            "await beep(): Promise<SystemFeedbackResult>",
+            "Request a macOS system beep through afplay.",
+            "feedback",
+            "beep() returns a dispatch receipt when the feedback process is spawned; audible delivery is not verified and non-macOS platforms return unsupported.",
+        ),
+        SdkFunctionRef::experimental(
+            "say",
+            "await say(text: string, voice?: string): Promise<SystemFeedbackResult>",
+            "Request macOS text-to-speech through the say command.",
+            "feedback",
+            "say() returns a dispatch receipt when the feedback process is spawned; speech delivery is not verified and non-macOS platforms return unsupported.",
         ),
         SdkFunctionRef::supported(
             "setSelectedText",
@@ -1026,11 +1055,18 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             "computer-use",
         ),
         SdkFunctionRef::unsupported(
+            "setStatus",
+            "await setStatus(options: { status: 'busy' | 'idle' | 'error'; message: string }): Promise<SystemFeedbackResult>",
+            "Set application status text.",
+            "feedback",
+            "setStatus(...) currently has no visible GPUI status surface or receipt. The SDK returns ERR_UNSUPPORTED_SDK_FEATURE before sending; use hud(message) for visible feedback, or render progress in a prompt.",
+        ),
+        SdkFunctionRef::unsupported(
             "menu",
-            "await menu(icon: string, scripts?: string[]): Promise<void>",
+            "await menu(icon: string, scripts?: string[]): Promise<SystemFeedbackResult>",
             "Show a menu-bar icon with quick-access scripts.",
             "system",
-            "menu(...) is defined in scripts/kit-sdk.ts but the GPUI app does not yet handle the `menu` protocol message; use the built-in tray icon (System Actions) today.",
+            "menu(...) currently has no GPUI tray/menu mutation handler. The SDK returns ERR_UNSUPPORTED_SDK_FEATURE before sending; use the built-in tray icon (System Actions) or prompt-scoped setActions(...) today.",
         ),
     ]
 }

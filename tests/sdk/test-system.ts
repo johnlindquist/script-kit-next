@@ -7,14 +7,14 @@
  * Tests the TIER 3 system APIs that interact with the operating system.
  *
  * Test categories:
- * 1. Alerts (fire-and-forget): beep, say, notify, setStatus, menu
+ * 1. Feedback: beep, say, notify, setStatus, menu
  * 2. Clipboard: read/write text and images, copy/paste aliases
  * 3. Text operations: setSelectedText, getSelectedText
  * 4. Unsupported input simulation boundary: keyboard, mouse
  *
- * Note: Most system APIs are fire-and-forget (they send messages but don't wait
- * for user input). Keyboard and mouse helpers are the exception: they reject
- * explicitly because GPUI does not implement native input receipts yet.
+ * Note: system APIs either resolve from app-originated dispatch receipts,
+ * return typed unsupported results, or reject explicitly when GPUI has no
+ * native input receipt contract.
  */
 
 import "../../scripts/kit-sdk";
@@ -75,7 +75,7 @@ debug(
 );
 
 // -----------------------------------------------------------------------------
-// Test 1: beep() - System beep (fire-and-forget)
+// Test 1: beep() - System beep dispatch receipt
 // -----------------------------------------------------------------------------
 const test1 = "beep";
 logTest(test1, "running");
@@ -86,7 +86,7 @@ try {
 
 	await beep();
 
-	debug("Test 1 completed - beep message sent");
+	debug("Test 1 completed - beep dispatch result received");
 	logTest(test1, "pass", { duration_ms: Date.now() - start1 });
 } catch (err) {
 	logTest(test1, "fail", {
@@ -96,7 +96,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 2: say() - Text-to-speech (fire-and-forget)
+// Test 2: say() - Text-to-speech dispatch receipt
 // -----------------------------------------------------------------------------
 const test2 = "say";
 logTest(test2, "running");
@@ -111,7 +111,7 @@ try {
 	// With voice
 	await say("Testing voice parameter", "Samantha");
 
-	debug("Test 2 completed - say messages sent");
+	debug("Test 2 completed - say dispatch results received");
 	logTest(test2, "pass", { duration_ms: Date.now() - start2 });
 } catch (err) {
 	logTest(test2, "fail", {
@@ -121,7 +121,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 3: notify() - System notifications (fire-and-forget)
+// Test 3: notify() - System notification dispatch receipt
 // -----------------------------------------------------------------------------
 const test3 = "notify";
 logTest(test3, "running");
@@ -139,7 +139,7 @@ try {
 	// Title only
 	await notify({ title: "Just a title" });
 
-	debug("Test 3 completed - notify messages sent");
+	debug("Test 3 completed - notify dispatch results received");
 	logTest(test3, "pass", { duration_ms: Date.now() - start3 });
 } catch (err) {
 	logTest(test3, "fail", {
@@ -149,7 +149,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 4: setStatus() - Application status (fire-and-forget)
+// Test 4: setStatus() - Explicit unsupported status boundary
 // -----------------------------------------------------------------------------
 const test4 = "setStatus";
 logTest(test4, "running");
@@ -158,11 +158,16 @@ const start4 = Date.now();
 try {
 	debug("Test 4: setStatus()");
 
-	await setStatus({ status: "busy", message: "Processing..." });
-	await setStatus({ status: "idle", message: "Ready" });
-	await setStatus({ status: "error", message: "Something went wrong" });
+	const statusResult = await setStatus({ status: "busy", message: "Processing..." });
+	if (
+		!statusResult ||
+		statusResult.ok !== false ||
+		statusResult.code !== "ERR_UNSUPPORTED_SDK_FEATURE"
+	) {
+		throw new Error(`setStatus returned wrong result: ${JSON.stringify(statusResult)}`);
+	}
 
-	debug("Test 4 completed - setStatus messages sent");
+	debug("Test 4 completed - setStatus returned unsupported result");
 	logTest(test4, "pass", { duration_ms: Date.now() - start4 });
 } catch (err) {
 	logTest(test4, "fail", {
@@ -172,7 +177,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 5: menu() - System menu (fire-and-forget)
+// Test 5: menu() - Explicit unsupported menu boundary
 // -----------------------------------------------------------------------------
 const test5 = "menu";
 logTest(test5, "running");
@@ -181,13 +186,12 @@ const start5 = Date.now();
 try {
 	debug("Test 5: menu()");
 
-	// Just icon
-	await menu("star");
+	const menuResult = await menu("star");
+	if (!menuResult || menuResult.ok !== false || menuResult.code !== "ERR_UNSUPPORTED_SDK_FEATURE") {
+		throw new Error(`menu returned wrong result: ${JSON.stringify(menuResult)}`);
+	}
 
-	// Icon with scripts
-	await menu("gear", ["/path/to/script1.ts", "/path/to/script2.ts"]);
-
-	debug("Test 5 completed - menu messages sent");
+	debug("Test 5 completed - menu returned unsupported result");
 	logTest(test5, "pass", { duration_ms: Date.now() - start5 });
 } catch (err) {
 	logTest(test5, "fail", {
