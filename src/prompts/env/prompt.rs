@@ -31,6 +31,10 @@ pub struct EnvPrompt {
     pub exists_in_keyring: bool,
     /// When the secret was last modified (if exists)
     pub modified_at: Option<DateTime<Utc>>,
+    /// Stored secret value used only for the no-context auto-submit path.
+    pub(super) stored_secret_value: Option<String>,
+    /// Secret storage load/read/decrypt/parse failure, if storage health is degraded.
+    pub secret_store_error: Option<SecretStoreError>,
     /// Inline validation/persistence error shown to the user
     pub(super) validation_error: Option<String>,
     /// Whether secret text is currently visible
@@ -52,12 +56,18 @@ impl EnvPrompt {
         theme: Arc<theme::Theme>,
         exists_in_keyring: bool,
         modified_at: Option<DateTime<Utc>>,
+        stored_secret_value: Option<String>,
+        secret_store_error: Option<SecretStoreError>,
     ) -> Self {
         let correlation_id = env_prompt_correlation_id(&id, &key);
         logging::log(
             "PROMPTS",
             &format!(
-                "correlation_id={correlation_id} EnvPrompt::new key={key} secret={secret} exists={exists_in_keyring} title={title:?} modified={modified_at:?}",
+                "correlation_id={correlation_id} EnvPrompt::new key={key} secret={secret} exists={exists_in_keyring} store_error={} title={title:?} modified={modified_at:?}",
+                secret_store_error
+                    .as_ref()
+                    .map(|error| error.kind_str())
+                    .unwrap_or("none")
             ),
         );
 
@@ -75,6 +85,8 @@ impl EnvPrompt {
             checked_keyring: false,
             exists_in_keyring,
             modified_at,
+            stored_secret_value,
+            secret_store_error,
             validation_error: None,
             reveal_secret: false,
             reveal_generation: 0,
@@ -113,7 +125,21 @@ impl EnvPrompt {
         }
         self.checked_keyring = true;
 
-        if let Some(value) = secrets::get_secret(&self.key) {
+        if let Some(error) = self.secret_store_error.clone() {
+            self.validation_error = Some(error.user_message().to_string());
+            logging::log(
+                "PROMPTS",
+                &format!(
+                    "correlation_id={} EnvPrompt skipped auto-submit key={} store_error={}",
+                    self.correlation_id(),
+                    self.key,
+                    error.kind_str()
+                ),
+            );
+            return false;
+        }
+
+        if let Some(value) = self.stored_secret_value.take() {
             let correlation_id = self.correlation_id();
             logging::log(
                 "PROMPTS",
@@ -149,6 +175,21 @@ impl EnvPrompt {
 
         // Persist in encrypted storage only when this prompt is secret-mode.
         if self.secret {
+            if let Some(error) = self.secret_store_error.clone() {
+                self.validation_error = Some(error.user_message().to_string());
+                cx.notify();
+                logging::log(
+                    "ERROR",
+                    &format!(
+                        "correlation_id={} EnvPrompt submit blocked by secret store error key={} kind={}",
+                        self.correlation_id(),
+                        self.key,
+                        error.kind_str()
+                    ),
+                );
+                return;
+            }
+
             if let Err(e) = secrets::set_secret(&self.key, text) {
                 self.validation_error =
                     Some("Failed to store secret. Check logs and try again.".to_string());

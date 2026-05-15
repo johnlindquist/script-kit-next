@@ -138,12 +138,12 @@ fn show_api_key_prompt_checks_existing_secret_in_keyring() {
     let content = execution_helpers_content();
 
     assert!(
-        content.contains("secrets::get_secret_info(&key)"),
+        content.contains("secrets::get_secret_info_result(&key)"),
         "Expected show_api_key_prompt to check for existing secret in keyring"
     );
     assert!(
-        content.contains("exists_in_keyring"),
-        "Expected show_api_key_prompt to pass exists_in_keyring to EnvPrompt"
+        content.contains("exists_in_keyring") && content.contains("secret_store_error"),
+        "Expected show_api_key_prompt to pass existing-secret and storage-error state to EnvPrompt"
     );
 }
 

@@ -19,7 +19,7 @@ use crate::components::TextInputState;
 use crate::designs::DesignVariant;
 use crate::logging;
 use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH};
-use crate::secrets;
+use crate::secrets::{self, SecretStoreError};
 use crate::theme;
 use crate::ui_foundation::{is_key_enter, is_key_escape};
 

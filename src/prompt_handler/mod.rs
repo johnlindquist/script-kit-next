@@ -6617,15 +6617,29 @@ impl ScriptListApp {
 
                 let submit_callback = self.make_submit_callback("env");
 
-                // Check if key already exists in secrets (for UX messaging)
-                // Empty values don't count as "existing" - must have actual content
-                // Use get_secret_info to get both existence and modification timestamp
-                let secret_info = secrets::get_secret_info(&key);
-                let exists_in_keyring = secret_info
-                    .as_ref()
-                    .map(|info| !info.value.is_empty())
-                    .unwrap_or(false);
-                let modified_at = secret_info.map(|info| info.modified_at);
+                // Check if key already exists in secrets (for UX messaging). Missing
+                // keys stay distinct from storage/decrypt/parse failures.
+                let (exists_in_keyring, modified_at, stored_secret_value, secret_store_error) =
+                    match secrets::get_secret_info_result(&key) {
+                        Ok(secret_info) => {
+                            let exists = secret_info
+                                .as_ref()
+                                .map(|info| !info.value.is_empty())
+                                .unwrap_or(false);
+                            let modified_at = secret_info.as_ref().map(|info| info.modified_at);
+                            let value = secret_info.map(|info| info.value);
+                            (exists, modified_at, value, None)
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                category = "UI",
+                                key = %key,
+                                kind = error.kind_str(),
+                                "EnvPrompt secret store unavailable"
+                            );
+                            (false, None, None, Some(error))
+                        }
+                    };
 
                 // Create EnvPrompt entity
                 let focus_handle = self.focus_handle.clone();
@@ -6640,6 +6654,8 @@ impl ScriptListApp {
                     std::sync::Arc::clone(&self.theme),
                     exists_in_keyring,
                     modified_at,
+                    stored_secret_value,
+                    secret_store_error,
                 );
 
                 // Check keyring first - if value exists and no contextual prompt/title

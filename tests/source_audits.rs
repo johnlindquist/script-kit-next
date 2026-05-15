@@ -17,6 +17,9 @@ mod clipboard_actions;
 #[path = "source_audits/execution_helpers.rs"]
 mod execution_helpers;
 
+#[path = "source_audits/env_prompt_secret_store.rs"]
+mod env_prompt_secret_store;
+
 #[path = "source_audits/shortcut_alias_file_actions.rs"]
 mod shortcut_alias_file_actions;
 

@@ -71,14 +71,28 @@ impl ScriptListApp {
                 let _ = completion_sender.try_send((provider_for_callback.clone(), success));
             });
 
-        // Check if key already exists in secrets (for UX messaging)
-        // Use get_secret_info to get both existence and modification timestamp
-        let secret_info = secrets::get_secret_info(&key);
-        let exists_in_keyring = secret_info
-            .as_ref()
-            .map(|info| !info.value.is_empty())
-            .unwrap_or(false);
-        let modified_at = secret_info.map(|info| info.modified_at);
+        // Check if key already exists in secrets (for UX messaging). Missing
+        // keys stay distinct from storage/decrypt/parse failures.
+        let (exists_in_keyring, modified_at, stored_secret_value, secret_store_error) =
+            match secrets::get_secret_info_result(&key) {
+                Ok(secret_info) => {
+                    let exists = secret_info
+                        .as_ref()
+                        .map(|info| !info.value.is_empty())
+                        .unwrap_or(false);
+                    let modified_at = secret_info.as_ref().map(|info| info.modified_at);
+                    let value = secret_info.map(|info| info.value);
+                    (exists, modified_at, value, None)
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        key = %key,
+                        kind = error.kind_str(),
+                        "API key prompt secret store unavailable"
+                    );
+                    (false, None, None, Some(error))
+                }
+            };
 
         if exists_in_keyring {
             tracing::info!(message = %&format!(
@@ -101,6 +115,8 @@ impl ScriptListApp {
             std::sync::Arc::clone(&self.theme),
             exists_in_keyring,
             modified_at,
+            stored_secret_value,
+            secret_store_error,
         );
 
         let entity = cx.new(|_| env_prompt);

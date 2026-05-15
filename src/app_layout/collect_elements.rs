@@ -1241,6 +1241,9 @@ impl ScriptListApp {
         if env_prompt.exists_in_keyring {
             total_count += 1;
         }
+        if env_prompt.secret_store_error.is_some() {
+            total_count += 1;
+        }
 
         let mut elements = Vec::with_capacity(limit.min(total_count));
         Self::push_limited_element(
@@ -1294,6 +1297,32 @@ impl ScriptListApp {
                     selectable: None,
                     status_kind: None,
             action_disabled: None,
+                },
+            );
+        }
+
+        if let Some(error) = &env_prompt.secret_store_error {
+            Self::push_limited_element(
+                &mut elements,
+                limit,
+                protocol::ElementInfo {
+                    semantic_id: protocol::generate_semantic_id_named(
+                        "status",
+                        "env-secret-store-error",
+                    ),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some("Secret Store Error".to_string()),
+                    value: Some(error.kind_str().to_string()),
+                    selected: None,
+                    focused: None,
+                    index: Some(total_count - 1),
+                    role: Some("status".to_string()),
+                    kind: Some("secret_store_error".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(false),
+                    status_kind: Some(error.kind_str().to_string()),
+                    action_disabled: None,
                 },
             );
         }

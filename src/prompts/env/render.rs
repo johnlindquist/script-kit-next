@@ -98,7 +98,7 @@ impl Render for EnvPrompt {
             ))
             // Storage hint
             .child(crate::components::prompt_form_help(
-                env_storage_hint_text(self.secret),
+                env_storage_hint_text(self.secret, self.secret_store_error.as_ref()),
                 text.help,
             ))
             // Running status
@@ -143,6 +143,12 @@ impl Render for EnvPrompt {
                         })
                         .child("Delete stored value"),
                 );
+        }
+
+        if let Some(error) = &self.secret_store_error {
+            body = body.child(div().text_xs().text_color(rgb(error_color)).child(
+                SharedString::from(format!("Storage status: {}", error.kind_str())),
+            ));
         }
 
         let container = div()
