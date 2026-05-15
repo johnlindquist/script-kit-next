@@ -10,10 +10,11 @@
  * 1. Alerts (fire-and-forget): beep, say, notify, setStatus, menu
  * 2. Clipboard: read/write text and images, copy/paste aliases
  * 3. Text operations: setSelectedText, getSelectedText
- * 4. Input simulation: keyboard, mouse
+ * 4. Unsupported input simulation boundary: keyboard, mouse
  *
  * Note: Most system APIs are fire-and-forget (they send messages but don't wait
- * for user input). The test verifies they send the correct JSONL messages.
+ * for user input). Keyboard and mouse helpers are the exception: they reject
+ * explicitly because GPUI does not implement native input receipts yet.
  */
 
 import "../../scripts/kit-sdk";
@@ -47,6 +48,18 @@ function logTest(
 
 function debug(msg: string) {
 	console.error(`[TEST] ${msg}`);
+}
+
+async function expectUnsupported(name: string, call: () => Promise<unknown>) {
+	try {
+		await call();
+		throw new Error(`${name} unexpectedly resolved`);
+	} catch (err) {
+		const anyErr = err as { code?: string; message?: string };
+		if (anyErr.code !== "ERR_UNSUPPORTED_SDK_FEATURE") {
+			throw new Error(`${name} threw wrong error: ${anyErr.message ?? String(err)}`);
+		}
+	}
 }
 
 // =============================================================================
@@ -323,22 +336,21 @@ try {
 		throw new Error("keyboard.tap is not a function");
 	}
 
-	// DISABLED: These send real keystrokes to the OS, interfering with
-	// whatever the user is doing (e.g. Cmd+C triggers copy).
-	// Run with INCLUDE_SYSTEM_INPUT=1 to enable.
+	// These helpers are intentionally unsupported in GPUI until native input has
+	// focus, permission, target, and receipt contracts. They should throw before
+	// sending a fire-and-forget message.
 	if (process.env.INCLUDE_SYSTEM_INPUT === "1") {
-		await keyboard.type("Hello World");
-		await keyboard.tap("command", "c");
-		await keyboard.tap("command", "shift", "p");
-		debug("Test 9 completed - keyboard messages sent");
+		await expectUnsupported("keyboard.type", () => keyboard.type("Hello World"));
+		await expectUnsupported("keyboard.tap", () => keyboard.tap("command", "c"));
+		debug("Test 9 completed - keyboard helpers rejected unsupported calls");
 		logTest(test9, "pass", {
-			result: { methods: ["type", "tap"] },
+			result: { unsupported: ["type", "tap"] },
 			duration_ms: Date.now() - start9,
 		});
 	} else {
-		debug("Test 9 skipped - sends real keystrokes (set INCLUDE_SYSTEM_INPUT=1 to enable)");
+		debug("Test 9 skipped - unsupported helper throw checks require INCLUDE_SYSTEM_INPUT=1");
 		logTest(test9, "skip", {
-			result: { reason: "sends real keystrokes" },
+			result: { reason: "keyboard helpers are unsupported in GPUI" },
 			duration_ms: Date.now() - start9,
 		});
 	}
@@ -380,27 +392,31 @@ try {
 		throw new Error("mouse.setPosition is not a function");
 	}
 
-	// DISABLED: These send real mouse events to the OS, interfering with
-	// whatever the user is doing.
-	// Run with INCLUDE_SYSTEM_INPUT=1 to enable.
+	// These helpers are intentionally unsupported in GPUI until native input has
+	// coordinate, focus, permission, target, and receipt contracts. They should
+	// throw before sending a fire-and-forget message.
 	if (process.env.INCLUDE_SYSTEM_INPUT === "1") {
-		await mouse.move([
-			{ x: 100, y: 100 },
-			{ x: 200, y: 200 },
-			{ x: 300, y: 150 },
-		]);
-		await mouse.setPosition({ x: 500, y: 500 });
-		await mouse.leftClick();
-		await mouse.rightClick();
-		debug("Test 10 completed - mouse messages sent");
+		await expectUnsupported("mouse.move", () =>
+			mouse.move([
+				{ x: 100, y: 100 },
+				{ x: 200, y: 200 },
+				{ x: 300, y: 150 },
+			])
+		);
+		await expectUnsupported("mouse.setPosition", () =>
+			mouse.setPosition({ x: 500, y: 500 })
+		);
+		await expectUnsupported("mouse.leftClick", () => mouse.leftClick());
+		await expectUnsupported("mouse.rightClick", () => mouse.rightClick());
+		debug("Test 10 completed - mouse helpers rejected unsupported calls");
 		logTest(test10, "pass", {
-			result: { methods: ["move", "leftClick", "rightClick", "setPosition"] },
+			result: { unsupported: ["move", "leftClick", "rightClick", "setPosition"] },
 			duration_ms: Date.now() - start10,
 		});
 	} else {
-		debug("Test 10 skipped - sends real mouse events (set INCLUDE_SYSTEM_INPUT=1 to enable)");
+		debug("Test 10 skipped - unsupported helper throw checks require INCLUDE_SYSTEM_INPUT=1");
 		logTest(test10, "skip", {
-			result: { reason: "sends real mouse events" },
+			result: { reason: "mouse helpers are unsupported in GPUI" },
 			duration_ms: Date.now() - start10,
 		});
 	}

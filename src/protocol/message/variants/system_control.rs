@@ -26,7 +26,11 @@ macro_rules! protocol_message_variants_system_control {
         content: Option<String>,
     },
 
-    /// Keyboard simulation
+    /// Reserved keyboard automation message.
+    ///
+    /// GPUI does not currently implement receipt-backed native keyboard input
+    /// for this variant. SDK keyboard helpers reject before sending protocol
+    /// messages, so this shape is not proof that native input occurred.
     #[serde(rename = "keyboard")]
     Keyboard {
         action: KeyboardAction,
@@ -34,10 +38,11 @@ macro_rules! protocol_message_variants_system_control {
         keys: Option<String>,
     },
 
-    /// Mouse control
+    /// Reserved mouse automation message.
     ///
-    /// The `action` field determines the semantics (move, click, setPosition).
-    /// The `data` field contains coordinates and optional button.
+    /// GPUI does not currently implement receipt-backed native mouse input for
+    /// this variant. SDK mouse helpers reject before sending protocol messages,
+    /// so this shape is not proof that cursor movement or clicks occurred.
     #[serde(rename = "mouse")]
     Mouse {
         action: MouseAction,

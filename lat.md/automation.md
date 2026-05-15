@@ -72,6 +72,7 @@ These rules describe the behavior constraints that automation changes should pre
 - For screenshot-library work, use `surface-navigate --capture --strict-window` before ad hoc screenshots.
 - Treat screenshot ambiguity as a hard failure, not a best-effort capture.
 - Treat blank or black screenshots as infrastructure failures, not visual proof.
+- Do not use SDK `keyboard.*` or `mouse.*` helpers as automation proof. They reject with `UnsupportedSdkFeatureError`; use `batch.setInput` / `batch.forceSubmit` for direct prompt mutation or submit behavior, and use `simulateKey` only when testing key routing with a follow-up `getState`, `getElements`, or `waitFor` receipt.
 
 ## Filterable Surface Matrix
 

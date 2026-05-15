@@ -12,7 +12,7 @@
 // Types
 // =============================================================================
 
-type CoverageStatus = 'tested' | 'partial' | 'untested';
+type CoverageStatus = 'tested' | 'partial' | 'untested' | 'unsupported';
 
 interface ProtocolMessage {
   /** Message type name (matches serde rename in Rust) */
@@ -337,16 +337,16 @@ const PROTOCOL_MESSAGES: ProtocolMessage[] = [
   {
     name: 'keyboard',
     category: 'System Control',
-    status: 'untested',
-    testFiles: [],
-    notes: 'Keyboard simulation (type/tap) - needs test',
+    status: 'unsupported',
+    testFiles: ['tests/sdk_keyboard_mouse_unsupported_contract.rs'],
+    notes: 'Reserved protocol shape only; SDK keyboard helpers reject before send. Use simulateKey plus state receipts for key-routing proof.',
   },
   {
     name: 'mouse',
     category: 'System Control',
-    status: 'untested',
-    testFiles: [],
-    notes: 'Mouse control (move/click) - needs test',
+    status: 'unsupported',
+    testFiles: ['tests/sdk_keyboard_mouse_unsupported_contract.rs'],
+    notes: 'Reserved protocol shape only; SDK mouse helpers reject before send. Use semantic state-first automation instead of coordinate input.',
   },
   {
     name: 'show',

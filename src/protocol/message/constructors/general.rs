@@ -300,7 +300,10 @@ impl Message {
         }
     }
 
-    /// Create a keyboard type message
+    /// Create a reserved keyboard type message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native keyboard input.
     pub fn keyboard_type(keys: String) -> Self {
         Message::Keyboard {
             action: KeyboardAction::Type,
@@ -308,7 +311,10 @@ impl Message {
         }
     }
 
-    /// Create a keyboard tap message
+    /// Create a reserved keyboard tap message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native keyboard input.
     pub fn keyboard_tap(keys: String) -> Self {
         Message::Keyboard {
             action: KeyboardAction::Tap,
@@ -316,12 +322,18 @@ impl Message {
         }
     }
 
-    /// Create a mouse message
+    /// Create a reserved mouse message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native mouse input.
     pub fn mouse(action: MouseAction, data: Option<MouseData>) -> Self {
         Message::Mouse { action, data }
     }
 
-    /// Create a mouse move message
+    /// Create a reserved mouse move message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native mouse input.
     pub fn mouse_move(x: f64, y: f64) -> Self {
         Message::Mouse {
             action: MouseAction::Move,
@@ -329,7 +341,10 @@ impl Message {
         }
     }
 
-    /// Create a mouse click message
+    /// Create a reserved mouse click message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native mouse input.
     pub fn mouse_click(x: f64, y: f64, button: Option<String>) -> Self {
         Message::Mouse {
             action: MouseAction::Click,
@@ -337,7 +352,10 @@ impl Message {
         }
     }
 
-    /// Create a mouse set position message
+    /// Create a reserved mouse set-position message.
+    ///
+    /// This constructs the protocol shape only; GPUI does not currently provide
+    /// receipt-backed native mouse input.
     pub fn mouse_set_position(x: f64, y: f64) -> Self {
         Message::Mouse {
             action: MouseAction::SetPosition,
