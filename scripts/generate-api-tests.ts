@@ -24,7 +24,7 @@ interface APIInfo {
   demoScript: string | null;
   testFile: string;
   autoSubmit: boolean;
-  status: "tested" | "untested" | "hardware" | "fire-and-forget";
+  status: "tested" | "untested" | "hardware" | "fire-and-forget" | "unsupported-explicit-error";
   parameters?: string[];
   usageExamples?: string[];
 }
@@ -83,8 +83,8 @@ const API_TIERS: Record<string, { tier: APIInfo["tier"]; autoSubmit: boolean; st
   copy: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
   paste: { tier: "system", autoSubmit: true, status: "untested" },
   clipboard: { tier: "system", autoSubmit: true, status: "untested" },
-  keyboard: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
-  mouse: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
+  keyboard: { tier: "system", autoSubmit: false, status: "unsupported-explicit-error" },
+  mouse: { tier: "system", autoSubmit: false, status: "unsupported-explicit-error" },
   getSelectedText: { tier: "system", autoSubmit: true, status: "untested" },
   setSelectedText: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
 

@@ -1375,17 +1375,17 @@ export SK_PATH=~/Projects/my-app/.kit
 
 | Method | Description |
 |--------|-------------|
-| `keyboard.type(text)` | Type text |
-| `keyboard.tap(...keys)` | Press key combination |
+| `keyboard.type(text)` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
+| `keyboard.tap(...keys)` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
 
 ### Mouse Object
 
 | Method | Description |
 |--------|-------------|
-| `mouse.move(positions)` | Move mouse along path |
-| `mouse.leftClick()` | Left click |
-| `mouse.rightClick()` | Right click |
-| `mouse.setPosition(pos)` | Set mouse position |
+| `mouse.move(positions)` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
+| `mouse.leftClick()` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
+| `mouse.rightClick()` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
+| `mouse.setPosition(pos)` | Unsupported in GPUI; rejects with `ERR_UNSUPPORTED_SDK_FEATURE` |
 
 ### Window Control
 

@@ -637,9 +637,9 @@ impl SdkFunctionRef {
     }
 }
 
-/// SDK inventory flagged "not yet implemented in the GPUI app" by
-/// `scripts/kit-sdk.ts`. Sourced from the `console.warn(...)` lines
-/// and NOTE comments in that file. Only entries that also appear in
+/// SDK inventory flagged unsupported by `scripts/kit-sdk.ts`. Sourced
+/// from explicit unsupported throws, `console.warn(...)` lines, and NOTE
+/// comments in that file. Only entries that also appear in
 /// [`build_sdk_function_refs`] are marked in the generated SDK
 /// reference — adding missing entries is deliberately out of scope
 /// for this pass so the reference does not silently grow. The list
@@ -672,7 +672,7 @@ const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
 /// constant is exposed for tests that want to pin the generic wording.
 #[allow(dead_code)]
 const SDK_UNSUPPORTED_IN_GPUI_NOTE: &str =
-    "Defined in scripts/kit-sdk.ts, but the GPUI app does not handle this message yet; it logs a warning and may no-op or throw at runtime.";
+    "Defined in scripts/kit-sdk.ts, but the GPUI app does not handle this message yet; it rejects explicitly, logs a warning, no-ops, or throws depending on the API.";
 
 /// Needles for scanning starter-template bodies for references to
 /// unsupported SDK APIs. A template that contains any of these

@@ -44,11 +44,14 @@ export const SDK_VERSION = '0.2.0';
  *    - Pure utilities: home, skPath, uuid, compile, memoryMap
  *
  * ⚠️  NOT YET IMPLEMENTED (~18 methods):
- *    These functions send messages but the GPUI app doesn't handle them yet.
- *    They log warnings and may auto-submit in test mode.
+ *    Most of these functions send messages but the GPUI app doesn't handle
+ *    them yet. Keyboard and mouse helpers are stricter: they reject with
+ *    UnsupportedSdkFeatureError before sending because native input needs
+ *    permission, focus, target, coordinate, and receipt contracts.
  *
  *    - Notifications: beep(), say(), notify(), setStatus()
- *    - Automation: keyboard.type(), keyboard.tap(), mouse.move(), mouse.click()
+ *    - Automation: keyboard.type(), keyboard.tap(), mouse.move(),
+ *      mouse.leftClick(), mouse.rightClick(), mouse.setPosition()
  *    - UI updates: setPanel(), setPreview(), setPrompt()
  *    - Compact prompts: mini(), micro()
  *    - Advanced: hotkey(), widget(), menu()
@@ -2149,15 +2152,15 @@ export interface ClipboardAPI {
 }
 
 export interface KeyboardAPI {
-  type(text: string): Promise<void>;
-  tap(...keys: string[]): Promise<void>;
+  type(text: string): Promise<never>;
+  tap(...keys: string[]): Promise<never>;
 }
 
 export interface MouseAPI {
-  move(positions: Position[]): Promise<void>;
-  leftClick(): Promise<void>;
-  rightClick(): Promise<void>;
-  setPosition(position: Position): Promise<void>;
+  move(positions: Position[]): Promise<never>;
+  leftClick(): Promise<never>;
+  rightClick(): Promise<never>;
+  setPosition(position: Position): Promise<never>;
 }
 
 interface ArgMessage {
@@ -2665,19 +2668,36 @@ type AiEventHandler = (
   event: AiStreamChunkEvent | AiStreamCompleteEvent | AiMessageEvent | AiErrorEvent
 ) => void;
 
-interface KeyboardMessage {
-  type: 'keyboard';
-  action: 'type' | 'tap';
-  text?: string;
-  keys?: string[];
+export type UnsupportedSdkFeatureCode = 'ERR_UNSUPPORTED_SDK_FEATURE';
+
+export interface UnsupportedSdkFeatureDetails {
+  code: UnsupportedSdkFeatureCode;
+  supported: false;
+  feature: string;
+  alternatives: string[];
 }
 
-interface MouseMessage {
-  type: 'mouse';
-  action: 'move' | 'click' | 'setPosition';
-  positions?: Position[];
-  button?: 'left' | 'right';
-  position?: Position;
+export class UnsupportedSdkFeatureError extends Error {
+  readonly code: UnsupportedSdkFeatureCode = 'ERR_UNSUPPORTED_SDK_FEATURE';
+  readonly supported = false as const;
+  readonly feature: string;
+  readonly alternatives: string[];
+
+  constructor(feature: string, alternatives: string[]) {
+    super(`${feature} is unsupported in Script Kit GPUI. Use ${alternatives.join(' or ')}.`);
+    this.name = 'UnsupportedSdkFeatureError';
+    this.feature = feature;
+    this.alternatives = alternatives;
+  }
+
+  toJSON(): UnsupportedSdkFeatureDetails {
+    return {
+      code: this.code,
+      supported: this.supported,
+      feature: this.feature,
+      alternatives: this.alternatives,
+    };
+  }
 }
 
 interface SubmitMessage {
@@ -5559,71 +5579,61 @@ globalThis.paste = async function paste(): Promise<string> {
   return globalThis.clipboard.readText();
 };
 
+function rejectUnsupportedSdkFeature(feature: string, alternatives: string[]): Promise<never> {
+  const error = new UnsupportedSdkFeatureError(feature, alternatives);
+  console.warn(`[SDK] ${error.message}`);
+  return Promise.reject(error);
+}
+
 // Keyboard API object
-// NOTE: These functions send messages to the app but handlers are not yet implemented
+// NOTE: Native keyboard injection is intentionally unsupported until the app has
+// explicit focus, permission, target, and receipt contracts.
 globalThis.keyboard = {
-  async type(text: string): Promise<void> {
-    console.warn('[SDK] keyboard.type() is not yet implemented in the GPUI app');
-    const message: KeyboardMessage = {
-      type: 'keyboard',
-      action: 'type',
-      text,
-    };
-    send(message);
+  type(_text: string): Promise<never> {
+    return rejectUnsupportedSdkFeature('keyboard.type', [
+      'batch.setInput plus getState/getElements/waitFor for prompt text',
+      'simulateKey plus state receipts when testing key routing',
+    ]);
   },
 
-  async tap(...keys: string[]): Promise<void> {
-    console.warn('[SDK] keyboard.tap() is not yet implemented in the GPUI app');
-    const message: KeyboardMessage = {
-      type: 'keyboard',
-      action: 'tap',
-      keys,
-    };
-    send(message);
+  tap(..._keys: string[]): Promise<never> {
+    return rejectUnsupportedSdkFeature('keyboard.tap', [
+      'batch.forceSubmit for direct submit behavior',
+      'simulateKey plus getState/getElements/waitFor when testing key routing',
+    ]);
   },
 };
 
 // Mouse API object
-// NOTE: These functions send messages to the app but handlers are not yet implemented
+// NOTE: Native mouse injection is intentionally unsupported until coordinate,
+// focus, permission, target, and receipt contracts exist.
 globalThis.mouse = {
-  async move(positions: Position[]): Promise<void> {
-    console.warn('[SDK] mouse.move() is not yet implemented in the GPUI app');
-    const message: MouseMessage = {
-      type: 'mouse',
-      action: 'move',
-      positions,
-    };
-    send(message);
+  move(_positions: Position[]): Promise<never> {
+    return rejectUnsupportedSdkFeature('mouse.move', [
+      'state-first automation through batch/getState/getElements/waitFor',
+      'semantic action APIs instead of coordinate movement',
+    ]);
   },
 
-  async leftClick(): Promise<void> {
-    console.warn('[SDK] mouse.leftClick() is not yet implemented in the GPUI app');
-    const message: MouseMessage = {
-      type: 'mouse',
-      action: 'click',
-      button: 'left',
-    };
-    send(message);
+  leftClick(): Promise<never> {
+    return rejectUnsupportedSdkFeature('mouse.leftClick', [
+      'semantic action APIs instead of coordinate clicks',
+      'state-first automation through batch/getState/getElements/waitFor',
+    ]);
   },
 
-  async rightClick(): Promise<void> {
-    console.warn('[SDK] mouse.rightClick() is not yet implemented in the GPUI app');
-    const message: MouseMessage = {
-      type: 'mouse',
-      action: 'click',
-      button: 'right',
-    };
-    send(message);
+  rightClick(): Promise<never> {
+    return rejectUnsupportedSdkFeature('mouse.rightClick', [
+      'semantic action APIs instead of coordinate clicks',
+      'state-first automation through batch/getState/getElements/waitFor',
+    ]);
   },
 
-  async setPosition(position: Position): Promise<void> {
-    console.warn('[SDK] mouse.setPosition() is not yet implemented in the GPUI app');
-    const message: MouseMessage = {
-      type: 'mouse',
-      action: 'setPosition',
-      position,
-    };
-    send(message);
+  setPosition(_position: Position): Promise<never> {
+    return rejectUnsupportedSdkFeature('mouse.setPosition', [
+      'state-first automation through batch/getState/getElements/waitFor',
+      'semantic action APIs instead of coordinate positioning',
+    ]);
   },
 };
 

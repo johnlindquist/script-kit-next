@@ -2,6 +2,8 @@
 
 This repo prefers the smallest runtime-backed verification that proves a change. UI work should verify the real surface; logic work should stay on the narrowest relevant checks.
 
+Keyboard and mouse SDK helper tests should assert explicit unsupported rejection. UI behavior tests must use state-first receipts instead of `keyboard.*` or `mouse.*` helper calls, because those helpers do not provide native input receipts.
+
 ## Main menu and footer
 
 `make smoke-main-menu` is the repo's fast launcher and footer smoke target. Use it for main window, footer, built-in menu, and plugin-skill routing changes.

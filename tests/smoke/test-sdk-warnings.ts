@@ -13,11 +13,21 @@ await say('test');
 console.log('[TEST] Testing notify()...');
 await notify('test notification');
 
-console.log('[TEST] Testing keyboard.type()...');
-await keyboard.type('test');
+console.log('[TEST] Testing keyboard.type() - should throw...');
+try {
+  await keyboard.type('test');
+  console.error('[TEST] ERROR: keyboard.type() should have thrown!');
+} catch (err) {
+  console.log('[TEST] keyboard.type() correctly threw:', (err as Error).message);
+}
 
-console.log('[TEST] Testing mouse.leftClick()...');
-await mouse.leftClick();
+console.log('[TEST] Testing mouse.leftClick() - should throw...');
+try {
+  await mouse.leftClick();
+  console.error('[TEST] ERROR: mouse.leftClick() should have thrown!');
+} catch (err) {
+  console.log('[TEST] mouse.leftClick() correctly threw:', (err as Error).message);
+}
 
 console.log('[TEST] Testing setPanel()...');
 setPanel('<div>test</div>');

@@ -255,7 +255,10 @@ pub enum ClipboardFormat {
     Image,
 }
 
-/// Keyboard action type
+/// Reserved keyboard action type.
+///
+/// GPUI does not currently provide receipt-backed native keyboard input for
+/// these actions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum KeyboardAction {
@@ -263,7 +266,10 @@ pub enum KeyboardAction {
     Tap,
 }
 
-/// Mouse action type
+/// Reserved mouse action type.
+///
+/// GPUI does not currently provide receipt-backed native mouse input for these
+/// actions.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum MouseAction {
