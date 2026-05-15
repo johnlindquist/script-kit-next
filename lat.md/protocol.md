@@ -54,6 +54,8 @@ The stdin verbs `show`, `hide`, and `simulateKey` are fire-and-forget: each `Ext
 
 Rust `Message::Keyboard` and `Message::Mouse` are reserved protocol shapes, not native input support. [[scripts/kit-sdk.ts#UnsupportedSdkFeatureError]] rejects SDK keyboard and mouse helpers before sending these messages while there is no permission, focus, target, coordinate, or receipt contract.
 
+Feedback messages distinguish serialization from behavior. Request-id `notify`, `beep`, and `say` calls resolve through `systemFeedbackResult` envelopes from [[src/execute_script/mod.rs]], proving dispatch only; `setStatus` and `menu` are not exposed as successful SDK calls unless they gain visible behavior and receipts.
+
 ## Query and introspection
 
 The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.

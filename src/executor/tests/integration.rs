@@ -72,7 +72,7 @@ fn test_send_receive_message_round_trip_when_channel_open() {
         .expect("script should echo one message");
 
     assert!(
-        matches!(echoed, Message::Beep {}),
+        matches!(echoed, Message::Beep { .. }),
         "expected echoed beep message"
     );
 

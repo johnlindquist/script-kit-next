@@ -307,6 +307,57 @@ fn execute_script_dispatch_say_command(text: String, voice: Option<String>) -> s
     );
     Ok(())
 }
+
+fn execute_script_feedback_receipt(
+    api: &str,
+    ok: bool,
+    status: &str,
+    backend: Option<&str>,
+    side_effect: Option<&str>,
+    code: Option<&str>,
+    message: Option<&str>,
+) -> serde_json::Value {
+    let mut result = serde_json::json!({
+        "ok": ok,
+        "api": api,
+        "status": status,
+        "platform": std::env::consts::OS,
+    });
+
+    if let Some(backend) = backend {
+        result["backend"] = serde_json::json!(backend);
+    }
+    if let Some(side_effect) = side_effect {
+        result["sideEffect"] = serde_json::json!(side_effect);
+        result["delivery"] = serde_json::json!("not_verified");
+    }
+    if let Some(code) = code {
+        result["code"] = serde_json::json!(code);
+    }
+    if let Some(message) = message {
+        result["message"] = serde_json::json!(message);
+    }
+
+    result
+}
+
+fn execute_script_send_system_feedback_result(
+    response_tx: &std::sync::mpsc::SyncSender<Message>,
+    request_id: Option<String>,
+    result: serde_json::Value,
+) {
+    let Some(request_id) = request_id else {
+        return;
+    };
+
+    if let Err(error) = response_tx.send(Message::SystemFeedbackResult { request_id, result }) {
+        tracing::info!(
+            category = "EXEC",
+            error = %error,
+            "Failed to send system feedback response"
+        );
+    }
+}
 // --- merged from part_001.rs ---
 impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
@@ -2002,7 +2053,11 @@ impl ScriptListApp {
                                         Message::Hud { text, duration_ms } => {
                                             Some(PromptMessage::ShowHud { text, duration_ms })
                                         }
-                                        Message::Notify { title, body } => {
+                                        Message::Notify {
+                                            request_id,
+                                            title,
+                                            body,
+                                        } => {
                                             tracing::info!(
                                                 category = "EXEC",
                                                 effect = "notify",
@@ -2016,41 +2071,122 @@ impl ScriptListApp {
                                                     .unwrap_or(false),
                                                 "Received notify protocol message"
                                             );
-                                            if let Err(error) =
-                                                execute_script_dispatch_notify_command(title, body)
+                                            let result = if execute_script_normalize_notify_fields(
+                                                title.clone(),
+                                                body.clone(),
+                                            )
+                                            .is_none()
                                             {
-                                                tracing::warn!(
-                                                    category = "EXEC",
-                                                    effect = "notify",
-                                                    attempted = "osascript -e 'display notification ... with title ...'",
-                                                    error = %error,
-                                                    state = "spawn_failed",
-                                                    "Failed to dispatch notify protocol feedback command"
-                                                );
-                                            }
+                                                execute_script_feedback_receipt(
+                                                    "notify",
+                                                    false,
+                                                    "invalid",
+                                                    None,
+                                                    None,
+                                                    Some("ERR_SYSTEM_FEEDBACK_EMPTY"),
+                                                    Some("notify() requires a non-empty title or body."),
+                                                )
+                                            } else {
+                                                match execute_script_dispatch_notify_command(
+                                                    title, body,
+                                                ) {
+                                                    Ok(()) => execute_script_feedback_receipt(
+                                                        "notify",
+                                                        true,
+                                                        "dispatched",
+                                                        Some("notify-rust"),
+                                                        Some("notification_thread_spawned"),
+                                                        None,
+                                                        None,
+                                                    ),
+                                                    Err(error) => {
+                                                        tracing::warn!(
+                                                            category = "EXEC",
+                                                            effect = "notify",
+                                                            attempted = "notify-rust",
+                                                            error = %error,
+                                                            state = "spawn_failed",
+                                                            "Failed to dispatch notify protocol feedback command"
+                                                        );
+                                                        execute_script_feedback_receipt(
+                                                            "notify",
+                                                            false,
+                                                            "failed",
+                                                            Some("notify-rust"),
+                                                            None,
+                                                            Some("ERR_SYSTEM_FEEDBACK_DISPATCH_FAILED"),
+                                                            Some("Failed to dispatch notify feedback command."),
+                                                        )
+                                                    }
+                                                }
+                                            };
+                                            execute_script_send_system_feedback_result(
+                                                &reader_response_tx,
+                                                request_id,
+                                                result,
+                                            );
                                             None
                                         }
-                                        Message::Beep {} => {
+                                        Message::Beep { request_id } => {
                                             tracing::info!(
                                                 category = "EXEC",
                                                 effect = "beep",
                                                 "Received beep protocol message"
                                             );
-                                            if let Err(error) =
-                                                execute_script_dispatch_beep_command()
-                                            {
-                                                tracing::warn!(
-                                                    category = "EXEC",
-                                                    effect = "beep",
-                                                    attempted = "afplay /System/Library/Sounds/Tink.aiff",
-                                                    error = %error,
-                                                    state = "spawn_failed",
-                                                    "Failed to dispatch beep protocol feedback command"
-                                                );
-                                            }
+                                            let result = if cfg!(target_os = "macos") {
+                                                match execute_script_dispatch_beep_command() {
+                                                    Ok(()) => execute_script_feedback_receipt(
+                                                        "beep",
+                                                        true,
+                                                        "dispatched",
+                                                        Some("afplay"),
+                                                        Some("process_spawned"),
+                                                        None,
+                                                        None,
+                                                    ),
+                                                    Err(error) => {
+                                                        tracing::warn!(
+                                                            category = "EXEC",
+                                                            effect = "beep",
+                                                            attempted = "afplay /System/Library/Sounds/Tink.aiff",
+                                                            error = %error,
+                                                            state = "spawn_failed",
+                                                            "Failed to dispatch beep protocol feedback command"
+                                                        );
+                                                        execute_script_feedback_receipt(
+                                                            "beep",
+                                                            false,
+                                                            "failed",
+                                                            Some("afplay"),
+                                                            None,
+                                                            Some("ERR_SYSTEM_FEEDBACK_DISPATCH_FAILED"),
+                                                            Some("Failed to dispatch beep feedback command."),
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                execute_script_feedback_receipt(
+                                                    "beep",
+                                                    false,
+                                                    "unsupported",
+                                                    None,
+                                                    None,
+                                                    Some("ERR_UNSUPPORTED_SDK_FEATURE"),
+                                                    Some("beep() feedback dispatch is only supported on macOS."),
+                                                )
+                                            };
+                                            execute_script_send_system_feedback_result(
+                                                &reader_response_tx,
+                                                request_id,
+                                                result,
+                                            );
                                             None
                                         }
-                                        Message::Say { text, voice } => {
+                                        Message::Say {
+                                            request_id,
+                                            text,
+                                            voice,
+                                        } => {
                                             tracing::info!(
                                                 category = "EXEC",
                                                 effect = "say",
@@ -2061,18 +2197,70 @@ impl ScriptListApp {
                                                 text_len = text.chars().count(),
                                                 "Received say protocol message"
                                             );
-                                            if let Err(error) =
-                                                execute_script_dispatch_say_command(text, voice)
-                                            {
-                                                tracing::warn!(
-                                                    category = "EXEC",
-                                                    effect = "say",
-                                                    attempted = "say [-v voice] <text>",
-                                                    error = %error,
-                                                    state = "spawn_failed",
-                                                    "Failed to dispatch say protocol feedback command"
-                                                );
-                                            }
+                                            let result =
+                                                if execute_script_normalize_optional_text(Some(
+                                                    text.clone(),
+                                                ))
+                                                .is_none()
+                                                {
+                                                    execute_script_feedback_receipt(
+                                                        "say",
+                                                        false,
+                                                        "invalid",
+                                                        None,
+                                                        None,
+                                                        Some("ERR_SYSTEM_FEEDBACK_EMPTY"),
+                                                        Some("say() requires non-empty text."),
+                                                    )
+                                                } else if cfg!(target_os = "macos") {
+                                                    match execute_script_dispatch_say_command(
+                                                        text, voice,
+                                                    ) {
+                                                        Ok(()) => execute_script_feedback_receipt(
+                                                            "say",
+                                                            true,
+                                                            "dispatched",
+                                                            Some("say"),
+                                                            Some("process_spawned"),
+                                                            None,
+                                                            None,
+                                                        ),
+                                                        Err(error) => {
+                                                            tracing::warn!(
+                                                                category = "EXEC",
+                                                                effect = "say",
+                                                                attempted = "say [-v voice] <text>",
+                                                                error = %error,
+                                                                state = "spawn_failed",
+                                                                "Failed to dispatch say protocol feedback command"
+                                                            );
+                                                            execute_script_feedback_receipt(
+                                                                "say",
+                                                                false,
+                                                                "failed",
+                                                                Some("say"),
+                                                                None,
+                                                                Some("ERR_SYSTEM_FEEDBACK_DISPATCH_FAILED"),
+                                                                Some("Failed to dispatch say feedback command."),
+                                                            )
+                                                        }
+                                                    }
+                                                } else {
+                                                    execute_script_feedback_receipt(
+                                                        "say",
+                                                        false,
+                                                        "unsupported",
+                                                        None,
+                                                        None,
+                                                        Some("ERR_UNSUPPORTED_SDK_FEATURE"),
+                                                        Some("say() feedback dispatch is only supported on macOS."),
+                                                    )
+                                                };
+                                            execute_script_send_system_feedback_result(
+                                                &reader_response_tx,
+                                                request_id,
+                                                result,
+                                            );
                                             None
                                         }
                                         Message::SetStatus { status, message } => {

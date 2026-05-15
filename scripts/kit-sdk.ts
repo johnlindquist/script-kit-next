@@ -43,13 +43,13 @@ export const SDK_VERSION = '0.2.0';
  *    - File/menu: fileSearch, getMenuBar, executeMenuAction
  *    - Pure utilities: home, skPath, uuid, compile, memoryMap
  *
- * ⚠️  NOT YET IMPLEMENTED (~18 methods):
+ * ⚠️  NOT YET IMPLEMENTED (~15 methods):
  *    Most of these functions send messages but the GPUI app doesn't handle
- *    them yet. Keyboard and mouse helpers are stricter: they reject with
- *    UnsupportedSdkFeatureError before sending because native input needs
- *    permission, focus, target, coordinate, and receipt contracts.
+ *    them yet. Explicit unsupported helpers reject with
+ *    UnsupportedSdkFeatureError before sending because they do not have a
+ *    visible behavior or receipt contract.
  *
- *    - Notifications: beep(), say(), notify(), setStatus()
+ *    - Status/menu: setStatus(), menu()
  *    - Automation: keyboard.type(), keyboard.tap(), mouse.move(),
  *      mouse.leftClick(), mouse.rightClick(), mouse.setPosition()
  *    - UI updates: setPanel(), setPreview(), setPrompt()
@@ -2163,6 +2163,28 @@ export interface MouseAPI {
   setPosition(position: Position): Promise<never>;
 }
 
+export type SystemFeedbackApi = 'beep' | 'say' | 'notify' | 'setStatus' | 'menu';
+export type SystemFeedbackStatus = 'dispatched' | 'unsupported' | 'invalid' | 'failed' | 'timeout';
+export type SystemFeedbackCode =
+  | 'ERR_UNSUPPORTED_SDK_FEATURE'
+  | 'ERR_SYSTEM_FEEDBACK_EMPTY'
+  | 'ERR_SYSTEM_FEEDBACK_DISPATCH_FAILED'
+  | 'ERR_SYSTEM_FEEDBACK_TIMEOUT';
+
+export interface SystemFeedbackResult {
+  ok: boolean;
+  api: SystemFeedbackApi;
+  status: SystemFeedbackStatus;
+  requestId?: string;
+  backend?: string;
+  platform?: string;
+  sideEffect?: string;
+  delivery?: 'not_verified';
+  code?: SystemFeedbackCode;
+  message?: string;
+  alternative?: 'hud' | 'setActions';
+}
+
 interface ArgMessage {
   type: 'arg';
   id: string;
@@ -2275,19 +2297,22 @@ interface EnvMessage {
   secret?: boolean;
 }
 
-// System message types (fire-and-forget, no response needed)
+// System feedback message types. requestId enables app-originated dispatch receipts.
 interface BeepMessage {
   type: 'beep';
+  requestId?: string;
 }
 
 interface SayMessage {
   type: 'say';
+  requestId?: string;
   text: string;
   voice?: string;
 }
 
 interface NotifyMessage {
   type: 'notify';
+  requestId?: string;
   title?: string;
   body?: string;
 }
@@ -2296,18 +2321,6 @@ interface HudMessage {
   type: 'hud';
   text: string;
   duration_ms?: number;
-}
-
-interface SetStatusMessage {
-  type: 'setStatus';
-  status: 'busy' | 'idle' | 'error';
-  message: string;
-}
-
-interface MenuMessage {
-  type: 'menu';
-  icon: string;
-  scripts?: string[];
 }
 
 interface ClipboardMessage {
@@ -2866,6 +2879,7 @@ type ResponseMessage =
   | { type: 'chatSubmit'; id: string; text: string }
   | { type: 'displayListResult'; requestId: string; displays: DisplayInfo[] }
   | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo }
+  | { type: 'systemFeedbackResult'; requestId: string; result: SystemFeedbackResult }
   | StateResultMessage
   | ElementsResultMessage
   | WaitForResultMessage
@@ -3535,20 +3549,20 @@ declare global {
   /**
    * Play system beep sound
    */
-  function beep(): Promise<void>;
+  function beep(): Promise<SystemFeedbackResult>;
   
   /**
    * Text-to-speech
    * @param text - Text to speak
    * @param voice - Optional voice name
    */
-  function say(text: string, voice?: string): Promise<void>;
+  function say(text: string, voice?: string): Promise<SystemFeedbackResult>;
   
   /**
    * Show system notification
    * @param options - Notification options or body string
    */
-  function notify(options: string | NotifyOptions): Promise<void>;
+  function notify(options: string | NotifyOptions): Promise<SystemFeedbackResult>;
   
   /**
    * Show a brief HUD notification at bottom-center of screen.
@@ -3569,14 +3583,14 @@ declare global {
    * Set application status
    * @param options - Status options with status and message
    */
-  function setStatus(options: StatusOptions): Promise<void>;
+  function setStatus(options: StatusOptions): Promise<SystemFeedbackResult>;
   
   /**
    * Set system menu icon and scripts
    * @param icon - Icon name/path
    * @param scripts - Optional array of script paths
    */
-  function menu(icon: string, scripts?: string[]): Promise<void>;
+  function menu(icon: string, scripts?: string[]): Promise<SystemFeedbackResult>;
   
   /**
    * Set the available actions for the current prompt.
@@ -5253,30 +5267,97 @@ globalThis.env = async function env(
   });
 };
 
+function unsupportedSystemFeedbackResult(
+  api: SystemFeedbackApi,
+  message: string,
+  alternative: 'hud' | 'setActions'
+): Promise<SystemFeedbackResult> {
+  return Promise.resolve({
+    ok: false,
+    api,
+    status: 'unsupported',
+    code: 'ERR_UNSUPPORTED_SDK_FEATURE',
+    message,
+    platform: process.platform,
+    alternative,
+  });
+}
+
+function invalidSystemFeedbackResult(
+  api: SystemFeedbackApi,
+  message: string
+): Promise<SystemFeedbackResult> {
+  return Promise.resolve({
+    ok: false,
+    api,
+    status: 'invalid',
+    code: 'ERR_SYSTEM_FEEDBACK_EMPTY',
+    message,
+    platform: process.platform,
+  });
+}
+
+function requestSystemFeedback(
+  api: Extract<SystemFeedbackApi, 'beep' | 'say' | 'notify'>,
+  message: BeepMessage | SayMessage | NotifyMessage
+): Promise<SystemFeedbackResult> {
+  const requestId = nextId();
+  const fallback: SystemFeedbackResult = {
+    ok: false,
+    api,
+    status: 'timeout',
+    code: 'ERR_SYSTEM_FEEDBACK_TIMEOUT',
+    requestId,
+    platform: process.platform,
+    message: `${api}() did not receive a runtime dispatch receipt from the GPUI app.`,
+  };
+
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      removePending(requestId);
+      resolve(fallback);
+    }, 2000);
+
+    addPending(requestId, (msg: ResponseMessage) => {
+      clearTimeout(timeout);
+      if (msg.type === 'systemFeedbackResult') {
+        resolve(msg.result);
+      } else {
+        resolve(fallback);
+      }
+    });
+    send({ ...message, requestId });
+  });
+}
+
 // =============================================================================
 // TIER 3: System APIs (alerts, clipboard, keyboard, mouse)
 // =============================================================================
 
-// Fire-and-forget messages - send and resolve immediately (no response needed)
-// NOTE: These functions send messages to the app but handlers are not yet implemented
-globalThis.beep = async function beep(): Promise<void> {
-  console.warn('[SDK] beep() is not yet implemented in the GPUI app');
-  const message: BeepMessage = { type: 'beep' };
-  send(message);
+// Feedback messages resolve from app-originated dispatch receipts. Delivery
+// remains platform-dependent and is not verified by the receipt.
+globalThis.beep = function beep(): Promise<SystemFeedbackResult> {
+  return requestSystemFeedback('beep', { type: 'beep' });
 };
 
-globalThis.say = async function say(text: string, voice?: string): Promise<void> {
-  console.warn('[SDK] say() is not yet implemented in the GPUI app');
-  const message: SayMessage = { type: 'say', text, voice };
-  send(message);
+globalThis.say = function say(text: string, voice?: string): Promise<SystemFeedbackResult> {
+  if (!text?.trim()) {
+    return invalidSystemFeedbackResult('say', 'say() requires non-empty text.');
+  }
+  return requestSystemFeedback('say', { type: 'say', text, voice });
 };
 
-globalThis.notify = async function notify(options: string | NotifyOptions): Promise<void> {
-  console.warn('[SDK] notify() is not yet implemented in the GPUI app (use hud() instead)');
+globalThis.notify = function notify(options: string | NotifyOptions): Promise<SystemFeedbackResult> {
   const message: NotifyMessage = typeof options === 'string'
     ? { type: 'notify', body: options }
     : { type: 'notify', title: options.title, body: options.body };
-  send(message);
+  if (!message.title?.trim() && !message.body?.trim()) {
+    return invalidSystemFeedbackResult(
+      'notify',
+      'notify() requires a non-empty title or body.'
+    );
+  }
+  return requestSystemFeedback('notify', message);
 };
 
 /**
@@ -5292,20 +5373,20 @@ globalThis.hud = function hud(message: string, options?: { duration?: number }):
   send(hudMessage);
 };
 
-globalThis.setStatus = async function setStatus(options: StatusOptions): Promise<void> {
-  console.warn('[SDK] setStatus() is not yet implemented in the GPUI app');
-  const message: SetStatusMessage = {
-    type: 'setStatus',
-    status: options.status,
-    message: options.message,
-  };
-  send(message);
+globalThis.setStatus = function setStatus(_options: StatusOptions): Promise<SystemFeedbackResult> {
+  return unsupportedSystemFeedbackResult(
+    'setStatus',
+    'setStatus() has no visible GPUI status surface or receipt contract.',
+    'hud'
+  );
 };
 
-globalThis.menu = async function menu(icon: string, scripts?: string[]): Promise<void> {
-  console.warn('[SDK] menu() is not yet implemented in the GPUI app');
-  const message: MenuMessage = { type: 'menu', icon, scripts };
-  send(message);
+globalThis.menu = function menu(_icon: string, _scripts?: string[]): Promise<SystemFeedbackResult> {
+  return unsupportedSystemFeedbackResult(
+    'menu',
+    'menu() has no GPUI tray/menu mutation handler.',
+    'setActions'
+  );
 };
 
 // =============================================================================

@@ -1349,12 +1349,12 @@ export SK_PATH=~/Projects/my-app/.kit
 
 | Function | Description |
 |----------|-------------|
-| `beep()` | Play system beep |
-| `say(text, voice?)` | Text-to-speech |
-| `notify(options)` | OS-level system notification (Notification Center). Distinct from `hud(message)` — use `hud` for in-launcher feedback, `notify` when the message should persist outside the launcher. |
+| `beep()` | Request platform system beep; resolves to a dispatch receipt |
+| `say(text, voice?)` | Request platform text-to-speech; resolves to a dispatch receipt |
+| `notify(options)` | OS-level system notification (Notification Center); resolves to a dispatch receipt. Distinct from `hud(message)` — use `hud` for in-launcher feedback, `notify` when the message should persist outside the launcher. |
 | `hud(message, options?)` | Brief HUD notification |
-| `setStatus(options)` | Set app status |
-| `menu(icon, scripts?)` | Set system menu |
+| `setStatus(options)` | Unsupported in GPUI; returns `ERR_UNSUPPORTED_SDK_FEATURE` |
+| `menu(icon, scripts?)` | Unsupported in GPUI; returns `ERR_UNSUPPORTED_SDK_FEATURE` |
 | `copy(text)` | Copy to clipboard |
 | `paste()` | Paste from clipboard |
 | `setSelectedText(text)` | Replace selected text |

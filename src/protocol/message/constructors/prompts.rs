@@ -207,7 +207,11 @@ impl Message {
             | Message::AiSubscribe { request_id, .. }
             | Message::AiSubscribed { request_id, .. }
             | Message::AiUnsubscribe { request_id, .. }
+            | Message::SystemFeedbackResult { request_id, .. }
             | Message::AiUnsubscribed { request_id, .. } => Some(request_id),
+            Message::Notify { request_id, .. }
+            | Message::Beep { request_id }
+            | Message::Say { request_id, .. } => request_id.as_deref(),
             // AiError has optional request_id
             Message::AiError { request_id, .. } => request_id.as_deref(),
             // All other messages don't have request IDs

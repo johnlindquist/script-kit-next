@@ -24,7 +24,7 @@ interface APIInfo {
   demoScript: string | null;
   testFile: string;
   autoSubmit: boolean;
-  status: "tested" | "untested" | "hardware" | "fire-and-forget" | "unsupported-explicit-error";
+  status: "tested" | "untested" | "hardware" | "fire-and-forget" | "dispatch-receipt" | "unsupported-explicit-error" | "unsupported-explicit-result";
   parameters?: string[];
   usageExamples?: string[];
 }
@@ -75,11 +75,11 @@ const API_TIERS: Record<string, { tier: APIInfo["tier"]; autoSubmit: boolean; st
   env: { tier: "forms", autoSubmit: true, status: "untested" },
 
   // TIER 3: System APIs
-  beep: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
-  say: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
-  notify: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
-  setStatus: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
-  menu: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
+  beep: { tier: "system", autoSubmit: false, status: "dispatch-receipt" },
+  say: { tier: "system", autoSubmit: false, status: "dispatch-receipt" },
+  notify: { tier: "system", autoSubmit: false, status: "dispatch-receipt" },
+  setStatus: { tier: "system", autoSubmit: false, status: "unsupported-explicit-result" },
+  menu: { tier: "system", autoSubmit: false, status: "unsupported-explicit-result" },
   copy: { tier: "system", autoSubmit: false, status: "fire-and-forget" },
   paste: { tier: "system", autoSubmit: true, status: "untested" },
   clipboard: { tier: "system", autoSubmit: true, status: "untested" },
@@ -569,12 +569,14 @@ await runTest('notify-object', async () => {
 
   // setStatus tests
   content += `// -----------------------------------------------------------------------------
-// setStatus() tests (fire-and-forget)
+// setStatus() tests (explicit unsupported result)
 // -----------------------------------------------------------------------------
 
 await runTest('setStatus-basic', async () => {
-  await setStatus({ status: 'busy', message: 'Testing...' });
-  // Success = no error thrown
+  const result = await setStatus({ status: 'busy', message: 'Testing...' });
+  if (!result || result.ok !== false || result.code !== 'ERR_UNSUPPORTED_SDK_FEATURE') {
+    throw new Error('setStatus did not return an explicit unsupported result');
+  }
 });
 
 `;

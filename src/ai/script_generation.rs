@@ -100,7 +100,7 @@ ERROR HANDLING
 * Treat Esc/cancel as normal: catch and exit quietly (or toast/notify if useful).
 * Validate input early; for strict validation use arg({ onSubmit }) + setHint/setEnter + preventSubmit.
 * For exec(), capture/show stderr/stdout on failure (editor/div) and suggest next steps.
-* For long tasks: show progress (setStatus/setLoading/setProgress) or a "working" div with onInit + submit.
+* For long tasks: show progress with setLoading/setProgress or a "working" div with onInit + submit; setStatus() is unsupported in GPUI.
 
 SCRIPT KIT IDIOMS (PREFERRED)
 
@@ -198,7 +198,7 @@ UI Helpers
 * setPanel(html, classes?) — dense panel API; avoid for normal commands
 * setLoading(boolean) — spinner/loading state
 * setProgress(number) — progress bar 0..1
-* setStatus({ status, message }) — tray status + message
+* setStatus({ status, message }) — unsupported in GPUI; use hud/div/progress UI instead
 * show() — show prompt
 * hide(options?) — hide prompt
 * blur() — focus previous app
