@@ -49,6 +49,13 @@ struct RegisteredHotkey {
     /// Display string for logging (e.g., "cmd+shift+k")
     display: String,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShortcutConflict {
+    pub command_id: String,
+    pub command_name: String,
+    pub shortcut: String,
+}
 /// Unified routing table for all hotkeys
 /// Uses RwLock for fast reads (event dispatch) with occasional writes (updates)
 struct HotkeyRoutes {
@@ -157,6 +164,50 @@ impl HotkeyRoutes {
         };
         self.routes.get(&id)
     }
+}
+
+fn hotkey_action_label(action: &HotkeyAction) -> String {
+    match action {
+        HotkeyAction::Main => "Main launcher".to_string(),
+        HotkeyAction::Notes => "Notes".to_string(),
+        HotkeyAction::Ai => "Agent Chat".to_string(),
+        HotkeyAction::ToggleLogs => "Logs".to_string(),
+        HotkeyAction::Dictation => "Dictation".to_string(),
+        HotkeyAction::Script(command_id) => command_id.clone(),
+    }
+}
+
+fn shortcut_conflict_in_routes(
+    routes: &HotkeyRoutes,
+    command_id: &str,
+    shortcut: &str,
+) -> Option<ShortcutConflict> {
+    let (mods, code) = shortcuts::parse_shortcut(shortcut)?;
+    let hotkey = HotKey::new(Some(mods), code);
+    let entry = routes.routes.get(&hotkey.id())?;
+
+    if matches!(&entry.action, HotkeyAction::Script(existing) if existing == command_id) {
+        return None;
+    }
+
+    let conflicting_command_id = match &entry.action {
+        HotkeyAction::Script(existing) => existing.clone(),
+        other => format!("{:?}", other),
+    };
+
+    Some(ShortcutConflict {
+        command_id: conflicting_command_id,
+        command_name: hotkey_action_label(&entry.action),
+        shortcut: entry.display.clone(),
+    })
+}
+
+pub fn shortcut_conflict_for_recording(
+    command_id: &str,
+    shortcut: &str,
+) -> Option<ShortcutConflict> {
+    let routes_guard = routes().read();
+    shortcut_conflict_in_routes(&routes_guard, command_id, shortcut)
 }
 /// Global routing table - protected by RwLock for fast reads
 static HOTKEY_ROUTES: LazyLock<RwLock<HotkeyRoutes>> =
@@ -823,24 +874,42 @@ pub fn register_dynamic_shortcut(
 /// Returns Ok(()) even if the shortcut wasn't registered (no-op).
 #[allow(dead_code)]
 pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
-    let manager = MAIN_MANAGER
-        .get()
-        .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
+    // Remove app routing first so a removed config shortcut cannot invoke the command
+    // even if the OS/global unregister call fails.
+    let Some((id, hotkey)) = ({
+        let mut routes_guard = routes().write();
+        routes_guard.get_script_id(command_id).and_then(|id| {
+            routes_guard
+                .remove_route(id)
+                .map(|entry| (id, entry.hotkey))
+        })
+    }) else {
+        logging::log(
+            "HOTKEY",
+            &format!(
+                "No dynamic shortcut registered for {}; unregister treated as no-op",
+                command_id
+            ),
+        );
+        return Ok(());
+    };
+
+    let Some(manager) = MAIN_MANAGER.get() else {
+        logging::log(
+            "HOTKEY",
+            &format!(
+                "Removed dynamic shortcut route for {} (id: {}), but hotkey manager was unavailable",
+                command_id, id
+            ),
+        );
+        return Ok(());
+    };
 
     let manager_guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
-    // Find the hotkey ID for this command
-    let (id, hotkey) = {
-        let routes_guard = routes().read();
-        routes_guard
-            .get_script_id(command_id)
-            .and_then(|id| routes_guard.routes.get(&id).map(|entry| (id, entry.hotkey)))
-    }
-    .ok_or_else(|| anyhow::anyhow!("No shortcut registered for {}", command_id))?;
-
-    // Unregister from OS
+    // Unregister from OS after route removal; failure is recoverable because dispatch no longer maps the command.
     if let Err(e) = manager_guard.unregister(hotkey) {
         logging::log(
             "HOTKEY",
@@ -849,12 +918,6 @@ pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
                 command_id, e
             ),
         );
-    }
-
-    // Remove from routing table
-    {
-        let mut routes_guard = routes().write();
-        routes_guard.remove_route(id);
     }
 
     logging::log(
@@ -1624,6 +1687,48 @@ mod tests {
 
             routes.remove_route(hotkey.id());
             assert!(!routes.script_paths.contains_key(&path));
+        }
+
+        #[test]
+        fn shortcut_conflict_reports_existing_live_route() {
+            let mut routes = HotkeyRoutes::new();
+            let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyK);
+            routes.add_route(
+                hotkey.id(),
+                RegisteredHotkey {
+                    hotkey,
+                    action: HotkeyAction::Script("builtin/existing-command".to_string()),
+                    display: "cmd+shift+k".to_string(),
+                },
+            );
+
+            let conflict =
+                shortcut_conflict_in_routes(&routes, "builtin/new-command", "cmd+shift+k")
+                    .expect("expected conflict with existing live route");
+
+            assert_eq!(conflict.command_id, "builtin/existing-command");
+            assert_eq!(conflict.command_name, "builtin/existing-command");
+            assert_eq!(conflict.shortcut, "cmd+shift+k");
+        }
+
+        #[test]
+        fn shortcut_conflict_ignores_current_command_rebind() {
+            let mut routes = HotkeyRoutes::new();
+            let hotkey = HotKey::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyK);
+            routes.add_route(
+                hotkey.id(),
+                RegisteredHotkey {
+                    hotkey,
+                    action: HotkeyAction::Script("builtin/current-command".to_string()),
+                    display: "cmd+shift+k".to_string(),
+                },
+            );
+
+            assert!(
+                shortcut_conflict_in_routes(&routes, "builtin/current-command", "cmd+shift+k",)
+                    .is_none(),
+                "updating the selected command's current shortcut should not self-conflict"
+            );
         }
 
         #[test]

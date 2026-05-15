@@ -96,6 +96,56 @@ fn remove_shortcut_calls_persistence_and_shows_hud() {
     );
 }
 
+#[test]
+fn remove_shortcut_checks_live_unregister_result() {
+    let content = super::read_all_handle_action_sources();
+
+    let remove_pos = content
+        .find("\"remove_shortcut\"")
+        .expect("Expected remove_shortcut action handler");
+    let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
+
+    assert!(
+        block.contains("match crate::hotkeys::unregister_dynamic_shortcut(&command_id)"),
+        "remove_shortcut should inspect live unregister result instead of discarding it"
+    );
+    assert!(
+        block.contains("Config shortcut removed, but live unregister failed"),
+        "remove_shortcut should log recoverable live unregister failures after config removal"
+    );
+}
+
+#[test]
+fn shortcut_assignment_wires_live_conflict_checker() {
+    let recorder = super::read_source("src/app_impl/shortcut_recorder.rs");
+
+    assert!(
+        recorder.contains(".with_conflict_checker(")
+            && recorder.contains("shortcut_conflict_for_recording("),
+        "shortcut recorder entry paths should wire the live hotkey route conflict checker"
+    );
+}
+
+#[test]
+fn shortcut_save_rechecks_live_conflict_before_config_write() {
+    let recorder = super::read_source("src/app_impl/shortcut_recorder.rs");
+    let save_pos = recorder
+        .find("pub(crate) fn handle_shortcut_save")
+        .expect("handle_shortcut_save not found");
+    let block = &recorder[save_pos..recorder.len().min(save_pos + 5000)];
+    let conflict_pos = block
+        .find("shortcut_conflict_for_recording(&command_id, &shortcut_str)")
+        .expect("handle_shortcut_save should re-check live conflicts");
+    let write_pos = block
+        .find("self.write_config_command_shortcut(")
+        .expect("handle_shortcut_save should write config through the wrapper");
+
+    assert!(
+        conflict_pos < write_pos,
+        "shortcut saves should re-check live conflicts before mutating config.ts"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // remove_shortcut — error path
 // ---------------------------------------------------------------------------

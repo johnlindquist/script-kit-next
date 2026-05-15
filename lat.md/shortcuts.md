@@ -28,13 +28,17 @@ Scripts use `script/{owner}:{name}` and scriptlets use `scriptlet/{owner}:{name}
 
 The shortcut recorder writes config-backed command shortcuts.
 
-Recorder saves call `scripts/update-config-shortcut.ts`, a compatibility wrapper around `scripts/config-cli.ts set-command-shortcut`. The live hotkey table is updated after the config write succeeds so the shortcut works before restart.
+Recorder saves call `scripts/update-config-shortcut.ts`, a compatibility wrapper around `scripts/config-cli.ts set-command-shortcut`. The live hotkey table is updated after the config write succeeds so the shortcut works without restart when registration succeeds.
+
+Recorder conflict checks read the live hotkey route table before save. They block conflicts with already-registered config, script, scriptlet, and app hotkeys while allowing the selected command to keep its current shortcut.
 
 ## Removal Writes
 
 Shortcut removal edits only the shortcut field in config.
 
 Removal calls `scripts/remove-config-shortcut.ts`, which wraps `scripts/config-cli.ts remove-command-shortcut`. Removing a shortcut preserves sibling command fields such as `hidden` and `confirmationRequired`; empty command entries are deleted.
+
+Removal also unregisters the live dynamic shortcut route when one exists. Missing live routes are treated as no-ops; app routes are removed before best-effort OS unregister so failures cannot dispatch removed commands.
 
 ## Source Documents
 
