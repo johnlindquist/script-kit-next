@@ -8,6 +8,8 @@ System feedback SDK tests should distinguish protocol serialization from behavio
 
 Shortcut assignment proof should cover config writes, save-time live route conflict checks, dynamic unregister route removal/no-ops, and recoverable registration failures. Use source audits plus `cargo check --lib` unless OS-level delivery is the target.
 
+EnvPrompt secret-store proof should distinguish missing files from read, decrypt/format, parse, and cache failures. Source audits must prove result-returning lookup APIs, EnvPrompt storage-error propagation, redacted `getElements` status kinds, and `cargo check --lib`; direct lib tests may be blocked by unrelated dirty-tree `cfg(test)` failures.
+
 ## Main menu and footer
 
 `make smoke-main-menu` is the repo's fast launcher and footer smoke target. Use it for main window, footer, built-in menu, and plugin-skill routing changes.

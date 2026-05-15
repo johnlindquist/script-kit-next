@@ -37,11 +37,16 @@ pub(super) fn masked_secret_value_for_display(value: &str) -> String {
     "•".repeat(value.chars().count())
 }
 
-pub(super) fn env_storage_hint_text(secret: bool) -> &'static str {
-    if secret {
-        "Stored securely in ~/.scriptkit/secrets.age"
+pub(super) fn env_storage_hint_text(
+    secret: bool,
+    store_error: Option<&SecretStoreError>,
+) -> String {
+    if let Some(error) = store_error {
+        error.user_message().to_string()
+    } else if secret {
+        "Stored securely in ~/.scriptkit/secrets.age".to_string()
     } else {
-        "Value is provided to the script for this run only"
+        "Value is provided to the script for this run only".to_string()
     }
 }
 

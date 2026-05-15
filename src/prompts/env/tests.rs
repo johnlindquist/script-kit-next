@@ -46,7 +46,7 @@ mod tests {
     #[test]
     fn test_env_storage_hint_describes_encrypted_store_when_secret() {
         assert_eq!(
-            env_storage_hint_text(true),
+            env_storage_hint_text(true, None),
             "Stored securely in ~/.scriptkit/secrets.age"
         );
     }
@@ -54,8 +54,25 @@ mod tests {
     #[test]
     fn test_env_storage_hint_describes_ephemeral_mode_when_not_secret() {
         assert_eq!(
-            env_storage_hint_text(false),
+            env_storage_hint_text(false, None),
             "Value is provided to the script for this run only"
+        );
+    }
+
+    #[test]
+    fn test_env_storage_hint_surfaces_secret_store_errors_without_values() {
+        let error = SecretStoreError {
+            kind: secrets::SecretStoreErrorKind::DecryptFailed,
+            message: "low-level decrypt detail".to_string(),
+        };
+
+        assert_eq!(
+            env_storage_hint_text(true, Some(&error)),
+            "Saved secrets could not be loaded. The store may be corrupt or from another machine."
+        );
+        assert!(
+            !env_storage_hint_text(true, Some(&error)).contains("low-level decrypt detail"),
+            "user-facing storage hint should not expose raw storage details"
         );
     }
 
