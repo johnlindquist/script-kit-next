@@ -121,10 +121,23 @@ impl ShortcutRecorderPopupWindow {
     ) -> Self {
         let recorder_theme = std::sync::Arc::clone(&theme);
         let recorder = cx.new(move |cx| {
+            let conflict_command_id = command_id.clone();
             crate::components::shortcut_recorder::ShortcutRecorder::new(cx, recorder_theme)
                 .with_detached_window(true)
                 .with_command_name(command_name)
                 .with_command_description(format!("ID: {}", command_id))
+                .with_conflict_checker(move |recorded| {
+                    crate::hotkeys::shortcut_conflict_for_recording(
+                        &conflict_command_id,
+                        &recorded.to_config_string(),
+                    )
+                    .map(|conflict| {
+                        crate::components::shortcut_recorder::ShortcutConflict {
+                            command_name: conflict.command_name,
+                            shortcut: conflict.shortcut,
+                        }
+                    })
+                })
         });
 
         Self {
@@ -641,7 +654,21 @@ export default {
             let recorder = cx.new(move |cx| {
                 // Create the recorder with its own focus handle from its own context
                 // This is CRITICAL for keyboard events to work
-                let mut r = ShortcutRecorder::new(cx, theme);
+                let conflict_command_id = command_id.clone();
+                let mut r = ShortcutRecorder::new(cx, theme).with_conflict_checker(
+                    move |recorded| {
+                        crate::hotkeys::shortcut_conflict_for_recording(
+                            &conflict_command_id,
+                            &recorded.to_config_string(),
+                        )
+                        .map(|conflict| {
+                            crate::components::shortcut_recorder::ShortcutConflict {
+                                command_name: conflict.command_name,
+                                shortcut: conflict.shortcut,
+                            }
+                        })
+                    },
+                );
                 r.set_command_name(Some(command_name.clone()));
                 r.set_command_description(Some(format!("ID: {}", command_id)));
 
@@ -792,6 +819,23 @@ export default {
         );
 
         let recorded_key = recorded.key.clone().unwrap_or_default();
+        let shortcut_str = shortcut.to_canonical_string();
+
+        if let Some(conflict) =
+            crate::hotkeys::shortcut_conflict_for_recording(&command_id, &shortcut_str)
+        {
+            tracing::warn!(
+                command_id = %command_id,
+                conflicting_command_id = %conflict.command_id,
+                shortcut = %conflict.shortcut,
+                "Shortcut save blocked by live route conflict"
+            );
+            self.show_error_toast(
+                format!("Shortcut already used by {}", conflict.command_name),
+                cx,
+            );
+            return;
+        }
 
         // Save to config.ts via the same CLI path used by script-side tooling.
         match self.write_config_command_shortcut(
@@ -806,7 +850,6 @@ export default {
                 logging::log("SHORTCUT", "Shortcut saved to config.ts commands");
 
                 // Register the hotkey immediately so it works without restart
-                let shortcut_str = shortcut.to_canonical_string();
                 match crate::hotkeys::update_script_hotkey(&command_id, None, Some(&shortcut_str)) {
                     Ok(()) => {
                         logging::log(
@@ -820,18 +863,20 @@ export default {
                         );
                     }
                     Err(e) => {
-                        // Shortcut saved but couldn't register - will work after restart
+                        // Shortcut saved but couldn't register, so the config remains durable while
+                        // the live binding stays inactive until the user resolves the OS/global conflict.
                         logging::log(
                             "SHORTCUT",
-                            &format!("Shortcut saved but registration failed: {} - will work after restart", e),
+                            &format!("Shortcut saved but registration failed: {} - not active now", e),
                         );
                         self.show_hud(
-                            format!("Shortcut set: {} (restart to activate)", shortcut.display()),
+                            format!("Shortcut saved: {} (not active now)", shortcut.display()),
                             Some(HUD_LONG_MS),
                             cx,
                         );
                     }
                 }
+                self.refresh_scripts(cx);
             }
             Err(e) => {
                 tracing::error!(error = %e, "Failed to save shortcut");

@@ -82,7 +82,23 @@ impl ScriptListApp {
                         // Remove only the config.ts command shortcut, preserving other command fields.
                         match self.remove_config_command_shortcut(&command_id) {
                             Ok(()) => {
-                                let _ = crate::hotkeys::unregister_dynamic_shortcut(&command_id);
+                                match crate::hotkeys::unregister_dynamic_shortcut(&command_id) {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "SHORTCUT",
+                                            command_id = %command_id,
+                                            "Unregistered live shortcut after config removal"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        tracing::warn!(
+                                            category = "SHORTCUT",
+                                            command_id = %command_id,
+                                            error = %error,
+                                            "Config shortcut removed, but live unregister failed"
+                                        );
+                                    }
+                                }
                                 tracing::info!(
                                     category = "SHORTCUT",
                                     command_id = %command_id,

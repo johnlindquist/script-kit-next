@@ -6,6 +6,8 @@ Keyboard and mouse SDK helper tests should assert explicit unsupported rejection
 
 System feedback SDK tests should distinguish protocol serialization from behavior. Platform feedback dispatch must resolve from app-originated `systemFeedbackResult` receipts, while unimplemented UI promises should return `ERR_UNSUPPORTED_SDK_FEATURE`.
 
+Shortcut assignment proof should cover config writes, save-time live route conflict checks, dynamic unregister route removal/no-ops, and recoverable registration failures. Use source audits plus `cargo check --lib` unless OS-level delivery is the target.
+
 ## Main menu and footer
 
 `make smoke-main-menu` is the repo's fast launcher and footer smoke target. Use it for main window, footer, built-in menu, and plugin-skill routing changes.

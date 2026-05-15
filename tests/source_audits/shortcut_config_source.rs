@@ -41,6 +41,20 @@ fn remove_action_writes_config_shortcuts() {
 }
 
 #[test]
+fn dynamic_shortcut_unregister_absent_binding_is_noop() {
+    let hotkeys = super::read_source("src/hotkeys/mod.rs");
+    let unregister_pos = hotkeys
+        .find("pub fn unregister_dynamic_shortcut")
+        .expect("unregister_dynamic_shortcut not found");
+    let block = &hotkeys[unregister_pos..hotkeys.len().min(unregister_pos + 2500)];
+
+    assert!(
+        block.contains("unregister treated as no-op") && block.contains("return Ok(())"),
+        "dynamic shortcut removal should be a no-op when config has no live route"
+    );
+}
+
+#[test]
 fn preview_and_focused_info_read_config_shortcuts() {
     let preview = super::read_source("src/app_render/preview_panel.rs");
     let focused = super::read_source("src/app_render/focused_info.rs");
