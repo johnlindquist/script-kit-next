@@ -47,7 +47,7 @@ fn dispatcher_loads_windows_before_opening_view() {
         "crate::window_control::list_windows()",
         "self.cached_windows = windows;",
         "AppView::WindowSwitcherView",
-        "self.update_window_size_deferred(window, cx);",
+        "resize: true",
     ] {
         assert!(
             body.contains(required),

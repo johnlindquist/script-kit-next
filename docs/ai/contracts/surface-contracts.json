@@ -396,28 +396,13 @@
     {
       "surfaceKind": "GenericFilterableList",
       "appViewVariants": [
-        "BrowseKitsView",
-        "InstalledKitsView",
         "SearchAiPresetsView",
-        "SettingsView",
         "FavoritesBrowseView"
       ],
       "appViewFooters": [
         {
-          "variant": "BrowseKitsView",
-          "nativeFooterSurface": "kit_store_browse"
-        },
-        {
-          "variant": "InstalledKitsView",
-          "nativeFooterSurface": "kit_store_installed"
-        },
-        {
           "variant": "SearchAiPresetsView",
           "nativeFooterSurface": "search_ai_presets"
-        },
-        {
-          "variant": "SettingsView",
-          "nativeFooterSurface": "settings"
         },
         {
           "variant": "FavoritesBrowseView",
@@ -442,6 +427,96 @@
         "cmdW": "CloseMainWindow"
       },
       "automationSemanticSurface": "scriptList"
+    },
+    {
+      "surfaceKind": "Settings",
+      "appViewVariants": [
+        "SettingsView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "SettingsView",
+          "nativeFooterSurface": "settings"
+        }
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "settings"
+    },
+    {
+      "surfaceKind": "KitStoreBrowse",
+      "appViewVariants": [
+        "BrowseKitsView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "BrowseKitsView",
+          "nativeFooterSurface": "kit_store_browse"
+        }
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "kitStoreBrowse"
+    },
+    {
+      "surfaceKind": "KitStoreInstalled",
+      "appViewVariants": [
+        "InstalledKitsView"
+      ],
+      "appViewFooters": [
+        {
+          "variant": "InstalledKitsView",
+          "nativeFooterSurface": "kit_store_installed"
+        }
+      ],
+      "vocabulary": {
+        "family": "FilterableLauncherList",
+        "inputOwnership": "LauncherFilter",
+        "previewRole": "NoPersistentPreview"
+      },
+      "focusPolicy": "LauncherFilterFocus",
+      "keyboardPolicy": "LauncherListKeyboard",
+      "actionsPolicy": "HostRowActions",
+      "proofPolicy": "StateAndElementsProof",
+      "visualPolicy": "CompactLauncherVisual",
+      "dismissPolicy": {
+        "policy": "standard",
+        "windowBlur": "CloseMainWindow",
+        "backdropClick": "CloseMainWindow",
+        "escape": "CloseMainWindow",
+        "cmdW": "CloseMainWindow"
+      },
+      "automationSemanticSurface": "kitStoreInstalled"
     },
     {
       "surfaceKind": "ProcessManager",

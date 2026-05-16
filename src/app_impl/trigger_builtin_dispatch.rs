@@ -16,6 +16,29 @@ use crate::builtins::trigger_registry::{registry as trigger_registry, TriggerBui
 use crate::protocol_stats::{self, PROTOCOL_STATS};
 use crate::stdin_commands::{BuiltinRef, ExternalCommand};
 
+#[derive(Debug)]
+enum FilterableRouteState {
+    Start(FilterableView),
+    Prepared(FilterableRoutePlan),
+    Failed {
+        view: FilterableView,
+        reason: String,
+    },
+    Applied {
+        surface_kind: SurfaceKind,
+    },
+}
+
+#[derive(Debug)]
+struct FilterableRoutePlan {
+    next_view: AppView,
+    reset_shared_filter: bool,
+    pending_placeholder: Option<&'static str>,
+    pending_focus: Option<FocusTarget>,
+    clear_hover: bool,
+    resize: bool,
+}
+
 /// Oracle-Session `logging-observability-next-pass` PR1 migrated the
 /// three log sites below off the ad-hoc `UNKNOWN_NAME_PREVIEW_CHAR_LIMIT`
 /// + `chars().take(N)` preview. Every user-value preview now flows
@@ -183,109 +206,207 @@ impl ScriptListApp {
         self.rekey_main_automation_surface_from_current_view()
     }
 
-    /// Imperative half of [`AppRoute::ShowFilterableView`]. Seeds any
-    /// per-view cache, resets the filter/focus state, sets
-    /// `current_view`, and issues the deferred window resize. The
-    /// `FilterableView` enum is the planner's view handle, so this
-    /// match has the same exhaustive-dispatch guarantee as
-    /// `apply_trigger_builtin`.
+    /// Entry point for the imperative half of [`AppRoute::ShowFilterableView`].
+    ///
+    /// The route-entry state machine owns cache preloads, shared-filter reset,
+    /// focus/hover cleanup, `current_view` assignment, and deferred resizing.
+    /// Keeping that ordered transition in one owner makes this path auditable
+    /// without moving triggerBuiltin's post-dispatch automation re-key.
     fn show_filterable_view(
         &mut self,
         view: FilterableView,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match view {
-            FilterableView::DesignGallery => {
-                self.current_view = AppView::DesignGalleryView {
+        match self.run_filterable_route_state_machine(view, window, cx) {
+            FilterableRouteState::Applied { surface_kind } => {
+                tracing::trace!(
+                    target: "script_kit::trigger_builtin",
+                    ?surface_kind,
+                    "filterable route applied"
+                );
+            }
+            FilterableRouteState::Failed { view, reason } => {
+                tracing::debug!(
+                    target: "script_kit::trigger_builtin",
+                    ?view,
+                    reason,
+                    "filterable route failed"
+                );
+            }
+            FilterableRouteState::Start(_) | FilterableRouteState::Prepared(_) => {
+                unreachable!("filterable route state machine must return a terminal state")
+            }
+        }
+    }
+
+    fn run_filterable_route_state_machine(
+        &mut self,
+        view: FilterableView,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> FilterableRouteState {
+        let mut state = FilterableRouteState::Start(view);
+        loop {
+            state = match state {
+                FilterableRouteState::Start(view) => match self.prepare_filterable_route(view) {
+                    Ok(plan) => FilterableRouteState::Prepared(plan),
+                    Err(reason) => FilterableRouteState::Failed { view, reason },
+                },
+                FilterableRouteState::Prepared(plan) => {
+                    self.apply_filterable_route_plan(plan, window, cx)
+                }
+                terminal @ FilterableRouteState::Failed { .. }
+                | terminal @ FilterableRouteState::Applied { .. } => return terminal,
+            };
+        }
+    }
+
+    fn prepare_filterable_route(
+        &mut self,
+        view: FilterableView,
+    ) -> Result<FilterableRoutePlan, String> {
+        let plan = match view {
+            FilterableView::DesignGallery => FilterableRoutePlan {
+                next_view: AppView::DesignGalleryView {
                     filter: String::new(),
                     selected_index: 0,
-                };
-                self.update_window_size_deferred(window, cx);
-            }
+                },
+                reset_shared_filter: false,
+                pending_placeholder: None,
+                pending_focus: None,
+                clear_hover: false,
+                resize: true,
+            },
             FilterableView::ClipboardHistory => {
                 self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
                 self.focused_clipboard_entry_id = self
                     .cached_clipboard_entries
                     .first()
                     .map(|entry| entry.id.clone());
-                self.current_view = AppView::ClipboardHistoryView {
+                FilterableRoutePlan {
+                    next_view: AppView::ClipboardHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    reset_shared_filter: false,
+                    pending_placeholder: None,
+                    pending_focus: None,
+                    clear_hover: false,
+                    resize: true,
+                }
+            }
+            FilterableView::AppLauncher => FilterableRoutePlan {
+                next_view: AppView::AppLauncherView {
                     filter: String::new(),
                     selected_index: 0,
-                };
-                self.update_window_size_deferred(window, cx);
-            }
-            FilterableView::AppLauncher => {
-                self.current_view = AppView::AppLauncherView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.update_window_size_deferred(window, cx);
-            }
+                },
+                reset_shared_filter: false,
+                pending_placeholder: None,
+                pending_focus: None,
+                clear_hover: false,
+                resize: true,
+            },
             FilterableView::BrowserTabs => match crate::browser_tabs::list_open_tabs() {
                 Ok(tabs) => {
                     self.cached_browser_tabs = tabs;
-                    self.filter_text = String::new();
-                    self.pending_filter_sync = true;
-                    self.pending_placeholder = Some("Search open browser tabs...".to_string());
-                    self.current_view = AppView::BrowserTabsView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    };
-                    self.hovered_index = None;
-                    self.pending_focus = Some(FocusTarget::MainFilter);
-                    self.update_window_size_deferred(window, cx);
+                    FilterableRoutePlan {
+                        next_view: AppView::BrowserTabsView {
+                            filter: String::new(),
+                            selected_index: 0,
+                        },
+                        reset_shared_filter: true,
+                        pending_placeholder: Some("Search open browser tabs..."),
+                        pending_focus: Some(FocusTarget::MainFilter),
+                        clear_hover: true,
+                        resize: true,
+                    }
                 }
                 Err(error) => {
-                    logging::log("ERROR", &format!("Failed to list browser tabs: {error}"));
+                    let reason = format!("Failed to list browser tabs: {error}");
+                    logging::log("ERROR", &reason);
+                    return Err(reason);
                 }
             },
-            FilterableView::EmojiPicker => {
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
-                self.current_view = AppView::EmojiPickerView {
+            FilterableView::EmojiPicker => FilterableRoutePlan {
+                next_view: AppView::EmojiPickerView {
                     filter: String::new(),
                     selected_index: 0,
                     selected_category: None,
-                };
-                self.hovered_index = None;
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.update_window_size_deferred(window, cx);
-            }
+                },
+                reset_shared_filter: true,
+                pending_placeholder: Some("Search Emoji & Symbols..."),
+                pending_focus: Some(FocusTarget::MainFilter),
+                clear_hover: true,
+                resize: true,
+            },
             FilterableView::WindowSwitcher => match crate::window_control::list_windows() {
                 Ok(windows) => {
                     self.cached_windows = windows;
-                    self.filter_text = String::new();
-                    self.pending_filter_sync = true;
-                    self.pending_placeholder = Some("Search windows...".to_string());
-                    self.current_view = AppView::WindowSwitcherView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    };
-                    self.hovered_index = None;
-                    self.pending_focus = Some(FocusTarget::MainFilter);
-                    self.update_window_size_deferred(window, cx);
+                    FilterableRoutePlan {
+                        next_view: AppView::WindowSwitcherView {
+                            filter: String::new(),
+                            selected_index: 0,
+                        },
+                        reset_shared_filter: true,
+                        pending_placeholder: Some("Search windows..."),
+                        pending_focus: Some(FocusTarget::MainFilter),
+                        clear_hover: true,
+                        resize: true,
+                    }
                 }
                 Err(error) => {
-                    logging::log("ERROR", &format!("Failed to list windows: {error}"));
+                    let reason = format!("Failed to list windows: {error}");
+                    logging::log("ERROR", &reason);
+                    return Err(reason);
                 }
             },
             FilterableView::ProcessManager => {
                 self.cached_processes =
                     crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search running scripts...".to_string());
-                self.current_view = AppView::ProcessManagerView {
-                    filter: String::new(),
-                    selected_index: 0,
-                };
-                self.hovered_index = None;
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.update_window_size_deferred(window, cx);
+                FilterableRoutePlan {
+                    next_view: AppView::ProcessManagerView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    reset_shared_filter: true,
+                    pending_placeholder: Some("Search running scripts..."),
+                    pending_focus: Some(FocusTarget::MainFilter),
+                    clear_hover: true,
+                    resize: true,
+                }
             }
+        };
+        Ok(plan)
+    }
+
+    fn apply_filterable_route_plan(
+        &mut self,
+        plan: FilterableRoutePlan,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> FilterableRouteState {
+        if plan.reset_shared_filter {
+            self.filter_text = String::new();
+            self.pending_filter_sync = true;
         }
+        if let Some(placeholder) = plan.pending_placeholder {
+            self.pending_placeholder = Some(placeholder.to_string());
+        }
+        if plan.clear_hover {
+            self.hovered_index = None;
+        }
+        if let Some(focus) = plan.pending_focus {
+            self.pending_focus = Some(focus);
+        }
+
+        self.current_view = plan.next_view;
+        let surface_kind = self.current_view.surface_kind();
+        if plan.resize {
+            self.update_window_size_deferred(window, cx);
+        }
+
+        FilterableRouteState::Applied { surface_kind }
     }
 
     /// Rate-limited, byte-capped log for the unknown-name no-op path.
