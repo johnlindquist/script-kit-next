@@ -36,6 +36,12 @@ TemplatePrompt automation parity proves the protocol path owns the same submit, 
 
 Use `cargo test --test template_prompt_parity_contract -- --nocapture` for source proof that every stdin simulateKey dispatcher has a TemplatePrompt arm, ForceSubmit includes TemplatePrompt in direct and batch paths, and the TemplatePrompt footer Actions button has a live `ActionsDialogHost::TemplatePrompt` mapping with focus restore. Runtime proof should launch `template("Hello {{name}}")`, assert `getState.promptType:"template"` plus `getElements` template rows, fill with `batch.setInput`, submit with `simulateKey Enter`, separately cancel with `simulateKey Escape`, open actions with `simulateKey Cmd+K`, and prove `batch.forceSubmit` resolves a provided value. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
 
+## FieldsPrompt Automation Parity
+
+FieldsPrompt automation parity proves `fields()` is a production prompt surface, not a coming-soon route.
+
+Use `cargo test --test source_audits fields_prompt_contract -- --nocapture` for source proof that `Message::Fields` routes to `PromptMessage::ShowFields`, reuses `FormPromptState::from_fields`, reports prompt type `fields`, exposes `fields-fields` and `input:fields-*` elements, submits values as a JSON array in definition order, and has explicit submit/cancel/navigation simulateKey arms. Runtime proof should launch `fields()` with at least one text field and one typed validation field, assert `getState.promptType:"fields"` and `activeFooter.activeSurface:"form_prompt"`, assert `getElements` field rows, fill through `batch.setInput` / `batch.selectBySemanticId`, verify invalid email blocks Enter, verify valid Enter submits, prove explicit `batch.forceSubmit` array resolution, open actions with Cmd+K under the FormPrompt host, and cancel with Escape. Use `bun scripts/agentic/fields-prompt-parity.ts`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
+
 ## SDK find unsupported boundary
 
 `find()` verification is a negative SDK contract, not a UI prompt proof.

@@ -20,14 +20,19 @@ impl ScriptListApp {
         let has_actions = self.has_nonempty_sdk_actions();
 
         // Get prompt ID and field count from entity for tracing
-        let (prompt_id, field_count) = {
+        let (prompt_id, prompt_type, field_count) = {
             let form_state = entity.read(cx);
-            (form_state.id.clone(), form_state.fields.len())
+            (
+                form_state.id.clone(),
+                form_state.prompt_type(),
+                form_state.fields.len(),
+            )
         };
 
         tracing::info!(
             surface = "render_prompts::form",
             prompt_id = %prompt_id,
+            prompt_type,
             field_count,
             shell = "render_simple_prompt_shell",
             body_padding = design_spacing.padding_lg,
@@ -77,12 +82,11 @@ impl ScriptListApp {
                 };
                 match form_enter_behavior(key, has_cmd, focused_field_is_textarea) {
                     FormEnterBehavior::Submit => {
-                        let validation_errors = {
+                        let validation_message = {
                             let form = entity_for_submit.read(cx);
-                            collect_form_submit_validation_errors(form, cx)
+                            form.submit_validation_message(cx)
                         };
-                        if !validation_errors.is_empty() {
-                            let message = form_submit_validation_message(&validation_errors);
+                        if let Some(message) = validation_message {
                             this.show_hud(message, Some(HUD_LONG_MS), cx);
                             return;
                         }

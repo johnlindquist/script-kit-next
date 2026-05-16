@@ -17,6 +17,9 @@ mod clipboard_actions;
 #[path = "source_audits/clipboard_image_contract.rs"]
 mod clipboard_image_contract;
 
+#[path = "source_audits/fields_prompt_contract.rs"]
+mod fields_prompt_contract;
+
 #[path = "source_audits/execution_helpers.rs"]
 mod execution_helpers;
 

@@ -31,6 +31,11 @@ enum PromptMessage {
         html: String,
         actions: Option<Vec<ProtocolAction>>,
     },
+    ShowFields {
+        id: String,
+        fields: Vec<protocol::Field>,
+        actions: Option<Vec<ProtocolAction>>,
+    },
     ShowTerm {
         id: String,
         command: Option<String>,
@@ -231,7 +236,7 @@ enum PromptMessage {
     SetActions {
         actions: Vec<protocol::ProtocolAction>,
     },
-    /// Placeholder stub until fields() lands in GPUI
+    /// Legacy placeholder retained for old queued messages.
     FieldsComingSoon {
         id: String,
         field_count: usize,
