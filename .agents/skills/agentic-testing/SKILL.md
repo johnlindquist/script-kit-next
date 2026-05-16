@@ -89,6 +89,19 @@ Rules:
 - If the screenshot does not clearly match the real surface, stop and re-route verification to the real surface instead of iterating on the fake one.
 - For ACP specifically, `AcpChatView` in isolation is not sufficient proof. Default to the real ACP entry path (`triggerBuiltin tab-ai`, detached chat window routing, or another production runtime path) before using any synthetic ACP harness.
 
+## Visual Diagnostics
+
+Visual proof must connect what the user sees to structured layout and semantic receipts. Use visible text, layout measurement, and screenshot-to-semantics diagnostics before trusting a screenshot as UX proof.
+
+- Use `screenshot-semantics-visual-consistency-stress` for pass-now visual consistency. It checks strict capture identity, non-blank content audit, `getState`, `getElements`, selected row, focus receipt, footer actions, popup crop bounds, and semantic visible text labels.
+- `visibleTextMode:"semanticElements"` means the harness found visible text from automation element labels. It is not OCR and not clipping proof.
+- For visible text, require text bounds, rendered text bounds, measured width, available width, glyph/container bounds, overlap pairs, and truncation metadata. Clipped or ellipsized text is acceptable only when the receipt proves intentional truncation plus tooltip or accessible full text.
+- For layout measurement, require rem/font/scale metrics, window/content/container/scroll/input/footer bounds, footer/input ownership, and before/after layout-shift fingerprints for filtering or resizing.
+- For screenshot-to-semantics checks, require the screenshot crop target to match the exact automation window and semantic surface, then cross-check selected row, focus ring, footer actions, and visible text against `getElements` receipts.
+- Do not treat pixels alone as proof. A PNG can show that something rendered, but it does not prove the selected row, focus target, visible text, or footer actions are the correct semantic objects unless the receipt ties pixels back to the same target window.
+- Do not claim text fits from a screenshot alone. Use `visible-text-clipping-overlap-stress` for clipping and overlap audits; it must fail closed until app-side text measurement receipts expose text bounds, measured width, available width, clipping state, truncation intent, tooltip or accessible full text, and overlap pairs.
+- Do not claim rem/layout correctness from window bounds alone. Use `layout-measurement-regression-stress`; it must fail closed until app-side layout receipts expose rem size, scale factor, content/container/scroll metrics, footer/input ownership, and layout-shift samples.
+
 ## The Pattern
 
 Every verification follows the same core loop:
