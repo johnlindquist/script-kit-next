@@ -45,7 +45,7 @@ fn dispatcher_seeds_process_manager_view_state() {
         "crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted()",
         "Search running scripts...",
         "AppView::ProcessManagerView",
-        "self.pending_focus = Some(FocusTarget::MainFilter);",
+        "pending_focus: Some(FocusTarget::MainFilter),",
         "self.update_window_size_deferred(window, cx);",
     ] {
         assert!(

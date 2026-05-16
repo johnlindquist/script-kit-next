@@ -84,7 +84,7 @@ Mini mode is an atomic main-window contract covering mode state, bounds, active 
 
 Prompt sizing follows the same split. `MiniPrompt` resolves through `ViewType::MiniPrompt`; inline Mini AI and mini-hosted ACP resolve through `ViewType::MiniAiChat`; Full ChatPrompt and ACP continue to use `ViewType::DivPrompt`.
 
-Hide/reset paths snapshot Mini state before `reset_to_script_list`, then reset hidden bounds when either the pre-reset or post-reset mode is Mini. This prevents reset normalization from leaking wide hidden bounds into automation receipts.
+Hide/reset paths snapshot Mini state before `reset_to_script_list`, set `windowVisible:false` before reset or prompt cancellation can make `ScriptList` current, then reset hidden bounds when either the pre-reset or post-reset mode is Mini. This prevents reset normalization from leaking wide hidden bounds into automation receipts and prevents visible main-menu frames during state-first close paths such as Quick Terminal Cmd-W.
 
 ## Mini Popup Dismiss Parity
 

@@ -72,6 +72,8 @@ Return-view restoration has a separate owner. `ScriptListApp::restore_current_vi
 
 ScriptList main-filter entries use `ScriptListApp::show_script_list_with_main_filter_focus()`. The helper delegates to `restore_current_view_with_focus(AppView::ScriptList, FocusTarget::MainFilter)`, then re-keys the main automation semantic surface from the restored `ScriptList` view while callers keep their own filter text, list cache, sizing, and notification work visible.
 
+Filterable `triggerBuiltin` routes enter through `ScriptListApp::show_filterable_view()`, but `ScriptListApp::run_filterable_route_state_machine()` owns the ordered route-entry mutation. It moves `FilterableView` from `Start` to `Prepared(FilterableRoutePlan)` or `Failed`, applies one `current_view = plan.next_view` assignment, derives the applied `SurfaceKind`, and leaves main automation re-keying to the existing post-dispatch helper.
+
 `AppView::native_footer_surface()` owns the exact native footer surface id for each view. It intentionally stays AppView-specific rather than SurfaceKind-specific because some grouped surface kinds still need distinct footer ids for prompt slots and specialized built-ins; the generated surface matrix exposes these per-variant footer ids.
 
 ## Agent-Readable Surface Contract Matrix
@@ -87,6 +89,8 @@ The JSON artifact is intentionally generated, not hand-authored. `tests/surface_
 The generated transition inventory exposes `current_view` mutation sites and named transition-helper calls while they are migrated behind route APIs.
 
 `scripts/generate-current-view-transitions.ts` scans `src/app_actions`, `src/app_execute`, `src/app_impl`, `src/main_entry`, `src/main_sections`, and `src/prompt_handler`, then writes [current-view-transitions.json](docs/ai/contracts/current-view-transitions.json). Each entry lists the file, line, owner function, receiver, operation, expression, inferred target, and whether the transition is dynamic enough to need manual review; named transition-helper calls also expose the helper name and contract flags such as main re-keying, focus target, embedded-AI upsert, and actions cleanup.
+
+Filterable `triggerBuiltin` surfaces now appear as a single dynamic assignment owned by `apply_filterable_route_plan`, because the route-entry state machine prepares the exact `AppView` payload before applying it. Agents should inspect the state-machine owner rather than expecting one generated inventory row per filterable surface.
 
 Named helper entries also carry checked `transitionContract` metadata for main re-keying, focus target/focused input, embedded AI upsert, actions cleanup, resize ownership, and state snapshot proof. This metadata is a source-derived transition contract, not a parallel router or public runtime receipt; runtime proof still flows through `getState.surfaceContract` and `activePopupContract`.
 
