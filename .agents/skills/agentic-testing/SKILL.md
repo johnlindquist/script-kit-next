@@ -128,6 +128,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For input-device modality transitions, prove hover/focus/selection affordances, pointer hover, keyboard focus, selection, trackpad/wheel scroll anchors, shortcut ownership, activation ownership, stale modality event rejection, wrong-surface input rejection, no accidental submit, screenshot-to-state revalidation, and cleanup.
 - For multi-context attachment dedupe/provenance, prove file, screenshot, selected-text, MCP resource, script resource, and clipboard snippet origins across ACP Composer and Notes, with attachment provenance, destination generations, dedupe keys, provenance fingerprints, redacted preview, remove/reorder receipts, stale provenance rejection, duplicate-id rejection, no privacy leaks, and cleanup.
 - For visual contrast readable state checks, prove active inactive disabled focused error loading states across themes, scale factors, and surfaces with theme token fingerprints, rem/scale metrics, text/color/bounds receipts, contrast ratios, non-color state cue coverage, screenshot-to-state revalidation, stale theme token rejection, wrong-surface rejection, and cleanup.
+- For empty/error/retry state UX, prove empty, loading, error, retry, and recovered states with visible text, semantic retry identity, footer-safe actions, stable selection, and no stale error after recovery.
+- For form validation and inline error recovery, prove invalid submit prevention, focus first invalid field, preserve user input, inline error identity, clear errors on valid edits, final submit recovery, prevent accidental submit, and no cross-field error leakage.
+- For navigation/back-stack history, prove transition generations, route stack depth, actions discoverability, disabled/no-op affordances, Escape/back/Cmd-K close behavior, and return-to-origin restore selection, filter, scroll, footer, and focus without stale surface state.
 
 ## The Pattern
 
@@ -616,6 +619,12 @@ bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress \
   --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations acp-composer,notes --reorder-cycles 3 --json
 bun scripts/agentic/index.ts visual-contrast-readable-state-stress \
   --session default --surfaces main,actionsDialog,promptPopup,acp-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
+bun scripts/agentic/index.ts empty-error-retry-state-ux-stress \
+  --session default --surfaces main,clipboard-history,emoji-picker,file-search --query 'agentic-loop-eighteen-no-results-zzzz' --json
+bun scripts/agentic/index.ts form-validation-inline-recovery-stress \
+  --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
+bun scripts/agentic/index.ts navigation-back-stack-history-stress \
+  --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
 ```
 
 ### State-only vs screenshot checkpoints
