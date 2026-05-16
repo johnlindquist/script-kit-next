@@ -140,6 +140,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For icon/image fallback redaction, prove requested image source kind, redacted source fingerprint, fallback icon kind, fallback reason, image load generation, no raw path/URL/content leakage, stale image rejection, accessible label preservation, and cleanup.
 - For footer/status persistence, prove owner, native footer surface id, rendered buttons, shortcut labels, status generation, persistence across filter/selection/actions transitions, duplicate-footer rejection, stale-status rejection, wrong-surface rejection, and cleanup.
 - For keyboard hint label parity, prove footer, row accessory, tooltip, action catalog, normalized shortcut tokens, platform glyphs, disabled-state parity, activation owner, no accidental execution, stale-hint rejection, wrong-surface rejection, and cleanup.
+- For row state parity without native pointer input, prove selected, focused, hovered, and selected-hovered row states through semantic row ids, state/elements receipts, modality receipts, tokenized fill/focus/text/icon states, stale-row rejection, wrong-surface rejection, no accidental execution, and cleanup.
+- For quiet chrome/card nesting regressions, prove shell/content/row/popup/footer chrome layers, border/fill/shadow tokens, card depth, inset/gap/radius, duplicate-border rejection, opaque-fill rejection, stale-token rejection, wrong-surface rejection, and cleanup.
+- For scroll shadows, sticky headers, and density drift, prove scroll position, viewport/content bounds, sticky header bounds/z-index, scroll shadow opacity tokens, row/header/input/footer heights, rem/scale metrics, footer-safe viewport, selected-row visibility, stale-scroll rejection, wrong-surface rejection, and cleanup.
 
 ## The Pattern
 
@@ -795,6 +798,9 @@ bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --sess
 bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
 bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
 bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPopup --families footer,row-accessory,tooltip,action-catalog --json
+bun scripts/agentic/index.ts row-state-parity-without-pointer-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --states selected,focused,hovered,selected-hovered --json
+bun scripts/agentic/index.ts quiet-chrome-card-nesting-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,promptPopup --chrome quiet --json
+bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --session default --surfaces clipboard-history,emoji-picker,file-search,app-launcher,actionsDialog --scroll-positions top,middle,bottom --density compact,default --json
 ```
 
 ## Adjacent Skills

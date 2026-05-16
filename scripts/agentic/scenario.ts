@@ -145,7 +145,10 @@ export interface HardScenarioReceipt {
     | "loading-skeleton-progress-restoration-stress"
     | "icon-image-fallback-redaction-stress"
     | "footer-status-persistence-stress"
-    | "keyboard-hint-label-parity-stress";
+    | "keyboard-hint-label-parity-stress"
+    | "row-state-parity-without-pointer-stress"
+    | "quiet-chrome-card-nesting-stress"
+    | "scroll-shadow-sticky-header-density-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -226,6 +229,9 @@ export interface HardScenarioReceipt {
   iconImageFallbackRedaction?: Record<string, unknown>;
   footerStatusPersistence?: Record<string, unknown>;
   keyboardHintLabelParity?: Record<string, unknown>;
+  rowStateParityWithoutPointer?: Record<string, unknown>;
+  quietChromeCardNesting?: Record<string, unknown>;
+  scrollShadowStickyHeaderDensity?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6617,6 +6623,117 @@ export async function runKeyboardHintLabelParityStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_keyboard_hint_label_parity_receipt" } }],
     failure: { code: "missing_keyboard_hint_label_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side keyboard hint label parity receipts." },
     warnings: ["file_linear:keyboard_hint_label_parity_receipts_missing"],
+  };
+}
+
+export async function runRowStateParityWithoutPointerStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  states?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "row-state-parity-without-pointer-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_row_state_parity_without_pointer_receipt",
+    linearIssue: "file_linear:row_state_parity_without_pointer_receipts_missing",
+    rowStateParityWithoutPointer: {
+      kind: "ux.rowStateParityWithoutPointer",
+      rowStateParityStressId: "loop-twenty-two-row-state-parity-without-pointer",
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog"],
+      requestedStates: opts.states ?? ["selected", "focused", "hovered", "selected-hovered"],
+      surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, rowStateParityWithoutPointerReceipt: null,
+      rowStateSamples: [], semanticId: null, rowRole: null, rowIndex: null, rowLabel: null, modality: null,
+      selectedSemanticId: null, focusedSemanticId: null, hoverSemanticId: null,
+      keyboardFocusRingVisible: null, selectionPaintVisible: null, hoverPaintVisible: null, focusPaintVisible: null,
+      selectedFillToken: null, hoverFillToken: null, focusRingToken: null, textOpacityToken: null, iconOpacityToken: null,
+      selectedPrecedenceOverHover: null, hoverDoesNotOverrideSelection: null, focusDoesNotStealSelection: null,
+      focusedRowMatchesElements: null, selectedRowMatchesState: null, hoverReceiptSyntheticOnly: null,
+      noNativePointerRequired: true, staleRowStateRejected: null, wrongSurfaceRowStateRejected: null, noAccidentalExecution: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_row_state_parity_without_pointer_receipt" } }],
+    failure: { code: "missing_row_state_parity_without_pointer_receipt", stepName: "declare-required-receipt", message: "Missing app-side row visual-state parity receipts without native pointer input." },
+    warnings: ["file_linear:row_state_parity_without_pointer_receipts_missing"],
+  };
+}
+
+export async function runQuietChromeCardNestingStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  chrome?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "quiet-chrome-card-nesting-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_quiet_chrome_card_nesting_receipt",
+    linearIssue: "file_linear:quiet_chrome_card_nesting_receipts_missing",
+    quietChromeCardNesting: {
+      kind: "ux.quietChromeCardNesting",
+      quietChromeStressId: "loop-twenty-two-quiet-chrome-card-nesting",
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog", "promptPopup"],
+      requestedChrome: opts.chrome ?? "quiet",
+      surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, quietChromeCardNestingReceipt: null,
+      chromeLayerSamples: [], shellLayer: null, contentLayer: null, rowLayer: null, popupLayer: null, footerLayer: null,
+      borderToken: null, fillToken: null, shadowToken: null, vibrancyMaterial: null, cornerRadius: null,
+      insetPx: null, gapPx: null, cardDepth: null, nestedCardCount: null, maxAllowedCardDepth: null,
+      duplicateBorderRejected: null, opaqueFillRejected: null, heavyShadowRejected: null, doubleCardNestingRejected: null,
+      footerChromeSeparated: null, inputChromeSeparated: null, popupMaterialPreserved: null, quietChromeBudgetMatched: null,
+      themeTokenFingerprint: null, staleChromeTokenRejected: null, wrongSurfaceChromeRejected: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_quiet_chrome_card_nesting_receipt" } }],
+    failure: { code: "missing_quiet_chrome_card_nesting_receipt", stepName: "declare-required-receipt", message: "Missing app-side quiet chrome/card nesting receipts." },
+    warnings: ["file_linear:quiet_chrome_card_nesting_receipts_missing"],
+  };
+}
+
+export async function runScrollShadowStickyHeaderDensityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  scrollPositions?: string[];
+  density?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "scroll-shadow-sticky-header-density-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_scroll_shadow_sticky_header_density_receipt",
+    linearIssue: "file_linear:scroll_shadow_sticky_header_density_receipts_missing",
+    scrollShadowStickyHeaderDensity: {
+      kind: "ux.scrollShadowStickyHeaderDensity",
+      scrollChromeDensityStressId: "loop-twenty-two-scroll-shadow-sticky-header-density",
+      requestedSurfaces: opts.surfaces ?? ["clipboard-history", "emoji-picker", "file-search", "app-launcher", "actionsDialog"],
+      requestedScrollPositions: opts.scrollPositions ?? ["top", "middle", "bottom"],
+      requestedDensity: opts.density ?? ["compact", "default"],
+      surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, scrollShadowStickyHeaderDensityReceipt: null,
+      scrollSamples: [], scrollPosition: null, scrollTop: null, scrollViewportBounds: null, scrollContentBounds: null,
+      scrollContentHeight: null, scrollViewportHeight: null, stickyHeaderReceipt: null, headerSemanticId: null,
+      headerBounds: null, headerPinned: null, headerZIndex: null, headerDoesNotOverlapRows: null,
+      headerDoesNotOverlapInput: null, headerDoesNotOverlapFooter: null, scrollShadowReceipt: null,
+      topShadowVisible: null, bottomShadowVisible: null, topShadowOpacityToken: null, bottomShadowOpacityToken: null,
+      shadowGradientToken: null, shadowMatchesScrollPosition: null, densityReceipt: null, densityMode: null,
+      rowHeightPx: null, sectionHeaderHeightPx: null, inputHeightPx: null, footerHeightPx: null, verticalGapPx: null,
+      horizontalInsetPx: null, remSize: null, scaleFactor: null, densityTokenFingerprint: null, rowRhythmStable: null,
+      footerSafeViewport: null, selectedRowVisibleAboveFooter: null, staleScrollGenerationRejected: null,
+      wrongSurfaceScrollRejected: null, networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_scroll_shadow_sticky_header_density_receipt" } }],
+    failure: { code: "missing_scroll_shadow_sticky_header_density_receipt", stepName: "declare-required-receipt", message: "Missing app-side scroll shadow, sticky header, and density receipts." },
+    warnings: ["file_linear:scroll_shadow_sticky_header_density_receipts_missing"],
   };
 }
 
