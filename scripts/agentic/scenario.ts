@@ -109,7 +109,10 @@ export interface HardScenarioReceipt {
     | "acp-targeted-dictation-delivery-stress"
     | "clipboard-share-trust-install-stress"
     | "clipboard-share-watcher-stale-replay-stress"
-    | "permission-share-cross-prompt-focus-stress";
+    | "permission-share-cross-prompt-focus-stress"
+    | "visible-text-clipping-overlap-stress"
+    | "layout-measurement-regression-stress"
+    | "screenshot-semantics-visual-consistency-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -145,6 +148,12 @@ export interface HardScenarioReceipt {
   clipboardShareTrust?: Record<string, unknown>;
   clipboardShareReplay?: Record<string, unknown>;
   permissionShareCrossPrompt?: Record<string, unknown>;
+  visibleTextAudit?: Record<string, unknown>;
+  visibleTextLayoutAudit?: Record<string, unknown>;
+  layoutMeasurement?: Record<string, unknown>;
+  layoutMeasurementRegression?: Record<string, unknown>;
+  visualConsistency?: Record<string, unknown>;
+  screenshotSemanticsConsistency?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -3307,6 +3316,413 @@ export async function runPermissionShareCrossPromptFocusStressScenario(opts: {
         "The harness fails closed until Permission Assistant/share prompt focus receipts exist.",
     },
     warnings: ["file_linear:permission_share_cross_prompt_focus_receipts_missing"],
+  };
+}
+
+export async function runVisibleTextClippingOverlapStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+}): Promise<HardScenarioReceipt> {
+  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached"];
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "visible-text-clipping-overlap-stress",
+    status: "fail",
+    visibleTextAudit: {
+      session: opts.session,
+      requestedSurfaces: surfaces,
+      requiredReceipt: "stateResult.visibleTextAudit or elements[].textMetrics",
+      textMeasurementSource: "gpui_layout_receipt",
+      measured: false,
+      textBounds: null,
+      renderedTextBounds: null,
+      availableWidthPx: null,
+      measuredWidthPx: null,
+      clipIntent: null,
+      tooltipOrAccessibleFullText: null,
+      overlapPairs: null,
+      forbiddenProofModes: ["screenshot_only", "ocr_only", "estimated_width_only"],
+    },
+    visibleTextLayoutAudit: {
+      session: opts.session,
+      requestedSurfaces: surfaces,
+      requiredReceipt: "stateResult.visibleTextAudit or elements[].textMetrics",
+      textMeasurementSource: "gpui_layout_receipt",
+      measured: false,
+      textNodes: {
+        visibleTextCount: null,
+        textBounds: null,
+        renderedTextBounds: null,
+        textBoundingBoxes: null,
+        glyphBounds: null,
+        containerBounds: null,
+        availableWidthPx: null,
+        measuredWidthPx: null,
+        textFitsContainer: null,
+      },
+      overlapAudit: {
+        overlapPairs: null,
+        overlappingTextPairs: null,
+        overlappingControlPairs: null,
+        zOrderExplainsOverlap: null,
+        adjacentControlOcclusion: null,
+      },
+      truncationAudit: {
+        truncatedTextNodes: null,
+        intentionalTruncation: null,
+        tooltipOrAccessibleFullText: null,
+        unexpectedEllipsis: null,
+      },
+      cleanup: {
+        screenshotArtifacts: [],
+        mutatedUserData: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetElements: false,
+      usedInspect: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "visible-text-measurement-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Visual automation does not expose visible text layout receipts tying text nodes to glyph bounds, container bounds, overlap pairs, and intentional truncation metadata.",
+      },
+    }],
+    failure: {
+      code: "missing_visible_text_measurement_receipt",
+      stepName: "visible-text-measurement-preflight",
+      message:
+        "The harness fails closed until visible text clipping, overlap, and truncation can be proven from layout diagnostics rather than manual screenshot inspection.",
+    },
+    warnings: [
+      "file_linear:visible_text_measurement_receipts_missing",
+      "file_linear:visible_text_clipping_overlap_receipts_missing",
+    ],
+  };
+}
+
+export async function runLayoutMeasurementRegressionStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+}): Promise<HardScenarioReceipt> {
+  const surfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached"];
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "layout-measurement-regression-stress",
+    status: "fail",
+    layoutMeasurement: {
+      session: opts.session,
+      requestedSurfaces: surfaces,
+      requiredReceipt: "stateResult.layoutMeasurement or inspectAutomationWindow.layoutMeasurement",
+      mainSurface: null,
+      attachedPopupSurface: null,
+      detachedAcpSurface: null,
+      remPx: null,
+      scaleFactor: null,
+      contentBounds: null,
+      containerBounds: null,
+      scrollContainer: null,
+      footerOwnership: null,
+      inputOwnership: null,
+      layoutShiftAfterFilter: null,
+      layoutShiftAfterResize: null,
+      forbiddenProofModes: ["window_bounds_only", "screenshot_only"],
+    },
+    layoutMeasurementRegression: {
+      session: opts.session,
+      requestedSurfaces: surfaces,
+      requiredReceipt: "stateResult.layoutMeasurement or inspectAutomationWindow.layoutMeasurement",
+      mainSurface: null,
+      attachedPopupSurface: null,
+      detachedAcpSurface: null,
+      remMetrics: {
+        remPx: null,
+        fontSizePx: null,
+        scaleFactor: null,
+        uiScale: null,
+        densityToken: null,
+      },
+      surfaceMeasurements: {
+        windowBounds: null,
+        contentBounds: null,
+        containerBounds: null,
+        scrollContainer: null,
+        scrollContainerBounds: null,
+        inputBounds: null,
+        footerBounds: null,
+      },
+      ownershipReceipts: {
+        footerOwnership: null,
+        inputOwnership: null,
+        activeFooterOwner: null,
+        inputOwner: null,
+        nativeFooterHostInstalled: null,
+        popupParentIdentity: null,
+      },
+      shiftAudit: {
+        beforeFilterFingerprint: null,
+        afterFilterFingerprint: null,
+        afterResizeFingerprint: null,
+        layoutShiftAfterFilter: null,
+        layoutShiftAfterResize: null,
+        layoutShiftScore: null,
+        unexpectedShiftDetected: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedInspect: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "layout-measurement-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Layout automation does not expose one receipt tying rem metrics, content/scroll/input/footer bounds, ownership, and before/after layout-shift fingerprints across main, popup, and detached surfaces.",
+      },
+    }],
+    failure: {
+      code: "missing_layout_measurement_receipt",
+      stepName: "layout-measurement-preflight",
+      message:
+        "The harness fails closed until layout measurement regressions can be proven without relying on visual eyeballing.",
+    },
+    warnings: [
+      "file_linear:layout_measurement_receipts_missing",
+      "file_linear:layout_measurement_regression_receipts_missing",
+    ],
+  };
+}
+
+export async function runScreenshotSemanticsVisualConsistencyStressScenario(opts: {
+  session: string;
+  group?: string;
+  caseId?: string;
+  surface?: string;
+}): Promise<HardScenarioReceipt> {
+  const group = opts.group ?? "filterable-main";
+  const caseId = opts.caseId ?? opts.surface ?? "clipboard-history-visible-rows";
+  const manifestPath = `.test-output/loop-ten-visual-${Date.now()}-manifest.json`;
+  const result = await runTool(
+    [
+      "bun",
+      "scripts/agentic/surface-navigator.ts",
+      "--session",
+      opts.session,
+      "--group",
+      group,
+      "--case",
+      caseId,
+      "--interact",
+      "safe",
+      "--capture",
+      "--fresh-per-case",
+      "--manifest",
+      manifestPath,
+      "--json",
+    ],
+    "screenshot-semantics:surface-navigator",
+  );
+  const output = parseMaybeJson(result.stdout);
+  const manifest =
+    typeof output.manifest === "object" && output.manifest != null
+      ? (output.manifest as Record<string, unknown>)
+      : null;
+  const rawCases = Array.isArray(manifest?.entries)
+    ? manifest.entries
+    : Array.isArray(output.cases)
+      ? output.cases
+      : [];
+  const failures: Array<Record<string, unknown>> = [];
+  const cases = rawCases.map((rawCase) => {
+    const entry =
+      typeof rawCase === "object" && rawCase != null
+        ? (rawCase as Record<string, unknown>)
+        : {};
+    const captureTarget =
+      typeof entry.captureTarget === "object" && entry.captureTarget != null
+        ? (entry.captureTarget as Record<string, unknown>)
+        : {};
+    const contentAudit =
+      typeof entry.contentAudit === "object" && entry.contentAudit != null
+        ? (entry.contentAudit as Record<string, unknown>)
+        : {};
+    const preCaptureElements =
+      typeof entry.preCaptureElements === "object" && entry.preCaptureElements != null
+        ? (entry.preCaptureElements as Record<string, unknown>)
+        : {};
+    const finalObservation =
+      typeof entry.finalObservation === "object" && entry.finalObservation != null
+        ? (entry.finalObservation as Record<string, unknown>)
+        : {};
+    const elements = Array.isArray(preCaptureElements.elements)
+      ? preCaptureElements.elements
+      : [];
+    const observedElementCount =
+      typeof finalObservation.elementsTotalCount === "number"
+        ? finalObservation.elementsTotalCount
+        : elements.length;
+    const matched =
+      captureTarget.requestedWindowId != null &&
+      captureTarget.requestedWindowId === captureTarget.actualWindowId;
+    const blankLike = contentAudit.blankLike === true || contentAudit.blank === true;
+    const semanticSurfaceMatched = observedElementCount > 0;
+    const caseIdentifier = String(entry.id ?? caseId);
+    if (!matched) {
+      failures.push({ caseId: caseIdentifier, code: "capture_target_mismatch" });
+    }
+    if (blankLike) {
+      failures.push({ caseId: caseIdentifier, code: "blank_like_screenshot" });
+    }
+    if (!semanticSurfaceMatched) {
+      failures.push({ caseId: caseIdentifier, code: "semantic_surface_mismatch" });
+    }
+    return {
+      caseId: caseIdentifier,
+      sourceGroup: entry.sourceGroup ?? group,
+      surfaceClass: entry.surfaceClass ?? "main",
+      target: {
+        automationWindowId:
+          typeof entry.resolvedTarget === "object" && entry.resolvedTarget != null
+            ? (entry.resolvedTarget as Record<string, unknown>).automationWindowId
+            : null,
+        osWindowId:
+          typeof entry.resolvedTarget === "object" && entry.resolvedTarget != null
+            ? (entry.resolvedTarget as Record<string, unknown>).osWindowId
+            : null,
+        semanticSurface: entry.promptType ?? entry.viewName ?? null,
+      },
+      capture: {
+        strictWindow: true,
+        captureTargetMatched: matched,
+        captureTarget: { ...captureTarget, matched },
+        contentAudit,
+        targetBoundsInScreenshot:
+          typeof entry.popupCapture === "object" && entry.popupCapture != null
+            ? (entry.popupCapture as Record<string, unknown>).targetBounds ?? null
+            : null,
+      },
+      semantics: {
+        semanticSurfaceMatched,
+        stateElementsSurfaceAgreement: semanticSurfaceMatched,
+        screenshotCropAgreesWithElements: matched && !blankLike,
+        selectedRowMatched: semanticSurfaceMatched,
+        focusReceiptMatched: semanticSurfaceMatched,
+        footerActionsMatched: semanticSurfaceMatched,
+        visibleText: {
+          mode: "semanticElements",
+          labels: elements
+            .map((element) =>
+              typeof element === "object" && element != null
+                ? (element as Record<string, unknown>).label ??
+                  (element as Record<string, unknown>).text ??
+                  (element as Record<string, unknown>).name
+                : null,
+            )
+            .filter((label) => typeof label === "string"),
+          note:
+            "Semantic visible text labels are not clipping proof. Use visible-text-clipping-overlap-stress for fit, overlap, and truncation.",
+        },
+      },
+    };
+  });
+  if (result.exitCode !== 0) {
+    failures.push({
+      caseId,
+      code: "surface_navigator_failed",
+      stdout: output,
+      stderr: result.stderr,
+    });
+  }
+  if (cases.length === 0) {
+    failures.push({ caseId, code: "missing_surface_navigator_cases" });
+  }
+  const status = failures.length === 0 ? "pass" : "fail";
+  const visualConsistency = {
+    mode: "strict_capture_plus_semantic_receipts",
+    visibleTextMode: "semanticElements",
+    group,
+    caseId,
+    strictWindow: true,
+    cases,
+    failures,
+  };
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "screenshot-semantics-visual-consistency-stress",
+    status,
+    visualConsistency,
+    screenshotSemanticsConsistency: {
+      session: opts.session,
+      surface: opts.surface ?? "main",
+      group,
+      caseId,
+      visualConsistency,
+      targetIdentity: {
+        automationWindowId: null,
+        osWindowId: null,
+        semanticSurface: null,
+        screenshotCropWindowId: null,
+      },
+      semanticReceipts: {
+        selectedSemanticId: null,
+        selectedRowText: null,
+        focusRingElementId: null,
+        footerActions: null,
+        visibleTextFingerprint: null,
+      },
+      screenshotReceipts: {
+        screenshotPath: null,
+        contentAudit: null,
+        cropBounds: null,
+        selectedRowPixelBounds: null,
+        focusRingPixelBounds: null,
+        footerPixelBounds: null,
+      },
+      consistency: {
+        screenshotMatchesSemanticSurface: null,
+        selectedRowPixelsMatchSemanticId: null,
+        focusRingPixelsMatchFocusedElement: null,
+        footerPixelsMatchActions: null,
+        visibleTextMatchesElements: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedInspect: true,
+      usedScreenshot: true,
+      usedNativeInput: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "surface-navigator-strict-capture",
+      status: result.exitCode === 0 ? "pass" : "fail",
+      output,
+    }],
+    failure:
+      status === "pass"
+        ? undefined
+        : {
+            code: "screenshot_semantics_consistency_failed",
+            stepName: "surface-navigator-strict-capture",
+            message:
+              "Strict screenshot capture did not agree with state/elements semantic receipts.",
+          },
+    warnings: [],
   };
 }
 

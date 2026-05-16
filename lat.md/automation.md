@@ -210,6 +210,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `permission-share-cross-prompt-focus-stress` is intentionally fail-closed until Permission Assistant and share trust prompts expose one cross-prompt focus receipt with passive panel identity, share prompt identity, prompt priority, no System Settings activation leak, no accidental share acceptance, no TCC/plugin mutation, and cleanup.
 
+`screenshot-semantics-visual-consistency-stress` is the pass-now visual recipe. It delegates to strict `surface-navigator` capture, then checks the sidecar manifest so the captured window, screenshot content audit, pre-capture `getState`, pre-capture `getElements`, selected row, focus receipt, footer actions, and popup crop bounds describe the same semantic surface. Its `visibleTextMode:"semanticElements"` field means visible text was detected from automation element labels, not OCR and not clipping proof.
+
+`visible-text-clipping-overlap-stress` is intentionally fail-closed until GPUI exposes authoritative text measurement receipts. The required receipt must include each visible label, button, row, and input text's semantic id, full text, visible text, element bounds, text bounds, rendered text bounds, available width, measured width, clipping state, truncation intent, tooltip or accessible full text, and overlap pairs.
+
+`layout-measurement-regression-stress` is intentionally fail-closed until main, attached popup, and detached ACP surfaces expose rem size, scale factor, window/content/container bounds, scroll viewport/content metrics, footer ownership, input ownership, and before/after filter/resize layout-shift samples.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

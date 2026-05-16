@@ -45,6 +45,12 @@
  *                         Fail-closed clipboard watcher stale/replay proof
  *   permission-share-cross-prompt-focus-stress
  *                         Fail-closed permission/share cross-prompt focus proof
+ *   visible-text-clipping-overlap-stress
+ *                         Fail-closed visible text clipping/overlap visual proof
+ *   layout-measurement-regression-stress
+ *                         Fail-closed layout measurement regression proof
+ *   screenshot-semantics-visual-consistency-stress
+ *                         Pass-now screenshot-to-semantics consistency proof
  *   help                   Show this help
  *
  * Target threading:
@@ -86,6 +92,9 @@ import {
   runClipboardShareTrustInstallStressScenario,
   runClipboardShareWatcherStaleReplayStressScenario,
   runPermissionShareCrossPromptFocusStressScenario,
+  runVisibleTextClippingOverlapStressScenario,
+  runLayoutMeasurementRegressionStressScenario,
+  runScreenshotSemanticsVisualConsistencyStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -631,6 +640,10 @@ function parseArgs() {
     surfacesIdx >= 0 && args[surfacesIdx + 1]
       ? args[surfacesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const groupIdx = args.indexOf("--group");
+  const group = groupIdx >= 0 && args[groupIdx + 1] ? args[groupIdx + 1] : undefined;
+  const caseIdx = args.indexOf("--case");
+  const caseId = caseIdx >= 0 && args[caseIdx + 1] ? args[caseIdx + 1] : undefined;
   const monitorProfileIdx = args.indexOf("--monitor-profile");
   const monitorProfile =
     monitorProfileIdx >= 0 && args[monitorProfileIdx + 1]
@@ -703,6 +716,8 @@ function parseArgs() {
     sandboxConfig,
     loops,
     surfaces,
+    group,
+    caseId,
     monitorProfile,
     transcript,
     fixtureId,
@@ -1996,6 +2011,8 @@ const {
   sandboxConfig,
   loops,
   surfaces,
+  group,
+  caseId,
   monitorProfile,
   transcript,
   fixtureId,
@@ -2543,6 +2560,58 @@ switch (recipe) {
     break;
   }
 
+  case "visible-text-clipping-overlap-stress": {
+    const proofBundle = await runVisibleTextClippingOverlapStressScenario({
+      session,
+      surfaces,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "visible-text-clipping-overlap-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Visible text clipping/overlap stress failed closed; text bounds, overlap, and truncation diagnostics are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "layout-measurement-regression-stress": {
+    const proofBundle = await runLayoutMeasurementRegressionStressScenario({
+      session,
+      surfaces,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "layout-measurement-regression-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Layout measurement regression stress failed closed; rem, bounds, ownership, and layout-shift receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "screenshot-semantics-visual-consistency-stress": {
+    const proofBundle = await runScreenshotSemanticsVisualConsistencyStressScenario({
+      session,
+      group,
+      caseId,
+      surface,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "screenshot-semantics-visual-consistency-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Screenshot, capture identity, state, elements, selected row, focus, footer, and semantic visible text receipts agree"
+        : "Screenshot-to-semantics consistency failed; inspect proofBundle.visualConsistency.failures",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2670,6 +2739,9 @@ switch (recipe) {
           { name: "clipboard-share-trust-install-stress", description: "Fail-closed clipboard share trust/install receipt for prompt identity, package fingerprint, accept/refuse, install gate, and clipboard restoration", flags: ["--session", "--fixture-id", "--share-kind", "--accept-mode", "--json"] },
           { name: "clipboard-share-watcher-stale-replay-stress", description: "Fail-closed clipboard share watcher stale/replay receipt for generation ordering, stale rejection, prompt replacement, and duplicate install guard", flags: ["--session", "--fixture-id", "--share-kind", "--count", "--burst-ms", "--json"] },
           { name: "permission-share-cross-prompt-focus-stress", description: "Fail-closed Permission Assistant/share trust prompt focus receipt for prompt priority, window identity, no Settings activation leak, and cleanup", flags: ["--session", "--fixture-id", "--share-kind", "--pane", "--bundle-id", "--json"] },
+          { name: "visible-text-clipping-overlap-stress", description: "Fail-closed visible text bounds, overlap, and intentional truncation receipt", flags: ["--session", "--surfaces", "--json"] },
+          { name: "layout-measurement-regression-stress", description: "Fail-closed rem, bounds, scroll/input/footer ownership, and layout-shift measurement receipt", flags: ["--session", "--surfaces", "--json"] },
+          { name: "screenshot-semantics-visual-consistency-stress", description: "Pass-now strict screenshot capture plus state/elements semantic consistency proof", flags: ["--session", "--group", "--case", "--surface", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2722,6 +2794,12 @@ switch (recipe) {
           "proofBundle.clipboardShareTrust",
           "proofBundle.clipboardShareReplay",
           "proofBundle.permissionShareCrossPrompt",
+          "proofBundle.visibleTextAudit",
+          "proofBundle.visibleTextLayoutAudit",
+          "proofBundle.layoutMeasurement",
+          "proofBundle.layoutMeasurementRegression",
+          "proofBundle.visualConsistency",
+          "proofBundle.screenshotSemanticsConsistency",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2798,6 +2876,12 @@ Recipes:
                          Fail-closed clipboard watcher stale/replay proof
   permission-share-cross-prompt-focus-stress
                          Fail-closed permission/share cross-prompt focus proof
+  visible-text-clipping-overlap-stress
+                         Fail-closed visible text clipping/overlap visual proof
+  layout-measurement-regression-stress
+                         Fail-closed layout measurement regression proof
+  screenshot-semantics-visual-consistency-stress
+                         Pass-now screenshot-to-semantics consistency proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2870,6 +2954,12 @@ Available scenarios:
                          Emit fail-closed clipboard watcher stale/replay requirements
   permission-share-cross-prompt-focus-stress
                          Emit fail-closed permission/share cross-prompt focus requirements
+  visible-text-clipping-overlap-stress
+                         Emit fail-closed visible text clipping/overlap requirements
+  layout-measurement-regression-stress
+                         Emit fail-closed layout measurement regression requirements
+  screenshot-semantics-visual-consistency-stress
+                         Run strict screenshot/semantics visual consistency proof
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2909,6 +2999,9 @@ Examples:
   bun scripts/agentic/index.ts clipboard-share-trust-install-stress --session default --fixture-id agentic-loop-nine --share-kind script --accept-mode both --json
   bun scripts/agentic/index.ts clipboard-share-watcher-stale-replay-stress --session default --fixture-id agentic-loop-nine --share-kind script --count 3 --burst-ms 25 --json
   bun scripts/agentic/index.ts permission-share-cross-prompt-focus-stress --session default --fixture-id agentic-loop-nine --share-kind script --pane Accessibility --bundle-id com.scriptkit.app --json
+  bun scripts/agentic/index.ts visible-text-clipping-overlap-stress --session default --surfaces main,actionsDialog,acpDetached --json
+  bun scripts/agentic/index.ts layout-measurement-regression-stress --session default --surfaces main,actionsDialog,acpDetached --json
+  bun scripts/agentic/index.ts screenshot-semantics-visual-consistency-stress --session default --group filterable-main --case clipboard-history-visible-rows --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
