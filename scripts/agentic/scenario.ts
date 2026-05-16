@@ -157,7 +157,10 @@ export interface HardScenarioReceipt {
     | "tooltip-hover-focus-affordance-stress"
     | "shortcut-recorder-cancel-layering-stress"
     | "inline-popover-anchor-resize-stress"
-    | "disabled-footer-hit-target-refusal-stress";
+    | "disabled-footer-hit-target-refusal-stress"
+    | "mini-full-transition-layout-continuity-stress"
+    | "filter-input-decoration-chip-layout-stress"
+    | "focus-ring-viewport-integrity-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -250,6 +253,9 @@ export interface HardScenarioReceipt {
   shortcutRecorderCancelLayeringReceipt?: Record<string, unknown>;
   inlinePopoverAnchorResizeReceipt?: Record<string, unknown>;
   disabledFooterHitTargetRefusalReceipt?: Record<string, unknown>;
+  miniFullTransitionLayoutContinuityReceipt?: Record<string, unknown>;
+  filterInputDecorationChipLayoutReceipt?: Record<string, unknown>;
+  focusRingViewportIntegrityReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7105,6 +7111,154 @@ export async function runDisabledFooterHitTargetRefusalStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_disabled_footer_hit_target_refusal_receipt" } }],
     failure: { code: "missing_disabled_footer_hit_target_refusal_receipt", stepName: "declare-required-receipt", message: "Missing app-side disabled footer hit-target refusal receipts." },
     warnings: ["file_linear:disabled_footer_hit_target_refusal_receipts_missing"],
+  };
+}
+
+export async function runMiniFullTransitionLayoutContinuityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  transitions?: string[];
+  fixture?: string;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "mini-full-transition-layout-continuity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_mini_full_transition_layout_continuity_receipt",
+    linearIssue: "file_linear:mini_full_transition_layout_continuity_receipts_missing",
+    miniFullTransitionLayoutContinuityReceipt: {
+      kind: "ux.miniFullTransitionLayoutContinuity",
+      miniFullTransitionLayoutContinuityStressId: "loop-twenty-six-mini-full-transition-layout-continuity",
+      session: opts.session,
+      requestedSurfaces: opts.surfaces ?? ["main", "mini-prompt", "fields-prompt", "actionsDialog"],
+      requestedTransitions: opts.transitions ?? ["mini-to-full", "full-to-mini", "hide-show", "return-to-origin"],
+      fixture: opts.fixture ?? "agentic-mini-full-layout",
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-resize"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      modeSamples: [], surface: null, transition: null, automationWindowId: null, osWindowId: null,
+      semanticSurface: null, modeBefore: null, modeAfter: null, viewTypeBefore: null, viewTypeAfter: null,
+      transitionGeneration: null, remSizeBefore: null, remSizeAfter: null, scaleFactor: null,
+      windowBoundsBefore: null, windowBoundsAfter: null, contentBoundsBefore: null, contentBoundsAfter: null,
+      inputBoundsBefore: null, inputBoundsAfter: null, listViewportBoundsBefore: null, listViewportBoundsAfter: null,
+      footerBoundsBefore: null, footerBoundsAfter: null, nativeFooterSurfaceId: null, focusRingBounds: null,
+      selectedRowVisible: null, selectedRowAboveFooter: null, noInputFooterOverlap: null, noContentClip: null,
+      noFooterClip: null, noPopupMainClobbering: null, screenshotToSemanticsAlignment: null,
+      strictCaptureTarget: null, blankScreenshotRejected: null, staleModeGenerationRejected: null,
+      wrongSurfaceRejected: null, openedSystemSettings: false, mutatedTcc: false, systemPasteboardMutated: false,
+      setupInstallFlowEntered: false, triggeredSecurityPrompt: false, networkAccessed: false,
+      externalServiceContacted: false, destructiveOperationRequested: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_mini_full_transition_layout_continuity_receipt" } }],
+    failure: { code: "missing_mini_full_transition_layout_continuity_receipt", stepName: "declare-required-receipt", message: "Missing app-side mini/full transition layout continuity receipts." },
+    warnings: ["file_linear:mini_full_transition_layout_continuity_receipts_missing"],
+  };
+}
+
+export async function runFilterInputDecorationChipLayoutStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  queries?: string[];
+  widths?: string[];
+  scaleFactors?: number[];
+  fixture?: string;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noConfigWrite?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "filter-input-decoration-chip-layout-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_filter_input_decoration_chip_layout_receipt",
+    linearIssue: "file_linear:filter_input_decoration_chip_layout_receipts_missing",
+    filterInputDecorationChipLayoutReceipt: {
+      kind: "ux.filterInputDecorationChipLayout",
+      filterInputDecorationChipLayoutStressId: "loop-twenty-six-filter-input-decoration-chip-layout",
+      session: opts.session, requestedSurfaces: opts.surfaces ?? ["main"],
+      requestedQueries: opts.queries ?? ["f: AGENTS.md", "c: agentic", "~/script", ":actions", ";note", "!command", "literal\\:chip"],
+      requestedWidths: opts.widths ?? ["mini", "narrow", "full"], requestedScaleFactors: opts.scaleFactors ?? [1, 1.25, 1.5],
+      fixture: opts.fixture ?? "agentic-filter-input-decorations", requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-resize"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noConfigWrite: opts.noConfigWrite ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true, inputDecorationSamples: [], surface: null, query: null,
+      widthMode: null, scaleFactor: null, remSize: null, automationWindowId: null, osWindowId: null,
+      semanticSurface: null, stateReceipt: null, elementsReceipt: null, filterInputDecorations: null,
+      renderedInputText: null, strippedSearchText: null, chipRanges: [], chipRoles: [], chipBounds: [],
+      textBounds: null, renderedTextBounds: null, cursorBounds: null, placeholderBounds: null,
+      measuredWidth: null, availableWidth: null, visibleText: null, decorationGeneration: null,
+      inputGeneration: null, sourceHeadCleared: null, staleDecorationCleared: null, noChipTextOverlap: null,
+      noChipCursorOverlap: null, noPlaceholderOverlap: null, noInputFooterOverlap: null, noHorizontalClip: null,
+      tooltipOrAccessibleFullText: null, screenshotToSemanticsAlignment: null, strictCaptureTarget: null,
+      blankScreenshotRejected: null, staleDecorationGenerationRejected: null, wrongSurfaceRejected: null,
+      openedSystemSettings: false, mutatedTcc: false, systemPasteboardMutated: false, configUnchanged: true,
+      setupInstallFlowEntered: false, triggeredSecurityPrompt: false, networkAccessed: false,
+      externalServiceContacted: false, destructiveOperationRequested: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_filter_input_decoration_chip_layout_receipt" } }],
+    failure: { code: "missing_filter_input_decoration_chip_layout_receipt", stepName: "declare-required-receipt", message: "Missing app-side filter input decoration chip layout receipts." },
+    warnings: ["file_linear:filter_input_decoration_chip_layout_receipts_missing"],
+  };
+}
+
+export async function runFocusRingViewportIntegrityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fixture?: string;
+  inputModes?: string[];
+  steps?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "focus-ring-viewport-integrity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_focus_ring_viewport_integrity_receipt",
+    linearIssue: "file_linear:focus_ring_viewport_integrity_receipts_missing",
+    focusRingViewportIntegrityReceipt: {
+      kind: "ux.focusRingViewportIntegrity",
+      focusRingViewportIntegrityStressId: "loop-twenty-six-focus-ring-viewport-integrity",
+      session: opts.session, requestedSurfaces: opts.surfaces ?? ["main", "actionsDialog", "fields-prompt", "path-prompt"],
+      fixture: opts.fixture ?? "agentic-focus-rings", requestedInputModes: opts.inputModes ?? ["protocol-key", "simulate-gpui-event"],
+      requestedSteps: opts.steps ?? ["tab", "shift-tab", "up", "down", "escape"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      focusSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      focusStep: null, inputMode: null, focusGeneration: null, focusedSemanticId: null, focusOwner: null,
+      semanticFocusMatchesState: null, focusRingBounds: null, focusedElementBounds: null, viewportBounds: null,
+      scrollViewportBounds: null, contentBounds: null, footerBounds: null, popupBounds: null, ringVisible: null,
+      ringNotClipped: null, ringWithinViewport: null, ringAboveFooter: null, ringNotObscuredByFooter: null,
+      ringNotCoveredByPopup: null, tabOrderIndex: null, tabOrderStable: null, selectionPreserved: null,
+      scrollAnchorPreserved: null, focusRestoredAfterEscape: null, noActivationReceipt: null, noSubmitReceipt: null,
+      staleFocusGenerationRejected: null, wrongSurfaceFocusRejected: null, openedSystemSettings: false,
+      mutatedTcc: false, systemPasteboardMutated: false, setupInstallFlowEntered: false,
+      triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false,
+      destructiveOperationRequested: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_focus_ring_viewport_integrity_receipt" } }],
+    failure: { code: "missing_focus_ring_viewport_integrity_receipt", stepName: "declare-required-receipt", message: "Missing app-side focus ring viewport integrity receipts." },
+    warnings: ["file_linear:focus_ring_viewport_integrity_receipts_missing"],
   };
 }
 

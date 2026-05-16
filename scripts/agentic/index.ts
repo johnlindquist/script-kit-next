@@ -141,6 +141,12 @@
  *                         Fail-closed inline popover anchor/resize proof
  *   disabled-footer-hit-target-refusal-stress
  *                         Fail-closed disabled footer hit-target refusal proof
+ *   mini-full-transition-layout-continuity-stress
+ *                         Fail-closed mini/full transition visual layout continuity proof
+ *   filter-input-decoration-chip-layout-stress
+ *                         Fail-closed filter input decoration chip layout proof
+ *   focus-ring-viewport-integrity-stress
+ *                         Fail-closed focus ring viewport integrity proof
  *   help                   Show this help
  *
  * Target threading:
@@ -230,6 +236,9 @@ import {
   runShortcutRecorderCancelLayeringStressScenario,
   runInlinePopoverAnchorResizeStressScenario,
   runDisabledFooterHitTargetRefusalStressScenario,
+  runMiniFullTransitionLayoutContinuityStressScenario,
+  runFilterInputDecorationChipLayoutStressScenario,
+  runFocusRingViewportIntegrityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -1014,6 +1023,18 @@ function parseArgs() {
   const noNativePointer = args.includes("--no-native-pointer");
   const noConfigWrite = args.includes("--no-config-write");
   const noNativeInput = args.includes("--no-native-input");
+  const localFixtureOnly = args.includes("--local-fixture-only");
+  const noSubmit = args.includes("--no-submit");
+  const stepsIdx = args.indexOf("--steps");
+  const proofSteps =
+    stepsIdx >= 0 && args[stepsIdx + 1]
+      ? args[stepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const queriesIdx = args.indexOf("--queries");
+  const queries =
+    queriesIdx >= 0 && args[queriesIdx + 1]
+      ? args[queriesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -1128,6 +1149,10 @@ function parseArgs() {
     noNativePointer,
     noConfigWrite,
     noNativeInput,
+    localFixtureOnly,
+    noSubmit,
+    proofSteps,
+    queries,
   };
 }
 
@@ -2480,6 +2505,10 @@ const {
   noNativePointer,
   noConfigWrite,
   noNativeInput,
+  localFixtureOnly,
+  noSubmit,
+  proofSteps,
+  queries,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3741,6 +3770,24 @@ switch (recipe) {
     break;
   }
 
+  case "mini-full-transition-layout-continuity-stress": {
+    const proofBundle = await runMiniFullTransitionLayoutContinuityStressScenario({ session, surfaces, transitions, fixture, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "mini-full-transition-layout-continuity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Mini/full transition layout continuity stress failed closed; bounds, rem/scale, focus ring, footer, clipping, and capture receipts are missing", proofBundle };
+    break;
+  }
+
+  case "filter-input-decoration-chip-layout-stress": {
+    const proofBundle = await runFilterInputDecorationChipLayoutStressScenario({ session, surfaces, queries, widths, scaleFactors, fixture, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noConfigWrite, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "filter-input-decoration-chip-layout-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Filter input decoration chip layout stress failed closed; chip ranges, bounds, overlap, clipping, cursor, and stale decoration receipts are missing", proofBundle };
+    break;
+  }
+
+  case "focus-ring-viewport-integrity-stress": {
+    const proofBundle = await runFocusRingViewportIntegrityStressScenario({ session, surfaces, fixture, inputModes, steps: proofSteps, noNativeInput, noNativePointer, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "focus-ring-viewport-integrity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Focus ring viewport integrity stress failed closed; focus bounds, viewport clipping, footer/popup occlusion, tab order, and no-submit receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3916,6 +3963,9 @@ switch (recipe) {
           { name: "shortcut-recorder-cancel-layering-stress", description: "Fail-closed UX receipt contract for shortcut recorder cancel paths and modal layering", flags: ["--session", "--surface", "--action", "--cancel-methods", "--input-modes", "--sandbox-config", "--no-config-write", "--json"] },
           { name: "inline-popover-anchor-resize-stress", description: "Fail-closed UX receipt contract for inline popover anchoring, resizing, clipping, and keyboard fallback", flags: ["--session", "--families", "--widths", "--fixture", "--input-modes", "--no-native-input", "--json"] },
           { name: "disabled-footer-hit-target-refusal-stress", description: "Fail-closed UX receipt contract for disabled footer hit-target refusal and no-submit proof", flags: ["--session", "--surfaces", "--fixtures", "--input-modes", "--no-native-pointer", "--dry-run-only", "--json"] },
+          { name: "mini-full-transition-layout-continuity-stress", description: "Fail-closed visual receipt contract for mini/full transition layout continuity", flags: ["--session", "--surfaces", "--transitions", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
+          { name: "filter-input-decoration-chip-layout-stress", description: "Fail-closed visual receipt contract for filter input decoration chip layout and clipping", flags: ["--session", "--surfaces", "--queries", "--widths", "--scale-factors", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
+          { name: "focus-ring-viewport-integrity-stress", description: "Fail-closed visual receipt contract for focus ring viewport bounds and occlusion", flags: ["--session", "--surfaces", "--fixture", "--input-modes", "--steps", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3995,6 +4045,9 @@ switch (recipe) {
           "proofBundle.shortcutRecorderCancelLayeringReceipt",
           "proofBundle.inlinePopoverAnchorResizeReceipt",
           "proofBundle.disabledFooterHitTargetRefusalReceipt",
+          "proofBundle.miniFullTransitionLayoutContinuityReceipt",
+          "proofBundle.filterInputDecorationChipLayoutReceipt",
+          "proofBundle.focusRingViewportIntegrityReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4323,6 +4376,12 @@ Available scenarios:
                          Emit fail-closed inline popover anchor/resize requirements
   disabled-footer-hit-target-refusal-stress
                          Emit fail-closed disabled footer hit-target refusal requirements
+  mini-full-transition-layout-continuity-stress
+                         Emit fail-closed mini/full transition layout continuity requirements
+  filter-input-decoration-chip-layout-stress
+                         Emit fail-closed filter input decoration chip layout requirements
+  focus-ring-viewport-integrity-stress
+                         Emit fail-closed focus ring viewport integrity requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4410,6 +4469,9 @@ Examples:
   bun scripts/agentic/index.ts shortcut-recorder-cancel-layering-stress --session default --surface shortcuts --action test-agentic-shortcut --cancel-methods escape,cmd-w,backdrop,parent-click --input-modes protocol-key,protocol-click --sandbox-config --no-config-write --json
   bun scripts/agentic/index.ts inline-popover-anchor-resize-stress --session default --families acp-slash,acp-mention,menu-syntax-colon --widths mini,narrow,full --fixture agentic-inline-popover --input-modes protocol-key,protocol-resize --no-native-input --json
   bun scripts/agentic/index.ts disabled-footer-hit-target-refusal-stress --session default --surfaces drop-prompt,fields-prompt,path-prompt --fixtures empty-drop,invalid-fields,missing-path --input-modes enter,footer-shortcut,protocol-footer-click --no-native-pointer --dry-run-only --json
+  bun scripts/agentic/index.ts mini-full-transition-layout-continuity-stress --session default --surfaces main,mini-prompt,fields-prompt,actionsDialog --transitions mini-to-full,full-to-mini,hide-show,return-to-origin --fixture agentic-mini-full-layout --input-modes protocol-key,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --local-fixture-only --json
+  bun scripts/agentic/index.ts filter-input-decoration-chip-layout-stress --session default --surfaces main --queries 'f: AGENTS.md,c: agentic,~/script,:actions,;note,!command,literal\\:chip' --widths mini,narrow,full --scale-factors 1,1.25,1.5 --fixture agentic-filter-input-decorations --input-modes protocol-set-filter,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
+  bun scripts/agentic/index.ts focus-ring-viewport-integrity-stress --session default --surfaces main,actionsDialog,fields-prompt,path-prompt --fixture agentic-focus-rings --input-modes protocol-key,simulate-gpui-event --steps tab,shift-tab,up,down,escape --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
