@@ -54,7 +54,7 @@ export const SDK_VERSION = '0.2.0';
  *      mouse.leftClick(), mouse.rightClick(), mouse.setPosition()
  *    - UI updates: setPanel(), setPreview(), setPrompt()
  *    - Compact prompts: mini(), micro()
- *    - Advanced: hotkey(), widget(), menu()
+ *    - Advanced: hotkey(), widget(), find()
  *
  * ❌ NOT FEASIBLE (removed):
  *    These don't fit the message-passing architecture and throw errors:
@@ -275,6 +275,7 @@ export interface ColorInfo {
 }
 
 export interface FindOptions {
+  /** Restrict supported fileSearch() requests to a search root. find() rejects before send. */
   onlyin?: string;
 }
 
@@ -2992,13 +2993,6 @@ interface EyeDropperMessage {
   id: string;
 }
 
-interface FindMessage {
-  type: 'find';
-  id: string;
-  placeholder: string;
-  onlyin?: string;
-}
-
 // Widget event message (from GPUI to script)
 interface WidgetEventMessage {
   type: 'widgetEvent';
@@ -3788,12 +3782,17 @@ declare global {
   function eyeDropper(): Promise<ColorInfo>;
   
   /**
-   * File search using Spotlight/mdfind
-   * @param placeholder - Search prompt text
-   * @param options - Search options including directory filter
-   * @returns Selected file path
+   * Legacy interactive find prompt.
+   *
+   * Unsupported in GPUI: there is no implemented Rust find prompt route,
+   * renderer, submit contract, or documented onlyin prompt semantics.
+   *
+   * Use fileSearch(query, { onlyin }) for non-interactive file results, or
+   * path({ startPath }) / arg(...) for supported prompt-driven selection.
+   *
+   * @throws UnsupportedSdkFeatureError
    */
-  function find(placeholder: string, options?: FindOptions): Promise<string>;
+  function find(placeholder: string, options?: FindOptions): Promise<never>;
   
   // =============================================================================
   // TIER 5A: Window Control Functions
@@ -6288,30 +6287,14 @@ globalThis.eyeDropper = async function eyeDropper(): Promise<ColorInfo> {
   );
 };
 
-globalThis.find = async function find(
-  placeholder: string,
-  options?: FindOptions
-): Promise<string> {
-  const id = nextId();
-
-  return new Promise((resolve) => {
-    addPending(id, (msg: SubmitMessage) => {
-      // If user pressed Escape (value is null), exit the script
-      if (msg.value === null) {
-        process.exit(0);
-      }
-      resolve(msg.value ?? '');
-    }, { value: '' }); // Auto-submit: empty string
-
-    const message: FindMessage = {
-      type: 'find',
-      id,
-      placeholder,
-      onlyin: options?.onlyin,
-    };
-
-    send(message);
-  });
+globalThis.find = function find(
+  _placeholder: string,
+  _options?: FindOptions
+): Promise<never> {
+  return rejectUnsupportedSdkFeature('find', [
+    'fileSearch(query, { onlyin }) for non-interactive Spotlight/mdfind results',
+    'path({ startPath }) or arg(...) for supported prompt-driven selection',
+  ]);
 };
 
 // =============================================================================

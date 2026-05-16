@@ -56,6 +56,8 @@ Rust `Message::Keyboard` and `Message::Mouse` are reserved protocol shapes, not 
 
 Feedback messages distinguish serialization from behavior. Request-id `notify`, `beep`, and `say` calls resolve through `systemFeedbackResult` envelopes from [[src/execute_script/mod.rs]], proving dispatch only; `setStatus` and `menu` are not exposed as successful SDK calls unless they gain visible behavior and receipts.
 
+SDK `find()` is not a Rust prompt protocol route. The SDK rejects it before emitting any `find` JSONL message while no GPUI prompt route, renderer, submit contract, or `onlyin` prompt semantics exist; the supported file-search protocol surface remains `fileSearch` / `fileSearchResult`, where `onlyin` is carried on the query request.
+
 ## Query and introspection
 
 The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.

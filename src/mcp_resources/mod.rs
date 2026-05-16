@@ -678,6 +678,7 @@ const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
     "micro",
     "hotkey",
     "widget",
+    "find",
     "menu",
 ];
 
@@ -1017,6 +1018,13 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             "home(...paths: string[]): string",
             "Resolve a path relative to the user's home directory.",
             "filesystem",
+        ),
+        SdkFunctionRef::unsupported(
+            "find",
+            "find(placeholder, options?)",
+            "Legacy interactive find prompt. GPUI does not currently implement a Rust find prompt route, renderer, submit contract, or onlyin prompt semantics.",
+            "filesystem",
+            "Use fileSearch(query, { onlyin }) for non-interactive Spotlight/mdfind results, or path({ startPath }) / arg(...) for supported prompt-driven selection.",
         ),
         SdkFunctionRef::supported(
             "getState",
@@ -4478,6 +4486,32 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn sdk_reference_marks_find_as_unsupported_prompt_gap() {
+        let doc = build_sdk_reference_document();
+        let find = doc
+            .functions
+            .iter()
+            .find(|entry| entry.name == "find")
+            .expect("find must appear in the SDK reference");
+        assert_eq!(find.support, SdkSupport::Unsupported);
+        let note = find
+            .unsupported_note
+            .as_deref()
+            .expect("find must explain its unsupported GPUI boundary");
+        assert!(
+            note.contains("fileSearch") && note.contains("onlyin"),
+            "find unsupported note must point users to the supported onlyin-capable fileSearch API: {note}"
+        );
+        assert!(
+            find.description
+                .to_lowercase()
+                .contains("does not currently implement"),
+            "find description must not imply a working GPUI prompt: {}",
+            find.description
+        );
     }
 
     #[test]

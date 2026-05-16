@@ -12,13 +12,13 @@
  * 3. widget-events: Widget event handlers exist
  * 4. term-basic: term() function exists
  * 5. media-apis: Media API functions exist
- * 6. find-api: find() function exists
+ * 6. find-api: find() rejects with typed unsupported error before sending
  * 
  * Expected behavior:
- * - widget() creates floating HTML panels
+ * - widget() returns a controller, but visible widget UI is unsupported
  * - term() opens terminal
- * - Media APIs (webcam, mic, eyeDropper) are available
- * - find() provides file search
+ * - Media APIs (webcam, mic, eyeDropper) are available but unsupported
+ * - find() is an explicit unsupported GPUI boundary; use fileSearch() for non-interactive file results
  */
 
 import '../../scripts/kit-sdk';
@@ -252,26 +252,55 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 6: find() function exists
+// Test 6: find() rejects with typed unsupported error
 // -----------------------------------------------------------------------------
 const test6 = 'find-api';
 logTest(test6, 'running');
 const start6 = Date.now();
 
 try {
-  debug('Test 6: find() function exists');
+  debug('Test 6: find() typed unsupported boundary');
   
   const hasFind = typeof find === 'function';
   
-  debug(`find function exists: ${hasFind}`);
-  
-  if (hasFind) {
-    logTest(test6, 'pass', { result: 'find() function available', duration_ms: Date.now() - start6 });
-  } else {
+  if (!hasFind) {
     logTest(test6, 'fail', { 
       error: 'find() function not found',
       duration_ms: Date.now() - start6 
     });
+  } else {
+    let error: any = null;
+    try {
+      await find('Find a file', { onlyin: '/tmp' });
+    } catch (err) {
+      error = err;
+    }
+
+    const checks = [
+      error?.name === 'UnsupportedSdkFeatureError',
+      error?.code === 'ERR_UNSUPPORTED_SDK_FEATURE',
+      error?.supported === false,
+      error?.feature === 'find',
+      Array.isArray(error?.alternatives),
+      error?.alternatives?.some((alt: string) => alt.includes('fileSearch')),
+    ];
+
+    if (checks.every(Boolean)) {
+      logTest(test6, 'pass', {
+        result: {
+          code: error.code,
+          supported: error.supported,
+          feature: error.feature,
+          alternatives: error.alternatives,
+        },
+        duration_ms: Date.now() - start6,
+      });
+    } else {
+      logTest(test6, 'fail', {
+        error: `Unexpected find() error shape: ${JSON.stringify(error)}`,
+        duration_ms: Date.now() - start6,
+      });
+    }
   }
 } catch (err) {
   logTest(test6, 'fail', { error: String(err), duration_ms: Date.now() - start6 });
