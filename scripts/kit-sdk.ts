@@ -2148,7 +2148,9 @@ export interface Position {
 export interface ClipboardAPI {
   readText(): Promise<string>;
   writeText(text: string): Promise<void>;
+  /** Read the current clipboard image as PNG-encoded bytes. */
   readImage(): Promise<Buffer>;
+  /** Decode PNG or JPEG bytes and write a real image payload to the clipboard. */
   writeImage(buffer: Buffer): Promise<void>;
 }
 
@@ -2330,6 +2332,42 @@ interface ClipboardMessage {
   action: 'read' | 'write';
   format: 'text' | 'image';
   content?: string;
+}
+
+type ClipboardErrorCode =
+  | 'ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE'
+  | 'ERR_CLIPBOARD_ACCESS_FAILED'
+  | 'ERR_CLIPBOARD_IMAGE_DECODE_FAILED'
+  | 'ERR_CLIPBOARD_IMAGE_ENCODE_FAILED'
+  | 'ERR_CLIPBOARD_IMAGE_WRITE_FAILED'
+  | 'ERR_CLIPBOARD_IMAGE_MISSING_CONTENT'
+  | 'ERR_CLIPBOARD_NO_RESPONSE';
+
+class ClipboardProtocolError extends Error {
+  code: ClipboardErrorCode | string;
+  operation: string;
+
+  constructor(operation: string, code: string, message: string) {
+    super(message || code);
+    this.name = 'ClipboardProtocolError';
+    this.code = code;
+    this.operation = operation;
+  }
+}
+
+function clipboardErrorFromSubmitValue(
+  operation: string,
+  value: string | null | undefined,
+): ClipboardProtocolError | null {
+  if (typeof value !== 'string' || !value.startsWith('ERROR:')) {
+    return null;
+  }
+
+  const rest = value.slice('ERROR:'.length);
+  const separator = rest.indexOf(':');
+  const code = separator === -1 ? rest : rest.slice(0, separator);
+  const message = separator === -1 ? rest : rest.slice(separator + 1);
+  return new ClipboardProtocolError(operation, code, message);
 }
 
 interface SetSelectedTextMessage {
@@ -5617,12 +5655,28 @@ globalThis.clipboard = {
   async readImage(): Promise<Buffer> {
     const id = nextId();
 
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       addPending(id, (msg: SubmitMessage) => {
-        // Value comes back as base64-encoded string
-        const base64 = msg.value ?? '';
-        resolve(Buffer.from(base64, 'base64'));
-      }, { value: '' }); // Auto-submit: empty image
+        const value = msg.value ?? '';
+        const error = clipboardErrorFromSubmitValue('clipboard.readImage', value);
+        if (error) {
+          reject(error);
+          return;
+        }
+        if (!value) {
+          reject(new ClipboardProtocolError(
+            'clipboard.readImage',
+            'ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE',
+            'Clipboard does not contain a supported image.',
+          ));
+          return;
+        }
+
+        // Value comes back as a base64-encoded PNG.
+        resolve(Buffer.from(value, 'base64'));
+      }, {
+        value: 'ERROR:ERR_CLIPBOARD_NO_RESPONSE:clipboard.readImage did not receive a runtime response.',
+      });
 
       const message: ClipboardMessage = {
         type: 'clipboard',
@@ -5637,17 +5691,24 @@ globalThis.clipboard = {
   async writeImage(buffer: Buffer): Promise<void> {
     const id = nextId();
 
-    return new Promise((resolve) => {
-      addPending(id, () => {
+    return new Promise((resolve, reject) => {
+      addPending(id, (msg: SubmitMessage) => {
+        const error = clipboardErrorFromSubmitValue('clipboard.writeImage', msg.value);
+        if (error) {
+          reject(error);
+          return;
+        }
         resolve();
-      }, undefined); // Auto-submit: void return
+      }, {
+        value: 'ERROR:ERR_CLIPBOARD_NO_RESPONSE:clipboard.writeImage did not receive a runtime response.',
+      });
 
       const message: ClipboardMessage = {
         type: 'clipboard',
         id,
         action: 'write',
         format: 'image',
-        content: buffer.toString('base64'),
+        content: Buffer.from(buffer).toString('base64'),
       };
       send(message);
     });

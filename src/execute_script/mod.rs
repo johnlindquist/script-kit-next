@@ -31,6 +31,186 @@ fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_contr
 /// Note: This is an approximation - the actual height can vary with accessibility settings
 const MACOS_MENU_BAR_HEIGHT: i32 = 24;
 const CLIPBOARD_HISTORY_PREVIEW_CHAR_LIMIT: usize = 1000;
+
+#[derive(Debug)]
+struct ClipboardImageError {
+    code: &'static str,
+    message: &'static str,
+}
+
+impl ClipboardImageError {
+    fn access() -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_ACCESS_FAILED",
+            message: "Clipboard is unavailable.",
+        }
+    }
+
+    fn image_not_available() -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE",
+            message: "Clipboard does not contain a supported image.",
+        }
+    }
+
+    fn decode(message: &'static str) -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_IMAGE_DECODE_FAILED",
+            message,
+        }
+    }
+
+    fn encode(message: &'static str) -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_IMAGE_ENCODE_FAILED",
+            message,
+        }
+    }
+
+    fn write() -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_IMAGE_WRITE_FAILED",
+            message: "Failed to write image data to the clipboard.",
+        }
+    }
+
+    fn missing_content() -> Self {
+        Self {
+            code: "ERR_CLIPBOARD_IMAGE_MISSING_CONTENT",
+            message: "clipboard.writeImage requires encoded image bytes.",
+        }
+    }
+
+    fn to_submit_value(&self) -> String {
+        format!("ERROR:{}:{}", self.code, self.message)
+    }
+}
+
+fn read_clipboard_image_as_png_base64() -> Result<String, ClipboardImageError> {
+    use base64::Engine;
+
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| {
+        tracing::info!(
+            category = "EXEC",
+            error = %e,
+            code = "ERR_CLIPBOARD_ACCESS_FAILED",
+            "Clipboard image read init error"
+        );
+        ClipboardImageError::access()
+    })?;
+
+    let image = clipboard.get_image().map_err(|e| {
+        tracing::info!(
+            category = "EXEC",
+            error = %e,
+            code = "ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE",
+            "Clipboard image read unavailable"
+        );
+        ClipboardImageError::image_not_available()
+    })?;
+
+    let width = u32::try_from(image.width)
+        .map_err(|_| ClipboardImageError::encode("Clipboard image width exceeds PNG limits."))?;
+    let height = u32::try_from(image.height)
+        .map_err(|_| ClipboardImageError::encode("Clipboard image height exceeds PNG limits."))?;
+    let rgba = image::RgbaImage::from_raw(width, height, image.bytes.into_owned()).ok_or_else(
+        || ClipboardImageError::encode("Clipboard image RGBA buffer length is invalid."),
+    )?;
+
+    let mut png_cursor = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(rgba)
+        .write_to(&mut png_cursor, image::ImageFormat::Png)
+        .map_err(|e| {
+            tracing::info!(
+                category = "EXEC",
+                error = %e,
+                code = "ERR_CLIPBOARD_IMAGE_ENCODE_FAILED",
+                "Clipboard image PNG encode error"
+            );
+            ClipboardImageError::encode("Failed to encode clipboard image as PNG.")
+        })?;
+
+    let png_bytes = png_cursor.into_inner();
+    tracing::info!(
+        category = "EXEC",
+        width,
+        height,
+        png_bytes_len = png_bytes.len(),
+        "Clipboard image read success"
+    );
+    Ok(base64::engine::general_purpose::STANDARD.encode(png_bytes))
+}
+
+fn write_clipboard_image_from_base64(content: Option<&String>) -> Result<(), ClipboardImageError> {
+    use base64::Engine;
+
+    let Some(content) = content.filter(|value| !value.is_empty()) else {
+        tracing::info!(
+            category = "EXEC",
+            code = "ERR_CLIPBOARD_IMAGE_MISSING_CONTENT",
+            "Clipboard image write missing content"
+        );
+        return Err(ClipboardImageError::missing_content());
+    };
+
+    let encoded = base64::engine::general_purpose::STANDARD
+        .decode(content.as_bytes())
+        .map_err(|e| {
+            tracing::info!(
+                category = "EXEC",
+                error = %e,
+                code = "ERR_CLIPBOARD_IMAGE_DECODE_FAILED",
+                "Clipboard image base64 decode error"
+            );
+            ClipboardImageError::decode("clipboard.writeImage expected base64 image bytes.")
+        })?;
+    let decoded = image::load_from_memory(&encoded).map_err(|e| {
+        tracing::info!(
+            category = "EXEC",
+            error = %e,
+            encoded_bytes_len = encoded.len(),
+            code = "ERR_CLIPBOARD_IMAGE_DECODE_FAILED",
+            "Clipboard image decode error"
+        );
+        ClipboardImageError::decode("clipboard.writeImage expected PNG or JPEG bytes.")
+    })?;
+    let rgba = decoded.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let image_data = arboard::ImageData {
+        width: width as usize,
+        height: height as usize,
+        bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+    };
+
+    let mut clipboard = arboard::Clipboard::new().map_err(|e| {
+        tracing::info!(
+            category = "EXEC",
+            error = %e,
+            code = "ERR_CLIPBOARD_ACCESS_FAILED",
+            "Clipboard image write init error"
+        );
+        ClipboardImageError::access()
+    })?;
+    clipboard.set_image(image_data).map_err(|e| {
+        tracing::info!(
+            category = "EXEC",
+            error = %e,
+            code = "ERR_CLIPBOARD_IMAGE_WRITE_FAILED",
+            "Clipboard image write error"
+        );
+        ClipboardImageError::write()
+    })?;
+
+    tracing::info!(
+        category = "EXEC",
+        width,
+        height,
+        encoded_bytes_len = encoded.len(),
+        "Clipboard image write success"
+    );
+    Ok(())
+}
+
 /// Get information about all displays/monitors
 fn get_displays() -> anyhow::Result<Vec<protocol::DisplayInfo>> {
     #[cfg(target_os = "macos")]
@@ -931,12 +1111,24 @@ impl ScriptListApp {
                                             None => {
                                                 // Handle clipboard operation without response
                                                 if let protocol::ClipboardAction::Write = action {
-                                                    if let Some(text) = content {
-                                                        use arboard::Clipboard;
-                                                        if let Ok(mut clipboard) = Clipboard::new()
-                                                        {
+                                                    match format {
+                                                        Some(protocol::ClipboardFormat::Image) => {
                                                             let _ =
-                                                                clipboard.set_text(text.clone());
+                                                                write_clipboard_image_from_base64(
+                                                                    content.as_ref(),
+                                                                );
+                                                        }
+                                                        Some(protocol::ClipboardFormat::Text)
+                                                        | None => {
+                                                            if let Some(text) = content {
+                                                                use arboard::Clipboard;
+                                                                if let Ok(mut clipboard) =
+                                                                    Clipboard::new()
+                                                                {
+                                                                    let _ = clipboard
+                                                                        .set_text(text.clone());
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -986,48 +1178,18 @@ impl ScriptListApp {
                                                             }
                                                         }
                                                     }
-                                                    Some(protocol::ClipboardFormat::Image) => {
-                                                        use arboard::Clipboard;
-                                                        match Clipboard::new() {
-                                                            Ok(mut clipboard) => {
-                                                                match clipboard.get_image() {
-                                                                    Ok(img) => {
-                                                                        // Convert image to base64
-                                                                        use base64::Engine;
-                                                                        let bytes =
-                                                                            img.bytes.to_vec();
-                                                                        let base64_str = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                                                                        Message::Submit {
-                                                                            id: req_id,
-                                                                            value: Some(base64_str),
-                                                                        }
-                                                                    }
-                                                                    Err(e) => {
-                                                                        tracing::info!(
-                                                                            category = "EXEC",
-                                                                            error = %e,
-                                                                            "Clipboard read image error"
-                                                                        );
-                                                                        Message::Submit {
-                                                                            id: req_id,
-                                                                            value: Some(
-                                                                                String::new(),
-                                                                            ),
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                            Err(e) => {
-                                                                tracing::info!(
-                                                                    category = "EXEC",
-                                                                    error = %e,
-                                                                    "Clipboard init error"
-                                                                );
-                                                                Message::Submit {
-                                                                    id: req_id,
-                                                                    value: Some(String::new()),
-                                                                }
-                                                            }
+                                            Some(protocol::ClipboardFormat::Image) => {
+                                                        match read_clipboard_image_as_png_base64() {
+                                                            Ok(base64_png) => Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(base64_png),
+                                                            },
+                                                            Err(error) => Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(
+                                                                    error.to_submit_value(),
+                                                                ),
+                                                            },
                                                         }
                                                     }
                                                 }
@@ -1035,9 +1197,27 @@ impl ScriptListApp {
                                             protocol::ClipboardAction::Write => {
                                                 // Write to clipboard
                                                 use arboard::Clipboard;
-                                                match Clipboard::new() {
-                                                    Ok(mut clipboard) => {
-                                                        if let Some(text) = content {
+                                                match format {
+                                                    Some(protocol::ClipboardFormat::Image) => {
+                                                        match write_clipboard_image_from_base64(
+                                                            content.as_ref(),
+                                                        ) {
+                                                            Ok(()) => Message::Submit {
+                                                                id: req_id,
+                                                                value: Some("ok".to_string()),
+                                                            },
+                                                            Err(error) => Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(
+                                                                    error.to_submit_value(),
+                                                                ),
+                                                            },
+                                                        }
+                                                    }
+                                                    Some(protocol::ClipboardFormat::Text) | None => {
+                                                        match Clipboard::new() {
+                                                            Ok(mut clipboard) => {
+                                                                if let Some(text) = content {
                                                             match clipboard.set_text(text.clone()) {
                                                                 Ok(()) => {
                                                                     tracing::info!(
@@ -1064,26 +1244,28 @@ impl ScriptListApp {
                                                                     }
                                                                 }
                                                             }
-                                                        } else {
-                                                            tracing::info!(
+                                                                } else {
+                                                                    tracing::info!(
                                                             category = "EXEC",
                                                             "Clipboard write: no content provided"
                                                         );
-                                                            Message::Submit {
-                                                                id: req_id,
-                                                                value: Some(String::new()),
+                                                                    Message::Submit {
+                                                                        id: req_id,
+                                                                        value: Some(String::new()),
+                                                                    }
+                                                                }
                                                             }
-                                                        }
-                                                    }
-                                                    Err(e) => {
-                                                        tracing::info!(
+                                                            Err(e) => {
+                                                                tracing::info!(
                                                             category = "EXEC",
                                                             error = %e,
                                                             "Clipboard init error"
                                                         );
-                                                        Message::Submit {
-                                                            id: req_id,
-                                                            value: Some(String::new()),
+                                                                Message::Submit {
+                                                                    id: req_id,
+                                                                    value: Some(String::new()),
+                                                                }
+                                                            }
                                                         }
                                                     }
                                                 }
