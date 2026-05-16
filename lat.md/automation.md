@@ -286,6 +286,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `keyboard-hint-label-parity-stress` is intentionally fail-closed until shortcut hint receipts expose footer, row accessory, tooltip, action catalog, normalized shortcut tokens, platform glyphs, disabled-state parity, activation owner, no accidental execution, stale-hint rejection, wrong-surface rejection, and cleanup.
 
+`row-state-parity-without-pointer-stress` is intentionally fail-closed until row visual-state receipts expose selected, focused, hovered, and selected-hovered row states without native pointer input. The receipt must prove semantic row identity, modality, tokenized selected/hover/focus paint, precedence rules, stale-row rejection, wrong-surface rejection, no accidental execution, AFK-safe flags, and cleanup.
+
+`quiet-chrome-card-nesting-stress` is intentionally fail-closed until chrome receipts expose shell, content, row, popup, and footer layer tokens. The receipt must prove quiet border/fill/shadow budgets, card depth, duplicate-border rejection, opaque-fill rejection, stale chrome token rejection, wrong-surface rejection, AFK-safe flags, and cleanup.
+
+`scroll-shadow-sticky-header-density-stress` is intentionally fail-closed until scroll and density receipts expose scroll positions, viewport/content bounds, sticky header bounds/z-index, scroll shadow opacity tokens, row/header/input/footer heights, rem/scale metrics, footer-safe viewport, selected-row visibility, stale-scroll rejection, wrong-surface rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

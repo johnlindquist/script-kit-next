@@ -117,6 +117,12 @@
  *                         Fail-closed footer/status persistence proof
  *   keyboard-hint-label-parity-stress
  *                         Fail-closed keyboard hint label parity proof
+ *   row-state-parity-without-pointer-stress
+ *                         Fail-closed row state parity proof without native pointer input
+ *   quiet-chrome-card-nesting-stress
+ *                         Fail-closed quiet chrome/card nesting proof
+ *   scroll-shadow-sticky-header-density-stress
+ *                         Fail-closed scroll shadow/sticky header/density proof
  *   help                   Show this help
  *
  * Target threading:
@@ -194,6 +200,9 @@ import {
   runIconImageFallbackRedactionStressScenario,
   runFooterStatusPersistenceStressScenario,
   runKeyboardHintLabelParityStressScenario,
+  runRowStateParityWithoutPointerStressScenario,
+  runQuietChromeCardNestingStressScenario,
+  runScrollShadowStickyHeaderDensityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -930,6 +939,18 @@ function parseArgs() {
       ? args[pathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const dryRunOnly = args.includes("--dry-run-only");
+  const chromeIdx = args.indexOf("--chrome");
+  const chrome = chromeIdx >= 0 && args[chromeIdx + 1] ? args[chromeIdx + 1] : undefined;
+  const scrollPositionsIdx = args.indexOf("--scroll-positions");
+  const scrollPositions =
+    scrollPositionsIdx >= 0 && args[scrollPositionsIdx + 1]
+      ? args[scrollPositionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const densityIdx = args.indexOf("--density");
+  const density =
+    densityIdx >= 0 && args[densityIdx + 1]
+      ? args[densityIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   const hostsIdx = args.indexOf("--hosts");
   const hosts =
     hostsIdx >= 0 && args[hostsIdx + 1]
@@ -1042,6 +1063,9 @@ function parseArgs() {
     fixtures,
     paths,
     dryRunOnly,
+    chrome,
+    scrollPositions,
+    density,
     hosts,
     selectionCycles,
     resizeCycles,
@@ -2382,6 +2406,9 @@ const {
   fixtures,
   paths,
   dryRunOnly,
+  chrome,
+  scrollPositions,
+  density,
   hosts,
   selectionCycles,
   resizeCycles,
@@ -3574,6 +3601,24 @@ switch (recipe) {
     break;
   }
 
+  case "row-state-parity-without-pointer-stress": {
+    const proofBundle = await runRowStateParityWithoutPointerStressScenario({ session, surfaces, states });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "row-state-parity-without-pointer-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Row state parity without pointer stress failed closed; selected/focused/hover paint, precedence, stale rejection, and no-native-pointer receipts are missing", proofBundle };
+    break;
+  }
+
+  case "quiet-chrome-card-nesting-stress": {
+    const proofBundle = await runQuietChromeCardNestingStressScenario({ session, surfaces, chrome });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "quiet-chrome-card-nesting-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Quiet chrome/card nesting stress failed closed; layer token, card depth, duplicate border, opaque fill, and stale chrome receipts are missing", proofBundle };
+    break;
+  }
+
+  case "scroll-shadow-sticky-header-density-stress": {
+    const proofBundle = await runScrollShadowStickyHeaderDensityStressScenario({ session, surfaces, scrollPositions, density });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "scroll-shadow-sticky-header-density-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Scroll shadow/sticky header/density stress failed closed; scroll bounds, sticky header, shadow token, density, and footer-safe viewport receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3737,6 +3782,9 @@ switch (recipe) {
           { name: "icon-image-fallback-redaction-stress", description: "Fail-closed UX stress for icon/image fallback, source redaction, stale image rejection, and accessible labels", flags: ["--session", "--surfaces", "--fixtures", "--json"] },
           { name: "footer-status-persistence-stress", description: "Fail-closed UX stress for footer/status owner, generation, transition persistence, duplicate rejection, and stale status", flags: ["--session", "--surfaces", "--transitions", "--json"] },
           { name: "keyboard-hint-label-parity-stress", description: "Fail-closed UX stress for footer, row, tooltip, and action catalog shortcut hint parity", flags: ["--session", "--surfaces", "--families", "--json"] },
+          { name: "row-state-parity-without-pointer-stress", description: "Fail-closed UX receipt contract for row selected/focused/hover state parity without native pointer input", flags: ["--session", "--surfaces", "--states", "--json"] },
+          { name: "quiet-chrome-card-nesting-stress", description: "Fail-closed UX receipt contract for quiet chrome/card nesting and visual token budgets", flags: ["--session", "--surfaces", "--chrome", "--json"] },
+          { name: "scroll-shadow-sticky-header-density-stress", description: "Fail-closed UX receipt contract for scroll shadows, sticky headers, and density drift", flags: ["--session", "--surfaces", "--scroll-positions", "--density", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3958,6 +4006,12 @@ Recipes:
                          Fail-closed footer/status persistence proof
   keyboard-hint-label-parity-stress
                          Fail-closed keyboard hint label parity proof
+  row-state-parity-without-pointer-stress
+                         Fail-closed row selected/focused/hover state parity proof
+  quiet-chrome-card-nesting-stress
+                         Fail-closed quiet chrome/card nesting proof
+  scroll-shadow-sticky-header-density-stress
+                         Fail-closed scroll shadow/sticky header/density proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -4102,6 +4156,12 @@ Available scenarios:
                          Emit fail-closed footer/status persistence requirements
   keyboard-hint-label-parity-stress
                          Emit fail-closed keyboard hint label parity requirements
+  row-state-parity-without-pointer-stress
+                         Emit fail-closed row state parity requirements
+  quiet-chrome-card-nesting-stress
+                         Emit fail-closed quiet chrome/card nesting requirements
+  scroll-shadow-sticky-header-density-stress
+                         Emit fail-closed scroll shadow/sticky header/density requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4177,6 +4237,9 @@ Examples:
   bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
   bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
   bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPopup --families footer,row-accessory,tooltip,action-catalog --json
+  bun scripts/agentic/index.ts row-state-parity-without-pointer-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --states selected,focused,hovered,selected-hovered --json
+  bun scripts/agentic/index.ts quiet-chrome-card-nesting-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,promptPopup --chrome quiet --json
+  bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --session default --surfaces clipboard-history,emoji-picker,file-search,app-launcher,actionsDialog --scroll-positions top,middle,bottom --density compact,default --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
