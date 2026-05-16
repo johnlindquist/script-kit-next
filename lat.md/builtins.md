@@ -121,7 +121,7 @@ That is a materially broader contract than the older â€œfew built-ins plus appsâ
 
 AI Vault is a source-filtered launcher route for cmux conversation session metadata.
 
-The launcher-visible `builtin/vault` entry and `triggerBuiltin` aliases `vault` / `ai-vault` resolve through [[src/builtins/trigger_registry.rs#TriggerBuiltin]] and execute through [[src/app_execute/builtin_execution.rs#ScriptListApp#open_ai_vault_source_filter]]. Running the command returns to `ScriptList` with the committed `vault: ` source head already applied, so users see the AI Vault source state and can continue typing a session query instead of hitting a silent no-op.
+The launcher-visible `builtin/vault` entry and `triggerBuiltin` aliases `vault` / `ai-vault` / `aivault` resolve through [[src/builtins/trigger_registry.rs#TriggerBuiltin]] and execute through [[src/app_execute/builtin_execution.rs#ScriptListApp#open_ai_vault_source_filter]]. Exact aliases reserve the built-in row over stale history for an older standalone `Vault` script, and running the command returns to `ScriptList` with the committed `vault: ` source head already applied so users see the AI Vault source state instead of a silent no-op.
 
 `config.ts` exposes `unifiedSearch.aiVault` as an opt-in passive source backed by the metadata-only `[[src/ai_vault.rs#search_root_ai_vault_direct]]` bridge. Explicit `vault:` / `v:` source filters temporarily enable the source, lower its length floor to browse recent Vault metadata, and render `SearchResult::AiVault` rows with `Vault Conversation` type labels instead of the disabled status placeholder.
 

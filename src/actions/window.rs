@@ -1616,6 +1616,11 @@ pub fn open_actions_window(
         close_actions_window(cx);
         return Err(e);
     }
+    crate::windows::automation_surface_collector::upsert_actions_dialog_snapshot(
+        popup_automation_id.as_str(),
+        &dialog_entity,
+        cx,
+    );
 
     // Structured receipt for agentic verification
     let dialog_ref = dialog_entity.read(cx);
@@ -1639,6 +1644,7 @@ pub fn open_actions_window(
 /// Close the actions window if it's open
 pub fn close_actions_window(cx: &mut App) {
     // Unregister from automation registry before destroying the window
+    crate::windows::automation_surface_collector::remove_actions_dialog_snapshot("actions-dialog");
     crate::windows::remove_automation_window("actions-dialog");
 
     if let Some(window_storage) = ACTIONS_WINDOW.get() {

@@ -48,6 +48,37 @@ fn prompt_popup_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupEl
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+fn actions_dialog_semantic_cache() -> &'static Mutex<HashMap<String, PromptPopupElementSnapshot>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, PromptPopupElementSnapshot>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
+pub(crate) fn upsert_actions_dialog_snapshot(
+    window_id: &str,
+    dialog_entity: &gpui::Entity<crate::actions::ActionsDialog>,
+    cx: &gpui::App,
+) {
+    let snapshot = collect_actions_dialog_elements(dialog_entity, 1000, cx);
+    if let Ok(mut cache) = actions_dialog_semantic_cache().lock() {
+        cache.insert(
+            window_id.to_string(),
+            PromptPopupElementSnapshot {
+                elements: snapshot.elements,
+                focused_semantic_id: snapshot.focused_semantic_id,
+                selected_semantic_id: snapshot.selected_semantic_id,
+            },
+        );
+    }
+}
+
+#[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
+pub(crate) fn remove_actions_dialog_snapshot(window_id: &str) {
+    if let Ok(mut cache) = actions_dialog_semantic_cache().lock() {
+        cache.remove(window_id);
+    }
+}
+
 #[allow(dead_code)] // Binary app_impl uses this; lib-only builds do not.
 pub(crate) fn upsert_menu_syntax_prompt_popup_snapshot(
     window_id: &str,
@@ -185,15 +216,15 @@ pub fn collect_surface_snapshot(
                     "panel_only_acp_detached",
                 )
             }),
-        AutomationWindowKind::ActionsDialog => {
-            collect_actions_dialog_snapshot(cx).unwrap_or_else(|| {
+        AutomationWindowKind::ActionsDialog => collect_actions_dialog_snapshot(cx)
+            .or_else(|| collect_cached_actions_dialog_snapshot(&resolved.id))
+            .unwrap_or_else(|| {
                 panel_only_fallback(
                     "panel:actions-dialog",
                     resolved.title.clone(),
                     "panel_only_actions_dialog",
                 )
-            })
-        }
+            }),
         AutomationWindowKind::PromptPopup => collect_cached_prompt_popup_snapshot(&resolved.id)
             .or_else(|| collect_prompt_popup_snapshot(cx))
             .unwrap_or_else(|| {
@@ -382,6 +413,21 @@ pub(crate) fn collect_acp_detached_elements(
 fn collect_actions_dialog_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
     let dialog_entity = crate::actions::get_actions_dialog_entity(cx)?;
     Some(collect_actions_dialog_elements(&dialog_entity, 1000, cx))
+}
+
+fn collect_cached_actions_dialog_snapshot(window_id: &str) -> Option<SurfaceElementSnapshot> {
+    let cached = actions_dialog_semantic_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(window_id).cloned())?;
+    Some(SurfaceElementSnapshot {
+        total_count: cached.elements.len(),
+        elements: cached.elements,
+        focused_semantic_id: cached.focused_semantic_id,
+        selected_semantic_id: cached.selected_semantic_id,
+        warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
+    })
 }
 
 /// Collect semantic elements from a live ActionsDialog entity.

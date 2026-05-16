@@ -29,6 +29,10 @@ fn template_prompt_stress_pins_state_first_runtime_receipts() {
         "templatePrompt",
         "input:template-source",
         "activePopupContract",
+        "target: { type: \"kind\", kind: \"actionsDialog\", index: 0 }",
+        "template_prompt_actions_unavailable",
+        "panel_only_actions_dialog",
+        "semanticId.startsWith(\"action:\") || row.semanticId.startsWith(\"choice:\")",
         "usedGetState: true",
         "usedGetElements: true",
         "usedBatch: true",
@@ -40,6 +44,57 @@ fn template_prompt_stress_pins_state_first_runtime_receipts() {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token) || TARGET_THREAD.contains(token),
             "TemplatePrompt stress receipt must pin {token}"
+        );
+    }
+}
+
+#[test]
+fn template_prompt_stress_opens_template_without_wrong_parse_wait() {
+    let send_fn_start = SCENARIO
+        .find("const send = async (payload: Record<string, unknown>, name: string)")
+        .expect("TemplatePrompt stress must keep a local send helper");
+    let send_fn = &SCENARIO[send_fn_start
+        ..SCENARIO[send_fn_start..]
+            .find("const start = await runTool")
+            .map(|offset| send_fn_start + offset)
+            .expect("TemplatePrompt send helper must end before session start")];
+
+    for token in [
+        "const shouldAwaitParse = payload.type !== \"template\"",
+        "if (shouldAwaitParse)",
+        "\"--await-parse\"",
+    ] {
+        assert!(
+            send_fn.contains(token),
+            "TemplatePrompt send helper must gate parse waits with {token}"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_automation_elements_use_cached_semantic_rows() {
+    const COLLECTOR: &str = include_str!("../src/windows/automation_surface_collector.rs");
+    const ACTION_WINDOW: &str = include_str!("../src/actions/window.rs");
+
+    for token in [
+        "actions_dialog_semantic_cache",
+        "upsert_actions_dialog_snapshot",
+        "remove_actions_dialog_snapshot",
+        "collect_cached_actions_dialog_snapshot(&resolved.id)",
+    ] {
+        assert!(
+            COLLECTOR.contains(token),
+            "ActionsDialog automation collector must pin cached semantic rows with {token}"
+        );
+    }
+
+    for token in [
+        "upsert_actions_dialog_snapshot(",
+        "remove_actions_dialog_snapshot(\"actions-dialog\")",
+    ] {
+        assert!(
+            ACTION_WINDOW.contains(token),
+            "ActionsDialog window lifecycle must publish/remove semantic snapshots with {token}"
         );
     }
 }

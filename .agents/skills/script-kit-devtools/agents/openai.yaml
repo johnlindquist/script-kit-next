@@ -1,0 +1,3 @@
+display_name: Script Kit DevTools
+short_description: Agent-facing DevTools for inspecting, controlling, measuring, and proving Script Kit GPUI behavior.
+default_prompt: Use $script-kit-devtools to investigate this Script Kit UI behavior through protocol/MCP DevTools primitives before falling back to recipes.

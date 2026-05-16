@@ -2122,6 +2122,9 @@ export async function runTemplatePromptAutomationParityStressScenario(opts: {
       schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
       scenario: "template-prompt-automation-parity-stress",
       status: "fail",
+      failClosed: true,
+      failureMode: "fail_closed",
+      missingReceipt: code,
       templatePrompt: {
         session: opts.session,
         template,
@@ -2149,17 +2152,19 @@ export async function runTemplatePromptAutomationParityStressScenario(opts: {
   };
 
   const send = async (payload: Record<string, unknown>, name: string) => {
+    const shouldAwaitParse = payload.type !== "template";
+    const args = [
+      "bash",
+      "scripts/agentic/session.sh",
+      "send",
+      opts.session,
+      JSON.stringify(payload),
+    ];
+    if (shouldAwaitParse) {
+      args.push("--await-parse", "--timeout", "8000");
+    }
     const result = await runTool(
-      [
-        "bash",
-        "scripts/agentic/session.sh",
-        "send",
-        opts.session,
-        JSON.stringify(payload),
-        "--await-parse",
-        "--timeout",
-        "8000",
-      ],
+      args,
       `template-prompt:${name}`,
     );
     if (result.exitCode !== 0) {
@@ -2281,24 +2286,49 @@ export async function runTemplatePromptAutomationParityStressScenario(opts: {
         error: error instanceof Error ? error.message : String(error),
       };
     }
-    const actionsStateEnvelope = await rpc(
-      opts.session,
-      { type: "getState", requestId: `${actionId}-actions-state` },
-      "stateResult",
-      8000,
-    );
-    const actionsState = extractResponse(actionsStateEnvelope);
+    let actionsStateEnvelope: Record<string, unknown> | null = null;
+    try {
+      actionsStateEnvelope = await rpc(
+        opts.session,
+        {
+          type: "getState",
+          requestId: `${actionId}-actions-state`,
+          target: { type: "kind", kind: "actionsDialog", index: 0 },
+        },
+        "stateResult",
+        8000,
+      );
+    } catch (error) {
+      actionsStateEnvelope = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    const actionsState = extractResponse(actionsStateEnvelope ?? {});
     const actionsElements = extractResponse(actionsElementsEnvelope ?? {});
     const actionRows = Array.isArray(actionsElements.elements)
       ? actionsElements.elements as Array<Record<string, unknown>>
       : [];
-    const actionsOpened = Boolean(actionsState.activePopupContract) || actionRows.length > 0;
+    const concreteActionRows = actionRows.filter((row) =>
+      typeof row.semanticId === "string"
+        && (row.semanticId.startsWith("action:") || row.semanticId.startsWith("choice:")));
+    const actionsWarnings = Array.isArray(actionsElements.warnings)
+      ? actionsElements.warnings as string[]
+      : [];
+    const actionsOpened = Boolean(actionsState.activePopupContract) || concreteActionRows.length > 0;
     if (!actionsOpened) {
       return fail(
         "template_prompt_actions_unavailable",
         "cmd-k-actions",
-        "TemplatePrompt Cmd+K did not expose an active actions popup contract or actionsDialog elements.",
-        { actionsStateEnvelope, actionsElementsEnvelope },
+        "TemplatePrompt Cmd+K did not expose an active actions popup contract or concrete actionsDialog rows.",
+        { actionsStateEnvelope, actionsElementsEnvelope, concreteActionRowCount: concreteActionRows.length },
+      );
+    }
+    if (actionsWarnings.includes("panel_only_actions_dialog")) {
+      return fail(
+        "template_prompt_actions_unavailable",
+        "cmd-k-actions",
+        "TemplatePrompt Cmd+K exposed only a panel placeholder instead of concrete action rows.",
+        { actionsStateEnvelope, actionsElementsEnvelope, concreteActionRowCount: concreteActionRows.length },
       );
     }
     pushStep("cmd-k-actions", "pass", { actionsStateEnvelope, actionsElementsEnvelope });

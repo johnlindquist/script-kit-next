@@ -364,6 +364,68 @@ fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
 }
 
 #[test]
+fn test_get_grouped_results_ai_vault_builtin_beats_stale_script_history() {
+    use crate::builtins::{BuiltInFeature, BuiltInGroup};
+
+    let scripts = wrap_scripts(vec![Script {
+        name: "Vault".to_string(),
+        path: PathBuf::from("/vault.ts"),
+        extension: "ts".to_string(),
+        icon: None,
+        description: Some("Search past AI conversations".to_string()),
+        alias: None,
+        shortcut: None,
+        ..Default::default()
+    }]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
+    let builtins = vec![BuiltInEntry {
+        id: "builtin/vault".to_string(),
+        name: "Vault".to_string(),
+        description: "Search AI Vault sessions...".to_string(),
+        keywords: vec![
+            "vault".to_string(),
+            "ai-vault".to_string(),
+            "aivault".to_string(),
+        ],
+        feature: BuiltInFeature::AiVault,
+        icon: None,
+        group: BuiltInGroup::Core,
+    }];
+    let apps: Vec<AppInfo> = vec![];
+    let frecency_store = FrecencyStore::new();
+    let mut input_history = crate::input_history::InputHistory::new();
+    input_history.add_entry_with_selection("vault", Some("script/main:Vault".to_string()));
+
+    let (grouped, results) = get_grouped_results_with_input_history(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &frecency_store,
+        "vault",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+        Some(&input_history),
+    );
+
+    let remembered_first = grouped
+        .iter()
+        .find_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(&results[*idx]),
+            GroupedListItem::SectionHeader(_, _) => None,
+            GroupedListItem::Status(_) => None,
+        })
+        .expect("vault search should have a selectable result");
+    assert_eq!(
+        remembered_first.history_result_key().as_deref(),
+        Some("builtin/vault"),
+        "exact AI Vault aliases must route to the built-in even when stale input history points at the old Vault script"
+    );
+}
+
+#[test]
 fn test_get_grouped_results_default_suggestions_for_new_users() {
     // When frecency store is empty (new user), items matching DEFAULT_SUGGESTED_ITEMS
     // should appear in the SUGGESTED section to help users discover features.

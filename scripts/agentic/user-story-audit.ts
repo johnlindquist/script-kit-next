@@ -3,7 +3,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-type StoryResultStatus = "pass" | "fail_closed" | "runtime_failure" | "timeout";
+type StoryResultStatus = "pass" | "fail_closed" | "blocked_precondition" | "runtime_failure" | "timeout";
 
 type StoryResult = {
   id: string;
@@ -38,6 +38,7 @@ function parseArgs(argv: string[]) {
   let maxMs = 30_000;
   let includeKnown = false;
   let dryRun = false;
+  let reclassifyPath: string | null = null;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -49,10 +50,12 @@ function parseArgs(argv: string[]) {
       includeKnown = true;
     } else if (arg === "--dry-run") {
       dryRun = true;
+    } else if (arg === "--reclassify") {
+      reclassifyPath = argv[++i] ?? null;
     }
   }
 
-  return { limit, maxMs, includeKnown, dryRun };
+  return { limit, maxMs, includeKnown, dryRun, reclassifyPath };
 }
 
 function humanizeRecipe(recipe: string) {
@@ -79,22 +82,81 @@ function extractStressRecipes(indexSource: string) {
   return [...recipes];
 }
 
-function extractJsonObject(output: string): any | null {
-  for (let index = output.lastIndexOf("{"); index >= 0; index = output.lastIndexOf("{", index - 1)) {
-    const candidate = output.slice(index).trim();
-    try {
-      return JSON.parse(candidate);
-    } catch {
-      // Keep walking backward until the final pretty-printed receipt parses.
+function extractJsonObjects(output: string): any[] {
+  const objects: any[] = [];
+
+  for (let start = 0; start < output.length; start += 1) {
+    if (output[start] !== "{") continue;
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let index = start; index < output.length; index += 1) {
+      const char = output[index];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (char === "\\") {
+          escaped = true;
+        } else if (char === "\"") {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (char === "\"") {
+        inString = true;
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          try {
+            objects.push(JSON.parse(output.slice(start, index + 1)));
+          } catch {
+            // Ignore brace-balanced text that is not JSON.
+          }
+          start = index;
+          break;
+        }
+      }
     }
   }
-  return null;
+
+  return objects;
 }
 
-function classify(parsed: any | null, exitCode: number | null, timedOut: boolean): StoryResultStatus {
+function extractJsonObject(output: string): any | null {
+  const objects = extractJsonObjects(output);
+  return [...objects].reverse().find((object) => object?.recipe && object?.status) ?? objects.at(-1) ?? null;
+}
+
+function failureCode(parsed: any | null) {
+  return parsed?.failure?.code ?? parsed?.proofBundle?.failure?.code ?? null;
+}
+
+function isFailClosed(parsed: any | null, outputPreview = "") {
+  const summary = String(parsed?.summary ?? outputPreview);
+  const code = failureCode(parsed) ?? "";
+  const warnings = parsed?.proofBundle?.warnings ?? parsed?.warnings ?? [];
+  return parsed?.failClosed === true
+    || parsed?.proofBundle?.failClosed === true
+    || parsed?.failureMode === "fail_closed"
+    || parsed?.proofBundle?.failureMode === "fail_closed"
+    || summary.includes("failed closed")
+    || code.startsWith("missing_")
+    || warnings.some((warning: string) => warning.startsWith("file_linear:"));
+}
+
+function classify(parsed: any | null, exitCode: number | null, timedOut: boolean, outputPreview = ""): StoryResultStatus {
+  const topLevelStatus = outputPreview.match(/^\s*\{[\s\S]{0,240}?\"recipe\"\s*:\s*\"[^\"]+\"\s*,\s*\"status\"\s*:\s*\"(pass|fail)\"/)?.[1];
   if (timedOut) return "timeout";
-  if (parsed?.status === "pass") return "pass";
-  if (parsed?.failClosed === true || parsed?.failureMode === "fail_closed") return "fail_closed";
+  if (failureCode(parsed) === "insufficient_target_count") return "blocked_precondition";
+  if (topLevelStatus === "pass") return "pass";
+  if (topLevelStatus !== "fail" && parsed?.status === "pass") return "pass";
+  if (isFailClosed(parsed, outputPreview)) return "fail_closed";
   if (exitCode === 0 && parsed?.status === "pass") return "pass";
   return "runtime_failure";
 }
@@ -127,7 +189,7 @@ async function runStory(recipe: string, index: number, maxMs: number): Promise<S
 
   const output = `${stdout}\n${stderr}`.trim();
   const parsed = extractJsonObject(output);
-  const status = classify(parsed, exitCode, timedOut);
+  const status = classify(parsed, exitCode, timedOut, output);
 
   return {
     id: `ux-story-${String(index + 1).padStart(3, "0")}`,
@@ -138,16 +200,47 @@ async function runStory(recipe: string, index: number, maxMs: number): Promise<S
     exitCode,
     durationMs: Date.now() - started,
     summary: parsed?.summary ?? null,
-    missingReceipt: parsed?.missingReceipt ?? parsed?.proofBundle?.missingReceipt ?? null,
-    failClosed: parsed?.failClosed === true || parsed?.proofBundle?.failClosed === true,
-    failureCode: parsed?.failure?.code ?? parsed?.proofBundle?.failure?.code ?? null,
+    missingReceipt: parsed?.missingReceipt ?? parsed?.proofBundle?.missingReceipt ?? failureCode(parsed),
+    failClosed: isFailClosed(parsed, output),
+    failureCode: failureCode(parsed),
     warnings: parsed?.proofBundle?.warnings ?? parsed?.warnings ?? [],
     outputPreview: output.slice(0, 1600),
   };
 }
 
 async function main() {
-  const { limit, maxMs, includeKnown, dryRun } = parseArgs(Bun.argv.slice(2));
+  const { limit, maxMs, includeKnown, dryRun, reclassifyPath } = parseArgs(Bun.argv.slice(2));
+
+  if (reclassifyPath) {
+    const existing = JSON.parse(await readFile(reclassifyPath, "utf8"));
+    const stories = existing.stories.map((story: StoryResult) => {
+      const parsed = extractJsonObject(story.outputPreview);
+      const status = classify(parsed, story.exitCode, story.status === "timeout", story.outputPreview);
+      return {
+        ...story,
+        status,
+        summary: story.summary ?? parsed?.summary ?? null,
+        missingReceipt: story.missingReceipt ?? parsed?.missingReceipt ?? parsed?.proofBundle?.missingReceipt ?? failureCode(parsed),
+        failClosed: isFailClosed(parsed, story.outputPreview),
+        failureCode: story.failureCode ?? failureCode(parsed),
+        warnings: story.warnings?.length ? story.warnings : parsed?.proofBundle?.warnings ?? parsed?.warnings ?? [],
+      };
+    });
+    const statusCounts = stories.reduce<Record<string, number>>((acc, story: StoryResult) => {
+      acc[story.status] = (acc[story.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    const normalized = {
+      ...existing,
+      reclassifiedAt: new Date().toISOString(),
+      statusCounts,
+      stories,
+    };
+    const outPath = reclassifyPath.replace(/\.json$/, ".normalized.json");
+    await writeFile(outPath, `${JSON.stringify(normalized, null, 2)}\n`);
+    console.log(JSON.stringify({ artifactPath: outPath, statusCounts }, null, 2));
+    return;
+  }
   const indexSource = await readFile("scripts/agentic/index.ts", "utf8");
   const candidates = extractStressRecipes(indexSource)
     .filter((recipe) => includeKnown || !ALREADY_EXERCISED_THIS_THREAD.has(recipe))

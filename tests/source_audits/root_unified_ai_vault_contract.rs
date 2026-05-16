@@ -18,6 +18,8 @@ fn root_unified_ai_vault_contract() {
     let defaults = read_source("src/config/defaults.rs");
     let ai_vault = read_source("src/ai_vault.rs");
     let grouping = read_source("src/scripts/grouping.rs");
+    let search_mode = read_source("src/scripts/grouping/search_mode.rs");
+    let scripts_tests = read_source("src/scripts/tests/chunk_12.rs");
     let actions = read_source("src/app_impl/root_unified_result_actions.rs");
     let selection = read_source("src/app_impl/selection_fallback.rs");
     let preflight = read_source("src/main_window_preflight/build.rs");
@@ -80,6 +82,13 @@ fn root_unified_ai_vault_contract() {
     assert!(trigger_registry.contains("TriggerBuiltin::AiVault => \"builtin/vault\""));
     assert!(trigger_registry
         .contains("TriggerBuiltin::AiVault => &[\"vault\", \"ai-vault\", \"aivault\"]"));
+    assert!(search_mode.contains("reserved_exact_builtin_preferred_result_key"));
+    assert!(search_mode.contains("\"vault\" | \"ai-vault\" | \"aivault\""));
+    assert!(search_mode.contains("BuiltInFeature::AiVault"));
+    assert!(scripts_tests
+        .contains("test_get_grouped_results_ai_vault_builtin_beats_stale_script_history"));
+    assert!(scripts_tests.contains("script/main:Vault"));
+    assert!(scripts_tests.contains("builtin/vault"));
     assert!(builtin_execution.contains("fn open_ai_vault_source_filter("));
     assert!(builtin_execution.contains("let filter_text = \"vault: \".to_string();"));
     assert!(builtin_execution.contains("Search AI Vault sessions..."));

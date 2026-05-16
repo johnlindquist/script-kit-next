@@ -70,6 +70,12 @@ Existing-chat AI mutation messages settle through direct SDK handler responses i
 
 The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.
 
+### Script Kit Agent DevTools
+
+Agent DevTools is the protocol/MCP-first surface agents use to inspect, control, measure, compare, and prove UI behavior before reaching for scripted recipes.
+
+The repo-local `script-kit-devtools` skill frames `getState`, `getElements`, `getLayoutInfo`, `listAutomationWindows`, `inspectAutomationWindow`, `waitFor`, `batch`, screenshot capture, and read-only MCP `computer/*` tools as one DevTools layer. The first CLI composition is `bun scripts/devtools/inspect.ts`, which gathers target identity, state, elements, layout, screenshot metadata, capabilities, warnings, errors, missing fields, and recommended next primitives into one agent-readable report. `agentic-testing` recipes remain useful regression packs, but user-reported UX/UI bugs should start from direct DevTools primitives so agents can form hypotheses, inspect unfamiliar surfaces, measure before/after behavior, and name missing instrumentation instead of being steered by whichever stress recipe already exists.
+
 `getState` accepts an optional `target: AutomationWindowTarget` for wire compatibility and main-window disambiguation, but `stateResult` remains a main-window state contract. Omitted target, `Main`, `Focused`, and explicit targets resolving to the main window return main state. Explicit non-main targets return a diagnostic `stateResult` with `promptType:"unsupported"` and `promptId:"target_unsupported:<Kind>"`; target resolution failures stay distinct as `promptType:"target_resolution_failed"` and `promptId:"target_error:<error>"`. Use `getElements(target)` for semantic element inspection, `inspectAutomationWindow(target)` for window/surface inspection, and `getAcpState(target)` for ACP state.
 
 Notes-targeted `batch.setInput` writes to the Notes editor while the Notes surface is in editor mode and to the embedded ACP composer while the Notes surface is in ACP mode. This keeps runtime proofs state-first for both surfaces without native typing.
