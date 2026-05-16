@@ -38,6 +38,8 @@ import {
   runAcpPortalRoundTripOriginStressScenario,
   runAcpPromptPopupParityScenario,
   runActionsCapturedSubjectFrameStressScenario,
+  runBrowserTabsCacheIdentityStressScenario,
+  runClipboardHistoryPortalRangeStressScenario,
   runCurrentAppCommandsFrontmostStressScenario,
   runDetachedAcpTargetThreadingStressScenario,
   runDropPromptNativeDropPrivacyStressScenario,
@@ -49,6 +51,7 @@ import {
   runPermissionPreflightReadonlyScenario,
   runPromptPopupExactIdScenario,
   runScreenshotIdentityAcpContextStressScenario,
+  runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
   runTemplatePromptAutomationParityStressScenario,
 } from "./scenario";
@@ -541,6 +544,10 @@ function parseArgs() {
   const sizeIdx = args.indexOf("--size");
   const rawSize = sizeIdx >= 0 && args[sizeIdx + 1] ? Number(args[sizeIdx + 1]) : undefined;
   const size = Number.isFinite(rawSize) ? rawSize : undefined;
+  const portalIdIdx = args.indexOf("--portal-id");
+  const portalId = portalIdIdx >= 0 && args[portalIdIdx + 1] ? args[portalIdIdx + 1] : undefined;
+  const rangeIdx = args.indexOf("--range");
+  const range = rangeIdx >= 0 && args[rangeIdx + 1] ? args[rangeIdx + 1] : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
@@ -574,6 +581,8 @@ function parseArgs() {
     mutation,
     fileName,
     size,
+    portalId,
+    range,
     sandboxConfig,
   };
 }
@@ -1845,6 +1854,8 @@ const {
   mutation,
   fileName,
   size,
+  portalId,
+  range,
   sandboxConfig,
 } = parseArgs();
 
@@ -2131,6 +2142,48 @@ switch (recipe) {
     break;
   }
 
+  case "clipboard-history-portal-range-stress": {
+    const proofBundle = await runClipboardHistoryPortalRangeStressScenario({ session, portalId, range });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "clipboard-history-portal-range-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Clipboard history portal range stress failed closed; portal range receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "browser-tabs-cache-identity-stress": {
+    const proofBundle = await runBrowserTabsCacheIdentityStressScenario({ session, source });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "browser-tabs-cache-identity-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Browser tabs/history cache identity stress failed closed; cache identity receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "scroll-selection-reanchor-stress": {
+    const proofBundle = await runScrollSelectionReanchorStressScenario({
+      session,
+      surfaces: kinds,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "scroll-selection-reanchor-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Scroll selection reanchor stress failed closed; cross-surface reanchor receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2243,6 +2296,9 @@ switch (recipe) {
           { name: "drop-prompt-native-drop-privacy-stress", description: "Fail-closed DropPrompt native drop privacy/redaction receipt", flags: ["--session", "--file-name", "--size", "--json"] },
           { name: "path-prompt-filesystem-edge-stress", description: "State-first PathPrompt filesystem edge receipt helper", flags: ["--session", "--json"] },
           { name: "screenshot-identity-acp-context-stress", description: "Fail-closed screenshotIdentity to ACP context threading receipt", flags: ["--session", "--source", "--json"] },
+          { name: "clipboard-history-portal-range-stress", description: "Fail-closed Clipboard History portal host/range receipt", flags: ["--session", "--portal-id", "--range", "--json"] },
+          { name: "browser-tabs-cache-identity-stress", description: "Fail-closed browser tabs/history cache identity receipt", flags: ["--session", "--source", "--json"] },
+          { name: "scroll-selection-reanchor-stress", description: "Fail-closed cross-surface scroll selection reanchor receipt", flags: ["--session", "--kinds", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2280,6 +2336,9 @@ switch (recipe) {
           "proofBundle.dropPrompt",
           "proofBundle.pathPrompt",
           "proofBundle.screenshotIdentity",
+          "proofBundle.clipboardPortal",
+          "proofBundle.browserCache",
+          "proofBundle.scrollSelection",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2326,6 +2385,12 @@ Recipes:
                          State-first PathPrompt filesystem edge proof
   screenshot-identity-acp-context-stress
                          Fail-closed screenshotIdentity to ACP context proof
+  clipboard-history-portal-range-stress
+                         Fail-closed Clipboard History portal host/range proof
+  browser-tabs-cache-identity-stress
+                         Fail-closed browser cache identity/dedupe proof
+  scroll-selection-reanchor-stress
+                         Fail-closed cross-surface scroll selection proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2368,6 +2433,12 @@ Available scenarios:
                          Run PathPrompt filesystem edge helper
   screenshot-identity-acp-context-stress
                          Emit fail-closed screenshot identity context requirements
+  clipboard-history-portal-range-stress
+                         Emit fail-closed Clipboard History portal range requirements
+  browser-tabs-cache-identity-stress
+                         Emit fail-closed browser cache identity requirements
+  scroll-selection-reanchor-stress
+                         Emit fail-closed scroll selection reanchor requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2392,6 +2463,9 @@ Examples:
   bun scripts/agentic/index.ts drop-prompt-native-drop-privacy-stress --session default --file-name agentic-drop.txt --size 12 --json
   bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress --session default --json
   bun scripts/agentic/index.ts screenshot-identity-acp-context-stress --session default --source tab-ai-screenshot --json
+  bun scripts/agentic/index.ts clipboard-history-portal-range-stress --session default --portal-id 'kit://clipboard-history?id=agentic' --range composer:0..0 --json
+  bun scripts/agentic/index.ts browser-tabs-cache-identity-stress --session default --source browser-tabs --json
+  bun scripts/agentic/index.ts scroll-selection-reanchor-stress --session default --kinds clipboard,browser-history,current-app-commands,file-search --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

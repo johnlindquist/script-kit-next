@@ -94,7 +94,10 @@ export interface HardScenarioReceipt {
     | "actions-captured-subject-frame-stress"
     | "drop-prompt-native-drop-privacy-stress"
     | "path-prompt-filesystem-edge-stress"
-    | "screenshot-identity-acp-context-stress";
+    | "screenshot-identity-acp-context-stress"
+    | "clipboard-history-portal-range-stress"
+    | "browser-tabs-cache-identity-stress"
+    | "scroll-selection-reanchor-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -115,6 +118,9 @@ export interface HardScenarioReceipt {
   dropPrompt?: Record<string, unknown>;
   pathPrompt?: Record<string, unknown>;
   screenshotIdentity?: Record<string, unknown>;
+  clipboardPortal?: Record<string, unknown>;
+  browserCache?: Record<string, unknown>;
+  scrollSelection?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -2123,6 +2129,131 @@ export async function runScreenshotIdentityAcpContextStressScenario(opts: {
         "The harness fails closed until screenshot identity threading can be proven from state and ACP context receipts without grepping the filesystem.",
     },
     warnings: ["file_linear:screenshot_identity_context_receipts_missing"],
+  };
+}
+
+export async function runClipboardHistoryPortalRangeStressScenario(opts: {
+  session: string;
+  portalId?: string;
+  range?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "clipboard-history-portal-range-stress",
+    status: "fail",
+    clipboardPortal: {
+      session: opts.session,
+      portalId: opts.portalId ?? "kit://clipboard-history?id=agentic",
+      range: opts.range ?? "composer:0..0",
+      hostRefusalReceipt: null,
+      roundTripUri: null,
+      exactRangeReplacement: null,
+      wrongHostAccepted: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "clipboard-portal-range-receipt-preflight",
+      status: "fail",
+      output: { blockingGap: "Clipboard portal host refusal, kit:// URI round-trip, and exact range replacement receipts are not exposed as one agentic proof." },
+    }],
+    failure: {
+      code: "missing_clipboard_portal_range_receipt",
+      stepName: "clipboard-portal-range-receipt-preflight",
+      message: "The harness fails closed until clipboard-history portal range receipts exist.",
+    },
+    warnings: ["file_linear:clipboard_portal_range_receipts_missing"],
+  };
+}
+
+export async function runBrowserTabsCacheIdentityStressScenario(opts: {
+  session: string;
+  source?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "browser-tabs-cache-identity-stress",
+    status: "fail",
+    browserCache: {
+      session: opts.session,
+      source: opts.source ?? "browser-tabs",
+      cacheOnly: true,
+      browserActivated: false,
+      dedupeKey: null,
+      sourceIdentity: null,
+      staleCacheRejected: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "browser-cache-identity-receipt-preflight",
+      status: "fail",
+      output: { blockingGap: "Browser tabs/history cache identity and dedupe receipts are not exposed without activating the browser." },
+    }],
+    failure: {
+      code: "missing_browser_cache_identity_receipt",
+      stepName: "browser-cache-identity-receipt-preflight",
+      message: "The harness fails closed until browser cache identity receipts exist.",
+    },
+    warnings: ["file_linear:browser_cache_identity_receipts_missing"],
+  };
+}
+
+export async function runScrollSelectionReanchorStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+}): Promise<HardScenarioReceipt> {
+  const surfaces = opts.surfaces ?? ["clipboard", "browser-history", "current-app-commands", "file-search"];
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "scroll-selection-reanchor-stress",
+    status: "fail",
+    scrollSelection: {
+      session: opts.session,
+      surfaces,
+      initialSelectedSemanticId: null,
+      afterWheelSelectedSemanticId: null,
+      afterDragSelectedSemanticId: null,
+      visibleRowStillSelected: null,
+      footerOcclusionSafe: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "scroll-selection-reanchor-receipt-preflight",
+      status: "fail",
+      output: { surfaces, blockingGap: "Cross-surface wheel/drag selection reanchor receipts are not exposed as one agentic proof." },
+    }],
+    failure: {
+      code: "missing_scroll_selection_reanchor_receipt",
+      stepName: "scroll-selection-reanchor-receipt-preflight",
+      message: "The harness fails closed until scroll/drag reanchor receipts exist.",
+    },
+    warnings: ["file_linear:scroll_selection_reanchor_receipts_missing"],
   };
 }
 

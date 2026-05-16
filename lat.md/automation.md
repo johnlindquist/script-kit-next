@@ -180,6 +180,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `screenshot-identity-acp-context-stress` is intentionally fail-closed until ACP context receipts expose the same screenshot identity as `stateResult.screenshotIdentity` without filesystem greps.
 
+`clipboard-history-portal-range-stress` is intentionally fail-closed until Clipboard History portal receipts expose host refusal, `kit://clipboard-history?id=...` round-tripping, and exact range replacement on accept.
+
+`browser-tabs-cache-identity-stress` is intentionally fail-closed until browser tabs/history receipts expose cache-only source identity, dedupe keys, stale-cache rejection, and a no-browser-activation guarantee.
+
+`scroll-selection-reanchor-stress` is intentionally fail-closed until list surfaces expose state-first wheel/drag reanchor receipts proving the selected semantic row remains visible and footer-safe.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

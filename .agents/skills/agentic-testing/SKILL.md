@@ -558,6 +558,12 @@ bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress \
   --session default --json
 bun scripts/agentic/index.ts screenshot-identity-acp-context-stress \
   --session default --source tab-ai-screenshot --json
+bun scripts/agentic/index.ts clipboard-history-portal-range-stress \
+  --session default --portal-id 'kit://clipboard-history?id=agentic' --range composer:0..0 --json
+bun scripts/agentic/index.ts browser-tabs-cache-identity-stress \
+  --session default --source browser-tabs --json
+bun scripts/agentic/index.ts scroll-selection-reanchor-stress \
+  --session default --kinds clipboard,browser-history,current-app-commands,file-search --json
 ```
 
 ### State-only vs screenshot checkpoints
