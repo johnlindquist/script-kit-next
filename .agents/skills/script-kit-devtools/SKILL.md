@@ -38,6 +38,9 @@ The loop is:
 Prefer direct primitives over prewritten recipes:
 
 - Inspector CLI: `bun scripts/devtools/inspect.ts --session <name> --start --show --main` composes the protocol primitives below into one agent-readable target report with capabilities, missing fields, warnings, errors, and recommended next primitives.
+- Coverage CLI: `bun scripts/devtools/coverage.ts --surface notes|dictation|main|actions-dialog` reports Chrome-DevTools-inspired domain coverage, supported primitives, missing runtime primitives, required shortcuts, and next API work before an agent reaches for a recipe.
+- Measure CLI: `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>` converts inspect and coverage receipts into target identity, screenshot, semantic, layout, text, scroll, focus, media, and missing-primitive measurements.
+- Media CLI: `bun scripts/devtools/media.ts --coverage <dictation-coverage.json>` is the fail-closed `devtools.media.inspect` slice for Dictation. It requires passive microphone, device, model, recording, transcript, target-delivery, hotkey, wrong-target, and cleanup receipts before live Dictation bugs can be called green.
 - Targeting: `listAutomationWindows`, `inspectAutomationWindow`, exact automation ids, kind/index promotion.
 - State: `getState`, `getAcpState`, surface contracts, popup contracts, active footer, visible counts, prompt-specific state.
 - Semantics: `getElements(target)`, semantic ids, roles, labels, selected/focused ids, row metadata, warnings.
@@ -75,6 +78,8 @@ Do not call an investigation green because a recipe passed. Green means the same
 ## Coverage Audit
 
 Read `references/devtools-coverage-audit.md` when planning new DevTools surface work, expanding coverage, or deciding whether a user bug is blocked by missing instrumentation.
+
+Read `references/devtools-api-coverage-map.md` when the work needs Chrome-DevTools-level breadth, Notes coverage, Dictation coverage, or the next protocol/API primitive. The checked-in coverage command is the machine-readable companion to that map.
 
 Use the audit as a living map, not a final verdict. Update it when new protocol/MCP primitives land or when a recipe reveals a missing primitive.
 
