@@ -346,6 +346,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `acp-context-insertion-preview-parity-stress` is intentionally fail-closed until ACP context insertion receipts expose source/destination identities, portal session id, selection and preview generations, selected row id/title/kind/fingerprint, accepted context URI, inserted token alias and preview fingerprint, composer generation and replacement range, row preview matching inserted context, selection preservation, stale/selection-drift/wrong-destination rejection, no raw content leak, no picker/Quick Look/pasteboard/network/submit, AFK-safe flags, and cleanup.
 
+`acp-slash-mention-provider-visibility-stress` is intentionally fail-closed until ACP slash/mention receipts expose provider hint catalog identity, popup family, trigger/query text, provider readiness generation, visibility rows, hint text, unavailable/loading/error-recovered/filtered-empty states, slash and mention provider rows, disabled-provider refusal, stale generation rejection, no picker/Quick Look/network/submit, AFK-safe flags, and cleanup.
+
+`acp-composer-token-keyboard-edit-parity-stress` is intentionally fail-closed until ACP composer token receipts expose host surface identity, composer generation, token ids/kinds/aliases/bounds, cursor-before/after-token positions, atomic Backspace/Delete behavior, range remove, move-left/move-right receipts, order before/after, context and pasted metadata preservation, cursor selection preservation, no partial token text leak, stale/duplicate/wrong-host rejection, no pasteboard/native input/submit, AFK-safe flags, and cleanup.
+
+`acp-transcript-stream-retry-virtualization-stress` is intentionally fail-closed until ACP transcript receipts expose fixture transcript and thread generations, virtualized message window, visible row ids, stream run/chunk ordering, scroll anchors, bottom stickiness, user-scrolled-away preservation, assistant error identity/text, retry button/draft/request/recovery generations, stale chunk and wrong-message retry rejection, virtualized row stability, blank-row rejection, transcript redaction, no spawned agent process/security prompt/network/submit, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

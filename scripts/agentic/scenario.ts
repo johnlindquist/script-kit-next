@@ -175,7 +175,10 @@ export interface HardScenarioReceipt {
     | "menu-syntax-capture-validation-chip-stress"
     | "acp-footer-activity-indicator-stress"
     | "acp-model-history-popover-visual-state-stress"
-    | "acp-context-insertion-preview-parity-stress";
+    | "acp-context-insertion-preview-parity-stress"
+    | "acp-slash-mention-provider-visibility-stress"
+    | "acp-composer-token-keyboard-edit-parity-stress"
+    | "acp-transcript-stream-retry-virtualization-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -286,6 +289,9 @@ export interface HardScenarioReceipt {
   acpFooterActivityIndicatorReceipt?: Record<string, unknown>;
   acpModelHistoryPopoverVisualStateReceipt?: Record<string, unknown>;
   acpContextInsertionPreviewParityReceipt?: Record<string, unknown>;
+  acpSlashMentionProviderVisibilityReceipt?: Record<string, unknown>;
+  acpComposerTokenKeyboardEditParityReceipt?: Record<string, unknown>;
+  acpTranscriptStreamRetryVirtualizationReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8026,6 +8032,181 @@ export async function runAcpContextInsertionPreviewParityStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_context_insertion_preview_parity_receipt" } }],
     failure: { code: "missing_acp_context_insertion_preview_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP context insertion preview parity receipts." },
     warnings: ["file_linear:acp_context_insertion_preview_parity_receipts_missing"],
+  };
+}
+
+export async function runAcpSlashMentionProviderVisibilityStressScenario(opts: {
+  session: string;
+  families?: string[];
+  fixture?: string;
+  providers?: string[];
+  queries?: string[];
+  states?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noQuickLook?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-slash-mention-provider-visibility-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_slash_mention_provider_visibility_receipt",
+    linearIssue: "file_linear:acp_slash_mention_provider_visibility_receipts_missing",
+    acpSlashMentionProviderVisibilityReceipt: {
+      kind: "ux.acpSlashMentionProviderVisibility",
+      acpSlashMentionProviderVisibilityStressId: "loop-thirty-two-acp-slash-mention-provider-visibility",
+      session: opts.session, requestedFamilies: opts.families ?? ["slash", "mention"],
+      fixture: opts.fixture ?? "agentic-acp-provider-hints",
+      requestedProviders: opts.providers ?? ["dictation-history", "browser-history", "notes", "files", "skills"],
+      requestedQueries: opts.queries ?? ["@di", "@browser-history", "@missing", "/new-script", "/unknown"],
+      requestedStates: opts.states ?? ["ready", "unavailable", "loading", "error-recovered", "filtered-empty"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true, noQuickLook: opts.noQuickLook ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      providerHintCatalogId: null, popupFamily: null, triggerText: null, queryText: null,
+      providerReadinessGeneration: null, providerVisibilityRows: [], providerHintText: null,
+      providerUnavailableReason: null, providerLoadingState: null, providerErrorRecoveredState: null,
+      hiddenUntilResourceAvailable: null, dictationProviderVisibleWhenKitResourceReady: null,
+      browserHistoryProviderVisibleWhenCacheReady: null, slashCommandProviderRows: [],
+      mentionProviderRows: [], selectedRowSemanticId: null, focusedRowSemanticId: null,
+      disabledProviderRowsNotAccepted: null, staleProviderGenerationRejected: null,
+      wrongPopupRejected: null, noRawProviderContentLeak: null, noNativePicker: true,
+      noQuickLook: true, noNetwork: true, noSubmit: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_slash_mention_provider_visibility_receipt" } }],
+    failure: { code: "missing_acp_slash_mention_provider_visibility_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP slash/mention provider visibility receipts." },
+    warnings: ["file_linear:acp_slash_mention_provider_visibility_receipts_missing"],
+  };
+}
+
+export async function runAcpComposerTokenKeyboardEditParityStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  tokenKinds?: string[];
+  editSteps?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noScreenCapture?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-composer-token-keyboard-edit-parity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_composer_token_keyboard_edit_parity_receipt",
+    linearIssue: "file_linear:acp_composer_token_keyboard_edit_parity_receipts_missing",
+    acpComposerTokenKeyboardEditParityReceipt: {
+      kind: "ux.acpComposerTokenKeyboardEditParity",
+      acpComposerTokenKeyboardEditParityStressId: "loop-thirty-two-acp-composer-token-keyboard-edit-parity",
+      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-acp-composer-tokens",
+      requestedTokenKinds: opts.tokenKinds ?? ["mention", "slash", "pasted-text", "pasted-image", "skill-file"],
+      requestedEditSteps: opts.editSteps ?? ["backspace-delete", "delete-forward", "range-remove", "move-token-left", "move-token-right", "cursor-around-token"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true, noScreenCapture: opts.noScreenCapture ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureComposerTokenSetId: null, hostSurfaceIdentity: null, composerGeneration: null,
+      tokenSemanticIds: [], tokenKinds: [], tokenAliases: [], tokenBounds: [],
+      cursorBeforeToken: null, cursorAfterToken: null, backspaceRemovesTokenAtomically: null,
+      deleteForwardRemovesTokenAtomically: null, rangeRemoveReceipt: null,
+      moveTokenLeftReceipt: null, moveTokenRightReceipt: null, tokenOrderBefore: [],
+      tokenOrderAfter: [], pendingContextPartsPreserved: null, slashSkillContextPreserved: null,
+      pastedTokenMetadataPreserved: null, cursorSelectionPreserved: null,
+      noPartialTokenTextLeak: null, staleComposerGenerationRejected: null,
+      duplicateTokenIdRejected: null, wrongHostRejected: null, noSystemPasteboard: true,
+      noNativeInput: true, noSubmit: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_composer_token_keyboard_edit_parity_receipt" } }],
+    failure: { code: "missing_acp_composer_token_keyboard_edit_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP composer token keyboard edit parity receipts." },
+    warnings: ["file_linear:acp_composer_token_keyboard_edit_parity_receipts_missing"],
+  };
+}
+
+export async function runAcpTranscriptStreamRetryVirtualizationStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  messageCount?: number;
+  streamChunks?: number;
+  errorFixtures?: string[];
+  retryPaths?: string[];
+  scrollPositions?: string[];
+  inputModes?: string[];
+  agentFixture?: string;
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSecurityPrompts?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-transcript-stream-retry-virtualization-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_transcript_stream_retry_virtualization_receipt",
+    linearIssue: "file_linear:acp_transcript_stream_retry_virtualization_receipts_missing",
+    acpTranscriptStreamRetryVirtualizationReceipt: {
+      kind: "ux.acpTranscriptStreamRetryVirtualization",
+      acpTranscriptStreamRetryVirtualizationStressId: "loop-thirty-two-acp-transcript-stream-retry-virtualization",
+      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-acp-transcript-stream",
+      messageCount: opts.messageCount ?? 160, streamChunks: opts.streamChunks ?? 48,
+      requestedErrorFixtures: opts.errorFixtures ?? ["tool-error", "agent-error", "model-timeout", "cancelled"],
+      requestedRetryPaths: opts.retryPaths ?? ["retry-same-draft", "retry-edited-draft", "retry-after-scroll"],
+      requestedScrollPositions: opts.scrollPositions ?? ["top", "middle", "bottom", "near-active"],
+      requestedInputModes: opts.inputModes ?? ["protocol-state", "protocol-key", "batch"],
+      agentFixture: opts.agentFixture ?? "scripted-local", noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true, noSecurityPrompts: opts.noSecurityPrompts ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureTranscriptId: null, hostSurfaceIdentity: null, threadGeneration: null,
+      transcriptGeneration: null, virtualizedMessageWindow: null, visibleMessageIds: [],
+      messageRowSemanticIds: [], streamRunId: null, streamChunkSequence: [],
+      activeAssistantMessageId: null, monotonicChunkAppend: null, scrollAnchorBefore: null,
+      scrollAnchorAfter: null, bottomStickinessState: null, userScrolledAwayPreserved: null,
+      assistantErrorMessageId: null, errorKind: null, errorVisibleText: null,
+      retryButtonSemanticId: null, retryDraftFingerprint: null, retryRequestGeneration: null,
+      retryRecoveryMessageId: null, noStaleErrorAfterRecovery: null, staleStreamChunkRejected: null,
+      wrongMessageRetryRejected: null, virtualizedRowIdentityStable: null, blankRowRejected: null,
+      noTranscriptBodyLeakInReceipts: null, noAgentProcessSpawn: true, noSecurityPrompt: true,
+      noNetwork: true, noSubmit: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_transcript_stream_retry_virtualization_receipt" } }],
+    failure: { code: "missing_acp_transcript_stream_retry_virtualization_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP transcript streaming retry virtualization receipts." },
+    warnings: ["file_linear:acp_transcript_stream_retry_virtualization_receipts_missing"],
   };
 }
 
