@@ -69,3 +69,30 @@ fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
         "hidden-main orderOut must happen before overlay orderFrontRegardless"
     );
 }
+
+// @lat: [[dictation-overlay-shortcuts#Dictation Overlay Shortcuts#Visible shortcut rail]]
+#[test]
+fn dictation_overlay_renders_visible_shortcut_rail() {
+    assert!(
+        DICTATION_WINDOW.contains("pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;")
+            && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 58.0;"),
+        "dictation overlay must reserve enough room for visible controls and shortcut hints"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("const RECORDING_HINT: &str = \"Hotkey again Submit")
+            && DICTATION_WINDOW.contains("Esc Cancel")
+            && DICTATION_WINDOW.contains("const CONFIRM_HINT: &str")
+            && DICTATION_WINDOW.contains("Enter")
+            && DICTATION_WINDOW.contains("Continue")
+            && DICTATION_WINDOW.contains("const CLOSE_HINT: &str = \"Esc Close\""),
+        "recording, confirming, and terminal phases must have visible shortcut copy"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("fn render_shortcut_hint_text")
+            && DICTATION_WINDOW.contains(".id(\"dictation-shortcut-hint\")")
+            && DICTATION_WINDOW.contains(".child(self.render_shortcut_hint(hint))")
+            && DICTATION_WINDOW
+                .contains(".child(render_shortcut_hint_text(recording_shortcut_hint(false)))"),
+        "runtime and preview renders must both include the visible shortcut rail"
+    );
+}

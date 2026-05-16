@@ -9,22 +9,24 @@ use crate::dictation::visualizer::silent_bars;
 // ---------------------------------------------------------------------------
 
 /// Compact capsule width in pixels.
-pub(crate) const OVERLAY_WIDTH_PX: f32 = 312.0;
+pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
 /// Compact capsule height in pixels.
-pub(crate) const OVERLAY_HEIGHT_PX: f32 = 32.0;
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 58.0;
 /// Confirming phase uses the same capsule height so content swaps inline.
-/// Fully-rounded corner radius (half of height for capsule shape).
-pub(crate) const OVERLAY_RADIUS_PX: f32 = 16.0;
+/// Fully-rounded corner radius for the expanded capsule shape.
+pub(crate) const OVERLAY_RADIUS_PX: f32 = 22.0;
 /// Horizontal padding inside the capsule.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 /// Gap between inner content columns.
 pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 8.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
+/// Font size for the visible shortcut rail.
+pub(crate) const SHORTCUT_TEXT_SIZE_PX: f32 = 10.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
-pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 86.0;
+pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 108.0;
 
 /// Number of waveform bars in the compact capsule visualizer.
 pub(crate) const WAVEFORM_BAR_COUNT: usize = 9;
@@ -344,11 +346,18 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 // ---------------------------------------------------------------------------
 
 /// Button label for the Stop action in the confirming overlay.
-const CONFIRM_STOP_LABEL: &str = "Stop \u{21b5}";
+const CONFIRM_STOP_LABEL: &str = "Stop Enter";
 /// Button label for the Continue action in the confirming overlay.
-const CONFIRM_CONTINUE_LABEL: &str = "Continue \u{238b}";
+const CONFIRM_CONTINUE_LABEL: &str = "Continue Esc";
 /// Hint text shown in the confirming overlay footer.
-const CONFIRM_HINT: &str = "\u{21b5} Stop \u{00b7} \u{238b} Continue";
+const CONFIRM_HINT: &str = "Enter Stop \u{00b7} Esc Continue";
+/// Recording hint shown while audio capture is active.
+const RECORDING_HINT: &str = "Hotkey again Submit \u{00b7} Esc Cancel";
+/// Recording hint when the target badge can cycle destinations.
+const RECORDING_TARGET_HINT: &str =
+    "Hotkey again Submit \u{00b7} Esc Cancel \u{00b7} Click target to change";
+/// Close hint shown for non-recording terminal phases.
+const CLOSE_HINT: &str = "Esc Close";
 
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
@@ -372,13 +381,22 @@ pub(crate) enum OverlayEscapeAction {
 /// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Stop · ⎋ Continue").
 pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str, &'static str) {
     match phase {
-        DictationSessionPhase::Recording => ("Listening\u{2026}", "Esc Cancel"),
+        DictationSessionPhase::Recording => ("Listening\u{2026}", RECORDING_HINT),
         DictationSessionPhase::Confirming => ("Stop dictation?", CONFIRM_HINT),
-        DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", "Esc Close"),
-        DictationSessionPhase::Delivering => ("Delivering\u{2026}", "Esc Close"),
-        DictationSessionPhase::Finished => ("Done", "Esc Close"),
-        DictationSessionPhase::Failed(_) => ("Dictation failed", "Esc Close"),
+        DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", CLOSE_HINT),
+        DictationSessionPhase::Delivering => ("Delivering\u{2026}", CLOSE_HINT),
+        DictationSessionPhase::Finished => ("Done", CLOSE_HINT),
+        DictationSessionPhase::Failed(_) => ("Dictation failed", CLOSE_HINT),
         DictationSessionPhase::Idle => ("", ""),
+    }
+}
+
+/// Return the visible shortcut hint for the recording state.
+pub(crate) fn recording_shortcut_hint(can_cycle_target: bool) -> &'static str {
+    if can_cycle_target {
+        RECORDING_TARGET_HINT
+    } else {
+        RECORDING_HINT
     }
 }
 
@@ -730,6 +748,11 @@ impl DictationOverlay {
             .child(badge)
     }
 
+    /// Render a visible shortcut rail below the primary overlay controls.
+    fn render_shortcut_hint(&self, hint: &'static str) -> impl IntoElement {
+        render_shortcut_hint_text(hint)
+    }
+
     /// Handle key-down events for the overlay.
     ///
     /// Escape semantics (vercel-voice 5-second threshold pattern):
@@ -854,52 +877,61 @@ impl Render for DictationOverlay {
         let bars = &self.display_bars;
         let elapsed = &self.state.elapsed;
 
-        // 3-column inner content matching vercel-voice grid layout:
-        //   left (timer) | center (bars/dots/status) | right (spacer)
+        // Primary controls plus a visible shortcut rail. The rail is part of
+        // the runtime overlay, not hidden copy, so dictation affordances stay
+        // discoverable while the capsule remains compact.
         let inner = match phase {
             DictationSessionPhase::Recording => {
                 let timer_text = format_elapsed(*elapsed);
                 let active = has_sound(bars);
                 let target_badge_interactive = crate::dictation::can_cycle_dictation_target();
+                let hint = recording_shortcut_hint(target_badge_interactive);
 
                 div()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
+                    .justify_center()
+                    .gap(px(3.))
                     .w_full()
-                    // Left: timer
                     .child(
                         div()
-                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap(px(8.))
+                            .w_full()
+                            // Left: timer
                             .child(
                                 div()
-                                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                                    .font_family(FONT_MONO)
-                                    .text_color(timer_color)
-                                    .child(timer_text),
-                            ),
+                                    .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(
+                                        div()
+                                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                                            .font_family(FONT_MONO)
+                                            .text_color(timer_color)
+                                            .child(timer_text),
+                                    ),
+                            )
+                            // Center: waveform bars (flex-grow to fill)
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(render_waveform_bars(bars, active)),
+                            )
+                            // Right: destination badge
+                            .child(self.render_target_badge_slot(target_badge_interactive, cx)),
                     )
-                    // Center: waveform bars (flex-grow to fill)
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_center()
-                            .child(render_waveform_bars(bars, active)),
-                    )
-                    // Right: destination badge
-                    .child(self.render_target_badge_slot(target_badge_interactive, cx))
+                    .child(self.render_shortcut_hint(hint))
             }
             DictationSessionPhase::Confirming => {
-                // Same 3-column horizontal layout as recording — content swaps
-                // inline at the same pill height (no vertical expansion).
-                //   left: timer  |  center: Stop · Continue buttons  |  right: spacer
                 let timer_text = format_elapsed(*elapsed);
                 let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
                 let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
@@ -912,77 +944,99 @@ impl Render for DictationOverlay {
 
                 div()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
+                    .justify_center()
+                    .gap(px(3.))
                     .w_full()
-                    // Left: timer (same position as recording)
-                    .child(
-                        div().flex().flex_row().items_center().gap(px(8.)).child(
-                            div()
-                                .text_size(px(STATUS_TEXT_SIZE_PX))
-                                .font_family(FONT_MONO)
-                                .text_color(timer_color)
-                                .child(timer_text),
-                        ),
-                    )
-                    // Center: Stop / Continue buttons (replaces waveform)
                     .child(
                         div()
-                            .flex_1()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .justify_center()
-                            .gap(px(10.))
+                            .w_full()
+                            // Left: timer (same position as recording)
                             .child(
                                 div()
-                                    .id("dictation-stop-button")
-                                    .px(px(8.))
-                                    .py(px(2.))
-                                    .bg(stop_bg)
-                                    .rounded(px(999.))
-                                    .border_1()
-                                    .border_color(theme.colors.ui.error.with_opacity(0.45))
-                                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                                    .font_family(FONT_MONO)
-                                    .text_color(stop_color)
-                                    .cursor_pointer()
-                                    .hover(move |style| style.bg(stop_hover_bg))
-                                    .active(move |style| style.bg(stop_active_bg))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                            this.abort_overlay_session(window, cx);
-                                        }),
-                                    )
-                                    .child(CONFIRM_STOP_LABEL),
+                                    .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(
+                                        div()
+                                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                                            .font_family(FONT_MONO)
+                                            .text_color(timer_color)
+                                            .child(timer_text),
+                                    ),
                             )
+                            // Center: Stop / Continue buttons (replaces waveform)
                             .child(
                                 div()
-                                    .id("dictation-continue-button")
-                                    .px(px(8.))
-                                    .py(px(2.))
-                                    .bg(continue_bg)
-                                    .rounded(px(999.))
-                                    .border_1()
-                                    .border_color(theme.colors.ui.success.with_opacity(0.35))
-                                    .text_size(px(STATUS_TEXT_SIZE_PX))
-                                    .font_family(FONT_MONO)
-                                    .text_color(continue_color)
-                                    .cursor_pointer()
-                                    .hover(move |style| style.bg(continue_hover_bg))
-                                    .active(move |style| style.bg(continue_active_bg))
-                                    .on_mouse_down(
-                                        MouseButton::Left,
-                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                            this.resume_recording(window, cx);
-                                        }),
+                                    .flex_1()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_center()
+                                    .gap(px(10.))
+                                    .child(
+                                        div()
+                                            .id("dictation-stop-button")
+                                            .px(px(8.))
+                                            .py(px(2.))
+                                            .bg(stop_bg)
+                                            .rounded(px(999.))
+                                            .border_1()
+                                            .border_color(theme.colors.ui.error.with_opacity(0.45))
+                                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                                            .font_family(FONT_MONO)
+                                            .text_color(stop_color)
+                                            .cursor_pointer()
+                                            .hover(move |style| style.bg(stop_hover_bg))
+                                            .active(move |style| style.bg(stop_active_bg))
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(
+                                                    |this, _event: &MouseDownEvent, window, cx| {
+                                                        this.abort_overlay_session(window, cx);
+                                                    },
+                                                ),
+                                            )
+                                            .child(CONFIRM_STOP_LABEL),
                                     )
-                                    .child(CONFIRM_CONTINUE_LABEL),
-                            ),
+                                    .child(
+                                        div()
+                                            .id("dictation-continue-button")
+                                            .px(px(8.))
+                                            .py(px(2.))
+                                            .bg(continue_bg)
+                                            .rounded(px(999.))
+                                            .border_1()
+                                            .border_color(
+                                                theme.colors.ui.success.with_opacity(0.35),
+                                            )
+                                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                                            .font_family(FONT_MONO)
+                                            .text_color(continue_color)
+                                            .cursor_pointer()
+                                            .hover(move |style| style.bg(continue_hover_bg))
+                                            .active(move |style| style.bg(continue_active_bg))
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(
+                                                    |this, _event: &MouseDownEvent, window, cx| {
+                                                        this.resume_recording(window, cx);
+                                                    },
+                                                ),
+                                            )
+                                            .child(CONFIRM_CONTINUE_LABEL),
+                                    ),
+                            )
+                            // Right: destination badge
+                            .child(self.render_target_badge_slot(false, cx)),
                     )
-                    // Right: destination badge
-                    .child(self.render_target_badge_slot(false, cx))
+                    .child(self.render_shortcut_hint(CONFIRM_HINT))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -995,17 +1049,20 @@ impl Render for DictationOverlay {
                 };
                 div()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
                     .justify_center()
+                    .gap(px(4.))
                     .w_full()
                     .child(render_transcribing_dots(&dot_opacities))
+                    .child(self.render_shortcut_hint(CLOSE_HINT))
             }
             DictationSessionPhase::Finished => div()
                 .flex()
-                .flex_row()
+                .flex_col()
                 .items_center()
                 .justify_center()
+                .gap(px(3.))
                 .w_full()
                 .child(
                     div()
@@ -1014,14 +1071,16 @@ impl Render for DictationOverlay {
                         .text_color(text_color)
                         .overflow_hidden()
                         .child(finished_label()),
-                ),
+                )
+                .child(self.render_shortcut_hint(CLOSE_HINT)),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
                     .justify_center()
+                    .gap(px(3.))
                     .w_full()
                     .child(
                         div()
@@ -1031,6 +1090,7 @@ impl Render for DictationOverlay {
                             .overflow_hidden()
                             .child(err_text),
                     )
+                    .child(self.render_shortcut_hint(CLOSE_HINT))
             }
             // Idle / Delivering — render nothing meaningful
             _ => div(),
@@ -1146,6 +1206,20 @@ fn render_transcribing_dots(opacities: &[f32; TRANSCRIBING_DOT_COUNT]) -> impl I
     container
 }
 
+fn render_shortcut_hint_text(hint: &'static str) -> impl IntoElement {
+    let theme = get_cached_theme();
+
+    div()
+        .id("dictation-shortcut-hint")
+        .text_size(px(SHORTCUT_TEXT_SIZE_PX))
+        .font_family(FONT_MONO)
+        .text_color(theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .child(hint)
+}
+
 /// Render the live compact capsule from a fixed state for Storybook previews.
 ///
 /// This keeps canonical Dictation stories on the same constants, waveform
@@ -1179,28 +1253,44 @@ pub(crate) fn render_dictation_overlay_state_preview(
             let active = has_sound(&state.bars);
             div()
                 .flex()
-                .flex_row()
+                .flex_col()
                 .items_center()
+                .justify_center()
+                .gap(px(3.))
                 .w_full()
                 .child(
-                    div().flex().flex_row().items_center().gap(px(8.)).child(
-                        div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_MONO)
-                            .text_color(timer_color)
-                            .child(timer_text),
-                    ),
-                )
-                .child(
                     div()
-                        .flex_1()
                         .flex()
                         .flex_row()
                         .items_center()
-                        .justify_center()
-                        .child(render_waveform_bars(&state.bars, active)),
+                        .w_full()
+                        .child(
+                            div()
+                                .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                                        .font_family(FONT_MONO)
+                                        .text_color(timer_color)
+                                        .child(timer_text),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_center()
+                                .child(render_waveform_bars(&state.bars, active)),
+                        )
+                        .child(render_static_target_badge_slot(state.target)),
                 )
-                .child(render_static_target_badge_slot(state.target))
+                .child(render_shortcut_hint_text(recording_shortcut_hint(false)))
         }
         DictationSessionPhase::Confirming => {
             let timer_text = format_elapsed(state.elapsed);
@@ -1210,71 +1300,90 @@ pub(crate) fn render_dictation_overlay_state_preview(
             let continue_bg = theme.colors.ui.success.with_opacity(0.08);
             div()
                 .flex()
-                .flex_row()
+                .flex_col()
                 .items_center()
+                .justify_center()
+                .gap(px(3.))
                 .w_full()
                 .child(
-                    div().flex().flex_row().items_center().gap(px(8.)).child(
-                        div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_MONO)
-                            .text_color(timer_color)
-                            .child(timer_text),
-                    ),
-                )
-                .child(
                     div()
-                        .flex_1()
                         .flex()
                         .flex_row()
                         .items_center()
-                        .justify_center()
-                        .gap(px(10.))
+                        .w_full()
                         .child(
                             div()
-                                .id("dictation-stop-button")
-                                .px(px(8.))
-                                .py(px(2.))
-                                .bg(stop_bg)
-                                .rounded(px(999.))
-                                .border_1()
-                                .border_color(theme.colors.ui.error.with_opacity(0.45))
-                                .text_size(px(STATUS_TEXT_SIZE_PX))
-                                .font_family(FONT_MONO)
-                                .text_color(stop_color)
-                                .child(CONFIRM_STOP_LABEL),
+                                .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                                        .font_family(FONT_MONO)
+                                        .text_color(timer_color)
+                                        .child(timer_text),
+                                ),
                         )
                         .child(
                             div()
-                                .id("dictation-continue-button")
-                                .px(px(8.))
-                                .py(px(2.))
-                                .bg(continue_bg)
-                                .rounded(px(999.))
-                                .border_1()
-                                .border_color(theme.colors.ui.success.with_opacity(0.35))
-                                .text_size(px(STATUS_TEXT_SIZE_PX))
-                                .font_family(FONT_MONO)
-                                .text_color(continue_color)
-                                .child(CONFIRM_CONTINUE_LABEL),
-                        ),
+                                .flex_1()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_center()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .id("dictation-stop-button")
+                                        .px(px(8.))
+                                        .py(px(2.))
+                                        .bg(stop_bg)
+                                        .rounded(px(999.))
+                                        .border_1()
+                                        .border_color(theme.colors.ui.error.with_opacity(0.45))
+                                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                                        .font_family(FONT_MONO)
+                                        .text_color(stop_color)
+                                        .child(CONFIRM_STOP_LABEL),
+                                )
+                                .child(
+                                    div()
+                                        .id("dictation-continue-button")
+                                        .px(px(8.))
+                                        .py(px(2.))
+                                        .bg(continue_bg)
+                                        .rounded(px(999.))
+                                        .border_1()
+                                        .border_color(theme.colors.ui.success.with_opacity(0.35))
+                                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                                        .font_family(FONT_MONO)
+                                        .text_color(continue_color)
+                                        .child(CONFIRM_CONTINUE_LABEL),
+                                ),
+                        )
+                        .child(render_static_target_badge_slot(state.target)),
                 )
-                .child(render_static_target_badge_slot(state.target))
+                .child(render_shortcut_hint_text(CONFIRM_HINT))
         }
         DictationSessionPhase::Transcribing => div()
             .flex()
-            .flex_row()
+            .flex_col()
             .items_center()
             .justify_center()
+            .gap(px(4.))
             .w_full()
             .child(render_transcribing_dots(
                 &transcribing_dot_opacities_static(),
-            )),
+            ))
+            .child(render_shortcut_hint_text(CLOSE_HINT)),
         DictationSessionPhase::Finished => div()
             .flex()
-            .flex_row()
+            .flex_col()
             .items_center()
             .justify_center()
+            .gap(px(3.))
             .w_full()
             .child(
                 div()
@@ -1283,14 +1392,16 @@ pub(crate) fn render_dictation_overlay_state_preview(
                     .text_color(text_color)
                     .overflow_hidden()
                     .child(finished_label()),
-            ),
+            )
+            .child(render_shortcut_hint_text(CLOSE_HINT)),
         DictationSessionPhase::Failed(msg) => {
             let err_text: SharedString = format!("Error: {msg}").into();
             div()
                 .flex()
-                .flex_row()
+                .flex_col()
                 .items_center()
                 .justify_center()
+                .gap(px(3.))
                 .w_full()
                 .child(
                     div()
@@ -1300,6 +1411,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                         .overflow_hidden()
                         .child(err_text),
                 )
+                .child(render_shortcut_hint_text(CLOSE_HINT))
         }
         DictationSessionPhase::Delivering | DictationSessionPhase::Idle => div(),
     };

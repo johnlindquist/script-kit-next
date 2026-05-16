@@ -159,6 +159,10 @@ Attached popups must preserve parent identity and `parent_capture_with_crop`. De
 
 These recipes exercise automation paths that previously required slow human interaction across multiple windows, popups, or delayed action origins.
 
+### Target and popup recipe foundations
+
+These recipes establish exact target threading, popup parity, delayed origins, and preflight-only permission checks.
+
 `acp-detached-target-threading-stress` promotes an `acpDetached` kind/index target to an exact id once, requires at least `--min-targets` ACP peer windows, drives native input through the resolved `surfaceId`, checks `getAcpState`, `resetAcpTestProbe`, `waitFor`, and strict capture against the same target, and emits `proofBundle.targetThread`, `peerWindows`, `usage.usedNativeInput`, and `captureTarget`.
 
 `acp-prompt-popup-parity` opens ACP PromptPopup families through protocol input, promotes each popup to an exact id, inspects row-aware `getElements(target)` receipts, and fails on wrong popup family/id instead of accepting any visible PromptPopup.
@@ -174,6 +178,10 @@ These recipes exercise automation paths that previously required slow human inte
 `template-prompt-automation-parity-stress` runs as a state-first runtime proof for TemplatePrompt state, template rows, batch field input, Cmd+K actions, Escape cancel, and batch ForceSubmit explicit values. The template open path sends the prompt without `--await-parse` because TemplatePrompt completion is correlated by prompt id rather than request id; after opening Cmd-K, the recipe targets `{kind:"actionsDialog",index:0}` and requires concrete `action:` or `choice:` rows, failing closed on `panel_only_actions_dialog`.
 
 `scripts/agentic/user-story-audit.ts` turns the stress recipe catalog into a broad 100-story UX sweep. It excludes recipes already exercised in the current thread unless `--include-known` is set, runs each selected recipe through the real `scripts/agentic/index.ts` entry point, writes `.test-output/agentic-100-user-story-audit-*.json`, and classifies `pass`, `fail_closed`, `blocked_precondition`, `runtime_failure`, and `timeout` separately so missing receipts do not masquerade as product success.
+
+### Root subject and portal identity recipes
+
+These recipes cover command subjects, portal identity, path prompts, clipboard/browser boundaries, and early drag or PTY receipts.
 
 `current-app-commands-frontmost-stress` is intentionally fail-closed until Do in Current App receipts expose the captured frontmost app, stable alias normalization, shared filter counts, and wrong-app execution guard.
 
@@ -215,6 +223,10 @@ These recipes exercise automation paths that previously required slow human inte
 
 `permission-share-cross-prompt-focus-stress` is intentionally fail-closed until Permission Assistant and share trust prompts expose one cross-prompt focus receipt with passive panel identity, share prompt identity, prompt priority, no System Settings activation leak, no accidental share acceptance, no TCC/plugin mutation, and cleanup.
 
+### Pass-now visual and layout recipes
+
+These recipes currently produce runtime receipts for screenshot semantics, text measurement, layout stability, and restart recovery.
+
 `screenshot-semantics-visual-consistency-stress` is the pass-now visual recipe. It delegates to strict `surface-navigator` capture, then checks the sidecar manifest so the captured window, screenshot content audit, pre-capture `getState`, pre-capture `getElements`, selected row, focus receipt, footer actions, and popup crop bounds describe the same semantic surface. Its `visibleTextMode:"semanticElements"` field means visible text was detected from automation element labels, not OCR and not clipping proof.
 
 `visible-text-clipping-overlap-stress` is the pass-now main-window text measurement recipe. It opens the real app, uses bounded `getElements`, `getLayoutInfo`, and AppKit text measurement, then reports visible text bounds, rendered bounds, available width, measured width, clipping state, truncation intent, accessible full text, overlap pairs, and cleanup. Requested non-main surfaces emit explicit coverage warnings.
@@ -232,6 +244,10 @@ These recipes exercise automation paths that previously required slow human inte
 `ime-composition-input-boundary-stress` is intentionally fail-closed until filter input, prompt input, and ACP composer expose composition start/update/commit receipts that prove no premature submit or action dispatch and preserve final committed text semantics.
 
 `accessibility-selected-text-fallback-stress` is intentionally fail-closed until selected-text capture exposes permission-denied fallback, stale frontmost-context rejection, private text redaction, and safe action disablement without opening System Settings or mutating TCC.
+
+### Display and native handoff recipes
+
+These recipes capture display migration, native picker handoff, drag cancellation, appearance churn, resume, interruption, and media readiness contracts.
 
 `display-migration-visual-bounds-stress` is intentionally fail-closed until window/display receipts expose source and target display ids, display bounds, scale factor, rem size, semantic surface identity, visible text bounds, focus and selection preservation, screenshot-to-semantics alignment, wrong-display capture rejection, stale migration rejection, and no popup/main clobbering.
 
@@ -256,6 +272,10 @@ These recipes exercise automation paths that previously required slow human inte
 `rtl-bidi-emoji-text-rendering-stress` is intentionally fail-closed until text rendering receipts expose RTL/LTR direction runs, bidi embedding levels, grapheme clusters, emoji ZWJ sequences, combining mark sequences, cursor visual positions, selection visual rects, visible/rendered text bounds, truncation intent, search/filter fingerprints, stale layout rejection, wrong-surface mutation rejection, no accidental submit, and cleanup.
 
 `high-volume-virtualized-list-stability-stress` is intentionally fail-closed until virtualized list receipts expose high-volume fixture identity, total and visible counts, virtualization generations, stable row keys, selected-row reanchor, scroll anchor preservation, row/text bounds, rapid filter generations, stale-filter rejection, duplicate-key rejection, blank-row rejection, footer-safe selection, screenshot-to-semantics consistency, and cleanup.
+
+### Context, contrast, and recovery recipes
+
+These recipes cover modality ownership, context attachment, contrast receipts, empty states, validation, navigation, resizing, and popup action discovery.
 
 `input-modality-transition-ownership-stress` is intentionally fail-closed until modality receipts expose pointer hover, keyboard focus, selected semantic id, trackpad/wheel scroll anchors, shortcut activation owner, modality generations, stale modality event rejection, wrong-surface input rejection, no accidental submit, screenshot-to-state revalidation, and cleanup.
 
@@ -285,6 +305,10 @@ The actions receipt must cover disabled/no-op/actionable rows with reasons so ke
 
 The dense preview receipt must keep row identity, preview text, metadata chips, keyboard focus, and footer actions readable through filtering, selection changes, and resize.
 
+### Notification, footer, and row-state recipes
+
+These recipes cover toast lifecycle, destructive confirmation, loading restoration, image fallback, footer persistence, hints, row states, chrome, and scrolling.
+
 `toast-notification-queue-lifecycle-stress` is intentionally fail-closed until toast/notification receipts expose queue generation, bridge generation, visible text, duplicate collapse, autohide and manual dismiss ordering, bounds and overlap pairs, footer/input non-blocking, stale-toast rejection, no action execution from toast UI, and cleanup.
 
 `destructive-confirm-modal-safety-stress` is intentionally fail-closed until destructive confirm receipts expose dry-run-only fixture identity, confirm prompt identity, focused button, Enter/Escape resolution, no mutation before confirm, no mutation after cancel, no real system command request, stale or wrong-surface confirm rejection, parent focus/selection/filter/route restoration, and cleanup.
@@ -302,6 +326,10 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 `quiet-chrome-card-nesting-stress` is intentionally fail-closed until chrome receipts expose shell, content, row, popup, and footer layer tokens. The receipt must prove quiet border/fill/shadow budgets, card depth, duplicate-border rejection, opaque-fill rejection, stale chrome token rejection, wrong-surface rejection, AFK-safe flags, and cleanup.
 
 `scroll-shadow-sticky-header-density-stress` is intentionally fail-closed until scroll and density receipts expose scroll positions, viewport/content bounds, sticky header bounds/z-index, scroll shadow opacity tokens, row/header/input/footer heights, rem/scale metrics, footer-safe viewport, selected-row visibility, stale-scroll rejection, wrong-surface rejection, AFK-safe flags, and cleanup.
+
+### Popup, portal, and inline interaction recipes
+
+These recipes cover popup focus, reduced motion, command highlights, copy feedback, portal restoration, tooltips, shortcut recorders, inline popovers, and disabled footers.
 
 `popup-focus-keycap-visual-semantics-stress` is intentionally fail-closed until popup receipts expose popup owner identity, focused button/keycap parity, normalized shortcut glyphs, danger semantics on labels rather than keycaps, parent focus and selection preservation, stale focus rejection, wrong-surface rejection, no accidental execution, AFK-safe flags, and cleanup.
 
@@ -321,6 +349,10 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `disabled-footer-hit-target-refusal-stress` is intentionally fail-closed until disabled footer receipts expose active footer/native footer identity, disabled primary action label/reason/visual/accessibility state, Enter/shortcut/protocol-click refusal, Cmd-K action availability, no submit receipt, unchanged side-effect counts and state fingerprints, focus/selection/filter preservation, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
 
+### Layout integrity and prompt-state recipes
+
+These recipes cover mini/full continuity, filter decoration layout, focus rings, warning banners, multiselect state, safe previews, hotkeys, process details, and env recovery.
+
 `mini-full-transition-layout-continuity-stress` is intentionally fail-closed until Mini/Full transition receipts expose rem/scale, window/content/input/list/footer bounds, native footer identity, focus ring bounds, selected row above footer, no input/footer overlap, no clipping, no popup/main clobbering, screenshot-to-semantics alignment, strict capture target, blank screenshot rejection, stale mode rejection, AFK-safe flags, and cleanup.
 
 `filter-input-decoration-chip-layout-stress` is intentionally fail-closed until filter input decoration receipts expose rendered input text, stripped search text, chip ranges/roles/bounds, cursor and placeholder bounds, measured/available width, visible text, decoration/input generations, stale decoration clearing, overlap/clipping checks, accessible full text, screenshot-to-semantics alignment, strict capture target, stale generation rejection, AFK-safe flags, and cleanup.
@@ -338,6 +370,10 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 `process-manager-sort-detail-panel-stability-stress` is intentionally fail-closed until Process Manager receipts expose fixture identity, table header semantic ids, sort key/direction/generation, non-selectable section headers, selected process/pid identity, detail panel generation/source/title/metrics, CPU/memory/PID parity, row reanchor after sort, header aria-sort labels, disabled kill action, no process signal, stale sort/detail rejection, AFK-safe flags, and cleanup.
 
 `env-prompt-redacted-status-error-recovery-stress` is intentionally fail-closed until EnvPrompt receipts expose prompt/fixture identity, status generation/kind/text, inline error and first-invalid-field semantics, masked value visibility, secret redaction and fingerprints, no raw secret leak, no secret/config writes, valid edit recovery, disabled submit reason, focus preservation, stale/wrong-field rejection, AFK-safe flags, and cleanup.
+
+### Route, chip, and ACP footer recipes
+
+These recipes cover command palette routes, source chips, recents grouping, attachment chips, window title/status, menu syntax validation, and ACP footer/model state.
 
 `command-palette-breadcrumb-route-stack-stress` is intentionally fail-closed until command palette receipts expose host/topmost owner identity, route stack depth, breadcrumb trail labels and semantic ids, active route id, parent/child snapshots, drill-down push, breadcrumb and Escape back, preserved search text, restored selection/scroll anchor, no pre-drill `onSelect`, no accidental execution, stale route rejection, AFK-safe flags, and cleanup.
 
@@ -357,6 +393,10 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `acp-context-insertion-preview-parity-stress` is intentionally fail-closed until ACP context insertion receipts expose source/destination identities, portal session id, selection and preview generations, selected row id/title/kind/fingerprint, accepted context URI, inserted token alias and preview fingerprint, composer generation and replacement range, row preview matching inserted context, selection preservation, stale/selection-drift/wrong-destination rejection, no raw content leak, no picker/Quick Look/pasteboard/network/submit, AFK-safe flags, and cleanup.
 
+### ACP provider, transcript, and handoff recipes
+
+These recipes cover ACP provider visibility, composer tokens, transcript virtualization, plugin thread affinity, Notes handoff, and root Files pagination.
+
 `acp-slash-mention-provider-visibility-stress` is intentionally fail-closed until ACP slash/mention receipts expose provider hint catalog identity, popup family, trigger/query text, provider readiness generation, visibility rows, hint text, unavailable/loading/error-recovered/filtered-empty states, slash and mention provider rows, disabled-provider refusal, stale generation rejection, no picker/Quick Look/network/submit, AFK-safe flags, and cleanup.
 
 `acp-composer-token-keyboard-edit-parity-stress` is intentionally fail-closed until ACP composer token receipts expose host surface identity, composer generation, token ids/kinds/aliases/bounds, cursor-before/after-token positions, atomic Backspace/Delete behavior, range remove, move-left/move-right receipts, order before/after, context and pasted metadata preservation, cursor selection preservation, no partial token text leak, stale/duplicate/wrong-host rejection, no pasteboard/native input/submit, AFK-safe flags, and cleanup.
@@ -368,6 +408,10 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 `notes-cart-acp-handoff-dedupe-stress` is intentionally fail-closed until Notes cart handoff receipts expose sandbox store identity, fixture notes, active note, cart snapshot generation, cart item ids and dedupe keys, duplicate rejection, handoff session identity, destination host/generation, staged context URIs, inline aliases, redacted preview fingerprints, dry-run consume generation, cancel restoration, switch-note cleanup, wrong-note and stale-cart rejection, no raw note body leak, no user notes mutation/network/agent process, AFK-safe flags, and cleanup.
 
 `root-file-source-filter-pagination-footer-stress` is intentionally fail-closed until root Files source-filter receipts expose fixture provider identity, source filters, rendered/stripped input text, root frame key, provider/page generations, page size, visible file rows/fingerprints, continuation row identity, selected key before/after, footer-safe visibility, scroll metrics, near-bottom page request, delayed page/provider stability, duplicate key rejection, fallback suppression, non-selectable status chips, Quick Look/native picker/pasteboard/network/submit refusal, stale page rejection, AFK-safe flags, and cleanup.
+
+### Late-loop surface recipes
+
+These recipes cover file breadcrumbs, emoji skin tone UX, window activation refusal, Notes preview sync, terminal/script output, app grids, browser history, settings, design, and dictation preview.
 
 `file-search-directory-breadcrumb-restoration-stress` is intentionally fail-closed until File Search breadcrumb receipts expose fixture directory tree identity, redacted breadcrumb segments, only-in-filter chip identity, rendered/stripped search text, visible file rows, directory rows before/after navigation, selected file before/after, breadcrumb reanchor, filter preservation, back/forward stack depth, scroll anchor restoration, preview generation, no raw path leak, native picker and Quick Look refusal, stale directory rejection, wrong-origin rejection, AFK-safe flags, and cleanup.
 

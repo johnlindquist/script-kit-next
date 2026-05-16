@@ -238,7 +238,7 @@ That mock menu should preserve the launcher density while it compares glyph vari
 
 The Storybook measurement grid is opt-in via `SCRIPT_KIT_STORYBOOK_GRID`; design comparison previews should not render ruler lines by default because they distort color and spacing judgment.
 
-The live dictation overlay uses the compact capsule direction: a narrower standalone capsule with main-menu density, quiet waveform chrome, readable primary timer/target text, and a neutral native rim.
+The live dictation overlay uses an expanded compact capsule: a standalone bottom overlay with main-menu density, quiet waveform chrome, readable timer/target text, a neutral native rim, and a visible shortcut rail for submit/cancel/close affordances.
 
 The target badge should name the actual delivery surface. Internal targets use explicit labels such as `Script Kit` or `ACP`, while external-app dictation uses the tracked frontmost app name and ellipsizes inside the capsule.
 

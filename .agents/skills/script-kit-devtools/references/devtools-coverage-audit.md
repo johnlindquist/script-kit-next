@@ -55,12 +55,24 @@ Build the DevTools surface around these scenarios before adding more recipes:
 The next implementation wave should add DevTools primitives and a small investigator CLI instead of adding more long stress recipes:
 
 - `devtools.inspect`: first slice exists as `bun scripts/devtools/inspect.ts --session <name> --start --show --main|--focused|--target-id <id>|--target-kind <kind>`. It returns target identity, state, elements, layout, screenshot metadata, capabilities, warnings, errors, missing fields, and recommended next primitives.
-- `devtools.measure`: target-scoped measurements for text fit, overlap, scroll need, resize deltas, popup anchor, focus ring, hit target, and contrast.
+- `devtools.coverage`: first slice exists as `bun scripts/devtools/coverage.ts --surface <id>|--domain <id>|--markdown`. It returns Chrome-DevTools-inspired domains, surface feature and shortcut coverage, supported primitives, missing runtime primitives, and recommended next work without pretending those runtime primitives already exist.
+- `devtools.measure`: first slice exists as `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>`. It turns inspect and coverage receipts into available measurements, planned measurement gaps, missing runtime primitives, fail-closed status, and next measurement work for layout, text fit, overlap, scroll need, resize deltas, popup anchor, focus ring, hit target, contrast, and media.
+- `devtools.media.inspect`: first slice exists as `bun scripts/devtools/media.ts --coverage <dictation-coverage.json>`. It is intentionally passive and fail-closed until Dictation exposes microphone permission, device, model readiness, recording generation, audio levels, target delivery, transcript, cursor insertion, wrong-target refusal, hotkey, and cleanup receipts without System Settings or TCC mutation.
 - `devtools.act`: safe user-like interaction using protocol channels first, with explicit escalation for GPUI/native input.
 - `devtools.compare`: paired before/after measurements with stable metric names and delta classification.
 - `devtools.investigate`: bug-report intake plus hypothesis/proof transcript, producing `.test-output/devtools-investigation-*.json`.
 
 Recipes should be rebuilt as thin smoke/regression wrappers over those primitives.
+
+## Chrome-Style API Coverage
+
+The current coverage command and narrative map live in `references/devtools-api-coverage-map.md`. Treat that file as the DevTools API backlog before adding another scripted scenario.
+
+The intended domain spread is targets/windows, elements/semantics, layout/box model, styles/theme/text fit, console/logs/events, sources/scripts/owners, performance/timeline, storage/resources/privacy, accessibility, input/focus/actions, media/sensors/permissions, screenshots/visual proof, and investigation records.
+
+Notes and Dictation are first-class coverage targets. Notes must expose editor, preview, browse, trash, command-bar, recent-switcher, note-cart, embedded ACP, portal, draft, resize, scroll, and shortcut receipts. Dictation must expose passive permission/model readiness, recording state, audio levels, target delivery, transcript generation, wrong-target refusal, history preview/redaction, hotkey, and cleanup receipts before live dictation bugs are called green.
+
+Oracle browser session `devtools-chrome-notes-dictation-api` reviewed this API direction on 2026-05-16 and reinforced the same split: coverage may be source-backed before runtime exists, but runtime proof must stay fail-closed until `devtools.measure`, `devtools.media.inspect`, `devtools.act`, `devtools.compare`, and `devtools.investigate` expose the needed receipts.
 
 ## First Inspect Slice Scenarios
 
