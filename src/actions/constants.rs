@@ -8,6 +8,9 @@ pub const POPUP_WIDTH: f32 = 320.0;
 /// Maximum height for the actions dialog popup
 pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 
+/// Taller popup cap for the Notes Cmd+P recent-note switcher.
+pub const NOTES_RECENT_POPUP_MAX_HEIGHT: f32 = 560.0;
+
 /// Fixed height for action items (required for uniform_list virtualization)
 /// Compact height at 30px for tight, distilled appearance
 pub const ACTION_ITEM_HEIGHT: f32 = 30.0;
@@ -56,6 +59,8 @@ mod tests {
     fn test_popup_constants() {
         assert_eq!(POPUP_WIDTH, 320.0);
         assert_eq!(POPUP_MAX_HEIGHT, 400.0);
+        assert_eq!(NOTES_RECENT_POPUP_MAX_HEIGHT, 560.0);
+        assert!(NOTES_RECENT_POPUP_MAX_HEIGHT > POPUP_MAX_HEIGHT);
     }
 
     #[test]

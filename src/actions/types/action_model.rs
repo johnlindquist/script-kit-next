@@ -1,3 +1,5 @@
+use crate::actions::constants::POPUP_MAX_HEIGHT;
+
 /// Represents a single action item in the actions menu.
 ///
 /// Actions are created by builder functions in `builders.rs` or converted from
@@ -151,6 +153,8 @@ pub struct ActionsDialogConfig {
     pub search_placeholder: Option<String>,
     /// Whether to render the separate context header row
     pub show_context_header: bool,
+    /// Maximum popup height before the action list scrolls.
+    pub max_height: f32,
 }
 
 impl Default for ActionsDialogConfig {
@@ -163,6 +167,7 @@ impl Default for ActionsDialogConfig {
             show_footer: false,
             search_placeholder: None,
             show_context_header: true,
+            max_height: POPUP_MAX_HEIGHT,
         }
     }
 }

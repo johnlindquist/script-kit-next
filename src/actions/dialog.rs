@@ -408,6 +408,7 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
     show_search: bool,
     has_header: bool,
     show_footer: bool,
+    max_height: f32,
 ) -> f32 {
     let search_height = if show_search {
         SEARCH_INPUT_HEIGHT
@@ -421,7 +422,7 @@ pub(super) fn actions_dialog_scrollbar_viewport_height(
         0.0
     };
     let available_viewport_height =
-        (POPUP_MAX_HEIGHT - search_height - header_height - footer_height).max(0.0);
+        (max_height - search_height - header_height - footer_height).max(0.0);
 
     total_content_height.min(available_viewport_height)
 }
@@ -2840,6 +2841,7 @@ impl Render for ActionsDialog {
                 show_search,
                 self.shows_context_header() && style.show_header,
                 self.config.show_footer,
+                self.config.max_height,
             );
 
             // Estimate visible items based on average item height
@@ -3365,7 +3367,7 @@ impl Render for ActionsDialog {
             + (section_header_count as f32 * SECTION_HEADER_HEIGHT);
         let items_height = content_height
             .max(min_items_height)
-            .min(POPUP_MAX_HEIGHT - search_box_height - header_height - footer_height);
+            .min(self.config.max_height - search_box_height - header_height - footer_height);
         let total_height =
             items_height + search_box_height + header_height + border_height + footer_height;
 
@@ -4033,8 +4035,13 @@ mod tests {
     #[test]
     fn test_scrollbar_viewport_subtracts_header_footer_and_search_height() {
         let total_content_height = 500.0;
-        let viewport_height =
-            actions_dialog_scrollbar_viewport_height(total_content_height, true, true, true);
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            total_content_height,
+            true,
+            true,
+            true,
+            POPUP_MAX_HEIGHT,
+        );
 
         // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (36) - HEADER_HEIGHT (24) - footer (32)
         assert_eq!(viewport_height, 308.0);
@@ -4043,8 +4050,13 @@ mod tests {
     #[test]
     fn test_scrollbar_viewport_clamps_to_content_when_content_shorter_than_viewport() {
         let total_content_height = 120.0;
-        let viewport_height =
-            actions_dialog_scrollbar_viewport_height(total_content_height, true, true, true);
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            total_content_height,
+            true,
+            true,
+            true,
+            POPUP_MAX_HEIGHT,
+        );
 
         assert_eq!(viewport_height, 120.0);
     }

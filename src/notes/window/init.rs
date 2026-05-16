@@ -164,7 +164,7 @@ impl NotesApp {
             // Initialize note switcher CommandBar (Cmd+P) with note list
             note_switcher: CommandBar::new(
                 note_switcher_actions,
-                CommandBarConfig::notes_style(),
+                CommandBarConfig::notes_recent_style(),
                 std::sync::Arc::new(theme::get_cached_theme()),
             ),
             browse_panel: None,
