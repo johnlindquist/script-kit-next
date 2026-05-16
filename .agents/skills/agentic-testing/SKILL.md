@@ -6,79 +6,711 @@ description: >-
 
 # Agentic Testing
 
-This skill owns runtime proof and session cleanup for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This canonical repo-local skill owns runtime proof and session cleanup for Script Kit GPUI. It combines the current `.agents/skills` routing policy with the full operational recipe previously kept under `.codex/skills` / `.claude/skills`.
 
-## Use When
+Verify code changes with the fastest proof that can establish correctness. Reuse warm sessions, prefer state receipts and exact targets, and escalate to screenshots or OS-level focus only when lower-cost proof cannot answer the question.
 
-Use this skill for tasks involving:
+## Canonical Ownership
 
-- State-first runtime proof for UI, protocol, behavior, ACP, actions dialogs, surface changes, screenshots only when needed, and cleanup of launched sessions.
-- Owned paths or concepts listed below.
-- Bugs, tests, docs, or behavior changes where this domain is the primary owner.
-
-Do not use this skill as the primary owner for test authoring or product ownership decisions; load the adjacent owning skill instead.
-
-## First Reads
-
-Start with these sources before editing:
-
-- `lat.md/automation.md`
-- `lat.md/verification.md`
-- `.claude/skills/agentic-testing/SKILL.md`
-- `.agents/subagents/agentic-testing-reader.md` for broad or high-risk investigation.
-
-## Owned Paths and Concepts
+Use this `.agents/skills/agentic-testing` file as the source of truth for Codex routing and runtime proof. Legacy `.codex/skills/agentic-testing` and `.claude/skills/agentic-testing` files are compatibility snapshots only; mine them only when auditing history.
 
 Primary paths and concepts:
 
-- `scripts/agentic/, .test-output/, .test-screenshots/`
-- runtime proof and session cleanup.
-- The verification and documentation boundaries for this domain.
+- `scripts/agentic/`, `.test-output/`, `.test-screenshots/`
+- Runtime proof, exact automation targets, screenshots, native input escalation, and cleanup
+- State-first receipts from `getState`, `getElements`, `inspectAutomationWindow`, `waitFor`, `batch`, ACP state/probe APIs, and recipe receipts
 
-## Core Rules
+## First Reads
 
-- Identify the behavior owner before editing shared files. Path ownership is a hint; the user-visible behavior and documented contract decide the owner.
-- Prefer current source, generated contracts, and `lat.md/` over legacy notes or memory.
-- Keep long recipes in the support skills that own them. Reference `$agentic-testing`, `$protocol-automation`, or `$testing-quality-gates` instead of duplicating proof procedures.
-- If behavior, architecture, tests, or contracts change, update `lat.md/` and run `lat check`.
+Start with these sources before editing or proving behavior:
+
+- `lat.md/automation.md`
+- `lat.md/verification.md`
+- `.agents/subagents/agentic-testing-reader.md` for broad or high-risk investigation.
 
 ## Workflow
 
-1. Run or review the required lat search/expand context from `AGENTS.md`.
-2. Read the first sources above and trace the smallest real owner.
+1. Run or review the required `lat search` / `lat expand` context from `AGENTS.md`.
+2. Identify the behavior owner before editing shared files. Path ownership is a hint; the user-visible behavior and documented contract decide the owner.
 3. Check adjacent-skill boundaries before changing shared code.
 4. Make the narrowest change that preserves the domain invariant.
 5. Verify with the smallest proof that can fail if the behavior regresses.
-6. Report changed files, proof tier, exact commands or receipts, adjacent skills consulted, and remaining risk.
+6. Report changed files, proof tier, exact commands or receipts, adjacent skills consulted, cleanup status, and remaining risk.
 
-## Proof Ladder
+Do not use this skill as the primary owner for test authoring or product ownership decisions; load `$testing-quality-gates`, `$protocol-automation`, `$lat-md`, or the relevant domain skill when those surfaces own the behavior.
 
-Use the smallest proof that can falsify the change. Do not escalate to screenshots, native input, broad test suites, or app launches when a lower tier proves the behavior.
+## When to Use
 
-1. Docs/source audit proof: for docs-only, skill-only, generated-contract, or ownership-map changes. Run `lat check` when `lat.md/` or wiki links are touched.
-2. Compile/static proof: for Rust, TypeScript, or config changes where runtime behavior is not needed. Run the narrowest compile or static check that covers the touched files.
-3. Targeted test proof: for behavior encoded in unit, source-contract, SDK, or generated-artifact tests. Run the smallest named test target first.
-4. State-first runtime proof: for UI, routing, protocol, focus, selection, popup, and surface behavior. Use the real runtime entry path with `getState`, `getElements`, `waitFor`, `batch`, or targeted receipts.
-5. Visual proof: only when layout, rendering, visual state, screenshots, or image-library acceptance criteria are part of the change. Capture the real product surface and read the PNG before claiming success.
-6. Native input / OS focus proof: only when the bug depends on real keyboard, mouse, AppKit focus, accessibility, screen capture permissions, PTY behavior, or other OS-level delivery.
+- After implementing any UI, protocol, or behavior change
+- For routine UI and behavior work, this is the default smoke test
+- When Oracle's autonomous verification says "Run the agentic-testing skill"
+- Before marking a task as complete
+- Especially after changes to: prompts, views, keyboard handlers, ACP chat, actions dialog
 
-Always clean up any process, session, or window the proof started. Report the tier used, exact commands or receipts, and why higher tiers were unnecessary.
+## Seconds-First Default
 
-Default check for this skill:
+Most verification runs should complete in seconds, not minutes. Default to the smallest proof tier that answers the question without stealing focus or blocking the user.
+
+1. No-runtime proof: docs, skills, source audits, or focused tests only. Do not launch the app if runtime evidence is unnecessary.
+2. State-first runtime proof: reuse a warm session and prove behavior with `getElements`, `getState`, `waitFor`, `batch`, and exact automation targets. This is the default for routing, selection, focus, popup ownership, and protocol bugs.
+3. Visual proof: capture one screenshot only when layout, styling, visibility, animation, or real-shell composition is part of the acceptance criteria.
+4. Native input and focus enforcement: use only when protocol-level and GPUI-level paths cannot exercise the real bug.
+
+Rules:
+- If your plan starts with cold start -> show -> screenshot -> log scrape, stop and look for a state-first proof.
+- Reuse an existing healthy session before starting a new one.
+- Avoid stealing OS focus unless the bug specifically involves native focus or the proof requires real keyboard or mouse delivery.
+- Prefer exact target threading and targeted receipts over reading generic global state.
+- If a non-visual proof is taking longer than about 10 seconds, redesign the proof before continuing.
+
+## Safety Rules (MANDATORY)
+
+- NEVER delete files, directories, or data
+- NEVER modify databases, user data, or production state
+- NEVER run destructive commands (rm -rf, DROP, git push --force, git reset --hard)
+- NEVER send requests to external services, APIs, or webhooks
+- NEVER modify files outside the project directory
+- NEVER commit, push, or modify git history
+- ALL verification is read-only: build, launch, screenshot, grep, read logs
+- Temp pipes/logs may live under `/tmp` via the session wrapper. Runtime `captureWindow` screenshots must go in project `.test-screenshots/` / `test-screenshots/` or `~/.scriptkit/screenshots`
+- The app runs locally only — never connect to production
+- Every verification run MUST stop every Script Kit process/session it started before reporting results
+
+## Surface Identity Rules (MANDATORY)
+
+- Always verify the real user-facing surface through its real runtime entry path first.
+- For Script Kit UI, prefer stdin JSON commands, built-in routing, and real app windows over ad hoc component harnesses.
+- Never treat an isolated GPUI entity, temporary debug window, story, off-screen render, or synthetic wrapper as proof of a real product surface unless the user explicitly asks for component-level verification.
+- Before trusting a screenshot, confirm the captured surface matches the intended product surface:
+  - same entry path
+  - same window/shell
+  - same wrapper/root chrome
+  - same footer, sizing, and layout structure
+- If the screenshot does not clearly match the real surface, stop and re-route verification to the real surface instead of iterating on the fake one.
+- For ACP specifically, `AcpChatView` in isolation is not sufficient proof. Default to the real ACP entry path (`triggerBuiltin tab-ai`, detached chat window routing, or another production runtime path) before using any synthetic ACP harness.
+
+## The Pattern
+
+Every verification follows the same core loop:
+
+### 1. Build Only What the Change Can Break
+```bash
+cargo build 2>&1 | tail -5
+```
+Only rebuild when the touched files can invalidate the binary or helper you need to exercise.
+
+- Docs, skills, notes, or source-audit-only changes: skip build.
+- Bun or shell harness changes with no Rust protocol changes: reuse the current debug binary if it already exists and a healthy session can start.
+- Rust or runtime changes: run `cargo build`.
+
+If you do build, it must complete with `Finished`. If it fails, fix the build error first.
+
+### 2. Reuse or Start a Session
+```bash
+# First look for a healthy reusable session
+bun scripts/agentic/session-state.ts --list
+bash scripts/agentic/session.sh status default
+
+# Start or resume a named session — works from any shell
+# session.sh waits for the APP_READY log marker instead of sleeping
+SESSION_JSON="$(bash scripts/agentic/session.sh start default 2>/dev/null)"
+APP_PID="$(printf '%s' "$SESSION_JSON" | jq -r '.pid')"
+PIPE="$(printf '%s' "$SESSION_JSON" | jq -r '.pipe')"
+LOG="$(printf '%s' "$SESSION_JSON" | jq -r '.log')"
+READY="$(printf '%s' "$SESSION_JSON" | jq -r '.ready // false')"
+READY_WAIT_MS="$(printf '%s' "$SESSION_JSON" | jq -r '.readyWaitMs // 0')"
+
+# Fallback only if readiness marker was not observed.
+if [ "$READY" != "true" ]; then
+  sleep 0.5
+fi
+```
+The session wrapper manages the named pipe, forwarder process, and PID tracking.
+Sessions are reusable across shells — no `exec 3>` / fd 3 trick required.
+`session.sh start` means the app is stdin-ready, not necessarily capture-ready.
+Prefer resume over cold start. A warm session plus state-only receipts should be the default path.
+
+**Session commands:**
+```bash
+bash scripts/agentic/session.sh start [NAME]    # Create or resume (default: "default")
+bash scripts/agentic/session.sh send NAME CMD    # Send JSON command
+bash scripts/agentic/session.sh status [NAME]    # Check session state (JSON)
+bash scripts/agentic/session.sh stop [NAME]      # Stop and clean up
+bun scripts/agentic/session-state.ts --session NAME  # Detailed state report
+bun scripts/agentic/session-state.ts --list          # List all sessions
+```
+
+All commands emit stable JSON envelopes on stdout (`schemaVersion`, `status`, payload).
+Diagnostics go to stderr.
+
+**`start` is idempotent** — re-running it resumes an existing healthy session.
+
+**Alternative (legacy, single-shell only):**
+```bash
+PIPE=$(mktemp -u)
+mkfifo "$PIPE"
+export SCRIPT_KIT_AI_LOG=1
+./target/debug/script-kit-gpui < "$PIPE" > /tmp/sk-test.log 2>&1 &
+APP_PID=$!
+exec 3>"$PIPE"
+sleep 3
+```
+
+### 3. Show the Window Only When Needed
+```bash
+# Session-based (any shell)
+bash scripts/agentic/session.sh send default '{"type":"show"}'
+sleep 1.5
+```
+The app starts hidden. State-only proofs should usually skip this step entirely.
+
+Show the window only for screenshots, native input, or other proofs that require the real visible surface.
+
+### 4. Interact
+Send commands via the session. Common commands:
+```bash
+S="bash scripts/agentic/session.sh send default"
+
+# Set filter text
+$S '{"type":"setFilter","text":"search term"}'
+
+# Read current state without touching focus
+bash scripts/agentic/session.sh rpc default '{"type":"getState","requestId":"s1"}' --expect stateResult
+
+# Discover visible elements (returns semantic IDs)
+bash scripts/agentic/session.sh rpc default '{"type":"getElements","requestId":"e1"}' --expect elementsResult
+
+# Discover an attached popup or detached surface directly by target
+bash scripts/agentic/session.sh rpc default '{"type":"getElements","requestId":"e2","target":{"type":"kind","kind":"actionsDialog","index":0}}' --expect elementsResult
+
+# Select element by semantic ID (from getElements response)
+bash scripts/agentic/session.sh rpc default '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}' --expect batchResult
+
+# When supported, mutate popup state directly instead of typing through native focus
+bash scripts/agentic/session.sh rpc default '{"type":"batch","requestId":"b2","target":{"type":"kind","kind":"actionsDialog","index":0},"commands":[{"type":"setInput","text":"alias"}]}' --expect batchResult
+
+# Trigger a built-in view
+$S '{"type":"triggerBuiltin","name":"clipboard"}'
+$S '{"type":"triggerBuiltin","name":"tab-ai"}'
+$S '{"type":"triggerBuiltin","name":"emoji"}'
+$S '{"type":"triggerBuiltin","name":"apps"}'
+$S '{"type":"triggerBuiltin","name":"file-search"}'
+
+# Simulate keys (dispatches to current view; not suitable for interceptor bugs)
+$S '{"type":"simulateKey","key":"enter","modifiers":[]}'
+$S '{"type":"simulateKey","key":"escape","modifiers":[]}'
+$S '{"type":"simulateKey","key":"k","modifiers":["cmd"]}'
+$S '{"type":"simulateKey","key":"w","modifiers":["cmd"]}'
+
+# Prefer GPUI event dispatch over simulateKey when you need the real key pipeline
+bash scripts/agentic/session.sh rpc default '{"type":"simulateGpuiEvent","requestId":"g1","target":{"type":"main"},"event":{"type":"keyDown","key":"down","modifiers":[]}}' --expect simulateGpuiEventResult
+
+# Type individual characters (for views with text input)
+$S '{"type":"simulateKey","key":"h","modifiers":[]}'
+
+# Query ACP state (returns input, cursor, picker, accepted item, thread status)
+bash scripts/agentic/session.sh rpc default '{"type":"getAcpState","requestId":"acp1"}' --expect acpStateResult
+```
+
+### 5. Capture Screenshots
+```bash
+mkdir -p .test-screenshots
+bash scripts/agentic/session.sh send default '{"type":"captureWindow","title":"","path":"'"$(pwd)"'/.test-screenshots/step-01.png"}'
+sleep 1
+```
+- `title` is substring match. `""` matches any window.
+- For embedded ACP in the main Script Kit window, use `title: ""` or the resolver-driven `verify-shot.ts` / `window.ts` flow. Do not assume the title contains `ACP Chat`.
+- Path must be absolute — use `$(pwd)/` prefix.
+- Runtime `captureWindow` does not allow arbitrary `/tmp/*.png` output paths.
+- Always `sleep 1` after capture for file write.
+- The screenshot must come from the real runtime surface you are verifying, not a synthetic component window.
+- **Read the PNG** to visually verify. Never assume correctness without checking.
+
+### 6. Read Logs
+```bash
+grep -i "keyword" /tmp/sk-test.log | head -20
+```
+Log format: `TIMESTAMP|LEVEL|CATEGORY|cid=CORRELATION_ID message`
+
+### 7. Cleanup
+```bash
+# Session-based (preferred)
+bash scripts/agentic/session.sh stop default
+
+# Verify the session is actually gone before reporting success
+bash scripts/agentic/session.sh status default
+
+# Legacy fd 3 cleanup (single-shell only)
+# exec 3>&-
+# rm -f "$PIPE"
+# kill $APP_PID 2>/dev/null || true
+# wait $APP_PID 2>/dev/null || true
+```
+
+Cleanup is mandatory, even after failures or interrupted runs.
+
+- Do not report PASS or FAIL until the session you started has been stopped.
+- If you launched Script Kit via `session.sh`, run `session.sh stop NAME` and verify the session is no longer alive.
+- If you launched Script Kit directly, kill that specific PID and `wait` for it.
+- Do not leave orphan `script-kit-gpui` processes behind from agentic testing.
+
+### 8. Report
+- **PASS**: build succeeded + expected screenshots match + expected log output + cleanup confirmed
+- **FAIL**: describe what went wrong with evidence (screenshot, log line), then still clean up the launched process/session
+
+## Timing Guidelines
+
+| Action | Wait strategy |
+|--------|--------------|
+| App startup | `session.sh start` readiness wait; fallback 0.5s only if `ready=false` |
+| Warm session reuse | Prefer 0-1s `status` / resume over creating a fresh process |
+| State-only proof | Aim for 3-10s total; no screenshot or OS focus |
+| `show` window | 0.3s macOS focus-settling delay |
+| `setFilter` | 1s sleep or waitFor stateMatch |
+| `triggerBuiltin` (opens new view) | waitFor appropriate condition |
+| `simulateKey` (view transition) | 1.5s sleep |
+| `simulateKey` (text input) | 0.1s sleep |
+| `captureWindow` | 1s sleep (file write) |
+| ACP context bootstrap | `waitFor(acpReady, timeout=8000)` |
+| ACP picker open | `waitFor(acpPickerOpen, timeout=3000)` |
+| ACP picker accept | `waitFor(acpItemAccepted, timeout=3000)` |
+| ACP response streaming | 10-20s or waitFor(acpStatus) |
+
+**Rule:** Use `waitFor` for all ACP state transitions. Only use fixed sleeps
+for macOS focus-settling (0.3s) and file I/O (1s screenshot write).
+
+**Rule:** Do not add a fixed `sleep 3` after `session.sh start`. The session
+wrapper is responsible for readiness. Only use the 0.5s fallback when `ready=false`.
+
+**Rule:** If a non-visual proof is trending beyond this budget, stop and redesign around `getElements`, `getState`, `waitFor`, `batch`, exact targets, or session reuse before escalating.
+
+## Session Management
+
+Use `scripts/agentic/session.sh` instead of hand-rolling `mkfifo` + `exec 3>` in ad hoc shells.
+
+**Why:** The `exec 3>"$PIPE"` pattern ties the pipe to a single shell process. When a coding agent
+spawns a new shell (e.g., follow-up verification step), fd 3 does not exist and the session is lost.
+The session wrapper uses a background forwarder process so any shell can send commands via
+`session.sh send`.
+
+**Rules:**
+- Always use `session.sh start` instead of manual `mkfifo` + `exec 3>` for new verification flows
+- Use `session.sh send` for fire-and-forget stdin commands like `show`, `triggerBuiltin`, `setFilter`, and `captureWindow`
+- Use `session.sh rpc` for protocol requests that expect a typed response like `getAcpState`, `getElements`, `waitFor`, `batch`, and `inspectAutomationWindow`
+- Check session health with `session.sh status` or `session-state.ts` before sending commands
+- Stop sessions with `session.sh stop` when done — do not leave orphan processes
+- Treat cleanup as part of the test itself: a run is incomplete until the session is stopped and verified dead
+
+## Field Notes
+
+These are practical lessons from real ACP verification runs in this repo.
+
+- If `session.sh start` reports a dead session even though the log reached `STARTUP_READY`, inspect the log before assuming the app crashed. In some debug runs the wrapper/forwarder dies while `script-kit-gpui` is still healthy. When that happens, switch to the legacy single-shell FIFO fallback so you can keep stdin open yourself.
+- `window.ts` and `macos-input.ts --ensure-focus` may fail against the debug binary because the process name is `script-kit-gpui`, not the bundled `Script Kit` app identity. If focus/capture helpers cannot find the app, use `System Events` targeting `process "script-kit-gpui"` directly.
+- For debug-only window capture, direct region screenshots via `screencapture -R<x,y,w,h>` can be more reliable than the bundle-oriented window resolver. Use runtime automation bounds or `System Events` window position/size to compute the region.
+- ACP pasted-text verification needs two deletes when the cursor is immediately after a newly inserted token: the first backspace removes the trailing space, the second removes the token atomically. Query `getAcpState` after each step so you do not misread a correct first delete as a failure.
+
+## Screenshot Assertion (verify-shot.ts)
+
+Use `verify-shot.ts` for automated screenshot + state verification. It enforces
+the correct ACP verification order: **state receipt first, screenshot second**.
 
 ```bash
-lat check; targeted agentic receipt proof when runtime behavior changed
+# Basic: capture screenshot with ACP state assertions
+bun scripts/agentic/verify-shot.ts --session default \
+  --label step-name \
+  --acp-status idle \
+  --acp-picker-closed \
+  --acp-context-ready
+
+# Assert picker is open after typing @
+bun scripts/agentic/verify-shot.ts --session default \
+  --label picker-open \
+  --acp-picker-open
+
+# Assert item was accepted after Enter/Tab
+bun scripts/agentic/verify-shot.ts --session default \
+  --label item-accepted \
+  --acp-picker-closed \
+  --acp-item-accepted
+
+# State-only (skip screenshot)
+bun scripts/agentic/verify-shot.ts --session default \
+  --label quick-check \
+  --skip-screenshot \
+  --acp-input-contains "@context"
+
+# Screenshot-only (skip state query)
+bun scripts/agentic/verify-shot.ts --session default \
+  --label visual-check \
+  --skip-state
 ```
+
+**Available assertions:**
+| Flag | Checks |
+|------|--------|
+| `--acp-status STATUS` | ACP status equals value (idle, streaming, etc.) |
+| `--acp-picker-open` | Picker overlay is visible |
+| `--acp-picker-closed` | Picker overlay is closed |
+| `--acp-input-contains STR` | Input text contains substring |
+| `--acp-input-match STR` | Input text matches exactly |
+| `--acp-cursor-at N` | Cursor at character index N |
+| `--acp-item-accepted` | A picker item was accepted (lastAcceptedItem non-null) |
+| `--acp-accepted-label STR` | lastAcceptedItem.label equals STR |
+| `--acp-accepted-trigger STR` | lastAcceptedItem.trigger equals STR (@ or /) |
+| `--acp-accepted-via KEY` | Probe confirms acceptance via enter or tab |
+| `--acp-cursor-after-accepted N` | Probe confirms cursor landed at index N after acceptance |
+| `--acp-context-ready` | Context bootstrap complete |
+| `--acp-no-selection` | No text selection active (hasSelection is false) |
+| `--acp-has-selection` | Text selection is active (hasSelection is true) |
+| `--acp-no-permission` | No pending permission (hasPendingPermission is false) |
+| `--acp-has-permission` | Pending permission present (hasPendingPermission is true) |
+| `--acp-visible-start N` | inputLayout.visibleStart equals N (first visible char index) |
+| `--acp-visible-end N` | inputLayout.visibleEnd equals N (last visible char index) |
+| `--acp-cursor-in-window N` | inputLayout.cursorInWindow equals N (cursor position in viewport) |
+
+**Proof bundle fields:** The receipt includes stable top-level fields for machine consumption:
+`state` (ACP snapshot), `probe` (test probe snapshot), `screenshot` (path + capture metadata),
+`captureTarget` (requested vs actual window ID for identity proof),
+`visionCrops` (structured image check entries). These are the canonical fields for automated parsing.
+
+**Capture identity threading:** Detached ACP screenshots use the inspected
+native `osWindowId`, not the automation window ID. When `--target-json` is
+present, `verify-shot.ts` auto-lifts `inspection.osWindowId` into the screenshot
+step. An explicit `--capture-window-id` is only an override and must match the
+inspected `osWindowId`. The receipt exposes `captureTarget.requestedWindowId`,
+`captureTarget.actualWindowId`, `captureRouting`, `requestedAutomationWindowId`,
+and `inspectionOsWindowId`.
+
+**Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
+
+### Canonical input-stability proof
+
+Use visible-text-window assertions to verify single-line input rendering and cursor tracking
+without a screenshot:
+
+```bash
+bun scripts/agentic/verify-shot.ts --session default \
+  --label input-stability \
+  --skip-screenshot \
+  --acp-visible-start 12 \
+  --acp-visible-end 52 \
+  --acp-cursor-in-window 39
+```
+
+This proves the cursor is within the visible window and the viewport bounds are stable,
+which catches scroll jumps, layout shifts, and cursor-out-of-view regressions.
+
+**Strict capture:** When ACP assertions are present, `verify-shot.ts` requires
+`window.ts` quartz capture with frontmost confirmation and the exact inspected
+native window ID. If focus drifts, the inspected `osWindowId` is missing, or the
+captured `windowId` differs from the requested ID, the run fails instead of
+silently falling back to a full-screen screenshot.
+
+**Rule:** The recipe must fail when ACP state contradicts expected picker/caret
+outcome, even if the screenshot capture itself succeeds. State receipt is the
+primary proof; screenshot is secondary visual confirmation.
+
+## Recipe Orchestrator (index.ts) — Preferred ACP Verification
+
+**Always prefer the canonical CLI over ad hoc shell sequences.** The orchestrator
+encodes the correct verification order, focus enforcement, probe resets, and
+checkpoint strategy so agents do not need to reconstruct these from scratch.
+
+## Default Surface Proof (Preferred)
+
+Use `surface-proof` as the default seconds-first proof command for an already-open product surface. For main-hosted surfaces, enter through the real runtime command and keep the proof state-first.
+
+```bash
+bash scripts/agentic/session.sh start default
+bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"clipboard"}' --await-parse
+bun scripts/agentic/index.ts surface-proof --session default --kind main
+bash scripts/agentic/session.sh stop default
+bash scripts/agentic/session.sh status default
+
+# Advanced exact-target proofs when a popup or detached surface already exists:
+bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
+bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
+```
+
+This path reuses a warm session, promotes the target through `automation-window.ts inspect`, samples `getState` and `getElements`, returns a machine-readable proof bundle, and does not call `show`, native input, or screenshot capture unless the proof explicitly needs that escalation.
+
+Sample output shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "recipe": "surface-proof",
+  "status": "pass",
+  "summary": "State-first main proof succeeded for main",
+  "proofBundle": {
+    "schemaVersion": 2,
+    "scenario": "main-window-exact-id",
+    "surfaceClass": "main",
+    "resolvedTarget": {
+      "windowId": "main",
+      "windowKind": "Main"
+    },
+    "targetIdentity": { "stable": true },
+    "usage": {
+      "stateFirst": true,
+      "usedGetState": true,
+      "usedGetElements": true,
+      "usedScreenshot": false,
+      "usedNativeInput": false,
+      "usedShow": false,
+      "usedFixedSleepMs": 0
+    },
+    "capabilities": {
+      "state": true,
+      "elements": true,
+      "nativeInputRequired": false,
+      "screenshotRequired": false
+    },
+    "state": { "type": "stateResult" },
+    "elements": { "type": "elementsResult" },
+    "warnings": []
+  }
+}
+```
+
+### Canonical ACP proof commands
+
+```bash
+# Full ACP picker accept — choose key with --key enter|tab
+bun scripts/agentic/index.ts acp-accept --session default --key enter
+bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
+
+# Target a specific ACP window (detached/popup) — resolve exact identity first
+RESOLVED="$(bun scripts/agentic/automation-window.ts resolve --session default --kind acpDetached --index 0)"
+TARGET="$(printf '%s' "$RESOLVED" | jq -c '.targetJson')"
+SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
+```
+
+### Target threading (non-negotiable for multi-window ACP)
+
+When verifying a detached or popup ACP window, resolve **one target** once and
+reuse it for every RPC and native input step in the entire run.
+
+**Canonical rule:**
+1. Discover the surface (e.g., `bun scripts/agentic/window.ts list`).
+2. Pick one `--target-json` object (e.g., `{"type":"kind","kind":"acpDetached","index":0}`).
+3. Pass that same target to every ACP RPC: `getAcpState`, `getAcpTestProbe`,
+   `resetAcpTestProbe`, `waitFor`, and `batch`.
+4. Pass the matching `--surface` value to native input so focus and proof stay
+   on the same window.
+5. **Never mix focused-window ACP RPCs with surface-targeted native input in the
+   same verification run.** This causes cross-window false proof where you drive
+   one ACP surface and verify another.
+
+The `--target-json` flag threads through `index.ts` → `verify-shot.ts` → every
+RPC command, and the `--surface` flag threads through `index.ts` → `macos-input.ts`
+→ `window.ts` for focus enforcement.
+
+When `--target-json` is omitted, RPCs default to the main ACP view (existing behavior).
+
+What `acp-accept` guarantees:
+- Resets ACP test probe before native interaction (no stale accepted items)
+- Uses `macos-input.ts --ensure-focus` for native typing and acceptance
+- Uses **state-only** checks for ACP-ready and picker-open (no intermediate screenshots)
+- Waits for `acpAcceptedViaKey` (key-specific proof, not generic `acpItemAccepted`)
+- Keeps exactly **one final screenshot** as visual proof
+- Emits vision crops only when `--vision` is requested
+- When `--vision` is used, surfaces the full proof bundle (with `state`, `probe`, `screenshot`, `visionCrops`) as `proofBundle` in the recipe receipt
+
+### Other recipes
+
+```bash
+# Check all prerequisites
+bun scripts/agentic/index.ts preflight --session default
+
+# Open ACP and verify ready state (state-only, no screenshot)
+bun scripts/agentic/index.ts acp-open --session default
+
+# Compatibility aliases (same as --key enter / --key tab)
+bun scripts/agentic/index.ts acp-enter-accept --session default
+bun scripts/agentic/index.ts acp-tab-accept --session default
+
+# Hard-scenario recipes
+bun scripts/agentic/index.ts acp-detached-target-threading-stress \
+  --session default --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json
+bun scripts/agentic/index.ts acp-prompt-popup-parity \
+  --session default --families mention,model-selector,local-history --json
+bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress \
+  --session default --drift generation --json
+```
+
+### State-only vs screenshot checkpoints
+
+| Checkpoint | Screenshot? | Probe? | Why |
+|------------|-------------|--------|-----|
+| ACP ready | No | No | `waitFor(acpReady)` is sufficient proof; screenshot is waste |
+| Picker open | No | No | `waitFor(acpPickerOpen)` is sufficient proof |
+| **Final accepted** | **Yes** | **Yes** | The only checkpoint that needs visual + probe evidence |
+
+**Rule:** Intermediate checkpoints use state-only verification (`--skip-screenshot --skip-probe`).
+Only the final acceptance step captures a screenshot and queries the probe.
+
+### Receipt shape
+
+Each recipe returns a machine-readable JSON receipt:
+```json
+{
+  "schemaVersion": 1,
+  "recipe": "acp-enter-accept",
+  "status": "pass",
+  "steps": [
+    { "name": "acp-open", "status": "pass" },
+    { "name": "reset-probe", "status": "pass" },
+    { "name": "type-at-trigger", "status": "pass" },
+    { "name": "wait-accepted-via-key", "status": "pass" },
+    { "name": "verify-accepted", "status": "pass" }
+  ]
+}
+```
+
+When `--vision` is used, a `proofBundle` field is added containing the verify-shot receipt
+with `state`, `probe`, `screenshot`, and `visionCrops` for direct machine consumption.
+
+The wrapper does **not** replace the lower-level commands — use `session.sh`,
+`macos-input.ts`, `window.ts`, and `verify-shot.ts` directly when you need
+finer control.
+
+## ACP Golden Path (Critical)
+
+The **mandatory** verification flow for any ACP interaction testing.
+**Prefer the canonical CLI** (`bun scripts/agentic/index.ts acp-accept`) over
+reconstructing the manual steps below.
+
+### Canonical (one command, fully non-interactive)
+
+```bash
+bash scripts/agentic/session.sh start default
+bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
+# The recipe returns a machine-readable JSON receipt with proofBundle.
+# Parse proofBundle.state, proofBundle.probe, proofBundle.screenshot, proofBundle.visionCrops
+# to verify ACP behavior programmatically, then read the written PNG for final visual confirmation.
+bash scripts/agentic/session.sh stop default
+```
+
+### Exact detached ACP proof (preferred)
+
+The `scenario` recipe resolves one exact detached ACP target once, reuses
+the exact `targetJson` for every subsequent step, and emits a structured
+proof bundle recording `windowId`, `surfaceId`, and ordered step receipts.
+
+```bash
+bash scripts/agentic/session.sh start default
+bun scripts/agentic/index.ts scenario \
+  --session default \
+  --scenario detached-acp-exact-id \
+  --index 0
+bash scripts/agentic/session.sh stop default
+```
+
+The proof bundle is the regression substrate — every step records the exact
+`target` used, the full request/response pair, and a timestamp. Exit code 0
+means all steps succeeded; exit code 1 means some steps produced warnings.
+
+### Canonical with target threading (detached/popup ACP)
+
+For finer-grained control (e.g., picker acceptance flows), resolve one exact
+ACP target once and reuse both the target and surfaceId for the full run.
+**Do not use loose family-level `--surface acp`** — use the exact surfaceId
+from the resolver.
+
+```bash
+bash scripts/agentic/session.sh start default
+
+# Resolve exact target and surface identity once
+RESOLVED="$(bun scripts/agentic/automation-window.ts resolve --session default --kind acpDetached --index 0)"
+TARGET="$(printf '%s' "$RESOLVED" | jq -c '.targetJson')"
+SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
+
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
+INSPECTED="$(bun scripts/agentic/automation-window.ts inspect --session default --id "$(printf '%s' "$RESOLVED" | jq -r '.automationWindowId')")"
+WINDOW_ID="$(printf '%s' "$INSPECTED" | jq -r '.osWindowId')"
+
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
+bun scripts/agentic/verify-shot.ts --session default --label detached-proof \
+  --target-json "$TARGET" --capture-window-id "$WINDOW_ID"
+# Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
+# Confirm captureTarget.requestedWindowId == captureTarget.actualWindowId
+bash scripts/agentic/session.sh stop default
+```
+
+The `--vision` flag makes the recipe return a `proofBundle` containing all
+machine-readable proof. The golden path is complete when the exit code is 0
+and the `proofBundle.state` and `proofBundle.probe` fields confirm the expected
+ACP state. Screenshot files are still written for archival but are not the
+primary verification mechanism.
+
+### Manual (when you need finer control)
+
+```
+1. session start                               → session alive
+2. show                                        → window visible
+3. triggerBuiltin tab-ai                       → ACP opens
+4. waitFor(acpReady, timeout=8000)             → context bootstrapped (deterministic)
+5. focus window                                → frontmost confirmed
+6. native type @ (macos-input.ts --ensure-focus) → open picker
+7. waitFor(acpPickerOpen, timeout=3000)        → picker open (deterministic)
+8. native Enter or Tab (macos-input.ts --ensure-focus) → accept picker item
+9. waitFor(acpAcceptedViaKey, timeout=3000)    → key-specific acceptance (deterministic)
+10. verify-shot.ts with --acp-accepted-via     → state + probe + screenshot proof
+```
+
+**Key tools in the golden path:**
+| Tool | Role |
+|------|------|
+| `session.sh` | Cross-shell session management, RPC, lifecycle |
+| `macos-input.ts` | Native macOS keyboard/mouse with `--ensure-focus` |
+| `window.ts` | Window discovery, focus, activation, quartz capture |
+| `verify-shot.ts` | State + probe + screenshot bundle with strict capture |
+| `automation-window.ts` | Exact ACP target-to-surface resolver |
+| `scenario.ts` | Replayable proof-bundle scenarios for cross-window regression |
+| `index.ts` | Orchestrator that composes all of the above correctly |
+
+**waitFor replaces fixed sleeps.** Each `waitFor` polls at 25ms intervals
+and returns a `waitForResult` receipt with `success`, `elapsed`, and an
+optional `trace` (included automatically on failure when `trace: "onFailure"`).
+
+**State receipt before screenshot is non-negotiable.** If the state says the
+picker is still open but the screenshot looks fine, the test must FAIL.
+
+**Any remaining sleeps** in the recipes are brief macOS focus-settling delays
+(~300ms) with explicit comments. They are not proof of ACP state.
+
+## Verification Recipes
+
+See [references/recipes.md](references/recipes.md) for named verification patterns.
 
 ## Adjacent Skills
 
 Use adjacent skills when the work crosses boundaries:
 
-- `$agentic-testing` for state-first runtime proof, screenshots, and cleanup.
 - `$testing-quality-gates` for choosing narrow build/test gates.
 - `$lat-md` for `lat.md/` section, wiki-link, or code-ref changes.
 - `$protocol-automation` when stdin JSON, receipts, target identity, `waitFor`, or `batch` are the behavior owner.
+- The domain skill for the active surface, such as `$acp-chat-core`, `$actions-popups`, `$keyboard-focus-routing`, `$launcher-surface-contracts`, or `$window-resizing`.
 
 ## Migration Notes
 
-Legacy `.claude/skills/*` material can be mined for durable facts, but this 26-skill taxonomy is canonical for Codex routing. Do not rename this skill to a legacy skill name.
+This skill intentionally absorbs the long-form `.codex/skills/agentic-testing` and `.claude/skills/agentic-testing` recipes so future agents do not have to choose between duplicate `agentic-testing` definitions. Keep future updates here first, then update `lat.md/agent-skills.md` when the canonical routing or proof contract changes.
+
+## Key Gotchas
+
+- `simulateKey` does NOT go through GPUI's `intercept_keystrokes()`. Use `triggerBuiltin` for ACP Chat entry, not `simulateKey` Tab.
+- `AcpChatView` accepts single-char `simulateKey` for typing, `enter` for submit, `w`+cmd for close.
+- Attached popups like `ActionsDialog` and `PromptPopup` can expose targeted state snapshots even when they do not expose an independent GPUI key handle. Read state from the popup target first; only escalate to parent-window or native input when you must drive real key delivery.
+- `simulateGpuiEvent` is better than `simulateKey` for interceptor bugs, but `handle_unavailable` means the target has no usable runtime handle for that path. Treat that as a proof-design problem, not a cue to spam retries.
+- The app window auto-hides when focus is lost. If captures fail with "Window not found", the window was dismissed.
+- `captureWindow` filters out windows under 100x100 (tray icons).
+- Always unset API keys if you need the setup card: `unset ANTHROPIC_API_KEY`.
+- For ACP picker testing, use **native macOS input** (`macos-input.ts --ensure-focus`) instead of `simulateKey` — synthetic keys bypass GPUI's native key interception and do not faithfully exercise picker selection behavior.
+- Use `getAcpState` to verify picker acceptance, cursor landing, and input content — do not rely solely on screenshots for ACP state verification.
+- Use `waitFor` commands via `session.sh rpc` for deterministic ACP state transitions — do not use fixed sleeps as proof of ACP state.

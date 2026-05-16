@@ -152,6 +152,16 @@ The empty-state receipt is `getState.promptType:"drop"` with `stateResult.drop.f
 
 Attached popups must preserve parent identity and `parent_capture_with_crop`. Detached surfaces must preserve exact-id stability. Main should stay state-first unless a visual assertion explicitly requires capture.
 
+## Hard scenario recipes
+
+These recipes exercise automation paths that previously required slow human interaction across multiple windows, popups, or delayed action origins.
+
+`acp-detached-target-threading-stress` promotes an `acpDetached` kind/index target to an exact id once, requires at least `--min-targets` ACP peer windows, drives native input through the resolved `surfaceId`, checks `getAcpState`, `resetAcpTestProbe`, `waitFor`, and strict capture against the same target, and emits `proofBundle.targetThread`, `peerWindows`, `usage.usedNativeInput`, and `captureTarget`.
+
+`acp-prompt-popup-parity` opens ACP PromptPopup families through protocol input, promotes each popup to an exact id, inspects row-aware `getElements(target)` receipts, and fails on wrong popup family/id instead of accepting any visible PromptPopup.
+
+`notes-acp-delayed-action-origin-stress` is intentionally fail-closed until Notes-hosted ACP exposes durable origin and generation receipts. The current harness emits `missingOriginGeneration` rather than inferring delayed-action safety from unrelated state.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
