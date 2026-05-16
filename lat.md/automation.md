@@ -258,6 +258,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `visual-contrast-readable-state-stress` is intentionally fail-closed until visual receipts expose theme token fingerprints, appearance generations, rem/scale metrics, active/inactive/disabled/focused/error/loading state samples, semantic text, text bounds, foreground/background colors, contrast ratios, non-color state cues, screenshot-to-state revalidation, stale theme token rejection, wrong-surface rejection, blank screenshot rejection, and cleanup.
 
+`empty-error-retry-state-ux-stress` is intentionally fail-closed until empty, loading, error, retry, and recovery receipts expose visible text, semantic retry identity, request generations, footer-safe actions, selection stability, and no stale error after recovery.
+
+`form-validation-inline-recovery-stress` is intentionally fail-closed until FormPrompt/FieldsPrompt receipts expose validation generations, first-invalid-field focus, inline error identities, preserved input, footer submit prevention, valid-edit error clearing, and final submit recovery.
+
+`navigation-back-stack-history-stress` is intentionally fail-closed until launcher surface receipts expose transition generations, route stack depth, Cmd-K/actions discoverability, disabled/no-op affordances, Escape/back restoration, and return-to-origin selection/filter/scroll/footer/focus recovery without stale surface state.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

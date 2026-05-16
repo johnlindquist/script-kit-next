@@ -93,6 +93,12 @@
  *                         Fail-closed multi-context attachment dedupe/provenance proof
  *   visual-contrast-readable-state-stress
  *                         Fail-closed visual contrast/readable-state proof
+ *   empty-error-retry-state-ux-stress
+ *                         Fail-closed empty/error/retry state UX proof
+ *   form-validation-inline-recovery-stress
+ *                         Fail-closed form validation inline recovery proof
+ *   navigation-back-stack-history-stress
+ *                         Fail-closed navigation/back-stack history proof
  *   help                   Show this help
  *
  * Target threading:
@@ -158,6 +164,9 @@ import {
   runInputModalityTransitionOwnershipStressScenario,
   runMultiContextAttachmentDedupeProvenanceStressScenario,
   runVisualContrastReadableStateStressScenario,
+  runEmptyErrorRetryStateUxStressScenario,
+  runFormValidationInlineRecoveryStressScenario,
+  runNavigationBackStackHistoryStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -189,6 +198,7 @@ interface RecipeReceipt {
   failClosed?: boolean;
   failureMode?: string;
   missingReceipt?: string;
+  reasonCode?: string;
   linearIssue?: string;
   steps: StepReceipt[];
   summary: string;
@@ -847,6 +857,33 @@ function parseArgs() {
     statesIdx >= 0 && args[statesIdx + 1]
       ? args[statesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const retryCyclesIdx = args.indexOf("--retry-cycles");
+  const rawRetryCycles =
+    retryCyclesIdx >= 0 && args[retryCyclesIdx + 1] ? Number(args[retryCyclesIdx + 1]) : undefined;
+  const retryCycles = Number.isFinite(rawRetryCycles) ? rawRetryCycles : undefined;
+  const fieldsIdx = args.indexOf("--fields");
+  const fields =
+    fieldsIdx >= 0 && args[fieldsIdx + 1]
+      ? args[fieldsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const invalidIdx = args.indexOf("--invalid");
+  const invalid =
+    invalidIdx >= 0 && args[invalidIdx + 1]
+      ? args[invalidIdx + 1].split(",").map((s) => s.trim())
+      : undefined;
+  const validIdx = args.indexOf("--valid");
+  const valid =
+    validIdx >= 0 && args[validIdx + 1]
+      ? args[validIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const originSurfaceIdx = args.indexOf("--origin");
+  const originSurface =
+    originSurfaceIdx >= 0 && args[originSurfaceIdx + 1] ? args[originSurfaceIdx + 1] : undefined;
+  const transitionsIdx = args.indexOf("--transitions");
+  const transitions =
+    transitionsIdx >= 0 && args[transitionsIdx + 1]
+      ? args[transitionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -935,6 +972,12 @@ function parseArgs() {
     themes,
     scaleFactors,
     states,
+    retryCycles,
+    fields,
+    invalid,
+    valid,
+    originSurface,
+    transitions,
   };
 }
 
@@ -2261,6 +2304,12 @@ const {
   themes,
   scaleFactors,
   states,
+  retryCycles,
+  fields,
+  invalid,
+  valid,
+  originSurface,
+  transitions,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3228,6 +3277,76 @@ switch (recipe) {
     break;
   }
 
+  case "empty-error-retry-state-ux-stress": {
+    const proofBundle = await runEmptyErrorRetryStateUxStressScenario({
+      session,
+      surfaces,
+      query,
+      retryCycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "empty-error-retry-state-ux-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      reasonCode: proofBundle.reasonCode,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Empty/error/retry state UX stress failed closed; empty, loading, error, retry, and recovery receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "form-validation-inline-recovery-stress": {
+    const proofBundle = await runFormValidationInlineRecoveryStressScenario({
+      session,
+      surface,
+      fields,
+      invalid,
+      valid,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "form-validation-inline-recovery-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      reasonCode: proofBundle.reasonCode,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Form validation inline recovery stress failed closed; inline errors, first invalid focus, input preservation, valid edit recovery, and submit guard receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "navigation-back-stack-history-stress": {
+    const proofBundle = await runNavigationBackStackHistoryStressScenario({
+      session,
+      origin: originSurface,
+      surfaces,
+      transitions,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "navigation-back-stack-history-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      reasonCode: proofBundle.reasonCode,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Navigation/back-stack history stress failed closed; route stack, actions discoverability, no-op affordance, return-to-origin, and stale state receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3379,6 +3498,9 @@ switch (recipe) {
           { name: "input-modality-transition-ownership-stress", description: "Fail-closed input-device modality transition hover/focus/selection, scroll, shortcut, and activation ownership receipt", flags: ["--session", "--surface", "--interleave", "--cycles", "--json"] },
           { name: "multi-context-attachment-dedupe-provenance-stress", description: "Fail-closed multi-context attachment dedupe, provenance, ordering, and privacy receipt", flags: ["--session", "--origins", "--destinations", "--reorder-cycles", "--json"] },
           { name: "visual-contrast-readable-state-stress", description: "Fail-closed visual contrast, readable state, non-color cue, and screenshot revalidation receipt", flags: ["--session", "--surfaces", "--themes", "--scale-factors", "--states", "--json"] },
+          { name: "empty-error-retry-state-ux-stress", description: "Fail-closed empty/loading/error/retry/recovery UX state receipt", flags: ["--session", "--surfaces", "--query", "--retry-cycles", "--json"] },
+          { name: "form-validation-inline-recovery-stress", description: "Fail-closed form validation inline error recovery and submit guard receipt", flags: ["--session", "--surface", "--fields", "--invalid", "--valid", "--json"] },
+          { name: "navigation-back-stack-history-stress", description: "Fail-closed navigation/back-stack history restoration and stale state receipt", flags: ["--session", "--origin", "--surfaces", "--transitions", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3576,6 +3698,12 @@ Recipes:
                          Fail-closed multi-context attachment dedupe/provenance proof
   visual-contrast-readable-state-stress
                          Fail-closed visual contrast/readable-state proof
+  empty-error-retry-state-ux-stress
+                         Fail-closed empty/error/retry state UX proof
+  form-validation-inline-recovery-stress
+                         Fail-closed form validation inline recovery proof
+  navigation-back-stack-history-stress
+                         Fail-closed navigation/back-stack history proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3696,6 +3824,12 @@ Available scenarios:
                          Emit fail-closed multi-context attachment dedupe/provenance requirements
   visual-contrast-readable-state-stress
                          Emit fail-closed visual contrast/readable-state requirements
+  empty-error-retry-state-ux-stress
+                         Emit fail-closed empty/error/retry state UX requirements
+  form-validation-inline-recovery-stress
+                         Emit fail-closed form validation inline recovery requirements
+  navigation-back-stack-history-stress
+                         Emit fail-closed navigation/back-stack history requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3759,6 +3893,9 @@ Examples:
   bun scripts/agentic/index.ts input-modality-transition-ownership-stress --session default --surface main --interleave pointer-hover,keyboard-nav,trackpad-scroll,wheel-scroll,shortcut --cycles 8 --json
   bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations acp-composer,notes --reorder-cycles 3 --json
   bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,acp-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
+  bun scripts/agentic/index.ts empty-error-retry-state-ux-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search --query 'agentic-loop-eighteen-no-results-zzzz' --json
+  bun scripts/agentic/index.ts form-validation-inline-recovery-stress --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
+  bun scripts/agentic/index.ts navigation-back-stack-history-stress --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

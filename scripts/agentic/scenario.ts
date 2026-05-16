@@ -133,11 +133,15 @@ export interface HardScenarioReceipt {
     | "high-volume-virtualized-list-stability-stress"
     | "input-modality-transition-ownership-stress"
     | "multi-context-attachment-dedupe-provenance-stress"
-    | "visual-contrast-readable-state-stress";
+    | "visual-contrast-readable-state-stress"
+    | "empty-error-retry-state-ux-stress"
+    | "form-validation-inline-recovery-stress"
+    | "navigation-back-stack-history-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
   missingReceipt?: string;
+  reasonCode?: string;
   linearIssue?: string;
   error?: Record<string, unknown>;
   targetThread?: {
@@ -201,6 +205,9 @@ export interface HardScenarioReceipt {
   inputModalityTransitionOwnership?: Record<string, unknown>;
   multiContextAttachmentDedupeProvenance?: Record<string, unknown>;
   visualContrastReadableState?: Record<string, unknown>;
+  emptyErrorRetryStateUx?: Record<string, unknown>;
+  formValidationInlineRecovery?: Record<string, unknown>;
+  navigationBackStackHistory?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -5643,6 +5650,298 @@ export async function runVisualContrastReadableStateStressScenario(opts: {
         "The harness fails closed until visual.contrastReadableState receipts prove contrast/readability across themes, scales, states, surfaces, screenshot revalidation, and cleanup.",
     },
     warnings: ["file_linear:visual_contrast_readable_state_receipts_missing"],
+  };
+}
+
+export async function runEmptyErrorRetryStateUxStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  query?: string;
+  retryCycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "empty-error-retry-state-ux-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "ux.emptyErrorRetryState",
+    reasonCode: "missing_empty_error_retry_state_ux_receipt",
+    linearIssue: "file_linear:empty_error_retry_state_ux_receipts_missing",
+    error: {
+      code: "missing_empty_error_retry_state_ux_receipt",
+      linear: "file_linear:empty_error_retry_state_ux_receipts_missing",
+    },
+    emptyErrorRetryStateUx: {
+      session: opts.session,
+      requiredReceipt: "ux.emptyErrorRetryState",
+      emptyRetryStressId: null,
+      surfaceSamples: (opts.surfaces && opts.surfaces.length > 0
+        ? opts.surfaces
+        : ["main", "clipboard-history", "emoji-picker", "file-search"]).map((surface) => ({
+          surface,
+          automationWindowId: null,
+          osWindowId: null,
+          semanticSurface: null,
+          query: opts.query ?? "agentic-loop-eighteen-no-results-zzzz",
+          stateReceipt: null,
+          elementsReceipt: null,
+        })),
+      retryCycles: opts.retryCycles ?? 2,
+      emptyStateSamples: [],
+      emptyMessageSemanticId: null,
+      emptyMessageText: null,
+      emptyMessageVisible: null,
+      emptyIllustrationVisible: null,
+      loadingStateSamples: [],
+      loadingGeneration: null,
+      loadingMessageText: null,
+      loadingSpinnerVisible: null,
+      errorStateSamples: [],
+      errorGeneration: null,
+      errorBannerSemanticId: null,
+      errorMessageText: null,
+      errorSeverity: null,
+      retryButtonSemanticId: null,
+      retryButtonLabel: null,
+      retryButtonEnabled: null,
+      retryRequestId: null,
+      retryStateSamples: [],
+      retryAttempt: null,
+      retryStartedAt: null,
+      retryCompletedAt: null,
+      recoverySamples: [],
+      recoveredStateReceipt: null,
+      recoveredElementsReceipt: null,
+      recoveryClearsError: null,
+      selectionStableAcrossEmpty: null,
+      footerActionsSafeInEmpty: null,
+      noStaleErrorAfterRecovery: null,
+      noDisabledRetryTrap: null,
+      screenshotStateRevalidated: null,
+      cleanupConfirmed: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      openedSecurityPrompt: false,
+      mutatedTcc: false,
+      installedAgent: false,
+      triggeredCodexAcpSecurityAgent: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "missing_empty_error_retry_state_ux_receipt" },
+    }],
+    failure: {
+      code: "missing_empty_error_retry_state_ux_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until ux.emptyErrorRetryState receipts prove empty/loading/error/retry/recovery UX, footer safety, selection stability, and no stale error after recovery.",
+    },
+    warnings: ["file_linear:empty_error_retry_state_ux_receipts_missing"],
+  };
+}
+
+export async function runFormValidationInlineRecoveryStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fields?: string[];
+  invalid?: string[];
+  valid?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "form-validation-inline-recovery-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "ux.formValidationInlineRecovery",
+    reasonCode: "missing_form_validation_inline_recovery_receipt",
+    linearIssue: "file_linear:form_validation_inline_recovery_receipts_missing",
+    error: {
+      code: "missing_form_validation_inline_recovery_receipt",
+      linear: "file_linear:form_validation_inline_recovery_receipts_missing",
+    },
+    formValidationInlineRecovery: {
+      session: opts.session,
+      requiredReceipt: "ux.formValidationInlineRecovery",
+      formValidationStressId: null,
+      surface: opts.surface ?? "fields-prompt",
+      promptType: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      initialFormReceipt: null,
+      initialElementsReceipt: null,
+      fields: opts.fields ?? ["email", "required-text", "number"],
+      invalidInputs: opts.invalid ?? ["email:not-an-email", "required-text:", "number:not-a-number"],
+      validInputs: opts.valid ?? ["email:ada@example.com", "required-text:Ada", "number:42"],
+      fieldSamples: [],
+      fieldSemanticId: null,
+      fieldName: null,
+      fieldLabel: null,
+      fieldRole: null,
+      fieldRequired: null,
+      fieldValueBeforeInvalidSubmit: null,
+      invalidInputValue: null,
+      validInputValue: null,
+      validationRuleId: null,
+      fieldValidationGeneration: null,
+      invalidSubmitReceipt: null,
+      submitPrevented: null,
+      preventedAccidentalSubmit: null,
+      firstInvalidFieldSemanticId: null,
+      focusAfterInvalidSubmit: null,
+      cursorAfterInvalidSubmit: null,
+      inlineErrorSamples: [],
+      errorSemanticId: null,
+      errorText: null,
+      errorVisible: null,
+      errorLinkedFieldSemanticId: null,
+      errorSeverity: null,
+      inputPreservedAfterInvalidSubmit: null,
+      footerSubmitDisabledReason: null,
+      validEditReceipt: null,
+      errorsClearedOnValidEdit: null,
+      fieldValueAfterValidEdit: null,
+      focusPreservedDuringRecovery: null,
+      submitRecoveryReceipt: null,
+      submittedValueReceipt: null,
+      noStaleInlineErrors: null,
+      noCrossFieldErrorLeakage: null,
+      actionsDialogStillSafe: null,
+      escapeCancelStillSafe: null,
+      cleanupConfirmed: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      openedSecurityPrompt: false,
+      mutatedTcc: false,
+      installedAgent: false,
+      triggeredCodexAcpSecurityAgent: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "missing_form_validation_inline_recovery_receipt" },
+    }],
+    failure: {
+      code: "missing_form_validation_inline_recovery_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until ux.formValidationInlineRecovery receipts prove inline validation errors, input preservation, first invalid focus, valid edit recovery, submit prevention, and cleanup.",
+    },
+    warnings: ["file_linear:form_validation_inline_recovery_receipts_missing"],
+  };
+}
+
+export async function runNavigationBackStackHistoryStressScenario(opts: {
+  session: string;
+  origin?: string;
+  surfaces?: string[];
+  transitions?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "navigation-back-stack-history-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "ux.navigationBackStackHistory",
+    reasonCode: "missing_navigation_back_stack_history_receipt",
+    linearIssue: "file_linear:navigation_back_stack_history_receipts_missing",
+    error: {
+      code: "missing_navigation_back_stack_history_receipt",
+      linear: "file_linear:navigation_back_stack_history_receipts_missing",
+    },
+    navigationBackStackHistory: {
+      session: opts.session,
+      requiredReceipt: "ux.navigationBackStackHistory",
+      navigationBackStackStressId: null,
+      navigationRunId: null,
+      originSurface: opts.origin ?? "main",
+      originAutomationWindowId: null,
+      originSemanticSurface: null,
+      originStateReceipt: null,
+      originElementsReceipt: null,
+      originSelectionSemanticId: null,
+      originFilterText: null,
+      originScrollTop: null,
+      originFooterReceipt: null,
+      originFocusSemanticId: null,
+      surfaces: opts.surfaces ?? ["clipboard-history", "emoji-picker", "file-search", "actionsDialog"],
+      transitions: opts.transitions ?? ["triggerBuiltin", "cmd-k", "escape", "back"],
+      transitionSamples: [],
+      transitionSequenceId: null,
+      transitionKind: null,
+      fromSurface: null,
+      toSurface: null,
+      surfaceStackGeneration: null,
+      routeStackDepthBefore: null,
+      routeStackDepthAfter: null,
+      triggerReceipt: null,
+      stateReceiptAfterTransition: null,
+      elementsReceiptAfterTransition: null,
+      actionsDialogReceipt: null,
+      actionsDiscoverabilityReceipt: null,
+      actionRowsVisible: null,
+      disabledActionSamples: [],
+      disabledReason: null,
+      noOpActionSemanticId: null,
+      noOpAffordanceVisible: null,
+      noAccidentalExecution: null,
+      backStackSamples: [],
+      backAction: null,
+      escapeReceipt: null,
+      backReceipt: null,
+      cmdKCloseReceipt: null,
+      returnToOriginReceipt: null,
+      returnedSurface: null,
+      selectionRestored: null,
+      filterRestored: null,
+      scrollRestored: null,
+      footerRestored: null,
+      focusRestored: null,
+      inputCursorRestored: null,
+      routeStackDrained: null,
+      noStalePopup: null,
+      noStaleSurfaceState: null,
+      wrongSurfaceBackRejected: null,
+      staleTransitionRejected: null,
+      cleanupConfirmed: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      openedSecurityPrompt: false,
+      mutatedTcc: false,
+      installedAgent: false,
+      triggeredCodexAcpSecurityAgent: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "missing_navigation_back_stack_history_receipt" },
+    }],
+    failure: {
+      code: "missing_navigation_back_stack_history_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until ux.navigationBackStackHistory receipts prove transitions, route stack generations, actions discoverability, no-op affordances, return-to-origin restoration, stale rejection, and cleanup.",
+    },
+    warnings: ["file_linear:navigation_back_stack_history_receipts_missing"],
   };
 }
 
