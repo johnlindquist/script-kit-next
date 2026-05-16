@@ -154,7 +154,10 @@ export interface HardScenarioReceipt {
     | "command-search-highlighting-accessory-badges-stress"
     | "clipboard-copy-visual-feedback-stress"
     | "portal-cancel-return-state-restoration-stress"
-    | "tooltip-hover-focus-affordance-stress";
+    | "tooltip-hover-focus-affordance-stress"
+    | "shortcut-recorder-cancel-layering-stress"
+    | "inline-popover-anchor-resize-stress"
+    | "disabled-footer-hit-target-refusal-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -244,6 +247,9 @@ export interface HardScenarioReceipt {
   clipboardCopyVisualFeedback?: Record<string, unknown>;
   portalCancelReturnStateRestoration?: Record<string, unknown>;
   tooltipHoverFocusAffordance?: Record<string, unknown>;
+  shortcutRecorderCancelLayeringReceipt?: Record<string, unknown>;
+  inlinePopoverAnchorResizeReceipt?: Record<string, unknown>;
+  disabledFooterHitTargetRefusalReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6970,6 +6976,135 @@ export async function runTooltipHoverFocusAffordanceStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_tooltip_hover_focus_affordance_receipt" } }],
     failure: { code: "missing_tooltip_hover_focus_affordance_receipt", stepName: "declare-required-receipt", message: "Missing app-side tooltip hover/focus affordance receipts." },
     warnings: ["file_linear:tooltip_hover_focus_affordance_receipts_missing"],
+  };
+}
+
+export async function runShortcutRecorderCancelLayeringStressScenario(opts: {
+  session: string;
+  surface?: string;
+  action?: string;
+  cancelMethods?: string[];
+  inputModes?: string[];
+  sandboxConfig?: boolean;
+  noConfigWrite?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "shortcut-recorder-cancel-layering-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_shortcut_recorder_cancel_layering_receipt",
+    linearIssue: "file_linear:shortcut_recorder_cancel_layering_receipts_missing",
+    shortcutRecorderCancelLayeringReceipt: {
+      kind: "ux.shortcutRecorderCancelLayering",
+      shortcutRecorderCancelLayeringStressId: "loop-twenty-five-shortcut-recorder-cancel-layering",
+      session: opts.session,
+      surface: opts.surface ?? "shortcuts",
+      action: opts.action ?? "test-agentic-shortcut",
+      requestedCancelMethods: opts.cancelMethods ?? ["escape", "cmd-w", "backdrop", "parent-click"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-click"],
+      sandboxConfig: opts.sandboxConfig ?? true,
+      noConfigWrite: opts.noConfigWrite ?? true,
+      parentAutomationWindowId: null, recorderAutomationWindowId: null, parentSemanticSurface: null,
+      modalLayerReceipt: null, parentBounds: null, recorderBounds: null, shellNarrowerThanParent: null,
+      titleText: null, pressKeysPlaceholderVisible: null, footerAbsent: null, visibleCancelButton: null,
+      cancelMethod: null, escapeCancels: null, cmdWCancels: null, backdropClickCancels: null,
+      parentClickCancels: null, chordNotCapturedOnCancel: null, configFingerprintBefore: null,
+      configFingerprintAfter: null, configUnchanged: null, globalHotkeyNotRegistered: null,
+      parentFocusRestored: null, parentSelectionRestored: null, staleRecorderRejected: null,
+      wrongParentRejected: null, networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_shortcut_recorder_cancel_layering_receipt" } }],
+    failure: { code: "missing_shortcut_recorder_cancel_layering_receipt", stepName: "declare-required-receipt", message: "Missing app-side shortcut recorder cancel/layering receipts." },
+    warnings: ["file_linear:shortcut_recorder_cancel_layering_receipts_missing"],
+  };
+}
+
+export async function runInlinePopoverAnchorResizeStressScenario(opts: {
+  session: string;
+  families?: string[];
+  widths?: string[];
+  fixture?: string;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "inline-popover-anchor-resize-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_inline_popover_anchor_resize_receipt",
+    linearIssue: "file_linear:inline_popover_anchor_resize_receipts_missing",
+    inlinePopoverAnchorResizeReceipt: {
+      kind: "ux.inlinePopoverAnchorResize",
+      inlinePopoverAnchorResizeStressId: "loop-twenty-five-inline-popover-anchor-resize",
+      session: opts.session,
+      requestedFamilies: opts.families ?? ["acp-slash", "acp-mention", "menu-syntax-colon"],
+      requestedWidths: opts.widths ?? ["mini", "narrow", "full"],
+      requestedFixture: opts.fixture ?? "agentic-inline-popover",
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-resize"],
+      noNativeInput: opts.noNativeInput ?? true,
+      familySamples: [], family: null, originAutomationWindowId: null, popupAutomationWindowId: null,
+      parentSemanticSurface: null, triggerText: null, triggerRange: null, anchorBoundsBeforeResize: null,
+      anchorBoundsAfterResize: null, popupBoundsBeforeResize: null, popupBoundsAfterResize: null,
+      resizeGeneration: null, widthMode: null, visibleRangeBeforeResize: null, visibleRangeAfterResize: null,
+      selectedRowVisible: null, selectedRowIdentityPreserved: null, synopsisBounds: null, footerRowBounds: null,
+      noSynopsisFooterOverlap: null, noParentClipping: null, noViewportOverflow: null, zOrderAboveParent: null,
+      noFocusSteal: null, keyboardSelectionPreserved: null, keyboardFallbackAccepted: null,
+      screenshotToSemanticsAlignment: null, strictCaptureTarget: null, blankScreenshotRejected: null,
+      staleResizeGenerationRejected: null, wrongPopupRejected: null, networkAccessed: false,
+      externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_inline_popover_anchor_resize_receipt" } }],
+    failure: { code: "missing_inline_popover_anchor_resize_receipt", stepName: "declare-required-receipt", message: "Missing app-side inline popover anchor/resize receipts." },
+    warnings: ["file_linear:inline_popover_anchor_resize_receipts_missing"],
+  };
+}
+
+export async function runDisabledFooterHitTargetRefusalStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fixtures?: string[];
+  inputModes?: string[];
+  noNativePointer?: boolean;
+  dryRunOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "disabled-footer-hit-target-refusal-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_disabled_footer_hit_target_refusal_receipt",
+    linearIssue: "file_linear:disabled_footer_hit_target_refusal_receipts_missing",
+    disabledFooterHitTargetRefusalReceipt: {
+      kind: "ux.disabledFooterHitTargetRefusal",
+      disabledFooterHitTargetRefusalStressId: "loop-twenty-five-disabled-footer-hit-target-refusal",
+      session: opts.session,
+      requestedSurfaces: opts.surfaces ?? ["drop-prompt", "fields-prompt", "path-prompt"],
+      requestedFixtures: opts.fixtures ?? ["empty-drop", "invalid-fields", "missing-path"],
+      requestedInputModes: opts.inputModes ?? ["enter", "footer-shortcut", "protocol-footer-click"],
+      noNativePointer: opts.noNativePointer ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      surfaceSamples: [], surface: null, fixture: null, automationWindowId: null, osWindowId: null,
+      semanticSurface: null, stateReceipt: null, elementsReceipt: null, activeFooter: null,
+      nativeFooterSurfaceId: null, footerButtonSemanticId: null, footerButtonLabel: null,
+      actionDisabled: null, disabledReason: null, disabledVisualState: null, disabledAccessibleState: null,
+      keyboardEnterRefused: null, footerShortcutRefused: null, protocolFooterClickRefused: null,
+      cmdKActionsStillAvailable: null, noSubmitReceipt: null, submitAttemptGeneration: null,
+      sideEffectCountsBefore: null, sideEffectCountsAfter: null, stateFingerprintBefore: null,
+      stateFingerprintAfter: null, focusPreserved: null, selectionPreserved: null, filterPreserved: null,
+      staleFooterGenerationRejected: null, wrongSurfaceFooterRejected: null, networkAccessed: false,
+      externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_disabled_footer_hit_target_refusal_receipt" } }],
+    failure: { code: "missing_disabled_footer_hit_target_refusal_receipt", stepName: "declare-required-receipt", message: "Missing app-side disabled footer hit-target refusal receipts." },
+    warnings: ["file_linear:disabled_footer_hit_target_refusal_receipts_missing"],
   };
 }
 

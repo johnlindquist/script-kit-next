@@ -135,6 +135,12 @@
  *                         Fail-closed portal cancel/back return restoration proof
  *   tooltip-hover-focus-affordance-stress
  *                         Fail-closed tooltip hover/focus affordance proof
+ *   shortcut-recorder-cancel-layering-stress
+ *                         Fail-closed shortcut recorder cancel/layering proof
+ *   inline-popover-anchor-resize-stress
+ *                         Fail-closed inline popover anchor/resize proof
+ *   disabled-footer-hit-target-refusal-stress
+ *                         Fail-closed disabled footer hit-target refusal proof
  *   help                   Show this help
  *
  * Target threading:
@@ -221,6 +227,9 @@ import {
   runClipboardCopyVisualFeedbackStressScenario,
   runPortalCancelReturnStateRestorationStressScenario,
   runTooltipHoverFocusAffordanceStressScenario,
+  runShortcutRecorderCancelLayeringStressScenario,
+  runInlinePopoverAnchorResizeStressScenario,
+  runDisabledFooterHitTargetRefusalStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -1003,6 +1012,8 @@ function parseArgs() {
       ? args[inputModesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const noNativePointer = args.includes("--no-native-pointer");
+  const noConfigWrite = args.includes("--no-config-write");
+  const noNativeInput = args.includes("--no-native-input");
   return {
     recipe,
     session,
@@ -1115,6 +1126,8 @@ function parseArgs() {
     targets,
     inputModes,
     noNativePointer,
+    noConfigWrite,
+    noNativeInput,
   };
 }
 
@@ -2465,6 +2478,8 @@ const {
   targets,
   inputModes,
   noNativePointer,
+  noConfigWrite,
+  noNativeInput,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3708,6 +3723,24 @@ switch (recipe) {
     break;
   }
 
+  case "shortcut-recorder-cancel-layering-stress": {
+    const proofBundle = await runShortcutRecorderCancelLayeringStressScenario({ session, surface, action, cancelMethods, inputModes, sandboxConfig, noConfigWrite });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "shortcut-recorder-cancel-layering-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Shortcut recorder cancel/layering stress failed closed; modal layering, cancel paths, config unchanged, and focus restore receipts are missing", proofBundle };
+    break;
+  }
+
+  case "inline-popover-anchor-resize-stress": {
+    const proofBundle = await runInlinePopoverAnchorResizeStressScenario({ session, families, widths, fixture, inputModes, noNativeInput });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "inline-popover-anchor-resize-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Inline popover anchor/resize stress failed closed; anchor, resize, clipping, z-order, keyboard, and capture receipts are missing", proofBundle };
+    break;
+  }
+
+  case "disabled-footer-hit-target-refusal-stress": {
+    const proofBundle = await runDisabledFooterHitTargetRefusalStressScenario({ session, surfaces, fixtures, inputModes, noNativePointer, dryRunOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "disabled-footer-hit-target-refusal-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Disabled footer hit-target refusal stress failed closed; disabled reason, refused activation, no submit, and state preservation receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3880,6 +3913,9 @@ switch (recipe) {
           { name: "clipboard-copy-visual-feedback-stress", description: "Fail-closed UX receipt contract for fixture-scoped copy visual feedback and pasteboard isolation", flags: ["--session", "--hosts", "--fixture", "--pasteboard-scope", "--no-system-pasteboard", "--json"] },
           { name: "portal-cancel-return-state-restoration-stress", description: "Fail-closed UX receipt contract for portal cancel/back origin restoration without insertion", flags: ["--session", "--origins", "--portal", "--query", "--cancel-methods", "--fixture", "--no-native-picker", "--json"] },
           { name: "tooltip-hover-focus-affordance-stress", description: "Fail-closed UX receipt contract for tooltip hover/focus affordances and keyboard fallback", flags: ["--session", "--surfaces", "--targets", "--fixture", "--input-modes", "--no-native-pointer", "--json"] },
+          { name: "shortcut-recorder-cancel-layering-stress", description: "Fail-closed UX receipt contract for shortcut recorder cancel paths and modal layering", flags: ["--session", "--surface", "--action", "--cancel-methods", "--input-modes", "--sandbox-config", "--no-config-write", "--json"] },
+          { name: "inline-popover-anchor-resize-stress", description: "Fail-closed UX receipt contract for inline popover anchoring, resizing, clipping, and keyboard fallback", flags: ["--session", "--families", "--widths", "--fixture", "--input-modes", "--no-native-input", "--json"] },
+          { name: "disabled-footer-hit-target-refusal-stress", description: "Fail-closed UX receipt contract for disabled footer hit-target refusal and no-submit proof", flags: ["--session", "--surfaces", "--fixtures", "--input-modes", "--no-native-pointer", "--dry-run-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3956,6 +3992,9 @@ switch (recipe) {
           "proofBundle.clipboardCopyVisualFeedback",
           "proofBundle.portalCancelReturnStateRestoration",
           "proofBundle.tooltipHoverFocusAffordance",
+          "proofBundle.shortcutRecorderCancelLayeringReceipt",
+          "proofBundle.inlinePopoverAnchorResizeReceipt",
+          "proofBundle.disabledFooterHitTargetRefusalReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4278,6 +4317,12 @@ Available scenarios:
                          Emit fail-closed portal cancel/back return restoration requirements
   tooltip-hover-focus-affordance-stress
                          Emit fail-closed tooltip hover/focus affordance requirements
+  shortcut-recorder-cancel-layering-stress
+                         Emit fail-closed shortcut recorder cancel/layering requirements
+  inline-popover-anchor-resize-stress
+                         Emit fail-closed inline popover anchor/resize requirements
+  disabled-footer-hit-target-refusal-stress
+                         Emit fail-closed disabled footer hit-target refusal requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4362,6 +4407,9 @@ Examples:
   bun scripts/agentic/index.ts clipboard-copy-visual-feedback-stress --session default --hosts file-search,actionsDialog,app-launcher --fixture agentic-copy-preview --pasteboard-scope fixture --no-system-pasteboard --json
   bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins acp-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
   bun scripts/agentic/index.ts tooltip-hover-focus-affordance-stress --session default --surfaces main,actionsDialog,app-launcher --targets truncated-row,disabled-action,footer-button --fixture agentic-tooltips --input-modes protocol-hover,keyboard-focus --no-native-pointer --json
+  bun scripts/agentic/index.ts shortcut-recorder-cancel-layering-stress --session default --surface shortcuts --action test-agentic-shortcut --cancel-methods escape,cmd-w,backdrop,parent-click --input-modes protocol-key,protocol-click --sandbox-config --no-config-write --json
+  bun scripts/agentic/index.ts inline-popover-anchor-resize-stress --session default --families acp-slash,acp-mention,menu-syntax-colon --widths mini,narrow,full --fixture agentic-inline-popover --input-modes protocol-key,protocol-resize --no-native-input --json
+  bun scripts/agentic/index.ts disabled-footer-hit-target-refusal-stress --session default --surfaces drop-prompt,fields-prompt,path-prompt --fixtures empty-drop,invalid-fields,missing-path --input-modes enter,footer-shortcut,protocol-footer-click --no-native-pointer --dry-run-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

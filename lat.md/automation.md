@@ -304,6 +304,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `tooltip-hover-focus-affordance-stress` is intentionally fail-closed until tooltip receipts expose protocol-hover and keyboard-focus triggers, target identity, tooltip generation, text/kind/anchor/bounds/placement, hover delay, accessible description parity, Escape/scroll/focus-loss dismissal, no focus steal, no target/footer/popup-owner coverage, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
 
+`shortcut-recorder-cancel-layering-stress` is intentionally fail-closed until shortcut recorder receipts expose compact modal layering, parent/recorder bounds, placeholder and cancel affordance, Escape/Cmd-W/backdrop/parent-click cancellation, no chord capture, unchanged config fingerprints, no global hotkey registration, parent focus/selection restoration, stale/wrong-parent rejection, AFK-safe flags, and cleanup.
+
+`inline-popover-anchor-resize-stress` is intentionally fail-closed until inline popover receipts expose family/origin/popup identity, trigger range, anchor and popup bounds before/after resize, selected row visibility and identity, synopsis/footer bounds, no parent clipping or viewport overflow, z-order above parent, no focus steal, keyboard fallback, strict capture target, blank screenshot rejection, stale resize rejection, AFK-safe flags, and cleanup.
+
+`disabled-footer-hit-target-refusal-stress` is intentionally fail-closed until disabled footer receipts expose active footer/native footer identity, disabled primary action label/reason/visual/accessibility state, Enter/shortcut/protocol-click refusal, Cmd-K action availability, no submit receipt, unchanged side-effect counts and state fingerprints, focus/selection/filter preservation, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
