@@ -173,7 +173,7 @@ fn actions_command_discoverability_noop_pins_disabled_rows_keyboard_guards_and_n
         "installedAgents",
         "triggeredSecurityPrompt",
         "cleanupConfirmed",
-        "file_linear:actions_command_discoverability_noop_receipts_missing",
+        "state_not_yet_measured",
     ] {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),
@@ -281,7 +281,7 @@ fn docs_and_skill_teach_loop_nineteen_boundaries() {
         "full accessible text",
         "footer collisions",
         "actions/command discoverability no-op stress",
-        "disabled/no-op/actionable rows with reasons",
+        "Cmd-K action popup row measurement",
         "keyboard selection skips or explains disabled actions",
         "no-op rows cannot accidentally execute",
         "dense list/detail preview readability stress",

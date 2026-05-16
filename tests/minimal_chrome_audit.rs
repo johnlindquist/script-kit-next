@@ -214,6 +214,32 @@ fn editor_layout_info_has_editor_content_branch() {
 }
 
 #[test]
+fn div_layout_info_has_div_content_branch() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    assert!(
+        source.contains("AppView::DivPrompt")
+            && source.contains("DivContent")
+            && source.contains("LayoutComponentType::Prompt"),
+        "build_layout_info should expose a DivContent prompt branch"
+    );
+    let branch_start = source
+        .find("AppView::DivPrompt")
+        .expect("DivPrompt layout branch exists");
+    let prompt_branch = &source[branch_start..];
+    let return_idx = prompt_branch
+        .find("return LayoutInfo")
+        .expect("DivPrompt branch should return layout info before launcher components");
+    let script_list_idx = prompt_branch
+        .find("ScriptList")
+        .expect("launcher ScriptList branch exists after prompt branch");
+    assert!(
+        return_idx < script_list_idx,
+        "DivPrompt layout info must return before adding launcher ScriptList/PreviewPanel components"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"div_layout_info\",\"div_content_branch\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn terminal_layout_info_has_terminal_content_branch() {
     let source = include_str!("../src/app_layout/build_layout_info.rs");
     let branch_start = source

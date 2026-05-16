@@ -11,6 +11,9 @@ fn index_help_exposes_loop_ten_visual_recipes() {
     for name in [
         "visible-text-clipping-overlap-stress",
         "layout-measurement-regression-stress",
+        "div-container-scroll-overflow-stress",
+        "main-menu-dynamic-choice-resize-stress",
+        "notes-window-resize-stress",
         "screenshot-semantics-visual-consistency-stress",
     ] {
         assert!(
@@ -25,6 +28,9 @@ fn index_help_exposes_loop_ten_visual_recipes() {
     for function_name in [
         "runVisibleTextClippingOverlapStressScenario",
         "runLayoutMeasurementRegressionStressScenario",
+        "runDivContainerScrollOverflowStressScenario",
+        "runMainMenuDynamicChoiceResizeStressScenario",
+        "runNotesWindowResizeStressScenario",
         "runScreenshotSemanticsVisualConsistencyStressScenario",
     ] {
         assert!(
@@ -43,7 +49,7 @@ fn visible_text_clipping_overlap_stress_pins_text_bounds_overlap_and_truncation_
         "missing_visible_text_measurement_receipt",
         "visibleTextLayoutAudit",
         "textMeasurementSource",
-        "gpui_layout_receipt",
+        "appkit_text_width_plus_getLayoutInfo",
         "textBounds",
         "renderedTextBounds",
         "containerBounds",
@@ -55,11 +61,95 @@ fn visible_text_clipping_overlap_stress_pins_text_bounds_overlap_and_truncation_
         "screenshot_only",
         "ocr_only",
         "estimated_width_only",
-        "file_linear:visible_text_measurement_receipts_missing",
+        "surface_not_yet_measured",
     ] {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),
             "Visible text visual audit must pin {token}"
+        );
+    }
+}
+
+#[test]
+fn main_menu_dynamic_choice_resize_pins_count_bounds_and_cleanup_receipts() {
+    for token in [
+        "main-menu-dynamic-choice-resize-stress",
+        "runMainMenuDynamicChoiceResizeStressScenario",
+        "mainMenuDynamicChoiceResize",
+        "missing_main_menu_dynamic_choice_resize_receipt",
+        "ux.mainMenuDynamicChoiceResize",
+        "mainMenuDynamicChoiceResizeStressId",
+        "smallCount",
+        "largeCount",
+        "smallBounds",
+        "largeBounds",
+        "heightDeltaPx",
+        "visibleChoiceCountTracksFixture",
+        "heightGrewWithChoices",
+        "widthStable",
+        "escapeCleanupReceipt",
+    ] {
+        assert!(
+            INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),
+            "Main menu dynamic choice resize audit must pin {token}"
+        );
+    }
+}
+
+#[test]
+fn notes_window_resize_stress_pins_sandboxed_bounds_and_cleanup_receipts() {
+    for token in [
+        "notes-window-resize-stress",
+        "runNotesWindowResizeStressScenario",
+        "notesWindowResize",
+        "missing_notes_window_resize_receipt",
+        "ux.notesWindowResize",
+        "notesWindowResizeStressId",
+        "SCRIPT_KIT_TEST_NOTES_DB_PATH",
+        "sandboxNotesStore",
+        "beforeBounds",
+        "afterGrowBounds",
+        "afterShrinkBounds",
+        "growDeltaPx",
+        "shrinkDeltaPx",
+        "heightGrewForTallContent",
+        "heightShrankForShortContent",
+        "widthStable",
+        "cleanupConfirmed",
+    ] {
+        assert!(
+            INDEX.contains(token)
+                || SCENARIO.contains(token)
+                || SKILL.contains(token)
+                || AUTOMATION.contains(token),
+            "Notes window resize audit must pin {token}"
+        );
+    }
+}
+
+#[test]
+fn div_container_scroll_overflow_stress_pins_div_bounds_overflow_and_cleanup_receipts() {
+    for token in [
+        "div-container-scroll-overflow-stress",
+        "runDivContainerScrollOverflowStressScenario",
+        "divContainerScrollOverflow",
+        "missing_div_container_scroll_overflow_receipt",
+        "ux.divContainerScrollOverflow",
+        "divContainerScrollOverflowStressId",
+        "DivContent",
+        "divContentBounds",
+        "estimatedContentHeightPx",
+        "divViewportHeightPx",
+        "scrollRequired",
+        "noLauncherListOrPreviewComponents",
+        "scrollContainerSemanticId",
+        "endMarkerPresentInFixture",
+        "escapeCleanupReceipt",
+        "scroll_position_not_yet_exposed_for_div_prompt",
+    ] {
+        assert!(
+            INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),
+            "Div container overflow visual audit must pin {token}"
         );
     }
 }
@@ -85,7 +175,7 @@ fn layout_measurement_regression_stress_pins_rem_bounds_ownership_and_shift_rece
         "attachedPopupSurface",
         "detachedAcpSurface",
         "window_bounds_only",
-        "file_linear:layout_measurement_receipts_missing",
+        "surface_not_yet_measured",
     ] {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),
@@ -151,7 +241,7 @@ fn canonical_skill_teaches_visual_diagnostics_before_screenshot_trust() {
         "visibleTextMode:\"semanticElements\"",
         "not OCR",
         "not clipping proof",
-        "fail-closed until GPUI exposes authoritative text measurement receipts",
+        "getElements`, `getLayoutInfo`, and AppKit text measurement",
     ] {
         assert!(
             SKILL.contains(token) || AUTOMATION.contains(token) || VERIFICATION.contains(token),

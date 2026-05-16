@@ -1269,10 +1269,10 @@ mod command_bar_config_tests {
         assert!(audit.validate().is_empty());
         assert_eq!(
             config.dialog_config.max_height,
-            super::constants::NOTES_RECENT_POPUP_MAX_HEIGHT
+            crate::actions::constants::NOTES_RECENT_POPUP_MAX_HEIGHT
         );
         assert!(
-            config.dialog_config.max_height > super::constants::POPUP_MAX_HEIGHT,
+            config.dialog_config.max_height > crate::actions::constants::POPUP_MAX_HEIGHT,
             "Notes recent switcher needs a taller cap than generic action popups"
         );
     }
