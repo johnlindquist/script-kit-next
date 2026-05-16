@@ -397,7 +397,7 @@ impl TemplatePrompt {
     }
 
     /// Cancel - submit None
-    pub(super) fn submit_cancel(&mut self) {
+    pub(crate) fn submit_cancel(&mut self) {
         (self.on_submit)(self.id.clone(), None);
     }
 
@@ -410,7 +410,7 @@ impl TemplatePrompt {
     }
 
     /// Move to previous input (Shift+Tab)
-    pub(super) fn prev_input(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn prev_input(&mut self, cx: &mut Context<Self>) {
         if !self.inputs.is_empty() {
             if self.current_input == 0 {
                 self.current_input = self.inputs.len() - 1;
@@ -422,7 +422,7 @@ impl TemplatePrompt {
     }
 
     /// Handle character input for current field
-    pub(super) fn handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
+    pub(crate) fn handle_char(&mut self, ch: char, cx: &mut Context<Self>) {
         if let Some(value) = self.values.get_mut(self.current_input) {
             value.push(ch);
             if let Some(input) = self.inputs.get(self.current_input) {
@@ -434,7 +434,7 @@ impl TemplatePrompt {
     }
 
     /// Handle backspace for current field
-    pub(super) fn handle_backspace(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn handle_backspace(&mut self, cx: &mut Context<Self>) {
         if let Some(value) = self.values.get_mut(self.current_input) {
             if !value.is_empty() {
                 value.pop();

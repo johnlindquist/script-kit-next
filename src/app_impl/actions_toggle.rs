@@ -251,6 +251,7 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::ArgPrompt => "ArgPrompt",
         ActionsDialogHost::DivPrompt => "DivPrompt",
         ActionsDialogHost::EditorPrompt => "EditorPrompt",
+        ActionsDialogHost::TemplatePrompt => "TemplatePrompt",
         ActionsDialogHost::TermPrompt => "TermPrompt",
         ActionsDialogHost::FormPrompt => "FormPrompt",
         ActionsDialogHost::WebcamPrompt => "WebcamPrompt",
@@ -494,6 +495,11 @@ impl ScriptListApp {
 
         if matches!(&self.current_view, AppView::WebcamView { .. }) {
             self.toggle_webcam_actions(cx, window);
+            return true;
+        }
+
+        if matches!(&self.current_view, AppView::TemplatePrompt { .. }) {
+            self.toggle_actions(cx, window);
             return true;
         }
 
