@@ -99,6 +99,12 @@
  *                         Fail-closed form validation inline recovery proof
  *   navigation-back-stack-history-stress
  *                         Fail-closed navigation/back-stack history proof
+ *   long-text-wrap-resize-surface-stress
+ *                         Fail-closed long text wrapping/resizing UX proof
+ *   actions-command-discoverability-noop-stress
+ *                         Fail-closed actions discoverability/no-op UX proof
+ *   dense-list-detail-preview-readability-stress
+ *                         Fail-closed dense list/detail preview readability proof
  *   help                   Show this help
  *
  * Target threading:
@@ -167,6 +173,9 @@ import {
   runEmptyErrorRetryStateUxStressScenario,
   runFormValidationInlineRecoveryStressScenario,
   runNavigationBackStackHistoryStressScenario,
+  runLongTextWrapResizeSurfaceStressScenario,
+  runActionsCommandDiscoverabilityNoopStressScenario,
+  runDenseListDetailPreviewReadabilityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -884,6 +893,29 @@ function parseArgs() {
     transitionsIdx >= 0 && args[transitionsIdx + 1]
       ? args[transitionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const widthsIdx = args.indexOf("--widths");
+  const widths =
+    widthsIdx >= 0 && args[widthsIdx + 1]
+      ? args[widthsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const fixturesIdx = args.indexOf("--fixtures");
+  const fixtures =
+    fixturesIdx >= 0 && args[fixturesIdx + 1]
+      ? args[fixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const hostsIdx = args.indexOf("--hosts");
+  const hosts =
+    hostsIdx >= 0 && args[hostsIdx + 1]
+      ? args[hostsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const selectionCyclesIdx = args.indexOf("--selection-cycles");
+  const rawSelectionCycles =
+    selectionCyclesIdx >= 0 && args[selectionCyclesIdx + 1] ? Number(args[selectionCyclesIdx + 1]) : undefined;
+  const selectionCycles = Number.isFinite(rawSelectionCycles) ? rawSelectionCycles : undefined;
+  const resizeCyclesIdx = args.indexOf("--resize-cycles");
+  const rawResizeCycles =
+    resizeCyclesIdx >= 0 && args[resizeCyclesIdx + 1] ? Number(args[resizeCyclesIdx + 1]) : undefined;
+  const resizeCycles = Number.isFinite(rawResizeCycles) ? rawResizeCycles : undefined;
   return {
     recipe,
     session,
@@ -978,6 +1010,11 @@ function parseArgs() {
     valid,
     originSurface,
     transitions,
+    widths,
+    fixtures,
+    hosts,
+    selectionCycles,
+    resizeCycles,
   };
 }
 
@@ -2310,6 +2347,11 @@ const {
   valid,
   originSurface,
   transitions,
+  widths,
+  fixtures,
+  hosts,
+  selectionCycles,
+  resizeCycles,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3347,6 +3389,73 @@ switch (recipe) {
     break;
   }
 
+  case "long-text-wrap-resize-surface-stress": {
+    const proofBundle = await runLongTextWrapResizeSurfaceStressScenario({
+      session,
+      surfaces,
+      widths,
+      fixtures,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "long-text-wrap-resize-surface-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Long text wrapping/resizing UX stress failed closed; text bounds, accessible full text, overlap, footer collision, and resize receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "actions-command-discoverability-noop-stress": {
+    const proofBundle = await runActionsCommandDiscoverabilityNoopStressScenario({
+      session,
+      hosts,
+      states,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "actions-command-discoverability-noop-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Actions command discoverability no-op stress failed closed; disabled/no-op row, keyboard skip, activation guard, and host mutation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "dense-list-detail-preview-readability-stress": {
+    const proofBundle = await runDenseListDetailPreviewReadabilityStressScenario({
+      session,
+      surfaces,
+      query,
+      filterCycles,
+      selectionCycles,
+      resizeCycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "dense-list-detail-preview-readability-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Dense list/detail preview readability stress failed closed; row-preview identity, metadata chip, footer, filter, selection, and resize receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3501,6 +3610,9 @@ switch (recipe) {
           { name: "empty-error-retry-state-ux-stress", description: "Fail-closed empty/loading/error/retry/recovery UX state receipt", flags: ["--session", "--surfaces", "--query", "--retry-cycles", "--json"] },
           { name: "form-validation-inline-recovery-stress", description: "Fail-closed form validation inline error recovery and submit guard receipt", flags: ["--session", "--surface", "--fields", "--invalid", "--valid", "--json"] },
           { name: "navigation-back-stack-history-stress", description: "Fail-closed navigation/back-stack history restoration and stale state receipt", flags: ["--session", "--origin", "--surfaces", "--transitions", "--json"] },
+          { name: "long-text-wrap-resize-surface-stress", description: "Fail-closed UX stress for long labels, paths, descriptions, snippets, and Mini/Full resize readability", flags: ["--session", "--surfaces", "--widths", "--fixtures", "--json"] },
+          { name: "actions-command-discoverability-noop-stress", description: "Fail-closed UX stress for actionable, disabled, and no-op action rows with safe activation guards", flags: ["--session", "--hosts", "--states", "--json"] },
+          { name: "dense-list-detail-preview-readability-stress", description: "Fail-closed UX stress for dense list/detail preview readability during filter, selection, and resize churn", flags: ["--session", "--surfaces", "--query", "--filter-cycles", "--selection-cycles", "--resize-cycles", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3704,6 +3816,12 @@ Recipes:
                          Fail-closed form validation inline recovery proof
   navigation-back-stack-history-stress
                          Fail-closed navigation/back-stack history proof
+  long-text-wrap-resize-surface-stress
+                         Fail-closed long text wrapping/resizing UX proof
+  actions-command-discoverability-noop-stress
+                         Fail-closed actions disabled/no-op discoverability proof
+  dense-list-detail-preview-readability-stress
+                         Fail-closed dense list/detail preview readability proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3830,6 +3948,12 @@ Available scenarios:
                          Emit fail-closed form validation inline recovery requirements
   navigation-back-stack-history-stress
                          Emit fail-closed navigation/back-stack history requirements
+  long-text-wrap-resize-surface-stress
+                         Emit fail-closed long text wrapping/resizing UX requirements
+  actions-command-discoverability-noop-stress
+                         Emit fail-closed actions disabled/no-op discoverability requirements
+  dense-list-detail-preview-readability-stress
+                         Emit fail-closed dense list/detail preview readability requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3896,6 +4020,9 @@ Examples:
   bun scripts/agentic/index.ts empty-error-retry-state-ux-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search --query 'agentic-loop-eighteen-no-results-zzzz' --json
   bun scripts/agentic/index.ts form-validation-inline-recovery-stress --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
   bun scripts/agentic/index.ts navigation-back-stack-history-stress --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
+  bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
+  bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
+  bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

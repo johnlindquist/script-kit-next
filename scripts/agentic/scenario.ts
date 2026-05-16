@@ -136,7 +136,10 @@ export interface HardScenarioReceipt {
     | "visual-contrast-readable-state-stress"
     | "empty-error-retry-state-ux-stress"
     | "form-validation-inline-recovery-stress"
-    | "navigation-back-stack-history-stress";
+    | "navigation-back-stack-history-stress"
+    | "long-text-wrap-resize-surface-stress"
+    | "actions-command-discoverability-noop-stress"
+    | "dense-list-detail-preview-readability-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -208,6 +211,9 @@ export interface HardScenarioReceipt {
   emptyErrorRetryStateUx?: Record<string, unknown>;
   formValidationInlineRecovery?: Record<string, unknown>;
   navigationBackStackHistory?: Record<string, unknown>;
+  longTextWrapResizeSurface?: Record<string, unknown>;
+  actionsCommandDiscoverabilityNoop?: Record<string, unknown>;
+  denseListDetailPreviewReadability?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -5942,6 +5948,258 @@ export async function runNavigationBackStackHistoryStressScenario(opts: {
         "The harness fails closed until ux.navigationBackStackHistory receipts prove transitions, route stack generations, actions discoverability, no-op affordances, return-to-origin restoration, stale rejection, and cleanup.",
     },
     warnings: ["file_linear:navigation_back_stack_history_receipts_missing"],
+  };
+}
+
+export async function runLongTextWrapResizeSurfaceStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  widths?: string[];
+  fixtures?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "long-text-wrap-resize-surface-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_long_text_wrap_resize_surface_receipt",
+    linearIssue: "file_linear:long_text_wrap_resize_surface_receipts_missing",
+    longTextWrapResizeSurface: {
+      requiredReceipt: "ux.longTextWrapResizeSurface",
+      receiptKind: "ux.longTextWrapResizeSurface",
+      longTextStressId: "loop-nineteen-long-text-wrap-resize",
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog"],
+      requestedWidths: opts.widths ?? ["mini", "narrow", "full"],
+      requestedFixtures: opts.fixtures ?? ["long-name", "long-path", "long-description", "multiline-snippet"],
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateReceipt: null,
+      elementsReceipt: null,
+      widthSamples: [],
+      widthMode: null,
+      resizeGeneration: null,
+      windowBounds: null,
+      contentBounds: null,
+      inputBounds: null,
+      listBounds: null,
+      footerBounds: null,
+      fixtureSamples: [],
+      fixtureId: null,
+      longNameFixture: null,
+      longPathFixture: null,
+      longDescriptionFixture: null,
+      multilineSnippetFixture: null,
+      semanticId: null,
+      role: null,
+      fullText: null,
+      visibleText: null,
+      textBounds: null,
+      renderedTextBounds: null,
+      elementBounds: null,
+      availableWidth: null,
+      measuredWidth: null,
+      wrapLineCount: null,
+      clippingState: null,
+      truncationIntent: null,
+      tooltipOrAccessibleFullText: null,
+      accessibleFullText: null,
+      overlapPairs: [],
+      footerCollision: null,
+      inputCollision: null,
+      lostAccessibleText: null,
+      resizeTransitionSamples: [],
+      fromWidthMode: null,
+      toWidthMode: null,
+      selectionPreserved: null,
+      focusPreserved: null,
+      noLayoutShiftBeyondContainer: null,
+      noFooterCollision: null,
+      screenshotStateRevalidated: null,
+      cleanupConfirmed: null,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_long_text_wrap_resize_surface_receipt" } }],
+    failure: { code: "missing_long_text_wrap_resize_surface_receipt", stepName: "declare-required-receipt", message: "Missing app-side long text wrapping and resize layout receipts." },
+    warnings: ["file_linear:long_text_wrap_resize_surface_receipts_missing"],
+  };
+}
+
+export async function runActionsCommandDiscoverabilityNoopStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  states?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "actions-command-discoverability-noop-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_actions_command_discoverability_noop_receipt",
+    linearIssue: "file_linear:actions_command_discoverability_noop_receipts_missing",
+    actionsCommandDiscoverabilityNoop: {
+      requiredReceipt: "ux.actionsCommandDiscoverabilityNoop",
+      receiptKind: "ux.actionsCommandDiscoverabilityNoop",
+      actionsNoopStressId: "loop-nineteen-actions-command-discoverability-noop",
+      requestedHosts: opts.hosts ?? ["main", "clipboard-history", "emoji-picker", "file-search", "app-launcher"],
+      requestedStates: opts.states ?? ["actionable", "disabled", "no-op"],
+      hostSamples: [],
+      hostSurface: null,
+      hostAutomationWindowId: null,
+      hostSemanticSurface: null,
+      hostStateBefore: null,
+      hostElementsBefore: null,
+      actionsDialogReceipt: null,
+      parentAutomationWindowId: null,
+      routeStackDepth: null,
+      actionsVisible: null,
+      filterText: null,
+      focusedSemanticId: null,
+      actionRowSamples: [],
+      rowSemanticId: null,
+      actionId: null,
+      label: null,
+      section: null,
+      rowKind: null,
+      actionable: null,
+      disabled: null,
+      noOp: null,
+      enabled: null,
+      disabledReason: null,
+      noOpReason: null,
+      keyboardSelectable: null,
+      keyboardSkipOrExplainReceipt: null,
+      enterWouldExecute: null,
+      keyboardSelectionSamples: [],
+      fromSemanticId: null,
+      toSemanticId: null,
+      skippedSemanticIds: [],
+      skipReasons: [],
+      activationGuardSamples: [],
+      attemptedSemanticId: null,
+      attemptedActionId: null,
+      activationPrevented: null,
+      preventedReason: null,
+      noAccidentalExecution: null,
+      hostMutationCountBefore: null,
+      hostMutationCountAfter: null,
+      hostStateAfter: null,
+      hostMutationReceipt: null,
+      selectionUnchanged: null,
+      filterUnchanged: null,
+      scrollUnchanged: null,
+      footerUnchanged: null,
+      focusRestored: null,
+      cleanupConfirmed: null,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_actions_command_discoverability_noop_receipt" } }],
+    failure: { code: "missing_actions_command_discoverability_noop_receipt", stepName: "declare-required-receipt", message: "Missing app-side actions discoverability, disabled reason, and no-op execution guard receipts." },
+    warnings: ["file_linear:actions_command_discoverability_noop_receipts_missing"],
+  };
+}
+
+export async function runDenseListDetailPreviewReadabilityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  query?: string;
+  filterCycles?: number;
+  selectionCycles?: number;
+  resizeCycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "dense-list-detail-preview-readability-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_dense_list_detail_preview_readability_receipt",
+    linearIssue: "file_linear:dense_list_detail_preview_readability_receipts_missing",
+    denseListDetailPreviewReadability: {
+      requiredReceipt: "ux.denseListDetailPreviewReadability",
+      receiptKind: "ux.denseListDetailPreviewReadability",
+      densePreviewStressId: "loop-nineteen-dense-list-detail-preview-readability",
+      requestedSurfaces: opts.surfaces ?? ["file-search", "sdk-reference", "script-template-catalog"],
+      requestedQuery: opts.query ?? "agentic-loop-nineteen-preview",
+      filterCycles: opts.filterCycles ?? 4,
+      selectionCycles: opts.selectionCycles ?? 8,
+      resizeCycles: opts.resizeCycles ?? 3,
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      query: opts.query ?? "agentic-loop-nineteen-preview",
+      stateReceipt: null,
+      elementsReceipt: null,
+      listPaneSamples: [],
+      listPaneBounds: null,
+      visibleRowCount: null,
+      selectedRowSemanticId: null,
+      selectedStableKey: null,
+      selectedRowBounds: null,
+      selectedRowTextBounds: null,
+      selectedRowVisible: null,
+      selectedRowAboveFooter: null,
+      rowIdentityVisible: null,
+      previewPaneSamples: [],
+      previewPaneBounds: null,
+      previewSourceStableKey: null,
+      previewMatchesSelectedStableKey: null,
+      previewTitleSemanticId: null,
+      previewTitleText: null,
+      previewTitleBounds: null,
+      previewBodySemanticId: null,
+      previewBodyVisibleLineCount: null,
+      previewBodyBounds: null,
+      previewMetadataChips: [],
+      chipSemanticId: null,
+      chipLabel: null,
+      chipBounds: null,
+      chipReadable: null,
+      chipOverlaps: [],
+      previewFooterCollision: null,
+      previewListOverlap: null,
+      selectionChangeSamples: [],
+      selectionGeneration: null,
+      fromStableKey: null,
+      toStableKey: null,
+      previewGenerationBefore: null,
+      previewGenerationAfter: null,
+      previewUpdated: null,
+      noPreviewStaleAfterSelection: null,
+      focusPreserved: null,
+      filterGenerationSamples: [],
+      filterGeneration: null,
+      filterText: null,
+      rowFingerprintBefore: null,
+      rowFingerprintAfter: null,
+      previewStaleRejected: null,
+      selectedRowReanchored: null,
+      resizeSamples: [],
+      resizeGeneration: null,
+      widthMode: null,
+      noColumnOverlap: null,
+      previewReadable: null,
+      metadataChipsReadable: null,
+      footerActionsReadable: null,
+      footerActionSamples: [],
+      footerActionSemanticId: null,
+      label: null,
+      enabled: null,
+      overlapsPreview: null,
+      overlapsSelectedRow: null,
+      rowPreviewIdentityMatches: null,
+      cleanupConfirmed: null,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_dense_list_detail_preview_readability_receipt" } }],
+    failure: { code: "missing_dense_list_detail_preview_readability_receipt", stepName: "declare-required-receipt", message: "Missing app-side dense list/detail preview readability receipts." },
+    warnings: ["file_linear:dense_list_detail_preview_readability_receipts_missing"],
   };
 }
 

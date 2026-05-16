@@ -264,6 +264,16 @@ These recipes exercise automation paths that previously required slow human inte
 
 `navigation-back-stack-history-stress` is intentionally fail-closed until launcher surface receipts expose transition generations, route stack depth, Cmd-K/actions discoverability, disabled/no-op affordances, Escape/back restoration, and return-to-origin selection/filter/scroll/footer/focus recovery without stale surface state.
 
+`long-text-wrap-resize-surface-stress` is intentionally fail-closed until long text wrapping/resizing UX stress receipts expose long names, paths, descriptions, and multi-line snippets across Mini, narrow, and Full widths. The receipt must prove fixture identity, full accessible text, visible text, text/rendered/element bounds, available width, measured width, wrap line count, truncation intent, tooltip or accessible full text, footer collisions, input collisions, overlap pairs, focus and selection preservation, stale resize rejection, wrong-surface rejection, and cleanup.
+
+`actions-command-discoverability-noop-stress` is intentionally fail-closed until actions/command discoverability no-op stress receipts expose actionable, disabled, and no-op rows with labels, sections, disabled reasons, no-op reasons, keyboard selectability, keyboard selection skips or explains disabled actions, activation-prevention receipts, no host mutation, no-op rows cannot accidentally execute, focus restoration, stale action rejection, and cleanup.
+
+The actions receipt must cover disabled/no-op/actionable rows with reasons so keyboard and Enter behavior never infer intent from label text alone.
+
+`dense-list-detail-preview-readability-stress` is intentionally fail-closed until dense list/detail preview readability stress receipts expose row identity, preview source identity, preview title and body bounds, metadata chips, keyboard focus, footer actions, filter generations, selection changes, resize generations, stale-preview rejection, row reanchor, no column overlap, no footer overlap, and cleanup.
+
+The dense preview receipt must keep row identity, preview text, metadata chips, keyboard focus, and footer actions readable through filtering, selection changes, and resize.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
