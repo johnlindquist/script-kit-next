@@ -495,6 +495,57 @@ bun scripts/agentic/index.ts actions-captured-subject-frame-stress \
 
 ---
 
+### Recipe: verify-drop-prompt-native-drop-privacy-stress
+
+**When:** Testing native file-drop behavior where automation receipts must expose file count/name/size without leaking full paths or file contents.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts drop-prompt-native-drop-privacy-stress \
+  --session default \
+  --file-name agentic-drop.txt \
+  --size 12 \
+  --json
+```
+
+**Pass:** A future native-drop injection receipt proves `stateResult.drop` and `getElements` dropped-file rows are redacted to index/name/size.
+**Current fail-closed behavior:** Until native file-drop injection is deterministic from scripts/agentic, this recipe returns `missing_drop_prompt_native_drop_receipt`.
+
+---
+
+### Recipe: verify-path-prompt-filesystem-edge-stress
+
+**When:** Testing PathPrompt missing, empty, file-start, and permission-denied filesystem edge receipts.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress \
+  --session default \
+  --json
+```
+
+**Pass:** The tracked `scripts/agentic/path-prompt-fs-edges.ts` helper proves `stateResult.path` and `getElements` status rows match the expected edge kind for every fixture case.
+**Fail:** The helper exits non-zero or any state/elements status kind diverges.
+
+---
+
+### Recipe: verify-screenshot-identity-acp-context-stress
+
+**When:** Testing screenshot identity threading from Tab AI capture through `stateResult.screenshotIdentity` and ACP context attachment.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts screenshot-identity-acp-context-stress \
+  --session default \
+  --source tab-ai-screenshot \
+  --json
+```
+
+**Pass:** A future receipt proves capture identity, state identity, and ACP context part identity match without filesystem greps.
+**Current fail-closed behavior:** Until ACP context exposes that identity bridge, this recipe returns `missing_screenshot_identity_context_receipt`.
+
+---
+
 ### Recipe: verify-acp-input-stability
 
 **When:** Changes to single-line input rendering, cursor movement, or scroll behavior in ACP.

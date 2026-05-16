@@ -40,12 +40,15 @@ import {
   runActionsCapturedSubjectFrameStressScenario,
   runCurrentAppCommandsFrontmostStressScenario,
   runDetachedAcpTargetThreadingStressScenario,
+  runDropPromptNativeDropPrivacyStressScenario,
   runActionsDialogExactIdScenario,
   runDetachedAcpExactIdScenario,
   runMainWindowExactIdScenario,
   runNotesAcpDelayedActionOriginStressScenario,
+  runPathPromptFilesystemEdgeStressScenario,
   runPermissionPreflightReadonlyScenario,
   runPromptPopupExactIdScenario,
+  runScreenshotIdentityAcpContextStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
   runTemplatePromptAutomationParityStressScenario,
 } from "./scenario";
@@ -532,6 +535,12 @@ function parseArgs() {
   const mutationIdx = args.indexOf("--mutation");
   const mutation =
     mutationIdx >= 0 && args[mutationIdx + 1] ? args[mutationIdx + 1] : undefined;
+  const fileNameIdx = args.indexOf("--file-name");
+  const fileName =
+    fileNameIdx >= 0 && args[fileNameIdx + 1] ? args[fileNameIdx + 1] : undefined;
+  const sizeIdx = args.indexOf("--size");
+  const rawSize = sizeIdx >= 0 && args[sizeIdx + 1] ? Number(args[sizeIdx + 1]) : undefined;
+  const size = Number.isFinite(rawSize) ? rawSize : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
@@ -563,6 +572,8 @@ function parseArgs() {
     expectedApp,
     source,
     mutation,
+    fileName,
+    size,
     sandboxConfig,
   };
 }
@@ -1832,6 +1843,8 @@ const {
   expectedApp,
   source,
   mutation,
+  fileName,
+  size,
   sandboxConfig,
 } = parseArgs();
 
@@ -2063,6 +2076,61 @@ switch (recipe) {
     break;
   }
 
+  case "drop-prompt-native-drop-privacy-stress": {
+    const proofBundle = await runDropPromptNativeDropPrivacyStressScenario({
+      session,
+      fileName,
+      size,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "drop-prompt-native-drop-privacy-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "DropPrompt native drop receipts stayed redacted"
+          : "DropPrompt native drop privacy stress failed closed; native drop injection receipt is missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "path-prompt-filesystem-edge-stress": {
+    const proofBundle = await runPathPromptFilesystemEdgeStressScenario({ session });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "path-prompt-filesystem-edge-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "PathPrompt filesystem edge receipts passed for missing, empty, file-start, and permission-denied cases"
+          : "PathPrompt filesystem edge stress failed; inspect proofBundle.pathPrompt",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "screenshot-identity-acp-context-stress": {
+    const proofBundle = await runScreenshotIdentityAcpContextStressScenario({
+      session,
+      source,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "screenshot-identity-acp-context-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Screenshot identity matched capture, state, and ACP context receipts"
+          : "Screenshot identity ACP context stress failed closed; context identity receipt is missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2172,6 +2240,9 @@ switch (recipe) {
           { name: "template-prompt-automation-parity-stress", description: "State-first TemplatePrompt state/elements/actions/submit/cancel/forceSubmit parity receipt", flags: ["--session", "--template", "--field", "--value", "--forced-value", "--json"] },
           { name: "current-app-commands-frontmost-stress", description: "Fail-closed Do in Current App frontmost snapshot and shared filtering receipt", flags: ["--session", "--alias", "--query", "--expected-app", "--json"] },
           { name: "actions-captured-subject-frame-stress", description: "Fail-closed root actions captured-subject and source-frame stability receipt", flags: ["--session", "--source", "--action", "--mutation", "--json"] },
+          { name: "drop-prompt-native-drop-privacy-stress", description: "Fail-closed DropPrompt native drop privacy/redaction receipt", flags: ["--session", "--file-name", "--size", "--json"] },
+          { name: "path-prompt-filesystem-edge-stress", description: "State-first PathPrompt filesystem edge receipt helper", flags: ["--session", "--json"] },
+          { name: "screenshot-identity-acp-context-stress", description: "Fail-closed screenshotIdentity to ACP context threading receipt", flags: ["--session", "--source", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2206,6 +2277,9 @@ switch (recipe) {
           "proofBundle.templatePrompt",
           "proofBundle.currentAppCommands",
           "proofBundle.actionsCapturedSubject",
+          "proofBundle.dropPrompt",
+          "proofBundle.pathPrompt",
+          "proofBundle.screenshotIdentity",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2246,6 +2320,12 @@ Recipes:
                          Fail-closed Do in Current App frontmost/filtering/action snapshot
   actions-captured-subject-frame-stress
                          Fail-closed root actions captured-subject frame stability
+  drop-prompt-native-drop-privacy-stress
+                         Fail-closed DropPrompt native drop privacy/redaction proof
+  path-prompt-filesystem-edge-stress
+                         State-first PathPrompt filesystem edge proof
+  screenshot-identity-acp-context-stress
+                         Fail-closed screenshotIdentity to ACP context proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2282,6 +2362,12 @@ Available scenarios:
                          Emit fail-closed Current App Commands frontmost requirements
   actions-captured-subject-frame-stress
                          Emit fail-closed captured-subject frame requirements
+  drop-prompt-native-drop-privacy-stress
+                         Emit fail-closed DropPrompt native drop privacy requirements
+  path-prompt-filesystem-edge-stress
+                         Run PathPrompt filesystem edge helper
+  screenshot-identity-acp-context-stress
+                         Emit fail-closed screenshot identity context requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2303,6 +2389,9 @@ Examples:
   bun scripts/agentic/index.ts template-prompt-automation-parity-stress --session default --template 'Hello {{name}}' --field name --value Ada --forced-value forced-template-result --json
   bun scripts/agentic/index.ts current-app-commands-frontmost-stress --session default --alias 'Do in Current Command' --query 'close tab' --json
   bun scripts/agentic/index.ts actions-captured-subject-frame-stress --session default --source root-file --action quick-look --mutation filter-selection-cache-frame --json
+  bun scripts/agentic/index.ts drop-prompt-native-drop-privacy-stress --session default --file-name agentic-drop.txt --size 12 --json
+  bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress --session default --json
+  bun scripts/agentic/index.ts screenshot-identity-acp-context-stress --session default --source tab-ai-screenshot --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

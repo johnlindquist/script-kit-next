@@ -552,6 +552,12 @@ bun scripts/agentic/index.ts current-app-commands-frontmost-stress \
   --session default --alias 'Do in Current Command' --query 'close tab' --json
 bun scripts/agentic/index.ts actions-captured-subject-frame-stress \
   --session default --source root-file --action quick-look --mutation filter-selection-cache-frame --json
+bun scripts/agentic/index.ts drop-prompt-native-drop-privacy-stress \
+  --session default --file-name agentic-drop.txt --size 12 --json
+bun scripts/agentic/index.ts path-prompt-filesystem-edge-stress \
+  --session default --json
+bun scripts/agentic/index.ts screenshot-identity-acp-context-stress \
+  --session default --source tab-ai-screenshot --json
 ```
 
 ### State-only vs screenshot checkpoints
