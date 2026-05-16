@@ -27,6 +27,12 @@
  *                         Fail-closed Quick Terminal PTY apply-back proof
  *   mcp-context-resource-attachment-identity-stress
  *                         Fail-closed MCP context resource identity proof
+ *   settings-theme-hot-reload-stress
+ *                         Fail-closed Settings/theme hot-reload proof
+ *   file-search-drag-out-identity-stress
+ *                         Fail-closed File Search drag-out identity proof
+ *   scriptlet-bundle-execution-matrix-stress
+ *                         Fail-closed scriptlet bundle execution matrix proof
  *   help                   Show this help
  *
  * Target threading:
@@ -59,6 +65,9 @@ import {
   runPromptPopupExactIdScenario,
   runQuickTerminalPtyApplyBackStressScenario,
   runMcpContextResourceAttachmentIdentityStressScenario,
+  runSettingsThemeHotReloadStressScenario,
+  runFileSearchDragOutIdentityStressScenario,
+  runScriptletBundleExecutionMatrixStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -571,6 +580,27 @@ function parseArgs() {
   const profileIdx = args.indexOf("--profile");
   const profile =
     profileIdx >= 0 && args[profileIdx + 1] ? args[profileIdx + 1] : undefined;
+  const themeBeforeIdx = args.indexOf("--theme-before");
+  const themeBefore =
+    themeBeforeIdx >= 0 && args[themeBeforeIdx + 1] ? args[themeBeforeIdx + 1] : undefined;
+  const themeAfterIdx = args.indexOf("--theme-after");
+  const themeAfter =
+    themeAfterIdx >= 0 && args[themeAfterIdx + 1] ? args[themeAfterIdx + 1] : undefined;
+  const configKeyIdx = args.indexOf("--config-key");
+  const configKey =
+    configKeyIdx >= 0 && args[configKeyIdx + 1] ? args[configKeyIdx + 1] : undefined;
+  const dropTargetIdx = args.indexOf("--drop-target");
+  const dropTarget =
+    dropTargetIdx >= 0 && args[dropTargetIdx + 1] ? args[dropTargetIdx + 1] : undefined;
+  const scriptletIdIdx = args.indexOf("--scriptlet-id");
+  const scriptletId =
+    scriptletIdIdx >= 0 && args[scriptletIdIdx + 1] ? args[scriptletIdIdx + 1] : undefined;
+  const cancelAfterMsIdx = args.indexOf("--cancel-after-ms");
+  const rawCancelAfterMs =
+    cancelAfterMsIdx >= 0 && args[cancelAfterMsIdx + 1]
+      ? Number(args[cancelAfterMsIdx + 1])
+      : undefined;
+  const cancelAfterMs = Number.isFinite(rawCancelAfterMs) ? rawCancelAfterMs : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
@@ -611,6 +641,12 @@ function parseArgs() {
     command,
     resourceUri,
     profile,
+    themeBefore,
+    themeAfter,
+    configKey,
+    dropTarget,
+    scriptletId,
+    cancelAfterMs,
     sandboxConfig,
   };
 }
@@ -1889,6 +1925,12 @@ const {
   command,
   resourceUri,
   profile,
+  themeBefore,
+  themeAfter,
+  configKey,
+  dropTarget,
+  scriptletId,
+  cancelAfterMs,
   sandboxConfig,
 } = parseArgs();
 
@@ -2268,6 +2310,61 @@ switch (recipe) {
     break;
   }
 
+  case "settings-theme-hot-reload-stress": {
+    const proofBundle = await runSettingsThemeHotReloadStressScenario({
+      session,
+      themeBefore,
+      themeAfter,
+      configKey,
+      sandboxConfig,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "settings-theme-hot-reload-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Settings/theme hot-reload stress failed closed; config identity, token fingerprint, repaint, and cleanup receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "file-search-drag-out-identity-stress": {
+    const proofBundle = await runFileSearchDragOutIdentityStressScenario({
+      session,
+      query,
+      fileName,
+      dropTarget,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "file-search-drag-out-identity-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "File Search drag-out identity stress failed closed; selected file, drag payload, host refusal, privacy, and return receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "scriptlet-bundle-execution-matrix-stress": {
+    const proofBundle = await runScriptletBundleExecutionMatrixStressScenario({
+      session,
+      scriptletId,
+      bundleId,
+      cancelAfterMs,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "scriptlet-bundle-execution-matrix-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Scriptlet bundle execution matrix stress failed closed; scriptlet id, bundle hash, isolation, output, and cancellation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2386,6 +2483,9 @@ switch (recipe) {
           { name: "permission-assistant-drag-preflight-stress", description: "Fail-closed Permission Assistant passive drag-source and no-TCC-mutation receipt", flags: ["--session", "--pane", "--bundle-id", "--json"] },
           { name: "quick-terminal-pty-apply-back-stress", description: "Fail-closed Quick Terminal PTY readiness/output/apply-back cleanup receipt", flags: ["--session", "--command", "--json"] },
           { name: "mcp-context-resource-attachment-identity-stress", description: "Fail-closed MCP context resource URI/profile/context-part identity receipt", flags: ["--session", "--resource-uri", "--profile", "--source", "--json"] },
+          { name: "settings-theme-hot-reload-stress", description: "Fail-closed Settings/theme config identity, token fingerprint, repaint, and cleanup receipt", flags: ["--session", "--theme-before", "--theme-after", "--config-key", "--sandbox-config", "--json"] },
+          { name: "file-search-drag-out-identity-stress", description: "Fail-closed File Search selected URI, drag payload, host refusal, privacy, and return receipt", flags: ["--session", "--query", "--file-name", "--drop-target", "--json"] },
+          { name: "scriptlet-bundle-execution-matrix-stress", description: "Fail-closed scriptlet id, bundle hash, args/env isolation, output, cancellation, and bleed receipt", flags: ["--session", "--scriptlet-id", "--bundle-id", "--cancel-after-ms", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2429,6 +2529,9 @@ switch (recipe) {
           "proofBundle.permissionAssistant",
           "proofBundle.quickTerminal",
           "proofBundle.mcpContextResource",
+          "proofBundle.settingsThemeHotReload",
+          "proofBundle.fileSearchDragOut",
+          "proofBundle.scriptletBundleExecution",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2487,6 +2590,12 @@ Recipes:
                          Fail-closed Quick Terminal PTY apply-back lifecycle proof
   mcp-context-resource-attachment-identity-stress
                          Fail-closed MCP context resource identity proof
+  settings-theme-hot-reload-stress
+                         Fail-closed Settings/theme hot-reload proof
+  file-search-drag-out-identity-stress
+                         Fail-closed File Search drag-out identity proof
+  scriptlet-bundle-execution-matrix-stress
+                         Fail-closed scriptlet bundle execution matrix proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2541,6 +2650,12 @@ Available scenarios:
                          Emit fail-closed Quick Terminal apply-back requirements
   mcp-context-resource-attachment-identity-stress
                          Emit fail-closed MCP context resource identity requirements
+  settings-theme-hot-reload-stress
+                         Emit fail-closed Settings/theme hot-reload requirements
+  file-search-drag-out-identity-stress
+                         Emit fail-closed File Search drag-out identity requirements
+  scriptlet-bundle-execution-matrix-stress
+                         Emit fail-closed scriptlet bundle execution requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2571,6 +2686,9 @@ Examples:
   bun scripts/agentic/index.ts permission-assistant-drag-preflight-stress --session default --pane Accessibility --bundle-id com.scriptkit.app --json
   bun scripts/agentic/index.ts quick-terminal-pty-apply-back-stress --session default --command 'printf agentic-pty-apply-back' --json
   bun scripts/agentic/index.ts mcp-context-resource-attachment-identity-stress --session default --resource-uri kit://context/agentic-loop-six --profile agentic-test --source mcp-resource --json
+  bun scripts/agentic/index.ts settings-theme-hot-reload-stress --session default --theme-before script-kit-dark --theme-after script-kit-light --config-key theme --sandbox-config --json
+  bun scripts/agentic/index.ts file-search-drag-out-identity-stress --session default --query AGENTS.md --file-name AGENTS.md --drop-target host-refusal-fixture --json
+  bun scripts/agentic/index.ts scriptlet-bundle-execution-matrix-stress --session default --scriptlet-id alpha --bundle-id agentic-loop-seven-bundle --cancel-after-ms 50 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
