@@ -222,6 +222,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `dev-session-recovery-stale-target-stress` is the pass-now restart/recovery guard. It records a session epoch with the promoted target, restarts the agentic session, refuses stale-target input before delivery when the epoch changes, re-resolves the exact target, and proves the new target with state-first receipts.
 
+`menu-syntax-ambiguity-diagnostics-stress` is intentionally fail-closed until power syntax parsing exposes tolerant diagnostics, skipped malformed fragments, ambiguity reasons, selected command identity, and a no accidental execution guard.
+
+`ime-composition-input-boundary-stress` is intentionally fail-closed until filter input, prompt input, and ACP composer expose composition start/update/commit receipts that prove no premature submit or action dispatch and preserve final committed text semantics.
+
+`accessibility-selected-text-fallback-stress` is intentionally fail-closed until selected-text capture exposes permission-denied fallback, stale frontmost-context rejection, private text redaction, and safe action disablement without opening System Settings or mutating TCC.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

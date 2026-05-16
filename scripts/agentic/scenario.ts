@@ -115,7 +115,10 @@ export interface HardScenarioReceipt {
     | "screenshot-semantics-visual-consistency-stress"
     | "modal-stack-arbitration-stress"
     | "cross-surface-export-provenance-stress"
-    | "dev-session-recovery-stale-target-stress";
+    | "dev-session-recovery-stale-target-stress"
+    | "menu-syntax-ambiguity-diagnostics-stress"
+    | "ime-composition-input-boundary-stress"
+    | "accessibility-selected-text-fallback-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -160,6 +163,9 @@ export interface HardScenarioReceipt {
   modalStackArbitration?: Record<string, unknown>;
   crossSurfaceExport?: Record<string, unknown>;
   sessionRecovery?: Record<string, unknown>;
+  menuSyntaxAmbiguity?: Record<string, unknown>;
+  imeCompositionBoundary?: Record<string, unknown>;
+  accessibilitySelectedTextFallback?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -4080,6 +4086,196 @@ export async function runDevSessionRecoveryStaleTargetStressScenario(opts: {
             "The harness could not complete the stale-target session recovery guard.",
         },
     warnings: [],
+  };
+}
+
+export async function runMenuSyntaxAmbiguityDiagnosticsStressScenario(opts: {
+  session: string;
+  query?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "menu-syntax-ambiguity-diagnostics-stress",
+    status: "fail",
+    menuSyntaxAmbiguity: {
+      session: opts.session,
+      query: opts.query ?? ">open @file !bad ~AGENTS.md",
+      requiredReceipt: "stateResult.menuSyntaxDiagnostics",
+      parseDiagnostics: {
+        powerSyntaxMode: null,
+        parsedFragments: [],
+        skippedMalformedFragments: null,
+        ambiguityReasons: null,
+        tolerantDiagnosticsVisible: null,
+      },
+      selectionIdentity: {
+        selectedCommandId: null,
+        selectedSemanticId: null,
+        selectedSourceSurface: null,
+        fallbackRowUsed: null,
+      },
+      executionGuard: {
+        ambiguousParseBlockedExecution: null,
+        accidentalActionExecuted: false,
+        submittedCommandId: null,
+      },
+      cleanup: {
+        filterRestored: null,
+        noUserActionMutation: true,
+      },
+      forbiddenProofModes: ["selected_text_only", "row_label_only", "implicit_submit"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "menu-syntax-ambiguity-diagnostics-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove menu syntax ambiguity diagnostics, skipped malformed fragments, selected command identity, and no accidental execution in one receipt.",
+      },
+    }],
+    failure: {
+      code: "missing_menu_syntax_ambiguity_diagnostics_receipt",
+      stepName: "menu-syntax-ambiguity-diagnostics-receipt",
+      message:
+        "The harness fails closed until mixed power syntax exposes parse diagnostics, ambiguity reasons, selection identity, and blocked execution receipts.",
+    },
+    warnings: ["file_linear:menu_syntax_ambiguity_diagnostics_receipts_missing"],
+  };
+}
+
+export async function runImeCompositionInputBoundaryStressScenario(opts: {
+  session: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "ime-composition-input-boundary-stress",
+    status: "fail",
+    imeCompositionBoundary: {
+      session: opts.session,
+      surfaces: ["filterInput", "promptInput", "acpComposer"],
+      requiredReceipt: "input.compositionBoundary",
+      compositionLifecycle: {
+        compositionStart: null,
+        compositionUpdateEvents: [],
+        compositionCommit: null,
+        committedText: null,
+        preeditTextPreserved: null,
+      },
+      prematureActionGuards: {
+        enterDuringCompositionSubmitted: false,
+        actionsOpenedDuringComposition: false,
+        filterCommittedBeforeCompositionEnd: false,
+        acpMessageSentBeforeCompositionEnd: false,
+      },
+      semanticReceipts: {
+        finalFilterText: null,
+        finalPromptValue: null,
+        finalComposerText: null,
+        cursorRangeAfterCommit: null,
+      },
+      forbiddenProofModes: ["key_events_only", "sleep_until_text_changes", "native_input_without_composition_receipt"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "ime-composition-input-boundary-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove composition start/update/commit boundaries across filter input, prompt input, and ACP composer without relying on plain key events.",
+      },
+    }],
+    failure: {
+      code: "missing_ime_composition_input_boundary_receipt",
+      stepName: "ime-composition-input-boundary-receipt",
+      message:
+        "The harness fails closed until IME/composition receipts prove no premature submit/actions and final committed text semantics.",
+    },
+    warnings: ["file_linear:ime_composition_input_boundary_receipts_missing"],
+  };
+}
+
+export async function runAccessibilitySelectedTextFallbackStressScenario(opts: {
+  session: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "accessibility-selected-text-fallback-stress",
+    status: "fail",
+    accessibilitySelectedTextFallback: {
+      session: opts.session,
+      requiredReceipt: "platform.selectedTextFallback",
+      permissionMatrix: {
+        accessibilityGranted: null,
+        screenRecordingGranted: null,
+        selectedTextProvider: null,
+        providerDeniedReason: null,
+      },
+      staleContextGuard: {
+        frontmostAppBefore: null,
+        frontmostAppAfter: null,
+        selectedTextGeneration: null,
+        staleSelectedTextRejected: null,
+        staleFrontmostContextRejected: null,
+      },
+      redaction: {
+        privateTextRedacted: null,
+        maxPreviewChars: null,
+        rawSelectedTextLogged: false,
+        actionPayloadContainsRawText: false,
+      },
+      fallback: {
+        fallbackSource: null,
+        fallbackReason: null,
+        actionDisabledWhenUnsafe: null,
+      },
+      forbiddenProofModes: ["permission_prompt_side_effect", "raw_ax_text_log", "frontmost_app_label_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      openedSystemSettings: false,
+      mutatedTcc: false,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "accessibility-selected-text-fallback-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove denied or stale selected-text capture falls back safely, redacts private text, and avoids stale frontmost-app context.",
+      },
+    }],
+    failure: {
+      code: "missing_accessibility_selected_text_fallback_receipt",
+      stepName: "accessibility-selected-text-fallback-receipt",
+      message:
+        "The harness fails closed until platform selected-text fallback receipts prove permission handling, stale-context rejection, redaction, and safe action disablement.",
+    },
+    warnings: ["file_linear:accessibility_selected_text_fallback_receipts_missing"],
   };
 }
 
