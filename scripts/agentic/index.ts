@@ -153,6 +153,12 @@
  *                         Fail-closed SelectPrompt keyboard multi-selection state proof
  *   file-search-preview-sanitization-stress
  *                         Fail-closed File Search safe preview sanitization proof
+ *   hotkey-prompt-transient-capture-cancel-stress
+ *                         Fail-closed HotkeyPrompt transient capture/cancel proof
+ *   process-manager-sort-detail-panel-stability-stress
+ *                         Fail-closed Process Manager sort/header/detail panel proof
+ *   env-prompt-redacted-status-error-recovery-stress
+ *                         Fail-closed EnvPrompt redacted status/error recovery proof
  *   help                   Show this help
  *
  * Target threading:
@@ -245,6 +251,9 @@ import {
   runMiniFullTransitionLayoutContinuityStressScenario,
   runFilterInputDecorationChipLayoutStressScenario,
   runFocusRingViewportIntegrityStressScenario,
+  runHotkeyPromptTransientCaptureCancelStressScenario,
+  runProcessManagerSortDetailPanelStabilityStressScenario,
+  runEnvPromptRedactedStatusErrorRecoveryStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1058,6 +1067,24 @@ function parseArgs() {
       ? args[previewFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const noQuickLook = args.includes("--no-quick-look");
+  const chordsIdx = args.indexOf("--chords");
+  const chords =
+    chordsIdx >= 0 && args[chordsIdx + 1]
+      ? args[chordsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const sortKeysIdx = args.indexOf("--sort-keys");
+  const sortKeys =
+    sortKeysIdx >= 0 && args[sortKeysIdx + 1]
+      ? args[sortKeysIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const statusFixturesIdx = args.indexOf("--status-fixtures");
+  const statusFixtures =
+    statusFixturesIdx >= 0 && args[statusFixturesIdx + 1]
+      ? args[statusFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noProcessKill = args.includes("--no-process-kill");
+  const noGlobalHotkeyRegistration = args.includes("--no-global-hotkey-registration");
+  const noSecretWrite = args.includes("--no-secret-write");
   return {
     recipe,
     session,
@@ -1180,6 +1207,12 @@ function parseArgs() {
     selectionSteps,
     previewFixtures,
     noQuickLook,
+    chords,
+    sortKeys,
+    statusFixtures,
+    noProcessKill,
+    noGlobalHotkeyRegistration,
+    noSecretWrite,
   };
 }
 
@@ -2540,6 +2573,12 @@ const {
   selectionSteps,
   previewFixtures,
   noQuickLook,
+  chords,
+  sortKeys,
+  statusFixtures,
+  noProcessKill,
+  noGlobalHotkeyRegistration,
+  noSecretWrite,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3837,6 +3876,24 @@ switch (recipe) {
     break;
   }
 
+  case "hotkey-prompt-transient-capture-cancel-stress": {
+    const proofBundle = await runHotkeyPromptTransientCaptureCancelStressScenario({ session, surface, fixture, chords, cancelMethods, inputModes, noNativeInput, noNativePointer, noConfigWrite, noGlobalHotkeyRegistration, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "hotkey-prompt-transient-capture-cancel-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "HotkeyPrompt transient capture/cancel stress failed closed; capture, cancel, config fingerprint, global hotkey, and focus restore receipts are missing", proofBundle };
+    break;
+  }
+
+  case "process-manager-sort-detail-panel-stability-stress": {
+    const proofBundle = await runProcessManagerSortDetailPanelStabilityStressScenario({ session, surface, fixture, sortKeys, selectionCycles, filterCycles, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noProcessKill, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "process-manager-sort-detail-panel-stability-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Process Manager sort/detail panel stability stress failed closed; sort headers, section rows, detail source, kill disable, and stale detail receipts are missing", proofBundle };
+    break;
+  }
+
+  case "env-prompt-redacted-status-error-recovery-stress": {
+    const proofBundle = await runEnvPromptRedactedStatusErrorRecoveryStressScenario({ session, surface, fixture, statusFixtures, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noConfigWrite, noSecretWrite, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "env-prompt-redacted-status-error-recovery-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "EnvPrompt redacted status/error recovery stress failed closed; redaction, inline error, disabled submit, valid recovery, and no-secret-write receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4018,6 +4075,9 @@ switch (recipe) {
           { name: "warning-banner-action-dismiss-semantics-stress", description: "Fail-closed UX receipt contract for warning banner action/dismiss semantics", flags: ["--session", "--surface", "--fixtures", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
           { name: "select-prompt-multiselect-keyboard-state-stress", description: "Fail-closed UX receipt contract for SelectPrompt keyboard-only multi-selection state parity", flags: ["--session", "--surface", "--fixture", "--choices", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "file-search-preview-sanitization-stress", description: "Fail-closed UX receipt contract for File Search safe preview sanitization", flags: ["--session", "--surface", "--fixture", "--preview-fixtures", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
+          { name: "hotkey-prompt-transient-capture-cancel-stress", description: "Fail-closed UX receipt contract for HotkeyPrompt transient capture/cancel semantics", flags: ["--session", "--surface", "--fixture", "--chords", "--cancel-methods", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-config-write", "--no-global-hotkey-registration", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "process-manager-sort-detail-panel-stability-stress", description: "Fail-closed UX receipt contract for Process Manager sort/header/detail panel stability", flags: ["--session", "--surface", "--fixture", "--sort-keys", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-process-kill", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "env-prompt-redacted-status-error-recovery-stress", description: "Fail-closed UX receipt contract for EnvPrompt redacted status/error recovery", flags: ["--session", "--surface", "--fixture", "--status-fixtures", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--no-secret-write", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4103,6 +4163,9 @@ switch (recipe) {
           "proofBundle.warningBannerActionDismissSemanticsReceipt",
           "proofBundle.selectPromptMultiselectKeyboardStateReceipt",
           "proofBundle.fileSearchPreviewSanitizationReceipt",
+          "proofBundle.hotkeyPromptTransientCaptureCancelReceipt",
+          "proofBundle.processManagerSortDetailPanelStabilityReceipt",
+          "proofBundle.envPromptRedactedStatusErrorRecoveryReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4443,6 +4506,12 @@ Available scenarios:
                          Emit fail-closed SelectPrompt keyboard multi-selection state requirements
   file-search-preview-sanitization-stress
                          Emit fail-closed File Search safe preview sanitization requirements
+  hotkey-prompt-transient-capture-cancel-stress
+                         Emit fail-closed HotkeyPrompt transient capture/cancel requirements
+  process-manager-sort-detail-panel-stability-stress
+                         Emit fail-closed Process Manager sort/header/detail panel requirements
+  env-prompt-redacted-status-error-recovery-stress
+                         Emit fail-closed EnvPrompt redacted status/error recovery requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4536,6 +4605,9 @@ Examples:
   bun scripts/agentic/index.ts warning-banner-action-dismiss-semantics-stress --session default --surface main --fixtures warning,actionable,dismissible,error --input-modes protocol-hover,protocol-click,protocol-key --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
   bun scripts/agentic/index.ts select-prompt-multiselect-keyboard-state-stress --session default --surface select-prompt --fixture agentic-multiselect --choices 24 --selection-steps space,cmd-a,filter-preserve,clear-filter,range-toggle,escape-restore --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts file-search-preview-sanitization-stress --session default --surface file-search --fixture agentic-safe-preview --preview-fixtures text,binary,large-text,missing-file,private-path,unsupported-kind --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --local-fixture-only --json
+  bun scripts/agentic/index.ts hotkey-prompt-transient-capture-cancel-stress --session default --surface hotkey-prompt --fixture agentic-transient-hotkey --chords cmd+shift+7,ctrl+space --cancel-methods escape,cmd-w --input-modes protocol-key,simulate-key --no-native-input --no-native-pointer --no-config-write --no-global-hotkey-registration --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts process-manager-sort-detail-panel-stability-stress --session default --surface process-manager --fixture agentic-process-table --sort-keys name,cpu,memory,pid --selection-cycles 8 --filter-cycles 4 --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-process-kill --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts env-prompt-redacted-status-error-recovery-stress --session default --surface env-prompt --fixture agentic-env-status --status-fixtures missing-secret,parse-error,masked-existing,valid-edit --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --no-secret-write --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
