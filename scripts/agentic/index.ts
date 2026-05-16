@@ -81,6 +81,12 @@
  *                         Fail-closed dictation/media permission readiness churn proof
  *   animation-frame-capture-determinism-stress
  *                         Fail-closed animation frame capture determinism proof
+ *   accessibility-tree-semantic-parity-stress
+ *                         Fail-closed accessibility tree semantic parity proof
+ *   rtl-bidi-emoji-text-rendering-stress
+ *                         Fail-closed RTL/bidi/emoji text rendering proof
+ *   high-volume-virtualized-list-stability-stress
+ *                         Fail-closed high-volume virtualized list stability proof
  *   help                   Show this help
  *
  * Target threading:
@@ -140,6 +146,9 @@ import {
   runStreamProgressCancelVisualStabilityStressScenario,
   runDictationMediaPermissionReadinessChurnStressScenario,
   runAnimationFrameCaptureDeterminismStressScenario,
+  runAccessibilityTreeSemanticParityStressScenario,
+  runRtlBidiEmojiTextRenderingStressScenario,
+  runHighVolumeVirtualizedListStabilityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -777,6 +786,20 @@ function parseArgs() {
   const rawIntervalMs =
     intervalMsIdx >= 0 && args[intervalMsIdx + 1] ? Number(args[intervalMsIdx + 1]) : undefined;
   const intervalMs = Number.isFinite(rawIntervalMs) ? rawIntervalMs : undefined;
+  const textIdx = args.indexOf("--text");
+  const text = textIdx >= 0 && args[textIdx + 1] ? args[textIdx + 1] : undefined;
+  const fixtureCountIdx = args.indexOf("--fixture-count");
+  const rawFixtureCount =
+    fixtureCountIdx >= 0 && args[fixtureCountIdx + 1] ? Number(args[fixtureCountIdx + 1]) : undefined;
+  const fixtureCount = Number.isFinite(rawFixtureCount) ? rawFixtureCount : undefined;
+  const filterCyclesIdx = args.indexOf("--filter-cycles");
+  const rawFilterCycles =
+    filterCyclesIdx >= 0 && args[filterCyclesIdx + 1] ? Number(args[filterCyclesIdx + 1]) : undefined;
+  const filterCycles = Number.isFinite(rawFilterCycles) ? rawFilterCycles : undefined;
+  const scrollCyclesIdx = args.indexOf("--scroll-cycles");
+  const rawScrollCycles =
+    scrollCyclesIdx >= 0 && args[scrollCyclesIdx + 1] ? Number(args[scrollCyclesIdx + 1]) : undefined;
+  const scrollCycles = Number.isFinite(rawScrollCycles) ? rawScrollCycles : undefined;
   return {
     recipe,
     session,
@@ -854,6 +877,10 @@ function parseArgs() {
     target,
     frames,
     intervalMs,
+    text,
+    fixtureCount,
+    filterCycles,
+    scrollCycles,
   };
 }
 
@@ -2169,6 +2196,10 @@ const {
   target,
   frames,
   intervalMs,
+  text,
+  fixtureCount,
+  filterCycles,
+  scrollCycles,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3017,6 +3048,58 @@ switch (recipe) {
     break;
   }
 
+  case "accessibility-tree-semantic-parity-stress": {
+    const proofBundle = await runAccessibilityTreeSemanticParityStressScenario({
+      session,
+      surfaces,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "accessibility-tree-semantic-parity-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Accessibility tree semantic parity stress failed closed; role, label, focus order, activation, AX tree, and screenshot-to-semantics receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "rtl-bidi-emoji-text-rendering-stress": {
+    const proofBundle = await runRtlBidiEmojiTextRenderingStressScenario({
+      session,
+      surface,
+      text,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "rtl-bidi-emoji-text-rendering-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "RTL/bidi/emoji text rendering stress failed closed; direction run, grapheme, cursor, selection, filter, and layout receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "high-volume-virtualized-list-stability-stress": {
+    const proofBundle = await runHighVolumeVirtualizedListStabilityStressScenario({
+      session,
+      surface,
+      fixtureCount,
+      filterCycles,
+      scrollCycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "high-volume-virtualized-list-stability-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "High-volume virtualized list stability stress failed closed; row identity, reanchor, scroll/filter generation, and screenshot-to-semantics receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3162,6 +3245,9 @@ switch (recipe) {
           { name: "stream-progress-cancel-visual-stability-stress", description: "Fail-closed stream/progress monotonic repaint, cancellation ordering, stale chunk, and focus return receipt", flags: ["--session", "--surface", "--updates", "--cancel-at", "--json"] },
           { name: "dictation-media-permission-readiness-churn-stress", description: "Fail-closed dictation/media passive setup, readiness generation, target identity, and no auto-submit receipt", flags: ["--session", "--target", "--churn", "--json"] },
           { name: "animation-frame-capture-determinism-stress", description: "Fail-closed animation frame sampling, per-frame state/screenshot, occlusion, and stale-frame rejection receipt", flags: ["--session", "--surfaces", "--frames", "--interval-ms", "--json"] },
+          { name: "accessibility-tree-semantic-parity-stress", description: "Fail-closed accessibility role, label, focus order, activation, AX tree, and screenshot-to-semantics parity receipt", flags: ["--session", "--surfaces", "--json"] },
+          { name: "rtl-bidi-emoji-text-rendering-stress", description: "Fail-closed RTL/bidi/emoji grapheme, cursor, selection, truncation, and filter semantics receipt", flags: ["--session", "--surface", "--text", "--json"] },
+          { name: "high-volume-virtualized-list-stability-stress", description: "Fail-closed virtualized row identity, selection reanchor, scroll/filter generation, and screenshot-to-semantics receipt", flags: ["--session", "--surface", "--fixture-count", "--filter-cycles", "--scroll-cycles", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3347,6 +3433,12 @@ Recipes:
                          Fail-closed dictation/media permission readiness churn proof
   animation-frame-capture-determinism-stress
                          Fail-closed animation frame capture determinism proof
+  accessibility-tree-semantic-parity-stress
+                         Fail-closed accessibility tree semantic parity proof
+  rtl-bidi-emoji-text-rendering-stress
+                         Fail-closed RTL/bidirectional/emoji text rendering proof
+  high-volume-virtualized-list-stability-stress
+                         Fail-closed high-volume virtualized list stability proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3455,6 +3547,12 @@ Available scenarios:
                          Emit fail-closed dictation/media readiness churn requirements
   animation-frame-capture-determinism-stress
                          Emit fail-closed animation frame capture determinism requirements
+  accessibility-tree-semantic-parity-stress
+                         Emit fail-closed accessibility tree semantic parity requirements
+  rtl-bidi-emoji-text-rendering-stress
+                         Emit fail-closed RTL/bidirectional/emoji text rendering requirements
+  high-volume-virtualized-list-stability-stress
+                         Emit fail-closed high-volume virtualized list stability requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3512,6 +3610,9 @@ Examples:
   bun scripts/agentic/index.ts stream-progress-cancel-visual-stability-stress --session default --surface acp-composer --updates 40 --cancel-at 25 --json
   bun scripts/agentic/index.ts dictation-media-permission-readiness-churn-stress --session default --target acp-composer --churn microphone-permission,model-readiness --json
   bun scripts/agentic/index.ts animation-frame-capture-determinism-stress --session default --surfaces main,actionsDialog,promptPopup --frames 6 --interval-ms 80 --json
+  bun scripts/agentic/index.ts accessibility-tree-semantic-parity-stress --session default --surfaces main,actionsDialog,promptPopup --json
+  bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress --session default --surface acp-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
+  bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
