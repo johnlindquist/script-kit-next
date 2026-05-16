@@ -11,6 +11,7 @@ const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_ch
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const RENDER_TERM_PROMPT_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
+const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 
 #[test]
 fn quick_terminal_mouse_wheel_and_modern_interaction_contract() {
@@ -118,8 +119,9 @@ fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
         "non-quick terminal prompts must keep the route-aware GPUI hint strip"
     );
     assert!(
-        RENDER_TERM_PROMPT_SOURCE.contains("render_native_main_window_footer_spacer()"),
-        "Quick Terminal must reserve space for the native AppKit footer"
+        RENDER_TERM_PROMPT_SOURCE.contains("\"native_footer_spacer\"")
+            && UI_WINDOW_SOURCE.contains("render_native_main_window_footer_spacer()"),
+        "Quick Terminal must reserve space for the native AppKit footer through the shared footer slot"
     );
 }
 
@@ -141,5 +143,34 @@ fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
     assert!(
         RENDER_TERM_PROMPT_SOURCE.contains("return false;"),
         "Quick Terminal Cmd+Enter should fall through when Apply is not available"
+    );
+}
+
+#[test]
+fn quick_terminal_keyboard_and_footer_close_share_state_first_close() {
+    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    assert!(
+        RENDER_TERM_PROMPT_SOURCE
+            .contains("this.close_quick_terminal_main_window_state_first(cx);"),
+        "Quick Terminal Cmd+W must use the state-first close helper"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("self.close_quick_terminal_main_window_state_first(cx);"),
+        "Quick Terminal footer Close must share the state-first close helper advertised by Cmd+W"
+    );
+    assert!(
+        !UI_WINDOW_SOURCE.contains("event = \"quick_terminal_footer_close\",\n                        \"Closing quick terminal from native footer\"\n                    );\n                    self.close_tab_ai_harness_terminal_with_window"),
+        "Quick Terminal footer Close must not accidentally diverge back to restore-origin close"
+    );
+}
+
+#[test]
+fn quick_terminal_native_footer_close_is_semantically_selectable_for_agentic_proof() {
+    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    assert!(
+        PROMPT_HANDLER_SOURCE.contains("semantic_id == \"footer:native:close\"")
+            && PROMPT_HANDLER_SOURCE.contains("AppView::QuickTerminalView { .. }")
+            && PROMPT_HANDLER_SOURCE.contains("self.close_quick_terminal_main_window_state_first(cx);"),
+        "Agentic selectBySemanticId proof must be able to activate Quick Terminal native footer Close"
     );
 }

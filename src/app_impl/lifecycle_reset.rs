@@ -205,7 +205,7 @@ impl ScriptListApp {
             ),
         );
 
-        // CRITICAL: Always hide only the main window. `cx.hide()` hides the
+        // CRITICAL: Always hide only the main window. App-level hide conceals the
         // entire app (all windows), so any false-negative secondary-window
         // check can hide Notes together with main.
         // Must be deferred: orderOut: triggers window_did_change_key_status

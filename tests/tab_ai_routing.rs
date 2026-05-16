@@ -10,6 +10,9 @@
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
+const RUNTIME_SIMULATE_KEY_SOURCE: &str =
+    include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
+const APP_RUN_SETUP_SOURCE: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
@@ -26,6 +29,13 @@ const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog
 const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 const ACTIONS_DIALOG_RENDER_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 const AI_MOD_SOURCE_FOR_ACTIONS: &str = include_str!("../src/ai/mod.rs");
+
+fn source_block_after<'a>(source: &'a str, needle: &str, len: usize) -> &'a str {
+    let start = source
+        .find(needle)
+        .unwrap_or_else(|| panic!("expected to find `{needle}`"));
+    &source[start..source.len().min(start + len)]
+}
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -499,18 +509,24 @@ fn harness_startup_failure_toast_mentions_setup_guidance() {
 // =========================================================================
 
 #[test]
-fn quick_terminal_cmd_w_restores_previous_view() {
+fn quick_terminal_cmd_w_closes_main_window_state_first() {
     assert!(
-        TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
-        "Cmd+W in QuickTerminalView must restore the previous surface"
+        TERM_RENDER_SOURCE.contains("this.close_quick_terminal_main_window_state_first(cx);"),
+        "Cmd+W in QuickTerminalView must use the state-first main-window close path"
+    );
+    assert!(
+        !TERM_RENDER_SOURCE.contains(
+            "key.eq_ignore_ascii_case(\"w\")\n                        {\n                            this.close_tab_ai_harness_terminal_with_window"
+        ),
+        "Cmd+W must not use the visible restore-origin close helper"
     );
 }
 
 #[test]
 fn quick_terminal_close_semantics_documented_in_code() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("Cmd+W` closes the wrapper"),
-        "close_tab_ai_harness_terminal doc must state Cmd+W closes the wrapper"
+        TAB_AI_MODE_SOURCE.contains("Cmd+W` closes the Quick Terminal main window state-first"),
+        "harness close docs must state Cmd+W closes Quick Terminal state-first"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("Escape` is forwarded to the PTY"),
@@ -525,8 +541,8 @@ fn quick_terminal_render_documents_close_contract() {
         "render_prompts/term.rs must document the wrapper semantics contract"
     );
     assert!(
-        TERM_RENDER_SOURCE.contains("Cmd+W closes the wrapper"),
-        "render_prompts/term.rs must state Cmd+W closes the wrapper"
+        TERM_RENDER_SOURCE.contains("Cmd+W closes the main window state-first"),
+        "render_prompts/term.rs must state Cmd+W closes state-first"
     );
     assert!(
         TERM_RENDER_SOURCE.contains("Escape is forwarded to the PTY"),
@@ -556,14 +572,11 @@ fn tab_ai_reentry_uses_saved_originating_view() {
 
 #[test]
 fn close_harness_terminal_restores_return_view() {
-    let close_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn close_tab_ai_harness_terminal(")
-        .expect("close_tab_ai_harness_terminal must exist");
-    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
-    let next_fn = close_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(close_fn_body.len());
-    let close_fn_body = &close_fn_body[..next_fn];
+    let close_fn_body = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn close_tab_ai_harness_terminal_impl(",
+        4500,
+    );
 
     assert!(
         close_fn_body.contains("tab_ai_harness_return_view"),
@@ -581,14 +594,11 @@ fn close_harness_terminal_restores_return_view() {
 
 #[test]
 fn close_tab_ai_harness_terminal_clears_cached_session() {
-    let close_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn close_tab_ai_harness_terminal(")
-        .expect("close_tab_ai_harness_terminal must exist");
-    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
-    let next_fn = close_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(close_fn_body.len());
-    let close_fn_body = &close_fn_body[..next_fn];
+    let close_fn_body = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn close_tab_ai_harness_terminal_impl(",
+        4500,
+    );
 
     assert!(
         close_fn_body.contains("self.terminate_tab_ai_harness_session(cx);"),
@@ -610,14 +620,11 @@ fn close_tab_ai_harness_terminal_clears_cached_session() {
 
 #[test]
 fn close_tab_ai_harness_logs_session_cleared() {
-    let close_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn close_tab_ai_harness_terminal(")
-        .expect("close_tab_ai_harness_terminal must exist");
-    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
-    let next_fn = close_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(close_fn_body.len());
-    let close_fn_body = &close_fn_body[..next_fn];
+    let close_fn_body = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn close_tab_ai_harness_terminal_impl(",
+        4500,
+    );
 
     assert!(
         close_fn_body.contains("session_cleared = closing_quick_terminal"),
@@ -1481,21 +1488,20 @@ fn quick_terminal_disables_escape_cancel() {
         "render_prompts/term.rs must set escape_cancels based on QuickTerminalView"
     );
 
-    // The escape_cancels assignment must negate QuickTerminalView matches
-    // (i.e., escape_cancels = !matches!(..., QuickTerminalView)).
+    // The escape_cancels assignment must negate the QuickTerminalView flag.
     assert!(
-        TERM_RENDER_SOURCE.contains("!matches!(self.current_view, AppView::QuickTerminalView"),
-        "escape_cancels must be false for QuickTerminalView (negated matches)"
+        TERM_RENDER_SOURCE.contains("term.escape_cancels = !is_quick_terminal;"),
+        "escape_cancels must be false for QuickTerminalView"
     );
 }
 
 #[test]
 fn quick_terminal_cmd_w_dispatches_close() {
     // Cmd+W in QuickTerminalView must be intercepted before reaching the PTY
-    // and must call close_tab_ai_harness_terminal.
+    // and must use the state-first Quick Terminal main-window close helper.
     assert!(
-        TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
-        "Cmd+W in QuickTerminalView must dispatch to close_tab_ai_harness_terminal"
+        TERM_RENDER_SOURCE.contains("close_quick_terminal_main_window_state_first"),
+        "Cmd+W in QuickTerminalView must dispatch to the state-first close helper"
     );
     // The handler must check for the "w" key specifically
     assert!(
@@ -2948,9 +2954,67 @@ fn quick_terminal_cmd_w_routes_to_harness_close() {
         "QuickTerminalView must reserve Cmd+W as the wrapper close gesture",
     );
     assert!(
-        TERM_RENDER_SOURCE.contains("this.close_tab_ai_harness_terminal_with_window(window, cx);"),
-        "Cmd+W must call the window-aware harness close path",
+        TERM_RENDER_SOURCE.contains("this.close_quick_terminal_main_window_state_first(cx);"),
+        "Cmd+W must call the state-first main-window close path",
     );
+}
+
+#[test]
+fn quick_terminal_state_first_close_hides_before_script_list_can_render() {
+    let helper = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn close_quick_terminal_main_window_state_first(",
+        900,
+    );
+    assert!(
+        helper.contains("TabAiHarnessCloseDisposition::CloseMainWindowStateFirst"),
+        "Quick Terminal Cmd+W helper must select the state-first close disposition",
+    );
+
+    let impl_body = source_block_after(
+        TAB_AI_MODE_SOURCE,
+        "fn close_tab_ai_harness_terminal_impl(",
+        5200,
+    );
+    let state_first_branch = impl_body
+        .find("TabAiHarnessCloseDisposition::CloseMainWindowStateFirst")
+        .expect("state-first close branch must exist");
+    let close_reset = impl_body[state_first_branch..]
+        .find("self.close_and_reset_window(cx);")
+        .map(|offset| state_first_branch + offset)
+        .expect("state-first branch must delegate to close_and_reset_window");
+    let visible_restore = impl_body[state_first_branch..]
+        .find("self.restore_current_view_with_focus(return_view, return_focus_target)")
+        .map(|offset| state_first_branch + offset);
+    assert!(
+        visible_restore.map_or(true, |restore| close_reset < restore),
+        "state-first close must not restore the return view before close_and_reset_window hides the main window",
+    );
+}
+
+#[test]
+fn quick_terminal_simulate_key_cmd_w_uses_state_first_close() {
+    for (label, source) in [
+        (
+            "runtime_stdin_match_simulate_key",
+            RUNTIME_SIMULATE_KEY_SOURCE,
+        ),
+        ("app_run_setup", APP_RUN_SETUP_SOURCE),
+    ] {
+        let arm = source_block_after(source, "AppView::QuickTerminalView { .. } =>", 900);
+        assert!(
+            arm.contains("has_cmd && key_lower == \"w\""),
+            "{label} must explicitly handle Quick Terminal Cmd+W"
+        );
+        assert!(
+            arm.contains("view.close_quick_terminal_main_window_state_first(ctx);"),
+            "{label} must route simulated Quick Terminal Cmd+W through the state-first close helper"
+        );
+        assert!(
+            !arm.contains("key_lower == \"escape\""),
+            "{label} must not make simulated Escape close Quick Terminal"
+        );
+    }
 }
 
 #[test]

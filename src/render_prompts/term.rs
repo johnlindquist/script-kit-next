@@ -286,7 +286,8 @@ impl ScriptListApp {
                         // - Plain Escape is forwarded to the PTY (harness TUI owns it).
                         // - Cmd+Enter pastes back the terminal selection or last output
                         //   to the captured source context.
-                        // - Cmd+W closes the wrapper and restores the previous view/focus.
+                        // - Cmd+W closes the main window state-first so ScriptList
+                        //   cannot paint while windowVisible remains true.
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
                         //
@@ -314,7 +315,7 @@ impl ScriptListApp {
                             && has_cmd
                             && key.eq_ignore_ascii_case("w")
                         {
-                            this.close_tab_ai_harness_terminal_with_window(window, cx);
+                            this.close_quick_terminal_main_window_state_first(cx);
                             return true;
                         }
 
@@ -654,8 +655,8 @@ mod term_prompt_render_tests {
             "QuickTerminalView must use Cmd+W to close the wrapper"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
-            "Cmd+W must restore the previous view via close_tab_ai_harness_terminal"
+            TERM_RENDER_SOURCE.contains("close_quick_terminal_main_window_state_first"),
+            "Cmd+W must close the main window through the state-first Quick Terminal helper"
         );
         assert!(
             TERM_RENDER_SOURCE.contains("term.edge_to_edge = is_quick_terminal;"),
