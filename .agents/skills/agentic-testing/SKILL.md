@@ -125,6 +125,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For accessibility tree semantic parity, prove visible controls, automation elements, and AX nodes share roles, labels, focus order, tab order, disabled states, safe keyboard activation semantics, hit targets, screenshot-to-semantics alignment, stale-tree rejection, wrong-window rejection, and cleanup.
 - For RTL/bidirectional/emoji text rendering, prove direction runs, bidi levels, grapheme clusters, emoji ZWJ and combining mark sequences, cursor visual positions, selection rectangles, visible/rendered text bounds, truncation intent, search/filter semantics, stale layout rejection, wrong-surface mutation rejection, no accidental submit, and cleanup.
 - For high-volume virtualized list stability, prove fixture identity, row identity, virtualization generations, selected-row reanchor, selection reanchor, scroll anchor preservation, rapid filter ordering, stale result rejection, duplicate-key rejection, blank-row rejection, footer-safe selection, screenshot-to-semantics consistency, and cleanup.
+- For input-device modality transitions, prove hover/focus/selection affordances, pointer hover, keyboard focus, selection, trackpad/wheel scroll anchors, shortcut ownership, activation ownership, stale modality event rejection, wrong-surface input rejection, no accidental submit, screenshot-to-state revalidation, and cleanup.
+- For multi-context attachment dedupe/provenance, prove file, screenshot, selected-text, MCP resource, script resource, and clipboard snippet origins across ACP Composer and Notes, with attachment provenance, destination generations, dedupe keys, provenance fingerprints, redacted preview, remove/reorder receipts, stale provenance rejection, duplicate-id rejection, no privacy leaks, and cleanup.
+- For visual contrast readable state checks, prove active inactive disabled focused error loading states across themes, scale factors, and surfaces with theme token fingerprints, rem/scale metrics, text/color/bounds receipts, contrast ratios, non-color state cue coverage, screenshot-to-state revalidation, stale theme token rejection, wrong-surface rejection, and cleanup.
 
 ## The Pattern
 
@@ -607,6 +610,12 @@ bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress \
   --session default --surface acp-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
 bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress \
   --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
+bun scripts/agentic/index.ts input-modality-transition-ownership-stress \
+  --session default --surface main --interleave pointer-hover,keyboard-nav,trackpad-scroll,wheel-scroll,shortcut --cycles 8 --json
+bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress \
+  --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations acp-composer,notes --reorder-cycles 3 --json
+bun scripts/agentic/index.ts visual-contrast-readable-state-stress \
+  --session default --surfaces main,actionsDialog,promptPopup,acp-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
 ```
 
 ### State-only vs screenshot checkpoints

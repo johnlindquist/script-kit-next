@@ -252,6 +252,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `high-volume-virtualized-list-stability-stress` is intentionally fail-closed until virtualized list receipts expose high-volume fixture identity, total and visible counts, virtualization generations, stable row keys, selected-row reanchor, scroll anchor preservation, row/text bounds, rapid filter generations, stale-filter rejection, duplicate-key rejection, blank-row rejection, footer-safe selection, screenshot-to-semantics consistency, and cleanup.
 
+`input-modality-transition-ownership-stress` is intentionally fail-closed until modality receipts expose pointer hover, keyboard focus, selected semantic id, trackpad/wheel scroll anchors, shortcut activation owner, modality generations, stale modality event rejection, wrong-surface input rejection, no accidental submit, screenshot-to-state revalidation, and cleanup.
+
+`multi-context-attachment-dedupe-provenance-stress` is intentionally fail-closed until attachment receipts expose file, screenshot, selected-text, MCP resource, script resource, and clipboard snippet origins across ACP Composer and Notes, including destination generation, dedupe key, provenance fingerprint, accepted context-part URI, redacted preview, remove/reorder receipts, stale provenance rejection, duplicate-id rejection, no cross-host leakage, and cleanup.
+
+`visual-contrast-readable-state-stress` is intentionally fail-closed until visual receipts expose theme token fingerprints, appearance generations, rem/scale metrics, active/inactive/disabled/focused/error/loading state samples, semantic text, text bounds, foreground/background colors, contrast ratios, non-color state cues, screenshot-to-state revalidation, stale theme token rejection, wrong-surface rejection, blank screenshot rejection, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
