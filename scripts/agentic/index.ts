@@ -63,6 +63,12 @@
  *                         Fail-closed IME composition boundary proof
  *   accessibility-selected-text-fallback-stress
  *                         Fail-closed selected-text fallback proof
+ *   display-migration-visual-bounds-stress
+ *                         Fail-closed display migration visual bounds proof
+ *   native-picker-external-return-focus-stress
+ *                         Fail-closed native picker/external return focus proof
+ *   drag-cancel-payload-scope-stress
+ *                         Fail-closed drag cancellation payload scope proof
  *   help                   Show this help
  *
  * Target threading:
@@ -113,6 +119,9 @@ import {
   runMenuSyntaxAmbiguityDiagnosticsStressScenario,
   runImeCompositionInputBoundaryStressScenario,
   runAccessibilitySelectedTextFallbackStressScenario,
+  runDisplayMigrationVisualBoundsStressScenario,
+  runNativePickerExternalReturnFocusStressScenario,
+  runDragCancelPayloadScopeStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -697,6 +706,23 @@ function parseArgs() {
   const rawBurstMs =
     burstMsIdx >= 0 && args[burstMsIdx + 1] ? Number(args[burstMsIdx + 1]) : undefined;
   const burstMs = Number.isFinite(rawBurstMs) ? rawBurstMs : undefined;
+  const fromDisplayIdx = args.indexOf("--from-display");
+  const fromDisplay =
+    fromDisplayIdx >= 0 && args[fromDisplayIdx + 1] ? args[fromDisplayIdx + 1] : undefined;
+  const toDisplayIdx = args.indexOf("--to-display");
+  const toDisplay =
+    toDisplayIdx >= 0 && args[toDisplayIdx + 1] ? args[toDisplayIdx + 1] : undefined;
+  const handoffIdx = args.indexOf("--handoff");
+  const handoff =
+    handoffIdx >= 0 && args[handoffIdx + 1] ? args[handoffIdx + 1] : undefined;
+  const foreignAppIdx = args.indexOf("--foreign-app");
+  const foreignApp =
+    foreignAppIdx >= 0 && args[foreignAppIdx + 1] ? args[foreignAppIdx + 1] : undefined;
+  const hoverTargetIdx = args.indexOf("--hover-target");
+  const hoverTarget =
+    hoverTargetIdx >= 0 && args[hoverTargetIdx + 1] ? args[hoverTargetIdx + 1] : undefined;
+  const cancelIdx = args.indexOf("--cancel");
+  const cancel = cancelIdx >= 0 && args[cancelIdx + 1] ? args[cancelIdx + 1] : undefined;
   return {
     recipe,
     session,
@@ -758,6 +784,12 @@ function parseArgs() {
     acceptMode,
     count,
     burstMs,
+    fromDisplay,
+    toDisplay,
+    handoff,
+    foreignApp,
+    hoverTarget,
+    cancel,
   };
 }
 
@@ -2057,6 +2089,12 @@ const {
   acceptMode,
   count,
   burstMs,
+  fromDisplay,
+  toDisplay,
+  handoff,
+  foreignApp,
+  hoverTarget,
+  cancel,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -2745,6 +2783,60 @@ switch (recipe) {
     break;
   }
 
+  case "display-migration-visual-bounds-stress": {
+    const proofBundle = await runDisplayMigrationVisualBoundsStressScenario({
+      session,
+      surfaces,
+      fromDisplay,
+      toDisplay,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "display-migration-visual-bounds-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Display migration visual bounds stress failed closed; display, text bounds, focus/selection, and screenshot semantic alignment receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "native-picker-external-return-focus-stress": {
+    const proofBundle = await runNativePickerExternalReturnFocusStressScenario({
+      session,
+      origin: host,
+      handoff,
+      foreignApp,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "native-picker-external-return-focus-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Native picker external return focus stress failed closed; origin return, focus/selection/cursor restore, and stale/foreign event receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "drag-cancel-payload-scope-stress": {
+    const proofBundle = await runDragCancelPayloadScopeStressScenario({
+      session,
+      source,
+      hoverTarget,
+      cancel,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "drag-cancel-payload-scope-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Drag cancel payload scope stress failed closed; drag session, cancel cleanup, and side-effect boundary receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2881,6 +2973,9 @@ switch (recipe) {
           { name: "menu-syntax-ambiguity-diagnostics-stress", description: "Fail-closed menu syntax parse diagnostics, skipped fragments, selection identity, and no-execute guard receipt", flags: ["--session", "--query", "--json"] },
           { name: "ime-composition-input-boundary-stress", description: "Fail-closed IME composition lifecycle, premature action guard, and committed text receipt", flags: ["--session", "--json"] },
           { name: "accessibility-selected-text-fallback-stress", description: "Fail-closed selected-text permission fallback, stale-context rejection, redaction, and safe-disable receipt", flags: ["--session", "--json"] },
+          { name: "display-migration-visual-bounds-stress", description: "Fail-closed display migration visual/text bounds, focus/selection, capture identity, and wrong-display rejection receipt", flags: ["--session", "--surfaces", "--from-display", "--to-display", "--json"] },
+          { name: "native-picker-external-return-focus-stress", description: "Fail-closed native picker/external handoff origin return, focus/selection/cursor restore, and stale/foreign event receipt", flags: ["--session", "--origin", "--handoff", "--foreign-app", "--json"] },
+          { name: "drag-cancel-payload-scope-stress", description: "Fail-closed drag cancellation payload scope, hover/drop cleanup, origin restoration, and side-effect boundary receipt", flags: ["--session", "--source", "--hover-target", "--cancel", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2945,6 +3040,9 @@ switch (recipe) {
           "proofBundle.menuSyntaxAmbiguity",
           "proofBundle.imeCompositionBoundary",
           "proofBundle.accessibilitySelectedTextFallback",
+          "proofBundle.displayMigrationVisualBounds",
+          "proofBundle.nativePickerExternalReturnFocus",
+          "proofBundle.dragCancelPayloadScope",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -3039,6 +3137,12 @@ Recipes:
                          Fail-closed IME composition boundary proof
   accessibility-selected-text-fallback-stress
                          Fail-closed selected-text fallback proof
+  display-migration-visual-bounds-stress
+                         Fail-closed display migration visual bounds proof
+  native-picker-external-return-focus-stress
+                         Fail-closed native picker/external return focus proof
+  drag-cancel-payload-scope-stress
+                         Fail-closed drag cancellation payload scope proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3129,6 +3233,12 @@ Available scenarios:
                          Emit fail-closed IME composition requirements
   accessibility-selected-text-fallback-stress
                          Emit fail-closed selected-text fallback requirements
+  display-migration-visual-bounds-stress
+                         Emit fail-closed display migration visual bounds requirements
+  native-picker-external-return-focus-stress
+                         Emit fail-closed native picker/external return focus requirements
+  drag-cancel-payload-scope-stress
+                         Emit fail-closed drag cancellation payload scope requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3177,6 +3287,9 @@ Examples:
   bun scripts/agentic/index.ts menu-syntax-ambiguity-diagnostics-stress --session default --query '>open @file !bad ~AGENTS.md' --json
   bun scripts/agentic/index.ts ime-composition-input-boundary-stress --session default --json
   bun scripts/agentic/index.ts accessibility-selected-text-fallback-stress --session default --json
+  bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup,acpDetached,notes --from-display primary --to-display external --json
+  bun scripts/agentic/index.ts native-picker-external-return-focus-stress --session default --origin acp --handoff file-picker --foreign-app Finder --json
+  bun scripts/agentic/index.ts drag-cancel-payload-scope-stress --session default --source file-search --hover-target drop-prompt --cancel escape --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
