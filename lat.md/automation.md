@@ -310,6 +310,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `disabled-footer-hit-target-refusal-stress` is intentionally fail-closed until disabled footer receipts expose active footer/native footer identity, disabled primary action label/reason/visual/accessibility state, Enter/shortcut/protocol-click refusal, Cmd-K action availability, no submit receipt, unchanged side-effect counts and state fingerprints, focus/selection/filter preservation, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
 
+`mini-full-transition-layout-continuity-stress` is intentionally fail-closed until Mini/Full transition receipts expose rem/scale, window/content/input/list/footer bounds, native footer identity, focus ring bounds, selected row above footer, no input/footer overlap, no clipping, no popup/main clobbering, screenshot-to-semantics alignment, strict capture target, blank screenshot rejection, stale mode rejection, AFK-safe flags, and cleanup.
+
+`filter-input-decoration-chip-layout-stress` is intentionally fail-closed until filter input decoration receipts expose rendered input text, stripped search text, chip ranges/roles/bounds, cursor and placeholder bounds, measured/available width, visible text, decoration/input generations, stale decoration clearing, overlap/clipping checks, accessible full text, screenshot-to-semantics alignment, strict capture target, stale generation rejection, AFK-safe flags, and cleanup.
+
+`focus-ring-viewport-integrity-stress` is intentionally fail-closed until focus ring receipts expose focused semantic id and owner, focus ring/focused element/viewport/content/footer/popup bounds, ring visibility, no clipping, ring within viewport and above footer, no footer/popup occlusion, stable tab order, preserved selection/scroll anchor, focus restoration after Escape, no activation/submit, stale focus rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
