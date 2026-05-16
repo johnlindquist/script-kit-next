@@ -103,7 +103,10 @@ export interface HardScenarioReceipt {
     | "mcp-context-resource-attachment-identity-stress"
     | "settings-theme-hot-reload-stress"
     | "file-search-drag-out-identity-stress"
-    | "scriptlet-bundle-execution-matrix-stress";
+    | "scriptlet-bundle-execution-matrix-stress"
+    | "tray-global-hotkey-menu-mutation-stress"
+    | "multi-window-resize-monitor-restoration-stress"
+    | "acp-targeted-dictation-delivery-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -133,6 +136,9 @@ export interface HardScenarioReceipt {
   settingsThemeHotReload?: Record<string, unknown>;
   fileSearchDragOut?: Record<string, unknown>;
   scriptletBundleExecution?: Record<string, unknown>;
+  trayMenuMutation?: Record<string, unknown>;
+  multiWindowRestore?: Record<string, unknown>;
+  acpDictationDelivery?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -2744,6 +2750,263 @@ export async function runScriptletBundleExecutionMatrixStressScenario(opts: {
         "The harness fails closed until scriptlet bundle execution can prove selected id, bundle hash, isolation, output, cancellation, and no cross-scriptlet state bleed.",
     },
     warnings: ["file_linear:scriptlet_bundle_execution_receipts_missing"],
+  };
+}
+
+export async function runTrayGlobalHotkeyMenuMutationStressScenario(opts: {
+  session: string;
+  loops?: number;
+}): Promise<HardScenarioReceipt> {
+  const loops = opts.loops ?? 5;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "tray-global-hotkey-menu-mutation-stress",
+    status: "fail",
+    trayMenuMutation: {
+      session: opts.session,
+      loops,
+      menu: {
+        sectionOrder: null,
+        sectionLabels: null,
+        itemIds: null,
+        duplicateItemIds: null,
+        duplicateLabels: null,
+        versionItemId: "tray.version",
+        versionLabelBefore: null,
+        versionLabelAfter: null,
+      },
+      updateStateMutation: {
+        before: null,
+        mutation: "available-release",
+        after: null,
+        refreshRanOnMainThread: null,
+      },
+      actions: {
+        targetActionIds: [
+          "tray.open_script_kit",
+          "tray.current_app_commands",
+          "tray.open_notes",
+          "tray.open_agent_chat",
+          "tray.reload_scripts",
+          "tray.check_for_updates",
+        ],
+        actionRoundTrip: null,
+        targetIdentityStable: null,
+        wrongActionRejected: null,
+      },
+      globalHotkeyRoute: {
+        configuredAccelerator: null,
+        displayedAccelerator: null,
+        routeReceipt: null,
+        openedSurface: null,
+        wrongSurfaceOpened: null,
+      },
+      passiveSafety: {
+        openedExternalUrl: false,
+        reloadedScripts: false,
+        quitApp: false,
+        mutatedUserConfig: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "tray-menu-mutation-receipt-preflight",
+      status: "fail",
+      output: {
+        session: opts.session,
+        loops,
+        blockingGap:
+          "Tray/global-hotkey automation does not expose one receipt for live menu section order, update-state mutation, action target identity, duplicate item detection, and global-hotkey routing.",
+      },
+    }],
+    failure: {
+      code: "missing_tray_global_hotkey_menu_mutation_receipt",
+      stepName: "tray-menu-mutation-receipt-preflight",
+      message:
+        "The harness fails closed until tray menu/global-hotkey receipts exist without clicking destructive menu items.",
+    },
+    warnings: ["file_linear:tray_global_hotkey_menu_mutation_receipts_missing"],
+  };
+}
+
+export async function runMultiWindowResizeMonitorRestorationStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  monitorProfile?: string;
+}): Promise<HardScenarioReceipt> {
+  const requestedSurfaces = opts.surfaces ?? ["main", "actionsDialog", "acpDetached", "notes"];
+  const monitorProfile = opts.monitorProfile ?? "scale-bounds-drift";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "multi-window-resize-monitor-restoration-stress",
+    status: "fail",
+    multiWindowRestore: {
+      session: opts.session,
+      requestedSurfaces,
+      monitorSimulation: {
+        profile: monitorProfile,
+        scaleBefore: null,
+        scaleAfter: null,
+        visibleFrameBefore: null,
+        visibleFrameAfter: null,
+        mutationReceipt: null,
+        usedRealDisplayMutation: false,
+      },
+      windows: {
+        before: [],
+        afterResize: [],
+        afterRestore: [],
+      },
+      identity: {
+        windowIdsStable: null,
+        semanticSurfacesStable: null,
+        attachedPopupParentId: null,
+        detachedSurfaceId: null,
+        notesWindowId: null,
+      },
+      bounds: {
+        mainBoundsRestored: null,
+        popupBoundsRestored: null,
+        detachedAcpBoundsRestored: null,
+        notesBoundsRestored: null,
+        restoreOrder: null,
+      },
+      scaleRem: {
+        scaleFactorStable: null,
+        remPxStable: null,
+        themeFontSizeStable: null,
+      },
+      clobberGuards: {
+        noPopupMainClobber: null,
+        noDetachedAcpMainClobber: null,
+        noNotesMainClobber: null,
+        popupParentStillMain: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+      mutatedDisplays: false,
+    },
+    steps: [{
+      name: "multi-window-restore-receipt-preflight",
+      status: "fail",
+      output: {
+        session: opts.session,
+        requestedSurfaces,
+        monitorProfile,
+        blockingGap:
+          "Window automation does not expose one deterministic receipt for monitor/scale mutation, restore order, semantic surface stability, rem/scale stability, and popup/main clobber guards.",
+      },
+    }],
+    failure: {
+      code: "missing_multi_window_resize_monitor_restoration_receipt",
+      stepName: "multi-window-restore-receipt-preflight",
+      message:
+        "The harness fails closed until multi-window resize/monitor restoration receipts exist without mutating real display configuration.",
+    },
+    warnings: ["file_linear:multi_window_resize_monitor_restoration_receipts_missing"],
+  };
+}
+
+export async function runAcpTargetedDictationDeliveryStressScenario(opts: {
+  session: string;
+  kind?: string;
+  index?: number;
+  transcript?: string;
+}): Promise<HardScenarioReceipt> {
+  const kind = opts.kind ?? "acpDetached";
+  const index = opts.index ?? 0;
+  const transcript = opts.transcript ?? "agentic loop eight dictation";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-targeted-dictation-delivery-stress",
+    status: "fail",
+    acpDictationDelivery: {
+      session: opts.session,
+      transcript,
+      target: {
+        kind,
+        index,
+        targetAcpWindowId: null,
+        targetSurfaceId: null,
+        targetGenerationId: null,
+      },
+      peers: {
+        embeddedAcpWindowId: null,
+        detachedAcpWindowIds: [],
+        wrongWindowUnchanged: null,
+        wrongWindowInputBefore: null,
+        wrongWindowInputAfter: null,
+      },
+      dictation: {
+        deliveryId: null,
+        transcriptGenerationId: null,
+        pushReceipt: null,
+        source: "syntheticTranscript",
+        captureStarted: false,
+        microphonePrompted: false,
+        modelDownloadStarted: false,
+        setupPromptOpened: false,
+      },
+      insertion: {
+        cursorBefore: null,
+        cursorAfter: null,
+        cursorInsertionRange: null,
+        insertedText: null,
+        selectionReplaced: null,
+      },
+      outcome: {
+        deliveredToTarget: false,
+        deliveredToWrongWindow: null,
+        targetGenerationMatched: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+      startedAudioCapture: false,
+    },
+    steps: [{
+      name: "acp-dictation-delivery-receipt-preflight",
+      status: "fail",
+      output: {
+        session: opts.session,
+        kind,
+        index,
+        transcript,
+        blockingGap:
+          "ACP/dictation automation does not expose one targeted transcript delivery receipt with ACP generation, cursor insertion range, wrong-window negative proof, and passive microphone/model setup flags.",
+      },
+    }],
+    failure: {
+      code: "missing_acp_targeted_dictation_delivery_receipt",
+      stepName: "acp-dictation-delivery-receipt-preflight",
+      message:
+        "The harness fails closed until ACP-targeted dictation delivery can be proven without starting microphone capture or model setup.",
+    },
+    warnings: ["file_linear:acp_targeted_dictation_delivery_receipts_missing"],
   };
 }
 

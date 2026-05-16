@@ -198,6 +198,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `scriptlet-bundle-execution-matrix-stress` is intentionally fail-closed until scriptlet execution exposes selected scriptlet id, bundle source hash, arg/env isolation, execution output, cancellation path, orphan-process cleanup, and no cross-scriptlet state-bleed receipts.
 
+`tray-global-hotkey-menu-mutation-stress` is intentionally fail-closed until tray/global-hotkey receipts expose live menu section order, update-state mutation, action target identity, global-hotkey routing, and duplicate-item guards without clicking destructive menu items.
+
+`multi-window-resize-monitor-restoration-stress` is intentionally fail-closed until window receipts expose main, attached popup, detached ACP, and Notes window identities before/after synthetic monitor scale/bounds changes, including restore order, scale/rem stability, and no popup/main clobbering.
+
+`acp-targeted-dictation-delivery-stress` is intentionally fail-closed until ACP/dictation receipts expose targeted transcript delivery with ACP window identity, transcript generation id, cursor insertion range, wrong-window negative proof, and passive microphone/model setup flags.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
