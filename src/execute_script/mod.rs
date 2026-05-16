@@ -113,9 +113,10 @@ fn read_clipboard_image_as_png_base64() -> Result<String, ClipboardImageError> {
         .map_err(|_| ClipboardImageError::encode("Clipboard image width exceeds PNG limits."))?;
     let height = u32::try_from(image.height)
         .map_err(|_| ClipboardImageError::encode("Clipboard image height exceeds PNG limits."))?;
-    let rgba = image::RgbaImage::from_raw(width, height, image.bytes.into_owned()).ok_or_else(
-        || ClipboardImageError::encode("Clipboard image RGBA buffer length is invalid."),
-    )?;
+    let rgba =
+        image::RgbaImage::from_raw(width, height, image.bytes.into_owned()).ok_or_else(|| {
+            ClipboardImageError::encode("Clipboard image RGBA buffer length is invalid.")
+        })?;
 
     let mut png_cursor = std::io::Cursor::new(Vec::new());
     image::DynamicImage::ImageRgba8(rgba)
@@ -1178,7 +1179,7 @@ impl ScriptListApp {
                                                             }
                                                         }
                                                     }
-                                            Some(protocol::ClipboardFormat::Image) => {
+                                                    Some(protocol::ClipboardFormat::Image) => {
                                                         match read_clipboard_image_as_png_base64() {
                                                             Ok(base64_png) => Message::Submit {
                                                                 id: req_id,
@@ -1214,52 +1215,44 @@ impl ScriptListApp {
                                                             },
                                                         }
                                                     }
-                                                    Some(protocol::ClipboardFormat::Text) | None => {
-                                                        match Clipboard::new() {
-                                                            Ok(mut clipboard) => {
-                                                                if let Some(text) = content {
-                                                            match clipboard.set_text(text.clone()) {
-                                                                Ok(()) => {
-                                                                    tracing::info!(
+                                                    Some(protocol::ClipboardFormat::Text)
+                                                    | None => match Clipboard::new() {
+                                                        Ok(mut clipboard) => {
+                                                            if let Some(text) = content {
+                                                                match clipboard
+                                                                    .set_text(text.clone())
+                                                                {
+                                                                    Ok(()) => {
+                                                                        tracing::info!(
                                                                         category = "EXEC",
                                                                         bytes_len = text.len(),
                                                                         "Clipboard write success"
                                                                     );
-                                                                    Message::Submit {
-                                                                        id: req_id,
-                                                                        value: Some(
-                                                                            "ok".to_string(),
-                                                                        ),
+                                                                        Message::Submit {
+                                                                            id: req_id,
+                                                                            value: Some(
+                                                                                "ok".to_string(),
+                                                                            ),
+                                                                        }
+                                                                    }
+                                                                    Err(e) => {
+                                                                        tracing::info!(
+                                                                            category = "EXEC",
+                                                                            error = %e,
+                                                                            "Clipboard write error"
+                                                                        );
+                                                                        Message::Submit {
+                                                                            id: req_id,
+                                                                            value: Some(
+                                                                                String::new(),
+                                                                            ),
+                                                                        }
                                                                     }
                                                                 }
-                                                                Err(e) => {
-                                                                    tracing::info!(
-                                                                        category = "EXEC",
-                                                                        error = %e,
-                                                                        "Clipboard write error"
-                                                                    );
-                                                                    Message::Submit {
-                                                                        id: req_id,
-                                                                        value: Some(String::new()),
-                                                                    }
-                                                                }
-                                                            }
-                                                                } else {
-                                                                    tracing::info!(
-                                                            category = "EXEC",
-                                                            "Clipboard write: no content provided"
-                                                        );
-                                                                    Message::Submit {
-                                                                        id: req_id,
-                                                                        value: Some(String::new()),
-                                                                    }
-                                                                }
-                                                            }
-                                                            Err(e) => {
+                                                            } else {
                                                                 tracing::info!(
                                                             category = "EXEC",
-                                                            error = %e,
-                                                            "Clipboard init error"
+                                                            "Clipboard write: no content provided"
                                                         );
                                                                 Message::Submit {
                                                                     id: req_id,
@@ -1267,7 +1260,18 @@ impl ScriptListApp {
                                                                 }
                                                             }
                                                         }
-                                                    }
+                                                        Err(e) => {
+                                                            tracing::info!(
+                                                                category = "EXEC",
+                                                                error = %e,
+                                                                "Clipboard init error"
+                                                            );
+                                                            Message::Submit {
+                                                                id: req_id,
+                                                                value: Some(String::new()),
+                                                            }
+                                                        }
+                                                    },
                                                 }
                                             }
                                         };
@@ -1792,7 +1796,12 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetElements - needs UI state, forward to UI thread
-                                    if let Message::GetElements { request_id, limit, target } = &msg {
+                                    if let Message::GetElements {
+                                        request_id,
+                                        limit,
+                                        target,
+                                    } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1838,7 +1847,13 @@ impl ScriptListApp {
                                     }
 
                                     // Handle PerformAcpSetupAction - forward to UI thread
-                                    if let Message::PerformAcpSetupAction { request_id, action, agent_id, target } = &msg {
+                                    if let Message::PerformAcpSetupAction {
+                                        request_id,
+                                        action,
+                                        agent_id,
+                                        target,
+                                    } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1862,7 +1877,8 @@ impl ScriptListApp {
                                     }
 
                                     // Handle ResetAcpTestProbe - forward to UI thread
-                                    if let Message::ResetAcpTestProbe { request_id, target } = &msg {
+                                    if let Message::ResetAcpTestProbe { request_id, target } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1884,7 +1900,12 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAcpTestProbe - forward to UI thread
-                                    if let Message::GetAcpTestProbe { request_id, tail, target } = &msg {
+                                    if let Message::GetAcpTestProbe {
+                                        request_id,
+                                        tail,
+                                        target,
+                                    } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -2037,7 +2058,8 @@ impl ScriptListApp {
                                             "automation.list_windows.request"
                                         );
                                         let windows = crate::windows::list_automation_windows();
-                                        let focused_id = crate::windows::focused_automation_window_id();
+                                        let focused_id =
+                                            crate::windows::focused_automation_window_id();
                                         tracing::info!(
                                             target: "script_kit::automation",
                                             request_id = %request_id,
@@ -2057,7 +2079,12 @@ impl ScriptListApp {
                                     }
 
                                     // Forward SimulateGpuiEvent to entity for real GPUI dispatch
-                                    if let Message::SimulateGpuiEvent { request_id, target, event } = msg.clone() {
+                                    if let Message::SimulateGpuiEvent {
+                                        request_id,
+                                        target,
+                                        event,
+                                    } = msg.clone()
+                                    {
                                         tracing::info!(
                                             target: "script_kit::automation",
                                             request_id = %request_id,
@@ -2096,7 +2123,10 @@ impl ScriptListApp {
                                             "automation.capture_screenshot.request"
                                         );
 
-                                        let response = match capture_targeted_screenshot(target.as_ref(), hi_dpi_mode) {
+                                        let response = match capture_targeted_screenshot(
+                                            target.as_ref(),
+                                            hi_dpi_mode,
+                                        ) {
                                             Ok((png_data, width, height)) => {
                                                 use base64::Engine;
                                                 let base64_data =
@@ -2432,44 +2462,43 @@ impl ScriptListApp {
                                                 text_len = text.chars().count(),
                                                 "Received say protocol message"
                                             );
-                                            let result =
-                                                if execute_script_normalize_optional_text(Some(
-                                                    text.clone(),
-                                                ))
-                                                .is_none()
-                                                {
-                                                    execute_script_feedback_receipt(
+                                            let result = if execute_script_normalize_optional_text(
+                                                Some(text.clone()),
+                                            )
+                                            .is_none()
+                                            {
+                                                execute_script_feedback_receipt(
+                                                    "say",
+                                                    false,
+                                                    "invalid",
+                                                    None,
+                                                    None,
+                                                    Some("ERR_SYSTEM_FEEDBACK_EMPTY"),
+                                                    Some("say() requires non-empty text."),
+                                                )
+                                            } else if cfg!(target_os = "macos") {
+                                                match execute_script_dispatch_say_command(
+                                                    text, voice,
+                                                ) {
+                                                    Ok(()) => execute_script_feedback_receipt(
                                                         "say",
-                                                        false,
-                                                        "invalid",
+                                                        true,
+                                                        "dispatched",
+                                                        Some("say"),
+                                                        Some("process_spawned"),
                                                         None,
                                                         None,
-                                                        Some("ERR_SYSTEM_FEEDBACK_EMPTY"),
-                                                        Some("say() requires non-empty text."),
-                                                    )
-                                                } else if cfg!(target_os = "macos") {
-                                                    match execute_script_dispatch_say_command(
-                                                        text, voice,
-                                                    ) {
-                                                        Ok(()) => execute_script_feedback_receipt(
-                                                            "say",
-                                                            true,
-                                                            "dispatched",
-                                                            Some("say"),
-                                                            Some("process_spawned"),
-                                                            None,
-                                                            None,
-                                                        ),
-                                                        Err(error) => {
-                                                            tracing::warn!(
-                                                                category = "EXEC",
-                                                                effect = "say",
-                                                                attempted = "say [-v voice] <text>",
-                                                                error = %error,
-                                                                state = "spawn_failed",
-                                                                "Failed to dispatch say protocol feedback command"
-                                                            );
-                                                            execute_script_feedback_receipt(
+                                                    ),
+                                                    Err(error) => {
+                                                        tracing::warn!(
+                                                            category = "EXEC",
+                                                            effect = "say",
+                                                            attempted = "say [-v voice] <text>",
+                                                            error = %error,
+                                                            state = "spawn_failed",
+                                                            "Failed to dispatch say protocol feedback command"
+                                                        );
+                                                        execute_script_feedback_receipt(
                                                                 "say",
                                                                 false,
                                                                 "failed",
@@ -2478,10 +2507,10 @@ impl ScriptListApp {
                                                                 Some("ERR_SYSTEM_FEEDBACK_DISPATCH_FAILED"),
                                                                 Some("Failed to dispatch say feedback command."),
                                                             )
-                                                        }
                                                     }
-                                                } else {
-                                                    execute_script_feedback_receipt(
+                                                }
+                                            } else {
+                                                execute_script_feedback_receipt(
                                                         "say",
                                                         false,
                                                         "unsupported",
@@ -2490,7 +2519,7 @@ impl ScriptListApp {
                                                         Some("ERR_UNSUPPORTED_SDK_FEATURE"),
                                                         Some("say() feedback dispatch is only supported on macOS."),
                                                     )
-                                                };
+                                            };
                                             execute_script_send_system_feedback_result(
                                                 &reader_response_tx,
                                                 request_id,
@@ -2894,21 +2923,16 @@ mod execute_script_session_tests {
 
     #[test]
     fn test_execute_script_normalize_notify_fields_defaults_missing_fields() {
-        let title_only = execute_script_normalize_notify_fields(
-            Some("Build Finished".to_string()),
-            None,
-        )
-        .expect("title-only payload should fall back to reusing title as body");
+        let title_only =
+            execute_script_normalize_notify_fields(Some("Build Finished".to_string()), None)
+                .expect("title-only payload should fall back to reusing title as body");
         assert_eq!(
             title_only,
             ("Build Finished".to_string(), "Build Finished".to_string())
         );
 
-        let body_only = execute_script_normalize_notify_fields(
-            None,
-            Some("All green".to_string()),
-        )
-        .expect("body-only payload should default to the Script Kit title");
+        let body_only = execute_script_normalize_notify_fields(None, Some("All green".to_string()))
+            .expect("body-only payload should default to the Script Kit title");
         assert_eq!(
             body_only,
             ("Script Kit".to_string(), "All green".to_string())
