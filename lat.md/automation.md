@@ -240,6 +240,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `menu-tray-notification-modal-interruption-stress` is intentionally fail-closed until tray, app-menu, and notification activation receipts expose the active modal or prompt owner, interruption identity, wrong-surface action rejection, no focus steal, no selection/input mutation, no prompt submit, and focus restoration.
 
+`stream-progress-cancel-visual-stability-stress` is intentionally fail-closed until ACP/script progress receipts expose stream run identity, monotonic progress samples, visible progress text, cancellation ordering, stale post-cancel chunk rejection, screenshot-to-state revalidation, focus/cursor restoration, no accidental submit, and cleanup.
+
+`dictation-media-permission-readiness-churn-stress` is intentionally fail-closed until dictation/media receipts expose passive setup, microphone permission generation, model readiness generation, readiness churn event ordering, target identity, transcript generation identity, wrong-target rejection, no auto-submit, no System Settings or TCC mutation, focus/cursor preservation, and cleanup.
+
+`animation-frame-capture-determinism-stress` is intentionally fail-closed until animated/loading visual states expose deterministic frame ids, capture sequence ids, state/elements/screenshot receipts per frame, visible text and layout fingerprints, occlusion pairs, stale-frame rejection, wrong-window rejection, blank-frame rejection, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
