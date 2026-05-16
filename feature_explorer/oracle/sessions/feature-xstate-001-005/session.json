@@ -1,0 +1,93 @@
+{
+  "id": "feature-xstate-001-005",
+  "createdAt": "2026-05-15T13:59:46.142Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-001-005]\n\nProduce implementation-ready XState definitions for Script Kit GPUI feature-map chapters 001-005. Use the attached bundle and prompt f",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T13:59:46.144Z",
+      "completedAt": "2026-05-15T14:11:25.770Z",
+      "usage": {
+        "inputTokens": 50792,
+        "outputTokens": 17,
+        "reasoningTokens": 0,
+        "totalTokens": 50809
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-001-005]\n\nProduce implementation-ready XState definitions for Script Kit GPUI feature-map chapters 001-005. Use the attached bundle and prompt file as the source of truth. Return text only in this response. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write all repo files locally.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-001-005.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature_explorer/oracle/feature-xstate-001-005-prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-001-005",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T13:59:46.143Z",
+  "completedAt": "2026-05-15T14:11:25.771Z",
+  "usage": {
+    "inputTokens": 50792,
+    "outputTokens": 17,
+    "reasoningTokens": 0,
+    "totalTokens": 50809
+  },
+  "elapsedMs": 698699
+}

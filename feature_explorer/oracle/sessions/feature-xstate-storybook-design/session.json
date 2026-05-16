@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-storybook-design",
+  "createdAt": "2026-05-15T19:26:58.935Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-storybook-design]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app. `feature_explorer` is a standalone XState-driven wireframe/mockup",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T19:26:58.936Z",
+      "completedAt": "2026-05-15T19:36:45.785Z",
+      "usage": {
+        "inputTokens": 49966,
+        "outputTokens": 5088,
+        "reasoningTokens": 0,
+        "totalTokens": 55054
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-storybook-design]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app. `feature_explorer` is a standalone XState-driven wireframe/mockup that loads authored feature machines when table-derived state is too weak. Repo rules require `lat search`/`lat expand` before work, `lat.md/` updates when behavior/docs/contracts change, and `lat check` after each task. The bundle includes AGENTS/CLAUDE, Storybook/design/testing/lat skills, relevant `lat.md` pages including verification context, Feature 037 chapter/raw excerpt, current authored-machine registry tail, and focused Storybook/Design Gallery/visual-proof sources and tests.\n\nGoal: review and sharpen the local implementation plan for adding Feature 037, `037-storybook-design-visual-verification`, as an authored XState machine in `feature_explorer/src/state/authoredFeatureMachines.ts`. The authored machine should represent Storybook catalog honesty, StoryBrowser flows, adoption/resolution, Design Gallery and Design Picker boundaries, strict visual proof infrastructure, and known gaps without overclaiming production behavior or screenshot proof.\n\nCurrent evidence and constraints:\n- Authored machines currently cover Features 001-036; Feature 037 must be registered under both `\"037\"` and `\"037-storybook-design-visual-verification\"`.\n- Update `feature_explorer/README.md` and `lat.md/feature-explorer.md` from 001-036 to 001-037 and add the rationale.\n- Storybook is developer visual state coverage, not automatic proof of production behavior.\n- Primary Storybook catalog should contain canonical states or adoptable variations, not unregistered design experiments.\n- Variant representation quality matters: liveSurface > presenterFixture; old/runtimeFixture and design-only mock data must not masquerade as product truth.\n- Design Gallery is a product built-in surface, not the Storybook browser.\n- Strict visual proof requires target identity, state/elements receipts, screenshot, and content audit; blank/black/wrong-window/ambiguous screenshots are infrastructure failures.\n\nDeliverable: provide a critical review plan for the authored-machine implementation. I need:\n1. Highest-priority states/transitions that must be included.\n2. Boundary/gap/regression states that must be explicit.\n3. Exact receipts/names/ids to place in machine meta.\n4. Likely omissions in a local plan, especially Storybook-vs-product proof, Design Gallery, and strict screenshot boundaries.\n5. Focused verification list, including which Storybook/design/agentic source-contract tests are worth running for an explorer-only change.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-storybook-design.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-storybook-design",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T19:26:58.936Z",
+  "completedAt": "2026-05-15T19:36:45.787Z",
+  "usage": {
+    "inputTokens": 49966,
+    "outputTokens": 5088,
+    "reasoningTokens": 0,
+    "totalTokens": 55054
+  },
+  "elapsedMs": 585412
+}

@@ -1,0 +1,22 @@
+{
+  "featureId": "001-main-menu",
+  "title": "Main Menu / Script List / Menu Syntax / Actions / Shortcut Assignment",
+  "slug": "main-menu-feature-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T04:01:33.034Z",
+  "completedAt": "2026-05-15T04:10:00.841Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/main-menu-feature-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/main-menu-feature-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 62172,
+    "outputTokens": 8280,
+    "reasoningTokens": 0,
+    "totalTokens": 70452
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/main-menu-feature-map"
+}

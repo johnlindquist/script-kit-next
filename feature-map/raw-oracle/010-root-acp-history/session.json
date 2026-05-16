@@ -1,0 +1,22 @@
+{
+  "featureId": "010-root-acp-history",
+  "title": "Root Unified Search ACP History",
+  "slug": "root-acp-history-feature-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T05:34:28.439Z",
+  "completedAt": "2026-05-15T05:42:29.769Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/root-acp-history-feature-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/root-acp-history-feature-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 62801,
+    "outputTokens": 5836,
+    "reasoningTokens": 0,
+    "totalTokens": 68637
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/root-acp-history-feature-map"
+}

@@ -1,0 +1,97 @@
+{
+  "id": "drop-prompt-atlas",
+  "createdAt": "2026-05-15T08:55:49.677Z",
+  "status": "completed",
+  "promptPreview": "[drop-prompt-atlas] Produce the requested feature atlas for feature 020. Use the attached bundle and prompt. Return text only; do not create artifacts.",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T08:55:49.678Z",
+      "completedAt": "2026-05-15T09:04:07.787Z",
+      "usage": {
+        "inputTokens": 43670,
+        "outputTokens": 9748,
+        "reasoningTokens": 0,
+        "totalTokens": 53418
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 55206
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[drop-prompt-atlas] Produce the requested feature atlas for feature 020. Use the attached bundle and prompt. Return text only; do not create artifacts.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/drop-prompt-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/020-drop-prompt/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "drop-prompt-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/020-drop-prompt/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T08:55:49.678Z",
+  "completedAt": "2026-05-15T09:04:07.788Z",
+  "usage": {
+    "inputTokens": 43670,
+    "outputTokens": 9748,
+    "reasoningTokens": 0,
+    "totalTokens": 53418
+  },
+  "elapsedMs": 497133
+}

@@ -1,0 +1,97 @@
+{
+  "id": "form-fields-prompt-atlas",
+  "createdAt": "2026-05-15T08:16:45.392Z",
+  "status": "completed",
+  "promptPreview": "[form-fields-prompt-atlas]\n\nUse the attached focused repo bundle and prompt context. Produce the feature atlas for 017 Form and Fields Prompt / form() / fields(",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T08:16:45.394Z",
+      "completedAt": "2026-05-15T08:22:03.210Z",
+      "usage": {
+        "inputTokens": 20385,
+        "outputTokens": 6962,
+        "reasoningTokens": 0,
+        "totalTokens": 27347
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 27941
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[form-fields-prompt-atlas]\n\nUse the attached focused repo bundle and prompt context. Produce the feature atlas for 017 Form and Fields Prompt / form() / fields() in the requested section shape. Be complete and concrete, but keep the answer under about 6,000 words so it can be captured reliably. Return only text; do not create files or artifacts.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/form-fields-prompt-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/017-form-fields-prompt/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "form-fields-prompt-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/017-form-fields-prompt/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T08:16:45.393Z",
+  "completedAt": "2026-05-15T08:22:03.216Z",
+  "usage": {
+    "inputTokens": 20385,
+    "outputTokens": 6962,
+    "reasoningTokens": 0,
+    "totalTokens": 27347
+  },
+  "elapsedMs": 316427
+}

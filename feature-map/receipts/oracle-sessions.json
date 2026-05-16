@@ -1,0 +1,410 @@
+[
+  {
+    "id": "001-main-menu",
+    "slug": "main-menu-feature-map",
+    "title": "Main Menu / Script List / Menu Syntax / Actions / Shortcut Assignment",
+    "status": "completed",
+    "bundleBytes": 225795,
+    "completedAt": "2026-05-15T04:10:00.841Z"
+  },
+  {
+    "id": "002-file-search",
+    "slug": "file-search-feature-map",
+    "title": "File Search / Browser / Attachment Portals",
+    "status": "completed",
+    "bundleBytes": 183120,
+    "completedAt": "2026-05-15T04:23:25.406Z"
+  },
+  {
+    "id": "003-agent-chat-context",
+    "slug": "acp-context-feature-map",
+    "title": "Agent Chat Context Composer / Inline Mentions / Attachments",
+    "status": "completed",
+    "bundleBytes": 191003,
+    "completedAt": "2026-05-15T04:34:08.795Z"
+  },
+  {
+    "id": "004-mcp-sdk-protocol",
+    "slug": "mcp-sdk-protocol-map",
+    "title": "MCP Context Resources / SDK / Protocol Automation",
+    "status": "completed",
+    "bundleBytes": 259011,
+    "completedAt": "2026-05-15T04:43:28.441Z"
+  },
+  {
+    "id": "005-built-in-filterable-surfaces",
+    "slug": "builtin-filterable-map",
+    "title": "Built-in Filterable Surfaces",
+    "status": "completed",
+    "bundleBytes": 225347,
+    "completedAt": "2026-05-15T04:56:11.582Z"
+  },
+  {
+    "id": "006-notes-window",
+    "slug": "notes-window-feature-map",
+    "title": "Notes Window / Notes Browse / Notes-hosted ACP",
+    "status": "completed",
+    "bundleBytes": 843641,
+    "completedAt": "2026-05-15T05:08:53.371Z"
+  },
+  {
+    "id": "007-root-notes",
+    "slug": "root-notes-feature-map",
+    "title": "Root Unified Search Notes",
+    "status": "completed",
+    "bundleBytes": 195614,
+    "completedAt": "2026-05-15T05:16:51.982Z"
+  },
+  {
+    "id": "008-root-clipboard-history",
+    "slug": "root-clipboard-feature-map",
+    "title": "Root Unified Search Clipboard History",
+    "status": "completed",
+    "bundleBytes": 235396,
+    "completedAt": "2026-05-15T05:24:58.410Z"
+  },
+  {
+    "id": "009-root-dictation-history",
+    "slug": "root-dictation-feature-map",
+    "title": "Root Unified Search Dictation History",
+    "status": "completed",
+    "bundleBytes": 237558,
+    "completedAt": "2026-05-15T05:33:07.074Z"
+  },
+  {
+    "id": "010-root-acp-history",
+    "slug": "root-acp-history-feature-map",
+    "title": "Root Unified Search ACP History",
+    "status": "completed",
+    "bundleBytes": 261771,
+    "completedAt": "2026-05-15T05:42:29.769Z"
+  },
+  {
+    "id": "011-root-source-actions",
+    "slug": "root-source-actions-feature-map",
+    "title": "Root Unified Search Result Actions",
+    "status": "completed",
+    "bundleBytes": 403304,
+    "completedAt": "2026-05-15T05:49:43.594Z"
+  },
+  {
+    "id": "012-root-source-filters",
+    "slug": "root-source-filters-atlas",
+    "title": "Root Unified Source Filters / Source Chips / Lazy Paging",
+    "status": "completed",
+    "bundleBytes": 228508,
+    "completedAt": "2026-05-15T06:44:16.492Z"
+  },
+  {
+    "id": "013-scriptlist-special-entry-triggers",
+    "slug": "scriptlist-special-triggers-atlas",
+    "title": "ScriptList Special Entry Triggers / First-character Route Handoffs",
+    "status": "completed",
+    "bundleBytes": 151477,
+    "completedAt": "2026-05-15T07:05:27.912Z"
+  },
+  {
+    "id": "014-quick-terminal-pty",
+    "slug": "quick-terminal-pty-atlas",
+    "title": "Quick Terminal PTY / TermPrompt / Warm Pool / Apply-back",
+    "status": "completed",
+    "bundleBytes": 167795,
+    "completedAt": "2026-05-15T07:25:30.146Z"
+  },
+  {
+    "id": "015-sdk-term-prompt",
+    "slug": "sdk-term-atlas-cli",
+    "title": "SDK TermPrompt / term() / Terminal Actions / Full-height Terminal",
+    "status": "completed",
+    "bundleBytes": 37833,
+    "completedAt": "2026-05-15T07:59:21.706Z"
+  },
+  {
+    "id": "016-prompt-runtime-core",
+    "slug": "prompt-runtime-core-atlas",
+    "title": "Prompt Runtime Core / arg() / select() / div() / md()",
+    "status": "completed",
+    "bundleBytes": 29516,
+    "completedAt": "2026-05-15T08:10:53.237Z"
+  },
+  {
+    "id": "017-form-fields-prompt",
+    "slug": "form-fields-prompt-atlas",
+    "title": "Form and Fields Prompt / form() / fields()",
+    "status": "completed",
+    "bundleBytes": 65442,
+    "completedAt": "2026-05-15T08:22:03.216Z"
+  },
+  {
+    "id": "018-editor-template-prompt",
+    "slug": "editor-template-prompt-atlas",
+    "title": "Editor and Template Prompt / editor() / template()",
+    "status": "completed",
+    "bundleBytes": 197071,
+    "completedAt": "2026-05-15T08:36:42.988Z"
+  },
+  {
+    "id": "019-path-prompt",
+    "slug": "path-prompt-atlas",
+    "title": "Path Prompt / path()",
+    "status": "completed",
+    "bundleBytes": 137206,
+    "completedAt": "2026-05-15T08:50:51.959Z"
+  },
+  {
+    "id": "020-drop-prompt",
+    "slug": "drop-prompt-atlas",
+    "title": "Drop Prompt / drop()",
+    "status": "completed",
+    "bundleBytes": 148971,
+    "completedAt": "2026-05-15T09:04:07.788Z"
+  },
+  {
+    "id": "021-env-prompt",
+    "slug": "env-prompt-atlas",
+    "title": "Env Prompt / env()",
+    "status": "completed",
+    "bundleBytes": 199030,
+    "completedAt": "2026-05-15T09:17:58.223Z"
+  },
+  {
+    "id": "022-hotkey-prompt",
+    "slug": "hotkey-prompt-atlas",
+    "title": "Hotkey Prompt / hotkey() and Shortcut Recorder",
+    "status": "completed",
+    "bundleBytes": 227353,
+    "completedAt": "2026-05-15T09:29:18.092Z"
+  },
+  {
+    "id": "023-mini-micro-prompts",
+    "slug": "mini-micro-prompts-atlas",
+    "title": "Mini and Micro Prompts / mini() / micro()",
+    "status": "completed",
+    "bundleBytes": 167123,
+    "completedAt": "2026-05-15T09:43:55.162Z"
+  },
+  {
+    "id": "024-confirm-prompt-and-dialogs",
+    "slug": "confirm-prompt-dialogs-atlas",
+    "title": "Confirm Prompt and Dialogs / confirm()",
+    "status": "completed",
+    "bundleBytes": 294580,
+    "completedAt": "2026-05-15T09:56:41.979Z"
+  },
+  {
+    "id": "025-system-feedback-and-prompt-control",
+    "slug": "system-feedback-prompt-control-atlas",
+    "title": "System Feedback and Prompt Control APIs",
+    "status": "completed",
+    "bundleBytes": 103773,
+    "completedAt": "2026-05-15T10:11:04.960Z"
+  },
+  {
+    "id": "026-clipboard-selected-text-accessibility",
+    "slug": "clipboard-selected-text-accessibility-atlas",
+    "title": "Clipboard, Selected Text, and Accessibility APIs",
+    "status": "completed",
+    "bundleBytes": 295937,
+    "completedAt": "2026-05-15T10:28:05.772Z"
+  },
+  {
+    "id": "027-keyboard-mouse-apis",
+    "slug": "keyboard-mouse-apis-atlas",
+    "title": "Keyboard and Mouse APIs",
+    "status": "completed",
+    "bundleBytes": 136587,
+    "completedAt": "2026-05-15T10:39:28.984Z"
+  },
+  {
+    "id": "028-window-control-visual-inspection",
+    "slug": "window-control-visual-inspection-atlas",
+    "title": "Window Control and Visual Inspection APIs",
+    "status": "completed",
+    "bundleBytes": 200012,
+    "completedAt": "2026-05-15T10:53:28.644Z"
+  },
+  {
+    "id": "029-widget-media-find-apis",
+    "slug": "widget-media-find-apis-atlas",
+    "title": "Widget, Media, and Find APIs",
+    "status": "completed",
+    "bundleBytes": 29199,
+    "completedAt": "2026-05-15T11:06:48.377Z"
+  },
+  {
+    "id": "030-acp-chat-sdk-apis",
+    "slug": "acp-chat-sdk-apis-atlas",
+    "title": "ACP Chat SDK APIs",
+    "status": "completed",
+    "bundleBytes": 233297,
+    "completedAt": "2026-05-15T11:23:13.840Z"
+  },
+  {
+    "id": "031-legacy-chat-prompt",
+    "slug": "legacy-chat-prompt-atlas",
+    "title": "Legacy `chat()` Prompt",
+    "status": "completed",
+    "bundleBytes": 181003,
+    "completedAt": "2026-05-15T11:41:26.124Z"
+  },
+  {
+    "id": "032-script-metadata-scriptlets",
+    "slug": "script-metadata-scriptlets-atlas",
+    "title": "Script Metadata, Scriptlets, and Execution Catalog",
+    "status": "completed",
+    "bundleBytes": 157195,
+    "completedAt": "2026-05-15T12:03:41.929Z"
+  },
+  {
+    "id": "033-sharing-clipboard-trust",
+    "slug": "sharing-clipboard-trust-cli",
+    "title": "Sharing and Clipboard Trust Install",
+    "status": "completed",
+    "bundleBytes": 47867,
+    "completedAt": "2026-05-15T12:28:14.760Z"
+  },
+  {
+    "id": "034-permissions-assistant",
+    "slug": "permission-assistant-atlas",
+    "title": "Permissions and Permission Assistant",
+    "status": "completed",
+    "bundleBytes": 117496,
+    "completedAt": "2026-05-15T12:40:40.236Z"
+  },
+  {
+    "id": "035-settings-theme-config-preferences",
+    "slug": "settings-theme-config-preference-atlas",
+    "title": "Settings, Theme, Config, and Preferences",
+    "status": "completed",
+    "bundleBytes": 119739,
+    "completedAt": "2026-05-15T12:55:59.090Z"
+  },
+  {
+    "id": "036-tray-lifecycle-distribution-updates",
+    "slug": "tray-lifecycle-distribution-atlas",
+    "title": "Tray Menu, App Lifecycle, Distribution, and Updates",
+    "status": "completed",
+    "bundleBytes": 180851,
+    "completedAt": "2026-05-15T13:08:51.060Z"
+  },
+  {
+    "id": "036-tray-menu-global-entry-points",
+    "slug": "tray-menu-entry-atlas",
+    "title": "Tray Menu and Global App Entry Points",
+    "status": "supplemental",
+    "bundleBytes": 174207,
+    "completedAt": "2026-05-15T13:11:50.819Z"
+  },
+  {
+    "id": "037-storybook-design-visual-verification",
+    "slug": "storybook-design-visual-atlas",
+    "title": "Storybook, Design Explorer, and Visual Verification",
+    "status": "completed",
+    "bundleBytes": 218489,
+    "completedAt": "2026-05-15T13:23:52.694Z"
+  },
+  {
+    "id": "038-agent-skills-ai-context-catalog",
+    "slug": "agent-skills-ai-context-atlas",
+    "title": "Agent Skills and AI Context Catalog",
+    "status": "completed",
+    "bundleBytes": 191879,
+    "completedAt": "2026-05-15T13:37:36.298Z"
+  },
+  {
+    "id": "039-logging-diagnostics-transaction-observability",
+    "slug": "logging-diagnostic-observabil-atlas",
+    "title": "Logging, Diagnostics, and Transaction Observability",
+    "status": "completed",
+    "bundleBytes": 74990,
+    "completedAt": "2026-05-15T13:50:07.491Z"
+  },
+  {
+    "id": "039-logging-diagnostics-transaction-observability-duplicate-retry",
+    "slug": "logging-diagnostic-observabil-atlas-2",
+    "title": "Logging, Diagnostics, and Transaction Observability duplicate retry",
+    "status": "supplemental",
+    "bundleBytes": 74990,
+    "completedAt": "2026-05-15T13:56:47.261Z"
+  },
+  {
+    "id": "040-main-window-sizing-surface-contracts",
+    "slug": "main-window-surface-atlas",
+    "title": "Main Window Sizing and Surface Contracts",
+    "status": "completed",
+    "bundleBytes": 164838,
+    "completedAt": "2026-05-15T13:42:42.266Z"
+  },
+  {
+    "id": "041-main-menu-renderer-key-handling",
+    "slug": "main-menu-renderer-keys",
+    "title": "Main Menu Renderer Key Handling",
+    "status": "completed",
+    "bundleBytes": 191656,
+    "completedAt": "2026-05-15T14:24:33.561Z"
+  },
+  {
+    "id": "042-menu-syntax-power-capture",
+    "slug": "menu-syntax-capture-atlas",
+    "title": "Menu Syntax Power Commands and Capture Composer",
+    "status": "completed",
+    "bundleBytes": 225367,
+    "completedAt": "2026-05-15T14:43:58.223Z"
+  },
+  {
+    "id": "042-menu-syntax-power-capture-failed-attempt",
+    "slug": "menu-syntax-power-capture",
+    "title": "Menu Syntax Power Commands and Capture Composer failed browser attempt",
+    "status": "supplemental-error",
+    "bundleBytes": 225367,
+    "completedAt": "2026-05-15T14:34:16.463Z"
+  },
+  {
+    "id": "043-acp-sdk-runtime-apis",
+    "slug": "acp-sdk-runtime-apis",
+    "title": "ACP SDK Runtime APIs",
+    "status": "completed",
+    "bundleBytes": 144260,
+    "completedAt": "2026-05-15T15:00:15.016Z"
+  },
+  {
+    "id": "044-mcp-protocol-runtime-bridge",
+    "slug": "mcp-protocol-runtime-bridge",
+    "title": "MCP Protocol Runtime Bridge",
+    "status": "completed",
+    "bundleBytes": 173090,
+    "completedAt": "2026-05-15T15:14:50.101Z"
+  },
+  {
+    "id": "045-launcher-trigger-edge-cases",
+    "slug": "launcher-trigger-edge-cases",
+    "title": "Launcher Trigger Edge Cases",
+    "status": "completed",
+    "bundleBytes": 152344,
+    "completedAt": "2026-05-15T15:30:08.543Z"
+  },
+  {
+    "id": "046-shortcut-assignment-config-refresh",
+    "slug": "shortcut-refresh-atlas",
+    "title": "Shortcut Assignment And Config Refresh",
+    "status": "completed",
+    "bundleBytes": 209458,
+    "completedAt": "2026-05-15T15:54:05.010Z"
+  },
+  {
+    "id": "046-shortcut-assignment-config-refresh-failed-thinking-chip",
+    "slug": "shortcut-config-refresh",
+    "title": "Shortcut Assignment And Config Refresh failed thinking chip attempt",
+    "status": "supplemental-error",
+    "bundleBytes": 209458,
+    "completedAt": "2026-05-15T15:41:45.082Z"
+  },
+  {
+    "id": "supplemental-feature-xstate-001-005",
+    "slug": "feature-xstate-001-005",
+    "title": "Feature Explorer XState Definitions 001-005",
+    "status": "supplemental-error",
+    "bundleBytes": 224846,
+    "completedAt": "2026-05-15T14:11:25.771Z"
+  }
+]

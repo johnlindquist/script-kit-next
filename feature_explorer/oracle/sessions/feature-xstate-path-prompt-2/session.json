@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-path-prompt-2",
+  "createdAt": "2026-05-15T16:11:56.593Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-path-prompt]\n\nProject: Script Kit GPUI. Goal: continue the exhaustive feature-map -> XState Feature Explorer loop. The attached bundle includes ",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T16:11:56.594Z",
+      "completedAt": "2026-05-15T16:19:11.581Z",
+      "usage": {
+        "inputTokens": 113758,
+        "outputTokens": 7072,
+        "reasoningTokens": 0,
+        "totalTokens": 120830
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-path-prompt]\n\nProject: Script Kit GPUI. Goal: continue the exhaustive feature-map -> XState Feature Explorer loop. The attached bundle includes repo process rules, prompt-runtime/protocol/file-search/lat skills, lat.md Feature Explorer and builtins context, Feature 019 chapter and raw Oracle answer, current authored feature machines/runtime, and focused path source/test excerpts.\n\nTask: produce an implementation-ready authored XState runtime machine plan for Feature 019: Path Prompt / path().\n\nPlease identify the concrete states/events/guards/metadata the explorer machine should model so the wireframe covers every scenario in the chapter and source excerpts. Pay special attention to SDK request creation/response/cancel semantics, AppView::PathPrompt installation, startPath/hint handling, entries loading/sorting, filtering, selected row movement, directory navigation, typed-path fallback submit, native footer Select/Actions ownership, path action popup and typed PathAction ids, getState/getElements receipts, simulateKey routing, ForceSubmit uncertainty, File Search boundary, path privacy, sizing ambiguity, and missing proof gaps around load_entries, hidden files, permissions, symlinks, destructive move_to_trash confirmation, and action side effects.\n\nConstraints:\n- This repo requires lat.md updates for behavior/architecture/test changes and `lat check` after edits.\n- Keep the plan compatible with the current `feature_explorer/src/state/authoredFeatureMachines.ts` style.\n- Prefer exhaustive state coverage over minimalism.\n- Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nReturn: (1) coverage checklist keyed to chapter claims, (2) proposed machine states/events/guards, (3) likely missed edge cases, (4) verification gates.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-path-prompt.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-path-prompt-2",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T16:11:56.594Z",
+  "completedAt": "2026-05-15T16:19:11.582Z",
+  "usage": {
+    "inputTokens": 113758,
+    "outputTokens": 7072,
+    "reasoningTokens": 0,
+    "totalTokens": 120830
+  },
+  "elapsedMs": 432993
+}

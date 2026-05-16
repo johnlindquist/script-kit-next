@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-keyboard-mouse",
+  "createdAt": "2026-05-15T17:11:31.890Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-keyboard-mouse]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wi",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T17:11:31.891Z",
+      "completedAt": "2026-05-15T17:20:21.657Z",
+      "usage": {
+        "inputTokens": 118067,
+        "outputTokens": 7495,
+        "reasoningTokens": 0,
+        "totalTokens": 125562
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-keyboard-mouse]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this repo, Oracle/packx review should include AGENTS/CLAUDE process context, owning skills, relevant lat.md pages including verification, the feature chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the feature boundary. The attached bundle includes that context for Feature 027: Keyboard and Mouse APIs.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 027 in feature_explorer/src/state/authoredFeatureMachines.ts. This feature is mostly a negative/unsupported contract: SDK keyboard and mouse helpers are visible, warn unsupported, send fire-and-forget payloads, resolve without receipts, and must not be used as proof of prompt mutation, key routing, native input, mouse movement, or clicks. Reliable automation alternatives are simulateKey plus state receipts, batch.setInput, batch.forceSubmit, getState, getElements, and waitFor.\n\nFocus areas:\n- keyboard.type(text), keyboard.tap(...keys), mouse.move(positions), mouse.leftClick(), mouse.rightClick(), mouse.setPosition(position).\n- unsupported warning strings and Promise<void> fire-and-forget behavior.\n- lack of pending callback/result envelope/keyboardResult/mouseResult.\n- SDK payload shapes vs Rust protocol shapes: text/keys array/positions/button/position vs keys: Option<String> and data: Option<MouseData>.\n- Rust Message::Keyboard/Message::Mouse variants and constructors as protocol visibility only, not native implementation proof.\n- no proven backend handler/native AppKit/CoreGraphics/AX input delivery.\n- mouse coordinate-space, focus target, permission policy, and native safety gaps.\n- tests/benchmarks that call keyboard.tap/type or mouse helpers are weak unless they assert independent state receipts.\n- reliable alternatives: batch.setInput, batch.forceSubmit, simulateKey + getState/getElements/waitFor; simulateKey itself is fire-and-forget and must be followed by receipts.\n- boundaries with Feature 025 setInput, Feature 026 selected-text Cmd+V native paste, Actions popup, Quick Terminal/PTTY, platform-windowing.\n- Wireframe metadata must use only existing FeatureWireframeMeta enum values; do not invent keyboard/mouse/native-input-specific enum values.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for adding Feature 027 to feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between Feature 027 chapter/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if relevant.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, source audits, SDK tests, and any runtime proof that would catch wrong claims.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nBe direct and implementation-specific. Do not summarize generically.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-keyboard-mouse.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-keyboard-mouse",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T17:11:31.891Z",
+  "completedAt": "2026-05-15T17:20:21.659Z",
+  "usage": {
+    "inputTokens": 118067,
+    "outputTokens": 7495,
+    "reasoningTokens": 0,
+    "totalTokens": 125562
+  },
+  "elapsedMs": 527002
+}

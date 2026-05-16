@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-env-prompt",
+  "createdAt": "2026-05-15T16:30:25.679Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-env-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/mock",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T16:30:25.680Z",
+      "completedAt": "2026-05-15T16:36:38.436Z",
+      "usage": {
+        "inputTokens": 218755,
+        "outputTokens": 5120,
+        "reasoningTokens": 0,
+        "totalTokens": 223875
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-env-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/mockup atlas. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. Use the attached packx bundle and return text only.\n\nTask: produce an implementation-ready authored XState runtime machine plan for Feature 021: Env Prompt / env(). Focus on SDK env(key, promptFn?) preflight, process.env existing value bypass, custom promptFn bypass, missing value EnvMessage -> ShowEnv -> AppView::EnvPrompt, FocusTarget::EnvPrompt, DivPrompt sizing, native footer env_prompt Submit-only ownership, secret heuristic from key name, stored secret auto-submit only without contextual title/prompt, contextual API-key update/delete UI, EnvPrompt validation, secret persistence through ~/.scriptkit/secrets.age rather than macOS Keychain, secret redaction in getElements/state/Tab AI/logs/screenshots, delete semantics, setInput/dictation automation, ForceSubmit gap, stale smoke-test/options object mismatch, and storage read/write/delete failure behavior.\n\nReturn:\n1. Concrete XState states and transitions suitable for feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance for each major state, using existing FeatureWireframeMeta style and avoiding unsupported enum values.\n3. Invariants/regression states that should be represented.\n4. Any discrepancies between Feature 021 chapter and attached source that should be corrected before/while authoring.\n5. Verification checklist for this feature explorer iteration.\n\nDo not edit files. Do not summarize generically; give direct implementation guidance.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-env-prompt.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-env-prompt",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T16:30:25.680Z",
+  "completedAt": "2026-05-15T16:36:38.437Z",
+  "usage": {
+    "inputTokens": 218755,
+    "outputTokens": 5120,
+    "reasoningTokens": 0,
+    "totalTokens": 223875
+  },
+  "elapsedMs": 371427
+}

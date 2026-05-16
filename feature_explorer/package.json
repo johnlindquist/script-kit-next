@@ -1,0 +1,16 @@
+{
+  "name": "script-kit-feature-explorer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/build-feature-data.mjs",
+    "dev": "npm run generate && vite --host 127.0.0.1",
+    "build": "npm run generate && tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7",
+    "xstate": "^5.25.0"
+  }
+}

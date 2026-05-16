@@ -1,0 +1,22 @@
+{
+  "featureId": "004-mcp-sdk-protocol",
+  "title": "MCP Context Resources / SDK / Protocol Automation",
+  "slug": "mcp-sdk-protocol-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T04:35:50.749Z",
+  "completedAt": "2026-05-15T04:43:28.441Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/mcp-sdk-protocol-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/mcp-sdk-protocol-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 69883,
+    "outputTokens": 9528,
+    "reasoningTokens": 0,
+    "totalTokens": 79411
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/mcp-sdk-protocol-map"
+}

@@ -1,0 +1,97 @@
+{
+  "id": "settings-theme-config-preference-atlas",
+  "createdAt": "2026-05-15T12:48:02.225Z",
+  "status": "completed",
+  "promptPreview": "[settings-theme-config-preferences-atlas]\\n\\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 035, Settings, Theme, Config, and Pr",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T12:48:02.226Z",
+      "completedAt": "2026-05-15T12:55:59.087Z",
+      "usage": {
+        "inputTokens": 31502,
+        "outputTokens": 15846,
+        "reasoningTokens": 0,
+        "totalTokens": 47348
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 14357
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[settings-theme-config-preferences-atlas]\\n\\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 035, Settings, Theme, Config, and Preferences. Use the attached focused bundle and prompt file as source context. Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/settings-theme-config-preferences-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/035-settings-theme-config-preferences/prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "filesReport": false,
+    "slug": "settings-theme-config-preference-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 3600,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/035-settings-theme-config-preferences/answer.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T12:48:02.226Z",
+  "completedAt": "2026-05-15T12:55:59.090Z",
+  "usage": {
+    "inputTokens": 31502,
+    "outputTokens": 15846,
+    "reasoningTokens": 0,
+    "totalTokens": 47348
+  },
+  "elapsedMs": 475405
+}

@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-sharing-clipboard-trust",
+  "createdAt": "2026-05-15T18:34:02.380Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-sharing-clipboard-trust]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T18:34:02.381Z",
+      "completedAt": "2026-05-15T18:42:04.166Z",
+      "usage": {
+        "inputTokens": 112689,
+        "outputTokens": 8835,
+        "reasoningTokens": 0,
+        "totalTokens": 121524
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-sharing-clipboard-trust]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. The attached bundle includes repo process context, relevant storage/platform/actions/lat skills, relevant lat.md pages including sharing and verification, maintained Feature 033 chapter/raw Oracle, current Feature Explorer authored-machine patterns/registry excerpt, and source/tests for clipboard sharing, copy_deeplink, startup trust prompt, parent confirmation, and source audits.\n\nGoal: audit and improve the authored XState representation to add for Feature 033 in feature_explorer/src/state/authoredFeatureMachines.ts. Feature 033 is Sharing and Clipboard Trust Install. Preserve these layers:\n- sender copy_deeplink branch: portable Share for scripts/scriptlets/skills/agents vs plain command/run deeplink fallback\n- ScriptShareBundle kind/version/title/plugin/entry_path/files and scriptkit-share://v1 base64-url JSON encoding\n- text-only file collection and exact per-kind roots: scripts/, scriptlets/, skills/, agents/\n- recent-export and recent-prompt suppression with TTLs\n- clipboard watcher change-count privacy boundary and decode/error behavior\n- explicit parent trust prompt before install, Install vs Ignore fail-closed semantics\n- install validation: version, empty files, relative path, allowed top-level dirs, plugin-id normalization, unique plugin root, manifest/files writes, entry_path validation\n- post-install refresh/scripts/skills, ScriptList return, HUD/error toast\n- known gaps: logging full share URI leaks payload, binary assets unproven, max payload size absent, no signatures/provenance/sandboxing, no explicit refresh_agents, possible partial install because entry_path validates after file writes, no OS-level external URL handler proof.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for Feature 033 and registry keys \"033\" and \"033-sharing-clipboard-trust\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between maintained Feature 033/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if useful.\n5. Verification checklist: feature_explorer build, lat check, script_sharing unit tests, action/source-audit tests, parent confirmation/startup source audit proof, cargo check/fmt, and any caveats.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer downloadable files. The local agent will write files and run verification locally.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-sharing-clipboard-trust.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-sharing-clipboard-trust",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T18:34:02.381Z",
+  "completedAt": "2026-05-15T18:42:04.167Z",
+  "usage": {
+    "inputTokens": 112689,
+    "outputTokens": 8835,
+    "reasoningTokens": 0,
+    "totalTokens": 121524
+  },
+  "elapsedMs": 479561
+}

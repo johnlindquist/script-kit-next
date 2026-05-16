@@ -1,0 +1,97 @@
+{
+  "id": "confirm-prompt-dialogs-atlas",
+  "createdAt": "2026-05-15T09:48:50.016Z",
+  "status": "completed",
+  "promptPreview": "[confirm-prompt-dialogs-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source context. Return text ",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T09:48:50.017Z",
+      "completedAt": "2026-05-15T09:56:41.977Z",
+      "usage": {
+        "inputTokens": 83787,
+        "outputTokens": 8533,
+        "reasoningTokens": 0,
+        "totalTokens": 92320
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 64233
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[confirm-prompt-dialogs-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source context. Return text only.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/confirm-prompt-dialogs-atlas.txt",
+      "feature-map/raw-oracle/024-confirm-prompt-and-dialogs/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "confirm-prompt-dialogs-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/024-confirm-prompt-and-dialogs/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T09:48:50.017Z",
+  "completedAt": "2026-05-15T09:56:41.979Z",
+  "usage": {
+    "inputTokens": 83787,
+    "outputTokens": 8533,
+    "reasoningTokens": 0,
+    "totalTokens": 92320
+  },
+  "elapsedMs": 459836
+}

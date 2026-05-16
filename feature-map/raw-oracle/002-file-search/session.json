@@ -1,0 +1,22 @@
+{
+  "featureId": "002-file-search",
+  "title": "File Search / Browser / Attachment Portals",
+  "slug": "file-search-feature-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T04:15:23.192Z",
+  "completedAt": "2026-05-15T04:23:25.406Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/file-search-feature-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/file-search-feature-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 46000,
+    "outputTokens": 8981,
+    "reasoningTokens": 0,
+    "totalTokens": 54981
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/file-search-feature-map"
+}

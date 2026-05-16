@@ -1,0 +1,97 @@
+{
+  "id": "prompt-runtime-core-atlas",
+  "createdAt": "2026-05-15T08:04:53.649Z",
+  "status": "completed",
+  "promptPreview": "[prompt-runtime-core-atlas]\n\nUse the attached focused repo bundle and prompt context. Produce the feature atlas for 016 Prompt Runtime Core / arg() / select() /",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T08:04:53.650Z",
+      "completedAt": "2026-05-15T08:10:53.233Z",
+      "usage": {
+        "inputTokens": 10102,
+        "outputTokens": 8301,
+        "reasoningTokens": 0,
+        "totalTokens": 18403
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 58954
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[prompt-runtime-core-atlas]\n\nUse the attached focused repo bundle and prompt context. Produce the feature atlas for 016 Prompt Runtime Core / arg() / select() / div() / md() in the requested section shape. Be complete and concrete, but keep the answer under about 6,000 words so it can be captured reliably. Return only text; do not create files or artifacts.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/prompt-runtime-core-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/016-prompt-runtime-core/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "prompt-runtime-core-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/016-prompt-runtime-core/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T08:04:53.650Z",
+  "completedAt": "2026-05-15T08:10:53.237Z",
+  "usage": {
+    "inputTokens": 10102,
+    "outputTokens": 8301,
+    "reasoningTokens": 0,
+    "totalTokens": 18403
+  },
+  "elapsedMs": 358234
+}
