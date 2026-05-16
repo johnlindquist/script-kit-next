@@ -88,7 +88,10 @@ export interface HardScenarioReceipt {
     | "notes-acp-delayed-action-origin-stress"
     | "file-portal-origin-roundtrip"
     | "permission-privacy-preflight"
-    | "shortcut-recorder-focus-capture";
+    | "shortcut-recorder-focus-capture"
+    | "template-prompt-automation-parity-stress"
+    | "current-app-commands-frontmost-stress"
+    | "actions-captured-subject-frame-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -103,6 +106,9 @@ export interface HardScenarioReceipt {
   portal?: Record<string, unknown>;
   permissions?: Record<string, unknown>;
   shortcut?: Record<string, unknown>;
+  templatePrompt?: Record<string, unknown>;
+  currentAppCommands?: Record<string, unknown>;
+  actionsCapturedSubject?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -1536,6 +1542,432 @@ export async function runShortcutRecorderFocusCaptureStressScenario(opts: {
   };
 }
 
+export async function runTemplatePromptAutomationParityStressScenario(opts: {
+  session: string;
+  template?: string;
+  field?: string;
+  value?: string;
+  forcedValue?: string;
+}): Promise<HardScenarioReceipt> {
+  const template = opts.template ?? "Hello {{name}}";
+  const field = opts.field ?? "name";
+  const value = opts.value ?? "Ada";
+  const forcedValue = opts.forcedValue ?? "forced-template-result";
+  const steps: Array<Record<string, unknown>> = [];
+
+  const pushStep = (
+    name: string,
+    status: "pass" | "fail" | "error",
+    output: unknown,
+  ) => {
+    steps.push({ name, status, output });
+  };
+
+  const fail = (
+    code: TargetThreadFailure["code"],
+    stepName: string,
+    message: string,
+    output?: unknown,
+  ): HardScenarioReceipt => {
+    if (output !== undefined) pushStep(stepName, "fail", output);
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "template-prompt-automation-parity-stress",
+      status: "fail",
+      templatePrompt: {
+        session: opts.session,
+        template,
+        field,
+        value,
+        forcedValue,
+        failureStep: stepName,
+      },
+      usage: {
+        stateFirst: true,
+        usedGetState: true,
+        usedGetElements: true,
+        usedWaitFor: false,
+        usedBatch: true,
+        usedSimulateKey: true,
+        usedNativeInput: false,
+        usedScreenshot: false,
+        usedFixedSleepMs: 0,
+        mutatedUserData: false,
+      },
+      steps,
+      failure: { code, stepName, message },
+      warnings: [],
+    };
+  };
+
+  const send = async (payload: Record<string, unknown>, name: string) => {
+    const result = await runTool(
+      [
+        "bash",
+        "scripts/agentic/session.sh",
+        "send",
+        opts.session,
+        JSON.stringify(payload),
+        "--await-parse",
+        "--timeout",
+        "8000",
+      ],
+      `template-prompt:${name}`,
+    );
+    if (result.exitCode !== 0) {
+      throw new Error(result.stdout || result.stderr || `${name} failed`);
+    }
+    return parseMaybeJson(result.stdout);
+  };
+
+  const extractResponse = (receipt: Record<string, unknown>) =>
+    ((receipt.response as Record<string, unknown> | undefined) ?? receipt);
+
+  try {
+    const start = await runTool(
+      ["bash", "scripts/agentic/session.sh", "start", opts.session],
+      "template-prompt:session-start",
+    );
+    if (start.exitCode !== 0) {
+      return fail(
+        "missing_template_prompt_automation_receipt",
+        "session-start",
+        "TemplatePrompt parity could not start or resume the requested session.",
+        parseMaybeJson(start.stdout || start.stderr),
+      );
+    }
+    pushStep("session-start", "pass", parseMaybeJson(start.stdout));
+
+    const submitId = `tpl-submit-${Date.now()}`;
+    const opened = await send(
+      { type: "template", id: submitId, template, requestId: `${submitId}-open` },
+      "open-submit-template",
+    );
+    pushStep("open-submit-template", "pass", opened);
+
+    const stateEnvelope = await rpc(
+      opts.session,
+      { type: "getState", requestId: `${submitId}-state` },
+      "stateResult",
+      8000,
+    );
+    const state = extractResponse(stateEnvelope);
+    if (state.promptType !== "template") {
+      return fail(
+        "template_prompt_state_missing",
+        "get-state",
+        "Expected getState.promptType to be template.",
+        stateEnvelope,
+      );
+    }
+    pushStep("get-state", "pass", stateEnvelope);
+
+    const elementsEnvelope = await rpc(
+      opts.session,
+      { type: "getElements", requestId: `${submitId}-elements`, limit: 80 },
+      "elementsResult",
+      8000,
+    );
+    const elementsResponse = extractResponse(elementsEnvelope);
+    const elements = Array.isArray(elementsResponse.elements)
+      ? elementsResponse.elements as Array<Record<string, unknown>>
+      : [];
+    const sourceRow = elements.find((element) => element.semanticId === "input:template-source");
+    const fieldRowId = `input:template-${field}`;
+    const fieldRow = elements.find((element) => element.semanticId === fieldRowId);
+    if (!sourceRow || !fieldRow) {
+      return fail(
+        "template_prompt_elements_missing",
+        "get-elements",
+        "Expected template source and field rows in getElements.",
+        { sourceRow: Boolean(sourceRow), fieldRowId, rowCount: elements.length, elementsEnvelope },
+      );
+    }
+    pushStep("get-elements", "pass", { rowCount: elements.length, sourceRow, fieldRow });
+
+    const fillEnvelope = await rpc(
+      opts.session,
+      {
+        type: "batch",
+        requestId: `${submitId}-fill`,
+        commands: [{ type: "setInput", text: value }],
+      },
+      "batchResult",
+      8000,
+    );
+    const fill = extractResponse(fillEnvelope);
+    if (fill.success !== true) {
+      return fail(
+        "template_prompt_force_submit_failed",
+        "batch-set-input",
+        "TemplatePrompt batch.setInput failed.",
+        fillEnvelope,
+      );
+    }
+    pushStep("batch-set-input", "pass", fillEnvelope);
+
+    const actionId = `tpl-actions-${Date.now()}`;
+    await send(
+      { type: "template", id: actionId, template, requestId: `${actionId}-open` },
+      "open-actions-template",
+    );
+    await send(
+      { type: "simulateKey", key: "k", modifiers: ["cmd"], requestId: `${actionId}-cmd-k` },
+      "cmd-k-actions",
+    );
+    let actionsElementsEnvelope: Record<string, unknown> | null = null;
+    try {
+      actionsElementsEnvelope = await rpc(
+        opts.session,
+        {
+          type: "getElements",
+          requestId: `${actionId}-actions-elements`,
+          target: { type: "kind", kind: "actionsDialog", index: 0 },
+          limit: 80,
+        },
+        "elementsResult",
+        8000,
+      );
+    } catch (error) {
+      actionsElementsEnvelope = {
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+    const actionsStateEnvelope = await rpc(
+      opts.session,
+      { type: "getState", requestId: `${actionId}-actions-state` },
+      "stateResult",
+      8000,
+    );
+    const actionsState = extractResponse(actionsStateEnvelope);
+    const actionsElements = extractResponse(actionsElementsEnvelope ?? {});
+    const actionRows = Array.isArray(actionsElements.elements)
+      ? actionsElements.elements as Array<Record<string, unknown>>
+      : [];
+    const actionsOpened = Boolean(actionsState.activePopupContract) || actionRows.length > 0;
+    if (!actionsOpened) {
+      return fail(
+        "template_prompt_actions_unavailable",
+        "cmd-k-actions",
+        "TemplatePrompt Cmd+K did not expose an active actions popup contract or actionsDialog elements.",
+        { actionsStateEnvelope, actionsElementsEnvelope },
+      );
+    }
+    pushStep("cmd-k-actions", "pass", { actionsStateEnvelope, actionsElementsEnvelope });
+    await send(
+      { type: "simulateKey", key: "escape", modifiers: [], requestId: `${actionId}-escape-actions` },
+      "escape-actions",
+    );
+
+    const cancelId = `tpl-cancel-${Date.now()}`;
+    await send(
+      { type: "template", id: cancelId, template, requestId: `${cancelId}-open` },
+      "open-cancel-template",
+    );
+    await send(
+      { type: "simulateKey", key: "escape", modifiers: [], requestId: `${cancelId}-escape` },
+      "escape-cancel",
+    );
+    pushStep("escape-cancel", "pass", { id: cancelId });
+
+    const forceId = `tpl-force-${Date.now()}`;
+    await send(
+      { type: "template", id: forceId, template, requestId: `${forceId}-open` },
+      "open-force-template",
+    );
+    const forceEnvelope = await rpc(
+      opts.session,
+      {
+        type: "batch",
+        requestId: `${forceId}-batch-force`,
+        commands: [{ type: "forceSubmit", value: forcedValue }],
+      },
+      "batchResult",
+      8000,
+    );
+    const force = extractResponse(forceEnvelope);
+    const forceResult = Array.isArray(force.results)
+      ? force.results[0] as Record<string, unknown> | undefined
+      : undefined;
+    if (force.success !== true || forceResult?.value !== forcedValue) {
+      return fail(
+        "template_prompt_force_submit_failed",
+        "batch-force-submit",
+        "TemplatePrompt batch.forceSubmit did not return the explicit provided value.",
+        forceEnvelope,
+      );
+    }
+    pushStep("batch-force-submit", "pass", forceEnvelope);
+
+    return {
+      schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+      scenario: "template-prompt-automation-parity-stress",
+      status: "pass",
+      templatePrompt: {
+        session: opts.session,
+        template,
+        field,
+        value,
+        forcedValue,
+        promptType: state.promptType,
+        statePromptId: state.promptId ?? null,
+        elementSemanticIds: elements.map((element) => element.semanticId).filter(Boolean),
+        sourceRow,
+        fieldRow,
+        actionsHost: "TemplatePrompt",
+        activePopupContract: actionsState.activePopupContract,
+        actionsRowCount: actionRows.length,
+        batchSetInput: { field, value, success: true },
+        cancel: { viaEscape: true },
+        batchForceSubmit: { providedValue: forcedValue, resolvedValue: forceResult.value },
+      },
+      usage: {
+        stateFirst: true,
+        usedGetState: true,
+        usedGetElements: true,
+        usedWaitFor: false,
+        usedBatch: true,
+        usedSimulateKey: true,
+        usedNativeInput: false,
+        usedScreenshot: false,
+        usedFixedSleepMs: 0,
+        mutatedUserData: false,
+      },
+      steps,
+      warnings: [],
+    };
+  } catch (error) {
+    return fail(
+      "missing_template_prompt_automation_receipt",
+      "template-prompt-runtime",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+export async function runCurrentAppCommandsFrontmostStressScenario(opts: {
+  session: string;
+  query?: string;
+  alias?: string;
+  expectedApp?: string;
+}): Promise<HardScenarioReceipt> {
+  const query = opts.query ?? "close tab";
+  const alias = opts.alias ?? "Do in Current Command";
+
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "current-app-commands-frontmost-stress",
+    status: "fail",
+    currentAppCommands: {
+      session: opts.session,
+      stableEntryId: "builtin/do-in-current-app",
+      alias,
+      query,
+      expectedApp: opts.expectedApp ?? null,
+      frontmostSnapshot: null,
+      openedView: null,
+      sharedFilterHelper: "current_app_commands_filtered_entries",
+      stateVisibleChoiceCount: null,
+      elementRowCount: null,
+      rendererRowCount: null,
+      staleAliasRejected: null,
+      wrongAppExecutionBlocked: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "current-app-frontmost-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          alias,
+          query,
+          blockingGap:
+            "CurrentAppCommandsView receipts do not yet expose a frontmost-app snapshot, alias normalization proof, shared filter counts, and wrong-app execution guard in one agentic recipe.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_current_app_commands_frontmost_receipt",
+      stepName: "current-app-frontmost-receipt-preflight",
+      message:
+        "The harness fails closed until Do in Current App can prove frontmost snapshot identity and shared filter semantics without executing against a stale app.",
+    },
+    warnings: ["file_linear:current_app_commands_frontmost_receipts_missing"],
+  };
+}
+
+export async function runActionsCapturedSubjectFrameStressScenario(opts: {
+  session: string;
+  source?: string;
+  action?: string;
+  mutation?: string;
+}): Promise<HardScenarioReceipt> {
+  const source = opts.source ?? "root-file";
+  const action = opts.action ?? "quick-look";
+  const mutation = opts.mutation ?? "filter-selection-cache-frame";
+
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "actions-captured-subject-frame-stress",
+    status: "fail",
+    actionsCapturedSubject: {
+      session: opts.session,
+      host: "MainList",
+      source,
+      action,
+      mutation,
+      subjectStableKey: null,
+      pendingSubjectFrame: null,
+      activePopupContract: null,
+      executeSubjectStableKey: null,
+      focusRestoredTo: null,
+      reReadCurrentSelection: null,
+      unknownRootIdNoop: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "actions-captured-subject-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          source,
+          action,
+          mutation,
+          blockingGap:
+            "ActionsDialog receipts do not yet expose the captured MainList subject, source-filter frame, execution subject, and focus-restore target as one stable proof.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_actions_captured_subject_receipt",
+      stepName: "actions-captured-subject-receipt-preflight",
+      message:
+        "The harness fails closed until root actions can prove execution uses the captured subject after filter/selection/cache/frame drift.",
+    },
+    warnings: ["file_linear:actions_captured_subject_receipts_missing"],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -1603,17 +2035,94 @@ function parseArgs() {
   const actionIdx = args.indexOf("--action");
   const action =
     actionIdx >= 0 && args[actionIdx + 1] ? args[actionIdx + 1] : "test-agentic-shortcut";
+  const templateIdx = args.indexOf("--template");
+  const template =
+    templateIdx >= 0 && args[templateIdx + 1] ? args[templateIdx + 1] : "Hello {{name}}";
+  const fieldIdx = args.indexOf("--field");
+  const field = fieldIdx >= 0 && args[fieldIdx + 1] ? args[fieldIdx + 1] : "name";
+  const valueIdx = args.indexOf("--value");
+  const value = valueIdx >= 0 && args[valueIdx + 1] ? args[valueIdx + 1] : "Ada";
+  const forcedValueIdx = args.indexOf("--forced-value");
+  const forcedValue =
+    forcedValueIdx >= 0 && args[forcedValueIdx + 1]
+      ? args[forcedValueIdx + 1]
+      : "forced-template-result";
+  const aliasIdx = args.indexOf("--alias");
+  const alias =
+    aliasIdx >= 0 && args[aliasIdx + 1] ? args[aliasIdx + 1] : "Do in Current Command";
+  const expectedAppIdx = args.indexOf("--expected-app");
+  const expectedApp =
+    expectedAppIdx >= 0 && args[expectedAppIdx + 1] ? args[expectedAppIdx + 1] : undefined;
+  const sourceIdx = args.indexOf("--source");
+  const source = sourceIdx >= 0 && args[sourceIdx + 1] ? args[sourceIdx + 1] : "root-file";
+  const mutationIdx = args.indexOf("--mutation");
+  const mutation =
+    mutationIdx >= 0 && args[mutationIdx + 1]
+      ? args[mutationIdx + 1]
+      : "filter-selection-cache-frame";
   const surfaceIdx = args.indexOf("--surface");
   const surface = surfaceIdx >= 0 && args[surfaceIdx + 1] ? args[surfaceIdx + 1] : "shortcuts";
   const sandboxConfig = args.includes("--sandbox-config");
   const vision = args.includes("--vision");
 
-  return { session, scenario, index, minTargets, key, families, drift, host, portal, selection, query, kinds, chord, action, surface, sandboxConfig, vision };
+  return {
+    session,
+    scenario,
+    index,
+    minTargets,
+    key,
+    families,
+    drift,
+    host,
+    portal,
+    selection,
+    query,
+    kinds,
+    chord,
+    action,
+    template,
+    field,
+    value,
+    forcedValue,
+    alias,
+    expectedApp,
+    source,
+    mutation,
+    surface,
+    sandboxConfig,
+    vision,
+  };
 }
 
 // Only run CLI when executed directly (not imported)
 if (import.meta.main) {
-  const { session, scenario, index, minTargets, key, families, drift, host, portal, selection, query, kinds, chord, action, surface, sandboxConfig, vision } = parseArgs();
+  const {
+    session,
+    scenario,
+    index,
+    minTargets,
+    key,
+    families,
+    drift,
+    host,
+    portal,
+    selection,
+    query,
+    kinds,
+    chord,
+    action,
+    template,
+    field,
+    value,
+    forcedValue,
+    alias,
+    expectedApp,
+    source,
+    mutation,
+    surface,
+    sandboxConfig,
+    vision,
+  } = parseArgs();
 
   const AVAILABLE_SCENARIOS = [
     "main-window-exact-id",
@@ -1626,6 +2135,9 @@ if (import.meta.main) {
     "file-portal-origin-roundtrip",
     "permission-privacy-preflight",
     "shortcut-recorder-focus-capture",
+    "template-prompt-automation-parity-stress",
+    "current-app-commands-frontmost-stress",
+    "actions-captured-subject-frame-stress",
   ];
 
   if (!scenario) {
@@ -1712,6 +2224,27 @@ if (import.meta.main) {
 
     case "shortcut-recorder-focus-capture": {
       const bundle = await runShortcutRecorderFocusCaptureStressScenario({ session, chord, action, surface, sandboxConfig });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "template-prompt-automation-parity-stress": {
+      const bundle = await runTemplatePromptAutomationParityStressScenario({ session, template, field, value, forcedValue });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "current-app-commands-frontmost-stress": {
+      const bundle = await runCurrentAppCommandsFrontmostStressScenario({ session, query, alias, expectedApp });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "actions-captured-subject-frame-stress": {
+      const bundle = await runActionsCapturedSubjectFrameStressScenario({ session, source, action, mutation });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;

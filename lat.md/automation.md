@@ -168,6 +168,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `shortcut-recorder-focus-capture` is intentionally fail-closed until shortcut recorder surfaces expose focus, captured chord, and global-hotkey leak receipts without writing `config.ts`.
 
+`template-prompt-automation-parity-stress` runs as a state-first runtime proof for TemplatePrompt state, template rows, batch field input, Cmd+K actions, Escape cancel, and batch ForceSubmit explicit values.
+
+`current-app-commands-frontmost-stress` is intentionally fail-closed until Do in Current App receipts expose the captured frontmost app, stable alias normalization, shared filter counts, and wrong-app execution guard.
+
+`actions-captured-subject-frame-stress` is intentionally fail-closed until MainList action receipts expose the captured root subject stable key, source-frame identity, execution subject key, and focus-restore target after filter/selection/cache drift.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

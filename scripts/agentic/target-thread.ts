@@ -80,7 +80,22 @@ export interface TargetThreadFailure {
     | "hotkey_persisted_outside_sandbox"
     | "missing_portal_round_trip_origin_receipt"
     | "permission_preflight_failed"
-    | "missing_shortcut_recorder_capture_receipt";
+    | "missing_shortcut_recorder_capture_receipt"
+    | "missing_template_prompt_automation_receipt"
+    | "missing_current_app_commands_frontmost_receipt"
+    | "missing_actions_captured_subject_receipt"
+    | "template_prompt_state_missing"
+    | "template_prompt_elements_missing"
+    | "template_prompt_actions_unavailable"
+    | "template_prompt_force_submit_failed"
+    | "current_app_snapshot_missing"
+    | "current_app_alias_drift"
+    | "current_app_filter_drift"
+    | "current_app_wrong_app_execution"
+    | "actions_subject_missing"
+    | "actions_subject_drift"
+    | "actions_frame_drift"
+    | "actions_focus_restore_failed";
   expected?: Partial<TargetThreadIdentity>;
   actual?: Partial<TargetThreadIdentity>;
   stepName: string;

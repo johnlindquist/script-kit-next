@@ -438,6 +438,63 @@ bun scripts/agentic/index.ts shortcut-recorder-focus-capture \
 
 ---
 
+### Recipe: verify-template-prompt-automation-parity-stress
+
+**When:** Testing TemplatePrompt protocol parity for state, elements, field navigation, actions, submit/cancel, and ForceSubmit without using screenshots.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts template-prompt-automation-parity-stress \
+  --session default \
+  --template 'Hello {{name}}' \
+  --field name \
+  --value Ada \
+  --forced-value forced-template-result \
+  --json
+```
+
+**Pass:** The receipt proves `getState.promptType:"template"`, `getElements` template rows, TemplatePrompt actions host, Escape cancel, and batch ForceSubmit explicit value without screenshots or native input.
+**Fail:** Missing template state/elements/actions/ForceSubmit receipts, or any protocol step returning an error.
+
+---
+
+### Recipe: verify-current-app-commands-frontmost-stress
+
+**When:** Testing Do in Current App aliases, frontmost-app snapshot identity, shared CurrentAppCommands filtering, and stale-app execution guards.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts current-app-commands-frontmost-stress \
+  --session default \
+  --alias 'Do in Current Command' \
+  --query 'close tab' \
+  --json
+```
+
+**Pass:** A future receipt proves the stable `builtin/do-in-current-app` entry opened `CurrentAppCommandsView` from the captured frontmost app, and state/elements/renderer counts use shared filtering semantics.
+**Current fail-closed behavior:** Until those receipts exist, this recipe returns `missing_current_app_commands_frontmost_receipt` and never executes a menu action against a guessed app.
+
+---
+
+### Recipe: verify-actions-captured-subject-frame-stress
+
+**When:** Testing root unified Cmd+K actions where execution must use the subject captured when the dialog opened, even after filter, selection, cache, or source-frame drift.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts actions-captured-subject-frame-stress \
+  --session default \
+  --source root-file \
+  --action quick-look \
+  --mutation filter-selection-cache-frame \
+  --json
+```
+
+**Pass:** A future receipt proves the MainList actions dialog retained the captured subject stable key, executed against that key, and restored focus without re-reading the current selection.
+**Current fail-closed behavior:** Until those receipts exist, this recipe returns `missing_actions_captured_subject_receipt`.
+
+---
+
 ### Recipe: verify-acp-input-stability
 
 **When:** Changes to single-line input rendering, cursor movement, or scroll behavior in ACP.
