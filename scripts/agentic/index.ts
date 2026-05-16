@@ -165,6 +165,12 @@
  *                         Fail-closed root source-chip action semantics proof
  *   recent-history-dedupe-root-grouping-stress
  *                         Fail-closed recent/history dedupe root grouping proof
+ *   inline-attachment-preview-chip-stability-stress
+ *                         Fail-closed inline attachment preview chip proof
+ *   window-title-status-semantics-stress
+ *                         Fail-closed window title/status semantics proof
+ *   menu-syntax-capture-validation-chip-stress
+ *                         Fail-closed menu syntax capture validation chip proof
  *   help                   Show this help
  *
  * Target threading:
@@ -263,6 +269,9 @@ import {
   runCommandPaletteBreadcrumbRouteStackStressScenario,
   runRootSourceChipActionSemanticsStressScenario,
   runRecentHistoryDedupeRootGroupingStressScenario,
+  runInlineAttachmentPreviewChipStabilityStressScenario,
+  runWindowTitleStatusSemanticsStressScenario,
+  runMenuSyntaxCaptureValidationChipStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1106,7 +1115,9 @@ function parseArgs() {
     backMethodsIdx >= 0 && args[backMethodsIdx + 1]
       ? args[backMethodsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
-  const chipActionsIdx = args.indexOf("--actions");
+  const chipActionsIdx = args.includes("--chip-actions")
+    ? args.indexOf("--chip-actions")
+    : args.indexOf("--actions");
   const chipActions =
     chipActionsIdx >= 0 && args[chipActionsIdx + 1]
       ? args[chipActionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
@@ -1117,6 +1128,12 @@ function parseArgs() {
       ? args[sourcesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const noNetwork = args.includes("--no-network");
+  const casesIdx = args.indexOf("--cases");
+  const cases =
+    casesIdx >= 0 && args[casesIdx + 1]
+      ? args[casesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noScreenCapture = args.includes("--no-screen-capture");
   return {
     recipe,
     session,
@@ -1251,6 +1268,8 @@ function parseArgs() {
     chipActions,
     sources,
     noNetwork,
+    cases,
+    noScreenCapture,
   };
 }
 
@@ -2623,6 +2642,8 @@ const {
   chipActions,
   sources,
   noNetwork,
+  cases,
+  noScreenCapture,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3956,6 +3977,24 @@ switch (recipe) {
     break;
   }
 
+  case "inline-attachment-preview-chip-stability-stress": {
+    const proofBundle = await runInlineAttachmentPreviewChipStabilityStressScenario({ session, hosts, fixture, origins, chipActions, inputModes, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "inline-attachment-preview-chip-stability-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Inline attachment preview chip stability stress failed closed; chip focus/preview/remove/reorder, redaction, overflow, and no-leak receipts are missing", proofBundle };
+    break;
+  }
+
+  case "window-title-status-semantics-stress": {
+    const proofBundle = await runWindowTitleStatusSemanticsStressScenario({ session, surfaces, states, transitions, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "window-title-status-semantics-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Window title/status semantics stress failed closed; native title, semantic title, status generation, parity, and stale title/status receipts are missing", proofBundle };
+    break;
+  }
+
+  case "menu-syntax-capture-validation-chip-stress": {
+    const proofBundle = await runMenuSyntaxCaptureValidationChipStressScenario({ session, fixture, cases, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "menu-syntax-capture-validation-chip-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Menu syntax capture validation chip stress failed closed; status chips, missing/malformed/unresolved validation, no-submit, and no-payload receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4143,6 +4182,9 @@ switch (recipe) {
           { name: "command-palette-breadcrumb-route-stack-stress", description: "Fail-closed UX receipt contract for command palette breadcrumb route-stack restoration", flags: ["--session", "--host", "--fixture", "--drill-path", "--filter", "--back-methods", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "root-source-chip-action-semantics-stress", description: "Fail-closed UX receipt contract for root source-chip actions and status-chip refusal", flags: ["--session", "--queries", "--actions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "recent-history-dedupe-root-grouping-stress", description: "Fail-closed UX receipt contract for recent/history dedupe and root grouping stability", flags: ["--session", "--fixture", "--sources", "--query", "--cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "inline-attachment-preview-chip-stability-stress", description: "Fail-closed UX receipt contract for inline attachment preview chip stability", flags: ["--session", "--hosts", "--fixture", "--origins", "--chip-actions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "window-title-status-semantics-stress", description: "Fail-closed UX receipt contract for window title and visible status semantics", flags: ["--session", "--surfaces", "--states", "--transitions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "menu-syntax-capture-validation-chip-stress", description: "Fail-closed UX receipt contract for menu syntax capture validation chips", flags: ["--session", "--fixture", "--cases", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4234,6 +4276,9 @@ switch (recipe) {
           "proofBundle.commandPaletteBreadcrumbRouteStackReceipt",
           "proofBundle.rootSourceChipActionSemanticsReceipt",
           "proofBundle.recentHistoryDedupeRootGroupingReceipt",
+          "proofBundle.inlineAttachmentPreviewChipStabilityReceipt",
+          "proofBundle.windowTitleStatusSemanticsReceipt",
+          "proofBundle.menuSyntaxCaptureValidationChipReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4586,6 +4631,12 @@ Available scenarios:
                          Emit fail-closed root source-chip action semantics requirements
   recent-history-dedupe-root-grouping-stress
                          Emit fail-closed recent/history dedupe root grouping requirements
+  inline-attachment-preview-chip-stability-stress
+                         Emit fail-closed inline attachment preview chip requirements
+  window-title-status-semantics-stress
+                         Emit fail-closed window title/status semantics requirements
+  menu-syntax-capture-validation-chip-stress
+                         Emit fail-closed menu syntax capture validation chip requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4685,6 +4736,9 @@ Examples:
   bun scripts/agentic/index.ts command-palette-breadcrumb-route-stack-stress --session default --host main --fixture agentic-actions-breadcrumbs --drill-path parent-action,child-action --filter 'switch' --back-methods escape,breadcrumb-click --input-modes protocol-key,protocol-click,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts root-source-chip-action-semantics-stress --session default --queries 'f: AGENTS.md,c: agentic,n: welcome,-c: noise' --actions remove-chip,clear-all,toggle-exclude,open-chip-actions --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts recent-history-dedupe-root-grouping-stress --session default --fixture agentic-root-recents --sources files,notes,clipboard,dictation,acp-history --query agentic-loop-29-dupe --cycles 6 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts inline-attachment-preview-chip-stability-stress --session default --hosts acp-composer,notes --fixture agentic-inline-attachments --origins local-file,fixture-image,fixture-text,script-resource --chip-actions focus,preview,remove,reorder,overflow --input-modes protocol-set-input,protocol-click,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,acp-composer,actionsDialog,promptPopup,notes --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts menu-syntax-capture-validation-chip-stress --session default --fixture agentic-capture-validation --cases missing-body-date,missing-date,ready,malformed-url,unresolved-date,dynamic-schema --input-modes protocol-set-filter,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

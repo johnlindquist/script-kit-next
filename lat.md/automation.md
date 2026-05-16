@@ -334,6 +334,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `recent-history-dedupe-root-grouping-stress` is intentionally fail-closed until root recents/history receipts expose fixture snapshot and source catalog generations, query/root/passive frame keys, result roles, group order, contiguous Files section, stable Search Files continuation, dedupe keys and rejected collisions, metadata-only history rows, no transcript/body leaks, stable selection, row fingerprints across cycles, fallback suppression, stale passive publish rejection, AFK-safe flags, and cleanup.
 
+`inline-attachment-preview-chip-stability-stress` is intentionally fail-closed until inline attachment receipts expose fixture attachment set identity, host surface/composer generation, chip semantic ids/kinds/labels/bounds, redacted preview fingerprints, overflow/focus/remove/reorder receipts, cursor/selection preservation, no raw path/content leak, no native picker/screen capture/pasteboard/network, stale attachment rejection, AFK-safe flags, and cleanup.
+
+`window-title-status-semantics-stress` is intentionally fail-closed until window title/status receipts expose resolved target identity, automation/native/semantic titles, visible status text, title/status generations, transition receipts, detached window parity, attached popup parent title preservation, error recovery, stale title/status rejection, no focus steal, AFK-safe flags, and cleanup.
+
+`menu-syntax-capture-validation-chip-stress` is intentionally fail-closed until menu syntax receipts expose fixture catalog identity, filter input text, main hint snapshot, capture validation status, status chip labels, missing/malformed/unresolved field labels, fragment preview rows, priority choices row, invalid Enter prevention, no payload write, no handler spawn, stale validation rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
