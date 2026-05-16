@@ -111,6 +111,12 @@
  *                         Fail-closed destructive confirm dry-run safety proof
  *   loading-skeleton-progress-restoration-stress
  *                         Fail-closed loading skeleton/progress restoration proof
+ *   icon-image-fallback-redaction-stress
+ *                         Fail-closed icon/image fallback redaction proof
+ *   footer-status-persistence-stress
+ *                         Fail-closed footer/status persistence proof
+ *   keyboard-hint-label-parity-stress
+ *                         Fail-closed keyboard hint label parity proof
  *   help                   Show this help
  *
  * Target threading:
@@ -185,6 +191,9 @@ import {
   runToastNotificationQueueLifecycleStressScenario,
   runDestructiveConfirmModalSafetyStressScenario,
   runLoadingSkeletonProgressRestorationStressScenario,
+  runIconImageFallbackRedactionStressScenario,
+  runFooterStatusPersistenceStressScenario,
+  runKeyboardHintLabelParityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -3547,6 +3556,24 @@ switch (recipe) {
     break;
   }
 
+  case "icon-image-fallback-redaction-stress": {
+    const proofBundle = await runIconImageFallbackRedactionStressScenario({ session, surfaces, fixtures });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "icon-image-fallback-redaction-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Icon/image fallback redaction stress failed closed; fallback, redaction, stale image, accessible label, and no-leak receipts are missing", proofBundle };
+    break;
+  }
+
+  case "footer-status-persistence-stress": {
+    const proofBundle = await runFooterStatusPersistenceStressScenario({ session, surfaces, transitions });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "footer-status-persistence-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Footer/status persistence stress failed closed; owner, generation, transition persistence, duplicate rejection, and stale status receipts are missing", proofBundle };
+    break;
+  }
+
+  case "keyboard-hint-label-parity-stress": {
+    const proofBundle = await runKeyboardHintLabelParityStressScenario({ session, surfaces, families });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "keyboard-hint-label-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Keyboard hint label parity stress failed closed; footer, row, tooltip, catalog, glyph, disabled parity, and activation owner receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3707,6 +3734,9 @@ switch (recipe) {
           { name: "toast-notification-queue-lifecycle-stress", description: "Fail-closed UX stress for toast queue, notification bridge, duplicate collapse, autohide, dismiss, bounds, and stale rejection", flags: ["--session", "--surface", "--fixtures", "--cycles", "--json"] },
           { name: "destructive-confirm-modal-safety-stress", description: "Fail-closed UX stress for destructive confirm dry-run identity, Enter/Escape safety, parent restore, and no real system command", flags: ["--session", "--host", "--fixture", "--paths", "--dry-run-only", "--json"] },
           { name: "loading-skeleton-progress-restoration-stress", description: "Fail-closed UX stress for local loading skeleton/progress generations, stale rejection, activation blocking, and restoration", flags: ["--session", "--surfaces", "--fixture", "--cycles", "--json"] },
+          { name: "icon-image-fallback-redaction-stress", description: "Fail-closed UX stress for icon/image fallback, source redaction, stale image rejection, and accessible labels", flags: ["--session", "--surfaces", "--fixtures", "--json"] },
+          { name: "footer-status-persistence-stress", description: "Fail-closed UX stress for footer/status owner, generation, transition persistence, duplicate rejection, and stale status", flags: ["--session", "--surfaces", "--transitions", "--json"] },
+          { name: "keyboard-hint-label-parity-stress", description: "Fail-closed UX stress for footer, row, tooltip, and action catalog shortcut hint parity", flags: ["--session", "--surfaces", "--families", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3922,6 +3952,12 @@ Recipes:
                          Fail-closed destructive confirm dry-run safety proof
   loading-skeleton-progress-restoration-stress
                          Fail-closed loading skeleton/progress restoration proof
+  icon-image-fallback-redaction-stress
+                         Fail-closed icon/image fallback redaction proof
+  footer-status-persistence-stress
+                         Fail-closed footer/status persistence proof
+  keyboard-hint-label-parity-stress
+                         Fail-closed keyboard hint label parity proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -4060,6 +4096,12 @@ Available scenarios:
                          Emit fail-closed destructive confirm dry-run safety requirements
   loading-skeleton-progress-restoration-stress
                          Emit fail-closed loading skeleton/progress restoration requirements
+  icon-image-fallback-redaction-stress
+                         Emit fail-closed icon/image fallback redaction requirements
+  footer-status-persistence-stress
+                         Emit fail-closed footer/status persistence requirements
+  keyboard-hint-label-parity-stress
+                         Emit fail-closed keyboard hint label parity requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4132,6 +4174,9 @@ Examples:
   bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
   bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
   bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
+  bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
+  bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
+  bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPopup --families footer,row-accessory,tooltip,action-catalog --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

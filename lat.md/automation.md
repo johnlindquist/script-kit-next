@@ -280,6 +280,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `loading-skeleton-progress-restoration-stress` is intentionally fail-closed until loading/skeleton/progress receipts expose request and result generations, skeleton rows and bounds, visible progress text and monotonic percent, activation blocking while loading, stale loading/progress/result rejection, skeleton cleanup after results, selection/focus/filter/scroll restoration, local-fixture-only proof, and cleanup.
 
+`icon-image-fallback-redaction-stress` is intentionally fail-closed until row/icon receipts expose requested image source kind, redacted source fingerprint, fallback icon kind, fallback reason, image load generation, no raw path/URL/content leakage, stale image rejection, accessible label preservation, and cleanup.
+
+`footer-status-persistence-stress` is intentionally fail-closed until footer/status receipts expose owner, native footer surface id, rendered buttons, shortcut labels, status generation, persistence across filter/selection/actions transitions, duplicate-footer rejection, stale-status rejection, wrong-surface rejection, and cleanup.
+
+`keyboard-hint-label-parity-stress` is intentionally fail-closed until shortcut hint receipts expose footer, row accessory, tooltip, action catalog, normalized shortcut tokens, platform glyphs, disabled-state parity, activation owner, no accidental execution, stale-hint rejection, wrong-surface rejection, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
