@@ -5,6 +5,16 @@
 // copy_filename, __cancel__.
 
 impl ScriptListApp {
+    fn deeplink_for_result(result: &scripts::SearchResult) -> String {
+        result
+            .launcher_command_id()
+            .and_then(|command_id| crate::config::command_id_to_deeplink(&command_id).ok())
+            .unwrap_or_else(|| {
+                let deeplink_name = crate::actions::to_deeplink_name(result.name());
+                format!("scriptkit://run/{}", deeplink_name)
+            })
+    }
+
     /// Resolve the target path for a file action.
     ///
     /// Priority: `file_search_actions_path` (consumed) > selected SearchResult.
@@ -399,9 +409,7 @@ impl ScriptListApp {
                             }
                         }
                     } else {
-                        let name = result.name();
-                        let deeplink_name = crate::actions::to_deeplink_name(name);
-                        let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+                        let deeplink_url = Self::deeplink_for_result(&result);
 
                         tracing::info!(category = "UI", deeplink = %deeplink_url, "copying deeplink to clipboard");
                         self.copy_to_clipboard_with_feedback(
@@ -973,6 +981,45 @@ impl ScriptListApp {
             cached_count = self.cached_file_results.len(),
             first_rows = ?first_rows,
             "Applied file-search sort mode to cached results"
+        );
+    }
+}
+
+#[cfg(test)]
+mod files_action_tests {
+    use super::*;
+
+    #[test]
+    fn deeplink_for_config_backed_rows_uses_command_namespace() {
+        let builtin = scripts::SearchResult::BuiltIn(scripts::BuiltInMatch {
+            entry: crate::builtins::BuiltInEntry {
+                id: "builtin/clipboard-history".to_string(),
+                name: "Clipboard History".to_string(),
+                description: "Browse clipboard history".to_string(),
+                keywords: vec![],
+                feature: crate::builtins::BuiltInFeature::ClipboardHistory,
+                icon: None,
+                group: crate::builtins::BuiltInGroup::Core,
+            },
+            score: 1,
+        });
+        let app = scripts::SearchResult::App(scripts::AppMatch {
+            app: crate::app_launcher::AppInfo {
+                name: "Safari".to_string(),
+                path: std::path::PathBuf::from("/Applications/Safari.app"),
+                bundle_id: Some("com.apple.Safari".to_string()),
+                icon: None,
+            },
+            score: 1,
+        });
+
+        assert_eq!(
+            ScriptListApp::deeplink_for_result(&builtin),
+            "scriptkit://commands/builtin/clipboard-history"
+        );
+        assert_eq!(
+            ScriptListApp::deeplink_for_result(&app),
+            "scriptkit://commands/app/com.apple.Safari"
         );
     }
 }

@@ -274,7 +274,10 @@ pub(crate) fn root_unified_action_owner_for_result(
     result: &SearchResult,
 ) -> RootUnifiedResultActionOwner {
     match result {
-        SearchResult::Script(_) | SearchResult::Scriptlet(_) => {
+        SearchResult::Script(_)
+        | SearchResult::Scriptlet(_)
+        | SearchResult::BuiltIn(_)
+        | SearchResult::App(_) => {
             RootUnifiedResultActionOwner::ExistingScriptActions
         }
         _ => root_unified_action_subject_from_result(result)
@@ -789,5 +792,37 @@ mod tests {
             root_unified_action_owner_for_result(&result),
             RootUnifiedResultActionOwner::ExistingScriptActions
         ));
+    }
+
+    #[test]
+    fn config_backed_command_rows_delegate_to_existing_script_actions_owner() {
+        let builtin = SearchResult::BuiltIn(crate::scripts::BuiltInMatch {
+            entry: crate::builtins::BuiltInEntry {
+                id: "builtin/clipboard-history".to_string(),
+                name: "Clipboard History".to_string(),
+                description: "Browse clipboard history".to_string(),
+                keywords: vec![],
+                feature: crate::builtins::BuiltInFeature::ClipboardHistory,
+                icon: None,
+                group: crate::builtins::BuiltInGroup::Core,
+            },
+            score: 1,
+        });
+        let app = SearchResult::App(crate::scripts::AppMatch {
+            app: crate::app_launcher::AppInfo {
+                name: "Safari".to_string(),
+                path: std::path::PathBuf::from("/Applications/Safari.app"),
+                bundle_id: Some("com.apple.Safari".to_string()),
+                icon: None,
+            },
+            score: 1,
+        });
+
+        for result in [builtin, app] {
+            assert!(matches!(
+                root_unified_action_owner_for_result(&result),
+                RootUnifiedResultActionOwner::ExistingScriptActions
+            ));
+        }
     }
 }

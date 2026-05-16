@@ -1111,9 +1111,7 @@ impl ScriptListApp {
         let actions =
             crate::root_unified_result_actions::root_unified_actions_for_subject(&subject);
         let context_title = Some(subject.context_title());
-        if let crate::root_unified_result_actions::RootUnifiedActionSubject::File(file) =
-            &subject
-        {
+        if let crate::root_unified_result_actions::RootUnifiedActionSubject::File(file) = &subject {
             self.pending_root_file_actions_file = Some(file.clone());
         } else {
             self.pending_root_file_actions_file = None;
@@ -1197,7 +1195,10 @@ impl ScriptListApp {
             "Failed to open root unified result actions window",
         );
 
-        logging::log("FOCUS", "Root unified actions opened, keyboard routing active");
+        logging::log(
+            "FOCUS",
+            "Root unified actions opened, keyboard routing active",
+        );
         cx.notify();
     }
 
@@ -1940,13 +1941,11 @@ mod root_file_action_tests {
             browse_parent.description.as_deref(),
             Some("Opens ~/dev/script-kit-gpui/ in File Search")
         );
-        assert!(
-            !browse_parent
-                .description
-                .as_deref()
-                .unwrap_or_default()
-                .contains(&home)
-        );
+        assert!(!browse_parent
+            .description
+            .as_deref()
+            .unwrap_or_default()
+            .contains(&home));
     }
 
     #[test]
