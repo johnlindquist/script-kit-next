@@ -8200,6 +8200,7 @@ export interface PromptState {
   surfaceContract?: LauncherSurfaceContractSnapshot;
   activePopupContract?: LauncherSurfaceContractSnapshot;
   activeFooter?: ActiveFooterSnapshot;
+  drop?: DropPromptState;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8209,6 +8210,15 @@ export interface PromptState {
   selectedValue?: string;
   isFocused: boolean;
   windowVisible: boolean;
+}
+
+export interface DropPromptState {
+  fileCount: number;
+  files: Array<{
+    index: number;
+    name: string;
+    size: number;
+  }>;
 }
 
 export interface LauncherSurfaceContractSnapshot {
@@ -8347,6 +8357,7 @@ type StateResultMessage = {
   surfaceContract?: LauncherSurfaceContractSnapshot;
   activePopupContract?: LauncherSurfaceContractSnapshot;
   activeFooter?: ActiveFooterSnapshot;
+  drop?: DropPromptState;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8448,6 +8459,7 @@ globalThis.getState = async function getState(): Promise<PromptState> {
           surfaceContract: state.surfaceContract,
           activePopupContract: state.activePopupContract,
           activeFooter: state.activeFooter,
+          drop: state.drop,
           promptId: state.promptId,
           placeholder: state.placeholder,
           inputValue: state.inputValue,

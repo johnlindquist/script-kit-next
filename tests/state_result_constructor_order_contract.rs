@@ -32,6 +32,7 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "root_file_search",
     "main_list_scroll",
     "screenshot_identity",
+    "drop_state",
 ];
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {

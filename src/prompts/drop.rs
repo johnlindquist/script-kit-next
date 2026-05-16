@@ -5,8 +5,10 @@
 //! - Display dropped file information
 //! - Submit file paths
 
-use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, Window};
-use std::sync::Arc;
+use gpui::{
+    div, prelude::*, px, rgb, rgba, Context, ExternalPaths, FocusHandle, Focusable, Render, Window,
+};
+use std::{fs, path::Path, sync::Arc};
 
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
@@ -51,6 +53,35 @@ pub struct DroppedFile {
     pub name: String,
     /// File size in bytes
     pub size: u64,
+}
+
+impl DroppedFile {
+    pub(crate) fn from_path(path: &Path) -> Self {
+        let path_string = path.to_string_lossy().into_owned();
+        let name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| path_string.clone());
+        let size = fs::metadata(path)
+            .map(|metadata| metadata.len())
+            .unwrap_or(0);
+
+        Self {
+            path: path_string,
+            name,
+            size,
+        }
+    }
+
+    pub(crate) fn automation_metadata(&self, index: usize) -> serde_json::Value {
+        serde_json::json!({
+            "index": index,
+            "name": self.name,
+            "size": self.size,
+        })
+    }
 }
 
 impl DropPrompt {
@@ -102,8 +133,29 @@ impl DropPrompt {
         (self.on_submit)(self.id.clone(), None);
     }
 
-    /// Handle file drop (would be called from GPUI drag/drop events)
-    #[allow(dead_code)]
+    /// Handle native file drop paths from GPUI without reading file contents.
+    pub(crate) fn handle_external_paths(&mut self, paths: &ExternalPaths, cx: &mut Context<Self>) {
+        let files: Vec<DroppedFile> = paths
+            .paths()
+            .iter()
+            .map(|path| DroppedFile::from_path(path.as_path()))
+            .collect();
+
+        self.is_drag_over = false;
+        if files.is_empty() {
+            cx.notify();
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::drop_prompt",
+            event = "native_files_dropped",
+            file_count = files.len(),
+            "DropPrompt received native file drop"
+        );
+        self.handle_drop(files, cx);
+    }
+
     fn handle_drop(&mut self, files: Vec<DroppedFile>, cx: &mut Context<Self>) {
         self.dropped_files = files;
         self.is_drag_over = false;
@@ -160,6 +212,9 @@ impl Render for DropPrompt {
             .flex_col()
             .w_full()
             .h_full()
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                this.handle_external_paths(paths, cx);
+            }))
             .when_some(vibrancy_bg, |d, bg| d.bg(bg)) // Only apply bg when vibrancy disabled
             .text_color(text_color)
             .p(px(spacing.padding_lg))

@@ -142,6 +142,12 @@ Menu-syntax trigger popups are `promptPopup` windows with a specialized element 
 
 ScriptList `getState` includes `filterInputDecorations`, a receipt read from the live GPUI input state rather than recomputing tokenizer spans. It reports the rendered input text plus chip ranges and roles, so state-first proofs can catch stale decoration bugs such as `f:` surviving after the input becomes `~/` or `/tmp`.
 
+### DropPrompt Native Drop Proof
+
+DropPrompt native drop proof should exercise the OS/GPUI file-drop path and inspect redacted receipts before submitting.
+
+The empty-state receipt is `getState.promptType:"drop"` with `stateResult.drop.fileCount:0`, no dropped-file rows from `getElements`, and `activeFooter` showing Submit disabled with `actionDisabled:"no_files"`. After a native file drop onto `window:drop`, `getState.drop.files[]` and `getElements` file rows should expose only `index`, basename `name`, and byte `size`; paths are reserved for the final SDK submit payload. Enter or footer Submit should then resolve the script with the full `FileInfo[]`, while Escape should still cancel through the null path. [[tests/drop_prompt_native_drop_contract.rs#drop_prompt_wires_gpui_external_paths_to_prompt_state]] pins the source-side native hook.
+
 ### Non-obvious constraints
 
 Attached popups must preserve parent identity and `parent_capture_with_crop`. Detached surfaces must preserve exact-id stability. Main should stay state-first unless a visual assertion explicitly requires capture.
