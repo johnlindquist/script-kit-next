@@ -87,6 +87,12 @@
  *                         Fail-closed RTL/bidi/emoji text rendering proof
  *   high-volume-virtualized-list-stability-stress
  *                         Fail-closed high-volume virtualized list stability proof
+ *   input-modality-transition-ownership-stress
+ *                         Fail-closed input-device modality transition ownership proof
+ *   multi-context-attachment-dedupe-provenance-stress
+ *                         Fail-closed multi-context attachment dedupe/provenance proof
+ *   visual-contrast-readable-state-stress
+ *                         Fail-closed visual contrast/readable-state proof
  *   help                   Show this help
  *
  * Target threading:
@@ -149,6 +155,9 @@ import {
   runAccessibilityTreeSemanticParityStressScenario,
   runRtlBidiEmojiTextRenderingStressScenario,
   runHighVolumeVirtualizedListStabilityStressScenario,
+  runInputModalityTransitionOwnershipStressScenario,
+  runMultiContextAttachmentDedupeProvenanceStressScenario,
+  runVisualContrastReadableStateStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -177,6 +186,10 @@ interface RecipeReceipt {
   schemaVersion: number;
   recipe: string;
   status: "pass" | "fail" | "error";
+  failClosed?: boolean;
+  failureMode?: string;
+  missingReceipt?: string;
+  linearIssue?: string;
   steps: StepReceipt[];
   summary: string;
   /** When --vision is requested, the final verify-shot proof bundle is surfaced here unchanged. */
@@ -800,6 +813,40 @@ function parseArgs() {
   const rawScrollCycles =
     scrollCyclesIdx >= 0 && args[scrollCyclesIdx + 1] ? Number(args[scrollCyclesIdx + 1]) : undefined;
   const scrollCycles = Number.isFinite(rawScrollCycles) ? rawScrollCycles : undefined;
+  const interleaveIdx = args.indexOf("--interleave");
+  const interleave =
+    interleaveIdx >= 0 && args[interleaveIdx + 1]
+      ? args[interleaveIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const originsIdx = args.indexOf("--origins");
+  const origins =
+    originsIdx >= 0 && args[originsIdx + 1]
+      ? args[originsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const destinationsIdx = args.indexOf("--destinations");
+  const destinations =
+    destinationsIdx >= 0 && args[destinationsIdx + 1]
+      ? args[destinationsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const reorderCyclesIdx = args.indexOf("--reorder-cycles");
+  const rawReorderCycles =
+    reorderCyclesIdx >= 0 && args[reorderCyclesIdx + 1] ? Number(args[reorderCyclesIdx + 1]) : undefined;
+  const reorderCycles = Number.isFinite(rawReorderCycles) ? rawReorderCycles : undefined;
+  const themesIdx = args.indexOf("--themes");
+  const themes =
+    themesIdx >= 0 && args[themesIdx + 1]
+      ? args[themesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const scaleFactorsIdx = args.indexOf("--scale-factors");
+  const scaleFactors =
+    scaleFactorsIdx >= 0 && args[scaleFactorsIdx + 1]
+      ? args[scaleFactorsIdx + 1].split(",").map((s) => Number(s.trim())).filter(Number.isFinite)
+      : undefined;
+  const statesIdx = args.indexOf("--states");
+  const states =
+    statesIdx >= 0 && args[statesIdx + 1]
+      ? args[statesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -881,6 +928,13 @@ function parseArgs() {
     fixtureCount,
     filterCycles,
     scrollCycles,
+    interleave,
+    origins,
+    destinations,
+    reorderCycles,
+    themes,
+    scaleFactors,
+    states,
   };
 }
 
@@ -2200,6 +2254,13 @@ const {
   fixtureCount,
   filterCycles,
   scrollCycles,
+  interleave,
+  origins,
+  destinations,
+  reorderCycles,
+  themes,
+  scaleFactors,
+  states,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3100,6 +3161,73 @@ switch (recipe) {
     break;
   }
 
+  case "input-modality-transition-ownership-stress": {
+    const proofBundle = await runInputModalityTransitionOwnershipStressScenario({
+      session,
+      surface,
+      interleave,
+      cycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "input-modality-transition-ownership-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Input modality transition ownership stress failed closed; modality generation, hover/focus/selection, scroll, shortcut, and activation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "multi-context-attachment-dedupe-provenance-stress": {
+    const proofBundle = await runMultiContextAttachmentDedupeProvenanceStressScenario({
+      session,
+      origins,
+      destinations,
+      reorderCycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "multi-context-attachment-dedupe-provenance-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Multi-context attachment dedupe/provenance stress failed closed; cross-host origin, dedupe, provenance, reorder, privacy, and stale rejection receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "visual-contrast-readable-state-stress": {
+    const proofBundle = await runVisualContrastReadableStateStressScenario({
+      session,
+      surfaces,
+      themes,
+      scaleFactors,
+      states,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "visual-contrast-readable-state-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Visual contrast readable-state stress failed closed; theme, contrast, state cue, readability, and screenshot revalidation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3248,6 +3376,9 @@ switch (recipe) {
           { name: "accessibility-tree-semantic-parity-stress", description: "Fail-closed accessibility role, label, focus order, activation, AX tree, and screenshot-to-semantics parity receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "rtl-bidi-emoji-text-rendering-stress", description: "Fail-closed RTL/bidi/emoji grapheme, cursor, selection, truncation, and filter semantics receipt", flags: ["--session", "--surface", "--text", "--json"] },
           { name: "high-volume-virtualized-list-stability-stress", description: "Fail-closed virtualized row identity, selection reanchor, scroll/filter generation, and screenshot-to-semantics receipt", flags: ["--session", "--surface", "--fixture-count", "--filter-cycles", "--scroll-cycles", "--json"] },
+          { name: "input-modality-transition-ownership-stress", description: "Fail-closed input-device modality transition hover/focus/selection, scroll, shortcut, and activation ownership receipt", flags: ["--session", "--surface", "--interleave", "--cycles", "--json"] },
+          { name: "multi-context-attachment-dedupe-provenance-stress", description: "Fail-closed multi-context attachment dedupe, provenance, ordering, and privacy receipt", flags: ["--session", "--origins", "--destinations", "--reorder-cycles", "--json"] },
+          { name: "visual-contrast-readable-state-stress", description: "Fail-closed visual contrast, readable state, non-color cue, and screenshot revalidation receipt", flags: ["--session", "--surfaces", "--themes", "--scale-factors", "--states", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3439,6 +3570,12 @@ Recipes:
                          Fail-closed RTL/bidirectional/emoji text rendering proof
   high-volume-virtualized-list-stability-stress
                          Fail-closed high-volume virtualized list stability proof
+  input-modality-transition-ownership-stress
+                         Fail-closed input-device modality transition ownership proof
+  multi-context-attachment-dedupe-provenance-stress
+                         Fail-closed multi-context attachment dedupe/provenance proof
+  visual-contrast-readable-state-stress
+                         Fail-closed visual contrast/readable-state proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3553,6 +3690,12 @@ Available scenarios:
                          Emit fail-closed RTL/bidirectional/emoji text rendering requirements
   high-volume-virtualized-list-stability-stress
                          Emit fail-closed high-volume virtualized list stability requirements
+  input-modality-transition-ownership-stress
+                         Emit fail-closed input-device modality transition requirements
+  multi-context-attachment-dedupe-provenance-stress
+                         Emit fail-closed multi-context attachment dedupe/provenance requirements
+  visual-contrast-readable-state-stress
+                         Emit fail-closed visual contrast/readable-state requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3613,6 +3756,9 @@ Examples:
   bun scripts/agentic/index.ts accessibility-tree-semantic-parity-stress --session default --surfaces main,actionsDialog,promptPopup --json
   bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress --session default --surface acp-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
   bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
+  bun scripts/agentic/index.ts input-modality-transition-ownership-stress --session default --surface main --interleave pointer-hover,keyboard-nav,trackpad-scroll,wheel-scroll,shortcut --cycles 8 --json
+  bun scripts/agentic/index.ts multi-context-attachment-dedupe-provenance-stress --session default --origins file,screenshot,selected-text,mcp-resource,clipboard-snippet --destinations acp-composer,notes --reorder-cycles 3 --json
+  bun scripts/agentic/index.ts visual-contrast-readable-state-stress --session default --surfaces main,actionsDialog,promptPopup,acp-composer,notes --themes light,dark --scale-factors 1,1.25,1.5 --states active,inactive,disabled,focused,error,loading --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

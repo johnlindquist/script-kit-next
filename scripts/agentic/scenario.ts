@@ -130,10 +130,15 @@ export interface HardScenarioReceipt {
     | "animation-frame-capture-determinism-stress"
     | "accessibility-tree-semantic-parity-stress"
     | "rtl-bidi-emoji-text-rendering-stress"
-    | "high-volume-virtualized-list-stability-stress";
+    | "high-volume-virtualized-list-stability-stress"
+    | "input-modality-transition-ownership-stress"
+    | "multi-context-attachment-dedupe-provenance-stress"
+    | "visual-contrast-readable-state-stress";
   status: "pass" | "fail" | "error";
+  failClosed?: boolean;
   failureMode?: string;
   missingReceipt?: string;
+  linearIssue?: string;
   error?: Record<string, unknown>;
   targetThread?: {
     stable: boolean;
@@ -193,6 +198,9 @@ export interface HardScenarioReceipt {
   accessibilityTreeSemanticParity?: Record<string, unknown>;
   rtlBidiEmojiTextRendering?: Record<string, unknown>;
   highVolumeVirtualizedListStability?: Record<string, unknown>;
+  inputModalityTransitionOwnership?: Record<string, unknown>;
+  multiContextAttachmentDedupeProvenance?: Record<string, unknown>;
+  visualContrastReadableState?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -5352,6 +5360,289 @@ export async function runHighVolumeVirtualizedListStabilityStressScenario(opts: 
         "The harness fails closed until list.highVolumeVirtualizedListStability receipts prove virtualized row identity, filter/scroll ordering, screenshot-to-state consistency, and cleanup.",
     },
     warnings: ["file_linear:high_volume_virtualized_list_stability_receipts_missing"],
+  };
+}
+
+export async function runInputModalityTransitionOwnershipStressScenario(opts: {
+  session: string;
+  surface?: string;
+  interleave?: string[];
+  cycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "input-modality-transition-ownership-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "missing_required_receipt",
+    missingReceipt: "modality.inputTransitionOwnership",
+    linearIssue: "file_linear:input_modality_transition_ownership_receipts_missing",
+    error: {
+      code: "missing_input_modality_transition_ownership_receipt",
+      linear: "file_linear:input_modality_transition_ownership_receipts_missing",
+    },
+    inputModalityTransitionOwnership: {
+      session: opts.session,
+      requiredReceipt: "modality.inputTransitionOwnership",
+      requiredReceiptKind: "modality.inputTransitionOwnership",
+      modalityStressId: null,
+      surface: opts.surface ?? "main",
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      initialStateReceipt: null,
+      initialElementsReceipt: null,
+      interleave: opts.interleave && opts.interleave.length > 0
+        ? opts.interleave
+        : ["pointer-hover", "keyboard-nav", "trackpad-scroll", "wheel-scroll", "shortcut"],
+      cycles: opts.cycles ?? 8,
+      modalitySequence: [{
+        eventSequenceId: null,
+        inputDevice: null,
+        pointerDeviceKind: null,
+        modalityGeneration: null,
+        hoverSemanticId: null,
+        hoverBounds: null,
+        focusSemanticId: null,
+        focusRingVisible: null,
+        selectedSemanticId: null,
+        scrollInputKind: null,
+        scrollTopBefore: null,
+        scrollTopAfter: null,
+        scrollAnchorKey: null,
+        shortcutCommandId: null,
+        activationOwnerSemanticId: null,
+        activationMethod: null,
+      }],
+      hoverFocusParity: null,
+      selectionPreservedAcrossModality: null,
+      activationOwnershipPreserved: null,
+      shortcutDidNotStealHoverOwner: null,
+      wheelDidNotMutateFocus: null,
+      staleModalityEventRejected: null,
+      wrongSurfaceInputRejected: null,
+      noAccidentalSubmit: null,
+      screenshotStateRevalidated: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["input_delivery_only", "hover_without_generation", "screenshot_without_state"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "modality.inputTransitionOwnership" },
+    }],
+    failure: {
+      code: "missing_input_modality_transition_ownership_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until modality.inputTransitionOwnership receipts prove hover, focus, selection, scroll, shortcut, and activation ownership across modality changes.",
+    },
+    warnings: ["file_linear:input_modality_transition_ownership_receipts_missing"],
+  };
+}
+
+export async function runMultiContextAttachmentDedupeProvenanceStressScenario(opts: {
+  session: string;
+  origins?: string[];
+  destinations?: string[];
+  reorderCycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "multi-context-attachment-dedupe-provenance-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "missing_required_receipt",
+    missingReceipt: "context.multiContextAttachmentDedupeProvenance",
+    linearIssue: "file_linear:multi_context_attachment_dedupe_provenance_receipts_missing",
+    error: {
+      code: "missing_multi_context_attachment_dedupe_provenance_receipt",
+      linear: "file_linear:multi_context_attachment_dedupe_provenance_receipts_missing",
+    },
+    multiContextAttachmentDedupeProvenance: {
+      session: opts.session,
+      requiredReceipt: "context.multiContextAttachmentDedupeProvenance",
+      requiredReceiptKind: "context.multiContextAttachmentDedupeProvenance",
+      attachmentStressId: null,
+      contextRunId: null,
+      hostSamples: (opts.destinations && opts.destinations.length > 0
+        ? opts.destinations
+        : ["acp-composer", "notes"]).map((destinationSurface) => ({
+          destinationSurface,
+          automationWindowId: null,
+          osWindowId: null,
+          semanticSurface: null,
+          destinationGeneration: null,
+          stateReceipt: null,
+          elementsReceipt: null,
+        })),
+      originSamples: (opts.origins && opts.origins.length > 0
+        ? opts.origins
+        : ["file", "screenshot", "selected-text", "mcp-resource", "clipboard-snippet"]).map((sourceKind) => ({
+          sourceKind,
+          originSurface: null,
+          originGeneration: null,
+          sourceUri: null,
+          resourceProfile: null,
+          mcpResourceUri: null,
+          scriptResourceIdentity: null,
+          screenshotIdentity: null,
+          selectedTextCaptureGeneration: null,
+          clipboardGeneration: null,
+          redactedPreview: null,
+          privacyClass: null,
+        })),
+      reorderCycles: opts.reorderCycles ?? 3,
+      attachmentSamples: [{
+        attachmentId: null,
+        dedupeKey: null,
+        provenanceId: null,
+        provenanceFingerprint: null,
+        acceptedContextPartUri: null,
+        insertIndex: null,
+        removeReceipt: null,
+        reorderReceipt: null,
+      }],
+      insertedAttachmentIds: [],
+      removedAttachmentIds: [],
+      reorderedAttachmentIds: [],
+      duplicateAttachmentIdsRejected: null,
+      dedupeCollisionRejected: null,
+      staleProvenanceRejected: null,
+      wrongDestinationRejected: null,
+      orphanAttachmentRejected: null,
+      noCrossHostLeakage: null,
+      rawPathNotLogged: null,
+      rawTextNotLogged: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["visible_chip_count_only", "raw_path_logging", "single_host_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "context.multiContextAttachmentDedupeProvenance" },
+    }],
+    failure: {
+      code: "missing_multi_context_attachment_dedupe_provenance_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until context.multiContextAttachmentDedupeProvenance receipts prove attachment dedupe, provenance, ordering, privacy, stale rejection, and cleanup.",
+    },
+    warnings: ["file_linear:multi_context_attachment_dedupe_provenance_receipts_missing"],
+  };
+}
+
+export async function runVisualContrastReadableStateStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  themes?: string[];
+  scaleFactors?: number[];
+  states?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "visual-contrast-readable-state-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "missing_required_receipt",
+    missingReceipt: "visual.contrastReadableState",
+    linearIssue: "file_linear:visual_contrast_readable_state_receipts_missing",
+    error: {
+      code: "missing_visual_contrast_readable_state_receipt",
+      linear: "file_linear:visual_contrast_readable_state_receipts_missing",
+    },
+    visualContrastReadableState: {
+      session: opts.session,
+      requiredReceipt: "visual.contrastReadableState",
+      requiredReceiptKind: "visual.contrastReadableState",
+      visualContrastStressId: null,
+      themes: opts.themes && opts.themes.length > 0 ? opts.themes : ["light", "dark"],
+      scaleFactors: opts.scaleFactors && opts.scaleFactors.length > 0 ? opts.scaleFactors : [1, 1.25, 1.5],
+      surfaceSamples: (opts.surfaces && opts.surfaces.length > 0
+        ? opts.surfaces
+        : ["main", "actionsDialog", "promptPopup", "acp-composer", "notes"]).map((surface) => ({
+          surface,
+          automationWindowId: null,
+          osWindowId: null,
+          semanticSurface: null,
+          themeId: null,
+          themeMode: null,
+          themeTokenFingerprint: null,
+          appearanceGeneration: null,
+          scaleFactor: null,
+          remSize: null,
+          stateSamples: (opts.states && opts.states.length > 0
+            ? opts.states
+            : ["active", "inactive", "disabled", "focused", "error", "loading"]).map((stateKind) => ({
+              stateKind,
+              semanticId: null,
+              role: null,
+              label: null,
+              visibleText: null,
+              fontSizePx: null,
+              fontWeight: null,
+              elementBounds: null,
+              textBounds: null,
+              foregroundColor: null,
+              backgroundColor: null,
+              contrastRatio: null,
+              minimumContrastRatio: null,
+              contrastPass: null,
+              readabilityPass: null,
+              focusIndicatorBounds: null,
+              focusIndicatorContrastRatio: null,
+              disabledStateVisible: null,
+              errorStateVisible: null,
+              loadingStateVisible: null,
+              nonColorStateCue: null,
+              activeInactiveDifferentiator: null,
+            })),
+          screenshotReceipt: null,
+          screenshotStateRevalidated: null,
+          semanticVisibleTextMatchesReceipt: null,
+        })),
+      staleThemeTokenRejected: null,
+      wrongSurfaceContrastRejected: null,
+      blankScreenshotRejected: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["theme_name_only", "screenshot_without_color_samples", "color_only_state_cue"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+    },
+    steps: [{
+      name: "declare-required-receipt",
+      status: "fail",
+      output: { reason: "visual.contrastReadableState" },
+    }],
+    failure: {
+      code: "missing_visual_contrast_readable_state_receipt",
+      stepName: "declare-required-receipt",
+      message:
+        "The harness fails closed until visual.contrastReadableState receipts prove contrast/readability across themes, scales, states, surfaces, screenshot revalidation, and cleanup.",
+    },
+    warnings: ["file_linear:visual_contrast_readable_state_receipts_missing"],
   };
 }
 
