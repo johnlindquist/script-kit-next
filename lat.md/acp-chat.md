@@ -614,6 +614,14 @@ The termination edge is dual. The modern streaming path emits `"acp_turn_complet
 
 User cancellation is a real ACP `session/cancel` notification, not only a local UI stop. [[src/ai/acp/thread.rs#AcpThread#cancel_streaming]] enqueues an out-of-band cancel through [[src/ai/acp/client.rs#AcpRuntime#cancel_turn]], and the worker emits `acp_session_cancel_requested` before waiting for the agent's cancelled stop reason.
 
+## SDK live subscriptions
+
+Agent Chat live events are delivered through a script-owned subscription registry keyed by the `subscriptionId` returned from `aiSubscribed`.
+
+The runtime owner is [[src/ai/subscriptions.rs]], and script stdout handling registers subscriptions before the stateless AI SDK direct-handler path in [[src/execute_script/mod.rs]]. Each subscription stores the executing script owner, requested event types, optional chat/session id, and that script's response sender. `aiUnsubscribe` now carries `subscriptionId`, so the app removes the exact subscription instead of guessing from a request id.
+
+`AcpThread` fans out `aiNewMessage`, `aiStreamChunk`, `aiStreamComplete`, and `aiError` from the same event reducer that updates the visible transcript. Events use the ACP `ui_thread_id` as the chat/session id for filtering, so subscriptions scoped to another thread do not receive chunks or message events. Reader exit calls the owner cleanup path, which drains stale subscriptions when a script exits or its response channel disappears.
+
 ## Current code references
 
 These are the live files that define the ACP surface today.

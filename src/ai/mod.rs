@@ -45,6 +45,7 @@ pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
 pub(crate) mod session;
 pub(crate) mod storage;
+pub(crate) mod subscriptions;
 pub(crate) mod tab_context;
 pub(crate) mod window;
 

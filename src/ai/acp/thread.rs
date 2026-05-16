@@ -16,6 +16,7 @@ use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
 use gpui::{Context, SharedString, Task};
 
 use crate::components::text_input::TextInputState;
+use crate::protocol::AiMessageInfo;
 
 use super::{
     build_tab_ai_acp_context_blocks, AcpApprovalRequest, AcpConnection, AcpEvent, AcpEventRx,
@@ -571,6 +572,7 @@ impl AcpThread {
             AcpThreadMessageRole::User,
             trimmed.to_string(),
         ));
+        self.publish_sdk_new_message(msg_id, AcpThreadMessageRole::User, trimmed.to_string());
         self.input.clear();
         self.stream_started_at = Some(std::time::Instant::now());
         self.status = AcpThreadStatus::Streaming;
@@ -1123,7 +1125,17 @@ impl AcpThread {
                 changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::AgentMessageDelta(chunk) => {
+                let accumulated =
+                    self.accumulated_text_after_append(AcpThreadMessageRole::Assistant, &chunk);
+                let delta = chunk.clone();
                 changed |= self.append_chunk(AcpThreadMessageRole::Assistant, chunk);
+                if changed {
+                    crate::ai::subscriptions::publish_stream_chunk(
+                        &self.ui_thread_id,
+                        delta,
+                        accumulated,
+                    );
+                }
                 changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::AgentThoughtDelta(chunk) => {
@@ -1188,6 +1200,24 @@ impl AcpThread {
                     changed = true;
                 }
                 changed |= self.set_status(AcpThreadStatus::Idle);
+                if let Some(message) =
+                    self.latest_message_with_role(AcpThreadMessageRole::Assistant)
+                {
+                    let full_content = message.body.to_string();
+                    if !full_content.is_empty() {
+                        crate::ai::subscriptions::publish_stream_complete(
+                            &self.ui_thread_id,
+                            message.id.to_string(),
+                            full_content.clone(),
+                            None,
+                        );
+                        self.publish_sdk_new_message(
+                            message.id,
+                            AcpThreadMessageRole::Assistant,
+                            full_content,
+                        );
+                    }
+                }
 
                 // Save conversation summary + full messages to history.
                 // Build a rich index entry from the full conversation so
@@ -1260,6 +1290,11 @@ impl AcpThread {
                 changed |= self.set_status(AcpThreadStatus::Error);
             }
             AcpEvent::Failed { error } => {
+                crate::ai::subscriptions::publish_error(
+                    Some(&self.ui_thread_id),
+                    "ACP_TURN_FAILED".to_string(),
+                    error.clone(),
+                );
                 if self.pending_permission.take().is_some() {
                     changed = true;
                 }
@@ -1295,6 +1330,50 @@ impl AcpThread {
         let id = self.alloc_id();
         self.messages.push(AcpThreadMessage::new(id, role, body));
         true
+    }
+
+    fn sdk_role(role: AcpThreadMessageRole) -> Option<&'static str> {
+        match role {
+            AcpThreadMessageRole::User => Some("user"),
+            AcpThreadMessageRole::Assistant => Some("assistant"),
+            AcpThreadMessageRole::System => Some("system"),
+            AcpThreadMessageRole::Error => Some("system"),
+            AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool => None,
+        }
+    }
+
+    fn publish_sdk_new_message(&self, id: u64, role: AcpThreadMessageRole, content: String) {
+        let Some(role) = Self::sdk_role(role) else {
+            return;
+        };
+        crate::ai::subscriptions::publish_new_message(
+            &self.ui_thread_id,
+            AiMessageInfo {
+                id: id.to_string(),
+                role: role.to_string(),
+                content,
+                created_at: chrono::Utc::now().to_rfc3339(),
+                tokens_used: None,
+            },
+        );
+    }
+
+    fn latest_message_with_role(&self, role: AcpThreadMessageRole) -> Option<&AcpThreadMessage> {
+        self.messages
+            .iter()
+            .rev()
+            .find(|message| message.role == role)
+    }
+
+    fn accumulated_text_after_append(&self, role: AcpThreadMessageRole, chunk: &str) -> String {
+        let mut accumulated = self
+            .messages
+            .last()
+            .filter(|message| message.role == role)
+            .map(|message| message.body.to_string())
+            .unwrap_or_default();
+        accumulated.push_str(chunk);
+        accumulated
     }
 
     /// Append a text chunk to the last message if it has the same role,

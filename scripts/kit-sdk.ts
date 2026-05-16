@@ -2573,11 +2573,15 @@ interface AiSubscribedMessage {
 interface AiUnsubscribeMessage {
   type: 'aiUnsubscribe';
   requestId: string;
+  subscriptionId: string;
 }
 
 interface AiUnsubscribedMessage {
   type: 'aiUnsubscribed';
   requestId: string;
+  subscriptionId: string;
+  success: boolean;
+  error?: string;
 }
 
 interface AiStreamChunkMessage {
@@ -2871,6 +2875,7 @@ type ResponseMessage =
   | AiFocusResultMessage
   | AiStreamingStatusResultMessage
   | AiSubscribedMessage
+  | AiUnsubscribedMessage
   | AiStreamChunkMessage
   | AiStreamCompleteMessage
   | AiNewMessageMessage
@@ -6980,7 +6985,10 @@ globalThis.aiDeleteChat = async function aiDeleteChat(
 };
 
 // Subscription tracking for aiOn
-const aiSubscriptions = new Map<string, { eventTypes: AiEventType[]; handler: AiEventHandler }>();
+const aiSubscriptions = new Map<
+  string,
+  { eventTypes: AiEventType[]; chatId?: string; handler: AiEventHandler }
+>();
 
 /**
  * Subscribe to ACP Chat events for real-time streaming updates.
@@ -7012,6 +7020,7 @@ globalThis.aiOn = async function aiOn(
         // Store the subscription handler
         aiSubscriptions.set(subscriptionId, {
           eventTypes: [eventType],
+          chatId,
           handler,
         });
 
@@ -7019,10 +7028,25 @@ globalThis.aiOn = async function aiOn(
         resolve(async () => {
           aiSubscriptions.delete(subscriptionId);
           const unsubRequestId = nextId();
-          send({
-            type: 'aiUnsubscribe',
-            requestId: unsubRequestId,
-          } as AiUnsubscribeMessage);
+          await new Promise<void>((resolveUnsubscribe) => {
+            addPending(unsubRequestId, (msg: ResponseMessage) => {
+              if (msg.type === 'aiUnsubscribed') {
+                resolveUnsubscribe();
+                return;
+              }
+              resolveUnsubscribe();
+            }, {
+              type: 'aiUnsubscribed',
+              requestId: unsubRequestId,
+              subscriptionId,
+              success: true,
+            } as AiUnsubscribedMessage);
+            send({
+              type: 'aiUnsubscribe',
+              requestId: unsubRequestId,
+              subscriptionId,
+            } as AiUnsubscribeMessage);
+          });
         });
         return;
       }
@@ -7044,51 +7068,52 @@ function handleAiEvent(msg: ResponseMessage): boolean {
   switch (msg.type) {
     case 'aiStreamChunk': {
       const event = msg as AiStreamChunkMessage;
-      for (const [, sub] of aiSubscriptions) {
-        if (sub.eventTypes.includes('streamChunk')) {
-          sub.handler({
-            chatId: event.chatId,
-            chunk: event.chunk,
-            accumulatedContent: event.accumulatedContent,
-          });
-        }
+      const sub = aiSubscriptions.get(event.subscriptionId);
+      if (sub?.eventTypes.includes('streamChunk') && (!sub.chatId || sub.chatId === event.chatId)) {
+        sub.handler({
+          chatId: event.chatId,
+          chunk: event.chunk,
+          accumulatedContent: event.accumulatedContent,
+        });
       }
       return true;
     }
     case 'aiStreamComplete': {
       const event = msg as AiStreamCompleteMessage;
-      for (const [, sub] of aiSubscriptions) {
-        if (sub.eventTypes.includes('streamComplete')) {
-          sub.handler({
-            chatId: event.chatId,
-            messageId: event.messageId,
-            fullContent: event.fullContent,
-            tokensUsed: event.tokensUsed,
-          });
-        }
+      const sub = aiSubscriptions.get(event.subscriptionId);
+      if (sub?.eventTypes.includes('streamComplete') && (!sub.chatId || sub.chatId === event.chatId)) {
+        sub.handler({
+          chatId: event.chatId,
+          messageId: event.messageId,
+          fullContent: event.fullContent,
+          tokensUsed: event.tokensUsed,
+        });
       }
       return true;
     }
     case 'aiNewMessage': {
       const event = msg as AiNewMessageMessage;
-      for (const [, sub] of aiSubscriptions) {
-        if (sub.eventTypes.includes('message')) {
-          sub.handler({
-            chatId: event.chatId,
-            message: event.message,
-          });
-        }
+      const sub = aiSubscriptions.get(event.subscriptionId);
+      if (sub?.eventTypes.includes('message') && (!sub.chatId || sub.chatId === event.chatId)) {
+        sub.handler({
+          chatId: event.chatId,
+          message: event.message,
+        });
       }
       return true;
     }
     case 'aiError': {
       const event = msg as AiErrorMessage;
-      for (const [, sub] of aiSubscriptions) {
-        if (sub.eventTypes.includes('error')) {
-          sub.handler({
-            code: event.code,
-            message: event.message,
-          });
+      if (event.subscriptionId) {
+        const sub = aiSubscriptions.get(event.subscriptionId);
+        if (sub?.eventTypes.includes('error')) {
+          sub.handler({ code: event.code, message: event.message });
+        }
+      } else {
+        for (const [, sub] of aiSubscriptions) {
+          if (sub.eventTypes.includes('error')) {
+            sub.handler({ code: event.code, message: event.message });
+          }
         }
       }
       return true;

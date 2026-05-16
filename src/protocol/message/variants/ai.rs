@@ -323,6 +323,9 @@ macro_rules! protocol_message_variants_ai {
     AiUnsubscribe {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// Subscription ID returned from aiSubscribed
+        #[serde(rename = "subscriptionId")]
+        subscription_id: String,
     },
 
     /// Unsubscription confirmation (App → SDK)
@@ -330,6 +333,14 @@ macro_rules! protocol_message_variants_ai {
     AiUnsubscribed {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// Subscription ID that was removed, when known
+        #[serde(rename = "subscriptionId")]
+        subscription_id: String,
+        /// Whether the unsubscribe removed an owned subscription
+        success: bool,
+        /// Error message if unsubscribe failed
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
 
     /// Streaming chunk event (pushed to subscribed scripts)

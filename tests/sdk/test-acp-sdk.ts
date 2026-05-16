@@ -139,25 +139,52 @@ async function runTests() {
   }
 
   // =============================================================================
-  // Test 4: aiOn sends subscribe message
+  // Test 4: aiOn sends subscribe/unsubscribe and filters pushed events
   // =============================================================================
   {
-    const test = 'acp-aiOn-sends-subscribe';
+    const test = 'acp-aiOn-subscribe-unsubscribe-scoped-events';
     const start = Date.now();
     logTest(test, 'running');
     try {
       sentMessages.length = 0;
-      await aiOn('streamChunk' as any, () => {}, 'chat-123');
+      const received: any[] = [];
+      const unsubscribe = await aiOn('streamChunk' as any, (event) => received.push(event), 'chat-123');
 
       const msg = sentMessages.find((m: any) => m.type === 'aiSubscribe') as any;
       if (!msg) throw new Error('aiSubscribe message not found');
       if (msg.chatId !== 'chat-123') throw new Error(`wrong chatId: ${msg.chatId}`);
       if (!Array.isArray(msg.events) || msg.events[0] !== 'streamChunk') {
-        throw new Error(`wrong events: ${JSON.stringify(msg.events)}`);
+          throw new Error(`wrong events: ${JSON.stringify(msg.events)}`);
       }
 
-      debug(`aiOn subscribe payload: ${JSON.stringify(msg)}`);
-      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+      (globalThis as any)._handleAiEvent({
+        type: 'aiStreamChunk',
+        subscriptionId: `sub-${msg.requestId}`,
+        chatId: 'other-chat',
+        chunk: 'bad',
+        accumulatedContent: 'bad',
+      });
+      (globalThis as any)._handleAiEvent({
+        type: 'aiStreamChunk',
+        subscriptionId: `sub-${msg.requestId}`,
+        chatId: 'chat-123',
+        chunk: 'ok',
+        accumulatedContent: 'ok',
+      });
+      if (received.length !== 1 || received[0].chunk !== 'ok') {
+        throw new Error(`event scoping failed: ${JSON.stringify(received)}`);
+      }
+
+      sentMessages.length = 0;
+      await unsubscribe();
+      const unsub = sentMessages.find((m: any) => m.type === 'aiUnsubscribe') as any;
+      if (!unsub) throw new Error('aiUnsubscribe message not found');
+      if (unsub.subscriptionId !== `sub-${msg.requestId}`) {
+        throw new Error(`wrong subscriptionId: ${JSON.stringify(unsub)}`);
+      }
+
+      debug(`aiOn subscribe/unsubscribe payloads: ${JSON.stringify({ msg, unsub })}`);
+      logTest(test, 'pass', { result: { msg, unsub, received }, duration_ms: Date.now() - start });
     } catch (err) {
       logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
     }
