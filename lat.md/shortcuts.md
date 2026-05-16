@@ -22,7 +22,7 @@ The hotkey listener registers top-level app hotkeys first, then config-backed co
 
 Launcher command IDs are shared by read, write, and hotkey paths.
 
-Scripts use `script/{owner}:{name}` and scriptlets use `scriptlet/{owner}:{name}`. The owner is the plugin ID when present, otherwise the script kit name for scripts or scriptlet group for scriptlets, falling back to `main`.
+Scripts use `script/{owner}:{name}` and scriptlets use `scriptlet/{owner}:{name}`. Built-ins use `builtin/{id}` and apps use `app/{bundleId}` when available. Config-backed rows copy `scriptkit://commands/{commandId}` links so deeplinks and shortcut writes share the same ID.
 
 ## Recorder Writes
 
@@ -31,6 +31,24 @@ The shortcut recorder writes config-backed command shortcuts.
 Recorder saves call `scripts/update-config-shortcut.ts`, a compatibility wrapper around `scripts/config-cli.ts set-command-shortcut`. The live hotkey table is updated after the config write succeeds so the shortcut works without restart when registration succeeds.
 
 Recorder conflict checks read the live hotkey route table before save. They block conflicts with already-registered config, script, scriptlet, and app hotkeys while allowing the selected command to keep its current shortcut.
+
+## Transient SDK hotkey capture
+
+SDK `hotkey()` captures one shortcut for a running script without becoming shortcut assignment.
+
+The host maps `type:"hotkey"` messages to a `HotkeyPrompt` surface backed by the shortcut capture component, but its submit path returns only the serialized `HotkeyInfo` value to the script. It does not call the persistent recorder entry point, write `config.ts`, or update live global shortcut registrations. Pinned by [[tests/hotkey_prompt_contract.rs#sdk_hotkey_routes_to_real_host_prompt]].
+
+### Does not mutate shortcut config
+
+Transient capture must stay separate from command shortcut persistence.
+
+The persistent shortcut recorder remains the only path that calls config shortcut writes and live hotkey registration updates. The SDK HotkeyPrompt reuses capture rendering and key parsing only, then returns JSON through prompt submission. Pinned by [[tests/hotkey_prompt_contract.rs#hotkey_prompt_is_transient_and_does_not_use_persistent_shortcut_save]].
+
+### Automation receipts
+
+HotkeyPrompt proof uses prompt receipts instead of shortcut assignment side effects.
+
+`getState.promptType` reports `hotkey`, `getElements` exposes `panel:hotkey-capture` and `input:hotkey-shortcut`, and stdin `simulateKey` records modifier-plus-key chords into the same `HotkeyInfo` JSON that SDK `hotkey()` resolves. Escape submits `null` and cancels script execution, matching the SDK cancellation contract. Pinned by [[tests/hotkey_prompt_contract.rs#hotkey_prompt_has_state_first_capture_and_cancel_receipts]].
 
 ## Removal Writes
 

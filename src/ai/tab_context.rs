@@ -1425,7 +1425,7 @@ pub fn detect_tab_ai_source_type_from_prompt(
         "ClipboardHistory" => Some(TabAiSourceType::ClipboardEntry),
         "ArgPrompt" | "MiniPrompt" | "MicroPrompt" | "DivPrompt" | "FormPrompt"
         | "EditorPrompt" | "SelectPrompt" | "PathPrompt" | "DropPrompt" | "TemplatePrompt"
-        | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
+        | "HotkeyPrompt" | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
             Some(TabAiSourceType::RunningCommand)
         }
         _ if desktop
@@ -4492,6 +4492,7 @@ mod tab_ai_source_type_tests {
             "PathPrompt",
             "DropPrompt",
             "TemplatePrompt",
+            "HotkeyPrompt",
             "TermPrompt",
             "EnvPrompt",
             "ChatPrompt",

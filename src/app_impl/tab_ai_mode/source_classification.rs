@@ -16,6 +16,7 @@ pub(super) fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
         AppView::PathPrompt { .. } => "PathPrompt",
         AppView::DropPrompt { .. } => "DropPrompt",
         AppView::TemplatePrompt { .. } => "TemplatePrompt",
+        AppView::HotkeyPrompt { .. } => "HotkeyPrompt",
         AppView::TermPrompt { .. } => "TermPrompt",
         AppView::EnvPrompt { .. } => "EnvPrompt",
         AppView::ChatPrompt { .. } => "ChatPrompt",
@@ -38,7 +39,7 @@ pub(super) fn detect_tab_ai_source_type_early(
         "ClipboardHistory" => Some(crate::ai::TabAiSourceType::ClipboardEntry),
         "ArgPrompt" | "MiniPrompt" | "MicroPrompt" | "DivPrompt" | "FormPrompt"
         | "EditorPrompt" | "SelectPrompt" | "PathPrompt" | "DropPrompt" | "TemplatePrompt"
-        | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
+        | "HotkeyPrompt" | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
             Some(crate::ai::TabAiSourceType::RunningCommand)
         }
         // Desktop / DesktopSelection require the deferred capture's selected_text.

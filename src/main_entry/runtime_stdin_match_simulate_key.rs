@@ -604,6 +604,42 @@
                                             }
                                         }
                                     }
+                                    AppView::HotkeyPrompt { entity, id, .. } => {
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to HotkeyPrompt", key_lower));
+                                        let entity_clone = entity.clone();
+                                        let prompt_id_clone = id.clone();
+
+                                        if ((key_lower == "escape" || key_lower == "esc")
+                                            && !has_cmd)
+                                            || (has_cmd && key_lower == "w")
+                                        {
+                                            logging::log("STDIN", "SimulateKey: cancel HotkeyPrompt");
+                                            view.submit_prompt_response(prompt_id_clone, None, ctx);
+                                            view.cancel_script_execution(ctx);
+                                        } else {
+                                            let mut modifiers = gpui::Modifiers::default();
+                                            modifiers.platform = has_cmd;
+                                            modifiers.control = _has_ctrl;
+                                            modifiers.alt = _has_alt;
+                                            modifiers.shift = has_shift;
+                                            let submitted = entity_clone.update(ctx, |prompt, cx| {
+                                                prompt.handle_key_down(&key_lower, modifiers, cx);
+                                                if prompt.shortcut.is_complete() {
+                                                    Some(prompt.shortcut.to_hotkey_info_json())
+                                                } else {
+                                                    None
+                                                }
+                                            });
+                                            if let Some(value) = submitted {
+                                                logging::log("STDIN", "SimulateKey: captured HotkeyPrompt shortcut");
+                                                view.submit_prompt_response(
+                                                    prompt_id_clone,
+                                                    Some(value),
+                                                    ctx,
+                                                );
+                                            }
+                                        }
+                                    }
                                     AppView::ChatPrompt { entity, .. } => {
                                         // ChatPrompt key handling
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt (actions_popup={})", key_lower, view.show_actions_popup));

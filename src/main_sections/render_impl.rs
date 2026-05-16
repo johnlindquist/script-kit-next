@@ -459,6 +459,9 @@ impl Render for ScriptListApp {
             AppView::TemplatePrompt { entity, .. } => {
                 self.render_template_prompt(entity, cx).into_any_element()
             }
+            AppView::HotkeyPrompt { entity, .. } => {
+                self.render_hotkey_prompt(entity, window, cx).into_any_element()
+            }
             AppView::ChatPrompt { entity, .. } => {
                 self.render_chat_prompt(entity, cx).into_any_element()
             }

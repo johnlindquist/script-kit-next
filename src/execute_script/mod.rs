@@ -1994,10 +1994,7 @@ impl ScriptListApp {
                                             hint: None,
                                         }),
                                         Message::Hotkey { id, placeholder } => {
-                                            Some(PromptMessage::HotkeyComingSoon {
-                                                id,
-                                                placeholder,
-                                            })
+                                            Some(PromptMessage::ShowHotkey { id, placeholder })
                                         }
                                         Message::Template { id, template } => {
                                             Some(PromptMessage::ShowTemplate { id, template })

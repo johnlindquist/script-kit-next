@@ -91,6 +91,12 @@ enum AppView {
         id: String,
         entity: Entity<TemplatePrompt>,
     },
+    /// Showing transient SDK hotkey capture prompt
+    HotkeyPrompt {
+        #[allow(dead_code)]
+        id: String,
+        entity: Entity<crate::components::shortcut_recorder::ShortcutRecorder>,
+    },
     /// Showing chat prompt for conversational interfaces
     ChatPrompt {
         #[allow(dead_code)]
@@ -678,6 +684,7 @@ impl AppView {
             | AppView::PathPrompt { .. }
             | AppView::DropPrompt { .. }
             | AppView::TemplatePrompt { .. }
+            | AppView::HotkeyPrompt { .. }
             | AppView::ChatPrompt { .. }
             | AppView::MiniPrompt { .. }
             | AppView::MicroPrompt { .. } => SurfaceKind::PromptEntity,
@@ -758,6 +765,7 @@ impl AppView {
             AppView::EnvPrompt { .. } => Some("env_prompt"),
             AppView::DropPrompt { .. } => Some("drop_prompt"),
             AppView::TemplatePrompt { .. } => Some("template_prompt"),
+            AppView::HotkeyPrompt { .. } => Some("hotkey_prompt"),
             AppView::MiniPrompt { .. } => Some("mini_prompt"),
             AppView::ClipboardHistoryView { .. } => Some("clipboard_history"),
             AppView::FileSearchView { .. } => Some("file_search"),
@@ -808,23 +816,27 @@ impl SurfaceKind {
     /// Do **not** add `_ => ...` here. The point is to make rustc fail when
     /// a new [`SurfaceKind`] is added without explicit behavior decisions.
     pub(crate) fn surface_contract(self) -> LauncherSurfaceContract {
+        use LauncherSurfaceActionsPolicy::{
+            ActionsDialogActions, ChildViewActions, HostRowActions, MainMenuActions,
+            NoSurfaceActions, PromptEntityActions,
+        };
         use LauncherSurfaceFamily::{
             AssistantWorkspace, AttachmentPortal, FeedbackSurface, FilterableLauncherList,
             MainMenu, ScriptPrompt, UtilityWorkspace,
         };
-        use LauncherSurfaceInputOwnership::{
-            ChildView, LauncherFilter, NoEditableInput, PromptEntity,
-        };
         use LauncherSurfaceFocusPolicy::{
             ChildViewFocus, LauncherFilterFocus, NoEditableFocus, PromptEntityFocus,
+        };
+        use LauncherSurfaceInputOwnership::{
+            ChildView, LauncherFilter, NoEditableInput, PromptEntity,
         };
         use LauncherSurfaceKeyboardPolicy::{
             ActionsDialogKeyboard, ChildViewKeyboard, LauncherListKeyboard, NoEditableKeyboard,
             PromptEntityKeyboard,
         };
-        use LauncherSurfaceActionsPolicy::{
-            ActionsDialogActions, ChildViewActions, HostRowActions, MainMenuActions,
-            NoSurfaceActions, PromptEntityActions,
+        use LauncherSurfacePreviewRole::{
+            ContentPane, FeedbackPanel, NoPersistentPreview, OptionalInfoPanel,
+            RequiredSplitPreview,
         };
         use LauncherSurfaceProofPolicy::{
             ChildViewStateProof, PopupStateProof, StateAndElementsProof, StateReceiptProof,
@@ -832,10 +844,6 @@ impl SurfaceKind {
         use LauncherSurfaceVisualPolicy::{
             CompactLauncherVisual, ContentPaneVisual, FeedbackVisual, PopupVisual,
             SplitPreviewVisual,
-        };
-        use LauncherSurfacePreviewRole::{
-            ContentPane, FeedbackPanel, NoPersistentPreview, OptionalInfoPanel,
-            RequiredSplitPreview,
         };
 
         let standard = DismissPolicy::standard_launcher_surface();

@@ -29,6 +29,12 @@ acp_preferred_agent_post_launch_persist_decision
 acp_preferred_agent_preserved_during_fallback_launch
 "#;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TabAiHarnessCloseDisposition {
+    RestoreOrigin,
+    CloseMainWindowStateFirst,
+}
+
 impl ScriptListApp {
     /// Give the ACP chat one frame to paint before deferred context staging runs.
     const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
@@ -2533,12 +2539,13 @@ impl ScriptListApp {
         }
     }
 
-    /// Close the Tab AI harness terminal and restore the previous view + focus.
+    /// Close the Tab AI harness surface.
     ///
     /// **Close semantics contract:**
-    /// - `Cmd+W` closes the wrapper (handled in `render_prompts/term.rs`).
+    /// - `Cmd+W` closes the Quick Terminal main window state-first (handled in `render_prompts/term.rs`).
+    /// - Restore-origin callers still use the saved return view/focus for apply-back and embedded ACP close.
     /// - Plain `Escape` is forwarded to the PTY so the harness TUI can handle it.
-    /// - The footer hint strip advertises only "⌘W Close".
+    /// - The footer advertises the same Close affordance as Cmd+W for Quick Terminal.
     ///
     /// **Lifecycle contract:**
     /// - For `QuickTerminalView`: tears down PTY, clears harness, schedules prewarm.
@@ -2574,6 +2581,7 @@ impl ScriptListApp {
     fn close_tab_ai_harness_terminal_impl(
         &mut self,
         window: Option<&mut Window>,
+        disposition: TabAiHarnessCloseDisposition,
         cx: &mut Context<Self>,
     ) {
         let pending_script_list_trigger = self.tab_ai_harness_script_list_trigger;
@@ -2640,7 +2648,21 @@ impl ScriptListApp {
             focus_target = %format!("{return_focus_target:?}"),
             session_cleared = closing_quick_terminal,
             capture_generation = self.tab_ai_harness_capture_generation,
+            disposition = ?disposition,
         );
+
+        if disposition == TabAiHarnessCloseDisposition::CloseMainWindowStateFirst {
+            self.tab_ai_harness_script_list_trigger = None;
+
+            // Keep prewarm only for the actual PTY-backed quick terminal path.
+            if closing_quick_terminal {
+                self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
+            }
+
+            self.close_and_reset_window(cx);
+            cx.notify();
+            return;
+        }
 
         self.restore_current_view_with_focus(return_view, return_focus_target);
 
@@ -2679,7 +2701,11 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.close_tab_ai_harness_terminal_impl(Some(window), cx);
+        self.close_tab_ai_harness_terminal_impl(
+            Some(window),
+            TabAiHarnessCloseDisposition::RestoreOrigin,
+            cx,
+        );
     }
 
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
@@ -2692,7 +2718,23 @@ impl ScriptListApp {
         // - the close log records session_cleared = closing_quick_terminal
         // - it requeues schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx)
         // - it ends with cx.notify()
-        self.close_tab_ai_harness_terminal_impl(None, cx);
+        self.close_tab_ai_harness_terminal_impl(
+            None,
+            TabAiHarnessCloseDisposition::RestoreOrigin,
+            cx,
+        );
+    }
+
+    pub(crate) fn close_quick_terminal_main_window_state_first(&mut self, cx: &mut Context<Self>) {
+        // State-first Quick Terminal close intentionally does not restore the
+        // saved return view while the main panel is visible. `close_and_reset_window`
+        // sets windowVisible=false before prompt cancellation/reset can produce
+        // a hidden ScriptList state.
+        self.close_tab_ai_harness_terminal_impl(
+            None,
+            TabAiHarnessCloseDisposition::CloseMainWindowStateFirst,
+            cx,
+        );
     }
 
     /// Close ACP chat and force the main panel back to ScriptList.
@@ -2926,6 +2968,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
             AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
             AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
+            AppView::HotkeyPrompt { .. } => FocusTarget::AppRoot,
 
             AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
                 FocusTarget::TermPrompt
@@ -4155,6 +4198,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => "EnvPrompt".to_string(),
             AppView::DropPrompt { .. } => "DropPrompt".to_string(),
             AppView::TemplatePrompt { .. } => "TemplatePrompt".to_string(),
+            AppView::HotkeyPrompt { .. } => "HotkeyPrompt".to_string(),
             AppView::ChatPrompt { .. } => "ChatPrompt".to_string(),
             AppView::ClipboardHistoryView { .. } => "ClipboardHistory".to_string(),
             AppView::AppLauncherView { .. } => "AppLauncher".to_string(),
@@ -4305,6 +4349,7 @@ impl ScriptListApp {
             | AppView::QuickTerminalView { .. }
             | AppView::AcpChatView { .. }
             | AppView::DropPrompt { .. }
+            | AppView::HotkeyPrompt { .. }
             | AppView::WebcamView { .. }
             | AppView::CreationFeedback { .. }
             | AppView::ScriptIssuesView { .. }

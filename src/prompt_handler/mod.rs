@@ -1072,6 +1072,7 @@ fn prompt_message_from_protocol_message(
             placeholder: None,
             hint: None,
         }),
+        Message::Hotkey { id, placeholder } => Some(PromptMessage::ShowHotkey { id, placeholder }),
         Message::Template { id, template } => Some(PromptMessage::ShowTemplate { id, template }),
         Message::Select {
             id,
@@ -2886,6 +2887,16 @@ impl ScriptListApp {
                     ),
                     AppView::TemplatePrompt { id, .. } => (
                         "template".to_string(),
+                        Some(id.clone()),
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
+                    AppView::HotkeyPrompt { id, .. } => (
+                        "hotkey".to_string(),
                         Some(id.clone()),
                         None,
                         String::new(),
@@ -7306,16 +7317,42 @@ impl ScriptListApp {
                 );
                 self.show_prompt_coming_soon_toast("fields()", cx);
             }
-            PromptMessage::HotkeyComingSoon { id, placeholder } => {
-                tracing::warn!(
-                    category = "WARN",
-                    prompt = "hotkey()",
-                    id = %id,
+            PromptMessage::ShowHotkey { id, placeholder } => {
+                self.prepare_window_for_prompt("UI", "hotkey", "");
+
+                tracing::info!(
+                    id,
                     has_placeholder = placeholder.is_some(),
-                    state = "stubbed",
-                    "Received unsupported prompt message"
+                    "ShowHotkey received"
                 );
-                self.show_prompt_coming_soon_toast("hotkey()", cx);
+                logging::log(
+                    "PROMPTS",
+                    &format!(
+                        "ShowHotkey prompt received id={} placeholder={:?}",
+                        id, placeholder
+                    ),
+                );
+
+                let theme = std::sync::Arc::clone(&self.theme);
+                let title = placeholder
+                    .clone()
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| "Press keys".to_string());
+                let entity = cx.new(move |cx| {
+                    let mut recorder =
+                        crate::components::shortcut_recorder::ShortcutRecorder::new(cx, theme);
+                    recorder.set_command_name(Some(title));
+                    recorder.set_command_description(Some(
+                        "Transient capture for SDK hotkey(); does not save or register."
+                            .to_string(),
+                    ));
+                    recorder
+                });
+                self.current_view = AppView::HotkeyPrompt { id, entity };
+                self.focused_input = FocusedInput::None;
+
+                resize_to_view_sync(ViewType::DivPrompt, 0);
+                cx.notify();
             }
             PromptMessage::WidgetComingSoon { id } => {
                 tracing::warn!(
@@ -7868,6 +7905,7 @@ impl ScriptListApp {
             AppView::FormPrompt { .. } => "form".to_string(),
             AppView::EditorPrompt { .. } => "editor".to_string(),
             AppView::TermPrompt { .. } => "term".to_string(),
+            AppView::HotkeyPrompt { .. } => "hotkey".to_string(),
             AppView::ChatPrompt { .. } => "chat".to_string(),
             AppView::MiniPrompt { .. } => "mini".to_string(),
             AppView::MicroPrompt { .. } => "micro".to_string(),

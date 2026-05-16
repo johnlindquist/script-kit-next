@@ -22,6 +22,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => "env",
             AppView::DropPrompt { .. } => "drop",
             AppView::TemplatePrompt { .. } => "template",
+            AppView::HotkeyPrompt { .. } => "hotkey",
             AppView::ChatPrompt { .. } => "chat",
             AppView::MiniPrompt { .. } => "mini",
             AppView::MicroPrompt { .. } => "micro",

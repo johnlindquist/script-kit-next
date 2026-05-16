@@ -68,6 +68,11 @@ enum PromptMessage {
         id: String,
         template: String,
     },
+    /// Show a transient SDK hotkey capture prompt
+    ShowHotkey {
+        id: String,
+        placeholder: Option<String>,
+    },
     /// Multi-select prompt from choices
     ShowSelect {
         id: String,
@@ -230,11 +235,6 @@ enum PromptMessage {
     FieldsComingSoon {
         id: String,
         field_count: usize,
-    },
-    /// Placeholder stub until hotkey() lands in GPUI
-    HotkeyComingSoon {
-        id: String,
-        placeholder: Option<String>,
     },
     /// Placeholder stub until widget() lands in GPUI
     WidgetComingSoon {
