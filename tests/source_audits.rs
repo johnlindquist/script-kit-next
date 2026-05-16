@@ -14,6 +14,9 @@ mod builtin_confirmation;
 #[path = "source_audits/clipboard_actions.rs"]
 mod clipboard_actions;
 
+#[path = "source_audits/clipboard_image_contract.rs"]
+mod clipboard_image_contract;
+
 #[path = "source_audits/execution_helpers.rs"]
 mod execution_helpers;
 

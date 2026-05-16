@@ -18,7 +18,7 @@ The implementation is split across the SDK, protocol types, executor clipboard h
 
 Clipboard text read/write is implemented through executor-side `Message::Clipboard` and `arboard::Clipboard`. Error signaling is weak: read failures and genuinely empty clipboard both resolve as `""`, and `writeText` resolves on any response.
 
-Clipboard image support is not fully production-grade in the captured source. `readImage()` base64-decodes raw `arboard` image bytes into a `Buffer` without width/height/pixel-format metadata. `writeImage()` sends base64 with `format:"image"`, but the shown Rust write path writes `content` as text and does not decode/set an image clipboard payload.
+Clipboard image support is production-grade for encoded image bytes. `readImage()` returns PNG-encoded `Buffer` bytes, and `writeImage()` accepts encoded PNG/JPEG bytes, decodes them to RGBA, and writes a real image payload through the executor's `arboard::Clipboard::set_image` path.
 
 Selected-text APIs are macOS-first and require Accessibility permission. The SDK hides Script Kit, waits 20ms for focus to return to the previous app, then sends the request. Rust selected-text reads use an AX-first helper with clipboard fallback; writes use clipboard + Core Graphics Cmd+V and best-effort clipboard restoration.
 
@@ -39,8 +39,8 @@ Source-audit tests pin request-id correlation, typed response constructors, and 
 |---|---|---|
 | Copy text. | `await copy(text)` or `clipboard.writeText(text)` | Writes text to system clipboard. |
 | Paste/read text. | `await paste()` or `clipboard.readText()` | Resolves current clipboard text or `""`. |
-| Read image bytes. | `await clipboard.readImage()` | Resolves a `Buffer` from base64 raw image bytes; format metadata absent. |
-| Attempt image write. | `await clipboard.writeImage(buffer)` | SDK sends base64, but Rust write path appears text-only. |
+| Read image bytes. | `await clipboard.readImage()` | Resolves a PNG-encoded `Buffer`, or rejects with a typed image clipboard error. |
+| Write image bytes. | `await clipboard.writeImage(buffer)` | Accepts PNG/JPEG bytes and writes an actual image payload to the system clipboard. |
 | Read selected app text. | `await getSelectedText()` | Hides Script Kit, reads focused app selection, resolves text or rejects on SDK executor error. |
 | Replace selected app text. | `await setSelectedText(text)` | Hides Script Kit, pastes text into focused app through clipboard/Cmd+V. |
 | Check Accessibility. | `await hasAccessibilityPermission()` | Resolves current Accessibility trust status. |
@@ -85,7 +85,7 @@ Message::Clipboard {
 }
 ```
 
-With an `id`, the executor sends `Message::Submit { id, value }`. Without an `id`, a write is treated as best-effort/no-response text write.
+With an `id`, the executor sends `Message::Submit { id, value }`. Image clipboard errors use `ERROR:<CODE>:...` submit values so SDK promises can reject distinctly. Without an `id`, a write is treated as best-effort/no-response clipboard write.
 
 ### Aliases
 
@@ -113,8 +113,8 @@ This gives the previous app a chance to regain focus before AX or Cmd+V operatio
 | `paste()` | Clipboard read text. | SDK alias -> executor `ClipboardAction::Read`. | Text or `""`. |
 | `clipboard.readText()` | `format:"text"` read. | `arboard::Clipboard::get_text`. | Text or `""`. |
 | `clipboard.writeText(text)` | `format:"text"` write. | `arboard::Clipboard::set_text`. | `"ok"` submit on success, but SDK ignores value. |
-| `clipboard.readImage()` | `format:"image"` read. | `arboard::Clipboard::get_image`, base64 raw bytes. | `Buffer`; empty on failure. |
-| `clipboard.writeImage(buffer)` | `format:"image"` write. | SDK sends base64; captured executor writes `content` as text. | Known gap. |
+| `clipboard.readImage()` | `format:"image"` read. | `arboard::Clipboard::get_image` -> PNG encode -> base64 submit. | PNG `Buffer` or typed rejection. |
+| `clipboard.writeImage(buffer)` | `format:"image"` write. | SDK sends base64 encoded PNG/JPEG bytes; executor decodes and calls `set_image`. | Real image payload or typed rejection. |
 | `getSelectedText()` | `requestId`. | SDK hide/delay -> selected-text probe. | Selected text or error/empty depending path. |
 | `setSelectedText(text)` | `requestId`, text. | SDK hide/delay -> clipboard fallback paste. | Success or error. |
 | `hasAccessibilityPermission()` | `checkAccessibility`. | Permission wizard check. | Boolean. |
@@ -144,13 +144,13 @@ The SDK sends a clipboard read text message. The executor calls `arboard::Clipbo
 
 ### Read Image
 
-`clipboard.readImage()` sends a clipboard read image message. The executor gets image data from `arboard`, base64-encodes `img.bytes`, and the SDK decodes to `Buffer`.
+`clipboard.readImage()` sends a clipboard read image message. The executor gets RGBA image data from `arboard`, encodes it as PNG bytes, base64-encodes the PNG, and the SDK decodes that into a `Buffer`.
 
-Do not assume PNG bytes. Width, height, row stride, pixel format, and encoded container metadata are absent in the captured contract.
+Callers can treat the returned Buffer as a PNG file. A clipboard with no supported image rejects with `ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE` instead of resolving an empty buffer.
 
 ### Write Image
 
-`clipboard.writeImage(buffer)` sends base64 content with `format:"image"`. The captured Rust write branch does not branch on image format and writes `content` as text, so this should be documented as a gap until proven otherwise.
+`clipboard.writeImage(buffer)` sends base64 content with `format:"image"`. The executor decodes the bytes as PNG or JPEG, converts the decoded image to RGBA, and writes `arboard::ImageData` with `set_image` so the OS clipboard receives an image payload rather than a base64 text string.
 
 ### Get Selected Text
 
@@ -183,8 +183,8 @@ Snapshot failure aborts before mutating the clipboard. Restore failure is return
 |---|---|---|---|---|---|---|
 | Copy text. | `copy(text)` | None. | SDK call. | SDK alias -> clipboard write text. | Clipboard text set, weak success signal. | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`. |
 | Paste text. | `paste()` | None. | SDK call. | SDK alias -> clipboard read text. | Text or `""`. | `src/execute_script/mod.rs`. |
-| Read image. | `clipboard.readImage()` | None. | SDK call. | Clipboard read image -> base64 raw bytes. | Buffer, format ambiguous. | `src/execute_script/mod.rs`. |
-| Write image. | `clipboard.writeImage(buffer)` | None. | SDK call. | Sends base64 with image format. | Gap: write path appears text-only. | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`. |
+| Read image. | `clipboard.readImage()` | None. | SDK call. | Clipboard read image -> PNG base64 submit. | PNG Buffer or typed rejection. | `src/execute_script/mod.rs`. |
+| Write image. | `clipboard.writeImage(buffer)` | None. | SDK call. | Sends base64 encoded PNG/JPEG bytes. | Real image clipboard payload or typed rejection. | `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`. |
 | Read selected text. | `getSelectedText()` | Previous app focused. | Hide + delay. | SDK -> selected text probe. | Selected text or failure/empty. | `src/selected_text.rs`. |
 | Replace selected text. | `setSelectedText(text)` | Previous app focused. | Hide + delay + Cmd+V. | Clipboard fallback paste. | Text inserted or error. | `src/selected_text.rs`. |
 | Check permission. | `hasAccessibilityPermission()` | None. | SDK call. | `checkAccessibility`. | Boolean trust status. | `src/prompt_handler/mod.rs`. |
@@ -282,7 +282,7 @@ Source-audit tests require:
 | Data | Boundary |
 |---|---|
 | Clipboard text | Can be private; SDK read returns raw text to script. |
-| Clipboard images | Can be large/private; current Buffer lacks metadata. |
+| Clipboard images | Can be large/private; SDK exposes encoded PNG bytes without logging content. |
 | Selected text | Must not be logged raw; source tests pin `text_len` logging. |
 | Replacement text | Must not be logged raw; source tests pin `text_len` logging. |
 | Request ids | Echoed for correlation. |
@@ -299,8 +299,10 @@ Privacy regressions include logging `text = %text`, returning raw selected text 
 | Empty clipboard | `readText` resolves `""`. |
 | Clipboard read failure | Also resolves `""`; indistinguishable from empty. |
 | Clipboard write failure | Executor can return `""`; SDK `writeText` still resolves on response. |
-| `readImage` failure | Resolves empty `Buffer`. |
-| `writeImage` | Known gap; likely writes base64 as text in captured source. |
+| `readImage` no image | Rejects with `ERR_CLIPBOARD_IMAGE_NOT_AVAILABLE`. |
+| `readImage` access/encode failure | Rejects with `ERR_CLIPBOARD_ACCESS_FAILED` or `ERR_CLIPBOARD_IMAGE_ENCODE_FAILED`. |
+| `writeImage` missing/invalid data | Rejects with `ERR_CLIPBOARD_IMAGE_MISSING_CONTENT` or `ERR_CLIPBOARD_IMAGE_DECODE_FAILED`. |
+| `writeImage` clipboard write failure | Rejects with `ERR_CLIPBOARD_IMAGE_WRITE_FAILED`. |
 | No Accessibility permission | Selected-text read/write fails or returns error/empty depending path. |
 | Permission request denied/pending | Resolves false. |
 | Focus handoff race | 20ms delay may be insufficient on slow systems. |
@@ -329,7 +331,7 @@ Key files include `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/select
 |---|---|
 | Clipboard text read/write stays executor-side and response-correlated. | SDK promises resolve without a real clipboard operation. |
 | Empty/error clipboard reads remain understood as ambiguous. | Agents overclaim clipboard state. |
-| Image clipboard support remains documented as incomplete. | Users treat raw bytes or text-write gap as production image support. |
+| Image reads return PNG-encoded Buffers and image writes call `set_image`. | Users receive raw RGBA bytes or base64 text instead of a portable image payload. |
 | SDK hides before selected-text operations. | Script Kit reads/pastes into itself instead of previous app. |
 | Accessibility check/request remain distinct. | Read-only checks unexpectedly prompt, or request stops prompting. |
 | Stdin uses typed receipts, not executor `Submit`. | `session.sh rpc --expect ...` breaks. |
@@ -352,7 +354,7 @@ Key files include `scripts/kit-sdk.ts`, `src/execute_script/mod.rs`, `src/select
 | Clipboard action adjacency | `cargo test --test source_audits clipboard_actions -- --nocapture`. |
 | Manual selected text | Select text in TextEdit, run `getSelectedText`, then `setSelectedText("REPLACED")`. |
 | Stdin receipts | `session.sh rpc checkAccessibility --expect accessibilityStatus`, etc. |
-| Image clipboard | Test `readImage` only as non-empty raw buffer; treat `writeImage` as a gap until source proves image write. |
+| Image clipboard | Run `INCLUDE_SYSTEM_CLIPBOARD_IMAGE=1` system SDK proof: `writeImage` a tiny PNG, `readImage`, assert PNG magic and dimensions, then assert text clipboard and invalid image bytes reject with distinct codes. |
 
 ## Agent Notes
 
@@ -360,7 +362,7 @@ Do not assume `clipboard.readText()` returning `""` means the clipboard is empty
 
 Do not assume `clipboard.writeText()` succeeded just because the SDK Promise resolved; verify with a readback when it matters.
 
-Do not assume `clipboard.readImage()` returns PNG. Do not document `clipboard.writeImage()` as working without a source/runtime fix.
+`clipboard.readImage()` returns PNG bytes. `clipboard.writeImage()` accepts encoded PNG/JPEG bytes; do not pass raw RGBA pixels.
 
 Do not log raw selected text, replacement text, pasteboard type names, or pasteboard bytes. Length-only and content-light summary logging is deliberate and pinned.
 
@@ -384,9 +386,8 @@ For selected-text runtime proof, native focus matters. Use a real macOS app targ
 
 | Gap | Why it matters |
 |---|---|
-| `clipboard.writeImage()` appears incomplete. | SDK sends base64 image content, but executor writes text. |
-| `clipboard.readImage()` payload is underspecified. | No width/height/format metadata; cannot safely treat as PNG. |
-| Clipboard operation errors collapse to `""` or ignored values. | Scripts cannot distinguish empty clipboard from failure. |
+| Text clipboard errors still collapse to `""` or ignored values. | Scripts cannot distinguish empty text clipboard from text read failure. |
+| Image metadata API is still Buffer-only. | PNG bytes are self-describing, but callers that need dimensions without parsing PNG need a future additive helper. |
 | SDK auto-submit fallbacks can mask missing handlers. | Generated tests can pass without real behavior. |
 | Stdin vs executor selected-text errors diverge. | Stdin softens read errors to empty text; SDK path can reject. |
 | Focus timing is heuristic. | 20ms/100ms waits can race on slow systems. |
