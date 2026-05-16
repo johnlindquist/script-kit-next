@@ -1172,7 +1172,6 @@ fn prompt_message_from_protocol_message(
             target,
             summary_only,
         }),
-        }
         Message::GetElements {
             request_id,
             limit,
