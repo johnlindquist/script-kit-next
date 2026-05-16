@@ -147,6 +147,12 @@
  *                         Fail-closed filter input decoration chip layout proof
  *   focus-ring-viewport-integrity-stress
  *                         Fail-closed focus ring viewport integrity proof
+ *   warning-banner-action-dismiss-semantics-stress
+ *                         Fail-closed warning banner action/dismiss semantics proof
+ *   select-prompt-multiselect-keyboard-state-stress
+ *                         Fail-closed SelectPrompt keyboard multi-selection state proof
+ *   file-search-preview-sanitization-stress
+ *                         Fail-closed File Search safe preview sanitization proof
  *   help                   Show this help
  *
  * Target threading:
@@ -239,6 +245,9 @@ import {
   runMiniFullTransitionLayoutContinuityStressScenario,
   runFilterInputDecorationChipLayoutStressScenario,
   runFocusRingViewportIntegrityStressScenario,
+  runWarningBannerActionDismissSemanticsStressScenario,
+  runSelectPromptMultiselectKeyboardStateStressScenario,
+  runFileSearchPreviewSanitizationStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -1035,6 +1044,20 @@ function parseArgs() {
     queriesIdx >= 0 && args[queriesIdx + 1]
       ? args[queriesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const choicesIdx = args.indexOf("--choices");
+  const rawChoices = choicesIdx >= 0 && args[choicesIdx + 1] ? Number(args[choicesIdx + 1]) : undefined;
+  const choices = Number.isFinite(rawChoices) ? rawChoices : undefined;
+  const selectionStepsIdx = args.indexOf("--selection-steps");
+  const selectionSteps =
+    selectionStepsIdx >= 0 && args[selectionStepsIdx + 1]
+      ? args[selectionStepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const previewFixturesIdx = args.indexOf("--preview-fixtures");
+  const previewFixtures =
+    previewFixturesIdx >= 0 && args[previewFixturesIdx + 1]
+      ? args[previewFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noQuickLook = args.includes("--no-quick-look");
   return {
     recipe,
     session,
@@ -1153,6 +1176,10 @@ function parseArgs() {
     noSubmit,
     proofSteps,
     queries,
+    choices,
+    selectionSteps,
+    previewFixtures,
+    noQuickLook,
   };
 }
 
@@ -2509,6 +2536,10 @@ const {
   noSubmit,
   proofSteps,
   queries,
+  choices,
+  selectionSteps,
+  previewFixtures,
+  noQuickLook,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3788,6 +3819,24 @@ switch (recipe) {
     break;
   }
 
+  case "warning-banner-action-dismiss-semantics-stress": {
+    const proofBundle = await runWarningBannerActionDismissSemanticsStressScenario({ session, surface, fixtures, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noConfigWrite, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "warning-banner-action-dismiss-semantics-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Warning banner action/dismiss semantics stress failed closed; banner state, action-vs-dismiss, contrast, and obstruction receipts are missing", proofBundle };
+    break;
+  }
+
+  case "select-prompt-multiselect-keyboard-state-stress": {
+    const proofBundle = await runSelectPromptMultiselectKeyboardStateStressScenario({ session, surface, fixture, choices, selectionSteps, inputModes, noNativeInput, noNativePointer, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "select-prompt-multiselect-keyboard-state-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "SelectPrompt multiselect keyboard state stress failed closed; checked rows, state parity, filter preservation, and no-submit receipts are missing", proofBundle };
+    break;
+  }
+
+  case "file-search-preview-sanitization-stress": {
+    const proofBundle = await runFileSearchPreviewSanitizationStressScenario({ session, surface, fixture, previewFixtures, selectionCycles, filterCycles, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "file-search-preview-sanitization-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "File Search preview sanitization stress failed closed; preview identity, redaction, fallback, no external handoff, and stale preview receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3966,6 +4015,9 @@ switch (recipe) {
           { name: "mini-full-transition-layout-continuity-stress", description: "Fail-closed visual receipt contract for mini/full transition layout continuity", flags: ["--session", "--surfaces", "--transitions", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
           { name: "filter-input-decoration-chip-layout-stress", description: "Fail-closed visual receipt contract for filter input decoration chip layout and clipping", flags: ["--session", "--surfaces", "--queries", "--widths", "--scale-factors", "--fixture", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
           { name: "focus-ring-viewport-integrity-stress", description: "Fail-closed visual receipt contract for focus ring viewport bounds and occlusion", flags: ["--session", "--surfaces", "--fixture", "--input-modes", "--steps", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "warning-banner-action-dismiss-semantics-stress", description: "Fail-closed UX receipt contract for warning banner action/dismiss semantics", flags: ["--session", "--surface", "--fixtures", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--local-fixture-only", "--json"] },
+          { name: "select-prompt-multiselect-keyboard-state-stress", description: "Fail-closed UX receipt contract for SelectPrompt keyboard-only multi-selection state parity", flags: ["--session", "--surface", "--fixture", "--choices", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "file-search-preview-sanitization-stress", description: "Fail-closed UX receipt contract for File Search safe preview sanitization", flags: ["--session", "--surface", "--fixture", "--preview-fixtures", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4048,6 +4100,9 @@ switch (recipe) {
           "proofBundle.miniFullTransitionLayoutContinuityReceipt",
           "proofBundle.filterInputDecorationChipLayoutReceipt",
           "proofBundle.focusRingViewportIntegrityReceipt",
+          "proofBundle.warningBannerActionDismissSemanticsReceipt",
+          "proofBundle.selectPromptMultiselectKeyboardStateReceipt",
+          "proofBundle.fileSearchPreviewSanitizationReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4382,6 +4437,12 @@ Available scenarios:
                          Emit fail-closed filter input decoration chip layout requirements
   focus-ring-viewport-integrity-stress
                          Emit fail-closed focus ring viewport integrity requirements
+  warning-banner-action-dismiss-semantics-stress
+                         Emit fail-closed warning banner action/dismiss semantics requirements
+  select-prompt-multiselect-keyboard-state-stress
+                         Emit fail-closed SelectPrompt keyboard multi-selection state requirements
+  file-search-preview-sanitization-stress
+                         Emit fail-closed File Search safe preview sanitization requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4472,6 +4533,9 @@ Examples:
   bun scripts/agentic/index.ts mini-full-transition-layout-continuity-stress --session default --surfaces main,mini-prompt,fields-prompt,actionsDialog --transitions mini-to-full,full-to-mini,hide-show,return-to-origin --fixture agentic-mini-full-layout --input-modes protocol-key,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --local-fixture-only --json
   bun scripts/agentic/index.ts filter-input-decoration-chip-layout-stress --session default --surfaces main --queries 'f: AGENTS.md,c: agentic,~/script,:actions,;note,!command,literal\\:chip' --widths mini,narrow,full --scale-factors 1,1.25,1.5 --fixture agentic-filter-input-decorations --input-modes protocol-set-filter,protocol-resize --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
   bun scripts/agentic/index.ts focus-ring-viewport-integrity-stress --session default --surfaces main,actionsDialog,fields-prompt,path-prompt --fixture agentic-focus-rings --input-modes protocol-key,simulate-gpui-event --steps tab,shift-tab,up,down,escape --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts warning-banner-action-dismiss-semantics-stress --session default --surface main --fixtures warning,actionable,dismissible,error --input-modes protocol-hover,protocol-click,protocol-key --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --local-fixture-only --json
+  bun scripts/agentic/index.ts select-prompt-multiselect-keyboard-state-stress --session default --surface select-prompt --fixture agentic-multiselect --choices 24 --selection-steps space,cmd-a,filter-preserve,clear-filter,range-toggle,escape-restore --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts file-search-preview-sanitization-stress --session default --surface file-search --fixture agentic-safe-preview --preview-fixtures text,binary,large-text,missing-file,private-path,unsupported-kind --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

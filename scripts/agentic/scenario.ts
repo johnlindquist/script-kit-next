@@ -160,7 +160,10 @@ export interface HardScenarioReceipt {
     | "disabled-footer-hit-target-refusal-stress"
     | "mini-full-transition-layout-continuity-stress"
     | "filter-input-decoration-chip-layout-stress"
-    | "focus-ring-viewport-integrity-stress";
+    | "focus-ring-viewport-integrity-stress"
+    | "warning-banner-action-dismiss-semantics-stress"
+    | "select-prompt-multiselect-keyboard-state-stress"
+    | "file-search-preview-sanitization-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -256,6 +259,9 @@ export interface HardScenarioReceipt {
   miniFullTransitionLayoutContinuityReceipt?: Record<string, unknown>;
   filterInputDecorationChipLayoutReceipt?: Record<string, unknown>;
   focusRingViewportIntegrityReceipt?: Record<string, unknown>;
+  warningBannerActionDismissSemanticsReceipt?: Record<string, unknown>;
+  selectPromptMultiselectKeyboardStateReceipt?: Record<string, unknown>;
+  fileSearchPreviewSanitizationReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7259,6 +7265,150 @@ export async function runFocusRingViewportIntegrityStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_focus_ring_viewport_integrity_receipt" } }],
     failure: { code: "missing_focus_ring_viewport_integrity_receipt", stepName: "declare-required-receipt", message: "Missing app-side focus ring viewport integrity receipts." },
     warnings: ["file_linear:focus_ring_viewport_integrity_receipts_missing"],
+  };
+}
+
+export async function runWarningBannerActionDismissSemanticsStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixtures?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noConfigWrite?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "warning-banner-action-dismiss-semantics-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_warning_banner_action_dismiss_semantics_receipt",
+    linearIssue: "file_linear:warning_banner_action_dismiss_semantics_receipts_missing",
+    warningBannerActionDismissSemanticsReceipt: {
+      kind: "ux.warningBannerActionDismissSemantics",
+      warningBannerActionDismissSemanticsStressId: "loop-twenty-seven-warning-banner-action-dismiss-semantics",
+      session: opts.session, surface: opts.surface ?? "main",
+      requestedFixtures: opts.fixtures ?? ["warning", "actionable", "dismissible", "error"],
+      requestedInputModes: opts.inputModes ?? ["protocol-hover", "protocol-click", "protocol-key"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noConfigWrite: opts.noConfigWrite ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true, bannerSamples: [], fixture: null,
+      bannerGeneration: null, bannerSemanticId: null, bannerKind: null, bannerVisibleText: null,
+      bannerBounds: null, bannerTextBounds: null, bannerActionSemanticId: null, bannerDismissSemanticId: null,
+      hoverStateReceipt: null, focusStateReceipt: null, dismissClickReceipt: null, actionClickReceipt: null,
+      actionExecutionPreventedForDismiss: null, dismissDoesNotTriggerAction: null,
+      actionDoesNotDismissUnlessConfigured: null, nonColorStateCue: null, contrastRatio: null,
+      footerNotObscured: null, inputNotObscured: null, staleBannerGenerationRejected: null,
+      wrongSurfaceRejected: null, systemPasteboardMutated: false, openedSystemSettings: false,
+      mutatedTcc: false, networkAccessed: false, externalServiceContacted: false,
+      destructiveOperationRequested: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_warning_banner_action_dismiss_semantics_receipt" } }],
+    failure: { code: "missing_warning_banner_action_dismiss_semantics_receipt", stepName: "declare-required-receipt", message: "Missing app-side warning banner action/dismiss semantics receipts." },
+    warnings: ["file_linear:warning_banner_action_dismiss_semantics_receipts_missing"],
+  };
+}
+
+export async function runSelectPromptMultiselectKeyboardStateStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixture?: string;
+  choices?: number;
+  selectionSteps?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "select-prompt-multiselect-keyboard-state-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_select_prompt_multiselect_keyboard_state_receipt",
+    linearIssue: "file_linear:select_prompt_multiselect_keyboard_state_receipts_missing",
+    selectPromptMultiselectKeyboardStateReceipt: {
+      kind: "ux.selectPromptMultiselectKeyboardState",
+      selectPromptMultiselectKeyboardStateStressId: "loop-twenty-seven-select-prompt-multiselect-keyboard-state",
+      session: opts.session, surface: opts.surface ?? "select-prompt", fixture: opts.fixture ?? "agentic-multiselect",
+      choiceCount: opts.choices ?? 24, requestedSelectionSteps: opts.selectionSteps ?? ["space", "cmd-a", "filter-preserve", "clear-filter", "range-toggle", "escape-restore"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"], noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true, noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true, multiSelectSamples: [], selectionStep: null,
+      inputMode: null, promptType: null, selectMode: null, focusedChoiceSemanticId: null,
+      selectedChoiceSemanticIds: [], checkedRowSemanticIds: [], visibleChoiceSemanticIds: [],
+      selectionCountLabel: null, footerSubmitLabel: null, footerSubmitDisabledReason: null,
+      filterTextBefore: null, filterTextAfter: null, filterGeneration: null, selectionGeneration: null,
+      focusGeneration: null, cmdAReceipt: null, spaceToggleReceipt: null, rangeToggleReceipt: null,
+      filterPreservesSelectedSet: null, clearFilterRestoresCheckedRows: null,
+      focusedRowNotDuplicatedAsSelected: null, checkedRowsMatchState: null, visibleRowsMatchElements: null,
+      noSubmitReceipt: null, noActivationReceipt: null, staleSelectionGenerationRejected: null,
+      wrongSurfaceSelectionRejected: null, systemPasteboardMutated: false, configUnchanged: true,
+      destructiveOperationRequested: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_select_prompt_multiselect_keyboard_state_receipt" } }],
+    failure: { code: "missing_select_prompt_multiselect_keyboard_state_receipt", stepName: "declare-required-receipt", message: "Missing app-side SelectPrompt keyboard multi-selection state receipts." },
+    warnings: ["file_linear:select_prompt_multiselect_keyboard_state_receipts_missing"],
+  };
+}
+
+export async function runFileSearchPreviewSanitizationStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixture?: string;
+  previewFixtures?: string[];
+  selectionCycles?: number;
+  filterCycles?: number;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noQuickLook?: boolean;
+  noSystemPasteboard?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "file-search-preview-sanitization-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_file_search_preview_sanitization_receipt",
+    linearIssue: "file_linear:file_search_preview_sanitization_receipts_missing",
+    fileSearchPreviewSanitizationReceipt: {
+      kind: "ux.fileSearchPreviewSanitization",
+      fileSearchPreviewSanitizationStressId: "loop-twenty-seven-file-search-preview-sanitization",
+      session: opts.session, surface: opts.surface ?? "file-search", fixture: opts.fixture ?? "agentic-safe-preview",
+      requestedPreviewFixtures: opts.previewFixtures ?? ["text", "binary", "large-text", "missing-file", "private-path", "unsupported-kind"],
+      selectionCycles: opts.selectionCycles ?? 8, filterCycles: opts.filterCycles ?? 4,
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true, noQuickLook: opts.noQuickLook ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      previewSamples: [], previewFixtureKind: null, selectionCycle: null, filterCycle: null,
+      selectedRowSemanticId: null, selectedFileUri: null, selectedFileFingerprint: null,
+      previewGeneration: null, previewSourceIdentity: null, previewRenderKind: null, previewTitle: null,
+      previewVisibleText: null, previewBounds: null, previewTextBounds: null, previewByteLimit: null,
+      previewTruncated: null, binaryPreviewFallback: null, missingFileFallback: null,
+      unsupportedPreviewFallback: null, privatePathRedacted: null, redactedPathFingerprint: null,
+      noRawPathLeak: null, noNetworkFetch: true, noExternalServiceContacted: true,
+      noQuickLookOpened: true, noNativePickerOpened: true, noSystemPasteboardMutation: true,
+      filterGeneration: null, selectionGeneration: null, stalePreviewGenerationRejected: null,
+      wrongRowPreviewRejected: null, wrongSurfaceRejected: null, footerNotObscured: null,
+      inputNotObscured: null, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_file_search_preview_sanitization_receipt" } }],
+    failure: { code: "missing_file_search_preview_sanitization_receipt", stepName: "declare-required-receipt", message: "Missing app-side File Search safe preview sanitization receipts." },
+    warnings: ["file_linear:file_search_preview_sanitization_receipts_missing"],
   };
 }
 
