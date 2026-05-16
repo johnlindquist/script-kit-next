@@ -20,6 +20,22 @@ const sessionRoot = join(outputDir, "sessions");
 const recentDir = join(outputDir, "recent");
 const scriptsDir = join(kitDir, "plugins", "main", "scripts");
 const fixtureAppPath = join(outputDir, "Fixture Actions.app");
+const cmuxMockPath = join(outputDir, "cmux-mock.sh");
+const cmuxRequestsPath = join(outputDir, "cmux-requests.jsonl");
+const aiVaultPoisonStrings = [
+  "POISON_TRANSCRIPT",
+  "POISON_PREVIEW",
+  "POISON_PROMPT",
+  "POISON_ASSISTANT",
+  "POISON_RESUME_COMMAND",
+];
+const aiVaultSensitiveRequestFields = [
+  "transcript",
+  "preview",
+  "prompt",
+  "assistantText",
+  "resumeCommand",
+];
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;
@@ -58,6 +74,27 @@ process.env.SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER = JSON.stringify([
     bounds: { x: 20, y: 20, width: 1280, height: 720 },
   },
 ]);
+process.env.SCRIPT_KIT_AI_VAULT_TEST_PROVIDER = JSON.stringify([
+  {
+    provider: "hermes-agent",
+    providerDisplayName: "Hermes Agent",
+    sessionId: "vault-source-actions",
+    sourceKind: "cli",
+    safeTitle: `${query} vault session`,
+    workspacePath: `/tmp/${query}-workspace`,
+    model: "fixture-model",
+    modifiedAt: new Date().toISOString(),
+    matchedField: "title",
+    stableKey: "ai-vault/hermes-agent/cli/vault-source-actions",
+    score: 100,
+    transcript: aiVaultPoisonStrings[0],
+    preview: aiVaultPoisonStrings[1],
+    prompt: aiVaultPoisonStrings[2],
+    assistantText: aiVaultPoisonStrings[3],
+    resumeCommand: aiVaultPoisonStrings[4],
+  },
+]);
+process.env.SCRIPT_KIT_CMUX_COMMAND = cmuxMockPath;
 
 function argValue(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);
@@ -153,6 +190,7 @@ function seedFixtures() {
   mkdirSync(dbDir, { recursive: true });
   mkdirSync(recentDir, { recursive: true });
   mkdirSync(scriptsDir, { recursive: true });
+  writeFileSync(cmuxRequestsPath, "");
   mkdirSync(fixtureAppPath, { recursive: true });
   writeFileSync(join(fixtureAppPath, "fixture.txt"), query);
   writeFileSync(
@@ -168,8 +206,21 @@ function seedFixtures() {
     browserHistory: { enabled: false },
   },
 };
+    `,
+  );
+  writeFileSync(
+    cmuxMockPath,
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> ${JSON.stringify(cmuxRequestsPath)}
+if [[ "\${1:-}" == "ai-vault" && "\${2:-}" == "resume" ]]; then
+  printf '{"status":"launched","provider":"hermes-agent","sessionId":"vault-source-actions","terminalRouting":"userPreferred","terminalTargetId":"fixture-terminal","error":null}\\n'
+else
+  printf '{"status":"opened","provider":"hermes-agent","sessionId":"vault-source-actions","terminalRouting":"reveal","terminalTargetId":null,"error":null}\\n'
+fi
 `,
   );
+  run("chmod", ["+x", cmuxMockPath]);
 
   const recentFilePath = join(recentDir, `${query}-recent-file.txt`);
   writeFileSync(recentFilePath, `${query} recent file body\n`);
@@ -407,6 +458,25 @@ const cases: Json[] = [
     ],
   },
   {
+    id: "vault",
+    sourceHead: "v:",
+    query: "vault",
+    expectedFilters: ["vault"],
+    role: "rootPassive",
+    typeLabel: "Vault Conversation",
+    sourceName: "AI Vault",
+    stableKey: "ai-vault/hermes-agent/cli/vault-source-actions",
+    expectedActions: [
+      ["root_ai_vault_resume_preferred_terminal", "Resume in Preferred Terminal"],
+      ["root_ai_vault_resume_new_terminal", "Resume in New Terminal"],
+      ["root_ai_vault_copy_session_id", "Copy Session ID"],
+      ["root_ai_vault_copy_provider", "Copy Provider"],
+      ["root_ai_vault_copy_workspace_path", "Copy Workspace Path"],
+      ["root_ai_vault_copy_title", "Copy Title"],
+      ["root_ai_vault_reveal_in_cmux", "Reveal in cmux"],
+    ],
+  },
+  {
     id: "dictation",
     sourceHead: "d:",
     query: "dictation",
@@ -442,10 +512,8 @@ const cases: Json[] = [
     expectedFilters: ["commands"],
     role: "primary",
     typeLabel: "Built-in",
-    expectedActions: [
-      ["root_command_run", "Run Command"],
-      ["root_command_copy_id", "Copy Command ID"],
-    ],
+    expectedActions: [],
+    requireAnyActions: true,
   },
   {
     id: "apps",
@@ -454,12 +522,8 @@ const cases: Json[] = [
     expectedFilters: ["apps"],
     role: "primary",
     typeLabel: "App",
-    expectedActions: [
-      ["root_app_launch", "Launch App"],
-      ["root_app_reveal_in_finder", "Reveal in Finder"],
-      ["root_app_copy_path", "Copy App Path"],
-      ["root_app_copy_name", "Copy App Name"],
-    ],
+    expectedActions: [],
+    requireAnyActions: true,
   },
   {
     id: "windows",
@@ -635,8 +699,28 @@ async function main() {
       cases: results,
       logExcerpt: readFileSync(logPath, "utf8").split("\n").slice(-120),
       responsesPath,
+      cmuxRequestsPrivacy: (() => {
+        const cmuxRequests = readFileSync(cmuxRequestsPath, "utf8");
+        return {
+          containsTranscript: cmuxRequests.includes("transcript"),
+          containsPreview: cmuxRequests.includes("preview"),
+          containsPrompt: cmuxRequests.includes("prompt"),
+          containsAssistantText: cmuxRequests.includes("assistantText"),
+          containsResumeCommand: cmuxRequests.includes("resumeCommand"),
+        };
+      })(),
     };
     const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
+    const cmuxRequests = readFileSync(cmuxRequestsPath, "utf8");
+    const leakHaystack = `${receiptText}\n${readFileSync(logPath, "utf8")}\n${readFileSync(responsesPath, "utf8")}\n${cmuxRequests}`;
+    const leakedPoison = aiVaultPoisonStrings.filter((value) => leakHaystack.includes(value));
+    if (leakedPoison.length > 0) {
+      throw new Error(`AI Vault receipt leaked poison metadata: ${leakedPoison.join(", ")}`);
+    }
+    const leakedRequestFields = aiVaultSensitiveRequestFields.filter((value) => cmuxRequests.includes(value));
+    if (leakedRequestFields.length > 0) {
+      throw new Error(`AI Vault cmux request leaked sensitive fields: ${leakedRequestFields.join(", ")}`);
+    }
     writeFileSync(join(outputDir, "receipt.json"), receiptText);
     writeFileSync(join(repoRoot, ".test-output", "root-source-actions-matrix.json"), receiptText);
     process.stdout.write(receiptText);

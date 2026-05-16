@@ -41,6 +41,16 @@ const ROOT_UNIFIED_SOURCES: &[RootUnifiedSourceSpec] = &[
         verification_heading: "Root Unified Search ACP History",
     },
     RootUnifiedSourceSpec {
+        rust_field: "ai_vault",
+        schema_field: "aiVault",
+        config_struct: "UnifiedSearchAiVaultConfig",
+        default_prefix: "DEFAULT_UNIFIED_SEARCH_AI_VAULT_",
+        section_options_fn: "ai_vault_section_options",
+        grouping_fn: "append_root_ai_vault_section",
+        audit_module: "root_unified_ai_vault_contract",
+        verification_heading: "Root Unified Search AI Vault",
+    },
+    RootUnifiedSourceSpec {
         rust_field: "clipboard_history",
         schema_field: "clipboardHistory",
         config_struct: "UnifiedSearchClipboardHistoryConfig",
@@ -335,6 +345,7 @@ fn root_unified_passive_source_order_is_schema_backed_and_total() {
             "\"acpHistory\"",
             "append_root_acp_history_section",
         ),
+        ("AiVault", "\"aiVault\"", "append_root_ai_vault_section"),
         (
             "BrowserHistory",
             "\"browserHistory\"",

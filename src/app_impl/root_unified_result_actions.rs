@@ -35,6 +35,13 @@ pub(crate) enum RootUnifiedResultAction {
     AcpHistoryCopyTitle,
     AcpHistoryCopySessionId,
     AcpHistoryCopyPreview,
+    AiVaultResumePreferredTerminal,
+    AiVaultResumeNewTerminal,
+    AiVaultCopySessionId,
+    AiVaultCopyProvider,
+    AiVaultCopyWorkspacePath,
+    AiVaultCopyTitle,
+    AiVaultRevealInCmux,
     DictationPaste,
     DictationCopyTranscript,
     DictationAttachToAi,
@@ -88,6 +95,13 @@ impl RootUnifiedResultAction {
         Self::AcpHistoryCopyTitle,
         Self::AcpHistoryCopySessionId,
         Self::AcpHistoryCopyPreview,
+        Self::AiVaultResumePreferredTerminal,
+        Self::AiVaultResumeNewTerminal,
+        Self::AiVaultCopySessionId,
+        Self::AiVaultCopyProvider,
+        Self::AiVaultCopyWorkspacePath,
+        Self::AiVaultCopyTitle,
+        Self::AiVaultRevealInCmux,
         Self::DictationPaste,
         Self::DictationCopyTranscript,
         Self::DictationAttachToAi,
@@ -141,6 +155,13 @@ impl RootUnifiedResultAction {
             Self::AcpHistoryCopyTitle => "root_acp_history_copy_title",
             Self::AcpHistoryCopySessionId => "root_acp_history_copy_session_id",
             Self::AcpHistoryCopyPreview => "root_acp_history_copy_preview",
+            Self::AiVaultResumePreferredTerminal => "root_ai_vault_resume_preferred_terminal",
+            Self::AiVaultResumeNewTerminal => "root_ai_vault_resume_new_terminal",
+            Self::AiVaultCopySessionId => "root_ai_vault_copy_session_id",
+            Self::AiVaultCopyProvider => "root_ai_vault_copy_provider",
+            Self::AiVaultCopyWorkspacePath => "root_ai_vault_copy_workspace_path",
+            Self::AiVaultCopyTitle => "root_ai_vault_copy_title",
+            Self::AiVaultRevealInCmux => "root_ai_vault_reveal_in_cmux",
             Self::DictationPaste => "root_dictation_paste",
             Self::DictationCopyTranscript => "root_dictation_copy_transcript",
             Self::DictationAttachToAi => "root_dictation_attach_to_ai",
@@ -191,6 +212,7 @@ pub(crate) enum RootUnifiedActionSubject {
     BrowserTab(crate::browser_tabs::RootBrowserTabSearchHit),
     BrowserHistory(crate::browser_history::RootBrowserHistorySearchHit),
     AcpHistory(crate::ai::acp::history::AcpHistoryEntry),
+    AiVault(crate::ai_vault::AiVaultHit),
     Dictation {
         id: String,
         preview: String,
@@ -211,6 +233,7 @@ impl RootUnifiedActionSubject {
             Self::BrowserTab(hit) => hit.title.clone(),
             Self::BrowserHistory(hit) => hit.title.clone(),
             Self::AcpHistory(entry) => entry.title_display().to_string(),
+            Self::AiVault(_) => "AI Vault Conversation".to_string(),
             Self::Dictation { preview, .. } => preview.clone(),
             Self::App(app) => app.name.clone(),
             Self::Window(window) => window.title.clone(),
@@ -228,6 +251,7 @@ impl RootUnifiedActionSubject {
             Self::BrowserTab(hit) => Some(hit.stable_key.clone()),
             Self::BrowserHistory(hit) => Some(hit.stable_key.clone()),
             Self::AcpHistory(entry) => Some(format!("acp-history/{}", entry.session_id)),
+            Self::AiVault(hit) => Some(hit.stable_key.clone()),
             Self::Dictation { id, .. } => Some(format!("dictation-history/{id}")),
             Self::App(app) => Some(
                 app.bundle_id
@@ -262,6 +286,7 @@ impl RootUnifiedActionSubject {
             Self::BrowserTab(_) => "Browser Tabs",
             Self::BrowserHistory(_) => "Browser History",
             Self::AcpHistory(_) => "AI Conversations",
+            Self::AiVault(_) => "AI Vault",
             Self::Dictation { .. } => "Dictation History",
             Self::App(_) => "Apps",
             Self::Window(_) => "Windows",
@@ -304,6 +329,9 @@ pub(crate) fn root_unified_action_subject_from_result(
         }
         SearchResult::AcpHistory(history) => {
             Some(RootUnifiedActionSubject::AcpHistory(history.entry.clone()))
+        }
+        SearchResult::AiVault(ai_vault) => {
+            Some(RootUnifiedActionSubject::AiVault(ai_vault.hit.clone()))
         }
         SearchResult::DictationHistory(dictation) => Some(RootUnifiedActionSubject::Dictation {
             id: dictation.id.clone(),
@@ -408,6 +436,51 @@ pub(crate) fn root_unified_actions_for_subject(
                     "Copy Preview",
                     "Share",
                 ));
+            }
+            actions
+        }
+        RootUnifiedActionSubject::AiVault(hit) => {
+            let mut actions = vec![
+                action(
+                    RootUnifiedResultAction::AiVaultResumePreferredTerminal,
+                    "Resume in Preferred Terminal",
+                    "Open",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultResumeNewTerminal,
+                    "Resume in New Terminal",
+                    "Open",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultCopySessionId,
+                    "Copy Session ID",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultCopyProvider,
+                    "Copy Provider",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultCopyTitle,
+                    "Copy Title",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultRevealInCmux,
+                    "Reveal in cmux",
+                    "Open",
+                ),
+            ];
+            if hit.workspace_path.is_some() {
+                actions.insert(
+                    4,
+                    action(
+                        RootUnifiedResultAction::AiVaultCopyWorkspacePath,
+                        "Copy Workspace Path",
+                        "Share",
+                    ),
+                );
             }
             actions
         }
@@ -618,6 +691,23 @@ pub(crate) fn execute_root_unified_result_action(
         (RootUnifiedResultAction::AcpHistoryCopyTitle, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.title_display().to_string(), cx),
         (RootUnifiedResultAction::AcpHistoryCopySessionId, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.session_id.clone(), cx),
         (RootUnifiedResultAction::AcpHistoryCopyPreview, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.preview_display().to_string(), cx),
+        (RootUnifiedResultAction::AiVaultResumePreferredTerminal, RootUnifiedActionSubject::AiVault(hit)) => {
+            app.execute_root_ai_vault_resume_preferred_terminal(hit, cx);
+            true
+        }
+        (RootUnifiedResultAction::AiVaultResumeNewTerminal, RootUnifiedActionSubject::AiVault(hit)) => {
+            app.execute_root_ai_vault_resume_new_terminal(hit, cx);
+            true
+        }
+        (RootUnifiedResultAction::AiVaultCopySessionId, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.session_id.clone(), cx),
+        (RootUnifiedResultAction::AiVaultCopyProvider, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.provider.clone(), cx),
+        (RootUnifiedResultAction::AiVaultCopyWorkspacePath, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.workspace_path.clone().unwrap_or_default(), cx),
+        (RootUnifiedResultAction::AiVaultCopyTitle, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.safe_title.clone(), cx),
+        (RootUnifiedResultAction::AiVaultRevealInCmux, RootUnifiedActionSubject::AiVault(hit)) => {
+            let receipt = crate::ai_vault::reveal_vault_session(hit);
+            app.show_hud(vault_receipt_hud("AI Vault reveal", &receipt), Some(crate::HUD_MEDIUM_MS), cx);
+            true
+        }
         (RootUnifiedResultAction::DictationPaste, RootUnifiedActionSubject::Dictation { id, .. }) => {
             app.execute_root_dictation_history_paste(id, cx);
             true
@@ -705,6 +795,41 @@ pub(crate) fn execute_root_unified_result_action(
 fn copy(value: String, cx: &mut Context<ScriptListApp>) -> bool {
     cx.write_to_clipboard(gpui::ClipboardItem::new_string(value));
     true
+}
+
+impl ScriptListApp {
+    pub(crate) fn execute_root_ai_vault_resume_preferred_terminal(
+        &mut self,
+        hit: &crate::ai_vault::AiVaultHit,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute_root_ai_vault_resume(hit, crate::ai_vault::AiVaultTerminalRouting::UserPreferred, cx);
+    }
+
+    pub(crate) fn execute_root_ai_vault_resume_new_terminal(
+        &mut self,
+        hit: &crate::ai_vault::AiVaultHit,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute_root_ai_vault_resume(hit, crate::ai_vault::AiVaultTerminalRouting::NewTerminal, cx);
+    }
+
+    fn execute_root_ai_vault_resume(
+        &mut self,
+        hit: &crate::ai_vault::AiVaultHit,
+        routing: crate::ai_vault::AiVaultTerminalRouting,
+        cx: &mut Context<Self>,
+    ) {
+        let receipt = crate::ai_vault::resume_vault_session(hit, routing);
+        self.show_hud(vault_receipt_hud("AI Vault resume", &receipt), Some(crate::HUD_MEDIUM_MS), cx);
+    }
+}
+
+fn vault_receipt_hud(prefix: &str, receipt: &crate::ai_vault::AiVaultResumeReceipt) -> String {
+    match receipt.error.as_ref() {
+        Some(error) if !error.is_empty() => format!("{prefix} failed: {error}"),
+        _ => format!("{prefix}: {}", receipt.status),
+    }
 }
 
 #[cfg(test)]

@@ -144,6 +144,7 @@ mod script_creation;
 mod permissions_wizard;
 
 // Built-in features registry
+mod ai_vault;
 mod app_launcher;
 mod browser_history;
 mod browser_tabs;

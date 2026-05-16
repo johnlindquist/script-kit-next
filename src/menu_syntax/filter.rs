@@ -51,6 +51,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::File(_) => ArtifactKind::File,
         SearchResult::Note(_) => ArtifactKind::Note,
         SearchResult::AcpHistory(_) => ArtifactKind::AcpHistory,
+        SearchResult::AiVault(_) => ArtifactKind::AiVault,
         SearchResult::ClipboardHistory(_) => ArtifactKind::ClipboardHistory,
         SearchResult::DictationHistory(_) => ArtifactKind::DictationHistory,
         SearchResult::BrowserTab(_) => ArtifactKind::BrowserTab,

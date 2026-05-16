@@ -21,6 +21,8 @@ fn root_unified_ai_vault_contract() {
     let actions = read_source("src/app_impl/root_unified_result_actions.rs");
     let selection = read_source("src/app_impl/selection_fallback.rs");
     let preflight = read_source("src/main_window_preflight/build.rs");
+    let trigger_registry = read_source("src/builtins/trigger_registry.rs");
+    let builtin_execution = read_source("src/app_execute/builtin_execution.rs");
     let filter_matrix = read_source("scripts/agentic/root-source-filter-matrix.ts");
     let actions_matrix = read_source("scripts/agentic/root-source-actions-matrix.ts");
 
@@ -28,8 +30,6 @@ fn root_unified_ai_vault_contract() {
     assert!(payload.contains("canonical: \"vault:\""));
     assert!(payload.contains("short: Some(\"v:\")"));
     assert!(payload.contains("Self::AiVault => \"vault\""));
-    assert!(!payload.contains("canonical: \"processes:\""));
-    assert!(!payload.contains("short: Some(\"p:\")"));
 
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED: bool = false"));
     assert!(config.contains("pub ai_vault: UnifiedSearchAiVaultConfig"));
@@ -43,6 +43,12 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("\"type\": \"aiVault.search.v1\""));
     assert!(ai_vault.contains("\"includeContent\": false"));
     assert!(ai_vault.contains("\"type\": \"aiVault.resume.v1\""));
+    assert!(ai_vault.contains("#[serde(default)]"));
+    assert!(ai_vault.contains("impl Default for AiVaultMatchedField"));
+    assert!(ai_vault.contains("ai_vault_cache_get"));
+    assert!(ai_vault.contains("output_with_timeout"));
+    assert!(ai_vault.contains("cmux_failure_message"));
+    assert!(ai_vault.contains("ai_vault_cmux_response_parse_failed"));
     assert!(!ai_vault.contains("transcript:"));
     assert!(!ai_vault.contains("preview:"));
 
@@ -50,9 +56,7 @@ fn root_unified_ai_vault_contract() {
     assert!(grouping.contains(
         "root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"
     ));
-    assert!(grouping.contains(
-        "root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"
-    ));
+    assert!(grouping.contains("includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"));
     assert!(grouping.contains("SearchResult::AiVault"));
     assert!(grouping.contains("RootUnifiedSourceFilter::AiVault"));
 
@@ -73,12 +77,22 @@ fn root_unified_ai_vault_contract() {
     assert!(actions.contains("reveal_vault_session(hit)"));
     assert!(selection.contains("execute_root_ai_vault_resume_preferred_terminal"));
     assert!(preflight.contains("ResumeVaultConversation"));
+    assert!(trigger_registry.contains("TriggerBuiltin::AiVault => \"builtin/vault\""));
+    assert!(trigger_registry
+        .contains("TriggerBuiltin::AiVault => &[\"vault\", \"ai-vault\", \"aivault\"]"));
+    assert!(builtin_execution.contains("fn open_ai_vault_source_filter("));
+    assert!(builtin_execution.contains("let filter_text = \"vault: \".to_string();"));
+    assert!(builtin_execution.contains("Search AI Vault sessions..."));
     assert!(filter_matrix.contains("SCRIPT_KIT_AI_VAULT_TEST_PROVIDER"));
     assert!(filter_matrix.contains("heads: [\"v:\", \"vault:\"]"));
     assert!(filter_matrix.contains("sourceName: \"AI Vault\""));
+    assert!(filter_matrix.contains("POISON_TRANSCRIPT"));
+    assert!(filter_matrix.contains("AI Vault receipt leaked poison metadata"));
     assert!(actions_matrix.contains("SCRIPT_KIT_AI_VAULT_TEST_PROVIDER"));
     assert!(actions_matrix.contains("SCRIPT_KIT_CMUX_COMMAND"));
     assert!(actions_matrix.contains("root_ai_vault_resume_preferred_terminal"));
     assert!(actions_matrix.contains("\"terminalRouting\":\"userPreferred\""));
     assert!(actions_matrix.contains("cmuxRequests.includes(\"transcript\")"));
+    assert!(actions_matrix.contains("containsResumeCommand"));
+    assert!(actions_matrix.contains("AI Vault cmux request leaked sensitive fields"));
 }

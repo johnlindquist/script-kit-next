@@ -61,6 +61,7 @@ pub struct UnifiedSearchConfig {
     pub files: UnifiedSearchFilesConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
+    pub ai_vault: UnifiedSearchAiVaultConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
     pub dictation_history: UnifiedSearchDictationHistoryConfig,
     pub browser_tabs: UnifiedSearchBrowserTabsConfig,
@@ -76,6 +77,7 @@ impl Default for UnifiedSearchConfig {
             files: UnifiedSearchFilesConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
+            ai_vault: UnifiedSearchAiVaultConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
             dictation_history: UnifiedSearchDictationHistoryConfig::default(),
             browser_tabs: UnifiedSearchBrowserTabsConfig::default(),
@@ -92,16 +94,18 @@ pub enum UnifiedSearchPassiveSource {
     ClipboardHistory,
     DictationHistory,
     AcpHistory,
+    AiVault,
     BrowserHistory,
 }
 
 impl UnifiedSearchPassiveSource {
-    pub(crate) const DEFAULT_ORDER: [Self; 6] = [
+    pub(crate) const DEFAULT_ORDER: [Self; 7] = [
         Self::BrowserTabs,
         Self::Notes,
         Self::ClipboardHistory,
         Self::DictationHistory,
         Self::AcpHistory,
+        Self::AiVault,
         Self::BrowserHistory,
     ];
 }
@@ -166,6 +170,30 @@ impl Default for UnifiedSearchAcpHistoryConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED,
             max_results: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchAiVaultConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub providers: Vec<AiVaultProvider>,
+    pub cache_ttl_ms: u64,
+    pub search_content: bool,
+}
+
+impl Default for UnifiedSearchAiVaultConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_AI_VAULT_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_AI_VAULT_MIN_QUERY_CHARS,
+            providers: AiVaultProvider::default_root_providers(),
+            cache_ttl_ms: DEFAULT_UNIFIED_SEARCH_AI_VAULT_CACHE_TTL_MS,
+            search_content: DEFAULT_UNIFIED_SEARCH_AI_VAULT_SEARCH_CONTENT,
         }
     }
 }
@@ -314,6 +342,26 @@ impl BrowserHistoryProvider {
     }
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum AiVaultProvider {
+    HermesAgent,
+    RovoDev,
+}
+
+impl AiVaultProvider {
+    pub(crate) fn default_root_providers() -> Vec<Self> {
+        vec![Self::HermesAgent, Self::RovoDev]
+    }
+
+    pub(crate) fn cmux_id(&self) -> &'static str {
+        match self {
+            Self::HermesAgent => "hermes-agent",
+            Self::RovoDev => "rovodev",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum RootFilePromotionConfig {
@@ -387,6 +435,18 @@ impl UnifiedSearchConfig {
             enabled: self.enabled && self.acp_history.enabled,
             max_results: self.acp_history.max_results.clamp(1, 5),
             min_query_chars: self.acp_history.min_query_chars.clamp(2, 32),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn ai_vault_section_options(&self) -> crate::ai_vault::RootAiVaultSectionOptions {
+        crate::ai_vault::RootAiVaultSectionOptions {
+            enabled: self.enabled && self.ai_vault.enabled,
+            max_results: self.ai_vault.max_results.clamp(1, 5),
+            min_query_chars: self.ai_vault.min_query_chars.clamp(3, 32),
+            providers: self.ai_vault.providers.clone(),
+            cache_ttl_ms: self.ai_vault.cache_ttl_ms.clamp(5_000, 120_000),
+            search_content: self.ai_vault.search_content,
         }
     }
 

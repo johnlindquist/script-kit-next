@@ -17,6 +17,13 @@ const kitDir = join(homeDir, ".scriptkit");
 const dbDir = join(kitDir, "db");
 const sessionRoot = join(outputDir, "sessions");
 const recentDir = join(outputDir, "recent");
+const aiVaultPoisonStrings = [
+  "POISON_TRANSCRIPT",
+  "POISON_PREVIEW",
+  "POISON_PROMPT",
+  "POISON_ASSISTANT",
+  "POISON_RESUME_COMMAND",
+];
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;
@@ -43,6 +50,26 @@ process.env.SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER = JSON.stringify([
     tab_index: 1,
     title: `${query} browser tab`,
     url: `https://example.com/${query}/tab`,
+  },
+]);
+process.env.SCRIPT_KIT_AI_VAULT_TEST_PROVIDER = JSON.stringify([
+  {
+    provider: "hermes-agent",
+    providerDisplayName: "Hermes Agent",
+    sessionId: "vault-source-filter",
+    sourceKind: "cli",
+    safeTitle: `${query} vault session`,
+    workspacePath: `/tmp/${query}-workspace`,
+    model: "fixture-model",
+    modifiedAt: new Date().toISOString(),
+    matchedField: "title",
+    stableKey: "ai-vault/hermes-agent/cli/vault-source-filter",
+    score: 100,
+    transcript: aiVaultPoisonStrings[0],
+    preview: aiVaultPoisonStrings[1],
+    prompt: aiVaultPoisonStrings[2],
+    assistantText: aiVaultPoisonStrings[3],
+    resumeCommand: aiVaultPoisonStrings[4],
   },
 ]);
 
@@ -149,6 +176,7 @@ function seedFixtures() {
     clipboardHistory: { enabled: false },
     dictationHistory: { enabled: false },
     acpHistory: { enabled: false },
+    aiVault: { enabled: false },
     browserTabs: { enabled: false },
     browserHistory: { enabled: false },
   },
@@ -303,6 +331,14 @@ const cases = [
     sourceName: "AI Conversations",
     stableKey: "acp-history/acp-source-filter",
     emptyStableKey: "acp-history/acp-source-filter",
+  },
+  {
+    heads: ["v:", "vault:"],
+    expectedFilters: ["vault"],
+    role: "rootPassive",
+    sourceName: "AI Vault",
+    stableKey: "ai-vault/hermes-agent/cli/vault-source-filter",
+    emptyStableKey: "ai-vault/hermes-agent/cli/vault-source-filter",
   },
   {
     heads: ["h:", "history:"],
@@ -465,8 +501,14 @@ async function main() {
       logExcerpt: readFileSync(logPath, "utf8").split("\n").slice(-80),
       responsesPath,
     };
-    writeFileSync(join(outputDir, "receipt.json"), `${JSON.stringify(receipt, null, 2)}\n`);
-    process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+    const receiptText = `${JSON.stringify(receipt, null, 2)}\n`;
+    const leakHaystack = `${receiptText}\n${readFileSync(logPath, "utf8")}\n${readFileSync(responsesPath, "utf8")}`;
+    const leakedPoison = aiVaultPoisonStrings.filter((value) => leakHaystack.includes(value));
+    if (leakedPoison.length > 0) {
+      throw new Error(`AI Vault receipt leaked poison metadata: ${leakedPoison.join(", ")}`);
+    }
+    writeFileSync(join(outputDir, "receipt.json"), receiptText);
+    process.stdout.write(receiptText);
   } finally {
     runSession(["stop", session]);
   }

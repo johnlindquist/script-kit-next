@@ -641,6 +641,35 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("AI Conversation", style));
         }
 
+        scripts::SearchResult::AiVault(ai_vault_match) => {
+            let hit = &ai_vault_match.hit;
+
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(hit.safe_title.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section(
+                "PROVIDER",
+                &hit.provider_display_name,
+                style,
+            ));
+            if let Some(workspace) = hit.workspace_path.as_deref() {
+                content = content.child(focused_info_labeled_section("WORKSPACE", workspace, style));
+            }
+            if let Some(modified) = hit.modified_at.as_deref() {
+                content = content.child(focused_info_labeled_section("MODIFIED", modified, style));
+            }
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("AI Vault", style));
+        }
+
         scripts::SearchResult::ClipboardHistory(clipboard_match) => {
             let entry = &clipboard_match.entry;
 
@@ -1131,6 +1160,7 @@ impl ScriptListApp {
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::DictationHistory(_) => None,
                     scripts::SearchResult::BrowserTab(_) => None,
@@ -1260,6 +1290,12 @@ impl ScriptListApp {
                     scripts::SearchResult::AcpHistory(m) => Some(ScriptInfo::with_action_verb(
                         m.entry.title_display(),
                         format!("acp-history:{}", m.entry.session_id),
+                        false,
+                        "Resume",
+                    )),
+                    scripts::SearchResult::AiVault(m) => Some(ScriptInfo::with_action_verb(
+                        &m.hit.safe_title,
+                        m.hit.stable_key.clone(),
                         false,
                         "Resume",
                     )),

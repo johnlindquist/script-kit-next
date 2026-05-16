@@ -42,6 +42,8 @@ fn inline_source_filters_parse_for_files_notes_and_clipboard() {
             RootUnifiedSourceFilter::Conversations,
         ),
         ("ai: plan", "plan", RootUnifiedSourceFilter::Conversations),
+        ("vault: plan", "plan", RootUnifiedSourceFilter::AiVault),
+        ("v: plan", "plan", RootUnifiedSourceFilter::AiVault),
         (
             "dictation: note",
             "note",
@@ -100,6 +102,8 @@ fn source_filters_accept_attached_query_text() {
             "plan",
             RootUnifiedSourceFilter::Conversations,
         ),
+        ("v:plan", "plan", RootUnifiedSourceFilter::AiVault),
+        ("vault:plan", "plan", RootUnifiedSourceFilter::AiVault),
         ("d:note", "note", RootUnifiedSourceFilter::Dictation),
         ("dictation:note", "note", RootUnifiedSourceFilter::Dictation),
         ("a:calendar", "calendar", RootUnifiedSourceFilter::Apps),
@@ -156,6 +160,8 @@ fn source_only_filters_parse_as_empty_advanced_queries() {
         ("t: ", RootUnifiedSourceFilter::BrowserTabs),
         ("h: ", RootUnifiedSourceFilter::BrowserHistory),
         ("ai: ", RootUnifiedSourceFilter::Conversations),
+        ("v: ", RootUnifiedSourceFilter::AiVault),
+        ("vault: ", RootUnifiedSourceFilter::AiVault),
         ("d: ", RootUnifiedSourceFilter::Dictation),
     ] {
         match parse(input) {

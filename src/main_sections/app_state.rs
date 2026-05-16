@@ -49,6 +49,7 @@ pub(crate) struct RootPassiveFrameKey {
         crate::clipboard_history::RootClipboardHistorySectionOptions,
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
     pub(crate) acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    pub(crate) ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     pub(crate) browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
 }
@@ -60,6 +61,7 @@ pub(crate) struct RootPassiveFrame {
     pub(crate) clipboard_history_hits: Vec<crate::clipboard_history::ClipboardEntryMeta>,
     pub(crate) dictation_history_hits: Vec<crate::dictation::RootDictationHistorySearchHit>,
     pub(crate) acp_history_hits: Vec<crate::ai::acp::history::AcpHistorySearchHit>,
+    pub(crate) ai_vault_hits: Vec<crate::ai_vault::AiVaultHit>,
     pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
     pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
     pub(crate) browser_tabs_snapshot_generation: u64,

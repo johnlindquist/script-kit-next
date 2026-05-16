@@ -331,6 +331,7 @@ impl ScriptListApp {
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
+                    scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::DictationHistory(_) => None,
                     scripts::SearchResult::BrowserTab(_) => None,
@@ -453,6 +454,12 @@ impl ScriptListApp {
                         self.resume_acp_conversation_from_history(
                             &acp_history_match.entry.session_id,
                             acp_history_match.entry.first_message.as_str(),
+                            cx,
+                        );
+                    }
+                    scripts::SearchResult::AiVault(ai_vault_match) => {
+                        self.execute_root_ai_vault_resume_preferred_terminal(
+                            &ai_vault_match.hit,
                             cx,
                         );
                     }

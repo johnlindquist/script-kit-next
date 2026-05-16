@@ -310,6 +310,14 @@ pub struct AcpHistoryMatch {
     pub(crate) subtitle: String,
 }
 
+/// Represents a passive root-search match for cmux AI Vault metadata.
+#[derive(Clone, Debug)]
+pub struct AiVaultMatch {
+    pub(crate) hit: crate::ai_vault::AiVaultHit,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+}
+
 /// Represents a passive root-search match for recent clipboard metadata.
 #[derive(Clone, Debug)]
 pub struct ClipboardHistoryMatch {
@@ -365,6 +373,8 @@ pub enum SearchResult {
     Note(NoteMatch),
     /// Saved ACP conversation surfaced as a passive root-search source.
     AcpHistory(AcpHistoryMatch),
+    /// cmux AI Vault session metadata surfaced as a passive root-search source.
+    AiVault(AiVaultMatch),
     /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
     ClipboardHistory(ClipboardHistoryMatch),
     /// Saved dictation transcripts surfaced as an opt-in passive root-search source.
@@ -411,6 +421,7 @@ impl SearchResult {
             SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
             SearchResult::Note(_) => Some(RootUnifiedSourceFilter::Notes),
             SearchResult::AcpHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
+            SearchResult::AiVault(_) => Some(RootUnifiedSourceFilter::AiVault),
             SearchResult::ClipboardHistory(_) => Some(RootUnifiedSourceFilter::ClipboardHistory),
             SearchResult::DictationHistory(_) => Some(RootUnifiedSourceFilter::Dictation),
             SearchResult::BrowserTab(_) => Some(RootUnifiedSourceFilter::BrowserTabs),
@@ -433,6 +444,7 @@ impl SearchResult {
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::Note(nm) => &nm.title,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
+            SearchResult::AiVault(am) => &am.hit.safe_title,
             SearchResult::ClipboardHistory(cm) => &cm.title,
             SearchResult::DictationHistory(dm) => &dm.preview,
             SearchResult::BrowserTab(bm) => &bm.hit.title,
@@ -464,6 +476,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
+            SearchResult::AiVault(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
             SearchResult::DictationHistory(dm) => Some(dm.subtitle.as_str()),
             SearchResult::BrowserTab(bm) => Some(bm.subtitle.as_str()),
@@ -489,6 +502,7 @@ impl SearchResult {
             SearchResult::File(fm) => fm.score,
             SearchResult::Note(nm) => nm.score,
             SearchResult::AcpHistory(am) => am.score,
+            SearchResult::AiVault(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
             SearchResult::DictationHistory(dm) => dm.score,
             SearchResult::BrowserTab(bm) => bm.score,
@@ -511,6 +525,7 @@ impl SearchResult {
             SearchResult::File(_) => "File",
             SearchResult::Note(_) => "Note",
             SearchResult::AcpHistory(_) => "AI Conversation",
+            SearchResult::AiVault(_) => "Vault Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
             SearchResult::DictationHistory(_) => "Dictation",
             SearchResult::BrowserTab(_) => "Browser Tab",
@@ -544,6 +559,7 @@ impl SearchResult {
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Note(_) => None,
             SearchResult::AcpHistory(_) => None,
+            SearchResult::AiVault(_) => None,
             SearchResult::ClipboardHistory(_) => None,
             SearchResult::DictationHistory(_) => None,
             SearchResult::BrowserTab(_) => None,
@@ -568,6 +584,7 @@ impl SearchResult {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
+            SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
             SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
@@ -622,6 +639,7 @@ impl SearchResult {
             SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
             SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
             SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
+            SearchResult::AiVault(_) => ("Vault", 0x14B8A6), // Teal-500
             SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
             SearchResult::DictationHistory(_) => ("Dictation", 0xFB7185), // Rose-400
             SearchResult::BrowserTab(_) => ("Tab", 0x06B6D4), // Cyan-500
@@ -669,6 +687,7 @@ impl SearchResult {
             SearchResult::File(_) => Some("Files"),
             SearchResult::Note(_) => Some("Notes"),
             SearchResult::AcpHistory(_) => Some("AI Conversations"),
+            SearchResult::AiVault(_) => Some("AI Vault"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
             SearchResult::DictationHistory(_) => Some("Dictation History"),
             SearchResult::BrowserTab(_) => Some("Browser Tabs"),
@@ -726,6 +745,7 @@ impl SearchResult {
             }
             SearchResult::Note(_) => "Open Note",
             SearchResult::AcpHistory(_) => "Resume Conversation",
+            SearchResult::AiVault(_) => "Resume in Terminal",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
             SearchResult::DictationHistory(_) => "Paste Dictation",
             SearchResult::BrowserTab(_) => "Switch to Tab",
