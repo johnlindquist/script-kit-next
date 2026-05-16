@@ -159,6 +159,12 @@
  *                         Fail-closed Process Manager sort/header/detail panel proof
  *   env-prompt-redacted-status-error-recovery-stress
  *                         Fail-closed EnvPrompt redacted status/error recovery proof
+ *   command-palette-breadcrumb-route-stack-stress
+ *                         Fail-closed command palette breadcrumb route-stack proof
+ *   root-source-chip-action-semantics-stress
+ *                         Fail-closed root source-chip action semantics proof
+ *   recent-history-dedupe-root-grouping-stress
+ *                         Fail-closed recent/history dedupe root grouping proof
  *   help                   Show this help
  *
  * Target threading:
@@ -254,6 +260,9 @@ import {
   runHotkeyPromptTransientCaptureCancelStressScenario,
   runProcessManagerSortDetailPanelStabilityStressScenario,
   runEnvPromptRedactedStatusErrorRecoveryStressScenario,
+  runCommandPaletteBreadcrumbRouteStackStressScenario,
+  runRootSourceChipActionSemanticsStressScenario,
+  runRecentHistoryDedupeRootGroupingStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1085,6 +1094,29 @@ function parseArgs() {
   const noProcessKill = args.includes("--no-process-kill");
   const noGlobalHotkeyRegistration = args.includes("--no-global-hotkey-registration");
   const noSecretWrite = args.includes("--no-secret-write");
+  const drillPathIdx = args.indexOf("--drill-path");
+  const drillPath =
+    drillPathIdx >= 0 && args[drillPathIdx + 1]
+      ? args[drillPathIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const filterIdx = args.indexOf("--filter");
+  const filter = filterIdx >= 0 && args[filterIdx + 1] ? args[filterIdx + 1] : undefined;
+  const backMethodsIdx = args.indexOf("--back-methods");
+  const backMethods =
+    backMethodsIdx >= 0 && args[backMethodsIdx + 1]
+      ? args[backMethodsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const chipActionsIdx = args.indexOf("--actions");
+  const chipActions =
+    chipActionsIdx >= 0 && args[chipActionsIdx + 1]
+      ? args[chipActionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const sourcesIdx = args.indexOf("--sources");
+  const sources =
+    sourcesIdx >= 0 && args[sourcesIdx + 1]
+      ? args[sourcesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noNetwork = args.includes("--no-network");
   return {
     recipe,
     session,
@@ -1213,6 +1245,12 @@ function parseArgs() {
     noProcessKill,
     noGlobalHotkeyRegistration,
     noSecretWrite,
+    drillPath,
+    filter,
+    backMethods,
+    chipActions,
+    sources,
+    noNetwork,
   };
 }
 
@@ -2579,6 +2617,12 @@ const {
   noProcessKill,
   noGlobalHotkeyRegistration,
   noSecretWrite,
+  drillPath,
+  filter,
+  backMethods,
+  chipActions,
+  sources,
+  noNetwork,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3894,6 +3938,24 @@ switch (recipe) {
     break;
   }
 
+  case "command-palette-breadcrumb-route-stack-stress": {
+    const proofBundle = await runCommandPaletteBreadcrumbRouteStackStressScenario({ session, host, fixture, drillPath, filter, backMethods, inputModes, noNativeInput, noNativePointer, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "command-palette-breadcrumb-route-stack-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Command palette breadcrumb route-stack stress failed closed; breadcrumb, drill-down, Escape/back, parent restore, and no-execution receipts are missing", proofBundle };
+    break;
+  }
+
+  case "root-source-chip-action-semantics-stress": {
+    const proofBundle = await runRootSourceChipActionSemanticsStressScenario({ session, queries, actions: chipActions, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noConfigWrite, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "root-source-chip-action-semantics-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Root source-chip action semantics stress failed closed; chip remove/clear/exclude, decorations, status-chip refusal, and stale action receipts are missing", proofBundle };
+    break;
+  }
+
+  case "recent-history-dedupe-root-grouping-stress": {
+    const proofBundle = await runRecentHistoryDedupeRootGroupingStressScenario({ session, fixture, sources, query, cycles, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "recent-history-dedupe-root-grouping-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Recent/history dedupe root grouping stress failed closed; source grouping, dedupe keys, metadata-only rows, stale passive publish, and selection stability receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4078,6 +4140,9 @@ switch (recipe) {
           { name: "hotkey-prompt-transient-capture-cancel-stress", description: "Fail-closed UX receipt contract for HotkeyPrompt transient capture/cancel semantics", flags: ["--session", "--surface", "--fixture", "--chords", "--cancel-methods", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-config-write", "--no-global-hotkey-registration", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "process-manager-sort-detail-panel-stability-stress", description: "Fail-closed UX receipt contract for Process Manager sort/header/detail panel stability", flags: ["--session", "--surface", "--fixture", "--sort-keys", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-process-kill", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "env-prompt-redacted-status-error-recovery-stress", description: "Fail-closed UX receipt contract for EnvPrompt redacted status/error recovery", flags: ["--session", "--surface", "--fixture", "--status-fixtures", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--no-secret-write", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "command-palette-breadcrumb-route-stack-stress", description: "Fail-closed UX receipt contract for command palette breadcrumb route-stack restoration", flags: ["--session", "--host", "--fixture", "--drill-path", "--filter", "--back-methods", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "root-source-chip-action-semantics-stress", description: "Fail-closed UX receipt contract for root source-chip actions and status-chip refusal", flags: ["--session", "--queries", "--actions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-config-write", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "recent-history-dedupe-root-grouping-stress", description: "Fail-closed UX receipt contract for recent/history dedupe and root grouping stability", flags: ["--session", "--fixture", "--sources", "--query", "--cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4166,6 +4231,9 @@ switch (recipe) {
           "proofBundle.hotkeyPromptTransientCaptureCancelReceipt",
           "proofBundle.processManagerSortDetailPanelStabilityReceipt",
           "proofBundle.envPromptRedactedStatusErrorRecoveryReceipt",
+          "proofBundle.commandPaletteBreadcrumbRouteStackReceipt",
+          "proofBundle.rootSourceChipActionSemanticsReceipt",
+          "proofBundle.recentHistoryDedupeRootGroupingReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4512,6 +4580,12 @@ Available scenarios:
                          Emit fail-closed Process Manager sort/header/detail panel requirements
   env-prompt-redacted-status-error-recovery-stress
                          Emit fail-closed EnvPrompt redacted status/error recovery requirements
+  command-palette-breadcrumb-route-stack-stress
+                         Emit fail-closed command palette breadcrumb route-stack requirements
+  root-source-chip-action-semantics-stress
+                         Emit fail-closed root source-chip action semantics requirements
+  recent-history-dedupe-root-grouping-stress
+                         Emit fail-closed recent/history dedupe root grouping requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4608,6 +4682,9 @@ Examples:
   bun scripts/agentic/index.ts hotkey-prompt-transient-capture-cancel-stress --session default --surface hotkey-prompt --fixture agentic-transient-hotkey --chords cmd+shift+7,ctrl+space --cancel-methods escape,cmd-w --input-modes protocol-key,simulate-key --no-native-input --no-native-pointer --no-config-write --no-global-hotkey-registration --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts process-manager-sort-detail-panel-stability-stress --session default --surface process-manager --fixture agentic-process-table --sort-keys name,cpu,memory,pid --selection-cycles 8 --filter-cycles 4 --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-process-kill --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts env-prompt-redacted-status-error-recovery-stress --session default --surface env-prompt --fixture agentic-env-status --status-fixtures missing-secret,parse-error,masked-existing,valid-edit --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --no-secret-write --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts command-palette-breadcrumb-route-stack-stress --session default --host main --fixture agentic-actions-breadcrumbs --drill-path parent-action,child-action --filter 'switch' --back-methods escape,breadcrumb-click --input-modes protocol-key,protocol-click,batch --no-native-input --no-native-pointer --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts root-source-chip-action-semantics-stress --session default --queries 'f: AGENTS.md,c: agentic,n: welcome,-c: noise' --actions remove-chip,clear-all,toggle-exclude,open-chip-actions --input-modes protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-config-write --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts recent-history-dedupe-root-grouping-stress --session default --fixture agentic-root-recents --sources files,notes,clipboard,dictation,acp-history --query agentic-loop-29-dupe --cycles 6 --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

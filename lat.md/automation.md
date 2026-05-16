@@ -328,6 +328,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `env-prompt-redacted-status-error-recovery-stress` is intentionally fail-closed until EnvPrompt receipts expose prompt/fixture identity, status generation/kind/text, inline error and first-invalid-field semantics, masked value visibility, secret redaction and fingerprints, no raw secret leak, no secret/config writes, valid edit recovery, disabled submit reason, focus preservation, stale/wrong-field rejection, AFK-safe flags, and cleanup.
 
+`command-palette-breadcrumb-route-stack-stress` is intentionally fail-closed until command palette receipts expose host/topmost owner identity, route stack depth, breadcrumb trail labels and semantic ids, active route id, parent/child snapshots, drill-down push, breadcrumb and Escape back, preserved search text, restored selection/scroll anchor, no pre-drill `onSelect`, no accidental execution, stale route rejection, AFK-safe flags, and cleanup.
+
+`root-source-chip-action-semantics-stress` is intentionally fail-closed until root source-chip receipts expose rendered input text, stripped search text, source filter set, chip semantic ids and roles, remove/clear-all/toggle-exclude/action-menu receipts, decoration generation, preflight indicators, non-selectable status chips, disallowed-source suppression, blocked history recall, selection preservation, stale chip rejection, AFK-safe flags, and cleanup.
+
+`recent-history-dedupe-root-grouping-stress` is intentionally fail-closed until root recents/history receipts expose fixture snapshot and source catalog generations, query/root/passive frame keys, result roles, group order, contiguous Files section, stable Search Files continuation, dedupe keys and rejected collisions, metadata-only history rows, no transcript/body leaks, stable selection, row fingerprints across cycles, fallback suppression, stale passive publish rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

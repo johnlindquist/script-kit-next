@@ -166,7 +166,10 @@ export interface HardScenarioReceipt {
     | "file-search-preview-sanitization-stress"
     | "hotkey-prompt-transient-capture-cancel-stress"
     | "process-manager-sort-detail-panel-stability-stress"
-    | "env-prompt-redacted-status-error-recovery-stress";
+    | "env-prompt-redacted-status-error-recovery-stress"
+    | "command-palette-breadcrumb-route-stack-stress"
+    | "root-source-chip-action-semantics-stress"
+    | "recent-history-dedupe-root-grouping-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -268,6 +271,9 @@ export interface HardScenarioReceipt {
   hotkeyPromptTransientCaptureCancelReceipt?: Record<string, unknown>;
   processManagerSortDetailPanelStabilityReceipt?: Record<string, unknown>;
   envPromptRedactedStatusErrorRecoveryReceipt?: Record<string, unknown>;
+  commandPaletteBreadcrumbRouteStackReceipt?: Record<string, unknown>;
+  rootSourceChipActionSemanticsReceipt?: Record<string, unknown>;
+  recentHistoryDedupeRootGroupingReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7560,6 +7566,149 @@ export async function runEnvPromptRedactedStatusErrorRecoveryStressScenario(opts
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_env_prompt_redacted_status_error_recovery_receipt" } }],
     failure: { code: "missing_env_prompt_redacted_status_error_recovery_receipt", stepName: "declare-required-receipt", message: "Missing app-side EnvPrompt redacted status/error recovery receipts." },
     warnings: ["file_linear:env_prompt_redacted_status_error_recovery_receipts_missing"],
+  };
+}
+
+export async function runCommandPaletteBreadcrumbRouteStackStressScenario(opts: {
+  session: string;
+  host?: string;
+  fixture?: string;
+  drillPath?: string[];
+  filter?: string;
+  backMethods?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "command-palette-breadcrumb-route-stack-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_command_palette_breadcrumb_route_stack_receipt",
+    linearIssue: "file_linear:command_palette_breadcrumb_route_stack_receipts_missing",
+    commandPaletteBreadcrumbRouteStackReceipt: {
+      kind: "ux.commandPaletteBreadcrumbRouteStack",
+      commandPaletteBreadcrumbRouteStackStressId: "loop-twenty-nine-command-palette-breadcrumb-route-stack",
+      session: opts.session, host: opts.host ?? "main", fixture: opts.fixture ?? "agentic-actions-breadcrumbs",
+      requestedDrillPath: opts.drillPath ?? ["parent-action", "child-action"],
+      requestedFilter: opts.filter ?? "switch", requestedBackMethods: opts.backMethods ?? ["escape", "breadcrumb-click"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-click", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      actionsDialogHost: null, routeStackDepth: null, breadcrumbTrailLabels: [],
+      breadcrumbSemanticIds: [], activeRouteId: null, parentRouteSnapshot: null,
+      childRouteSnapshot: null, drillDownActionId: null, drillDownPushedReceipt: null,
+      breadcrumbBackReceipt: null, escapeBackReceipt: null, searchTextPreserved: null,
+      selectionRestoredToParent: null, scrollAnchorRestored: null, noOnSelectBeforeDrillDown: null,
+      noAccidentalExecution: null, topmostOwnerBeforeKey: null, staleRouteRejected: null,
+      wrongHostRejected: null, usedNativeInput: false, usedNativePointer: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_command_palette_breadcrumb_route_stack_receipt" } }],
+    failure: { code: "missing_command_palette_breadcrumb_route_stack_receipt", stepName: "declare-required-receipt", message: "Missing app-side command palette breadcrumb route-stack receipts." },
+    warnings: ["file_linear:command_palette_breadcrumb_route_stack_receipts_missing"],
+  };
+}
+
+export async function runRootSourceChipActionSemanticsStressScenario(opts: {
+  session: string;
+  queries?: string[];
+  actions?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noConfigWrite?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "root-source-chip-action-semantics-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_root_source_chip_action_semantics_receipt",
+    linearIssue: "file_linear:root_source_chip_action_semantics_receipts_missing",
+    rootSourceChipActionSemanticsReceipt: {
+      kind: "ux.rootSourceChipActionSemantics",
+      rootSourceChipActionSemanticsStressId: "loop-twenty-nine-root-source-chip-action-semantics",
+      session: opts.session,
+      requestedQueries: opts.queries ?? ["f: AGENTS.md", "c: agentic", "n: welcome", "-c: noise"],
+      requestedActions: opts.actions ?? ["remove-chip", "clear-all", "toggle-exclude", "open-chip-actions"],
+      requestedInputModes: opts.inputModes ?? ["protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noConfigWrite: opts.noConfigWrite ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureSourceCatalogId: null, inputRenderedText: null, strippedSearchText: null,
+      sourceFilterSet: null, sourceChipSemanticIds: [], sourceChipRoles: [],
+      chipRemoveReceipt: null, chipClearAllReceipt: null, chipToggleExcludeReceipt: null,
+      filterInputDecorationsGeneration: null, preflightFilterIndicators: null,
+      statusChipNonSelectable: null, groupedRowsSuppressDisallowedSources: null,
+      inputHistoryRecallBlocked: null, selectionPreservedAfterChipAction: null,
+      noStatusAsActionSubject: null, noAccidentalExecution: null, staleChipActionRejected: null,
+      wrongSurfaceRejected: null, usedNativeInput: false, usedNativePointer: false,
+      usedSystemPasteboard: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_root_source_chip_action_semantics_receipt" } }],
+    failure: { code: "missing_root_source_chip_action_semantics_receipt", stepName: "declare-required-receipt", message: "Missing app-side root source-chip action semantics receipts." },
+    warnings: ["file_linear:root_source_chip_action_semantics_receipts_missing"],
+  };
+}
+
+export async function runRecentHistoryDedupeRootGroupingStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  sources?: string[];
+  query?: string;
+  cycles?: number;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "recent-history-dedupe-root-grouping-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_recent_history_dedupe_root_grouping_receipt",
+    linearIssue: "file_linear:recent_history_dedupe_root_grouping_receipts_missing",
+    recentHistoryDedupeRootGroupingReceipt: {
+      kind: "ux.recentHistoryDedupeRootGrouping",
+      recentHistoryDedupeRootGroupingStressId: "loop-twenty-nine-recent-history-dedupe-root-grouping",
+      session: opts.session, fixture: opts.fixture ?? "agentic-root-recents",
+      requestedSources: opts.sources ?? ["files", "notes", "clipboard", "dictation", "acp-history"],
+      requestedQuery: opts.query ?? "agentic-loop-29-dupe", requestedCycles: opts.cycles ?? 6,
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureHistorySnapshotId: null, sourceCatalogGeneration: null, queryFrameKey: null,
+      rootFileFrameKey: null, passiveFrameKey: null, visibleResultsRoles: [],
+      groupSectionOrder: [], filesSectionContiguous: null, searchFilesContinuationStable: null,
+      dedupeKeys: [], duplicateKeyCollisionsRejected: null, recentFileSeedPoolFingerprint: null,
+      historyRowsMetadataOnly: null, noFullTranscriptOrNoteBodyLeak: null, stableSelectionKey: null,
+      rowFingerprintBeforeAfterCycles: null, fallbackRowsSuppressedWhenSourceRowsPresent: null,
+      stalePassivePublishRejected: null, noAccidentalExecution: null, usedNativeInput: false,
+      usedNativePointer: false, usedSystemPasteboard: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_recent_history_dedupe_root_grouping_receipt" } }],
+    failure: { code: "missing_recent_history_dedupe_root_grouping_receipt", stepName: "declare-required-receipt", message: "Missing app-side recent/history dedupe and root grouping receipts." },
+    warnings: ["file_linear:recent_history_dedupe_root_grouping_receipts_missing"],
   };
 }
 
