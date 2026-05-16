@@ -33,6 +33,7 @@
 // --- merged from part_000.rs ---
 use crate::logging;
 use crate::protocol;
+use crate::protocol::version::{read_wire_version, ProtocolVersion, ProtocolVersionError};
 use crate::protocol::GridDepthOption;
 use crate::setup;
 use itertools::Itertools;
@@ -46,12 +47,10 @@ fn default_grid_size() -> u32 {
 }
 /// Maximum bytes accepted for a single external stdin JSONL command.
 const MAX_STDIN_COMMAND_BYTES: usize = 16 * 1024;
-/// Current stdin JSONL protocol version. Missing `protocolVersion` fields
-/// default to [`STDIN_PROTOCOL_VERSION`] for backward compatibility with
-/// the pre-v1 Bun SDK. Values other than this constant are rejected up
-/// front before any typed deserialization, so the Rust side has one
-/// well-defined version gate.
-pub const STDIN_PROTOCOL_VERSION: u16 = 1;
+// Stdin JSONL protocol versions share the core protocol envelope.
+// Missing `protocolVersion` fields remain legacy v1 for backward
+// compatibility with the pre-v1 Bun SDK, while explicit versions in
+// the core accepted range dispatch through the same typed command layer.
 const CAPTURE_WINDOW_RELATIVE_ROOTS: [&str; 2] = [".test-screenshots", "test-screenshots"];
 const CAPTURE_WINDOW_SCRIPTKIT_ROOT: &str = "screenshots";
 /// Stdin RPC `requestId` newtype.
@@ -804,27 +803,13 @@ pub struct StdinCommandEnvelope {
 }
 
 /// Read the optional `protocolVersion` field from a raw command value.
-/// Missing values default to [`STDIN_PROTOCOL_VERSION`] for backward
-/// compatibility with the pre-v1 Bun SDK. Values outside the accepted
-/// set are rejected here so the typed deserializer never runs with a
-/// version it does not understand.
-fn parse_protocol_version(raw: &serde_json::Value) -> anyhow::Result<u16> {
-    match raw.get("protocolVersion") {
-        None => Ok(STDIN_PROTOCOL_VERSION),
-        Some(v) => {
-            let n = v
-                .as_u64()
-                .ok_or_else(|| anyhow::anyhow!("protocolVersion must be an unsigned integer"))?;
-            let n = u16::try_from(n)
-                .map_err(|_| anyhow::anyhow!("protocolVersion {n} is out of range"))?;
-            anyhow::ensure!(
-                n == STDIN_PROTOCOL_VERSION,
-                "unsupported protocolVersion={n}; expected {}",
-                STDIN_PROTOCOL_VERSION
-            );
-            Ok(n)
-        }
-    }
+/// Missing values default to core protocol legacy v1. Explicit versions
+/// inside the core accepted range dispatch; unsupported out-of-range
+/// versions are rejected before typed deserialization.
+fn parse_protocol_version(
+    raw: &serde_json::Value,
+) -> Result<ProtocolVersion, ProtocolVersionError> {
+    read_wire_version(raw)
 }
 
 fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
@@ -833,17 +818,20 @@ fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
     // of the whole JSON tree for the common v1 path while giving us
     // one clear place to reject unknown protocol versions.
     let mut raw: serde_json::Value = serde_json::from_str(trimmed)?;
-    let version = parse_protocol_version(&raw).inspect_err(|_| {
-        let total = crate::protocol_stats::increment(
-            &crate::protocol_stats::PROTOCOL_STATS.stdin_unsupported_protocol_version_total,
-        );
-        if crate::protocol_stats::should_log_occurrence(total) {
-            tracing::warn!(
-                category = "STDIN",
-                event_type = "stdin_unsupported_protocol_version",
-                occurrences_total = total,
-                "rejected stdin command with unsupported protocolVersion"
+    let version = parse_protocol_version(&raw).inspect_err(|err| {
+        if let ProtocolVersionError::Unsupported { found } = err {
+            let total = crate::protocol_stats::increment(
+                &crate::protocol_stats::PROTOCOL_STATS.stdin_unsupported_protocol_version_total,
             );
+            if crate::protocol_stats::should_log_occurrence(total) {
+                tracing::warn!(
+                    category = "STDIN",
+                    event_type = "stdin_unsupported_protocol_version",
+                    found_version = found,
+                    occurrences_total = total,
+                    "rejected stdin command with unsupported protocolVersion"
+                );
+            }
         }
     })?;
 
@@ -868,7 +856,7 @@ fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
             tracing::debug!(
                 category = "STDIN",
                 event_type = "stdin_protocol_version_checked",
-                protocol_version = version,
+                protocol_version = version.get(),
                 command_type = command.command_type(),
                 "Parsed external command"
             );
@@ -891,7 +879,7 @@ fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
     tracing::debug!(
         category = "STDIN",
         event_type = "stdin_protocol_version_checked",
-        protocol_version = version,
+        protocol_version = version.get(),
         "Parsed protocol message"
     );
     Ok(StdinCommand::Protocol(Box::new(message)))
@@ -1139,6 +1127,8 @@ mod tests {
     use std::io::Cursor;
     use std::path::Path;
     use tempfile::TempDir;
+
+    static PROTOCOL_VERSION_STATS_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     /// Pins `EXTERNAL_COMMAND_VERBS` to the exhaustive
     /// [`ExternalCommand::command_type`] match: every sample variant's verb
@@ -1450,22 +1440,75 @@ mod tests {
     }
 
     #[test]
-    fn parse_stdin_command_rejects_unsupported_protocol_version() {
-        let err = parse_stdin_command(r#"{"type":"show","protocolVersion":2}"#)
-            .expect_err("v2 must be rejected");
+    fn parse_stdin_command_accepts_v2_external_command_protocol_version() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(r#"{"type":"show","protocolVersion":2}"#)?;
+        assert!(matches!(
+            parsed,
+            StdinCommand::External(ExternalCommand::Show { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_accepts_v2_protocol_message() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(
+            r#"{"type":"getState","requestId":"state-v2","protocolVersion":2}"#,
+        )?;
+        assert!(matches!(
+            parsed,
+            StdinCommand::Protocol(message)
+                if matches!(*message, crate::protocol::Message::GetState { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_accepts_v2_trigger_builtin() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(
+            r#"{"type":"triggerBuiltin","builtinId":"builtin/clipboard-history","protocolVersion":2}"#,
+        )?;
+        assert!(matches!(
+            parsed,
+            StdinCommand::External(ExternalCommand::TriggerBuiltin { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_rejects_unsupported_protocol_version_and_counts_it() {
+        let _guard = PROTOCOL_VERSION_STATS_TEST_LOCK.lock().unwrap();
+        crate::protocol_stats::reset_for_test();
+
+        let err = parse_stdin_command(r#"{"type":"show","protocolVersion":999}"#)
+            .expect_err("future version must be rejected");
         assert!(
             err.to_string().contains("unsupported protocolVersion"),
             "unexpected error: {err}"
         );
+        assert_eq!(
+            crate::protocol_stats::PROTOCOL_STATS
+                .stdin_unsupported_protocol_version_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+            1
+        );
     }
 
     #[test]
-    fn parse_stdin_command_rejects_non_integer_protocol_version() {
+    fn parse_stdin_command_rejects_non_integer_protocol_version_without_unsupported_count() {
+        let _guard = PROTOCOL_VERSION_STATS_TEST_LOCK.lock().unwrap();
+        crate::protocol_stats::reset_for_test();
+
         let err = parse_stdin_command(r#"{"type":"show","protocolVersion":"one"}"#)
             .expect_err("non-integer protocolVersion must be rejected");
         assert!(
-            err.to_string().contains("unsigned integer"),
+            err.to_string().contains("not an unsigned integer"),
             "unexpected error: {err}"
+        );
+        assert_eq!(
+            crate::protocol_stats::PROTOCOL_STATS
+                .stdin_unsupported_protocol_version_total
+                .load(std::sync::atomic::Ordering::Relaxed),
+            0
         );
     }
 
