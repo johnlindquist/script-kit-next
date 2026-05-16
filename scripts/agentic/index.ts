@@ -35,13 +35,16 @@
 
 import { resolve } from "path";
 import {
+  runAcpPortalRoundTripOriginStressScenario,
   runAcpPromptPopupParityScenario,
   runDetachedAcpTargetThreadingStressScenario,
   runActionsDialogExactIdScenario,
   runDetachedAcpExactIdScenario,
   runMainWindowExactIdScenario,
   runNotesAcpDelayedActionOriginStressScenario,
+  runPermissionPreflightReadonlyScenario,
   runPromptPopupExactIdScenario,
+  runShortcutRecorderFocusCaptureStressScenario,
 } from "./scenario";
 
 const SCHEMA_VERSION = 1;
@@ -484,6 +487,29 @@ function parseArgs() {
       : undefined;
   const driftIdx = args.indexOf("--drift");
   const drift = driftIdx >= 0 && args[driftIdx + 1] ? args[driftIdx + 1] : undefined;
+  const hostIdx = args.indexOf("--host");
+  const originIdx = args.indexOf("--origin");
+  const host =
+    originIdx >= 0 && args[originIdx + 1]
+      ? args[originIdx + 1]
+      : hostIdx >= 0 && args[hostIdx + 1] ? args[hostIdx + 1] : undefined;
+  const portalIdx = args.indexOf("--portal");
+  const portal = portalIdx >= 0 && args[portalIdx + 1] ? args[portalIdx + 1] : undefined;
+  const selectionIdx = args.indexOf("--selection");
+  const selection =
+    selectionIdx >= 0 && args[selectionIdx + 1] ? args[selectionIdx + 1] : undefined;
+  const queryIdx = args.indexOf("--query");
+  const query = queryIdx >= 0 && args[queryIdx + 1] ? args[queryIdx + 1] : undefined;
+  const kindsIdx = args.indexOf("--kinds");
+  const kinds =
+    kindsIdx >= 0 && args[kindsIdx + 1]
+      ? args[kindsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const chordIdx = args.indexOf("--chord");
+  const chord = chordIdx >= 0 && args[chordIdx + 1] ? args[chordIdx + 1] : undefined;
+  const actionIdx = args.indexOf("--action");
+  const action = actionIdx >= 0 && args[actionIdx + 1] ? args[actionIdx + 1] : undefined;
+  const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
     session,
@@ -499,6 +525,14 @@ function parseArgs() {
     family,
     families,
     drift,
+    host,
+    portal,
+    selection,
+    query,
+    kinds,
+    chord,
+    action,
+    sandboxConfig,
   };
 }
 
@@ -1752,6 +1786,14 @@ const {
   family,
   families,
   drift,
+  host,
+  portal,
+  selection,
+  query,
+  kinds,
+  chord,
+  action,
+  sandboxConfig,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -1853,6 +1895,66 @@ switch (recipe) {
         proofBundle.status === "pass"
           ? "Notes ACP delayed action origin receipt stayed valid"
           : "Notes ACP delayed action origin stress failed closed; app-side origin/generation receipt is missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "file-portal-origin-roundtrip": {
+    const proofBundle = await runAcpPortalRoundTripOriginStressScenario({
+      session,
+      host: host ?? "acp",
+      portal: portal ?? "file-search",
+      selection: selection ?? "file",
+      query: query ?? "AGENTS.md",
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "file-portal-origin-roundtrip",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "ACP portal round-trip preserved origin and accepted context-part identity"
+          : "ACP portal round-trip origin stress failed closed; app-side portal origin/context receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "permission-privacy-preflight": {
+    const proofBundle = await runPermissionPreflightReadonlyScenario({ session, kinds });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "permission-privacy-preflight",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Read-only permission preflight completed without opening System Settings or mutating permissions"
+          : "Read-only permission preflight failed closed without mutating OS permission state",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "shortcut-recorder-focus-capture": {
+    const proofBundle = await runShortcutRecorderFocusCaptureStressScenario({
+      session,
+      chord: chord ?? "cmd+shift+7",
+      action: action ?? "test-agentic-shortcut",
+      surface: surface ?? "shortcuts",
+      sandboxConfig: Boolean(sandboxConfig),
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "shortcut-recorder-focus-capture",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Shortcut recorder captured the native chord on the exact focused recorder surface"
+          : "Shortcut recorder focus/capture stress failed closed; recorder receipts are missing",
       proofBundle,
     };
     break;
@@ -1961,6 +2063,9 @@ switch (recipe) {
           { name: "acp-detached-target-threading-stress", description: "Multi-window detached ACP proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
           { name: "acp-prompt-popup-parity", description: "State-first PromptPopup family parity proof for ACP mention, model selector, and local history", flags: ["--session", "--family", "--families", "--json"] },
           { name: "notes-acp-delayed-action-origin-stress", description: "Fail-closed Notes ACP delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
+          { name: "file-portal-origin-roundtrip", description: "Fail-closed ACP portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
+          { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },
+          { name: "shortcut-recorder-focus-capture", description: "Fail-closed native shortcut recorder focus/capture receipt", flags: ["--session", "--surface", "--action", "--chord", "--sandbox-config", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -1989,6 +2094,9 @@ switch (recipe) {
           "proofBundle.captureTarget",
           "proofBundle.popupCases",
           "proofBundle.origin",
+          "proofBundle.portal",
+          "proofBundle.permissions",
+          "proofBundle.shortcut",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2017,6 +2125,12 @@ Recipes:
                          State-first ACP PromptPopup family parity proof
   notes-acp-delayed-action-origin-stress
                          Fail-closed Notes ACP delayed-action origin/generation stress
+  file-portal-origin-roundtrip
+                         Fail-closed ACP portal origin/context-part round-trip stress
+  permission-privacy-preflight
+                         Read-only permission preflight; never opens Settings or mutates TCC
+  shortcut-recorder-focus-capture
+                         Fail-closed shortcut recorder focus/capture stress
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2041,6 +2155,12 @@ Available scenarios:
   actions-dialog-exact-id Resolve exact attached ActionsDialog target, inspect, waitFor
   prompt-popup-exact-id   Resolve exact attached PromptPopup target, inspect, waitFor
   detached-acp-exact-id  Resolve exact detached ACP target, inspect, GPUI event, inspect again
+  file-portal-origin-roundtrip
+                         Emit fail-closed portal origin/context receipt requirements
+  permission-privacy-preflight
+                         Run read-only permission prerequisite receipts
+  shortcut-recorder-focus-capture
+                         Emit fail-closed shortcut recorder receipt requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2056,6 +2176,9 @@ Examples:
   bun scripts/agentic/index.ts acp-detached-target-threading-stress --session default --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json
   bun scripts/agentic/index.ts acp-prompt-popup-parity --session default --families mention,model-selector,local-history --json
   bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress --session default --drift generation --json
+  bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host acp --portal file-search --json
+  bun scripts/agentic/index.ts permission-privacy-preflight --session default --json
+  bun scripts/agentic/index.ts shortcut-recorder-focus-capture --session default --chord cmd+shift+7 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

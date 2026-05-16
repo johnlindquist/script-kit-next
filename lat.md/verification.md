@@ -22,6 +22,12 @@ PathPrompt filesystem-edge verification must prove directory load states through
 
 Use `cargo test --lib prompts::path::prompt::tests:: -- --nocapture` for direct load-entry proof of missing paths, non-directory starts, empty directories, hidden-dotfile policy, symlink rows, and simulated permission denial. Use `cargo test --test path_prompt_filesystem_edges_contract -- --nocapture` for source proof that `stateResult.path`, `getElements` path-status rows, SDK `PathPromptState`, and stable status copy remain wired. Runtime proof should launch `path({ startPath })` against a missing path, an empty temp directory, and a permission-denied or chmod-simulated directory, then assert `getState.path.status.kind`, `getState.path.status.message`, `visibleEntryCount`, and `getElements` `path-status.statusKind` before cleanup. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
 
+## TemplatePrompt Automation Parity
+
+TemplatePrompt automation parity proves the protocol path owns the same submit, cancel, navigation, ForceSubmit, and actions behavior as the visible footer advertises.
+
+Use `cargo test --test template_prompt_parity_contract -- --nocapture` for source proof that the live and mirror stdin dispatchers have a TemplatePrompt simulateKey arm, ForceSubmit includes TemplatePrompt in direct and batch paths, and the TemplatePrompt footer Actions button has a live `ActionsDialogHost::TemplatePrompt` mapping with focus restore. Runtime proof should launch `template("Hello {{name}}")`, assert `getState.promptType:"template"` plus `getElements` template rows, fill with `batch.setInput`, submit with `simulateKey Enter`, separately cancel with `simulateKey Escape`, open actions with `simulateKey Cmd+K`, and prove `batch.forceSubmit` resolves a provided value. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
+
 ## SDK find unsupported boundary
 
 `find()` verification is a negative SDK contract, not a UI prompt proof.
@@ -77,7 +83,7 @@ Run `cargo test --test source_audits verify_shot_pixel_audit_contract`, `cargo t
 
 Hard-scenario tooling proves new CLI recipes, receipt fields, and failure modes before relying on live UI runs.
 
-Run `cargo test --test agentic_hard_scenarios_contract -- --nocapture` after changing `scripts/agentic/index.ts`, `scripts/agentic/scenario.ts`, or `scripts/agentic/target-thread.ts`. Runtime proof should use `bun scripts/agentic/index.ts acp-detached-target-threading-stress --session <name> --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json`, `bun scripts/agentic/index.ts acp-prompt-popup-parity --session <name> --families mention,model-selector,local-history --json`, and `bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress --session <name> --drift generation --json`, followed by `session.sh stop` and status verification.
+Run `cargo test --test agentic_hard_scenarios_contract --test agentic_loop_two_contract -- --nocapture` after changing `scripts/agentic/index.ts`, `scripts/agentic/scenario.ts`, or `scripts/agentic/target-thread.ts`. Runtime proof should use `bun scripts/agentic/index.ts acp-detached-target-threading-stress --session <name> --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json`, `bun scripts/agentic/index.ts acp-prompt-popup-parity --session <name> --families mention,model-selector,local-history --json`, `bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress --session <name> --drift generation --json`, `bun scripts/agentic/index.ts file-portal-origin-roundtrip --session <name> --origin acp --portal file-search --selection file --query AGENTS.md --json`, `bun scripts/agentic/index.ts permission-privacy-preflight --session <name> --kinds accessibility,screen-recording,microphone --json`, and `bun scripts/agentic/index.ts shortcut-recorder-focus-capture --session <name> --surface shortcuts --action test-agentic-shortcut --chord cmd+shift+7 --sandbox-config --json`, followed by `session.sh stop` and status verification.
 
 ## Cargo Test SIGBUS Guard
 

@@ -540,6 +540,12 @@ bun scripts/agentic/index.ts acp-prompt-popup-parity \
   --session default --families mention,model-selector,local-history --json
 bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress \
   --session default --drift generation --json
+bun scripts/agentic/index.ts file-portal-origin-roundtrip \
+  --session default --origin acp --portal file-search --selection file --query AGENTS.md --json
+bun scripts/agentic/index.ts permission-privacy-preflight \
+  --session default --kinds accessibility,screen-recording,microphone --json
+bun scripts/agentic/index.ts shortcut-recorder-focus-capture \
+  --session default --surface shortcuts --action test-agentic-shortcut --chord cmd+shift+7 --sandbox-config --json
 ```
 
 ### State-only vs screenshot checkpoints

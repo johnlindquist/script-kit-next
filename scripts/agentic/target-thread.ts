@@ -31,6 +31,15 @@ export interface TargetThreadIdentity {
   popupId?: string | null;
   acpViewId?: string | null;
   acpGeneration?: number | null;
+  originAutomationWindowId?: string | null;
+  originSurfaceId?: string | null;
+  originAcpViewId?: string | null;
+  originAcpGeneration?: number | null;
+  portalId?: string | null;
+  portalFamily?: string | null;
+  permissionSurfaceId?: string | null;
+  recorderId?: string | null;
+  recorderGeneration?: number | null;
 }
 
 export interface TargetThreadFailure {
@@ -42,7 +51,36 @@ export interface TargetThreadFailure {
     | "wrong_popup_family"
     | "wrong_popup_id"
     | "insufficient_target_count"
-    | "untargeted_rpc_forbidden";
+    | "untargeted_rpc_forbidden"
+    | "missing_origin_identity"
+    | "origin_identity_drift"
+    | "portal_target_resolution_failed"
+    | "portal_rows_missing"
+    | "selection_not_found"
+    | "portal_return_failed"
+    | "wrong_context_part_origin"
+    | "context_part_missing"
+    | "unredacted_path_leak"
+    | "permission_surface_unavailable"
+    | "missing_permission_status"
+    | "invalid_permission_status_kind"
+    | "permission_status_mismatch"
+    | "permission_prompt_attempted"
+    | "system_settings_opened"
+    | "forbidden_permission_mutation"
+    | "unsafe_config_root"
+    | "recorder_surface_unavailable"
+    | "missing_recorder_focus"
+    | "recorder_focus_drift"
+    | "native_chord_failed"
+    | "chord_capture_failed"
+    | "captured_chord_mismatch"
+    | "state_elements_mismatch"
+    | "global_hotkey_leak"
+    | "hotkey_persisted_outside_sandbox"
+    | "missing_portal_round_trip_origin_receipt"
+    | "permission_preflight_failed"
+    | "missing_shortcut_recorder_capture_receipt";
   expected?: Partial<TargetThreadIdentity>;
   actual?: Partial<TargetThreadIdentity>;
   stepName: string;
@@ -163,6 +201,38 @@ function identityFromInspect(
     acpGeneration:
       typeof inspect.acpGeneration === "number"
         ? (inspect.acpGeneration as number)
+        : null,
+    originAutomationWindowId:
+      typeof inspect.originAutomationWindowId === "string"
+        ? (inspect.originAutomationWindowId as string)
+        : null,
+    originSurfaceId:
+      typeof inspect.originSurfaceId === "string"
+        ? (inspect.originSurfaceId as string)
+        : null,
+    originAcpViewId:
+      typeof inspect.originAcpViewId === "string"
+        ? (inspect.originAcpViewId as string)
+        : null,
+    originAcpGeneration:
+      typeof inspect.originAcpGeneration === "number"
+        ? (inspect.originAcpGeneration as number)
+        : null,
+    portalId:
+      typeof inspect.portalId === "string" ? (inspect.portalId as string) : null,
+    portalFamily:
+      typeof inspect.portalFamily === "string"
+        ? (inspect.portalFamily as string)
+        : null,
+    permissionSurfaceId:
+      typeof inspect.permissionSurfaceId === "string"
+        ? (inspect.permissionSurfaceId as string)
+        : null,
+    recorderId:
+      typeof inspect.recorderId === "string" ? (inspect.recorderId as string) : null,
+    recorderGeneration:
+      typeof inspect.recorderGeneration === "number"
+        ? (inspect.recorderGeneration as number)
         : null,
   };
 }

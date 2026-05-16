@@ -85,7 +85,10 @@ export interface HardScenarioReceipt {
   scenario:
     | "detached-acp-target-threading-stress"
     | "acp-prompt-popup-parity"
-    | "notes-acp-delayed-action-origin-stress";
+    | "notes-acp-delayed-action-origin-stress"
+    | "file-portal-origin-roundtrip"
+    | "permission-privacy-preflight"
+    | "shortcut-recorder-focus-capture";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -97,6 +100,9 @@ export interface HardScenarioReceipt {
   peerWindows?: Array<Record<string, unknown>>;
   popupCases?: Array<Record<string, unknown>>;
   origin?: Record<string, unknown>;
+  portal?: Record<string, unknown>;
+  permissions?: Record<string, unknown>;
+  shortcut?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -1328,6 +1334,208 @@ export async function runNotesAcpDelayedActionOriginStressScenario(opts: {
   };
 }
 
+function parseMaybeJson(text: string): Record<string, unknown> {
+  if (!text.trim()) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+export async function runAcpPortalRoundTripOriginStressScenario(opts: {
+  session: string;
+  host: string;
+  portal: string;
+  selection?: string;
+  query?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "file-portal-origin-roundtrip",
+    status: "fail",
+    origin: {
+      host: opts.host,
+      session: opts.session,
+      acpGeneration: null,
+      portalSessionId: null,
+      returnTarget: null,
+    },
+    portal: {
+      kind: opts.portal,
+      selection: opts.selection ?? "file",
+      query: opts.query ?? "AGENTS.md",
+      roundTrip: "unverified",
+      expectedReceipts: [
+        "origin.host",
+        "origin.acpGeneration",
+        "portal.sessionId",
+        "portal.returnTarget",
+        "contextPart.uri",
+      ],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetAcpState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "portal-origin-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          host: opts.host,
+          portal: opts.portal,
+          blockingGap:
+            "ACP portal round-trip receipts do not yet expose origin generation, portal session id, return target, and accepted context part URI to the TypeScript harness.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_portal_round_trip_origin_receipt",
+      stepName: "portal-origin-receipt-preflight",
+      message:
+        "The harness fails closed until ACP portal round-trip origin and context-part receipts exist.",
+    },
+    warnings: ["file_linear:acp_portal_round_trip_origin_receipts_missing"],
+  };
+}
+
+export async function runPermissionPreflightReadonlyScenario(opts: {
+  session: string;
+  kinds?: string[];
+}): Promise<HardScenarioReceipt> {
+  const steps: Array<Record<string, unknown>> = [];
+
+  const inputCheck = await runTool(
+    ["bun", "scripts/agentic/macos-input.ts", "check"],
+    "permission-preflight:macos-input-check"
+  );
+  const inputPayload = parseMaybeJson(inputCheck.stdout);
+  steps.push({
+    name: "macos-input-check",
+    status: inputCheck.exitCode === 0 ? "pass" : "fail",
+    output: inputPayload,
+  });
+
+  const windowStatus = await runTool(
+    ["bun", "scripts/agentic/window.ts", "status"],
+    "permission-preflight:window-status"
+  );
+  const windowPayload = parseMaybeJson(windowStatus.stdout);
+  steps.push({
+    name: "window-status",
+    status: windowStatus.exitCode === 0 ? "pass" : "fail",
+    output: windowPayload,
+  });
+
+  const permissions = {
+    session: opts.session,
+    kinds: opts.kinds ?? ["accessibility", "screen-recording", "microphone"],
+    accessibility:
+      ((inputPayload.data as Record<string, unknown> | undefined)?.accessibility as
+        | boolean
+        | undefined) ?? null,
+    screenRecording: "notPrompted",
+    microphone: "notPrompted",
+    passiveOnly: true,
+    openedSystemSettings: false,
+    mutatedTcc: false,
+    clickedSettings: false,
+  };
+  const allPass = steps.every((step) => step.status === "pass");
+
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "permission-privacy-preflight",
+    status: allPass ? "pass" : "fail",
+    permissions,
+    usage: {
+      stateFirst: true,
+      usedGetAcpState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      openedSystemSettings: false,
+      mutatedUserData: false,
+    },
+    steps,
+    failure: allPass
+      ? undefined
+      : {
+          code: "permission_preflight_failed",
+          stepName: "permission-privacy-preflight",
+          message:
+            "Read-only permission preflight failed without opening System Settings or mutating permissions.",
+        },
+    warnings: [],
+  };
+}
+
+export async function runShortcutRecorderFocusCaptureStressScenario(opts: {
+  session: string;
+  chord: string;
+  surface?: string;
+  action?: string;
+  sandboxConfig?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "shortcut-recorder-focus-capture",
+    status: "fail",
+    shortcut: {
+      chord: opts.chord,
+      surface: opts.surface ?? "shortcuts",
+      action: opts.action ?? "test-agentic-shortcut",
+      sandboxConfig: opts.sandboxConfig ?? false,
+      recorderSurface: null,
+      focusedAutomationWindowId: null,
+      capturedShortcut: null,
+      leakedGlobalHotkey: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetAcpState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "shortcut-recorder-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          chord: opts.chord,
+          surface: opts.surface ?? "shortcuts",
+          action: opts.action ?? "test-agentic-shortcut",
+          sandboxConfig: opts.sandboxConfig ?? false,
+          blockingGap:
+            "Shortcut recorder focus/capture receipts are not yet exposed to the TypeScript harness without writing config.ts.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_shortcut_recorder_capture_receipt",
+      stepName: "shortcut-recorder-receipt-preflight",
+      message:
+        "The harness fails closed until recorder focus, captured chord, and global-hotkey leak receipts exist.",
+    },
+    warnings: ["file_linear:shortcut_recorder_capture_receipts_missing"],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -1372,14 +1580,40 @@ function parseArgs() {
       : ["mention", "model-selector", "local-history"];
   const driftIdx = args.indexOf("--drift");
   const drift = driftIdx >= 0 && args[driftIdx + 1] ? args[driftIdx + 1] : "generation";
+  const hostIdx = args.indexOf("--host");
+  const originIdx = args.indexOf("--origin");
+  const host =
+    originIdx >= 0 && args[originIdx + 1]
+      ? args[originIdx + 1]
+      : hostIdx >= 0 && args[hostIdx + 1] ? args[hostIdx + 1] : "acp";
+  const portalIdx = args.indexOf("--portal");
+  const portal = portalIdx >= 0 && args[portalIdx + 1] ? args[portalIdx + 1] : "file-search";
+  const selectionIdx = args.indexOf("--selection");
+  const selection =
+    selectionIdx >= 0 && args[selectionIdx + 1] ? args[selectionIdx + 1] : "file";
+  const queryIdx = args.indexOf("--query");
+  const query = queryIdx >= 0 && args[queryIdx + 1] ? args[queryIdx + 1] : "AGENTS.md";
+  const kindsIdx = args.indexOf("--kinds");
+  const kinds =
+    kindsIdx >= 0 && args[kindsIdx + 1]
+      ? args[kindsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : ["accessibility", "screen-recording", "microphone"];
+  const chordIdx = args.indexOf("--chord");
+  const chord = chordIdx >= 0 && args[chordIdx + 1] ? args[chordIdx + 1] : "cmd+shift+7";
+  const actionIdx = args.indexOf("--action");
+  const action =
+    actionIdx >= 0 && args[actionIdx + 1] ? args[actionIdx + 1] : "test-agentic-shortcut";
+  const surfaceIdx = args.indexOf("--surface");
+  const surface = surfaceIdx >= 0 && args[surfaceIdx + 1] ? args[surfaceIdx + 1] : "shortcuts";
+  const sandboxConfig = args.includes("--sandbox-config");
   const vision = args.includes("--vision");
 
-  return { session, scenario, index, minTargets, key, families, drift, vision };
+  return { session, scenario, index, minTargets, key, families, drift, host, portal, selection, query, kinds, chord, action, surface, sandboxConfig, vision };
 }
 
 // Only run CLI when executed directly (not imported)
 if (import.meta.main) {
-  const { session, scenario, index, minTargets, key, families, drift, vision } = parseArgs();
+  const { session, scenario, index, minTargets, key, families, drift, host, portal, selection, query, kinds, chord, action, surface, sandboxConfig, vision } = parseArgs();
 
   const AVAILABLE_SCENARIOS = [
     "main-window-exact-id",
@@ -1389,6 +1623,9 @@ if (import.meta.main) {
     "detached-acp-target-threading-stress",
     "acp-prompt-popup-parity",
     "notes-acp-delayed-action-origin-stress",
+    "file-portal-origin-roundtrip",
+    "permission-privacy-preflight",
+    "shortcut-recorder-focus-capture",
   ];
 
   if (!scenario) {
@@ -1454,6 +1691,27 @@ if (import.meta.main) {
 
     case "notes-acp-delayed-action-origin-stress": {
       const bundle = await runNotesAcpDelayedActionOriginStressScenario({ session, drift });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "file-portal-origin-roundtrip": {
+      const bundle = await runAcpPortalRoundTripOriginStressScenario({ session, host, portal, selection, query });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "permission-privacy-preflight": {
+      const bundle = await runPermissionPreflightReadonlyScenario({ session, kinds });
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.status === "pass" ? 0 : 1);
+      break;
+    }
+
+    case "shortcut-recorder-focus-capture": {
+      const bundle = await runShortcutRecorderFocusCaptureStressScenario({ session, chord, action, surface, sandboxConfig });
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
       process.exit(bundle.status === "pass" ? 0 : 1);
       break;

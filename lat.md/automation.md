@@ -162,6 +162,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `notes-acp-delayed-action-origin-stress` is intentionally fail-closed until Notes-hosted ACP exposes durable origin and generation receipts. The current harness emits `missingOriginGeneration` rather than inferring delayed-action safety from unrelated state.
 
+`file-portal-origin-roundtrip` is intentionally fail-closed until ACP portal returns expose origin host, ACP generation, portal session id, return target, and accepted context-part URI receipts. It records the required receipt shape without driving an ambiguous portal by hand.
+
+`permission-privacy-preflight` runs only read-only prerequisite checks and records that it did not open System Settings, click settings UI, or mutate TCC state. This keeps permission proof separate from permission remediation.
+
+`shortcut-recorder-focus-capture` is intentionally fail-closed until shortcut recorder surfaces expose focus, captured chord, and global-hotkey leak receipts without writing `config.ts`.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
