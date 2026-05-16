@@ -192,6 +192,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `mcp-context-resource-attachment-identity-stress` is intentionally fail-closed until resource-backed context attachment exposes resource URI, profile, source identity, accepted context-part URI, stale-resource rejection, and return target receipts.
 
+`settings-theme-hot-reload-stress` is intentionally fail-closed until Settings/theme receipts expose config source identity, before/after theme token fingerprints, renderer cache revision, active-window repaint revision, and restore cleanup without manual Settings clicks.
+
+`file-search-drag-out-identity-stress` is intentionally fail-closed until File Search exposes selected file URI, visible-row redaction, drag preview identity, drag payload identity, host/drop-target refusal, and return-to-source-surface receipts.
+
+`scriptlet-bundle-execution-matrix-stress` is intentionally fail-closed until scriptlet execution exposes selected scriptlet id, bundle source hash, arg/env isolation, execution output, cancellation path, orphan-process cleanup, and no cross-scriptlet state-bleed receipts.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

@@ -100,7 +100,10 @@ export interface HardScenarioReceipt {
     | "scroll-selection-reanchor-stress"
     | "permission-assistant-drag-preflight-stress"
     | "quick-terminal-pty-apply-back-stress"
-    | "mcp-context-resource-attachment-identity-stress";
+    | "mcp-context-resource-attachment-identity-stress"
+    | "settings-theme-hot-reload-stress"
+    | "file-search-drag-out-identity-stress"
+    | "scriptlet-bundle-execution-matrix-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -127,6 +130,9 @@ export interface HardScenarioReceipt {
   permissionAssistant?: Record<string, unknown>;
   quickTerminal?: Record<string, unknown>;
   mcpContextResource?: Record<string, unknown>;
+  settingsThemeHotReload?: Record<string, unknown>;
+  fileSearchDragOut?: Record<string, unknown>;
+  scriptletBundleExecution?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -2482,6 +2488,262 @@ export async function runMcpContextResourceAttachmentIdentityStressScenario(opts
         "The harness fails closed until resource-backed context attachment identity can be proven without manual picker interaction.",
     },
     warnings: ["file_linear:mcp_context_resource_attachment_receipts_missing"],
+  };
+}
+
+export async function runSettingsThemeHotReloadStressScenario(opts: {
+  session: string;
+  themeBefore?: string;
+  themeAfter?: string;
+  configKey?: string;
+  sandboxConfig?: boolean;
+}): Promise<HardScenarioReceipt> {
+  const themeBefore = opts.themeBefore ?? "script-kit-dark";
+  const themeAfter = opts.themeAfter ?? "script-kit-light";
+  const configKey = opts.configKey ?? "theme";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "settings-theme-hot-reload-stress",
+    status: "fail",
+    settingsThemeHotReload: {
+      session: opts.session,
+      sandboxConfig: opts.sandboxConfig ?? false,
+      requestedPreference: { configKey, beforeTheme: themeBefore, afterTheme: themeAfter },
+      configSourceIdentity: {
+        configDir: null,
+        configPathFingerprint: null,
+        sourceKind: null,
+        generation: null,
+      },
+      themeSourceIdentity: {
+        beforeThemeId: themeBefore,
+        afterThemeId: themeAfter,
+        beforeThemeTokenFingerprint: null,
+        afterThemeTokenFingerprint: null,
+        themeFileFingerprint: null,
+      },
+      rendererCache: {
+        beforeRendererCacheRevision: null,
+        afterRendererCacheRevision: null,
+        staleRendererCacheRejected: null,
+      },
+      activeWindowRepaint: {
+        windowId: null,
+        beforePaintRevision: null,
+        afterPaintRevision: null,
+        repaintObserved: null,
+      },
+      cleanup: {
+        restoredConfigFingerprint: null,
+        restoredThemeTokenFingerprint: null,
+        manualSettingsClicks: false,
+        mutatedUserConfig: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+      manualSettingsClicks: false,
+    },
+    steps: [{
+      name: "settings-theme-hot-reload-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Settings/theme hot-reload does not expose one receipt tying config source identity, theme token fingerprints, renderer cache revision, active window repaint, and restore cleanup.",
+      },
+    }],
+    failure: {
+      code: "missing_settings_theme_hot_reload_receipt",
+      stepName: "settings-theme-hot-reload-receipt-preflight",
+      message:
+        "The harness fails closed until Settings/theme hot-reload can be proven from source identity, token fingerprint, repaint, and cleanup receipts.",
+    },
+    warnings: ["file_linear:settings_theme_hot_reload_receipts_missing"],
+  };
+}
+
+export async function runFileSearchDragOutIdentityStressScenario(opts: {
+  session: string;
+  query?: string;
+  fileName?: string;
+  dropTarget?: string;
+}): Promise<HardScenarioReceipt> {
+  const query = opts.query ?? "AGENTS.md";
+  const fileName = opts.fileName ?? query;
+  const dropTarget = opts.dropTarget ?? "host-refusal-fixture";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "file-search-drag-out-identity-stress",
+    status: "fail",
+    fileSearchDragOut: {
+      session: opts.session,
+      query,
+      fileName,
+      dropTarget,
+      sourceSurface: {
+        promptType: null,
+        automationWindowId: null,
+        semanticSurface: null,
+      },
+      selectedFile: {
+        selectedSemanticId: null,
+        selectedFileUri: null,
+        selectedBasename: fileName,
+        selectedRowFingerprint: null,
+      },
+      visibleRowsPrivacy: {
+        visibleRowsRedacted: null,
+        privatePathLeakDetected: null,
+        forbiddenVisibleFields: ["absolutePath", "parentPath", "homeExpandedPath", "fileContent"],
+      },
+      dragPreview: {
+        previewCreated: null,
+        previewFileUri: null,
+        previewFingerprint: null,
+      },
+      dragPayloadIdentity: {
+        pasteboardType: null,
+        payloadFileUri: null,
+        payloadMatchesSelectedFile: null,
+        payloadLeaksPrivatePathInVisibleRows: null,
+      },
+      hostDropRefusal: {
+        attemptedTarget: dropTarget,
+        refused: null,
+        refusalReason: null,
+        wrongHostAccepted: null,
+      },
+      returnSurface: {
+        returnedToSourceSurface: null,
+        selectedSemanticIdAfterReturn: null,
+        filterTextAfterReturn: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "file-search-drag-out-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "File Search does not expose one deterministic receipt for selected file URI, drag preview/payload identity, host refusal, visible-row privacy, and return-surface preservation.",
+      },
+    }],
+    failure: {
+      code: "missing_file_search_drag_out_identity_receipt",
+      stepName: "file-search-drag-out-receipt-preflight",
+      message:
+        "The harness fails closed until File Search drag-out identity can be proven without leaking private paths or accepting the wrong host.",
+    },
+    warnings: ["file_linear:file_search_drag_out_identity_receipts_missing"],
+  };
+}
+
+export async function runScriptletBundleExecutionMatrixStressScenario(opts: {
+  session: string;
+  scriptletId?: string;
+  bundleId?: string;
+  cancelAfterMs?: number;
+}): Promise<HardScenarioReceipt> {
+  const scriptletId = opts.scriptletId ?? "alpha";
+  const bundleId = opts.bundleId ?? "agentic-loop-seven-bundle";
+  const cancelAfterMs = opts.cancelAfterMs ?? 50;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "scriptlet-bundle-execution-matrix-stress",
+    status: "fail",
+    scriptletBundleExecution: {
+      session: opts.session,
+      fixture: {
+        bundleId,
+        scriptletId,
+        bundleSourceHash: null,
+        fixtureRoot: null,
+        mutatedUserKenv: false,
+      },
+      matrixCases: [
+        {
+          name: "scriptlet-alpha-output",
+          selectedScriptletId: null,
+          selectedBundleId: null,
+          argsFingerprint: null,
+          envFingerprint: null,
+          executionId: null,
+          executionOutput: null,
+          exitStatus: null,
+        },
+        {
+          name: "scriptlet-beta-isolation",
+          selectedScriptletId: null,
+          selectedBundleId: null,
+          argsFingerprint: null,
+          envFingerprint: null,
+          executionId: null,
+          executionOutput: null,
+          crossScriptletStateBleed: null,
+        },
+        {
+          name: "scriptlet-cancel",
+          selectedScriptletId: null,
+          selectedBundleId: null,
+          executionId: null,
+          cancelAfterMs,
+          cancellationPath: null,
+          cancelledBeforeOutputCommit: null,
+          orphanProcessDetected: null,
+        },
+      ],
+      isolation: {
+        argEnvIsolation: null,
+        crossScriptletStateBleed: null,
+        leakedEnvKeys: null,
+      },
+      cleanup: {
+        tempFixtureRemoved: null,
+        orphanProcesses: null,
+        mutatedUserKenv: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "scriptlet-bundle-execution-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Scriptlet execution does not expose one receipt tying selected scriptlet id, bundle source hash, arg/env isolation, execution output, cancellation, and cross-scriptlet state isolation.",
+      },
+    }],
+    failure: {
+      code: "missing_scriptlet_bundle_execution_receipt",
+      stepName: "scriptlet-bundle-execution-receipt-preflight",
+      message:
+        "The harness fails closed until scriptlet bundle execution can prove selected id, bundle hash, isolation, output, cancellation, and no cross-scriptlet state bleed.",
+    },
+    warnings: ["file_linear:scriptlet_bundle_execution_receipts_missing"],
   };
 }
 
