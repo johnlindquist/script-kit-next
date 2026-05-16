@@ -40,7 +40,7 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         "self.pending_filter_sync = true;",
         "self.pending_placeholder = Some(\"Search scripts, apps, and commands…\".to_string());",
         "self.show_script_list_with_main_filter_focus();",
-        "self.main_window_mode = MainWindowMode::Mini;",
+        "self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, \"open_mini_main_window\");",
         "self.hovered_index = None;",
         "self.selected_index = 0;",
         "self.opened_from_main_menu = true;",
@@ -64,7 +64,9 @@ fn open_mini_main_window_sets_mini_mode_contract() {
 fn width_for_view_returns_mini_width_for_mini_main_window() {
     let content = read("src/window_resize/mod.rs");
     assert!(
-        content.contains("ViewType::MiniMainWindow => Some(MINI_MAIN_WINDOW_WIDTH)"),
+        content
+            .contains("ViewType::MiniMainWindow | ViewType::MiniPrompt | ViewType::MiniAiChat =>")
+            && content.contains("Some(MINI_MAIN_WINDOW_WIDTH)"),
         "width_for_view must return MINI_MAIN_WINDOW_WIDTH for MiniMainWindow"
     );
     assert!(
@@ -102,7 +104,9 @@ fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
         .expect("Expected close_and_reset_window helper");
     let close_body = &lifecycle[close_start..lifecycle.len().min(close_start + 900)];
     assert!(
-        close_body.contains("self.main_window_mode = MainWindowMode::Full;"),
+        close_body.contains(
+            "self.set_main_window_mode_state_only(MainWindowMode::Full, cx, \"close_and_reset_window\");"
+        ),
         "close_and_reset_window must restore MainWindowMode::Full"
     );
 

@@ -24,10 +24,10 @@ fn about_route_owns_focus_without_launcher_filter_on_open() {
 fn about_surface_contract_declares_no_editable_input_and_explicit_dismissal() {
     // @lat: [[lat.md/about#About#Route contract]]
     let start = APP_VIEW_STATE_SOURCE
-        .find("AppView::About { .. } => LauncherSurfaceContract::new")
+        .find("SurfaceKind::About => LauncherSurfaceContract::new")
         .expect("About surface contract arm exists");
     let end = APP_VIEW_STATE_SOURCE[start..]
-        .find("AppView::ActionsDialog")
+        .find("SurfaceKind::ActionsDialog")
         .map(|ix| start + ix)
         .expect("ActionsDialog arm follows About arm");
     let about_arm = &APP_VIEW_STATE_SOURCE[start..end];

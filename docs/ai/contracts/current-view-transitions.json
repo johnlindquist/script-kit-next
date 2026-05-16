@@ -56,7 +56,31 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 1778,
+      "line": 1762,
+      "owner": "open_ai_vault_source_filter",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false,
+      "helper": "show_script_list_with_main_filter_focus",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "MainFilter",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::ScriptList",
+        "delegatesTo": "restore_current_view_with_focus",
+        "focusTarget": "MainFilter",
+        "focusedInput": "MainFilter",
+        "mainAutomationRekey": true,
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 1807,
       "owner": "open_builtin_filterable_view_with_filter",
       "receiver": "self",
       "operation": "assign",
@@ -66,7 +90,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 2339,
+      "line": 2368,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -76,7 +100,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 2718,
+      "line": 2747,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -86,7 +110,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 2904,
+      "line": 2933,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -96,7 +120,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 3264,
+      "line": 3362,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -106,7 +130,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 4192,
+      "line": 4290,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -116,7 +140,7 @@
     },
     {
       "file": "src/app_execute/builtin_execution.rs",
-      "line": 4226,
+      "line": 4324,
       "owner": "execute_builtin_inner",
       "receiver": "self",
       "operation": "assign",
@@ -414,7 +438,7 @@
     },
     {
       "file": "src/app_impl/filter_input_core.rs",
-      "line": 241,
+      "line": 252,
       "owner": "open_file_search_view_with_result_transition",
       "receiver": "self",
       "operation": "assign",
@@ -444,7 +468,7 @@
     },
     {
       "file": "src/app_impl/prompt_ai.rs",
-      "line": 411,
+      "line": 493,
       "owner": "show_inline_ai_chat",
       "receiver": "self",
       "operation": "assign",
@@ -454,7 +478,7 @@
     },
     {
       "file": "src/app_impl/prompt_ai.rs",
-      "line": 485,
+      "line": 573,
       "owner": "show_inline_ai_chat",
       "receiver": "self",
       "operation": "assign",
@@ -474,7 +498,7 @@
     },
     {
       "file": "src/app_impl/selection_fallback.rs",
-      "line": 1147,
+      "line": 1164,
       "owner": "open_script_issues_view",
       "receiver": "self",
       "operation": "assign",
@@ -484,7 +508,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/acp_launch.rs",
-      "line": 380,
+      "line": 387,
       "owner": "open_tab_ai_acp_view_from_request_impl",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -540,7 +564,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 714,
+      "line": 783,
       "owner": "try_reuse_embedded_acp_view",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -568,7 +592,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 1963,
+      "line": 2059,
       "owner": "open_tab_ai_harness_terminal_from_request",
       "receiver": "self",
       "operation": "assign",
@@ -578,7 +602,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2555,
+      "line": 2667,
       "owner": "close_tab_ai_harness_terminal_impl",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -602,7 +626,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2601,
+      "line": 2717,
       "owner": "close_tab_ai_harness_terminal",
       "receiver": "self",
       "operation": "transitionHelper",
@@ -626,7 +650,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 2643,
+      "line": 2775,
       "owner": "close_acp_chat_to_script_list",
       "receiver": "self",
       "operation": "assign",
@@ -636,7 +660,7 @@
     },
     {
       "file": "src/app_impl/tab_ai_mode/mod.rs",
-      "line": 4413,
+      "line": 4545,
       "owner": "save_tab_ai_script",
       "receiver": "self",
       "operation": "assign",
@@ -646,77 +670,17 @@
     },
     {
       "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 184,
-      "owner": "show_filterable_view",
+      "line": 403,
+      "owner": "apply_filterable_route_plan",
       "receiver": "self",
       "operation": "assign",
-      "expression": "AppView::DesignGalleryView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::DesignGalleryView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 196,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::ClipboardHistoryView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::ClipboardHistoryView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 203,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::AppLauncherView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::AppLauncherView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 215,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::BrowserTabsView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::BrowserTabsView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 231,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::EmojiPickerView { filter: String::new(), selected_index: 0, selected_category: None, }",
-      "inferredTarget": "AppView::EmojiPickerView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 246,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::WindowSwitcherView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::WindowSwitcherView",
-      "requiresManualReview": false
-    },
-    {
-      "file": "src/app_impl/trigger_builtin_dispatch.rs",
-      "line": 264,
-      "owner": "show_filterable_view",
-      "receiver": "self",
-      "operation": "assign",
-      "expression": "AppView::ProcessManagerView { filter: String::new(), selected_index: 0, }",
-      "inferredTarget": "AppView::ProcessManagerView",
-      "requiresManualReview": false
+      "expression": "plan.next_view",
+      "inferredTarget": "dynamic",
+      "requiresManualReview": true
     },
     {
       "file": "src/app_impl/ui_window.rs",
-      "line": 1191,
+      "line": 1324,
       "owner": "resolve_confirm_prompt",
       "receiver": "self",
       "operation": "assign",
@@ -726,7 +690,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1713,
+      "line": 1932,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -736,7 +700,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1755,
+      "line": 1969,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -746,7 +710,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1793,
+      "line": 2007,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -756,7 +720,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1858,
+      "line": 2072,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -766,7 +730,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1880,
+      "line": 2094,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -776,7 +740,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 1929,
+      "line": 2143,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -786,7 +750,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 2047,
+      "line": 2261,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -796,7 +760,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6060,
+      "line": 6584,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -806,7 +770,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6136,
+      "line": 6660,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -816,7 +780,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6173,
+      "line": 6697,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -826,7 +790,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6204,
+      "line": 6728,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -836,7 +800,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6249,
+      "line": 6773,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",
@@ -846,7 +810,7 @@
     },
     {
       "file": "src/prompt_handler/mod.rs",
-      "line": 6521,
+      "line": 7067,
       "owner": "handle_prompt_message",
       "receiver": "self",
       "operation": "assign",

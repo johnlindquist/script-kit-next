@@ -110,7 +110,8 @@ fn shortcut_recorder_uses_compact_modal_copy_and_bounds() {
         "shortcut recorder must treat Cmd+W as explicit cancel, not a captured shortcut"
     );
     assert!(
-        render_source.contains("} else if is_key_escape(key) {\n                this.cancel();\n                cx.notify();"),
+        render_source
+            .contains("if (mods.platform && key.eq_ignore_ascii_case(\"w\")) || is_key_escape(key) {\n                this.cancel();\n                cx.notify();"),
         "shortcut recorder Esc should cancel and notify like Cmd+W instead of clearing a captured shortcut"
     );
     assert!(

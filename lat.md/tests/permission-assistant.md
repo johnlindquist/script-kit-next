@@ -12,7 +12,7 @@ Accessibility and Screen Recording built-ins must route to the retained assistan
 
 ## Passive detection does not prompt
 
-Permission status reads must use passive preflight APIs and must not request access, write TCC, or automate System Settings.
+Permission status reads and MCP permission tools must use passive preflight APIs and must not request access, write TCC, or automate System Settings.
 
 ## Overlay lifetime and teardown
 

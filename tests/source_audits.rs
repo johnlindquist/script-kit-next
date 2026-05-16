@@ -164,6 +164,9 @@ mod root_unified_browser_history_contract;
 #[path = "source_audits/root_unified_browser_tabs_contract.rs"]
 mod root_unified_browser_tabs_contract;
 
+#[path = "source_audits/mcp_computer_list_tray_menu_observation_only.rs"]
+mod mcp_computer_list_tray_menu_observation_only;
+
 #[path = "source_audits/computer_get_tray_menu_item_contract.rs"]
 mod computer_get_tray_menu_item_contract;
 
@@ -229,6 +232,15 @@ mod permiso_teardown_contract;
 
 #[path = "source_audits/permiso_no_prompt_contract.rs"]
 mod permiso_no_prompt_contract;
+
+#[path = "source_audits/mcp_computer_list_permissions_observation_only.rs"]
+mod mcp_computer_list_permissions_observation_only;
+
+#[path = "source_audits/computer_list_permissions_contract.rs"]
+mod computer_list_permissions_contract;
+
+#[path = "source_audits/computer_get_permission_contract.rs"]
+mod computer_get_permission_contract;
 
 #[path = "source_audits/verify_shot_pixel_audit_contract.rs"]
 mod verify_shot_pixel_audit_contract;
