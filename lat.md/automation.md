@@ -316,6 +316,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `focus-ring-viewport-integrity-stress` is intentionally fail-closed until focus ring receipts expose focused semantic id and owner, focus ring/focused element/viewport/content/footer/popup bounds, ring visibility, no clipping, ring within viewport and above footer, no footer/popup occlusion, stable tab order, preserved selection/scroll anchor, focus restoration after Escape, no activation/submit, stale focus rejection, AFK-safe flags, and cleanup.
 
+`warning-banner-action-dismiss-semantics-stress` is intentionally fail-closed until banner receipts expose banner identity, visible text/bounds/text bounds, action and dismiss semantic ids, hover/focus state, action-vs-dismiss click receipts, non-color state cue, contrast ratio, no footer/input obstruction, stale banner rejection, AFK-safe flags, and cleanup.
+
+`select-prompt-multiselect-keyboard-state-stress` is intentionally fail-closed until SelectPrompt receipts expose choice count, focused/selected/checked/visible row ids, selection count and footer labels, filter and selection generations, Cmd-A/space/range-toggle receipts, filter preservation, checked rows matching state/elements, no submit/activation, stale selection rejection, AFK-safe flags, and cleanup.
+
+`file-search-preview-sanitization-stress` is intentionally fail-closed until File Search preview receipts expose selected row/file identity, preview generation/source/render kind/title/visible text/bounds/text bounds, byte limit/truncation, binary/missing/unsupported fallbacks, private path redaction, no raw path leak, no network/external service, no Quick Look/native picker/pasteboard mutation, stale preview rejection, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
