@@ -33,6 +33,12 @@
  *                         Fail-closed File Search drag-out identity proof
  *   scriptlet-bundle-execution-matrix-stress
  *                         Fail-closed scriptlet bundle execution matrix proof
+ *   tray-global-hotkey-menu-mutation-stress
+ *                         Fail-closed tray menu/global hotkey mutation proof
+ *   multi-window-resize-monitor-restoration-stress
+ *                         Fail-closed multi-window resize/monitor restoration proof
+ *   acp-targeted-dictation-delivery-stress
+ *                         Fail-closed ACP-targeted dictation delivery proof
  *   help                   Show this help
  *
  * Target threading:
@@ -68,6 +74,9 @@ import {
   runSettingsThemeHotReloadStressScenario,
   runFileSearchDragOutIdentityStressScenario,
   runScriptletBundleExecutionMatrixStressScenario,
+  runTrayGlobalHotkeyMenuMutationStressScenario,
+  runMultiWindowResizeMonitorRestorationStressScenario,
+  runAcpTargetedDictationDeliveryStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -602,6 +611,25 @@ function parseArgs() {
       : undefined;
   const cancelAfterMs = Number.isFinite(rawCancelAfterMs) ? rawCancelAfterMs : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
+  const loopsIdx = args.indexOf("--loops");
+  const rawLoops = loopsIdx >= 0 ? args[loopsIdx + 1] : undefined;
+  const loops =
+    rawLoops != null && Number.isInteger(Number(rawLoops)) && Number(rawLoops) > 0
+      ? Number(rawLoops)
+      : undefined;
+  const surfacesIdx = args.indexOf("--surfaces");
+  const surfaces =
+    surfacesIdx >= 0 && args[surfacesIdx + 1]
+      ? args[surfacesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const monitorProfileIdx = args.indexOf("--monitor-profile");
+  const monitorProfile =
+    monitorProfileIdx >= 0 && args[monitorProfileIdx + 1]
+      ? args[monitorProfileIdx + 1]
+      : undefined;
+  const transcriptIdx = args.indexOf("--transcript");
+  const transcript =
+    transcriptIdx >= 0 && args[transcriptIdx + 1] ? args[transcriptIdx + 1] : undefined;
   return {
     recipe,
     session,
@@ -648,6 +676,10 @@ function parseArgs() {
     scriptletId,
     cancelAfterMs,
     sandboxConfig,
+    loops,
+    surfaces,
+    monitorProfile,
+    transcript,
   };
 }
 
@@ -1932,6 +1964,10 @@ const {
   scriptletId,
   cancelAfterMs,
   sandboxConfig,
+  loops,
+  surfaces,
+  monitorProfile,
+  transcript,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -2365,6 +2401,57 @@ switch (recipe) {
     break;
   }
 
+  case "tray-global-hotkey-menu-mutation-stress": {
+    const proofBundle = await runTrayGlobalHotkeyMenuMutationStressScenario({
+      session,
+      loops,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "tray-global-hotkey-menu-mutation-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Tray/global-hotkey menu mutation stress failed closed; tray generation, duplicate detection, route identity, and cleanup receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "multi-window-resize-monitor-restoration-stress": {
+    const proofBundle = await runMultiWindowResizeMonitorRestorationStressScenario({
+      session,
+      surfaces,
+      monitorProfile,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "multi-window-resize-monitor-restoration-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Multi-window resize/monitor restoration stress failed closed; window identity, bounds, scale/rem, restore order, and clobber receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "acp-targeted-dictation-delivery-stress": {
+    const proofBundle = await runAcpTargetedDictationDeliveryStressScenario({
+      session,
+      kind,
+      index,
+      transcript,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-targeted-dictation-delivery-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "ACP-targeted dictation delivery stress failed closed; transcript generation, target identity, cursor range, wrong-window guard, and passive setup receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2486,6 +2573,9 @@ switch (recipe) {
           { name: "settings-theme-hot-reload-stress", description: "Fail-closed Settings/theme config identity, token fingerprint, repaint, and cleanup receipt", flags: ["--session", "--theme-before", "--theme-after", "--config-key", "--sandbox-config", "--json"] },
           { name: "file-search-drag-out-identity-stress", description: "Fail-closed File Search selected URI, drag payload, host refusal, privacy, and return receipt", flags: ["--session", "--query", "--file-name", "--drop-target", "--json"] },
           { name: "scriptlet-bundle-execution-matrix-stress", description: "Fail-closed scriptlet id, bundle hash, args/env isolation, output, cancellation, and bleed receipt", flags: ["--session", "--scriptlet-id", "--bundle-id", "--cancel-after-ms", "--json"] },
+          { name: "tray-global-hotkey-menu-mutation-stress", description: "Fail-closed tray menu/global-hotkey mutation receipt for section order, update state, action identity, duplicate guards, and hotkey route", flags: ["--session", "--loops", "--json"] },
+          { name: "multi-window-resize-monitor-restoration-stress", description: "Fail-closed multi-window monitor/scale/resize restoration receipt for main, attached popup, detached ACP, and Notes windows", flags: ["--session", "--surfaces", "--monitor-profile", "--json"] },
+          { name: "acp-targeted-dictation-delivery-stress", description: "Fail-closed ACP-targeted dictation delivery receipt for target identity, transcript generation, cursor insertion range, wrong-window guard, and passive setup", flags: ["--session", "--kind", "--index", "--transcript", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2532,6 +2622,9 @@ switch (recipe) {
           "proofBundle.settingsThemeHotReload",
           "proofBundle.fileSearchDragOut",
           "proofBundle.scriptletBundleExecution",
+          "proofBundle.trayMenuMutation",
+          "proofBundle.multiWindowRestore",
+          "proofBundle.acpDictationDelivery",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2596,6 +2689,12 @@ Recipes:
                          Fail-closed File Search drag-out identity proof
   scriptlet-bundle-execution-matrix-stress
                          Fail-closed scriptlet bundle execution matrix proof
+  tray-global-hotkey-menu-mutation-stress
+                         Fail-closed tray/global hotkey menu mutation proof
+  multi-window-resize-monitor-restoration-stress
+                         Fail-closed multi-window resize/monitor restoration proof
+  acp-targeted-dictation-delivery-stress
+                         Fail-closed ACP-targeted dictation delivery proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2656,6 +2755,12 @@ Available scenarios:
                          Emit fail-closed File Search drag-out identity requirements
   scriptlet-bundle-execution-matrix-stress
                          Emit fail-closed scriptlet bundle execution requirements
+  tray-global-hotkey-menu-mutation-stress
+                         Emit fail-closed tray/global hotkey mutation requirements
+  multi-window-resize-monitor-restoration-stress
+                         Emit fail-closed multi-window resize/monitor requirements
+  acp-targeted-dictation-delivery-stress
+                         Emit fail-closed ACP dictation targeting requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2689,6 +2794,9 @@ Examples:
   bun scripts/agentic/index.ts settings-theme-hot-reload-stress --session default --theme-before script-kit-dark --theme-after script-kit-light --config-key theme --sandbox-config --json
   bun scripts/agentic/index.ts file-search-drag-out-identity-stress --session default --query AGENTS.md --file-name AGENTS.md --drop-target host-refusal-fixture --json
   bun scripts/agentic/index.ts scriptlet-bundle-execution-matrix-stress --session default --scriptlet-id alpha --bundle-id agentic-loop-seven-bundle --cancel-after-ms 50 --json
+  bun scripts/agentic/index.ts tray-global-hotkey-menu-mutation-stress --session default --loops 5 --json
+  bun scripts/agentic/index.ts multi-window-resize-monitor-restoration-stress --session default --surfaces main,actionsDialog,acpDetached,notes --monitor-profile scale-bounds-drift --json
+  bun scripts/agentic/index.ts acp-targeted-dictation-delivery-stress --session default --kind acpDetached --index 0 --transcript 'agentic loop eight dictation' --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
