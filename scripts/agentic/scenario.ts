@@ -163,7 +163,10 @@ export interface HardScenarioReceipt {
     | "focus-ring-viewport-integrity-stress"
     | "warning-banner-action-dismiss-semantics-stress"
     | "select-prompt-multiselect-keyboard-state-stress"
-    | "file-search-preview-sanitization-stress";
+    | "file-search-preview-sanitization-stress"
+    | "hotkey-prompt-transient-capture-cancel-stress"
+    | "process-manager-sort-detail-panel-stability-stress"
+    | "env-prompt-redacted-status-error-recovery-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -262,6 +265,9 @@ export interface HardScenarioReceipt {
   warningBannerActionDismissSemanticsReceipt?: Record<string, unknown>;
   selectPromptMultiselectKeyboardStateReceipt?: Record<string, unknown>;
   fileSearchPreviewSanitizationReceipt?: Record<string, unknown>;
+  hotkeyPromptTransientCaptureCancelReceipt?: Record<string, unknown>;
+  processManagerSortDetailPanelStabilityReceipt?: Record<string, unknown>;
+  envPromptRedactedStatusErrorRecoveryReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7409,6 +7415,151 @@ export async function runFileSearchPreviewSanitizationStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_file_search_preview_sanitization_receipt" } }],
     failure: { code: "missing_file_search_preview_sanitization_receipt", stepName: "declare-required-receipt", message: "Missing app-side File Search safe preview sanitization receipts." },
     warnings: ["file_linear:file_search_preview_sanitization_receipts_missing"],
+  };
+}
+
+export async function runHotkeyPromptTransientCaptureCancelStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixture?: string;
+  chords?: string[];
+  cancelMethods?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noConfigWrite?: boolean;
+  noGlobalHotkeyRegistration?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "hotkey-prompt-transient-capture-cancel-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_hotkey_prompt_transient_capture_cancel_receipt",
+    linearIssue: "file_linear:hotkey_prompt_transient_capture_cancel_receipts_missing",
+    hotkeyPromptTransientCaptureCancelReceipt: {
+      kind: "ux.hotkeyPromptTransientCaptureCancel",
+      hotkeyPromptTransientCaptureCancelStressId: "loop-twenty-eight-hotkey-prompt-transient-capture-cancel",
+      session: opts.session, surface: opts.surface ?? "hotkey-prompt", fixture: opts.fixture ?? "agentic-transient-hotkey",
+      requestedChords: opts.chords ?? ["cmd+shift+7", "ctrl+space"],
+      requestedCancelMethods: opts.cancelMethods ?? ["escape", "cmd-w"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "simulate-key"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noConfigWrite: opts.noConfigWrite ?? true, noGlobalHotkeyRegistration: opts.noGlobalHotkeyRegistration ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      promptType: null, hotkeyPromptSurfaceId: null, capturePanelSemanticId: null,
+      shortcutInputSemanticId: null, placeholderVisibleText: null, capturedChordTokens: [],
+      capturedHotkeyInfo: null, simulateKeyCaptureReceipt: null, escapeCancelReceipt: null,
+      cmdWCancelReceipt: null, noConfigFingerprintChange: null, noGlobalHotkeyRegistrationReceipt: null,
+      noShortcutRecorderRoute: null, cancelSubmitsNull: null, focusRestoredToParent: null,
+      staleHotkeyCaptureRejected: null, wrongSurfaceRejected: null, usedNativeInput: false,
+      usedNativePointer: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_hotkey_prompt_transient_capture_cancel_receipt" } }],
+    failure: { code: "missing_hotkey_prompt_transient_capture_cancel_receipt", stepName: "declare-required-receipt", message: "Missing app-side HotkeyPrompt transient capture/cancel receipts." },
+    warnings: ["file_linear:hotkey_prompt_transient_capture_cancel_receipts_missing"],
+  };
+}
+
+export async function runProcessManagerSortDetailPanelStabilityStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixture?: string;
+  sortKeys?: string[];
+  selectionCycles?: number;
+  filterCycles?: number;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noProcessKill?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "process-manager-sort-detail-panel-stability-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_process_manager_sort_detail_panel_stability_receipt",
+    linearIssue: "file_linear:process_manager_sort_detail_panel_receipts_missing",
+    processManagerSortDetailPanelStabilityReceipt: {
+      kind: "ux.processManagerSortDetailPanelStability",
+      processManagerSortDetailPanelStabilityStressId: "loop-twenty-eight-process-manager-sort-detail-panel-stability",
+      session: opts.session, surface: opts.surface ?? "process-manager", fixture: opts.fixture ?? "agentic-process-table",
+      requestedSortKeys: opts.sortKeys ?? ["name", "cpu", "memory", "pid"],
+      selectionCycles: opts.selectionCycles ?? 8, filterCycles: opts.filterCycles ?? 4,
+      requestedInputModes: opts.inputModes ?? ["protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noProcessKill: opts.noProcessKill ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      processFixtureIdentity: null, tableHeaderSemanticIds: [], sortKey: null,
+      sortDirection: null, sortGeneration: null, sectionHeaderRows: [],
+      sectionHeaderSelectableFalse: null, selectedProcessSemanticId: null, selectedPid: null,
+      detailPanelGeneration: null, detailSourceIdentity: null, detailTitle: null,
+      detailMetricRows: [], cpuMemoryPidParity: null, filterGeneration: null,
+      rowReanchorAfterSort: null, visibleRowsMatchElements: null, headerAriaSortLabel: null,
+      killActionDisabled: null, noProcessSignalRequested: true, staleSortGenerationRejected: null,
+      staleDetailRejected: null, wrongSurfaceRejected: null, usedNativeInput: false,
+      usedNativePointer: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, destructiveOperationRequested: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_process_manager_sort_detail_panel_stability_receipt" } }],
+    failure: { code: "missing_process_manager_sort_detail_panel_stability_receipt", stepName: "declare-required-receipt", message: "Missing app-side Process Manager sort/header/detail panel stability receipts." },
+    warnings: ["file_linear:process_manager_sort_detail_panel_receipts_missing"],
+  };
+}
+
+export async function runEnvPromptRedactedStatusErrorRecoveryStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixture?: string;
+  statusFixtures?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noConfigWrite?: boolean;
+  noSecretWrite?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "env-prompt-redacted-status-error-recovery-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_env_prompt_redacted_status_error_recovery_receipt",
+    linearIssue: "file_linear:env_prompt_redacted_status_error_recovery_receipts_missing",
+    envPromptRedactedStatusErrorRecoveryReceipt: {
+      kind: "ux.envPromptRedactedStatusErrorRecovery",
+      envPromptRedactedStatusErrorRecoveryStressId: "loop-twenty-eight-env-prompt-redacted-status-error-recovery",
+      session: opts.session, surface: opts.surface ?? "env-prompt", fixture: opts.fixture ?? "agentic-env-status",
+      requestedStatusFixtures: opts.statusFixtures ?? ["missing-secret", "parse-error", "masked-existing", "valid-edit"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noConfigWrite: opts.noConfigWrite ?? true,
+      noSecretWrite: opts.noSecretWrite ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      promptType: null, envFixtureIdentity: null, statusGeneration: null, statusKind: null,
+      statusVisibleText: null, statusSemanticId: null, inlineErrorSemanticId: null,
+      firstInvalidFieldSemanticId: null, maskedValueVisible: null, secretValueRedacted: null,
+      redactedSecretFingerprint: null, noRawSecretLeak: null, noSecretWriteReceipt: null,
+      noConfigFingerprintChange: null, validEditClearsErrors: null, submitDisabledReason: null,
+      footerSubmitDisabled: null, focusPreservedAfterError: null, staleStatusRejected: null,
+      wrongFieldErrorRejected: null, visibleRowsMatchElements: null, usedNativeInput: false,
+      usedNativePointer: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, configUnchanged: true, secretMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_env_prompt_redacted_status_error_recovery_receipt" } }],
+    failure: { code: "missing_env_prompt_redacted_status_error_recovery_receipt", stepName: "declare-required-receipt", message: "Missing app-side EnvPrompt redacted status/error recovery receipts." },
+    warnings: ["file_linear:env_prompt_redacted_status_error_recovery_receipts_missing"],
   };
 }
 

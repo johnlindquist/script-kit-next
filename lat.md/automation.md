@@ -322,6 +322,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `file-search-preview-sanitization-stress` is intentionally fail-closed until File Search preview receipts expose selected row/file identity, preview generation/source/render kind/title/visible text/bounds/text bounds, byte limit/truncation, binary/missing/unsupported fallbacks, private path redaction, no raw path leak, no network/external service, no Quick Look/native picker/pasteboard mutation, stale preview rejection, and cleanup.
 
+`hotkey-prompt-transient-capture-cancel-stress` is intentionally fail-closed until HotkeyPrompt receipts expose prompt type, transient surface/input semantics, placeholder text, captured chord tokens and HotkeyInfo, simulateKey capture, Escape/Cmd-W cancellation, null submit on cancel, unchanged config fingerprints, no global hotkey registration, no shortcut recorder route, parent focus restoration, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
+
+`process-manager-sort-detail-panel-stability-stress` is intentionally fail-closed until Process Manager receipts expose fixture identity, table header semantic ids, sort key/direction/generation, non-selectable section headers, selected process/pid identity, detail panel generation/source/title/metrics, CPU/memory/PID parity, row reanchor after sort, header aria-sort labels, disabled kill action, no process signal, stale sort/detail rejection, AFK-safe flags, and cleanup.
+
+`env-prompt-redacted-status-error-recovery-stress` is intentionally fail-closed until EnvPrompt receipts expose prompt/fixture identity, status generation/kind/text, inline error and first-invalid-field semantics, masked value visibility, secret redaction and fingerprints, no raw secret leak, no secret/config writes, valid edit recovery, disabled submit reason, focus preservation, stale/wrong-field rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
