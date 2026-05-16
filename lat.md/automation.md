@@ -298,6 +298,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `command-search-highlighting-accessory-badges-stress` is intentionally fail-closed until command search receipts expose query/search generations, highlighted ranges, command row identity, accessory badge order/kinds/tooltips, disabled/no-op/loading reasons, action-catalog parity, stale highlight/badge rejection, wrong-host rejection, no accidental execution, AFK-safe flags, and cleanup.
 
+`clipboard-copy-visual-feedback-stress` is intentionally fail-closed until copy receipts expose fixture-scoped pasteboard isolation, visible copied state, copied-state duration, copy toast identity, redacted preview, payload fingerprint, unchanged system pasteboard fingerprints, stale copy rejection, wrong-host rejection, no accidental paste, AFK-safe flags, and cleanup.
+
+`portal-cancel-return-state-restoration-stress` is intentionally fail-closed until portal cancel/back receipts expose origin generation, draft/cursor/selection/filter/scroll before handoff, portal session identity, cancel method receipts, return target identity, restored origin state, no context insertion, no prompt submit, stale/foreign/wrong-origin rejection, AFK-safe flags, and cleanup.
+
+`tooltip-hover-focus-affordance-stress` is intentionally fail-closed until tooltip receipts expose protocol-hover and keyboard-focus triggers, target identity, tooltip generation, text/kind/anchor/bounds/placement, hover delay, accessible description parity, Escape/scroll/focus-loss dismissal, no focus steal, no target/footer/popup-owner coverage, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

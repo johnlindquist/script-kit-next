@@ -146,6 +146,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For popup focus/keycap visual semantics, prove popup owner identity, focused button/keycap parity, normalized shortcut glyphs, danger semantics on labels rather than keycaps, parent focus/selection preservation, stale focus rejection, wrong-surface rejection, no accidental execution, AFK-safe flags, and cleanup.
 - For reduced-motion animation disable behavior, prove fixture-only reduced-motion policy, animation/transition generations, stable opacity/transform/frame receipts, disabled shimmer/spinner/pulse motion, focus/selection/cursor preservation, stale motion rejection, wrong-surface rejection, no System Settings or TCC mutation, AFK-safe flags, and cleanup.
 - For command search highlighting/accessory badges, prove query/search generations, highlighted ranges, command row identity, accessory badge order/kinds/tooltips, disabled/no-op/loading reasons, action-catalog parity, stale highlight/badge rejection, wrong-host rejection, no accidental execution, AFK-safe flags, and cleanup.
+- For clipboard copy visual feedback, prove fixture-scoped pasteboard isolation, visible copied state, copied-state duration, copy toast receipt, redacted preview, payload fingerprint, unchanged system pasteboard fingerprints, stale copy rejection, wrong-host rejection, no accidental paste, AFK-safe flags, and cleanup.
+- For portal cancel/back return restoration, prove origin generation, draft/cursor/selection/filter/scroll before the portal, portal session identity, Escape/back cancel receipts, return target identity, restored focus/draft/cursor/selection/filter/scroll, no context insertion, no prompt submit, stale/foreign/wrong-origin rejection, AFK-safe flags, and cleanup.
+- For tooltip hover/focus affordances, prove protocol-hover and keyboard-focus triggers, target identity, tooltip generation, text/kind/anchor/bounds/placement, hover delay, accessible description parity, Escape/scroll/focus-loss dismissal, no focus steal, target focus preservation, no target/footer/popup-owner coverage, stale/wrong-surface rejection, AFK-safe flags, and cleanup.
 
 ## The Pattern
 
@@ -807,6 +810,9 @@ bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --sessio
 bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,menuSyntaxTriggerPopup,confirmPrompt --json
 bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
 bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
+bun scripts/agentic/index.ts clipboard-copy-visual-feedback-stress --session default --hosts file-search,actionsDialog,app-launcher --fixture agentic-copy-preview --pasteboard-scope fixture --no-system-pasteboard --json
+bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins acp-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
+bun scripts/agentic/index.ts tooltip-hover-focus-affordance-stress --session default --surfaces main,actionsDialog,app-launcher --targets truncated-row,disabled-action,footer-button --fixture agentic-tooltips --input-modes protocol-hover,keyboard-focus --no-native-pointer --json
 ```
 
 ## Adjacent Skills
