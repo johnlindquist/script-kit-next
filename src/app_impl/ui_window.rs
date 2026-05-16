@@ -307,7 +307,15 @@ impl ScriptListApp {
                         event = "quick_terminal_footer_close",
                         "Closing quick terminal from native footer"
                     );
-                    self.close_tab_ai_harness_terminal_with_window(window, cx);
+                    self.close_quick_terminal_main_window_state_first(cx);
+                } else if let AppView::HotkeyPrompt { id, .. } = &self.current_view {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "hotkey_prompt_footer_cancel",
+                        "Cancelling hotkey prompt from native footer"
+                    );
+                    self.submit_prompt_response(id.clone(), None, cx);
+                    self.cancel_script_execution(cx);
                 } else {
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -547,6 +555,23 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved TemplatePrompt footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::HotkeyPrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let enabled = !footer_disabled;
+            let buttons =
+                vec![FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel").enabled(enabled)];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved HotkeyPrompt footer buttons"
             );
             return buttons;
         }
@@ -968,6 +993,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
+            AppView::HotkeyPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Hotkey prompt uses compact recorder surface
             AppView::ChatPrompt { .. } => {
                 Some((compact_ai_view_type_for_mode(self.main_window_mode), 0))
             }

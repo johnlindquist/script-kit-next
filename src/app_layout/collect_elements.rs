@@ -640,6 +640,20 @@ impl ScriptListApp {
                 )
             }
 
+            AppView::HotkeyPrompt { entity, .. } => {
+                let hotkey_prompt = entity.read(cx);
+                let (elements, total_count) =
+                    self.collect_hotkey_prompt_elements(hotkey_prompt, limit);
+                Self::finalize_surface_outcome(
+                    "hotkey-prompt",
+                    "hotkey-prompt",
+                    "panel_only_hotkey_prompt",
+                    limit,
+                    elements,
+                    total_count,
+                )
+            }
+
             AppView::NamingPrompt { entity, .. } => {
                 let naming_prompt = entity.read(cx);
                 let (elements, total_count) =
@@ -1447,6 +1461,50 @@ impl ScriptListApp {
                 Some(index),
             ));
         }
+
+        (elements, total_count)
+    }
+
+    fn collect_hotkey_prompt_elements(
+        &self,
+        hotkey_prompt: &crate::components::shortcut_recorder::ShortcutRecorder,
+        limit: usize,
+    ) -> (Vec<protocol::ElementInfo>, usize) {
+        let total_count = 3;
+        let shortcut = hotkey_prompt.shortcut.to_display_string();
+        let status = if hotkey_prompt.shortcut.is_complete() {
+            "captured"
+        } else if hotkey_prompt.shortcut.has_only_modifiers()
+            || hotkey_prompt.current_modifiers.platform
+            || hotkey_prompt.current_modifiers.control
+            || hotkey_prompt.current_modifiers.alt
+            || hotkey_prompt.current_modifiers.shift
+        {
+            "modifiers"
+        } else {
+            "recording"
+        };
+        let mut elements = Vec::with_capacity(limit.min(total_count));
+
+        let mut panel = protocol::ElementInfo::panel("hotkey-capture");
+        panel.status_kind = Some(status.to_string());
+        Self::push_limited_element(&mut elements, limit, panel);
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            Self::input_element(
+                "hotkey-shortcut",
+                "Shortcut",
+                Some(shortcut),
+                true,
+                Some(0),
+            ),
+        );
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo::button(0, "Cancel"),
+        );
 
         (elements, total_count)
     }

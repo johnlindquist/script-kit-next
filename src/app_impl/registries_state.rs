@@ -155,6 +155,7 @@ impl ScriptListApp {
             AppView::EnvPrompt { .. } => "EnvPrompt",
             AppView::DropPrompt { .. } => "DropPrompt",
             AppView::TemplatePrompt { .. } => "TemplatePrompt",
+            AppView::HotkeyPrompt { .. } => "HotkeyPrompt",
             AppView::ChatPrompt { .. } => "ChatPrompt",
             AppView::MiniPrompt { .. } => "MiniPrompt",
             AppView::MicroPrompt { .. } => "MicroPrompt",

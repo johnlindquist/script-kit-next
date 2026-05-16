@@ -173,6 +173,21 @@ impl RecordedShortcut {
         keycaps
     }
 
+    /// Format as the transient SDK `HotkeyInfo` payload.
+    pub fn to_hotkey_info_json(&self) -> String {
+        let key = self.key.clone().unwrap_or_default();
+        serde_json::json!({
+            "key": key,
+            "command": self.cmd,
+            "shift": self.shift,
+            "option": self.alt,
+            "control": self.ctrl,
+            "shortcut": self.to_display_string(),
+            "keyCode": key,
+        })
+        .to_string()
+    }
+
     /// Format a key for display (uppercase letters, special key names)
     pub(super) fn format_key_display(key: &str) -> String {
         match key.to_lowercase().as_str() {

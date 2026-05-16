@@ -5062,23 +5062,21 @@ globalThis.path = async function path(
   });
 };
 
-// NOTE: hotkey() is not yet implemented
 globalThis.hotkey = async function hotkey(
   placeholder?: string
 ): Promise<HotkeyInfo> {
-  console.warn('[SDK] hotkey() is not yet implemented in the GPUI app');
   const id = nextId();
 
-  // Auto-submit value: mock hotkey (Escape key)
+  // Auto-submit value used only when SDK_TEST_AUTOSUBMIT is enabled.
   const autoSubmitValue = {
     value: JSON.stringify({
-      key: 'Escape',
+      key: 'K',
       command: false,
-      shift: false,
+      shift: true,
       option: false,
       control: false,
-      shortcut: 'Escape',
-      keyCode: 'Escape',
+      shortcut: '⇧K',
+      keyCode: 'K',
     }),
   };
 
