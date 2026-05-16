@@ -177,6 +177,12 @@
  *                         Fail-closed ACP model/history popover visual state proof
  *   acp-context-insertion-preview-parity-stress
  *                         Fail-closed ACP context insertion preview parity proof
+ *   acp-slash-mention-provider-visibility-stress
+ *                         Fail-closed ACP slash/mention provider visibility proof
+ *   acp-composer-token-keyboard-edit-parity-stress
+ *                         Fail-closed ACP composer token keyboard edit parity proof
+ *   acp-transcript-stream-retry-virtualization-stress
+ *                         Fail-closed ACP transcript stream retry virtualization proof
  *   help                   Show this help
  *
  * Target threading:
@@ -281,6 +287,9 @@ import {
   runAcpFooterActivityIndicatorStressScenario,
   runAcpModelHistoryPopoverVisualStateStressScenario,
   runAcpContextInsertionPreviewParityStressScenario,
+  runAcpSlashMentionProviderVisibilityStressScenario,
+  runAcpComposerTokenKeyboardEditParityStressScenario,
+  runAcpTranscriptStreamRetryVirtualizationStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1157,6 +1166,43 @@ function parseArgs() {
       ? args[insertModesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const noSecurityPrompts = args.includes("--no-security-prompts");
+  const providersIdx = args.indexOf("--providers");
+  const providers =
+    providersIdx >= 0 && args[providersIdx + 1]
+      ? args[providersIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const tokenKindsIdx = args.indexOf("--token-kinds");
+  const tokenKinds =
+    tokenKindsIdx >= 0 && args[tokenKindsIdx + 1]
+      ? args[tokenKindsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const editStepsIdx = args.indexOf("--edit-steps");
+  const editSteps =
+    editStepsIdx >= 0 && args[editStepsIdx + 1]
+      ? args[editStepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const messageCountIdx = args.indexOf("--message-count");
+  const rawMessageCount =
+    messageCountIdx >= 0 && args[messageCountIdx + 1]
+      ? Number(args[messageCountIdx + 1])
+      : undefined;
+  const messageCount = Number.isFinite(rawMessageCount) ? rawMessageCount : undefined;
+  const streamChunksIdx = args.indexOf("--stream-chunks");
+  const rawStreamChunks =
+    streamChunksIdx >= 0 && args[streamChunksIdx + 1]
+      ? Number(args[streamChunksIdx + 1])
+      : undefined;
+  const streamChunks = Number.isFinite(rawStreamChunks) ? rawStreamChunks : undefined;
+  const errorFixturesIdx = args.indexOf("--error-fixtures");
+  const errorFixtures =
+    errorFixturesIdx >= 0 && args[errorFixturesIdx + 1]
+      ? args[errorFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const retryPathsIdx = args.indexOf("--retry-paths");
+  const retryPaths =
+    retryPathsIdx >= 0 && args[retryPathsIdx + 1]
+      ? args[retryPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -1297,6 +1343,13 @@ function parseArgs() {
     agentFixture,
     insertModes,
     noSecurityPrompts,
+    providers,
+    tokenKinds,
+    editSteps,
+    messageCount,
+    streamChunks,
+    errorFixtures,
+    retryPaths,
   };
 }
 
@@ -2675,6 +2728,13 @@ const {
   agentFixture,
   insertModes,
   noSecurityPrompts,
+  providers,
+  tokenKinds,
+  editSteps,
+  messageCount,
+  streamChunks,
+  errorFixtures,
+  retryPaths,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4044,6 +4104,24 @@ switch (recipe) {
     break;
   }
 
+  case "acp-slash-mention-provider-visibility-stress": {
+    const proofBundle = await runAcpSlashMentionProviderVisibilityStressScenario({ session, families, fixture, providers, queries, states, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-slash-mention-provider-visibility-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP slash/mention provider visibility stress failed closed; provider readiness, hint rows, unavailable/loading/recovered states, and stale provider receipts are missing", proofBundle };
+    break;
+  }
+
+  case "acp-composer-token-keyboard-edit-parity-stress": {
+    const proofBundle = await runAcpComposerTokenKeyboardEditParityStressScenario({ session, hosts, fixture, tokenKinds, editSteps, inputModes, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-composer-token-keyboard-edit-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP composer token keyboard edit parity stress failed closed; atomic delete, reorder, cursor, metadata preservation, and stale composer receipts are missing", proofBundle };
+    break;
+  }
+
+  case "acp-transcript-stream-retry-virtualization-stress": {
+    const proofBundle = await runAcpTranscriptStreamRetryVirtualizationStressScenario({ session, hosts, fixture, messageCount, streamChunks, errorFixtures, retryPaths, scrollPositions, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-transcript-stream-retry-virtualization-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP transcript stream retry virtualization stress failed closed; stream ordering, virtualized rows, retry recovery, and stale chunk receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4237,6 +4315,9 @@ switch (recipe) {
           { name: "acp-footer-activity-indicator-stress", description: "Fail-closed UX receipt contract for ACP footer activity indicator transitions", flags: ["--session", "--hosts", "--fixture", "--activity-fixtures", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-model-history-popover-visual-state-stress", description: "Fail-closed UX receipt contract for ACP model/history popover visual states", flags: ["--session", "--families", "--fixture", "--states", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-context-insertion-preview-parity-stress", description: "Fail-closed UX receipt contract for ACP context insertion selected-row preview parity", flags: ["--session", "--sources", "--destination", "--fixture", "--selection-cycles", "--filter-cycles", "--insert-modes", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-slash-mention-provider-visibility-stress", description: "Fail-closed UX receipt contract for ACP slash/mention provider visibility and hint readiness", flags: ["--session", "--families", "--fixture", "--providers", "--queries", "--states", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-composer-token-keyboard-edit-parity-stress", description: "Fail-closed UX receipt contract for ACP composer token keyboard delete/reorder parity", flags: ["--session", "--hosts", "--fixture", "--token-kinds", "--edit-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-transcript-stream-retry-virtualization-stress", description: "Fail-closed UX receipt contract for ACP transcript streaming, virtualization, and retry recovery", flags: ["--session", "--hosts", "--fixture", "--message-count", "--stream-chunks", "--error-fixtures", "--retry-paths", "--scroll-positions", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4698,6 +4779,12 @@ Available scenarios:
                          Emit fail-closed ACP model/history popover visual state requirements
   acp-context-insertion-preview-parity-stress
                          Emit fail-closed ACP context insertion preview parity requirements
+  acp-slash-mention-provider-visibility-stress
+                         Emit fail-closed ACP slash/mention provider visibility requirements
+  acp-composer-token-keyboard-edit-parity-stress
+                         Emit fail-closed ACP composer token keyboard edit parity requirements
+  acp-transcript-stream-retry-virtualization-stress
+                         Emit fail-closed ACP transcript stream retry virtualization requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4803,6 +4890,9 @@ Examples:
   bun scripts/agentic/index.ts acp-footer-activity-indicator-stress --session default --hosts acp-composer,notes --fixture agentic-acp-footer-activity --activity-fixtures context-capture,tool-call,plan-update,permission-wait,cancelled,idle-recovered --input-modes protocol-state,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts acp-model-history-popover-visual-state-stress --session default --families model-selector,local-history --fixture agentic-acp-popover-visual-state --states idle,filtered,empty,loading,current-selection,error-recovered --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts acp-context-insertion-preview-parity-stress --session default --sources file-search,browser-history,dictation-history,notes --destination acp-composer --fixture agentic-context-preview-parity --selection-cycles 6 --filter-cycles 4 --insert-modes protocol-accept,batch --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-slash-mention-provider-visibility-stress --session default --families slash,mention --fixture agentic-acp-provider-hints --providers dictation-history,browser-history,notes,files,skills --queries '@di,@browser-history,@missing,/new-script,/unknown' --states ready,unavailable,loading,error-recovered,filtered-empty --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-composer-token-keyboard-edit-parity-stress --session default --hosts acp-composer,notes --fixture agentic-acp-composer-tokens --token-kinds mention,slash,pasted-text,pasted-image,skill-file --edit-steps backspace-delete,delete-forward,range-remove,move-token-left,move-token-right,cursor-around-token --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-transcript-stream-retry-virtualization-stress --session default --hosts acp-composer,notes --fixture agentic-acp-transcript-stream --message-count 160 --stream-chunks 48 --error-fixtures tool-error,agent-error,model-timeout,cancelled --retry-paths retry-same-draft,retry-edited-draft,retry-after-scroll --scroll-positions top,middle,bottom,near-active --input-modes protocol-state,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
