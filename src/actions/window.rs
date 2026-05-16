@@ -882,8 +882,10 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
-        let empty_height = actions_window_dynamic_height(0, 0, false, false, false);
-        let single_row_height = actions_window_dynamic_height(1, 0, false, false, false);
+        let empty_height =
+            actions_window_dynamic_height(0, 0, false, false, false, POPUP_MAX_HEIGHT);
+        let single_row_height =
+            actions_window_dynamic_height(1, 0, false, false, false, POPUP_MAX_HEIGHT);
 
         assert!(
             (empty_height - single_row_height).abs() < 0.001,
@@ -893,8 +895,9 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_includes_footer_height() {
-        let without_footer = actions_window_dynamic_height(3, 1, false, true, false);
-        let with_footer = actions_window_dynamic_height(3, 1, false, true, true);
+        let without_footer =
+            actions_window_dynamic_height(3, 1, false, true, false, POPUP_MAX_HEIGHT);
+        let with_footer = actions_window_dynamic_height(3, 1, false, true, true, POPUP_MAX_HEIGHT);
 
         assert!(
             (with_footer - without_footer - 32.0).abs() < 0.001,
@@ -910,6 +913,7 @@ fn actions_window_dynamic_height(
     hide_search: bool,
     has_header: bool,
     show_footer: bool,
+    max_height: f32,
 ) -> f32 {
     const POPUP_BORDER_HEIGHT: f32 = 2.0;
     const POPUP_FOOTER_HEIGHT: f32 = 32.0;
@@ -932,7 +936,7 @@ fn actions_window_dynamic_height(
     };
     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
         .max(min_items_height)
-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height - footer_height);
+        .min(max_height - search_box_height - header_height - footer_height);
     let border_height = POPUP_BORDER_HEIGHT;
     items_height + search_box_height + header_height + footer_height + border_height
 }
@@ -956,6 +960,7 @@ fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
         hide_search,
         has_header,
         show_footer,
+        dialog.config.max_height,
     )
 }
 

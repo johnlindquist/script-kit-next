@@ -27,6 +27,7 @@
 // }
 // ```
 
+use super::constants::NOTES_RECENT_POPUP_MAX_HEIGHT;
 use super::dialog::GroupedActionItem;
 use super::types::{Action, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle};
 use super::window::{
@@ -471,6 +472,23 @@ impl CommandBarConfig {
             ..Default::default()
         };
         emit_command_bar_chrome_audit("notes", &config);
+        config
+    }
+
+    /// Create config for the Notes recent-note switcher (Cmd+P).
+    pub fn notes_recent_style() -> Self {
+        let config = Self {
+            dialog_config: ActionsDialogConfig {
+                search_position: SearchPosition::Top,
+                section_style: SectionStyle::Headers,
+                anchor: AnchorPosition::Top,
+                show_icons: true,
+                max_height: NOTES_RECENT_POPUP_MAX_HEIGHT,
+                ..ActionsDialogConfig::default()
+            },
+            ..Default::default()
+        };
+        emit_command_bar_chrome_audit("notes_recent", &config);
         config
     }
 }
@@ -1239,6 +1257,24 @@ mod command_bar_config_tests {
         assert_eq!(audit.section_mode, "headers");
         assert_eq!(audit.anchor, "top");
         assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn notes_recent_style_uses_taller_top_headers_contract() {
+        let config = CommandBarConfig::notes_recent_style();
+        let audit = CommandBarChromeAudit::from_config("notes_recent", &config);
+        assert_eq!(audit.search_position, "top");
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.anchor, "top");
+        assert!(audit.validate().is_empty());
+        assert_eq!(
+            config.dialog_config.max_height,
+            super::constants::NOTES_RECENT_POPUP_MAX_HEIGHT
+        );
+        assert!(
+            config.dialog_config.max_height > super::constants::POPUP_MAX_HEIGHT,
+            "Notes recent switcher needs a taller cap than generic action popups"
+        );
     }
 
     #[test]
