@@ -35,9 +35,12 @@
 
 import { resolve } from "path";
 import {
+  runAcpPromptPopupParityScenario,
+  runDetachedAcpTargetThreadingStressScenario,
   runActionsDialogExactIdScenario,
   runDetachedAcpExactIdScenario,
   runMainWindowExactIdScenario,
+  runNotesAcpDelayedActionOriginStressScenario,
   runPromptPopupExactIdScenario,
 } from "./scenario";
 
@@ -98,6 +101,7 @@ interface SurfaceProofCapabilities {
 
 /** Input delivery method chosen by the routing logic. */
 type RoutedInputMethod = "batch" | "simulateGpuiEvent" | "native";
+type RoutedInputMode = "auto" | "force-native" | "force-batch" | "force-gpui";
 
 interface RoutedInputMetadata {
   inputMethod: RoutedInputMethod;
@@ -273,7 +277,13 @@ async function send(
  *   - Exact ID targets → "batch"
  *   - main/focused/unspecified → "native" (OS-level input via macos-input.ts)
  */
-function chooseInputMethod(target?: AutomationTargetJson): RoutedInputMethod {
+function chooseInputMethod(
+  target?: AutomationTargetJson,
+  mode: RoutedInputMode = "auto"
+): RoutedInputMethod {
+  if (mode === "force-native") return "native";
+  if (mode === "force-batch") return "batch";
+  if (mode === "force-gpui") return "simulateGpuiEvent";
   if (!target) return "native";
   if (target.type === "id") return "batch";
   if (target.type === "kind") {
@@ -345,9 +355,10 @@ async function routedInputStep(
     target?: AutomationTargetJson;
     surface?: string;
     modifiers?: string[];
+    inputMode?: RoutedInputMode;
   } = {}
 ): Promise<StepReceipt> {
-  const method = chooseInputMethod(opts.target);
+  const method = chooseInputMethod(opts.target, opts.inputMode ?? "auto");
   const start = Date.now();
 
   try {
@@ -378,7 +389,7 @@ async function routedInputStep(
       // Native fallback: use macos-input.ts
       const isNonMainTarget = opts.target && !isMainLikeTarget(opts.target);
       const args = nativeInputArgs(kind, value, session, opts.surface, {
-        skipEnsureFocus: isNonMainTarget,
+        skipEnsureFocus: opts.inputMode === "force-native" ? false : isNonMainTarget,
       });
       result = await runTool(args, name);
       return {
@@ -457,7 +468,38 @@ function parseArgs() {
     }
   }
   const index = rawIndex != null ? Number(rawIndex) : undefined;
-  return { recipe, session, key, vision, selectAgent, targetJson, surface, json, kind, index };
+  const minTargetsIdx = args.indexOf("--min-targets");
+  const rawMinTargets = minTargetsIdx >= 0 ? args[minTargetsIdx + 1] : undefined;
+  const minTargets =
+    rawMinTargets != null && Number.isInteger(Number(rawMinTargets))
+      ? Number(rawMinTargets)
+      : undefined;
+  const familyIdx = args.indexOf("--family");
+  const family =
+    familyIdx >= 0 && args[familyIdx + 1] ? args[familyIdx + 1] : undefined;
+  const familiesIdx = args.indexOf("--families");
+  const families =
+    familiesIdx >= 0 && args[familiesIdx + 1]
+      ? args[familiesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const driftIdx = args.indexOf("--drift");
+  const drift = driftIdx >= 0 && args[driftIdx + 1] ? args[driftIdx + 1] : undefined;
+  return {
+    recipe,
+    session,
+    key,
+    vision,
+    selectAgent,
+    targetJson,
+    surface,
+    json,
+    kind,
+    index,
+    minTargets,
+    family,
+    families,
+    drift,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -951,7 +993,13 @@ async function recipeAcpOpen(
 async function recipeAcpPickerAccept(
   session: string,
   acceptKey: "enter" | "tab",
-  opts: { emitVision?: boolean; target?: AutomationTargetJson; surface?: string; captureWindowId?: number } = {}
+  opts: {
+    emitVision?: boolean;
+    target?: AutomationTargetJson;
+    surface?: string;
+    captureWindowId?: number;
+    inputMode?: RoutedInputMode;
+  } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
@@ -996,6 +1044,7 @@ async function recipeAcpPickerAccept(
   const typeAtStep = await routedInputStep("type-at-trigger", "type", "@", session, {
     target: opts.target,
     surface: opts.surface,
+    inputMode: opts.inputMode,
   });
   steps.push(typeAtStep);
 
@@ -1057,6 +1106,7 @@ async function recipeAcpPickerAccept(
   const acceptKeyStep = await routedInputStep(`accept-${acceptKey}`, "key", acceptKey, session, {
     target: opts.target,
     surface: opts.surface,
+    inputMode: opts.inputMode,
   });
   steps.push(acceptKeyStep);
 
@@ -1543,6 +1593,7 @@ async function recipeAcpDetachedAccept(
     target: targetJson,
     surface: surfaceId ?? undefined,
     captureWindowId: captureWindowId ?? undefined,
+    inputMode: "force-native",
   });
 
   // Incorporate accept steps (skip the wrapper — flatten the inner steps for transparency)
@@ -1687,7 +1738,21 @@ async function recipeAcpDetachedAccept(
 // CLI
 // ---------------------------------------------------------------------------
 
-const { recipe, session, key, vision, selectAgent, targetJson, surface, kind, index } = parseArgs();
+const {
+  recipe,
+  session,
+  key,
+  vision,
+  selectAgent,
+  targetJson,
+  surface,
+  kind,
+  index,
+  minTargets,
+  family,
+  families,
+  drift,
+} = parseArgs();
 
 let result: RecipeReceipt;
 
@@ -1731,6 +1796,67 @@ switch (recipe) {
       index: index ?? 0,
     });
     break;
+
+  case "acp-detached-target-threading-stress": {
+    const proofBundle = await runDetachedAcpTargetThreadingStressScenario({
+      session,
+      kind: kind ?? "acpDetached",
+      index: index ?? 0,
+      minTargets: minTargets ?? 2,
+      key,
+      vision,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-target-threading-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Detached ACP target identity stayed stable across native input, ACP state, waitFor, and strict capture"
+          : `Detached ACP target threading stress failed: ${JSON.stringify(proofBundle.failure ?? proofBundle.targetThread?.driftFailures ?? [])}`,
+      proofBundle,
+    };
+    break;
+  }
+
+  case "acp-prompt-popup-parity": {
+    const proofBundle = await runAcpPromptPopupParityScenario({
+      session,
+      families: families ?? (family ? [family] : ["mention", "model-selector", "local-history"]),
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-prompt-popup-parity",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "ACP PromptPopup families produced stable row-aware exact-target receipts"
+          : "ACP PromptPopup parity failed; inspect proofBundle.popupCases",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "notes-acp-delayed-action-origin-stress": {
+    const proofBundle = await runNotesAcpDelayedActionOriginStressScenario({
+      session,
+      drift: drift ?? "generation",
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "notes-acp-delayed-action-origin-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Notes ACP delayed action origin receipt stayed valid"
+          : "Notes ACP delayed action origin stress failed closed; app-side origin/generation receipt is missing",
+      proofBundle,
+    };
+    break;
+  }
 
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
@@ -1832,6 +1958,9 @@ switch (recipe) {
           { name: "acp-enter-accept", description: "Compatibility alias for --key enter", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "acp-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
+          { name: "acp-detached-target-threading-stress", description: "Multi-window detached ACP proof with exact target threading, native input, and strict capture identity", flags: ["--session", "--kind", "--index", "--min-targets", "--key", "--vision", "--json"] },
+          { name: "acp-prompt-popup-parity", description: "State-first PromptPopup family parity proof for ACP mention, model selector, and local history", flags: ["--session", "--family", "--families", "--json"] },
+          { name: "notes-acp-delayed-action-origin-stress", description: "Fail-closed Notes ACP delayed-action origin/generation stress receipt", flags: ["--session", "--drift", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -1855,10 +1984,16 @@ switch (recipe) {
           "proofBundle.state",
           "proofBundle.elements",
           "proofBundle.targetIdentity",
+          "proofBundle.targetThread",
+          "proofBundle.peerWindows",
+          "proofBundle.captureTarget",
+          "proofBundle.popupCases",
+          "proofBundle.origin",
+          "proofBundle.delayedAction",
         ],
         routing: {
-          description: "Non-main targets (acpDetached, actionsDialog, promptPopup) are routed through batch/simulateGpuiEvent first; native input is last resort.",
-          methods: ["batch", "simulateGpuiEvent", "native"],
+          description: "Non-main targets are exact-id threaded. Attached popups prefer batch/simulateGpuiEvent. Detached ACP target-threading stress forces native input with focus enforcement.",
+          methods: ["batch", "simulateGpuiEvent", "native", "force-native", "force-batch", "force-gpui"],
           nonMainTargets: ["acpDetached", "actionsDialog", "promptPopup"],
         },
       };
@@ -1876,6 +2011,12 @@ Recipes:
   acp-enter-accept       Compatibility alias for --key enter
   acp-tab-accept         Compatibility alias for --key tab
   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
+  acp-detached-target-threading-stress
+                         Multi-window detached ACP proof with exact target threading
+  acp-prompt-popup-parity
+                         State-first ACP PromptPopup family parity proof
+  notes-acp-delayed-action-origin-stress
+                         Fail-closed Notes ACP delayed-action origin/generation stress
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -1891,7 +2032,8 @@ Target threading:
   --scenario NAME      Scenario name for the scenario recipe
 
 Input routing (non-main targets):
-  acpDetached, actionsDialog, promptPopup → batch/simulateGpuiEvent (no OS focus needed)
+  attached popups → batch/simulateGpuiEvent first, no OS focus unless required
+  detached ACP target-threading stress → force-native with OS focus enforcement
   main, focused, unspecified → native (macos-input.ts with OS focus enforcement)
 
 Available scenarios:
@@ -1911,6 +2053,9 @@ Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter \\
     --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
   bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
+  bun scripts/agentic/index.ts acp-detached-target-threading-stress --session default --kind acpDetached --index 0 --min-targets 2 --key enter --vision --json
+  bun scripts/agentic/index.ts acp-prompt-popup-parity --session default --families mention,model-selector,local-history --json
+  bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress --session default --drift generation --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
