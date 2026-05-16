@@ -21,6 +21,12 @@
  *   scenario               Run a replayable scenario with proof bundle (--scenario NAME --index N)
  *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
  *   preflight              Check all prerequisites (session, window, permissions)
+ *   permission-assistant-drag-preflight-stress
+ *                         Fail-closed Permission Assistant drag/no-TCC proof
+ *   quick-terminal-pty-apply-back-stress
+ *                         Fail-closed Quick Terminal PTY apply-back proof
+ *   mcp-context-resource-attachment-identity-stress
+ *                         Fail-closed MCP context resource identity proof
  *   help                   Show this help
  *
  * Target threading:
@@ -49,7 +55,10 @@ import {
   runNotesAcpDelayedActionOriginStressScenario,
   runPathPromptFilesystemEdgeStressScenario,
   runPermissionPreflightReadonlyScenario,
+  runPermissionAssistantDragPreflightStressScenario,
   runPromptPopupExactIdScenario,
+  runQuickTerminalPtyApplyBackStressScenario,
+  runMcpContextResourceAttachmentIdentityStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -548,6 +557,20 @@ function parseArgs() {
   const portalId = portalIdIdx >= 0 && args[portalIdIdx + 1] ? args[portalIdIdx + 1] : undefined;
   const rangeIdx = args.indexOf("--range");
   const range = rangeIdx >= 0 && args[rangeIdx + 1] ? args[rangeIdx + 1] : undefined;
+  const paneIdx = args.indexOf("--pane");
+  const pane = paneIdx >= 0 && args[paneIdx + 1] ? args[paneIdx + 1] : undefined;
+  const bundleIdIdx = args.indexOf("--bundle-id");
+  const bundleId =
+    bundleIdIdx >= 0 && args[bundleIdIdx + 1] ? args[bundleIdIdx + 1] : undefined;
+  const commandIdx = args.indexOf("--command");
+  const command =
+    commandIdx >= 0 && args[commandIdx + 1] ? args[commandIdx + 1] : undefined;
+  const resourceUriIdx = args.indexOf("--resource-uri");
+  const resourceUri =
+    resourceUriIdx >= 0 && args[resourceUriIdx + 1] ? args[resourceUriIdx + 1] : undefined;
+  const profileIdx = args.indexOf("--profile");
+  const profile =
+    profileIdx >= 0 && args[profileIdx + 1] ? args[profileIdx + 1] : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
@@ -583,6 +606,11 @@ function parseArgs() {
     size,
     portalId,
     range,
+    pane,
+    bundleId,
+    command,
+    resourceUri,
+    profile,
     sandboxConfig,
   };
 }
@@ -1856,6 +1884,11 @@ const {
   size,
   portalId,
   range,
+  pane,
+  bundleId,
+  command,
+  resourceUri,
+  profile,
   sandboxConfig,
 } = parseArgs();
 
@@ -2184,6 +2217,57 @@ switch (recipe) {
     break;
   }
 
+  case "permission-assistant-drag-preflight-stress": {
+    const proofBundle = await runPermissionAssistantDragPreflightStressScenario({
+      session,
+      pane,
+      bundleId,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "permission-assistant-drag-preflight-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Permission Assistant drag/preflight stress failed closed; passive panel and no-TCC-mutation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "quick-terminal-pty-apply-back-stress": {
+    const proofBundle = await runQuickTerminalPtyApplyBackStressScenario({
+      session,
+      command,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "quick-terminal-pty-apply-back-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Quick Terminal PTY apply-back stress failed closed; PTY/apply-back lifecycle receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "mcp-context-resource-attachment-identity-stress": {
+    const proofBundle = await runMcpContextResourceAttachmentIdentityStressScenario({
+      session,
+      resourceUri,
+      profile,
+      source,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "mcp-context-resource-attachment-identity-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "MCP context resource identity stress failed closed; resource/context-part identity receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2299,6 +2383,9 @@ switch (recipe) {
           { name: "clipboard-history-portal-range-stress", description: "Fail-closed Clipboard History portal host/range receipt", flags: ["--session", "--portal-id", "--range", "--json"] },
           { name: "browser-tabs-cache-identity-stress", description: "Fail-closed browser tabs/history cache identity receipt", flags: ["--session", "--source", "--json"] },
           { name: "scroll-selection-reanchor-stress", description: "Fail-closed cross-surface scroll selection reanchor receipt", flags: ["--session", "--kinds", "--json"] },
+          { name: "permission-assistant-drag-preflight-stress", description: "Fail-closed Permission Assistant passive drag-source and no-TCC-mutation receipt", flags: ["--session", "--pane", "--bundle-id", "--json"] },
+          { name: "quick-terminal-pty-apply-back-stress", description: "Fail-closed Quick Terminal PTY readiness/output/apply-back cleanup receipt", flags: ["--session", "--command", "--json"] },
+          { name: "mcp-context-resource-attachment-identity-stress", description: "Fail-closed MCP context resource URI/profile/context-part identity receipt", flags: ["--session", "--resource-uri", "--profile", "--source", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2339,6 +2426,9 @@ switch (recipe) {
           "proofBundle.clipboardPortal",
           "proofBundle.browserCache",
           "proofBundle.scrollSelection",
+          "proofBundle.permissionAssistant",
+          "proofBundle.quickTerminal",
+          "proofBundle.mcpContextResource",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2391,6 +2481,12 @@ Recipes:
                          Fail-closed browser cache identity/dedupe proof
   scroll-selection-reanchor-stress
                          Fail-closed cross-surface scroll selection proof
+  permission-assistant-drag-preflight-stress
+                         Fail-closed Permission Assistant passive drag/no-TCC proof
+  quick-terminal-pty-apply-back-stress
+                         Fail-closed Quick Terminal PTY apply-back lifecycle proof
+  mcp-context-resource-attachment-identity-stress
+                         Fail-closed MCP context resource identity proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2439,6 +2535,12 @@ Available scenarios:
                          Emit fail-closed browser cache identity requirements
   scroll-selection-reanchor-stress
                          Emit fail-closed scroll selection reanchor requirements
+  permission-assistant-drag-preflight-stress
+                         Emit fail-closed Permission Assistant drag/preflight requirements
+  quick-terminal-pty-apply-back-stress
+                         Emit fail-closed Quick Terminal apply-back requirements
+  mcp-context-resource-attachment-identity-stress
+                         Emit fail-closed MCP context resource identity requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2466,6 +2568,9 @@ Examples:
   bun scripts/agentic/index.ts clipboard-history-portal-range-stress --session default --portal-id 'kit://clipboard-history?id=agentic' --range composer:0..0 --json
   bun scripts/agentic/index.ts browser-tabs-cache-identity-stress --session default --source browser-tabs --json
   bun scripts/agentic/index.ts scroll-selection-reanchor-stress --session default --kinds clipboard,browser-history,current-app-commands,file-search --json
+  bun scripts/agentic/index.ts permission-assistant-drag-preflight-stress --session default --pane Accessibility --bundle-id com.scriptkit.app --json
+  bun scripts/agentic/index.ts quick-terminal-pty-apply-back-stress --session default --command 'printf agentic-pty-apply-back' --json
+  bun scripts/agentic/index.ts mcp-context-resource-attachment-identity-stress --session default --resource-uri kit://context/agentic-loop-six --profile agentic-test --source mcp-resource --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
