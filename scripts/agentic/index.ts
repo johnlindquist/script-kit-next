@@ -201,6 +201,12 @@
  *                         Fail-closed Quick Terminal ANSI scrollback search proof
  *   script-output-inspector-folding-recovery-stress
  *                         Fail-closed script output inspector folding recovery proof
+ *   app-launcher-icon-grid-keyboard-navigation-stress
+ *                         Fail-closed App Launcher icon-grid keyboard navigation proof
+ *   browser-history-time-grouped-privacy-stress
+ *                         Fail-closed Browser History time-grouped privacy proof
+ *   settings-preferences-search-reset-preview-stress
+ *                         Fail-closed Settings preferences search/reset preview proof
  *   help                   Show this help
  *
  * Target threading:
@@ -317,6 +323,9 @@ import {
   runNotesMarkdownPreviewScrollSyncStressScenario,
   runQuickTerminalAnsiScrollbackSearchStressScenario,
   runScriptOutputInspectorFoldingRecoveryStressScenario,
+  runAppLauncherIconGridKeyboardNavigationStressScenario,
+  runBrowserHistoryTimeGroupedPrivacyStressScenario,
+  runSettingsPreferencesSearchResetPreviewStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1330,6 +1339,53 @@ function parseArgs() {
       ? args[scriptFixtureIdx + 1]
       : undefined;
   const noHandlerSpawn = args.includes("--no-handler-spawn");
+  const appsIdx = args.indexOf("--apps");
+  const apps =
+    appsIdx >= 0 && args[appsIdx + 1]
+      ? args[appsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const gridStatesIdx = args.indexOf("--grid-states");
+  const gridStates =
+    gridStatesIdx >= 0 && args[gridStatesIdx + 1]
+      ? args[gridStatesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noAppLaunch = args.includes("--no-app-launch");
+  const browserFixturesIdx = args.indexOf("--browser-fixtures");
+  const browserFixtures =
+    browserFixturesIdx >= 0 && args[browserFixturesIdx + 1]
+      ? args[browserFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const timeBucketsIdx = args.indexOf("--time-buckets");
+  const timeBuckets =
+    timeBucketsIdx >= 0 && args[timeBucketsIdx + 1]
+      ? args[timeBucketsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const privacyModesIdx = args.indexOf("--privacy-modes");
+  const privacyModes =
+    privacyModesIdx >= 0 && args[privacyModesIdx + 1]
+      ? args[privacyModesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const browserProviderIdx = args.indexOf("--browser-provider");
+  const browserProvider =
+    browserProviderIdx >= 0 && args[browserProviderIdx + 1]
+      ? args[browserProviderIdx + 1]
+      : undefined;
+  const noBrowserActivation = args.includes("--no-browser-activation");
+  const preferenceFixturesIdx = args.indexOf("--preference-fixtures");
+  const preferenceFixtures =
+    preferenceFixturesIdx >= 0 && args[preferenceFixturesIdx + 1]
+      ? args[preferenceFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const controlTypesIdx = args.indexOf("--control-types");
+  const controlTypes =
+    controlTypesIdx >= 0 && args[controlTypesIdx + 1]
+      ? args[controlTypesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const resetPathsIdx = args.indexOf("--reset-paths");
+  const resetPaths =
+    resetPathsIdx >= 0 && args[resetPathsIdx + 1]
+      ? args[resetPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -1502,6 +1558,17 @@ function parseArgs() {
     viewSteps,
     scriptFixture,
     noHandlerSpawn,
+    apps,
+    gridStates,
+    noAppLaunch,
+    browserFixtures,
+    timeBuckets,
+    privacyModes,
+    browserProvider,
+    noBrowserActivation,
+    preferenceFixtures,
+    controlTypes,
+    resetPaths,
   };
 }
 
@@ -2912,6 +2979,17 @@ const {
   viewSteps,
   scriptFixture,
   noHandlerSpawn,
+  apps,
+  gridStates,
+  noAppLaunch,
+  browserFixtures,
+  timeBuckets,
+  privacyModes,
+  browserProvider,
+  noBrowserActivation,
+  preferenceFixtures,
+  controlTypes,
+  resetPaths,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4353,6 +4431,24 @@ switch (recipe) {
     break;
   }
 
+  case "app-launcher-icon-grid-keyboard-navigation-stress": {
+    const proofBundle = await runAppLauncherIconGridKeyboardNavigationStressScenario({ session, fixture, apps, gridStates, navigationSteps, inputModes, noNativeInput, noNativePointer, noAppLaunch, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "app-launcher-icon-grid-keyboard-navigation-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "App Launcher icon-grid keyboard navigation stress failed closed; icon bounds, selection, neighbor map, preview, and no-launch receipts are missing", proofBundle };
+    break;
+  }
+
+  case "browser-history-time-grouped-privacy-stress": {
+    const proofBundle = await runBrowserHistoryTimeGroupedPrivacyStressScenario({ session, fixture, browserFixtures, timeBuckets, queries, privacyModes, inputModes, browserProvider, noBrowserActivation, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "browser-history-time-grouped-privacy-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Browser History time-grouped privacy stress failed closed; bucket, redaction, favicon fallback, selection, and no-activation receipts are missing", proofBundle };
+    break;
+  }
+
+  case "settings-preferences-search-reset-preview-stress": {
+    const proofBundle = await runSettingsPreferencesSearchResetPreviewStressScenario({ session, fixture, preferenceFixtures, controlTypes, queries, resetPaths, inputModes, sandboxConfig, noConfigWrite, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "settings-preferences-search-reset-preview-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Settings preferences search/reset preview stress failed closed; controls, dirty state, reset preview, and no-write receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4558,6 +4654,9 @@ switch (recipe) {
           { name: "notes-markdown-preview-scroll-sync-stress", description: "Fail-closed UX receipt contract for Notes markdown preview scroll and focus sync", flags: ["--session", "--fixture", "--notes", "--markdown-fixtures", "--edit-steps", "--input-modes", "--sandbox-notes-store", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "quick-terminal-ansi-scrollback-search-stress", description: "Fail-closed UX receipt contract for Quick Terminal ANSI scrollback search readability", flags: ["--session", "--fixture", "--transcript-fixtures", "--search-queries", "--scroll-positions", "--input-modes", "--terminal-fixture", "--no-shell-command", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "script-output-inspector-folding-recovery-stress", description: "Fail-closed UX receipt contract for script output inspector folding and retry recovery", flags: ["--session", "--fixture", "--output-fixtures", "--view-steps", "--input-modes", "--script-fixture", "--no-handler-spawn", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-process-kill", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "app-launcher-icon-grid-keyboard-navigation-stress", description: "Fail-closed UX receipt contract for App Launcher icon-grid keyboard navigation", flags: ["--session", "--fixture", "--apps", "--grid-states", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-app-launch", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "browser-history-time-grouped-privacy-stress", description: "Fail-closed UX receipt contract for Browser History time grouping and privacy redaction", flags: ["--session", "--fixture", "--browser-fixtures", "--time-buckets", "--queries", "--privacy-modes", "--input-modes", "--browser-provider", "--no-browser-activation", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "settings-preferences-search-reset-preview-stress", description: "Fail-closed UX receipt contract for Settings preferences search and reset preview", flags: ["--session", "--fixture", "--preference-fixtures", "--control-types", "--queries", "--reset-paths", "--input-modes", "--sandbox-config", "--no-config-write", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -5043,6 +5142,12 @@ Available scenarios:
                          Emit fail-closed Quick Terminal ANSI scrollback search requirements
   script-output-inspector-folding-recovery-stress
                          Emit fail-closed script output inspector folding recovery requirements
+  app-launcher-icon-grid-keyboard-navigation-stress
+                         Emit fail-closed App Launcher icon-grid keyboard navigation requirements
+  browser-history-time-grouped-privacy-stress
+                         Emit fail-closed Browser History time grouping and privacy requirements
+  settings-preferences-search-reset-preview-stress
+                         Emit fail-closed Settings preferences search/reset preview requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -5160,6 +5265,9 @@ Examples:
   bun scripts/agentic/index.ts notes-markdown-preview-scroll-sync-stress --session default --fixture agentic-notes-markdown-preview --notes note-a,note-b --markdown-fixtures headings,checklist,code-block,table,long-link,image-placeholder --edit-steps protocol-insert,protocol-delete,protocol-scroll,preview-toggle,split-resize,switch-note --input-modes protocol-set-input,protocol-click,protocol-key,batch --sandbox-notes-store --no-native-input --no-native-pointer --no-native-picker --no-system-pasteboard --no-network --no-external-services --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts quick-terminal-ansi-scrollback-search-stress --session default --fixture agentic-terminal-ansi-scrollback --transcript-fixtures ansi-colors,wide-emoji,combining-marks,long-lines,hyperlinks,stderr-block,prompt-continuation --search-queries error,emoji,url,long --scroll-positions top,middle,bottom,search-hit --input-modes protocol-set-input,protocol-key,batch --terminal-fixture scripted-local --no-shell-command --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts script-output-inspector-folding-recovery-stress --session default --fixture agentic-script-output-inspector --output-fixtures stdout-long,stderr-long,ansi-stacktrace,json-lines,progress-rewrite,exit-error,exit-success --view-steps run-fixture,filter-output,fold-stderr,expand-stack,clear-filter,retry-dry-run --input-modes protocol-set-filter,protocol-click,protocol-key,batch --script-fixture local-noop --no-handler-spawn --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-process-kill --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts app-launcher-icon-grid-keyboard-navigation-stress --session default --fixture agentic-app-launcher-grid --apps 'Calculator,Script Kit,Safari,Terminal,Very Long Application Name' --grid-states grid,list,filtered,empty,resized --navigation-steps right,down,left,up,home,end,filter,clear-filter --input-modes protocol-key,protocol-set-filter,batch --no-native-input --no-native-pointer --no-app-launch --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts browser-history-time-grouped-privacy-stress --session default --fixture agentic-browser-history-time-groups --browser-fixtures same-domain,private-url,long-title,favicon-missing,duplicate-visit --time-buckets today,yesterday,last-week,older --queries docs,private,missing --privacy-modes redacted-url,favicon-fallback,title-only --input-modes protocol-set-filter,protocol-key,batch --browser-provider fixture-only --no-browser-activation --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts settings-preferences-search-reset-preview-stress --session default --fixture agentic-settings-preferences --preference-fixtures theme,font-size,ui-scale,launch-at-login,agent-profile --control-types toggle,select,slider,text,reset-button --queries theme,font,missing --reset-paths single-setting,section-reset,cancel-reset --input-modes protocol-set-filter,protocol-click,protocol-key,batch --sandbox-config --no-config-write --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

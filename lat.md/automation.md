@@ -370,6 +370,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `script-output-inspector-folding-recovery-stress` is intentionally fail-closed until script output receipts expose fixture run id, output fixtures, stream generation, stdout/stderr blocks, ANSI stack frames, JSON lines, progress rewrite generation, exit badge, filter text and highlights, stderr fold before/after, stack expansion, clear-filter restoration, dry-run retry, no handler spawn/process kill, scroll anchor restoration, no output interleave drift, stale output and wrong-run rejection, no pasteboard/network/external service/native input, AFK-safe flags, and cleanup.
 
+`app-launcher-icon-grid-keyboard-navigation-stress` is intentionally fail-closed until App Launcher receipts expose fixture app catalog identity, icon grid generation, visible app ids, icon bounds and fingerprints, selected app before/after, selected cell bounds and visibility, keyboard neighbor map, row/column count, filter generation, rendered/stripped query, empty state, preview panel, truncated-name tooltip, no icon text overlap/footer collision, Enter launch refusal, stale catalog and wrong-app rejection, no app launch/pasteboard/network/native input, AFK-safe flags, and cleanup.
+
+`browser-history-time-grouped-privacy-stress` is intentionally fail-closed until Browser History receipts expose fixture provider identity, history generation, time bucket ids, sticky header bounds, visible visit ids and fingerprints, favicon fallback ids, redacted URL fingerprints, rendered/stripped query, selected visit before/after, duplicate collapse, no raw private URL leak, no favicon network request, browser activation refusal, stale history and wrong-visit rejection, no pasteboard/network/native input, AFK-safe flags, and cleanup.
+
+`settings-preferences-search-reset-preview-stress` is intentionally fail-closed until Settings receipts expose sandbox config identity, preference section ids, visible preference ids, control bounds/accessibility names, values before and preview values, dirty preference ids, rendered/stripped query, search highlights, reset preview/cancel restoration, disabled-control refusal, no config write or secret leak, stale preference and wrong-preference rejection, no pasteboard/network/native input, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

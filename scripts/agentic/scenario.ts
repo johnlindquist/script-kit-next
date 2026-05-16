@@ -187,7 +187,10 @@ export interface HardScenarioReceipt {
     | "root-window-source-filter-activation-refusal-stress"
     | "notes-markdown-preview-scroll-sync-stress"
     | "quick-terminal-ansi-scrollback-search-stress"
-    | "script-output-inspector-folding-recovery-stress";
+    | "script-output-inspector-folding-recovery-stress"
+    | "app-launcher-icon-grid-keyboard-navigation-stress"
+    | "browser-history-time-grouped-privacy-stress"
+    | "settings-preferences-search-reset-preview-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -310,6 +313,9 @@ export interface HardScenarioReceipt {
   notesMarkdownPreviewScrollSyncReceipt?: Record<string, unknown>;
   quickTerminalAnsiScrollbackSearchReceipt?: Record<string, unknown>;
   scriptOutputInspectorFoldingRecoveryReceipt?: Record<string, unknown>;
+  appLauncherIconGridKeyboardNavigationReceipt?: Record<string, unknown>;
+  browserHistoryTimeGroupedPrivacyReceipt?: Record<string, unknown>;
+  settingsPreferencesSearchResetPreviewReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8827,6 +8833,142 @@ export async function runScriptOutputInspectorFoldingRecoveryStressScenario(opts
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_script_output_inspector_folding_recovery_receipt" } }],
     failure: { code: "missing_script_output_inspector_folding_recovery_receipt", stepName: "declare-required-receipt", message: "Missing app-side script output inspector folding recovery receipts." },
     warnings: ["file_linear:script_output_inspector_folding_recovery_receipts_missing"],
+  };
+}
+
+export async function runAppLauncherIconGridKeyboardNavigationStressScenario(opts: {
+  session: string; fixture?: string; apps?: string[]; gridStates?: string[];
+  navigationSteps?: string[]; inputModes?: string[]; noNativeInput?: boolean;
+  noNativePointer?: boolean; noAppLaunch?: boolean; noSystemPasteboard?: boolean;
+  noNetwork?: boolean; noSubmit?: boolean; dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "app-launcher-icon-grid-keyboard-navigation-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_app_launcher_icon_grid_keyboard_navigation_receipt",
+    linearIssue: "file_linear:app_launcher_icon_grid_keyboard_navigation_receipts_missing",
+    appLauncherIconGridKeyboardNavigationReceipt: {
+      kind: "ux.appLauncherIconGridKeyboardNavigation",
+      appLauncherIconGridKeyboardNavigationStressId: "loop-thirty-six-app-launcher-icon-grid-keyboard-navigation",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-app-launcher-grid",
+      requestedApps: opts.apps ?? ["Calculator", "Script Kit", "Safari", "Terminal", "Very Long Application Name"],
+      requestedGridStates: opts.gridStates ?? ["grid", "list", "filtered", "empty", "resized"],
+      requestedNavigationSteps: opts.navigationSteps ?? ["right", "down", "left", "up", "home", "end", "filter", "clear-filter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "protocol-set-filter", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noAppLaunch: opts.noAppLaunch ?? true, noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true, noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureAppCatalogId: null, iconGridGeneration: null, visibleAppIds: [],
+      visibleIconBounds: [], iconImageFingerprints: [], selectedAppIdBefore: null,
+      selectedAppIdAfter: null, selectedCellBounds: null, selectedCellVisible: null,
+      keyboardNeighborMap: null, rowColumnCount: null, filterGeneration: null,
+      renderedAndStrippedQuery: null, emptyStateBounds: null, previewPanelBounds: null,
+      previewAppId: null, tooltipForTruncatedName: null, noIconTextOverlap: null,
+      noPreviewFooterCollision: null, enterLaunchRefused: true, noNativeAppLaunch: true,
+      staleCatalogGenerationRejected: null, wrongAppActivationRejected: null,
+      noSystemPasteboardMutation: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_app_launcher_icon_grid_keyboard_navigation_receipt" } }],
+    failure: { code: "missing_app_launcher_icon_grid_keyboard_navigation_receipt", stepName: "declare-required-receipt", message: "Missing app-side App Launcher icon grid keyboard navigation receipts." },
+    warnings: ["file_linear:app_launcher_icon_grid_keyboard_navigation_receipts_missing"],
+  };
+}
+
+export async function runBrowserHistoryTimeGroupedPrivacyStressScenario(opts: {
+  session: string; fixture?: string; browserFixtures?: string[]; timeBuckets?: string[];
+  queries?: string[]; privacyModes?: string[]; inputModes?: string[]; browserProvider?: string;
+  noBrowserActivation?: boolean; noNativeInput?: boolean; noNativePointer?: boolean;
+  noSystemPasteboard?: boolean; noNetwork?: boolean; noSubmit?: boolean;
+  dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "browser-history-time-grouped-privacy-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_browser_history_time_grouped_privacy_receipt",
+    linearIssue: "file_linear:browser_history_time_grouped_privacy_receipts_missing",
+    browserHistoryTimeGroupedPrivacyReceipt: {
+      kind: "ux.browserHistoryTimeGroupedPrivacy",
+      browserHistoryTimeGroupedPrivacyStressId: "loop-thirty-six-browser-history-time-grouped-privacy",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-browser-history-time-groups",
+      requestedBrowserFixtures: opts.browserFixtures ?? ["same-domain", "private-url", "long-title", "favicon-missing", "duplicate-visit"],
+      requestedTimeBuckets: opts.timeBuckets ?? ["today", "yesterday", "last-week", "older"],
+      requestedQueries: opts.queries ?? ["docs", "private", "missing"],
+      requestedPrivacyModes: opts.privacyModes ?? ["redacted-url", "favicon-fallback", "title-only"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      browserProvider: opts.browserProvider ?? "fixture-only",
+      noBrowserActivation: opts.noBrowserActivation ?? true,
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureHistoryProviderId: null, historyGeneration: null, timeBucketIds: [],
+      stickyTimeHeaderBounds: [], visibleVisitIds: [], visitRowFingerprints: [],
+      faviconFallbackIds: [], redactedUrlFingerprints: [], renderedAndStrippedQuery: null,
+      selectedVisitBefore: null, selectedVisitAfter: null, selectedVisitVisible: null,
+      duplicateVisitCollapsed: null, noRawPrivateUrlLeak: null, noFaviconNetworkRequest: true,
+      openInBrowserRefused: true, noBrowserActivationReceipt: null,
+      staleHistoryGenerationRejected: null, wrongVisitActivationRejected: null,
+      noSystemPasteboardMutation: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_browser_history_time_grouped_privacy_receipt" } }],
+    failure: { code: "missing_browser_history_time_grouped_privacy_receipt", stepName: "declare-required-receipt", message: "Missing app-side Browser History time-grouped privacy receipts." },
+    warnings: ["file_linear:browser_history_time_grouped_privacy_receipts_missing"],
+  };
+}
+
+export async function runSettingsPreferencesSearchResetPreviewStressScenario(opts: {
+  session: string; fixture?: string; preferenceFixtures?: string[]; controlTypes?: string[];
+  queries?: string[]; resetPaths?: string[]; inputModes?: string[]; sandboxConfig?: boolean;
+  noConfigWrite?: boolean; noNativeInput?: boolean; noNativePointer?: boolean;
+  noSystemPasteboard?: boolean; noNetwork?: boolean; noSubmit?: boolean;
+  dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "settings-preferences-search-reset-preview-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_settings_preferences_search_reset_preview_receipt",
+    linearIssue: "file_linear:settings_preferences_search_reset_preview_receipts_missing",
+    settingsPreferencesSearchResetPreviewReceipt: {
+      kind: "ux.settingsPreferencesSearchResetPreview",
+      settingsPreferencesSearchResetPreviewStressId: "loop-thirty-six-settings-preferences-search-reset-preview",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-settings-preferences",
+      requestedPreferenceFixtures: opts.preferenceFixtures ?? ["theme", "font-size", "ui-scale", "launch-at-login", "agent-profile"],
+      requestedControlTypes: opts.controlTypes ?? ["toggle", "select", "slider", "text", "reset-button"],
+      requestedQueries: opts.queries ?? ["theme", "font", "missing"],
+      requestedResetPaths: opts.resetPaths ?? ["single-setting", "section-reset", "cancel-reset"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      sandboxConfig: opts.sandboxConfig ?? true, noConfigWrite: opts.noConfigWrite ?? true,
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      sandboxConfigId: null, preferenceSectionIds: [], visiblePreferenceIds: [],
+      controlBounds: [], controlAccessibleNames: [], valueBeforeByPreference: null,
+      previewValueByPreference: null, dirtyPreferenceIds: [], renderedAndStrippedQuery: null,
+      searchHighlightRanges: [], resetPreviewReceipt: null, cancelResetRestoresValues: null,
+      disabledControlRefusal: null, noConfigFileWrite: true, noSecretValueLeak: null,
+      stalePreferenceGenerationRejected: null, wrongPreferenceMutationRejected: null,
+      noSystemPasteboardMutation: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_settings_preferences_search_reset_preview_receipt" } }],
+    failure: { code: "missing_settings_preferences_search_reset_preview_receipt", stepName: "declare-required-receipt", message: "Missing app-side Settings preferences search/reset preview receipts." },
+    warnings: ["file_linear:settings_preferences_search_reset_preview_receipts_missing"],
   };
 }
 
