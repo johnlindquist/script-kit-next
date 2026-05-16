@@ -502,6 +502,71 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             }
                                         }
                                     }
+                                    AppView::FormPrompt { entity, id } => {
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to FormPrompt", key_lower));
+                                        let entity_clone = entity.clone();
+                                        let prompt_id_clone = id.clone();
+
+                                        if has_cmd
+                                            && !has_shift
+                                            && !_has_alt
+                                            && !_has_ctrl
+                                            && key_lower == "k"
+                                        {
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle form actions");
+                                            view.dispatch_actions_toggle_for_current_view(
+                                                window,
+                                                ctx,
+                                                "stdin_simulate_key_form_prompt",
+                                            );
+                                        } else {
+                                            match key_lower.as_str() {
+                                                "enter" | "return" if !has_shift && !has_cmd => {
+                                                    let validation_message = entity_clone.update(ctx, |form, cx| {
+                                                        form.submit_validation_message(cx)
+                                                    });
+                                                    if let Some(message) = validation_message {
+                                                        logging::log("STDIN", &format!("SimulateKey: Enter blocked FormPrompt validation: {}", message));
+                                                        view.show_hud(message, Some(3000), ctx);
+                                                    } else {
+                                                        logging::log("STDIN", "SimulateKey: Enter in FormPrompt - submitting form");
+                                                        let values = entity_clone.update(ctx, |form, cx| {
+                                                            form.collect_values(cx)
+                                                        });
+                                                        view.submit_prompt_response(
+                                                            prompt_id_clone.clone(),
+                                                            Some(values),
+                                                            ctx,
+                                                        );
+                                                    }
+                                                }
+                                                "escape" | "esc" if !has_cmd => {
+                                                    logging::log("STDIN", "SimulateKey: Escape - cancel FormPrompt");
+                                                    view.submit_prompt_response(
+                                                        prompt_id_clone.clone(),
+                                                        None,
+                                                        ctx,
+                                                    );
+                                                    view.cancel_script_execution(ctx);
+                                                }
+                                                "tab" if !has_cmd && !has_shift => {
+                                                    logging::log("STDIN", "SimulateKey: Tab - next FormPrompt field");
+                                                    entity_clone.update(ctx, |form, cx| {
+                                                        form.focus_next(window, cx);
+                                                    });
+                                                }
+                                                "tab" if !has_cmd && has_shift => {
+                                                    logging::log("STDIN", "SimulateKey: Shift+Tab - previous FormPrompt field");
+                                                    entity_clone.update(ctx, |form, cx| {
+                                                        form.focus_previous(window, cx);
+                                                    });
+                                                }
+                                                _ => {
+                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in FormPrompt", key_lower));
+                                                }
+                                            }
+                                        }
+                                    }
                                     AppView::EditorPrompt { entity, id, .. } => {
                                         // Editor prompt key handling for template/snippet navigation and choice popup
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to EditorPrompt", key_lower));

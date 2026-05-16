@@ -108,6 +108,12 @@ TemplatePrompt automation mirrors the prompt-owned field editor instead of falli
 
 Stdin `simulateKey` handles TemplatePrompt Enter submit, Escape cancel, Tab and Shift+Tab field navigation, Backspace and printable field editing, and Cmd+K actions toggling through the TemplatePrompt shared-actions host. `batch.forceSubmit` and direct `forceSubmit` submit the provided value for the active TemplatePrompt, preserving ForceSubmit's explicit-value contract instead of rendering current fields. `getState` continues to report prompt type `template`, and `getElements` exposes `template-source`, `template-inputs`, and `template-{field}` rows for state-first proof. Pinned by [[tests/template_prompt_parity_contract.rs#template_prompt_has_explicit_simulate_key_arm_in_live_and_mirror_dispatchers]], [[tests/template_prompt_parity_contract.rs#template_prompt_force_submit_is_supported_in_direct_and_batch_paths]], and [[tests/template_prompt_parity_contract.rs#template_prompt_footer_actions_has_live_host_coverage]].
 
+### FieldsPrompt automation receipts
+
+FieldsPrompt automation reuses FormPrompt ownership while preserving SDK array semantics.
+
+Stdin `simulateKey` handles FieldsPrompt Enter submit, Escape cancel, Tab and Shift+Tab navigation, and Cmd+K action toggling through the `FormPrompt` actions host. `getState` reports prompt type `fields`, `getElements` exposes `fields-fields` plus `fields-{name}` semantic rows, `batch.setInput` edits the focused field, `batch.selectBySemanticId` can focus `input:fields-*`, and `batch.forceSubmit` preserves the explicit JSON-array value. Pinned by [[tests/source_audits/fields_prompt_contract.rs#fields_prompt_has_simulate_key_submit_cancel_navigation]], [[tests/source_audits/fields_prompt_contract.rs#fields_prompt_is_visible_to_state_and_elements]], and [[tests/source_audits/fields_prompt_contract.rs#fields_prompt_collects_array_values_by_definition_order]].
+
 ### HotkeyPrompt automation receipts
 
 HotkeyPrompt automation proves SDK capture without exercising shortcut assignment.

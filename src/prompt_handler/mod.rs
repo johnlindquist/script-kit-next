@@ -1021,6 +1021,15 @@ fn prompt_message_from_protocol_message(
             opacity,
         }),
         Message::Form { id, html, actions } => Some(PromptMessage::ShowForm { id, html, actions }),
+        Message::Fields {
+            id,
+            fields,
+            actions,
+        } => Some(PromptMessage::ShowFields {
+            id,
+            fields,
+            actions,
+        }),
         Message::Term {
             id,
             command,
@@ -2105,6 +2114,40 @@ impl ScriptListApp {
                 resize_to_view_sync(view_type, field_count);
                 cx.notify();
             }
+            PromptMessage::ShowFields {
+                id,
+                fields,
+                actions,
+            } => {
+                self.prepare_window_for_prompt("UI", "fields", "");
+
+                tracing::info!(
+                    category = "UI",
+                    id = %id,
+                    field_count = fields.len(),
+                    "Showing fields prompt"
+                );
+
+                // Store SDK actions for the actions panel (Cmd+K).
+                self.sdk_actions = actions;
+
+                let colors = FormFieldColors::from_theme(&self.theme);
+                let form_state = FormPromptState::from_fields(id.clone(), fields, colors, cx);
+                let field_count = form_state.fields.len();
+                let entity = cx.new(|_| form_state);
+
+                self.current_view = AppView::FormPrompt { id, entity };
+                self.focused_input = FocusedInput::None;
+                self.pending_focus = Some(FocusTarget::FormPrompt);
+
+                let view_type = if field_count > 0 {
+                    ViewType::ArgPromptWithChoices
+                } else {
+                    ViewType::DivPrompt
+                };
+                resize_to_view_sync(view_type, field_count);
+                cx.notify();
+            }
             PromptMessage::ShowTerm {
                 id,
                 command,
@@ -2815,16 +2858,19 @@ impl ScriptListApp {
                         -1,
                         None,
                     ),
-                    AppView::FormPrompt { id, .. } => (
-                        "form".to_string(),
-                        Some(id.clone()),
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        -1,
-                        None,
-                    ),
+                    AppView::FormPrompt { id, entity } => {
+                        let prompt_type = entity.read(cx).prompt_type().to_string();
+                        (
+                            prompt_type,
+                            Some(id.clone()),
+                            None,
+                            String::new(),
+                            0,
+                            0,
+                            -1,
+                            None,
+                        )
+                    }
                     AppView::TermPrompt { id, .. } => (
                         "term".to_string(),
                         Some(id.clone()),
@@ -7667,7 +7713,7 @@ impl ScriptListApp {
                         .any(|el| el.semantic_id == *semantic_id && el.focused == Some(true))
                 }
                 protocol::WaitDetailedCondition::StateMatch { state: expected } => {
-                    let prompt_type = self.current_prompt_type();
+                    let prompt_type = self.current_prompt_type(cx);
                     let input_value = self.current_input_value();
                     let selected_value = self.current_selected_value();
                     let window_visible = script_kit_gpui::is_main_window_visible();
@@ -7897,12 +7943,12 @@ impl ScriptListApp {
     }
 
     /// Get the current prompt type as a string.
-    fn current_prompt_type(&self) -> String {
+    fn current_prompt_type(&self, cx: &App) -> String {
         match &self.current_view {
             AppView::ScriptList => "none".to_string(),
             AppView::ArgPrompt { .. } => "arg".to_string(),
             AppView::DivPrompt { .. } => "div".to_string(),
-            AppView::FormPrompt { .. } => "form".to_string(),
+            AppView::FormPrompt { entity, .. } => entity.read(cx).prompt_type().to_string(),
             AppView::EditorPrompt { .. } => "editor".to_string(),
             AppView::TermPrompt { .. } => "term".to_string(),
             AppView::HotkeyPrompt { .. } => "hotkey".to_string(),
@@ -8265,6 +8311,11 @@ impl ScriptListApp {
                 entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
             }
+            AppView::FormPrompt { entity, .. } => {
+                let entity = entity.clone();
+                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
+                cx.notify();
+            }
             _ => {
                 tracing::warn!(
                     category = "BATCH",
@@ -8312,6 +8363,24 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if let AppView::FormPrompt { entity, .. } = &self.current_view {
+            let entity = entity.clone();
+            let selected = entity.update(cx, |form, cx| {
+                let selected = form.focus_field_by_semantic_id(semantic_id);
+                cx.notify();
+                selected
+            });
+
+            if let Some(selected) = selected {
+                if submit {
+                    self.submit_current_value(cx);
+                }
+                return Ok(selected);
+            }
+
+            anyhow::bail!("No form field matched semantic ID '{semantic_id}'");
+        }
+
         let choices = match &self.current_view {
             AppView::ArgPrompt { choices, .. }
             | AppView::MiniPrompt { choices, .. }

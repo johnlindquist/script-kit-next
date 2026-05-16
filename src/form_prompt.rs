@@ -6,6 +6,12 @@ use gpui::{
 use crate::components::{FormCheckbox, FormFieldColors, FormTextArea, FormTextField};
 use crate::{form_parser, logging, protocol};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FormPromptOutputMode {
+    ObjectByName,
+    ArrayByOrder,
+}
+
 /// Enum to hold different types of form field entities.
 #[derive(Clone)]
 pub enum FormFieldEntity {
@@ -29,6 +35,8 @@ pub struct FormPromptState {
     pub focused_index: usize,
     /// Focus handle for this form.
     pub focus_handle: FocusHandle,
+    /// Output contract for SDK resolution.
+    pub output_mode: FormPromptOutputMode,
 }
 
 impl FormPromptState {
@@ -40,15 +48,11 @@ impl FormPromptState {
         serde_json::to_string(&map).unwrap_or_else(|_| "{}".to_string())
     }
 
-    /// Create a new form prompt state from HTML.
-    pub fn new(id: String, html: String, colors: FormFieldColors, cx: &mut App) -> Self {
-        let parsed_fields = form_parser::parse_form_html(&html);
-
-        logging::log(
-            "FORM",
-            &format!("Parsed {} form fields from HTML", parsed_fields.len()),
-        );
-
+    fn build_field_entities(
+        parsed_fields: Vec<protocol::Field>,
+        colors: FormFieldColors,
+        cx: &mut App,
+    ) -> Vec<(protocol::Field, FormFieldEntity)> {
         let fields: Vec<(protocol::Field, FormFieldEntity)> = parsed_fields
             .into_iter()
             .map(|field| {
@@ -82,6 +86,19 @@ impl FormPromptState {
             })
             .collect();
 
+        fields
+    }
+
+    fn from_fields_with_mode(
+        id: String,
+        html: String,
+        parsed_fields: Vec<protocol::Field>,
+        colors: FormFieldColors,
+        output_mode: FormPromptOutputMode,
+        cx: &mut App,
+    ) -> Self {
+        let fields = Self::build_field_entities(parsed_fields, colors, cx);
+
         Self {
             id,
             html,
@@ -89,27 +106,133 @@ impl FormPromptState {
             colors,
             focused_index: 0,
             focus_handle: cx.focus_handle(),
+            output_mode,
         }
     }
 
-    /// Get all field values as a JSON object string.
-    pub fn collect_values(&self, cx: &App) -> String {
-        let values = self.fields.iter().map(|(field_def, entity)| {
-            let value = match entity {
-                FormFieldEntity::TextField(e) => e.read(cx).value().to_string(),
-                FormFieldEntity::TextArea(e) => e.read(cx).value().to_string(),
-                FormFieldEntity::Checkbox(e) => {
-                    if e.read(cx).is_checked() {
-                        "true".to_string()
-                    } else {
-                        "false".to_string()
-                    }
-                }
-            };
-            (field_def.name.clone(), value)
-        });
+    /// Create a new form prompt state from HTML.
+    pub fn new(id: String, html: String, colors: FormFieldColors, cx: &mut App) -> Self {
+        let parsed_fields = form_parser::parse_form_html(&html);
 
-        Self::build_values_json(values)
+        logging::log(
+            "FORM",
+            &format!("Parsed {} form fields from HTML", parsed_fields.len()),
+        );
+
+        Self::from_fields_with_mode(
+            id,
+            html,
+            parsed_fields,
+            colors,
+            FormPromptOutputMode::ObjectByName,
+            cx,
+        )
+    }
+
+    /// Create a form prompt state from SDK fields() definitions.
+    pub fn from_fields(
+        id: String,
+        fields: Vec<protocol::Field>,
+        colors: FormFieldColors,
+        cx: &mut App,
+    ) -> Self {
+        logging::log(
+            "FORM",
+            &format!("Creating fields() prompt with {} fields", fields.len()),
+        );
+
+        Self::from_fields_with_mode(
+            id,
+            String::new(),
+            fields,
+            colors,
+            FormPromptOutputMode::ArrayByOrder,
+            cx,
+        )
+    }
+
+    pub fn prompt_type(&self) -> &'static str {
+        match self.output_mode {
+            FormPromptOutputMode::ObjectByName => "form",
+            FormPromptOutputMode::ArrayByOrder => "fields",
+        }
+    }
+
+    pub fn semantic_prefix(&self) -> &'static str {
+        match self.output_mode {
+            FormPromptOutputMode::ObjectByName => "form",
+            FormPromptOutputMode::ArrayByOrder => "fields",
+        }
+    }
+
+    fn field_value(entity: &FormFieldEntity, cx: &App) -> String {
+        match entity {
+            FormFieldEntity::TextField(e) => e.read(cx).value().to_string(),
+            FormFieldEntity::TextArea(e) => e.read(cx).value().to_string(),
+            FormFieldEntity::Checkbox(e) => {
+                if e.read(cx).is_checked() {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }
+            }
+        }
+    }
+
+    /// Get all field values using the SDK contract for this prompt source.
+    pub fn collect_values(&self, cx: &App) -> String {
+        match self.output_mode {
+            FormPromptOutputMode::ObjectByName => {
+                let values = self.fields.iter().map(|(field_def, entity)| {
+                    (field_def.name.clone(), Self::field_value(entity, cx))
+                });
+                Self::build_values_json(values)
+            }
+            FormPromptOutputMode::ArrayByOrder => {
+                let values: Vec<String> = self
+                    .fields
+                    .iter()
+                    .map(|(_, entity)| Self::field_value(entity, cx))
+                    .collect();
+                serde_json::to_string(&values).unwrap_or_else(|_| "[]".to_string())
+            }
+        }
+    }
+
+    pub fn submit_validation_errors(&self, cx: &App) -> Vec<String> {
+        let mut invalid_fields = Vec::new();
+
+        for (field_definition, field_entity) in &self.fields {
+            let value = Self::field_value(field_entity, cx);
+            if field_value_is_valid_for_submit(field_definition.field_type.as_deref(), &value) {
+                continue;
+            }
+
+            let field_type = field_definition
+                .field_type
+                .as_deref()
+                .unwrap_or("text")
+                .to_string();
+            invalid_fields.push(format!("{} ({})", field_definition.name, field_type));
+        }
+
+        invalid_fields
+    }
+
+    pub fn submit_validation_message(&self, cx: &App) -> Option<String> {
+        let invalid_fields = self.submit_validation_errors(cx);
+        if invalid_fields.is_empty() {
+            return None;
+        }
+
+        Some(if invalid_fields.len() == 1 {
+            format!("Fix invalid field before submitting: {}", invalid_fields[0])
+        } else {
+            format!(
+                "Fix invalid fields before submitting: {}",
+                invalid_fields.join(", ")
+            )
+        })
     }
 
     /// Focus the next field (for Tab navigation).
@@ -151,6 +274,25 @@ impl FormPromptState {
             focus_handle.focus(window, cx);
         }
         cx.notify();
+    }
+
+    pub fn focus_field_by_semantic_id(&mut self, semantic_id: &str) -> Option<String> {
+        let semantic_prefix = self.semantic_prefix();
+        let index = self
+            .fields
+            .iter()
+            .enumerate()
+            .find_map(|(index, (field, _))| {
+                let semantic_name = format!("{semantic_prefix}-{}", field.name);
+                let field_semantic_id =
+                    protocol::generate_semantic_id_named("input", &semantic_name);
+                (field_semantic_id == semantic_id).then_some(index)
+            })?;
+
+        self.focused_index = index;
+        self.fields
+            .get(index)
+            .map(|(field, _)| field.label.clone().unwrap_or_else(|| field.name.clone()))
     }
 
     /// Get the focus handle for the currently focused field.
@@ -216,10 +358,60 @@ impl FormPromptState {
     }
 }
 
+#[inline]
+fn is_valid_email_submit_value(value: &str) -> bool {
+    if value.is_empty() {
+        return true;
+    }
+
+    if value
+        .chars()
+        .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return false;
+    }
+
+    let mut parts = value.split('@');
+    let local = parts.next().unwrap_or_default();
+    let domain = parts.next().unwrap_or_default();
+
+    if local.is_empty() || domain.is_empty() || parts.next().is_some() {
+        return false;
+    }
+
+    if domain.starts_with('.') || domain.ends_with('.') {
+        return false;
+    }
+
+    domain.contains('.')
+}
+
+#[inline]
+fn is_valid_number_submit_value(value: &str) -> bool {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+    trimmed.parse::<f64>().is_ok()
+}
+
+#[inline]
+fn field_value_is_valid_for_submit(field_type: Option<&str>, value: &str) -> bool {
+    match field_type {
+        Some(field_type) if field_type.eq_ignore_ascii_case("email") => {
+            is_valid_email_submit_value(value)
+        }
+        Some(field_type) if field_type.eq_ignore_ascii_case("number") => {
+            is_valid_number_submit_value(value)
+        }
+        _ => true,
+    }
+}
+
 impl Render for FormPromptState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         tracing::info!(
-            surface = "form_prompt",
+            surface = %format!("{}_prompt", self.semantic_prefix()),
             field_count = self.fields.len(),
             focused_index = self.focused_index,
             "prompt_surface_rendered"

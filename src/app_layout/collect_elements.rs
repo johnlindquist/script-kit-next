@@ -534,9 +534,10 @@ impl ScriptListApp {
             AppView::FormPrompt { entity, .. } => {
                 let form = entity.read(cx);
                 let (elements, total_count) = self.collect_form_prompt_elements(form, limit, cx);
+                let surface_id = format!("{}-prompt", form.semantic_prefix());
                 Self::finalize_surface_outcome(
-                    "form-prompt",
-                    "form-prompt",
+                    surface_id.as_str(),
+                    surface_id.as_str(),
                     "panel_only_form_prompt",
                     limit,
                     elements,
@@ -1012,10 +1013,12 @@ impl ScriptListApp {
         let total_count = form.fields.len() + 1;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
+        let semantic_prefix = form.semantic_prefix();
+        let list_id = format!("{semantic_prefix}-fields");
         Self::push_limited_element(
             &mut elements,
             limit,
-            protocol::ElementInfo::list("form-fields", form.fields.len()),
+            protocol::ElementInfo::list(list_id.as_str(), form.fields.len()),
         );
 
         for (index, (field, entity)) in form.fields.iter().enumerate() {
@@ -1023,7 +1026,7 @@ impl ScriptListApp {
                 break;
             }
 
-            let field_name = format!("form-{}", field.name);
+            let field_name = format!("{semantic_prefix}-{}", field.name);
             let field_label = field.label.clone().unwrap_or_else(|| field.name.clone());
             let focused = index == form.focused_index;
 
