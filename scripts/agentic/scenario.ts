@@ -148,7 +148,10 @@ export interface HardScenarioReceipt {
     | "keyboard-hint-label-parity-stress"
     | "row-state-parity-without-pointer-stress"
     | "quiet-chrome-card-nesting-stress"
-    | "scroll-shadow-sticky-header-density-stress";
+    | "scroll-shadow-sticky-header-density-stress"
+    | "popup-focus-keycap-visual-semantics-stress"
+    | "reduced-motion-animation-disable-stress"
+    | "command-search-highlighting-accessory-badges-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -232,6 +235,9 @@ export interface HardScenarioReceipt {
   rowStateParityWithoutPointer?: Record<string, unknown>;
   quietChromeCardNesting?: Record<string, unknown>;
   scrollShadowStickyHeaderDensity?: Record<string, unknown>;
+  popupFocusKeycapVisualSemantics?: Record<string, unknown>;
+  reducedMotionAnimationDisable?: Record<string, unknown>;
+  commandSearchHighlightingAccessoryBadges?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6734,6 +6740,104 @@ export async function runScrollShadowStickyHeaderDensityStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_scroll_shadow_sticky_header_density_receipt" } }],
     failure: { code: "missing_scroll_shadow_sticky_header_density_receipt", stepName: "declare-required-receipt", message: "Missing app-side scroll shadow, sticky header, and density receipts." },
     warnings: ["file_linear:scroll_shadow_sticky_header_density_receipts_missing"],
+  };
+}
+
+export async function runPopupFocusKeycapVisualSemanticsStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "popup-focus-keycap-visual-semantics-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_popup_focus_keycap_visual_semantics_receipt",
+    linearIssue: "file_linear:popup_focus_keycap_visual_semantics_receipts_missing",
+    popupFocusKeycapVisualSemantics: {
+      kind: "ux.popupFocusKeycapVisualSemantics", popupKeycapStressId: "loop-twenty-three-popup-focus-keycap",
+      requestedSurfaces: opts.surfaces ?? ["actionsDialog", "menuSyntaxTriggerPopup", "confirmPrompt"],
+      surfaceSamples: [], surface: null, popupKind: null, automationWindowId: null, osWindowId: null, parentAutomationWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, popupFocusKeycapVisualSemanticsReceipt: null,
+      keycapSamples: [], keycapRole: null, keycapLabel: null, shortcutLabel: null, normalizedShortcutTokens: [], platformGlyph: null,
+      focused: null, focusOwnerSemanticId: null, focusedButtonSemanticId: null, focusedKeycapMatchesFocusedButton: null,
+      escapeKeycapAvailable: null, enterKeycapAvailable: null, keycapFillToken: null, keycapGlyphToken: null,
+      keycapTextToken: null, focusRingToken: null, dangerSemanticOnLabelNotKeycap: null, disabledKeycapMuted: null,
+      shortcutGlyphNormalized: null, popupIsTopmostOwner: null, parentFocusUnchanged: null, parentSelectionUnchanged: null,
+      staleFocusReceiptRejected: null, wrongSurfaceKeycapRejected: null, noAccidentalExecution: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_popup_focus_keycap_visual_semantics_receipt" } }],
+    failure: { code: "missing_popup_focus_keycap_visual_semantics_receipt", stepName: "declare-required-receipt", message: "Missing app-side popup focus/keycap visual semantics receipts." },
+    warnings: ["file_linear:popup_focus_keycap_visual_semantics_receipts_missing"],
+  };
+}
+
+export async function runReducedMotionAnimationDisableStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fixture?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "reduced-motion-animation-disable-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_reduced_motion_animation_disable_receipt",
+    linearIssue: "file_linear:reduced_motion_animation_disable_receipts_missing",
+    reducedMotionAnimationDisable: {
+      kind: "ux.reducedMotionAnimationDisable", reducedMotionStressId: "loop-twenty-three-reduced-motion-animation-disable",
+      requestedSurfaces: opts.surfaces ?? ["main", "actionsDialog", "menuSyntaxTriggerPopup"], requestedFixture: opts.fixture ?? "reduced-motion",
+      surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, reducedMotionAnimationDisableReceipt: null,
+      motionPolicyReceipt: null, motionPreferenceSource: null, fixtureOnlyReducedMotion: true, systemPreferenceNotRead: true,
+      systemPreferenceNotMutated: true, animationSamples: [], animationName: null, transitionGeneration: null, frameId: null,
+      frameClockPaused: null, motionDurationMs: null, effectiveDurationMs: null, animatedOpacityStable: null,
+      animatedTransformStable: null, spinnerHiddenOrStatic: null, shimmerDisabled: null, loadingPulseDisabled: null,
+      autoFocusPreserved: null, selectedRowPreserved: null, cursorPositionPreserved: null, noLayoutShiftDuringMotionDisable: null,
+      staleMotionGenerationRejected: null, wrongSurfaceMotionRejected: null, noNativeInputRequired: true,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_reduced_motion_animation_disable_receipt" } }],
+    failure: { code: "missing_reduced_motion_animation_disable_receipt", stepName: "declare-required-receipt", message: "Missing app-side reduced-motion animation-disable receipts." },
+    warnings: ["file_linear:reduced_motion_animation_disable_receipts_missing"],
+  };
+}
+
+export async function runCommandSearchHighlightingAccessoryBadgesStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  query?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "command-search-highlighting-accessory-badges-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_command_search_highlighting_accessory_badges_receipt",
+    linearIssue: "file_linear:command_search_highlighting_accessory_badges_receipts_missing",
+    commandSearchHighlightingAccessoryBadges: {
+      kind: "ux.commandSearchHighlightAccessoryBadges", commandHighlightBadgeStressId: "loop-twenty-three-command-search-highlighting-accessory-badges",
+      requestedHosts: opts.hosts ?? ["main", "actionsDialog", "app-launcher", "menuSyntaxTriggerPopup"], query: opts.query ?? "agentic-loop-twenty-three",
+      hostSamples: [], host: null, popupKind: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, commandSearchHighlightingAccessoryBadgesReceipt: null,
+      querySamples: [], searchGeneration: null, commandRows: [], semanticId: null, commandId: null, commandLabel: null,
+      sectionLabel: null, highlightedRanges: [], highlightText: null, matchedQuery: null, highlightMatchesFilter: null,
+      highlightDoesNotMutateLabel: null, accessoryBadges: [], badgeKind: null, badgeLabel: null, badgeTooltip: null,
+      shortcutBadge: null, disabledBadge: null, noOpBadge: null, loadingBadge: null, accessoryOrderStable: null,
+      badgesMatchActionCatalog: null, disabledReasonVisible: null, loadingReasonVisible: null, staleBadgeRejected: null,
+      staleHighlightRejected: null, wrongHostCommandRejected: null, footerActionsStable: null, noAccidentalExecution: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_command_search_highlighting_accessory_badges_receipt" } }],
+    failure: { code: "missing_command_search_highlighting_accessory_badges_receipt", stepName: "declare-required-receipt", message: "Missing app-side command search highlighting/accessory badge receipts." },
+    warnings: ["file_linear:command_search_highlighting_accessory_badges_receipts_missing"],
   };
 }
 
