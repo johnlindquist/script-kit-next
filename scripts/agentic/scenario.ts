@@ -151,7 +151,10 @@ export interface HardScenarioReceipt {
     | "scroll-shadow-sticky-header-density-stress"
     | "popup-focus-keycap-visual-semantics-stress"
     | "reduced-motion-animation-disable-stress"
-    | "command-search-highlighting-accessory-badges-stress";
+    | "command-search-highlighting-accessory-badges-stress"
+    | "clipboard-copy-visual-feedback-stress"
+    | "portal-cancel-return-state-restoration-stress"
+    | "tooltip-hover-focus-affordance-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -238,6 +241,9 @@ export interface HardScenarioReceipt {
   popupFocusKeycapVisualSemantics?: Record<string, unknown>;
   reducedMotionAnimationDisable?: Record<string, unknown>;
   commandSearchHighlightingAccessoryBadges?: Record<string, unknown>;
+  clipboardCopyVisualFeedback?: Record<string, unknown>;
+  portalCancelReturnStateRestoration?: Record<string, unknown>;
+  tooltipHoverFocusAffordance?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6838,6 +6844,132 @@ export async function runCommandSearchHighlightingAccessoryBadgesStressScenario(
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_command_search_highlighting_accessory_badges_receipt" } }],
     failure: { code: "missing_command_search_highlighting_accessory_badges_receipt", stepName: "declare-required-receipt", message: "Missing app-side command search highlighting/accessory badge receipts." },
     warnings: ["file_linear:command_search_highlighting_accessory_badges_receipts_missing"],
+  };
+}
+
+export async function runClipboardCopyVisualFeedbackStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  pasteboardScope?: string;
+  noSystemPasteboard?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "clipboard-copy-visual-feedback-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_clipboard_copy_visual_feedback_receipt",
+    linearIssue: "file_linear:clipboard_copy_visual_feedback_receipts_missing",
+    clipboardCopyVisualFeedback: {
+      kind: "ux.clipboardCopyVisualFeedback",
+      clipboardCopyFeedbackStressId: "loop-twenty-four-clipboard-copy-visual-feedback",
+      requestedHosts: opts.hosts ?? ["file-search", "actionsDialog", "app-launcher"],
+      requestedFixture: opts.fixture ?? "agentic-copy-preview",
+      pasteboardScope: opts.pasteboardScope ?? "fixture",
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      hostSamples: [], host: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, clipboardCopyVisualFeedbackReceipt: null,
+      copyActionSemanticId: null, copyActionLabel: null, copyGeneration: null,
+      copyButtonStateBefore: null, copyButtonStateAfter: null, visibleCopiedState: null,
+      copiedStateDurationMs: null, copyToastReceipt: null, redactedPayloadPreview: null,
+      payloadFingerprint: null, fixturePasteboardUsed: null, systemPasteboardUnchanged: null,
+      originalPasteboardFingerprint: null, postRunPasteboardFingerprint: null,
+      noRawClipboardContentLogged: null, staleCopyGenerationRejected: null, wrongHostCopyRejected: null,
+      noAccidentalPaste: null, networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_clipboard_copy_visual_feedback_receipt" } }],
+    failure: { code: "missing_clipboard_copy_visual_feedback_receipt", stepName: "declare-required-receipt", message: "Missing app-side fixture-scoped copy visual feedback receipts." },
+    warnings: ["file_linear:clipboard_copy_visual_feedback_receipts_missing"],
+  };
+}
+
+export async function runPortalCancelReturnStateRestorationStressScenario(opts: {
+  session: string;
+  origins?: string[];
+  portal?: string;
+  query?: string;
+  cancelMethods?: string[];
+  fixture?: string;
+  noNativePicker?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "portal-cancel-return-state-restoration-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_portal_cancel_return_state_restoration_receipt",
+    linearIssue: "file_linear:portal_cancel_return_state_restoration_receipts_missing",
+    portalCancelReturnStateRestoration: {
+      kind: "ux.portalCancelReturnStateRestoration",
+      portalCancelReturnStressId: "loop-twenty-four-portal-cancel-return-state-restoration",
+      requestedOrigins: opts.origins ?? ["acp-composer", "notes"],
+      requestedPortal: opts.portal ?? "file-search",
+      requestedQuery: opts.query ?? "AGENTS.md",
+      requestedCancelMethods: opts.cancelMethods ?? ["escape", "back"],
+      requestedFixture: opts.fixture ?? "repo-file",
+      noNativePicker: opts.noNativePicker ?? true,
+      originSamples: [], origin: null, originAutomationWindowId: null, originGeneration: null,
+      originSemanticSurface: null, originStateReceipt: null, originElementsReceipt: null,
+      draftTextBeforePortal: null, cursorBeforePortal: null, selectionBeforePortal: null,
+      portalSessionId: null, portalSurface: null, portalAutomationWindowId: null, portalQuery: null,
+      portalSelectionBeforeCancel: null, cancelMethod: null, cancelReceipt: null,
+      returnTargetIdentity: null, returnGeneration: null, focusRestored: null, draftTextRestored: null,
+      cursorRestored: null, selectionRestored: null, filterRestored: null, scrollRestored: null,
+      noContextPartInserted: null, noPromptSubmit: null, noSelectionMutationDuringPortal: null,
+      stalePortalReturnRejected: null, foreignPortalEventRejected: null, wrongOriginReturnRejected: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_portal_cancel_return_state_restoration_receipt" } }],
+    failure: { code: "missing_portal_cancel_return_state_restoration_receipt", stepName: "declare-required-receipt", message: "Missing app-side portal cancel/back return restoration receipts." },
+    warnings: ["file_linear:portal_cancel_return_state_restoration_receipts_missing"],
+  };
+}
+
+export async function runTooltipHoverFocusAffordanceStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  targets?: string[];
+  fixture?: string;
+  inputModes?: string[];
+  noNativePointer?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "tooltip-hover-focus-affordance-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_tooltip_hover_focus_affordance_receipt",
+    linearIssue: "file_linear:tooltip_hover_focus_affordance_receipts_missing",
+    tooltipHoverFocusAffordance: {
+      kind: "ux.tooltipHoverFocusAffordance",
+      tooltipHoverFocusStressId: "loop-twenty-four-tooltip-hover-focus-affordance",
+      requestedSurfaces: opts.surfaces ?? ["main", "actionsDialog", "app-launcher"],
+      requestedTargets: opts.targets ?? ["truncated-row", "disabled-action", "footer-button"],
+      requestedFixture: opts.fixture ?? "agentic-tooltips",
+      requestedInputModes: opts.inputModes ?? ["protocol-hover", "keyboard-focus"],
+      noNativePointer: opts.noNativePointer ?? true,
+      surfaceSamples: [], surface: null, automationWindowId: null, osWindowId: null, semanticSurface: null,
+      stateReceipt: null, elementsReceipt: null, tooltipHoverFocusAffordanceReceipt: null,
+      targetSamples: [], targetSemanticId: null, targetRole: null, triggerMode: null,
+      hoverGeneration: null, focusGeneration: null, tooltipGeneration: null, tooltipText: null,
+      tooltipKind: null, tooltipAnchorBounds: null, tooltipBounds: null, tooltipPlacement: null,
+      hoverDelayMs: null, hoverDelayRespected: null, keyboardFocusOpensTooltip: null,
+      tooltipAccessibleDescriptionMatches: null, escapeDismissesTooltip: null, scrollDismissesTooltip: null,
+      focusLossDismissesTooltip: null, noFocusSteal: null, targetFocusPreserved: null,
+      doesNotCoverTarget: null, doesNotCoverFooter: null, doesNotCoverPopupOwner: null,
+      staleTooltipGenerationRejected: null, wrongSurfaceTooltipRejected: null, noAccidentalExecution: null,
+      networkAccessed: false, externalServiceContacted: false, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_tooltip_hover_focus_affordance_receipt" } }],
+    failure: { code: "missing_tooltip_hover_focus_affordance_receipt", stepName: "declare-required-receipt", message: "Missing app-side tooltip hover/focus affordance receipts." },
+    warnings: ["file_linear:tooltip_hover_focus_affordance_receipts_missing"],
   };
 }
 

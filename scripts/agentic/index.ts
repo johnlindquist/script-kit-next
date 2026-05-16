@@ -129,6 +129,12 @@
  *                         Fail-closed reduced-motion animation disable proof
  *   command-search-highlighting-accessory-badges-stress
  *                         Fail-closed command search highlight/badge proof
+ *   clipboard-copy-visual-feedback-stress
+ *                         Fail-closed fixture-scoped copy visual feedback proof
+ *   portal-cancel-return-state-restoration-stress
+ *                         Fail-closed portal cancel/back return restoration proof
+ *   tooltip-hover-focus-affordance-stress
+ *                         Fail-closed tooltip hover/focus affordance proof
  *   help                   Show this help
  *
  * Target threading:
@@ -212,6 +218,9 @@ import {
   runPopupFocusKeycapVisualSemanticsStressScenario,
   runReducedMotionAnimationDisableStressScenario,
   runCommandSearchHighlightingAccessoryBadgesStressScenario,
+  runClipboardCopyVisualFeedbackStressScenario,
+  runPortalCancelReturnStateRestorationStressScenario,
+  runTooltipHoverFocusAffordanceStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -973,6 +982,27 @@ function parseArgs() {
   const rawResizeCycles =
     resizeCyclesIdx >= 0 && args[resizeCyclesIdx + 1] ? Number(args[resizeCyclesIdx + 1]) : undefined;
   const resizeCycles = Number.isFinite(rawResizeCycles) ? rawResizeCycles : undefined;
+  const pasteboardScopeIdx = args.indexOf("--pasteboard-scope");
+  const pasteboardScope =
+    pasteboardScopeIdx >= 0 && args[pasteboardScopeIdx + 1] ? args[pasteboardScopeIdx + 1] : undefined;
+  const noSystemPasteboard = args.includes("--no-system-pasteboard");
+  const cancelMethodsIdx = args.indexOf("--cancel-methods");
+  const cancelMethods =
+    cancelMethodsIdx >= 0 && args[cancelMethodsIdx + 1]
+      ? args[cancelMethodsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noNativePicker = args.includes("--no-native-picker");
+  const targetsIdx = args.indexOf("--targets");
+  const targets =
+    targetsIdx >= 0 && args[targetsIdx + 1]
+      ? args[targetsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const inputModesIdx = args.indexOf("--input-modes");
+  const inputModes =
+    inputModesIdx >= 0 && args[inputModesIdx + 1]
+      ? args[inputModesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noNativePointer = args.includes("--no-native-pointer");
   return {
     recipe,
     session,
@@ -1078,6 +1108,13 @@ function parseArgs() {
     hosts,
     selectionCycles,
     resizeCycles,
+    pasteboardScope,
+    noSystemPasteboard,
+    cancelMethods,
+    noNativePicker,
+    targets,
+    inputModes,
+    noNativePointer,
   };
 }
 
@@ -2421,6 +2458,13 @@ const {
   hosts,
   selectionCycles,
   resizeCycles,
+  pasteboardScope,
+  noSystemPasteboard,
+  cancelMethods,
+  noNativePicker,
+  targets,
+  inputModes,
+  noNativePointer,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3646,6 +3690,24 @@ switch (recipe) {
     break;
   }
 
+  case "clipboard-copy-visual-feedback-stress": {
+    const proofBundle = await runClipboardCopyVisualFeedbackStressScenario({ session, hosts, fixture, pasteboardScope, noSystemPasteboard });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "clipboard-copy-visual-feedback-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Clipboard copy visual feedback stress failed closed; fixture pasteboard, visible copied state, toast, redaction, and stale copy receipts are missing", proofBundle };
+    break;
+  }
+
+  case "portal-cancel-return-state-restoration-stress": {
+    const proofBundle = await runPortalCancelReturnStateRestorationStressScenario({ session, origins, portal, query, cancelMethods, fixture, noNativePicker });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "portal-cancel-return-state-restoration-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Portal cancel return state restoration stress failed closed; origin draft, cursor, selection, filter, scroll, and no-insert receipts are missing", proofBundle };
+    break;
+  }
+
+  case "tooltip-hover-focus-affordance-stress": {
+    const proofBundle = await runTooltipHoverFocusAffordanceStressScenario({ session, surfaces, targets, fixture, inputModes, noNativePointer });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "tooltip-hover-focus-affordance-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Tooltip hover/focus affordance stress failed closed; protocol hover, keyboard focus, placement, dismissal, and no-cover receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3815,6 +3877,9 @@ switch (recipe) {
           { name: "popup-focus-keycap-visual-semantics-stress", description: "Fail-closed UX receipt contract for popup focus, keycap visual semantics, shortcut glyphs, and parent preservation", flags: ["--session", "--surfaces", "--json"] },
           { name: "reduced-motion-animation-disable-stress", description: "Fail-closed UX receipt contract for fixture-only reduced motion and disabled animation semantics", flags: ["--session", "--surfaces", "--fixture", "--json"] },
           { name: "command-search-highlighting-accessory-badges-stress", description: "Fail-closed UX receipt contract for command search highlighting, accessory badges, and action-catalog parity", flags: ["--session", "--hosts", "--query", "--json"] },
+          { name: "clipboard-copy-visual-feedback-stress", description: "Fail-closed UX receipt contract for fixture-scoped copy visual feedback and pasteboard isolation", flags: ["--session", "--hosts", "--fixture", "--pasteboard-scope", "--no-system-pasteboard", "--json"] },
+          { name: "portal-cancel-return-state-restoration-stress", description: "Fail-closed UX receipt contract for portal cancel/back origin restoration without insertion", flags: ["--session", "--origins", "--portal", "--query", "--cancel-methods", "--fixture", "--no-native-picker", "--json"] },
+          { name: "tooltip-hover-focus-affordance-stress", description: "Fail-closed UX receipt contract for tooltip hover/focus affordances and keyboard fallback", flags: ["--session", "--surfaces", "--targets", "--fixture", "--input-modes", "--no-native-pointer", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3888,6 +3953,9 @@ switch (recipe) {
           "proofBundle.streamProgressCancelVisualStability",
           "proofBundle.dictationMediaPermissionReadinessChurn",
           "proofBundle.animationFrameCaptureDeterminism",
+          "proofBundle.clipboardCopyVisualFeedback",
+          "proofBundle.portalCancelReturnStateRestoration",
+          "proofBundle.tooltipHoverFocusAffordance",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4204,6 +4272,12 @@ Available scenarios:
                          Emit fail-closed reduced-motion animation disable requirements
   command-search-highlighting-accessory-badges-stress
                          Emit fail-closed command search highlighting/accessory badge requirements
+  clipboard-copy-visual-feedback-stress
+                         Emit fail-closed clipboard copy visual feedback requirements
+  portal-cancel-return-state-restoration-stress
+                         Emit fail-closed portal cancel/back return restoration requirements
+  tooltip-hover-focus-affordance-stress
+                         Emit fail-closed tooltip hover/focus affordance requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4285,6 +4359,9 @@ Examples:
   bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,menuSyntaxTriggerPopup,confirmPrompt --json
   bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
   bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
+  bun scripts/agentic/index.ts clipboard-copy-visual-feedback-stress --session default --hosts file-search,actionsDialog,app-launcher --fixture agentic-copy-preview --pasteboard-scope fixture --no-system-pasteboard --json
+  bun scripts/agentic/index.ts portal-cancel-return-state-restoration-stress --session default --origins acp-composer,notes --portal file-search --query AGENTS.md --cancel-methods escape,back --fixture repo-file --no-native-picker --json
+  bun scripts/agentic/index.ts tooltip-hover-focus-affordance-stress --session default --surfaces main,actionsDialog,app-launcher --targets truncated-row,disabled-action,footer-button --fixture agentic-tooltips --input-modes protocol-hover,keyboard-focus --no-native-pointer --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
