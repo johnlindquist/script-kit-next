@@ -19,6 +19,7 @@ use gpui::AppContext as _;
 pub(crate) mod catalog;
 pub(crate) mod chat_window;
 pub(crate) mod client;
+pub(crate) mod composer_state;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod conversation_export;
