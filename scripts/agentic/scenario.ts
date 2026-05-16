@@ -121,7 +121,10 @@ export interface HardScenarioReceipt {
     | "accessibility-selected-text-fallback-stress"
     | "display-migration-visual-bounds-stress"
     | "native-picker-external-return-focus-stress"
-    | "drag-cancel-payload-scope-stress";
+    | "drag-cancel-payload-scope-stress"
+    | "runtime-appearance-churn-focused-input-stress"
+    | "power-resume-window-generation-stress"
+    | "menu-tray-notification-modal-interruption-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -172,6 +175,9 @@ export interface HardScenarioReceipt {
   displayMigrationVisualBounds?: Record<string, unknown>;
   nativePickerExternalReturnFocus?: Record<string, unknown>;
   dragCancelPayloadScope?: Record<string, unknown>;
+  runtimeAppearanceChurnFocusedInput?: Record<string, unknown>;
+  powerResumeWindowGeneration?: Record<string, unknown>;
+  menuTrayNotificationModalInterruption?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -4542,6 +4548,275 @@ export async function runDragCancelPayloadScopeStressScenario(opts: {
         "The harness fails closed until drag receipts prove scoped payload identity, cancel cleanup, no partial side effects, and stale/foreign drop rejection.",
     },
     warnings: ["file_linear:drag_cancel_payload_scope_receipts_missing"],
+  };
+}
+
+export async function runRuntimeAppearanceChurnFocusedInputStressScenario(opts: {
+  session: string;
+  surface?: string;
+  churn?: string[];
+  cycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "runtime-appearance-churn-focused-input-stress",
+    status: "fail",
+    runtimeAppearanceChurnFocusedInput: {
+      session: opts.session,
+      requiredReceipt: "ui.appearanceChurnFocusedInput",
+      appearanceChurnId: null,
+      surface: opts.surface ?? "acp-composer",
+      churn: opts.churn && opts.churn.length > 0 ? opts.churn : ["scale", "font", "theme"],
+      cycles: opts.cycles ?? 6,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      surfaceGenerationBefore: null,
+      surfaceGenerationAfter: null,
+      focusSemanticIdBefore: null,
+      focusSemanticIdAfter: null,
+      inputTextBefore: null,
+      inputTextAfter: null,
+      visibleTextBefore: null,
+      visibleTextAfter: null,
+      cursorRangeBefore: null,
+      cursorRangeAfter: null,
+      selectionRangeBefore: null,
+      selectionRangeAfter: null,
+      inputLayoutBefore: {
+        remPx: null,
+        fontFamily: null,
+        fontSizePx: null,
+        scaleFactor: null,
+        boundsPx: null,
+        visibleStart: null,
+        visibleEnd: null,
+        cursorInWindow: null,
+      },
+      inputLayoutAfter: {
+        remPx: null,
+        fontFamily: null,
+        fontSizePx: null,
+        scaleFactor: null,
+        boundsPx: null,
+        visibleStart: null,
+        visibleEnd: null,
+        cursorInWindow: null,
+      },
+      themeTokenFingerprintBefore: null,
+      themeTokenFingerprintAfter: null,
+      rendererTokenGenerationBefore: null,
+      rendererTokenGenerationAfter: null,
+      staleTokenRepaintDetected: null,
+      layoutShiftPxMax: null,
+      visibleTextPreserved: null,
+      cursorRangePreserved: null,
+      selectionRangePreserved: null,
+      focusPreserved: null,
+      wrongSurfaceMutationRejected: null,
+      forbiddenProofModes: ["screenshot_only", "config_write_only", "theme_name_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "runtime-appearance-churn-focused-input-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove runtime appearance churn preserves focused input text, visible text, cursor/selection, layout metrics, and renderer token generation.",
+      },
+    }],
+    failure: {
+      code: "missing_runtime_appearance_churn_focused_input_receipt",
+      stepName: "runtime-appearance-churn-focused-input-receipt",
+      message:
+        "The harness fails closed until ui.appearanceChurnFocusedInput receipts prove focused input continuity and stale token repaint rejection.",
+    },
+    warnings: ["file_linear:runtime_appearance_churn_focused_input_receipts_missing"],
+  };
+}
+
+export async function runPowerResumeWindowGenerationStressScenario(opts: {
+  session: string;
+  surface?: string;
+  event?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "power-resume-window-generation-stress",
+    status: "fail",
+    powerResumeWindowGeneration: {
+      session: opts.session,
+      requiredReceipt: "window.powerResumeGeneration",
+      resumeEventId: null,
+      event: opts.event ?? "sleep-wake",
+      surface: opts.surface ?? "main",
+      sessionEpochBefore: null,
+      sessionEpochAfter: null,
+      appGenerationBefore: null,
+      appGenerationAfter: null,
+      powerStateBefore: null,
+      powerStateAfter: null,
+      sleepObservedAtMs: null,
+      wakeObservedAtMs: null,
+      preSleepTarget: {
+        automationWindowId: null,
+        osWindowId: null,
+        semanticSurface: null,
+        windowGeneration: null,
+        targetFingerprint: null,
+      },
+      postWakeTarget: {
+        automationWindowId: null,
+        osWindowId: null,
+        semanticSurface: null,
+        windowGeneration: null,
+        targetFingerprint: null,
+      },
+      guards: {
+        preSleepTargetRejectedBeforeInput: null,
+        nativeInputDeliveryBlockedForStaleTarget: null,
+        batchDeliveryBlockedForStaleTarget: null,
+        gpuiEventDeliveryBlockedForStaleTarget: null,
+        screenshotDeliveryBlockedForStaleTarget: null,
+        staleScreenshotRejected: null,
+        wrongGenerationStateRejected: null,
+      },
+      revalidation: {
+        targetReResolvedAfterWake: null,
+        stateReceiptAfterWake: null,
+        elementsReceiptAfterWake: null,
+        screenshotReceiptAfterWake: null,
+        screenshotStateRevalidatedAfterWake: null,
+      },
+      continuity: {
+        focusSemanticIdBefore: null,
+        focusSemanticIdAfter: null,
+        selectedSemanticIdBefore: null,
+        selectedSemanticIdAfter: null,
+        cleanupConfirmed: null,
+      },
+      forbiddenProofModes: ["os_sleep_side_effect", "stale_target_retry", "screenshot_without_generation"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      initiatedOsSleep: false,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "power-resume-window-generation-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove power resume generation, stale pre-sleep target rejection, exact post-wake re-resolution, and fresh state/elements/screenshot receipts.",
+      },
+    }],
+    failure: {
+      code: "missing_power_resume_window_generation_receipt",
+      stepName: "power-resume-window-generation-receipt",
+      message:
+        "The harness fails closed until window.powerResumeGeneration receipts prove resume generations, stale-target refusal, post-wake revalidation, and cleanup.",
+    },
+    warnings: ["file_linear:power_resume_window_generation_receipts_missing"],
+  };
+}
+
+export async function runMenuTrayNotificationModalInterruptionStressScenario(opts: {
+  session: string;
+  host?: string;
+  activeSurface?: string;
+  interruptions?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "menu-tray-notification-modal-interruption-stress",
+    status: "fail",
+    menuTrayNotificationModalInterruption: {
+      session: opts.session,
+      requiredReceipt: "platform.modalInterruptionFocus",
+      interruptionStressId: null,
+      hostSurface: opts.host ?? "acpChat",
+      activeSurface: opts.activeSurface ?? "actionsDialog",
+      modalStackGenerationBefore: null,
+      modalStackGenerationAfter: null,
+      activeModalIdBefore: null,
+      activeModalIdAfter: null,
+      parentAutomationWindowId: null,
+      parentOsWindowId: null,
+      modalAutomationWindowId: null,
+      modalOsWindowId: null,
+      focusSemanticIdBefore: null,
+      focusSemanticIdAfter: null,
+      selectedSemanticIdBefore: null,
+      selectedSemanticIdAfter: null,
+      inputTextBefore: null,
+      inputTextAfter: null,
+      cursorRangeBefore: null,
+      cursorRangeAfter: null,
+      interruptions: (opts.interruptions && opts.interruptions.length > 0
+        ? opts.interruptions
+        : ["tray-menu", "app-menu", "notification"]).map((kind) => ({
+        kind,
+        interruptionId: null,
+        menuItemId: null,
+        notificationId: null,
+        notificationActionId: null,
+        actionTargetSurface: null,
+        wrongSurfaceActionRejected: null,
+        modalRemainedTopmost: null,
+        focusStolen: null,
+        selectionMutated: null,
+      })),
+      submitCountBefore: null,
+      submitCountAfter: null,
+      modalClosedDuringInterruption: null,
+      parentSelectionMutated: null,
+      promptSubmittedDuringInterruption: null,
+      notificationActionDeliveredToWrongSurface: null,
+      trayActionDeliveredToWrongSurface: null,
+      appMenuActionDeliveredToWrongSurface: null,
+      focusRestoredToActiveModal: null,
+      forbiddenProofModes: ["activation_only", "frontmost_app_only", "notification_clicked_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "menu-tray-notification-modal-interruption-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove tray/menu/notification interruptions preserve active modal focus, reject wrong-surface actions, and avoid selection/input mutation.",
+      },
+    }],
+    failure: {
+      code: "missing_menu_tray_notification_modal_interruption_receipt",
+      stepName: "menu-tray-notification-modal-interruption-receipt",
+      message:
+        "The harness fails closed until platform.modalInterruptionFocus receipts prove interruption identity, topmost modal preservation, wrong-surface rejection, and focus restoration.",
+    },
+    warnings: ["file_linear:menu_tray_notification_modal_interruption_receipts_missing"],
   };
 }
 

@@ -234,6 +234,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `drag-cancel-payload-scope-stress` is intentionally fail-closed until drag receipts expose drag session id, origin window identity, selected semantic id, payload fingerprint, redacted payload preview, drag preview identity, hover/drop target identity, cancel method, origin restoration, hover/drop target cleanup, clipboard/file/attachment/submit side-effect counts, stale drag rejection, and foreign drop rejection.
 
+`runtime-appearance-churn-focused-input-stress` is intentionally fail-closed until prompt and ACP input surfaces expose one focused-input appearance churn receipt covering runtime scale/font/theme changes, text preservation, cursor/selection continuity, layout metrics, renderer token generation, stale repaint rejection, and wrong-surface mutation rejection.
+
+`power-resume-window-generation-stress` is intentionally fail-closed until window receipts expose sleep/wake or platform-resume generations, pre-sleep target rejection, post-wake exact target re-resolution, fresh state/elements/screenshot revalidation, focus/selection preservation, and cleanup.
+
+`menu-tray-notification-modal-interruption-stress` is intentionally fail-closed until tray, app-menu, and notification activation receipts expose the active modal or prompt owner, interruption identity, wrong-surface action rejection, no focus steal, no selection/input mutation, no prompt submit, and focus restoration.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

@@ -116,6 +116,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For display migration visual bounds, prove source/target display identity, scale/rem metrics, focus/selection preservation, visible text bounds, screenshot-to-semantics alignment, wrong-display capture rejection, stale migration rejection, and no popup/main clobbering.
 - For native picker or external app return, prove origin surface identity, handoff request id, picker/external window identity, restored focus/selection/cursor, stale or foreign window event rejection, and no submit or selection mutation during handoff.
 - For drag cancellation, prove drag session identity, scoped payload fingerprint, redacted preview, hover/drop target cleanup, origin focus/selection restoration, no clipboard/file/attachment/prompt side effects, stale drag rejection, and foreign drop rejection.
+- For runtime appearance churn while focused input is active, prove surface/window identity, focus, text, visible text, cursor/selection, rem/font/scale/layout metrics, theme and renderer token generations, stale token repaint rejection, and wrong-surface mutation rejection.
+- For power resume recovery, prove pre-sleep target identity, post-wake target generation, stale target refusal before native/batch/GPUI/screenshot delivery, exact re-resolution, fresh state/elements/screenshot receipts, focus/selection preservation, and cleanup.
+- For menu/tray/notification interruption, prove active modal/prompt identity, interruption identity, wrong-surface action rejection, topmost modal preservation, no focus steal, no selection/input/cursor mutation, no prompt submit, and focus restoration.
 
 ## The Pattern
 
