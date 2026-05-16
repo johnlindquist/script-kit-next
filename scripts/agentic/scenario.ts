@@ -190,7 +190,10 @@ export interface HardScenarioReceipt {
     | "script-output-inspector-folding-recovery-stress"
     | "app-launcher-icon-grid-keyboard-navigation-stress"
     | "browser-history-time-grouped-privacy-stress"
-    | "settings-preferences-search-reset-preview-stress";
+    | "settings-preferences-search-reset-preview-stress"
+    | "settings-preferences-readonly-detail-panel-stress"
+    | "design-picker-preview-restore-visual-stress"
+    | "dictation-history-transcript-preview-redaction-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -316,6 +319,9 @@ export interface HardScenarioReceipt {
   appLauncherIconGridKeyboardNavigationReceipt?: Record<string, unknown>;
   browserHistoryTimeGroupedPrivacyReceipt?: Record<string, unknown>;
   settingsPreferencesSearchResetPreviewReceipt?: Record<string, unknown>;
+  settingsPreferencesReadonlyDetailPanelReceipt?: Record<string, unknown>;
+  designPickerPreviewRestoreVisualReceipt?: Record<string, unknown>;
+  dictationHistoryTranscriptPreviewRedactionReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8969,6 +8975,148 @@ export async function runSettingsPreferencesSearchResetPreviewStressScenario(opt
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_settings_preferences_search_reset_preview_receipt" } }],
     failure: { code: "missing_settings_preferences_search_reset_preview_receipt", stepName: "declare-required-receipt", message: "Missing app-side Settings preferences search/reset preview receipts." },
     warnings: ["file_linear:settings_preferences_search_reset_preview_receipts_missing"],
+  };
+}
+
+export async function runSettingsPreferencesReadonlyDetailPanelStressScenario(opts: {
+  session: string; fixture?: string; sections?: string[]; queries?: string[];
+  navigationSteps?: string[]; inputModes?: string[]; noNativeInput?: boolean;
+  noNativePointer?: boolean; noSystemPasteboard?: boolean; noNetwork?: boolean;
+  noExternalServices?: boolean; noSecurityPrompts?: boolean; noSystemSettings?: boolean;
+  noTccMutation?: boolean; noConfigWrite?: boolean; noSubmit?: boolean;
+  dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "settings-preferences-readonly-detail-panel-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_settings_preferences_readonly_detail_panel_receipt",
+    linearIssue: "file_linear:settings_preferences_readonly_detail_panel_receipts_missing",
+    settingsPreferencesReadonlyDetailPanelReceipt: {
+      kind: "ux.settingsPreferencesReadonlyDetailPanel",
+      settingsPreferencesReadonlyDetailPanelStressId: "loop-thirty-seven-settings-preferences-readonly-detail-panel",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-settings-preferences-readonly",
+      requestedSections: opts.sections ?? ["appearance", "windowing", "history", "advanced"],
+      requestedQueries: opts.queries ?? ["theme", "mini", "history", "missing"],
+      requestedNavigationSteps: opts.navigationSteps ?? ["filter", "section-click", "detail-focus", "clear-filter", "escape-restore"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true, noSecurityPrompts: opts.noSecurityPrompts ?? true,
+      noSystemSettings: opts.noSystemSettings ?? true, noTccMutation: opts.noTccMutation ?? true,
+      noConfigWrite: opts.noConfigWrite ?? true, noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureCatalogId: null, settingsSurfaceId: null, selectedSectionBefore: null,
+      selectedSectionAfter: null, detailPanelGeneration: null, visibleRowLabels: [],
+      visibleRowBounds: [], visibleTextBounds: [], detailBodyBounds: null, detailFooterBounds: null,
+      emptyStateCopy: null, disabledApplySaveReason: null, configFingerprintBefore: null,
+      configFingerprintAfter: null, noSetupOrSecurityPrompt: true, staleDetailGenerationRejected: null,
+      wrongSectionMutationRejected: null, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_settings_preferences_readonly_detail_panel_receipt" } }],
+    failure: { code: "missing_settings_preferences_readonly_detail_panel_receipt", stepName: "declare-required-receipt", message: "Missing app-side Settings read-only detail panel receipts." },
+    warnings: ["file_linear:settings_preferences_readonly_detail_panel_receipts_missing"],
+  };
+}
+
+export async function runDesignPickerPreviewRestoreVisualStressScenario(opts: {
+  session: string; fixture?: string; catalogIds?: string[]; previewSteps?: string[];
+  inputModes?: string[]; noNativeInput?: boolean; noNativePointer?: boolean;
+  noSystemPasteboard?: boolean; noNetwork?: boolean; noExternalServices?: boolean;
+  noSecurityPrompts?: boolean; noSystemSettings?: boolean; noTccMutation?: boolean;
+  noConfigWrite?: boolean; noDesignWrite?: boolean; noSubmit?: boolean;
+  dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "design-picker-preview-restore-visual-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_design_picker_preview_restore_visual_receipt",
+    linearIssue: "file_linear:design_picker_preview_restore_visual_receipts_missing",
+    designPickerPreviewRestoreVisualReceipt: {
+      kind: "ux.designPickerPreviewRestoreVisual",
+      designPickerPreviewRestoreVisualStressId: "loop-thirty-seven-design-picker-preview-restore-visual",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-design-picker-preview",
+      requestedCatalogIds: opts.catalogIds ?? ["default", "compact", "high-contrast"],
+      requestedPreviewSteps: opts.previewSteps ?? ["open-picker", "preview-next", "preview-previous", "filter", "escape-restore", "cmd-w-restore"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true, noSecurityPrompts: opts.noSecurityPrompts ?? true,
+      noSystemSettings: opts.noSystemSettings ?? true, noTccMutation: opts.noTccMutation ?? true,
+      noConfigWrite: opts.noConfigWrite ?? true, noDesignWrite: opts.noDesignWrite ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureDesignCatalogId: null, activeDesignIdBeforePreview: null, previewDesignId: null,
+      previewGeneration: null, themeTokenFingerprintsBefore: [], themeTokenFingerprintsPreview: [],
+      themeTokenFingerprintsRestored: [], visiblePickerRowIds: [], visiblePickerRowLabels: [],
+      visiblePickerRowBounds: [], visibleTextBounds: [], selectedPreviewRowVisible: null,
+      screenshotSemanticTargetIdentity: null, escapeRestoresPreviewState: null,
+      cmdWRestoresPreviewState: null, persistedDesignFingerprintBefore: null,
+      persistedDesignFingerprintAfter: null, stalePreviewGenerationRejected: null,
+      wrongSurfacePreviewRejected: null, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_design_picker_preview_restore_visual_receipt" } }],
+    failure: { code: "missing_design_picker_preview_restore_visual_receipt", stepName: "declare-required-receipt", message: "Missing app-side Design Picker preview restore receipts." },
+    warnings: ["file_linear:design_picker_preview_restore_visual_receipts_missing"],
+  };
+}
+
+export async function runDictationHistoryTranscriptPreviewRedactionStressScenario(opts: {
+  session: string; fixture?: string; transcriptFixtures?: string[]; queries?: string[];
+  selectionCycles?: number; viewSteps?: string[]; inputModes?: string[]; dictationFixture?: string;
+  noMicrophone?: boolean; noMediaCapture?: boolean; noNativeInput?: boolean;
+  noNativePointer?: boolean; noSystemPasteboard?: boolean; noNetwork?: boolean;
+  noExternalServices?: boolean; noSecurityPrompts?: boolean; noSystemSettings?: boolean;
+  noTccMutation?: boolean; noSubmit?: boolean; dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "dictation-history-transcript-preview-redaction-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_dictation_history_transcript_preview_redaction_receipt",
+    linearIssue: "file_linear:dictation_history_transcript_preview_redaction_receipts_missing",
+    dictationHistoryTranscriptPreviewRedactionReceipt: {
+      kind: "ux.dictationHistoryTranscriptPreviewRedaction",
+      dictationHistoryTranscriptPreviewRedactionStressId: "loop-thirty-seven-dictation-history-transcript-preview-redaction",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-dictation-history-preview",
+      requestedTranscriptFixtures: opts.transcriptFixtures ?? ["short", "long", "redacted", "missing-audio", "emoji"],
+      requestedQueries: opts.queries ?? ["meeting", "error", "emoji", "missing"],
+      selectionCycles: opts.selectionCycles ?? 6,
+      requestedViewSteps: opts.viewSteps ?? ["filter", "preview", "expand-redacted", "clear-filter", "escape-restore"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      dictationFixture: opts.dictationFixture ?? "saved-local",
+      noMicrophone: opts.noMicrophone ?? true, noMediaCapture: opts.noMediaCapture ?? true,
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true, noSecurityPrompts: opts.noSecurityPrompts ?? true,
+      noSystemSettings: opts.noSystemSettings ?? true, noTccMutation: opts.noTccMutation ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureDictationStoreId: null, transcriptRowIds: [], transcriptGeneration: null,
+      queryGeneration: null, selectedTranscriptBefore: null, selectedTranscriptAfter: null,
+      previewGeneration: null, previewSourceId: null, previewRenderKind: null,
+      visiblePreviewTextBounds: [], redactedTranscriptFingerprint: null,
+      missingAudioFallbackCopy: null, emojiGraphemeBounds: [], footerInputNonOverlapping: null,
+      noRawTranscriptLeak: null, noRawAudioPathLeak: null, noMicrophonePermissionRequest: true,
+      noMediaCaptureRequest: true, staleTranscriptGenerationRejected: null,
+      wrongRowPreviewRejected: null, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_dictation_history_transcript_preview_redaction_receipt" } }],
+    failure: { code: "missing_dictation_history_transcript_preview_redaction_receipt", stepName: "declare-required-receipt", message: "Missing app-side Dictation History transcript preview redaction receipts." },
+    warnings: ["file_linear:dictation_history_transcript_preview_redaction_receipts_missing"],
   };
 }
 
