@@ -110,6 +110,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For cross-surface export provenance, prove the payload origin surface, generation, selected semantic id, redacted preview, destination identity, stale-source rejection, and cleanup. Clipboard or drag side effects alone are not proof.
 - Restart/recovery recipes must gate every promoted target with a session epoch. If the epoch changes, the harness must refuse native, batch, and GPUI input before delivery, then re-resolve the exact target.
 - For stale-target recovery, prove stale window targets are rejected, exact targets are re-resolved after restart or id churn, no stale input is delivered, and session cleanup ran. Never retry by kind without an identity receipt.
+- For menu syntax ambiguity, prove tolerant diagnostics, skipped malformed fragments, selected command identity, and no accidental execution before submitting any command.
+- For IME composition, prove composition start/update/commit boundaries, no premature submit/actions, and final committed text semantics. Plain key events are not enough.
+- For selected-text fallback, prove permission denial/staleness, redaction, fallback source, and safe action disablement. Never trust stale frontmost-app context or raw selected text logs.
 
 ## The Pattern
 

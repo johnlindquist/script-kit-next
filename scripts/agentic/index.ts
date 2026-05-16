@@ -57,6 +57,12 @@
  *                         Fail-closed cross-surface export provenance proof
  *   dev-session-recovery-stale-target-stress
  *                         Pass-now stale target recovery proof
+ *   menu-syntax-ambiguity-diagnostics-stress
+ *                         Fail-closed menu syntax ambiguity diagnostics proof
+ *   ime-composition-input-boundary-stress
+ *                         Fail-closed IME composition boundary proof
+ *   accessibility-selected-text-fallback-stress
+ *                         Fail-closed selected-text fallback proof
  *   help                   Show this help
  *
  * Target threading:
@@ -104,6 +110,9 @@ import {
   runModalStackArbitrationStressScenario,
   runCrossSurfaceExportProvenanceStressScenario,
   runDevSessionRecoveryStaleTargetStressScenario,
+  runMenuSyntaxAmbiguityDiagnosticsStressScenario,
+  runImeCompositionInputBoundaryStressScenario,
+  runAccessibilitySelectedTextFallbackStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -2694,6 +2703,48 @@ switch (recipe) {
     break;
   }
 
+  case "menu-syntax-ambiguity-diagnostics-stress": {
+    const proofBundle = await runMenuSyntaxAmbiguityDiagnosticsStressScenario({
+      session,
+      query,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "menu-syntax-ambiguity-diagnostics-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Menu syntax ambiguity diagnostics stress failed closed; parse diagnostics, skipped fragments, selection identity, and execution guard receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "ime-composition-input-boundary-stress": {
+    const proofBundle = await runImeCompositionInputBoundaryStressScenario({ session });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "ime-composition-input-boundary-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "IME composition input boundary stress failed closed; composition lifecycle, premature action guards, and committed text receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "accessibility-selected-text-fallback-stress": {
+    const proofBundle = await runAccessibilitySelectedTextFallbackStressScenario({ session });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "accessibility-selected-text-fallback-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Accessibility selected-text fallback stress failed closed; permission, stale-context, redaction, and fallback receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2827,6 +2878,9 @@ switch (recipe) {
           { name: "modal-stack-arbitration-stress", description: "Fail-closed stacked modal topmost-owner key routing and parent focus/selection restoration receipt", flags: ["--session", "--host", "--json"] },
           { name: "cross-surface-export-provenance-stress", description: "Fail-closed cross-surface export provenance, redaction, destination insertion, and stale-source receipt", flags: ["--session", "--source", "--destination", "--export-mode", "--query", "--range", "--json"] },
           { name: "dev-session-recovery-stale-target-stress", description: "Pass-now stale target session-epoch rejection, exact re-resolution, no stale input, and cleanup receipt", flags: ["--session", "--entry", "--kind", "--index", "--restart-mode", "--json"] },
+          { name: "menu-syntax-ambiguity-diagnostics-stress", description: "Fail-closed menu syntax parse diagnostics, skipped fragments, selection identity, and no-execute guard receipt", flags: ["--session", "--query", "--json"] },
+          { name: "ime-composition-input-boundary-stress", description: "Fail-closed IME composition lifecycle, premature action guard, and committed text receipt", flags: ["--session", "--json"] },
+          { name: "accessibility-selected-text-fallback-stress", description: "Fail-closed selected-text permission fallback, stale-context rejection, redaction, and safe-disable receipt", flags: ["--session", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2888,6 +2942,9 @@ switch (recipe) {
           "proofBundle.modalStackArbitration",
           "proofBundle.crossSurfaceExport",
           "proofBundle.sessionRecovery",
+          "proofBundle.menuSyntaxAmbiguity",
+          "proofBundle.imeCompositionBoundary",
+          "proofBundle.accessibilitySelectedTextFallback",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2976,6 +3033,12 @@ Recipes:
                          Fail-closed cross-surface export provenance proof
   dev-session-recovery-stale-target-stress
                          Pass-now stale target recovery proof
+  menu-syntax-ambiguity-diagnostics-stress
+                         Fail-closed menu syntax ambiguity diagnostics proof
+  ime-composition-input-boundary-stress
+                         Fail-closed IME composition boundary proof
+  accessibility-selected-text-fallback-stress
+                         Fail-closed selected-text fallback proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3060,6 +3123,12 @@ Available scenarios:
                          Emit fail-closed cross-surface export provenance requirements
   dev-session-recovery-stale-target-stress
                          Run pass-now stale target session recovery proof
+  menu-syntax-ambiguity-diagnostics-stress
+                         Emit fail-closed menu syntax ambiguity requirements
+  ime-composition-input-boundary-stress
+                         Emit fail-closed IME composition requirements
+  accessibility-selected-text-fallback-stress
+                         Emit fail-closed selected-text fallback requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3105,6 +3174,9 @@ Examples:
   bun scripts/agentic/index.ts modal-stack-arbitration-stress --session default --json
   bun scripts/agentic/index.ts cross-surface-export-provenance-stress --session default --source file-search --destination acp-composer --export-mode copy --query AGENTS.md --json
   bun scripts/agentic/index.ts dev-session-recovery-stale-target-stress --session default --entry clipboard-history-actions --kind actionsDialog --restart-mode stop-start --json
+  bun scripts/agentic/index.ts menu-syntax-ambiguity-diagnostics-stress --session default --query '>open @file !bad ~AGENTS.md' --json
+  bun scripts/agentic/index.ts ime-composition-input-boundary-stress --session default --json
+  bun scripts/agentic/index.ts accessibility-selected-text-fallback-stress --session default --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
