@@ -228,6 +228,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `accessibility-selected-text-fallback-stress` is intentionally fail-closed until selected-text capture exposes permission-denied fallback, stale frontmost-context rejection, private text redaction, and safe action disablement without opening System Settings or mutating TCC.
 
+`display-migration-visual-bounds-stress` is intentionally fail-closed until window/display receipts expose source and target display ids, display bounds, scale factor, rem size, semantic surface identity, visible text bounds, focus and selection preservation, screenshot-to-semantics alignment, wrong-display capture rejection, stale migration rejection, and no popup/main clobbering.
+
+`native-picker-external-return-focus-stress` is intentionally fail-closed until native picker and external-app handoff receipts expose origin window identity, origin focus/selection/cursor state, handoff request id, picker or external window identity, return target identity, restored focus/selection/cursor proof, stale or foreign window event rejection, and no submit or selection mutation during handoff.
+
+`drag-cancel-payload-scope-stress` is intentionally fail-closed until drag receipts expose drag session id, origin window identity, selected semantic id, payload fingerprint, redacted payload preview, drag preview identity, hover/drop target identity, cancel method, origin restoration, hover/drop target cleanup, clipboard/file/attachment/submit side-effect counts, stale drag rejection, and foreign drop rejection.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

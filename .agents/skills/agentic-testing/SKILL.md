@@ -113,6 +113,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For menu syntax ambiguity, prove tolerant diagnostics, skipped malformed fragments, selected command identity, and no accidental execution before submitting any command.
 - For IME composition, prove composition start/update/commit boundaries, no premature submit/actions, and final committed text semantics. Plain key events are not enough.
 - For selected-text fallback, prove permission denial/staleness, redaction, fallback source, and safe action disablement. Never trust stale frontmost-app context or raw selected text logs.
+- For display migration visual bounds, prove source/target display identity, scale/rem metrics, focus/selection preservation, visible text bounds, screenshot-to-semantics alignment, wrong-display capture rejection, stale migration rejection, and no popup/main clobbering.
+- For native picker or external app return, prove origin surface identity, handoff request id, picker/external window identity, restored focus/selection/cursor, stale or foreign window event rejection, and no submit or selection mutation during handoff.
+- For drag cancellation, prove drag session identity, scoped payload fingerprint, redacted preview, hover/drop target cleanup, origin focus/selection restoration, no clipboard/file/attachment/prompt side effects, stale drag rejection, and foreign drop rejection.
 
 ## The Pattern
 

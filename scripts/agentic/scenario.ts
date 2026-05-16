@@ -118,7 +118,10 @@ export interface HardScenarioReceipt {
     | "dev-session-recovery-stale-target-stress"
     | "menu-syntax-ambiguity-diagnostics-stress"
     | "ime-composition-input-boundary-stress"
-    | "accessibility-selected-text-fallback-stress";
+    | "accessibility-selected-text-fallback-stress"
+    | "display-migration-visual-bounds-stress"
+    | "native-picker-external-return-focus-stress"
+    | "drag-cancel-payload-scope-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -166,6 +169,9 @@ export interface HardScenarioReceipt {
   menuSyntaxAmbiguity?: Record<string, unknown>;
   imeCompositionBoundary?: Record<string, unknown>;
   accessibilitySelectedTextFallback?: Record<string, unknown>;
+  displayMigrationVisualBounds?: Record<string, unknown>;
+  nativePickerExternalReturnFocus?: Record<string, unknown>;
+  dragCancelPayloadScope?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -4276,6 +4282,266 @@ export async function runAccessibilitySelectedTextFallbackStressScenario(opts: {
         "The harness fails closed until platform selected-text fallback receipts prove permission handling, stale-context rejection, redaction, and safe action disablement.",
     },
     warnings: ["file_linear:accessibility_selected_text_fallback_receipts_missing"],
+  };
+}
+
+export async function runDisplayMigrationVisualBoundsStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fromDisplay?: string;
+  toDisplay?: string;
+}): Promise<HardScenarioReceipt> {
+  const surfaces = opts.surfaces && opts.surfaces.length > 0
+    ? opts.surfaces
+    : ["main", "actionsDialog", "promptPopup", "acpDetached", "notes"];
+
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "display-migration-visual-bounds-stress",
+    status: "fail",
+    displayMigrationVisualBounds: {
+      session: opts.session,
+      requiredReceipt: "window.displayMigrationVisualBounds",
+      migrationGeneration: null,
+      sourceDisplay: {
+        sourceDisplayId: opts.fromDisplay ?? "primary",
+        sourceDisplayBoundsPx: null,
+        displayScaleFactorBefore: null,
+      },
+      targetDisplay: {
+        targetDisplayId: opts.toDisplay ?? "external",
+        targetDisplayBoundsPx: null,
+        displayScaleFactorAfter: null,
+      },
+      surfaces: surfaces.map((surfaceClass) => ({
+        surfaceClass,
+        automationWindowId: null,
+        osWindowId: null,
+        semanticSurface: null,
+        before: {
+          windowBoundsBefore: null,
+          contentBoundsBefore: null,
+          remPx: null,
+          focusSemanticIdBefore: null,
+          selectedSemanticIdBefore: null,
+          visibleTextBoundsBefore: [],
+          textClipState: null,
+        },
+        after: {
+          windowBoundsAfter: null,
+          contentBoundsAfter: null,
+          remPx: null,
+          focusSemanticIdAfter: null,
+          selectedSemanticIdAfter: null,
+          visibleTextBoundsAfter: [],
+          textClipState: null,
+        },
+        assertions: {
+          displayChangedOrReceiptExplainsNoop: false,
+          windowFullyVisibleOnTargetDisplay: false,
+          scaleFactorReceiptPresent: false,
+          focusPreserved: false,
+          selectionPreserved: false,
+          visibleTextBoundsPreservedOrReflowedWithReceipt: false,
+          screenshotSemanticAlignment: false,
+          wrongDisplayCaptureRejected: false,
+          staleDisplayMigrationRejected: false,
+          popupMainClobbered: null,
+        },
+      })),
+      forbiddenProofModes: ["screenshot_only", "window_bounds_only", "focused_app_label_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "display-migration-visual-bounds-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove display migration visual bounds, scale/rem metrics, focus/selection preservation, screenshot-to-semantics alignment, and wrong-display rejection.",
+      },
+    }],
+    failure: {
+      code: "missing_display_migration_visual_bounds_receipt",
+      stepName: "display-migration-visual-bounds-receipt",
+      message:
+        "The harness fails closed until display migration receipts prove text bounds, display identity, focus/selection, stale migration rejection, and no popup/main clobbering.",
+    },
+    warnings: ["file_linear:display_migration_visual_bounds_receipts_missing"],
+  };
+}
+
+export async function runNativePickerExternalReturnFocusStressScenario(opts: {
+  session: string;
+  origin?: string;
+  handoff?: string;
+  foreignApp?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "native-picker-external-return-focus-stress",
+    status: "fail",
+    nativePickerExternalReturnFocus: {
+      session: opts.session,
+      requiredReceipt: "handoff.returnFocus",
+      handoffRequestId: null,
+      origin: {
+        originSurface: opts.origin ?? "acp",
+        originAutomationWindowId: null,
+        originOsWindowId: null,
+        originSemanticSurface: null,
+        originSelectionSemanticId: null,
+        originCursorRange: null,
+        originSurfaceGeneration: null,
+      },
+      handoff: {
+        kind: opts.handoff ?? "file-picker",
+        nativePickerWindowId: null,
+        externalBundleId: opts.foreignApp ?? "Finder",
+        externalWindowId: null,
+        openedByOriginSurface: false,
+        noSubmitDuringHandoff: false,
+      },
+      return: {
+        returnGeneration: null,
+        returnTargetAutomationWindowId: null,
+        returnTargetOsWindowId: null,
+        focusRestoredToOrigin: false,
+        selectionRestoredToOrigin: false,
+        cursorRangeRestored: false,
+      },
+      eventGuards: {
+        staleWindowEventRejected: false,
+        foreignWindowEventRejected: false,
+        foreignWindowEventDelivered: null,
+        staleReturnTargetUsed: null,
+        selectionMutatedDuringHandoff: null,
+        actionSubmittedDuringHandoff: null,
+      },
+      forbiddenProofModes: ["frontmost_app_only", "focus_label_only", "native_picker_opened_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "native-picker-external-return-focus-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove native picker or external app return focus, origin identity, restored selection/cursor, and stale or foreign window event rejection.",
+      },
+    }],
+    failure: {
+      code: "missing_native_picker_external_return_focus_receipt",
+      stepName: "native-picker-external-return-focus-receipt",
+      message:
+        "The harness fails closed until native handoff receipts prove exact-origin return focus and reject stale or foreign window events before delivery.",
+    },
+    warnings: ["file_linear:native_picker_external_return_focus_receipts_missing"],
+  };
+}
+
+export async function runDragCancelPayloadScopeStressScenario(opts: {
+  session: string;
+  source?: string;
+  hoverTarget?: string;
+  cancel?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "drag-cancel-payload-scope-stress",
+    status: "fail",
+    dragCancelPayloadScope: {
+      session: opts.session,
+      requiredReceipt: "drag.payloadScope",
+      dragSessionId: null,
+      origin: {
+        originSurface: opts.source ?? "file-search",
+        originAutomationWindowId: null,
+        originOsWindowId: null,
+        originSelectedSemanticId: null,
+        originFocusSemanticId: null,
+        originSurfaceGeneration: null,
+      },
+      payload: {
+        payloadFingerprint: null,
+        redactedPayloadPreview: null,
+        payloadKind: null,
+        dragPreviewIdentity: null,
+        payloadScopedToDragSession: false,
+      },
+      duringDrag: {
+        hoverTargetBeforeCancel: opts.hoverTarget ?? "drop-prompt",
+        dropTargetBeforeCancel: null,
+        nativeDragActive: null,
+      },
+      cancel: {
+        cancelMethod: opts.cancel ?? "escape",
+        escapeDuringDragCancelled: false,
+        dragSessionClosed: false,
+      },
+      afterCancel: {
+        originStateRestored: false,
+        focusSemanticIdAfter: null,
+        selectedSemanticIdAfter: null,
+        hoverTargetsCleared: false,
+        dropTargetsCleared: false,
+      },
+      sideEffects: {
+        clipboardChangeCountBefore: null,
+        clipboardChangeCountAfter: null,
+        fileMutationCount: null,
+        temporaryFileCount: null,
+        partialPayloadDelivered: null,
+        attachmentInsertedDuringCancel: null,
+        promptSubmittedDuringCancel: null,
+      },
+      negativeGuards: {
+        foreignDropRejected: false,
+        staleDragSessionRejected: false,
+      },
+      forbiddenProofModes: ["drag_preview_only", "clipboard_side_effect_only", "hover_label_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "drag-cancel-payload-scope-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove drag cancellation payload scope, hover/drop cleanup, origin restoration, and clipboard/file/attachment/prompt side-effect boundaries.",
+      },
+    }],
+    failure: {
+      code: "missing_drag_cancel_payload_scope_receipt",
+      stepName: "drag-cancel-payload-scope-receipt",
+      message:
+        "The harness fails closed until drag receipts prove scoped payload identity, cancel cleanup, no partial side effects, and stale/foreign drop rejection.",
+    },
+    warnings: ["file_linear:drag_cancel_payload_scope_receipts_missing"],
   };
 }
 
