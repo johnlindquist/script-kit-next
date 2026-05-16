@@ -181,7 +181,10 @@ export interface HardScenarioReceipt {
     | "acp-transcript-stream-retry-virtualization-stress"
     | "acp-plugin-skill-entry-thread-affinity-stress"
     | "notes-cart-acp-handoff-dedupe-stress"
-    | "root-file-source-filter-pagination-footer-stress";
+    | "root-file-source-filter-pagination-footer-stress"
+    | "file-search-directory-breadcrumb-restoration-stress"
+    | "emoji-picker-skin-tone-category-ux-stress"
+    | "root-window-source-filter-activation-refusal-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -298,6 +301,9 @@ export interface HardScenarioReceipt {
   acpPluginSkillEntryThreadAffinityReceipt?: Record<string, unknown>;
   notesCartAcpHandoffDedupeReceipt?: Record<string, unknown>;
   rootFileSourceFilterPaginationFooterReceipt?: Record<string, unknown>;
+  fileSearchDirectoryBreadcrumbRestorationReceipt?: Record<string, unknown>;
+  emojiPickerSkinToneCategoryUxReceipt?: Record<string, unknown>;
+  rootWindowSourceFilterActivationRefusalReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8450,6 +8456,223 @@ export async function runRootFileSourceFilterPaginationFooterStressScenario(opts
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_root_file_source_filter_pagination_footer_receipt" } }],
     failure: { code: "missing_root_file_source_filter_pagination_footer_receipt", stepName: "declare-required-receipt", message: "Missing app-side root file source-filter pagination footer receipts." },
     warnings: ["file_linear:root_file_source_filter_pagination_footer_receipts_missing"],
+  };
+}
+
+export async function runFileSearchDirectoryBreadcrumbRestorationStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  startDir?: string;
+  queries?: string[];
+  navigationSteps?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noQuickLook?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "file-search-directory-breadcrumb-restoration-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_file_search_directory_breadcrumb_restoration_receipt",
+    linearIssue: "file_linear:file_search_directory_breadcrumb_restoration_receipts_missing",
+    fileSearchDirectoryBreadcrumbRestorationReceipt: {
+      kind: "ux.fileSearchDirectoryBreadcrumbRestoration",
+      fileSearchDirectoryBreadcrumbRestorationStressId: "loop-thirty-four-file-search-directory-breadcrumb-restoration",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-file-tree-breadcrumbs",
+      startDir: opts.startDir ?? "repo-root",
+      requestedQueries: opts.queries ?? ["AGENTS", "src", "missing"],
+      requestedNavigationSteps: opts.navigationSteps ?? ["enter-directory", "breadcrumb-parent", "back", "forward", "filter-tighten", "clear-filter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true,
+      noQuickLook: opts.noQuickLook ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureDirectoryTreeId: null,
+      rootFolderFingerprint: null,
+      breadcrumbSegmentIds: [],
+      redactedBreadcrumbLabels: [],
+      onlyInFilterChipId: null,
+      renderedInputText: null,
+      strippedSearchText: null,
+      visibleFileRowIds: [],
+      directoryRowsBefore: [],
+      directoryRowsAfter: [],
+      selectedFileIdBefore: null,
+      selectedFileIdAfter: null,
+      selectionReanchoredAfterBreadcrumbClick: null,
+      filterPreservedAfterDirectoryChange: null,
+      backForwardStackDepth: null,
+      scrollAnchorRestored: null,
+      previewGeneration: null,
+      noRawPathLeak: null,
+      nativePickerRefused: true,
+      quickLookRefused: true,
+      staleDirectoryGenerationRejected: null,
+      wrongOriginRejected: null,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_file_search_directory_breadcrumb_restoration_receipt" } }],
+    failure: { code: "missing_file_search_directory_breadcrumb_restoration_receipt", stepName: "declare-required-receipt", message: "Missing app-side File Search directory breadcrumb restoration receipts." },
+    warnings: ["file_linear:file_search_directory_breadcrumb_restoration_receipts_missing"],
+  };
+}
+
+export async function runEmojiPickerSkinToneCategoryUxStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  categories?: string[];
+  queries?: string[];
+  skinTones?: string[];
+  steps?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "emoji-picker-skin-tone-category-ux-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_emoji_picker_skin_tone_category_ux_receipt",
+    linearIssue: "file_linear:emoji_picker_skin_tone_category_ux_receipts_missing",
+    emojiPickerSkinToneCategoryUxReceipt: {
+      kind: "ux.emojiPickerSkinToneCategoryUx",
+      emojiPickerSkinToneCategoryUxStressId: "loop-thirty-four-emoji-picker-skin-tone-category-ux",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-emoji-skin-tone",
+      requestedCategories: opts.categories ?? ["people", "symbols", "flags"],
+      requestedQueries: opts.queries ?? ["woman technologist", "thumbs up", "flag"],
+      requestedSkinTones: opts.skinTones ?? ["default", "medium-dark"],
+      requestedSteps: opts.steps ?? ["category-click", "skin-tone-open", "variant-select", "filter-tighten", "escape-palette", "clear-filter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureEmojiCatalogId: null,
+      categoryTabIds: [],
+      selectedCategoryId: null,
+      stickyCategoryHeaderBounds: null,
+      skinTonePaletteId: null,
+      skinTonePaletteBounds: null,
+      skinToneVariantIds: [],
+      selectedSkinToneToken: null,
+      emojiRowIds: [],
+      zwjSequenceIds: [],
+      graphemeClusterFingerprints: [],
+      searchGeneration: null,
+      highlightedRanges: [],
+      accessibleLabelParity: null,
+      previewGlyphBounds: null,
+      paletteDismissalReceipt: null,
+      selectionPreservedAcrossCategorySwitch: null,
+      noSystemPasteboardMutation: true,
+      noEmojiInsert: true,
+      stalePaletteGenerationRejected: null,
+      wrongCategoryMutationRejected: null,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_emoji_picker_skin_tone_category_ux_receipt" } }],
+    failure: { code: "missing_emoji_picker_skin_tone_category_ux_receipt", stepName: "declare-required-receipt", message: "Missing app-side Emoji Picker skin-tone category UX receipts." },
+    warnings: ["file_linear:emoji_picker_skin_tone_category_ux_receipts_missing"],
+  };
+}
+
+export async function runRootWindowSourceFilterActivationRefusalStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  queries?: string[];
+  windowStates?: string[];
+  selectionSteps?: string[];
+  inputModes?: string[];
+  windowProvider?: string;
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noWindowActivation?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "root-window-source-filter-activation-refusal-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_root_window_source_filter_activation_refusal_receipt",
+    linearIssue: "file_linear:root_window_source_filter_activation_refusal_receipts_missing",
+    rootWindowSourceFilterActivationRefusalReceipt: {
+      kind: "ux.rootWindowSourceFilterActivationRefusal",
+      rootWindowSourceFilterActivationRefusalStressId: "loop-thirty-four-root-window-source-filter-activation-refusal",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-window-rows",
+      requestedQueries: opts.queries ?? ["w: ", "w: safari", "windows: terminal"],
+      requestedWindowStates: opts.windowStates ?? ["focused", "minimized", "offscreen", "duplicate-title"],
+      requestedSelectionSteps: opts.selectionSteps ?? ["filter", "sort-z-order", "actions", "enter-refused", "clear-filter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      windowProvider: opts.windowProvider ?? "fixture-only",
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noWindowActivation: opts.noWindowActivation ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureWindowProviderId: null,
+      sourceFilterSet: [],
+      renderedInputText: null,
+      strippedSearchText: null,
+      rootFrameKey: null,
+      windowSnapshotGeneration: null,
+      zOrderGeneration: null,
+      visibleWindowRowIds: [],
+      windowRowFingerprints: [],
+      selectedStableKeyBefore: null,
+      selectedStableKeyAfter: null,
+      selectedRowVisible: null,
+      actionsSubjectStableKey: null,
+      activationDryRunReceipt: null,
+      enterActivationRefused: true,
+      noNativeWindowActivation: true,
+      noFocusSteal: true,
+      duplicateWindowKeyRejected: null,
+      staleWindowSnapshotRejected: null,
+      statusChipsNonSelectable: null,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_root_window_source_filter_activation_refusal_receipt" } }],
+    failure: { code: "missing_root_window_source_filter_activation_refusal_receipt", stepName: "declare-required-receipt", message: "Missing app-side root Window source-filter activation refusal receipts." },
+    warnings: ["file_linear:root_window_source_filter_activation_refusal_receipts_missing"],
   };
 }
 
