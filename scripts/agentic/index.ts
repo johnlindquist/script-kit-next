@@ -189,6 +189,12 @@
  *                         Fail-closed Notes cart ACP handoff dedupe proof
  *   root-file-source-filter-pagination-footer-stress
  *                         Fail-closed root file source-filter pagination footer proof
+ *   file-search-directory-breadcrumb-restoration-stress
+ *                         Fail-closed File Search breadcrumb restoration proof
+ *   emoji-picker-skin-tone-category-ux-stress
+ *                         Fail-closed Emoji Picker skin-tone/category UX proof
+ *   root-window-source-filter-activation-refusal-stress
+ *                         Fail-closed root Windows source-filter activation refusal proof
  *   help                   Show this help
  *
  * Target threading:
@@ -299,6 +305,9 @@ import {
   runAcpPluginSkillEntryThreadAffinityStressScenario,
   runNotesCartAcpHandoffDedupeStressScenario,
   runRootFileSourceFilterPaginationFooterStressScenario,
+  runFileSearchDirectoryBreadcrumbRestorationStressScenario,
+  runEmojiPickerSkinToneCategoryUxStressScenario,
+  runRootWindowSourceFilterActivationRefusalStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1245,6 +1254,35 @@ function parseArgs() {
     providerDelaysIdx >= 0 && args[providerDelaysIdx + 1]
       ? args[providerDelaysIdx + 1].split(",").map((s) => Number(s.trim())).filter(Number.isFinite)
       : undefined;
+  const startDirIdx = args.indexOf("--start-dir");
+  const startDir =
+    startDirIdx >= 0 && args[startDirIdx + 1] ? args[startDirIdx + 1] : undefined;
+  const navigationStepsIdx = args.indexOf("--navigation-steps");
+  const navigationSteps =
+    navigationStepsIdx >= 0 && args[navigationStepsIdx + 1]
+      ? args[navigationStepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const categoriesIdx = args.indexOf("--categories");
+  const categories =
+    categoriesIdx >= 0 && args[categoriesIdx + 1]
+      ? args[categoriesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const skinTonesIdx = args.indexOf("--skin-tones");
+  const skinTones =
+    skinTonesIdx >= 0 && args[skinTonesIdx + 1]
+      ? args[skinTonesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const windowStatesIdx = args.indexOf("--window-states");
+  const windowStates =
+    windowStatesIdx >= 0 && args[windowStatesIdx + 1]
+      ? args[windowStatesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const windowProviderIdx = args.indexOf("--window-provider");
+  const windowProvider =
+    windowProviderIdx >= 0 && args[windowProviderIdx + 1]
+      ? args[windowProviderIdx + 1]
+      : undefined;
+  const noWindowActivation = args.includes("--no-window-activation");
   return {
     recipe,
     session,
@@ -1400,6 +1438,13 @@ function parseArgs() {
     sandboxNotesStore,
     pageSize,
     providerDelays,
+    startDir,
+    navigationSteps,
+    categories,
+    skinTones,
+    windowStates,
+    windowProvider,
+    noWindowActivation,
   };
 }
 
@@ -2793,6 +2838,13 @@ const {
   sandboxNotesStore,
   pageSize,
   providerDelays,
+  startDir,
+  navigationSteps,
+  categories,
+  skinTones,
+  windowStates,
+  windowProvider,
+  noWindowActivation,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4198,6 +4250,24 @@ switch (recipe) {
     break;
   }
 
+  case "file-search-directory-breadcrumb-restoration-stress": {
+    const proofBundle = await runFileSearchDirectoryBreadcrumbRestorationStressScenario({ session, fixture, startDir, queries, navigationSteps, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "file-search-directory-breadcrumb-restoration-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "File Search directory breadcrumb restoration stress failed closed; breadcrumb, filter, selection, preview, and stale directory receipts are missing", proofBundle };
+    break;
+  }
+
+  case "emoji-picker-skin-tone-category-ux-stress": {
+    const proofBundle = await runEmojiPickerSkinToneCategoryUxStressScenario({ session, fixture, categories, queries, skinTones, steps: proofSteps, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "emoji-picker-skin-tone-category-ux-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Emoji Picker skin-tone/category UX stress failed closed; category, palette, variant, grapheme, and stale palette receipts are missing", proofBundle };
+    break;
+  }
+
+  case "root-window-source-filter-activation-refusal-stress": {
+    const proofBundle = await runRootWindowSourceFilterActivationRefusalStressScenario({ session, fixture, queries, windowStates, selectionSteps, inputModes, windowProvider, noNativeInput, noNativePointer, noWindowActivation, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "root-window-source-filter-activation-refusal-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Root Window source-filter activation refusal stress failed closed; window rows, selection, dry-run activation, and no-focus-steal receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4397,6 +4467,9 @@ switch (recipe) {
           { name: "acp-plugin-skill-entry-thread-affinity-stress", description: "Fail-closed UX receipt contract for ACP plugin skill entry thread affinity", flags: ["--session", "--hosts", "--fixture", "--skill-id", "--entry-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "notes-cart-acp-handoff-dedupe-stress", description: "Fail-closed UX receipt contract for Notes cart ACP handoff dedupe", flags: ["--session", "--fixture", "--notes", "--cart-items", "--handoff-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--sandbox-notes-store", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "root-file-source-filter-pagination-footer-stress", description: "Fail-closed UX receipt contract for root Files source-filter pagination near the footer", flags: ["--session", "--fixture", "--queries", "--page-size", "--provider-delays", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "file-search-directory-breadcrumb-restoration-stress", description: "Fail-closed UX receipt contract for File Search directory breadcrumb restoration", flags: ["--session", "--fixture", "--start-dir", "--queries", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "emoji-picker-skin-tone-category-ux-stress", description: "Fail-closed UX receipt contract for Emoji Picker skin-tone palette and category stability", flags: ["--session", "--fixture", "--categories", "--queries", "--skin-tones", "--steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "root-window-source-filter-activation-refusal-stress", description: "Fail-closed UX receipt contract for root Windows source-filter activation refusal", flags: ["--session", "--fixture", "--queries", "--window-states", "--selection-steps", "--input-modes", "--window-provider", "--no-native-input", "--no-native-pointer", "--no-window-activation", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4870,6 +4943,12 @@ Available scenarios:
                          Emit fail-closed Notes cart ACP handoff dedupe requirements
   root-file-source-filter-pagination-footer-stress
                          Emit fail-closed root Files source-filter pagination footer requirements
+  file-search-directory-breadcrumb-restoration-stress
+                         Emit fail-closed File Search breadcrumb restoration requirements
+  emoji-picker-skin-tone-category-ux-stress
+                         Emit fail-closed Emoji Picker skin-tone/category UX requirements
+  root-window-source-filter-activation-refusal-stress
+                         Emit fail-closed root Windows source-filter activation refusal requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4981,6 +5060,9 @@ Examples:
   bun scripts/agentic/index.ts acp-plugin-skill-entry-thread-affinity-stress --session loop33 --hosts embedded,detached --fixture agentic-plugin-skill-entry --skill-id new-script --entry-paths main-menu,source-filter,cmd-enter --input-modes protocol-set-filter,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts notes-cart-acp-handoff-dedupe-stress --session loop33 --fixture agentic-notes-cart --notes note-a,note-b --cart-items duplicate-link,local-snippet,repo-file,unchecked-task --handoff-paths open-acp,switch-note,cancel,consume --input-modes protocol-click,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --sandbox-notes-store --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts root-file-source-filter-pagination-footer-stress --session loop33 --fixture agentic-root-file-pages --queries 'f: ,f:s,files: AGENTS' --page-size 12 --provider-delays 0,150,450 --selection-steps near-bottom,next-page,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts file-search-directory-breadcrumb-restoration-stress --session default --fixture agentic-file-tree-breadcrumbs --start-dir repo-root --queries 'AGENTS,src,missing' --navigation-steps enter-directory,breadcrumb-parent,back,forward,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts emoji-picker-skin-tone-category-ux-stress --session default --fixture agentic-emoji-skin-tone --categories people,symbols,flags --queries 'woman technologist,thumbs up,flag' --skin-tones default,medium-dark --steps category-click,skin-tone-open,variant-select,filter-tighten,escape-palette,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts root-window-source-filter-activation-refusal-stress --session default --fixture agentic-window-rows --queries 'w: ,w: safari,windows: terminal' --window-states focused,minimized,offscreen,duplicate-title --selection-steps filter,sort-z-order,actions,enter-refused,clear-filter --input-modes protocol-set-filter,protocol-key,batch --window-provider fixture-only --no-native-input --no-native-pointer --no-window-activation --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
