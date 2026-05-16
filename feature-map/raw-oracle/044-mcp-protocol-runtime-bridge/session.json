@@ -1,0 +1,92 @@
+{
+  "id": "mcp-protocol-runtime-bridge",
+  "createdAt": "2026-05-15T15:06:06.454Z",
+  "status": "completed",
+  "promptPreview": "[mcp-protocol-runtime-bridge]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK support, JSONL stdin automation",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T15:06:06.455Z",
+      "completedAt": "2026-05-15T15:14:50.100Z",
+      "usage": {
+        "inputTokens": 49248,
+        "outputTokens": 8390,
+        "reasoningTokens": 0,
+        "totalTokens": 57638
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[mcp-protocol-runtime-bridge]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK support, JSONL stdin automation, and an HTTP MCP server.\n- The feature map is a human-and-agent atlas. Each chapter must explain capabilities, entry points, interactions, APIs, state machines, receipt paths, and open risks clearly enough for humans and AI agents to operate the product.\n- Repo process requires `lat.md/` updates for changed behavior/docs and `lat check` verification. For this atlas loop, every Oracle session's full output is preserved under `feature-map/raw-oracle/<feature-id>/` and distilled into `feature-map/features/<feature-id>.md`.\n- Relevant ownership skills for this pass: `mcp-context-resources`, `protocol-automation`, `sdk-script-execution`, `agentic-testing`, and `testing-quality-gates`.\n\nGoal:\n\nCreate a comprehensive feature-map reference for the MCP/protocol runtime bridge, focused on gaps left by feature 004:\n\n- Protocol envelope and `protocolVersion` behavior, especially the apparent split between v2 observation support and explicit stdin `protocolVersion:2` rejection/gating.\n- MCP HTTP server and JSON-RPC entrypoints.\n- MCP resources and resource schema/drift boundaries.\n- MCP tools and read-only computer-use boundaries.\n- SDK MCP client/config helpers in `scripts/kit-sdk.ts`.\n- Verification receipts that prove what agents can rely on without screenshots.\n\nCurrent evidence:\n\n- Feature 004 already gives a broad map of MCP resources, SDK helpers, JSONL stdin commands, protocol automation, query receipts, transactions, and MCP tools.\n- It flags several areas needing a focused source pass:\n  - full MCP server bind/discovery/auth/request/shutdown details;\n  - full `src/mcp_kit_tools.rs` and `src/mcp_script_tools.rs` inventory;\n  - reconciliation of protocol v2 envelope support with explicit stdin `protocolVersion:2` rejection;\n  - SDK wrapper inventory and `kit://context` resource proof boundaries.\n\nBundle map:\n\n- Repo process docs: `AGENTS.md`, `CLAUDE.md`.\n- Owning skills: MCP context resources, protocol automation, SDK script execution, agentic testing, testing gates.\n- Lat docs: protocol, AI context/MCP, workspace, verification.\n- Protocol source excerpts: version, ingress, deprecations, JSONL parsing/reader, protocol module.\n- MCP source excerpts: protocol dispatcher, HTTP server, resources, transaction resources, kit tools, script tools, computer-use tools.\n- SDK source excerpts: `scripts/kit-sdk.ts` MCP client/config and computer helpers.\n- Tests/fixtures: protocol ingress, protocol stats, MCP golden tests, MCP resource drift/reference tests, context resources, MCP and protocol golden fixtures.\n- Prior feature-map evidence: feature 004 chapter.\n\nDeliverable:\n\nReturn a dense, implementation-ready atlas chapter outline for local agents to distill into `feature-map/features/044-mcp-protocol-runtime-bridge.md`.\n\nPlease include:\n\n1. Exact current behavior for `protocolVersion` on JSONL stdin and outbound responses.\n2. Whether explicit `protocolVersion:2` stdin should be documented as supported, observed-only, warned, or rejected based on the bundle.\n3. MCP server lifecycle: bind address/port, discovery/token files, route handling, request parsing, error states, shutdown/handle retention, and security boundaries.\n4. MCP JSON-RPC methods and response/error behavior.\n5. MCP resources: inventory, schema/versioning, diagnostics, query parsing, drift-audited resources, context resources, transaction resources, and failure modes.\n6. MCP tools: kit tools, script-derived tools, read-only computer tools, native capture, permissions, and non-action boundaries.\n7. SDK MCP client helpers: config resolution, remote/http and stdio support, protocol headers, sessions, error behavior, and global `mcp` surface.\n8. What humans and AI agents can safely rely on today.\n9. Unsafe claims to avoid.\n10. Implementation plan for any gaps.\n11. Tests and agentic receipts that prove the current behavior and future fixes.\n\nOutput boundary:\n\nReturn your answer as text in this response only. Do not create, attach, export,\nor offer any downloadable file. Do not create local project artifacts yourself.\nThe local agent will write any needed files, plans, notes, goals, commits, or\nverification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/mcp-protocol-runtime-bridge.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "mcp-protocol-runtime-bridge",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T15:06:06.454Z",
+  "completedAt": "2026-05-15T15:14:50.101Z",
+  "usage": {
+    "inputTokens": 49248,
+    "outputTokens": 8390,
+    "reasoningTokens": 0,
+    "totalTokens": 57638
+  },
+  "elapsedMs": 521928
+}

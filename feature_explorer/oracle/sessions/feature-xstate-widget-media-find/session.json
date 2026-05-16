@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-widget-media-find",
+  "createdAt": "2026-05-15T17:39:08.876Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-widget-media-find]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T17:39:08.877Z",
+      "completedAt": "2026-05-15T17:48:04.182Z",
+      "usage": {
+        "inputTokens": 106020,
+        "outputTokens": 9081,
+        "reasoningTokens": 0,
+        "totalTokens": 115101
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-widget-media-find]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this repo, Oracle/packx review should include AGENTS/CLAUDE process context, owning skills, relevant lat.md pages including verification, the feature chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the feature boundary. The attached bundle includes that context for Feature 029: Widget, Media, and Find APIs.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 029 in feature_explorer/src/state/authoredFeatureMachines.ts. This feature is primarily a negative-contract/support-status trap:\n\n- widget(html, options?) exists in the SDK. It warns unsupported, sends a widget message, stores local widget handlers, and returns a controller. Rust routes Message::Widget to WidgetComingSoon/toast. No visible widget renderer, widgetAction backend handler, widgetEvent producer, HTML security model, or real floating widget support is proven.\n- controller.setState and close send widgetAction; close deletes SDK handler records but no closed flag is proven, so setState-after-close/repeated-close are important gap states.\n- widget event handlers are local SDK registrations; callbacks only run if widgetEvent arrives. No GPUI producer is proven.\n- webcam(), mic(), and eyeDropper() throw before send in the SDK. Rust has webcam/mic remnants and coming-soon routes, but current SDK globals do not reach them. mic() must stay distinct from micro() and dictation.\n- eyeDropper has TypeScript shape but no proven Rust route; future implementation would cross screenshot/screen-pixel permission boundaries, but current behavior is throw-before-send.\n- find(placeholder, options?) sends find with optional onlyin and waits for Submit. null exits, undefined resolves \"\". Backend Rust route/rendering/onlyin semantics are not proven; do not conflate it with file search portals or path().\n- Existing tests mostly prove API availability/controller shape and can be false positives for runtime support.\n- Wireframe metadata must use only existing FeatureWireframeMeta enum values. Put feature-specific detail in tags/notes; do not invent widget/media/find-specific enum slot values.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for adding Feature 029 to feature_explorer/src/state/authoredFeatureMachines.ts and registering keys \"029\" and \"029-widget-media-find-apis\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between Feature 029 chapter/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if relevant.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, source audits, SDK tests, generated API false-positive audits, minimal chrome/media distinction, SDK reference unsupported metadata, and any runtime negative proof that would catch wrong support claims.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nBe direct and implementation-specific.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-widget-media-find.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-widget-media-find",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T17:39:08.876Z",
+  "completedAt": "2026-05-15T17:48:04.182Z",
+  "usage": {
+    "inputTokens": 106020,
+    "outputTokens": 9081,
+    "reasoningTokens": 0,
+    "totalTokens": 115101
+  },
+  "elapsedMs": 533161
+}

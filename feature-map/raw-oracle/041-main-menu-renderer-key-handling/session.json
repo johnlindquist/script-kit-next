@@ -1,0 +1,93 @@
+{
+  "id": "main-menu-renderer-keys",
+  "createdAt": "2026-05-15T14:15:25.693Z",
+  "status": "completed",
+  "promptPreview": "[main-menu-renderer-keys]\n\nProduce a complete operator-grade feature atlas chapter for feature `041-main-menu-renderer-key-handling` using the attached bundle a",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T14:15:25.694Z",
+      "completedAt": "2026-05-15T14:24:33.560Z",
+      "usage": {
+        "inputTokens": 41763,
+        "outputTokens": 8941,
+        "reasoningTokens": 0,
+        "totalTokens": 50704
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[main-menu-renderer-keys]\n\nProduce a complete operator-grade feature atlas chapter for feature `041-main-menu-renderer-key-handling` using the attached bundle and prompt file as the source of truth. Return text only in this response. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write all repo files locally.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/main-menu-renderer-keys.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/041-main-menu-renderer-key-handling/prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "main-menu-renderer-keys",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T14:15:25.694Z",
+  "completedAt": "2026-05-15T14:24:33.561Z",
+  "usage": {
+    "inputTokens": 41763,
+    "outputTokens": 8941,
+    "reasoningTokens": 0,
+    "totalTokens": 50704
+  },
+  "elapsedMs": 546860
+}

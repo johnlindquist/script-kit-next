@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-acp-history",
+  "createdAt": "2026-05-15T15:11:11.179Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-acp-history]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app with a standalone TypeScript/Vite/XState Feature Explorer under feature",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T15:11:11.179Z",
+      "completedAt": "2026-05-15T15:19:04.188Z",
+      "usage": {
+        "inputTokens": 50859,
+        "outputTokens": 5968,
+        "reasoningTokens": 0,
+        "totalTokens": 56827
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-acp-history]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app with a standalone TypeScript/Vite/XState Feature Explorer under feature_explorer/. The repo uses feature-map/ as the maintained feature atlas and lat.md/ as the architecture/test graph. AGENTS.md requires lat search/expand before work, lat.md updates when behavior/docs/contracts change, and lat check before completion.\n\nGoal: The user wants a complete XState representation of every app feature by iterating through feature-map and Oracle. We have already built authored Feature Explorer machines for Features 001 through 009. The next concrete target is Feature 010 Root Unified Search ACP History. I need Oracle to validate and shape an implementation-ready authored XState machine for feature_explorer/src/state/authoredFeatureMachines.ts.\n\nCurrent evidence:\n- feature-map/features/010-root-acp-history.md is the distilled chapter.\n- feature_explorer/src/state/authoredFeatureMachines.ts already contains authored machines for Features 001-009 and the registry pattern.\n- feature_explorer/src/state/featureRuntime.ts falls back to derived machines when no authored machine is present.\n- The local agent just added root source machines for Feature 008 Clipboard and Feature 009 Dictation; Feature 010 should follow that style but must preserve ACP-specific resume and ordering/grouping boundaries.\n- Generated atlas coverage is currently 43/43/43; a new raw 044 prompt directory exists without answer.md and should not affect Feature 010.\n\nBundle map: The attached bundle includes AGENTS.md/CLAUDE.md, owning repo skills (acp-chat-core, main-menu-search-selection, agentic-testing, testing-quality-gates, lat-md), lat.md/feature-explorer.md, the Feature 010 chapter, explorer runtime files, and focused symbol context around AcpHistory, Conversations source filters, root grouping/actions, resume helper, ACP history storage, and source-audit tests.\n\nDeliverable: Return an implementation-ready answer for local agents, as text only. Please provide:\n1. A precise state inventory for an authored XState machine for Feature 010.\n2. Event/transition inventory with surface-prefixed event names where useful.\n3. Wireframe metadata guidance matching the existing wf(...) pattern: elements, selected subject, input text, active popup, active portal, footer owner, status, and receipts.\n4. Exact TypeScript object literal or patch-style guidance compatible with the current AuthoredFeatureMachineConfig shape and registry style.\n5. Any missing states that the local agent is likely to overlook, especially grouping/order boundaries, cache-stability errors, missing/deleted conversation JSON, detached-vs-embedded ACP resume, source-filter no-results, non-bindable row identity, and root actions subject capture.\n6. Minimal docs updates needed in feature_explorer/README.md and lat.md/feature-explorer.md.\n7. Verification gates: feature_explorer build, lat check, generated coverage receipt, and any source/runtime proof Oracle thinks is worth preserving.\n8. Ambiguities that should remain visible instead of being invented.\n\nRepo-specific rules: If behavior/docs/contracts change, local agent must update lat.md/ and run lat check. Do not ask for screenshots unless state-first proof cannot answer. Keep Feature 010 root rows distinct from the dedicated ACP History built-in browser and from ACP streaming/composer behavior after resume.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-acp-history.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-acp-history",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T15:11:11.179Z",
+  "completedAt": "2026-05-15T15:19:04.188Z",
+  "usage": {
+    "inputTokens": 50859,
+    "outputTokens": 5968,
+    "reasoningTokens": 0,
+    "totalTokens": 56827
+  },
+  "elapsedMs": 471927
+}

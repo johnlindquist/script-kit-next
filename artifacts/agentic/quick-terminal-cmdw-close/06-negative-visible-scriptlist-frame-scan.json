@@ -1,0 +1,23 @@
+{
+  "scenario": "quick_terminal_cmd_w_close_no_visible_scriptlist_flash",
+  "status": "passed",
+  "firstHiddenState": {
+    "waitFor": {
+      "schemaVersion": 1,
+      "status": "ok",
+      "session": "quick-terminal-cmdw-close",
+      "requestId": "qt-wait-hidden",
+      "responseType": "waitForResult",
+      "response": {
+        "type": "waitForResult",
+        "requestId": "qt-wait-hidden",
+        "success": true,
+        "elapsed": 0
+      }
+    }
+  },
+  "forbiddenFrameCount": 0,
+  "noVisibleScriptListFrameBeforeWindowVisibleFalse": true,
+  "quickTerminalPtyCloseCleanupObserved": true,
+  "mainWindowHiddenBeforeScriptListResetIsVisible": true
+}

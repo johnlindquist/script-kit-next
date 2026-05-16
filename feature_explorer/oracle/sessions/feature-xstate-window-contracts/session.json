@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-window-contracts",
+  "createdAt": "2026-05-15T20:02:26.430Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-window-contracts]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with a standalone TypeScript/Vite/XState Feature Explorer in feature_explor",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T20:02:26.431Z",
+      "completedAt": "2026-05-15T20:07:33.374Z",
+      "usage": {
+        "inputTokens": 167111,
+        "outputTokens": 4414,
+        "reasoningTokens": 0,
+        "totalTokens": 171525
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-window-contracts]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with a standalone TypeScript/Vite/XState Feature Explorer in feature_explorer/. This repo uses lat.md as an architecture knowledge graph. For this repo, implementation/review work must keep lat.md updated when functionality, architecture, tests, or behavior change, and must run lat check. The canonical Codex skills are under .agents/skills/; legacy .claude/skills are migration material.\n\nGoal: Help the local agent author Feature 040 (Main Window Sizing and Surface Contracts) as a rich hand-authored XState representation in feature_explorer/src/state/authoredFeatureMachines.ts. Features 001-039 already have authored machines. Feature 040 should model the live contracts that keep the main GPUI window understandable and automatable as it moves between Full launcher, Mini main window, built-in filterable surfaces, split preview/detail panes, prompt surfaces, embedded ACP/chat, attached actions popups, hidden/reset/go-back paths, and triggerBuiltin protocol routes.\n\nCurrent evidence: The bundle includes AGENTS/CLAUDE process context, repo-local skills for window-resizing, launcher-surface-contracts, testing-quality-gates, and lat-md, relevant lat.md pages including windowing/builtins/protocol/automation/verification/feature-explorer and the mini-window test spec, the Feature 040 chapter and prior raw Oracle answer, current authoredFeatureMachines context, and focused source/tests around MainWindowMode, ViewType, calculate_window_size_params, SurfaceKind, LauncherSurfaceContract, native footer surface, triggerBuiltin route mutation/re-keying, generated surface matrices, filterable surface inventory, and runtime surface-contract snapshots.\n\nDeliverable: Return an implementation-ready authoring plan for Feature 040's authored machine. Please provide:\n1. the key state clusters this machine should preserve;\n2. the most important state names and transitions/events to encode;\n3. regression/gap states that must stay visible so the explorer does not overclaim support;\n4. metadata/wireframe/receipt fields worth putting into state meta so the UI remains auditable;\n5. the focused verification commands to run after implementation;\n6. overlap cautions where this feature supports but must not replace prompt/built-in/ACP/actions/domain-specific proof from other features.\n\nRepo-specific constraints: Mention the lat.md update rule and required lat check. Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-window-contracts.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-window-contracts",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T20:02:26.430Z",
+  "completedAt": "2026-05-15T20:07:33.375Z",
+  "usage": {
+    "inputTokens": 167111,
+    "outputTokens": 4414,
+    "reasoningTokens": 0,
+    "totalTokens": 171525
+  },
+  "elapsedMs": 305623
+}

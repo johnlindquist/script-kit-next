@@ -1,0 +1,72 @@
+{
+  "id": "sharing-clipboard-trust-atlas-compact",
+  "createdAt": "2026-05-15T12:16:24.554Z",
+  "status": "running",
+  "promptPreview": "[sharing-clipboard-trust-atlas-compact]\n\nProduce an operator-grade feature atlas for Script Kit GPUI feature 033: Sharing and Clipboard Trust Install. Return te",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "pending",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[sharing-clipboard-trust-atlas-compact]\n\nProduce an operator-grade feature atlas for Script Kit GPUI feature 033: Sharing and Clipboard Trust Install. Return text only. Do not create files.\n\nContext:\n- Goal: feature-map atlas chapters must explain user workflows, interactions, state, code owners, proof paths, edge cases, and gaps. Raw Oracle output will be preserved separately.\n- AGENTS rules: include lat context, skills, verification; update lat.md if behavior changes; run lat check after docs. This is docs-only feature map work.\n- Relevant skills: storage-cache-security for persistent data/security boundaries; actions-popups for copy_deeplink/action/confirm routing; platform-windowing-macos for clipboard/platform boundaries.\n- lat.md/sharing: Script Kit GPUI shares scripts, snippets, skills, and agents as a single clipboard URI detected by another app after explicit trust prompt. Sender reuses copy_deeplink but emits scriptkit-share://v1/... for shareable items. Scripts share scripts/<filename>. Scriptlets share scriptlets/<filename>. Skills share full skills/<skill_id>/ directory. Agents share agents/<filename>. Non-shareable config-backed launcher items copy scriptkit://commands/{commandId}; rows without launcher command ID fall back to scriptkit://run/...\n- lat.md/sharing clipboard trust prompt: startup clipboard watcher detects share URI and opens parent confirmation dialog before install. It polls clipboard change count and only inspects text on pasteboard changes. Recently exported links are ignored briefly. Confirm shows kind, title, plugin label, file count; user chooses Install or Ignore.\n- lat.md/sharing install target: accepted bundles install to ~/.scriptkit/plugins/<plugin-id>/, writing plugin.json plus files. Existing plugin id gets unique sibling like <id>-shared-2. Paths restricted to scripts/, scriptlets/, skills/, agents/. After install app refreshes scripts and skills and returns to ScriptList.\n- src/script_sharing.rs: SHARE_URI_PREFIX = scriptkit-share://v1/. RECENT_EXPORT_TTL 5s, RECENT_PROMPT_TTL 10s, WATCHER_POLL_INTERVAL 350ms. ScriptShareBundle has version, kind, title, plugin manifest, entry_path, files. ShareKind: Script, Scriptlet, Skill, Agent. encode_share_bundle serializes JSON and base64 URL_SAFE_NO_PAD encodes. decode_share_text extracts URI from wrapped text or full trimmed text. mark_recently_exported_share records hash+Instant; should_ignore_recently_exported_share checks TTL.\n- bundle_from_search_result: Script result reads script file and packages scripts/<filename> using script plugin id/title/kit/name. Scriptlet result strips # anchor from file_path and packages scriptlets/<filename>. Skill result shares the parent skill directory, relative root skills/<skill_id>, entry skills/<skill_id>/SKILL.md, all text files recursively. Agent result packages agents/<filename>. Other result types bail: only launcher deeplinks, not clipboard sharing.\n- install_share_bundle: rejects unsupported version and empty files. Normalizes plugin id from bundle.plugin.id or title, creates unique plugin root, creates scripts/scriptlets/agents/skills dirs, writes plugin.json from sanitized manifest fields, validates each relative path, creates parents, writes text content, returns ShareInstallOutcome { plugin_id, plugin_root, entry_path, files_written }.\n- validate_share_relative_path: rejects empty, absolute paths, parent dirs, root/prefix components, paths missing top-level dir, and top-level dirs outside scripts/scriptlets/agents/skills.\n- spawn_clipboard_share_watcher: bounded channel 8, background thread, ClipboardChangeDetector. Sleeps 350ms, calls detector.has_changed(). If unchanged continue. Lazily opens arboard::Clipboard. get_text failures reset clipboard and continue. extract_share_uri scans whitespace tokens and trims punctuation or accepts full trimmed URI. Ignores recently exported and recently prompted URI. Decode failures log debug and continue. Successful decode remembers recently prompted and sends ClipboardShareImport { uri, bundle }.\n- src/app_actions/handle_action/files.rs copy_deeplink: if selected result is shareable, bundle_from_search_result + encode_share_bundle, mark recently exported, copy share URI with HUD 'Copied share link for <title>'. On error returns DispatchOutcome error 'Failed to build share link: ...'. If not shareable, deeplink_for_result uses launcher_command_id -> config command deeplink, else scriptkit://run/<slug>, copies with HUD.\n- src/actions/builders/script_context.rs: script context action copy_deeplink title is Share for scripts/scriptlets/agents/skills, Copy Deep Link otherwise. Shortcut Cmd+Shift+D. Description for shareable: Copy a portable Script Kit share link to clipboard. Section Share.\n- src/app_impl/startup.rs: non-test startup spawns clipboard share watcher. On import: logs, requests main window, waits 180ms, builds ParentConfirmOptions with title bundle.prompt_title(), body bundle.prompt_body(), confirm Install, cancel Ignore, trace id share-import-<kind>-<slug-title>. confirm_with_parent_dialog. If confirm error logs and continues. If not confirmed continue. If confirmed install_share_bundle. On success refresh_scripts, refresh_skills, current_view ScriptList, HUD 'Installed shared <kind> into <plugin_id>'. On failure show error toast.\n- ScriptShareBundle.prompt_title: Install Shared <Kind>? where ShareKind display names Script, Snippet, Skill, Agent. prompt_body: Script Kit found a shared <kind> on your clipboard; Title, Plugin, Files; Only install it if you trust the sender.\n- Tests in src/script_sharing.rs: bundle roundtrip through URI; decode finds wrapped URI; parent dir rejected; unknown top-level rejected; install writes plugin manifest and entry file with temp HOME. Action tests pin copy_deeplink/share label, shortcut, section, and portable share description for script/scriptlet/agent/skill contexts.\n\nRequired output sections: Executive Summary, What Users Can Do, Core Concepts, Entry Points, User Workflows, Interaction Matrix table, State Machine, Visual/Focus States, Keystrokes/Commands, Actions/Menus, Automation/Protocol Surface, Data/Storage/Privacy Boundaries, Error/Empty/Loading/Disabled States, Code Ownership, Invariants/Risks, Verification Recipes, Agent Notes, Related Features, Open Questions/Gaps.",
+    "file": [],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "sharing-clipboard-trust-atlas-compact",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T12:16:24.555Z"
+}

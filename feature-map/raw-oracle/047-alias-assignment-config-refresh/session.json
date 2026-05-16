@@ -1,0 +1,92 @@
+{
+  "id": "alias-refresh-atlas",
+  "createdAt": "2026-05-15T16:00:55.455Z",
+  "status": "completed",
+  "promptPreview": "[alias-refresh-atlas]\n\nProject briefing:\n\nThis is Script Kit GPUI, a Rust/GPUI desktop app with a Bun/TypeScript SDK and config tooling. The repository uses `la",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T16:00:55.456Z",
+      "completedAt": "2026-05-15T16:11:35.740Z",
+      "usage": {
+        "inputTokens": 53960,
+        "outputTokens": 10259,
+        "reasoningTokens": 0,
+        "totalTokens": 64219
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[alias-refresh-atlas]\n\nProject briefing:\n\nThis is Script Kit GPUI, a Rust/GPUI desktop app with a Bun/TypeScript SDK and config tooling. The repository uses `lat.md/` as the architecture/test knowledge graph. Repo rules require `lat expand`, `lat search`, relevant skill context, `lat.md/` updates for behavior/docs changes, and `lat check`. This feature-map project is building an operator-grade atlas for humans and AI agents. Every Oracle answer is preserved under `feature-map/raw-oracle/<feature-id>/`, then locally distilled into `feature-map/features/<feature-id>.md`.\n\nFeature id:\n\n`047-alias-assignment-config-refresh`\n\nGoal:\n\nProduce a complete operator-grade feature atlas chapter for launcher alias assignment and removal: add/update/remove alias actions, AliasInput UI, alias persistence, command IDs, config/source-of-truth behavior, refresh semantics, duplicate/conflict behavior, supported/unsupported row types, action exposure, and verification. This is a focused follow-up to shortcut assignment because the handler says shortcut and alias configuration share action dispatch but have separate UI and persistence.\n\nCurrent evidence:\n\n- `lat expand \"047 Launcher alias assignment config refresh: assign alias remove alias main menu actions config.ts command aliases alias recorder alias input duplicate conflict command IDs refresh app\"` was run.\n- `lat search \"launcher alias assignment config.ts remove alias main menu actions command aliases alias input duplicate conflict refresh app\"` returned:\n  - `lat.md/shortcuts#Shortcuts#Removal Writes`\n  - `lat.md/shortcuts#Shortcuts`\n  - `lat.md/shortcuts#Shortcuts#Key Facts`\n  - `lat.md/shortcuts#Shortcuts#Command IDs`\n  - `lat.md/architecture#Architecture#Key Facts`\n- Source search found `src/app_actions/handle_action/shortcuts.rs` handling `add_alias`, `update_alias`, and `remove_alias`; `src/app_impl/alias_input.rs`; `src/aliases/mod.rs`; `src/aliases/persistence.rs`; `src/components/alias_input/*`; source audits and smoke tests around alias conflict/action exposure.\n\nBundle map:\n\nThe attached bundle includes process docs, the goal file, owning skills, shortcut/command-id lat context, script validation context for duplicate metadata bindings, alias action handlers, AliasInput app integration and component code, alias persistence modules, command ID helpers, action helper messages, source-audit tests, smoke tests, and action-builder files for alias action exposure.\n\nPlease map what is present in the attached repo snapshot. Mark uncertain claims as inference. Do not invent behavior. If a user story or proof path is not implemented, call it a gap.\n\nRequired deliverable:\n\nProduce a complete operator-grade feature atlas for humans and AI agents.\n\nPrefer clarity, explicit examples, and workflow detail over compression. Explain every user workflow, UI state, shortcut, action, state transition, automation receipt, data boundary, edge case, failure mode, and verification path. Do not summarize away behavior.\n\nGround claims in the attached repo context. Prefer concrete file/function/test/script references. Mark uncertain claims as inference. Do not write code or create downloadable artifacts.\n\nRequired output shape:\n\n```markdown\n## 047 Alias Assignment And Config Refresh\n\n### Executive Summary\n\n### What Users Can Do\n\n### Core Concepts\n\n### Entry Points\n\n### User Workflows\n\n### Interaction Matrix\n\n| User intent | Entry point | UI state | Key/click | Code path | Result | Proof |\n|---|---|---|---|---|---|---|\n\n### State Machine\n\n### Visual And Focus States\n\n### Keystrokes And Commands\n\n### Actions And Menus\n\n### Alias Persistence And Refresh Semantics\n\n### Command IDs And Source Priority\n\n### Automation And Protocol Surface\n\n### Data, Storage, And Privacy Boundaries\n\n### Error, Empty, Conflict, And Disabled States\n\n### Code Ownership\n\n### Invariants And Regression Risks\n\n### Verification Recipes\n\n### Agent Notes\n\n### Related Features\n\n### Open Questions And Gaps\n```\n\nSpecific questions to answer:\n\n1. How does a user add or update an alias from main menu/actions surfaces?\n2. How does a user remove an alias?\n3. Which row types expose alias actions, and which row types should not?\n4. How does AliasInput behave from open -> edit -> validate -> save/cancel/clear?\n5. What exact alias validation rules exist?\n6. Where is alias state persisted, and is it in `config.ts`, a separate alias store, script metadata, or another file?\n7. How are alias overrides merged with script/scriptlet metadata aliases?\n8. What duplicate/conflict behavior exists for aliases, both for metadata validation and user overrides?\n9. What refresh/reload happens after save/remove?\n10. What command IDs are used and how do aliases relate to command deeplinks?\n11. What error states occur from unsupported rows, no selection, invalid aliases, persistence failures, duplicate aliases, or hidden commands?\n12. What tests and runtime receipts prove this feature?\n13. What unsafe claims should feature-map chapters avoid?\n\nRepo-specific rules:\n\n- Include the `lat.md/` update rule and required `lat check` in the verification plan.\n- Treat screenshots as secondary; prefer state-first receipts where possible.\n- Preserve raw Oracle output separately from the distilled feature chapter.\n- Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/alias-config-atlas.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "alias-refresh-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T16:00:55.456Z",
+  "completedAt": "2026-05-15T16:11:35.740Z",
+  "usage": {
+    "inputTokens": 53960,
+    "outputTokens": 10259,
+    "reasoningTokens": 0,
+    "totalTokens": 64219
+  },
+  "elapsedMs": 639203
+}

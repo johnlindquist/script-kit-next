@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-script-metadata",
+  "createdAt": "2026-05-15T18:20:25.253Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-script-metadata]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven w",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T18:20:25.254Z",
+      "completedAt": "2026-05-15T18:28:49.710Z",
+      "usage": {
+        "inputTokens": 103208,
+        "outputTokens": 10150,
+        "reasoningTokens": 0,
+        "totalTokens": 113358
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-script-metadata]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. The attached bundle includes repo process context, sdk-script-execution and adjacent skills, relevant lat.md pages including verification, maintained Feature 032 chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for script metadata, scriptlets, validation, resources, and execution catalog.\n\nGoal: audit and improve the authored XState representation to add for Feature 032 in feature_explorer/src/state/authoredFeatureMachines.ts. Feature 032 is Script Metadata, Scriptlets, and Execution Catalog. Preserve these layers:\n- plugin-scoped discovery under ~/.scriptkit/plugins/<plugin-id>/scripts and scriptlets\n- script metadata extraction: typed metadata, legacy comments, schema, schedule comments, body content\n- validation-safe script catalog via read_scripts_report/validate_script_catalog and duplicate binding exclusion\n- launcher Script Issues row and kit://failed-scripts diagnostics\n- scriptlet markdown parsing, metadata/schema fences, H1/H2/H3/action model, .actions.md skip, named inputs\n- scriptlet execution tool families and ScriptletResult\n- kit://scripts, kit://scriptlets, kit://failed-scripts, kit://sdk-reference, kit://script-templates resources\n- known gaps: metadata/schema parse errors not propagated, scheduling may bypass validation, typed cron/schedule ambiguity, scriptlet validation parser underused, scriptlet duplicate bindings unproven, main-only read_scriptlets, flat scriptlet metadata, resource casing, read_scripts bypassing validation, narrow extension support.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for Feature 032 and registry keys \"032\" and \"032-script-metadata-scriptlets\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between maintained Feature 032/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if useful.\n5. Verification checklist: feature_explorer build, lat check, cargo script/resource/validation/template tests, scriptlet smoke tests where useful, source-audit proof for known gaps.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer downloadable files. The local agent will write files and run verification locally.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-script-metadata.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-script-metadata",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T18:20:25.253Z",
+  "completedAt": "2026-05-15T18:28:49.712Z",
+  "usage": {
+    "inputTokens": 103208,
+    "outputTokens": 10150,
+    "reasoningTokens": 0,
+    "totalTokens": 113358
+  },
+  "elapsedMs": 502516
+}

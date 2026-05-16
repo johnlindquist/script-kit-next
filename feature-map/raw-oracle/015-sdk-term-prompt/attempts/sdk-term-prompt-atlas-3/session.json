@@ -1,0 +1,91 @@
+{
+  "id": "sdk-term-prompt-atlas-3",
+  "createdAt": "2026-05-15T07:36:07.671Z",
+  "status": "completed",
+  "promptPreview": "The previous turn may not have produced the full answer. Please return the complete requested operator-grade feature atlas for: 015 SDK TermPrompt / term() / Te",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T07:36:07.672Z",
+      "completedAt": "2026-05-15T07:43:59.148Z",
+      "usage": {
+        "inputTokens": 71,
+        "outputTokens": 4661,
+        "reasoningTokens": 0,
+        "totalTokens": 4732
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/c/6a06cc35-7b4c-83e8-a575-954fda17f3bf",
+      "chatgptUrl": "https://chatgpt.com/c/6a06cc35-7b4c-83e8-a575-954fda17f3bf",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "The previous turn may not have produced the full answer. Please return the complete requested operator-grade feature atlas for: 015 SDK TermPrompt / term() / Terminal Actions / Full-height Terminal, using the context already attached in this conversation. Return only the atlas text in the requested shape. Do not create files or artifacts.",
+    "file": [],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "sdk-term-prompt-atlas-3",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/c/6a06cc35-7b4c-83e8-a575-954fda17f3bf",
+      "chatgptUrl": "https://chatgpt.com/c/6a06cc35-7b4c-83e8-a575-954fda17f3bf",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T07:36:07.671Z",
+  "completedAt": "2026-05-15T07:43:59.150Z",
+  "usage": {
+    "inputTokens": 71,
+    "outputTokens": 4661,
+    "reasoningTokens": 0,
+    "totalTokens": 4732
+  },
+  "elapsedMs": 470175
+}

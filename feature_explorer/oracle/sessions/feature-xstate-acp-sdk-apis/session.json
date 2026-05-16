@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-acp-sdk-apis",
+  "createdAt": "2026-05-15T17:53:14.717Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-acp-sdk-apis]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wire",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T17:53:14.718Z",
+      "completedAt": "2026-05-15T18:01:15.724Z",
+      "usage": {
+        "inputTokens": 62925,
+        "outputTokens": 9075,
+        "reasoningTokens": 0,
+        "totalTokens": 72000
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-acp-sdk-apis]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this repo, Oracle/packx review should include AGENTS/CLAUDE process context, owning skills, relevant lat.md pages including verification, the feature chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the feature boundary. The attached bundle includes that context for Feature 030: ACP Chat SDK APIs.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 030 in feature_explorer/src/state/authoredFeatureMachines.ts. This feature is script-facing ai* SDK APIs for Agent/ACP Chat. Preserve the layered contract:\n\n- SDK globals and TypeScript return-shape layer.\n- Rust protocol variants/requestId correlation layer.\n- Direct storage/window-state handlers.\n- UI-thread prompt-message handlers.\n- AI window persistence/context/streaming runtime.\n- SDK-local subscription/event bookkeeping.\n\nImportant current split:\n- Proven direct/storage/window-state APIs: aiIsOpen, aiGetActiveChat, aiListChats, aiGetConversation, aiGetStreamingStatus, aiDeleteChat.\n- Proven UI-thread APIs: aiStartChat and aiFocus.\n- Declared but app-side handling unproven: aiAppendMessage, aiSendMessage, aiSetSystemPrompt, aiOn/aiSubscribe/aiUnsubscribe, pushed events aiStreamChunk/aiStreamComplete/aiNewMessage/aiError.\n- aiStartChat supports systemPrompt, modelId, noResponse, imagePath read/base64, and typed context parts. It sends AiChatCreated before/around queued persistence; noResponse must create chat/message without streaming.\n- SDK return shapes drop protocol fields: aiListChats drops totalCount; aiGetConversation drops chatId/hasMore; aiFocus drops success; aiDeleteChat drops success/error.\n- aiIsOpen is AI window-open state, not storage existence. aiGetActiveChat can fall back to most recent stored chat. Streaming status is a global SDK-visible snapshot, not a subscription.\n- Tests can be false positives: SDK stdout/message-shape tests prove messages, not app runtime handling.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for adding Feature 030 to feature_explorer/src/state/authoredFeatureMachines.ts and registering keys \"030\" and \"030-acp-chat-sdk-apis\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between Feature 030 chapter/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if relevant.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, SDK shape tests, protocol serde tests, direct handler/source audits, smoke aiStartChat/aiFocus, and negative proof for declared-but-unhandled APIs.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nBe direct and implementation-specific.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-acp-sdk-apis.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-acp-sdk-apis",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T17:53:14.718Z",
+  "completedAt": "2026-05-15T18:01:15.724Z",
+  "usage": {
+    "inputTokens": 62925,
+    "outputTokens": 9075,
+    "reasoningTokens": 0,
+    "totalTokens": 72000
+  },
+  "elapsedMs": 479294
+}

@@ -1,0 +1,22 @@
+{
+  "featureId": "007-root-notes",
+  "title": "Root Unified Search Notes",
+  "slug": "root-notes-feature-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T05:10:52.923Z",
+  "completedAt": "2026-05-15T05:16:51.982Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/root-notes-feature-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/root-notes-feature-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 48045,
+    "outputTokens": 6030,
+    "reasoningTokens": 0,
+    "totalTokens": 54075
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/root-notes-feature-map"
+}

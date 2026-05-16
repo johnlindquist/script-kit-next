@@ -1,0 +1,92 @@
+{
+  "id": "feature-xstate-window-visual",
+  "createdAt": "2026-05-15T17:24:16.665Z",
+  "status": "completed",
+  "promptPreview": "[feature-xstate-window-visual]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wir",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T17:24:16.666Z",
+      "completedAt": "2026-05-15T17:33:49.680Z",
+      "usage": {
+        "inputTokens": 114361,
+        "outputTokens": 11038,
+        "reasoningTokens": 0,
+        "totalTokens": 125399
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[feature-xstate-window-visual]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this repo, Oracle/packx review should include AGENTS/CLAUDE process context, owning skills, relevant lat.md pages including verification, the feature chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the feature boundary. The attached bundle includes that context for Feature 028: Window Control and Visual Inspection APIs.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 028 in feature_explorer/src/state/authoredFeatureMachines.ts. This feature splits fire-and-forget controls from receipt-backed visual/structural queries:\n\n- Fire-and-forget controls: show(), hide(), blur(), showGrid(options?), hideGrid(). These send commands and resolve after the SDK message is written, not after visibility/focus/grid effects are proven. Postconditions require follow-up getState/getElements/listAutomationWindows/inspectAutomationWindow/bounds/screenshot receipts.\n- Receipt-backed queries: getWindowBounds(), captureScreenshot(options?), getLayoutInfo(). These allocate request ids and expect correlated bounds/screenshot/layout responses, but each has shape, target, privacy, and error ambiguities.\n\nFocus areas:\n- show/hide no-envelope SDK behavior, stdin parse receipts, and follow-up visibility proof.\n- hide/reset/rekey/main-panel-only behavior and secondary-window boundary.\n- blur as a fire-and-forget focus-effect command with an unproven runtime route.\n- showGrid/hideGrid as fire-and-forget visual overlay commands; grid proof requires screenshot and custom color handling may drift by path.\n- getWindowBounds SDK submit-json vs stdin typed windowBounds drift; zero bounds as suspicious/error-masked state.\n- captureScreenshot request/result, hiDpi dimensions, optional protocol target vs SDK wrapper only exposing hiDpi, Screen Recording permission, blank/black/solid screenshot rejection, and privacy boundaries.\n- getLayoutInfo structural result, main-only/non-main target rejection/default layout, and the fact layout is not visual pixel proof.\n- The window_visibility_ack conflict: docs/source-audit say show/hide/simulateKey no response envelope, but bundled app_run_setup snippets include window_visibility_ack. Treat this as a discrepancy that the authored machine must make visible.\n- Wireframe metadata must use only existing FeatureWireframeMeta enum values; do not invent window/grid/screenshot-specific activePopup/portal/footerOwner enum values.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for adding Feature 028 to feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between Feature 028 chapter/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if relevant.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, source audits, SDK tests, visual proof boundaries, and any runtime proof that would catch wrong claims.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nBe direct and implementation-specific.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/feature-xstate-window-visual.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "feature-xstate-window-visual",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T17:24:16.666Z",
+  "completedAt": "2026-05-15T17:33:49.682Z",
+  "usage": {
+    "inputTokens": 114361,
+    "outputTokens": 11038,
+    "reasoningTokens": 0,
+    "totalTokens": 125399
+  },
+  "elapsedMs": 570477
+}

@@ -1,0 +1,93 @@
+{
+  "id": "agent-skills-ai-context-atlas",
+  "createdAt": "2026-05-15T13:29:15.267Z",
+  "status": "completed",
+  "promptPreview": "[agent-skills-ai-context-atlas]\n\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 038, Agent Skills and AI Context Catalog. Use th",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T13:29:15.268Z",
+      "completedAt": "2026-05-15T13:37:36.295Z",
+      "usage": {
+        "inputTokens": 51885,
+        "outputTokens": 5227,
+        "reasoningTokens": 0,
+        "totalTokens": 57112
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[agent-skills-ai-context-atlas]\n\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 038, Agent Skills and AI Context Catalog. Use the attached focused bundle and prompt file as source context. Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/agent-skills-ai-context-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/038-agent-skills-ai-context-catalog/prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "agent-skills-ai-context-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T13:29:15.267Z",
+  "completedAt": "2026-05-15T13:37:36.298Z",
+  "usage": {
+    "inputTokens": 51885,
+    "outputTokens": 5227,
+    "reasoningTokens": 0,
+    "totalTokens": 57112
+  },
+  "elapsedMs": 499296
+}

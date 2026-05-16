@@ -1,0 +1,94 @@
+{
+  "id": "tray-menu-entry-atlas",
+  "createdAt": "2026-05-15T13:01:47.989Z",
+  "status": "completed",
+  "promptPreview": "[tray-menu-entry-atlas]\n\nProject: Script Kit GPUI, a Rust GPUI native launcher shell with Bun/TypeScript script runtime, local SDK, MCP/computer-use tools, macO",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T13:01:47.990Z",
+      "completedAt": "2026-05-15T13:11:50.817Z",
+      "usage": {
+        "inputTokens": 44146,
+        "outputTokens": 18927,
+        "reasoningTokens": 0,
+        "totalTokens": 63073
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[tray-menu-entry-atlas]\n\nProject: Script Kit GPUI, a Rust GPUI native launcher shell with Bun/TypeScript script runtime, local SDK, MCP/computer-use tools, macOS tray/status-bar integration, and lat.md documentation gates.\n\nGoal: Produce the requested operator-grade feature atlas for Script Kit GPUI feature 036, Tray Menu and Global App Entry Points. Use the attached focused bundle and prompt file as source context. This chapter must fully map user stories, states, entry points, actions, automation receipts, data boundaries, and verification paths for the tray menu/global entry surface.\n\nImportant repo rules: AGENTS.md/CLAUDE.md require lat.md grounding, lat.md updates when behavior/docs change, and lat check after atlas updates. The local agent will preserve your complete answer in feature-map/raw-oracle/036-tray-menu-global-entry-points/answer.md and distill it into feature-map/features/036-tray-menu-global-entry-points.md.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/tray-menu-entry-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/036-tray-menu-global-entry-points/prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "tray-menu-entry-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T13:01:47.990Z",
+  "completedAt": "2026-05-15T13:11:50.819Z",
+  "usage": {
+    "inputTokens": 44146,
+    "outputTokens": 18927,
+    "reasoningTokens": 0,
+    "totalTokens": 63073
+  },
+  "elapsedMs": 601722
+}

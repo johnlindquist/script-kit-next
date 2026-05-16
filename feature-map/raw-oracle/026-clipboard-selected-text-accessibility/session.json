@@ -1,0 +1,97 @@
+{
+  "id": "clipboard-selected-text-accessibil-atlas",
+  "createdAt": "2026-05-15T10:16:05.406Z",
+  "status": "completed",
+  "promptPreview": "[clipboard-selected-text-accessibility-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source contex",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T10:16:05.407Z",
+      "completedAt": "2026-05-15T10:28:05.769Z",
+      "usage": {
+        "inputTokens": 80139,
+        "outputTokens": 12190,
+        "reasoningTokens": 0,
+        "totalTokens": 92329
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 23249
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[clipboard-selected-text-accessibility-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source context. Return text only.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/clipboard-selected-text-accessibility-atlas.txt",
+      "feature-map/raw-oracle/026-clipboard-selected-text-accessibility/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "clipboard-selected-text-accessibil-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/026-clipboard-selected-text-accessibility/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T10:16:05.407Z",
+  "completedAt": "2026-05-15T10:28:05.772Z",
+  "usage": {
+    "inputTokens": 80139,
+    "outputTokens": 12190,
+    "reasoningTokens": 0,
+    "totalTokens": 92329
+  },
+  "elapsedMs": 717933
+}

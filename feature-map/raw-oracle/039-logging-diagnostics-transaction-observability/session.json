@@ -1,0 +1,93 @@
+{
+  "id": "logging-diagnostic-observabil-atlas",
+  "createdAt": "2026-05-15T13:42:28.043Z",
+  "status": "completed",
+  "promptPreview": "[logging-diagnostics-observability-atlas]\n\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 039, Logging, Diagnostics, and Transac",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T13:42:28.044Z",
+      "completedAt": "2026-05-15T13:50:07.490Z",
+      "usage": {
+        "inputTokens": 20695,
+        "outputTokens": 5412,
+        "reasoningTokens": 0,
+        "totalTokens": 26107
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 80203
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[logging-diagnostics-observability-atlas]\n\nProduce the requested operator-grade feature atlas for Script Kit GPUI feature 039, Logging, Diagnostics, and Transaction Observability. Use the attached focused bundle and prompt file as source context. Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/logging-diagnostics-observability-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/039-logging-diagnostics-transaction-observability/prompt.md"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "logging-diagnostic-observabil-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T13:42:28.044Z",
+  "completedAt": "2026-05-15T13:50:07.491Z",
+  "usage": {
+    "inputTokens": 20695,
+    "outputTokens": 5412,
+    "reasoningTokens": 0,
+    "totalTokens": 26107
+  },
+  "elapsedMs": 458078
+}

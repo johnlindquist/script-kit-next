@@ -36,12 +36,13 @@ Root tool-facing documents still matter here. `README.md`, `CLAUDE.md`, `AGENTS.
 - [[sharing]]
 - [[migration]]
 - [[permissions]]
+- [[feature-explorer]]
 
 ## Current migration scope
 
 The first wave replaces the authored wiki with current-code-backed lattice pages for the core product and contributor workflow.
 
-It now covers overview, architecture, scripting, workspace, shortcuts, protocol, automation, AI context, ACP chat, notes, design, Storybook, windowing, surfaces, built-ins, verification, distribution, sharing, and the agent-understanding regression plan. The old authored wiki and standalone `docs/` tree have been folded down into these code-backed pages. Historical plans, audits, research, and session artifacts stay outside the lattice until their durable facts are distilled.
+It now covers overview, architecture, scripting, workspace, shortcuts, protocol, automation, AI context, ACP chat, notes, design, Storybook, feature exploration, windowing, surfaces, built-ins, verification, distribution, sharing, and the agent-understanding regression plan. The old authored wiki and standalone `docs/` tree have been folded down into these code-backed pages. Historical plans, audits, research, and session artifacts stay outside the lattice until their durable facts are distilled.
 
 ## Current sources
 

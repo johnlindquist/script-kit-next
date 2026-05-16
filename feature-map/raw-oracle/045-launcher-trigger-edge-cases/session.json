@@ -1,0 +1,92 @@
+{
+  "id": "launcher-trigger-edge-cases",
+  "createdAt": "2026-05-15T15:23:32.596Z",
+  "status": "completed",
+  "promptPreview": "[launcher-trigger-edge-cases]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with a ScriptList launcher, first-character handoffs, m",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T15:23:32.597Z",
+      "completedAt": "2026-05-15T15:30:08.541Z",
+      "usage": {
+        "inputTokens": 42432,
+        "outputTokens": 5699,
+        "reasoningTokens": 0,
+        "totalTokens": 48131
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[launcher-trigger-edge-cases]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with a ScriptList launcher, first-character handoffs, menu syntax, root source filters, Agent Chat, File Search, Quick Terminal, and actions popups.\n- The feature map is a human-and-agent atlas. Each chapter must explain capabilities, entry points, interactions, APIs, state machines, receipt paths, and open risks clearly enough for humans and AI agents to operate the product.\n- Repo process requires `lat.md/` updates for changed behavior/docs and `lat check` verification. For this atlas loop, every Oracle session's full output is preserved under `feature-map/raw-oracle/<feature-id>/` and distilled into `feature-map/features/<feature-id>.md`.\n- Relevant ownership skills for this pass: `main-menu-search-selection`, `acp-context-composer`, `file-search-portals`, `quick-terminal-pty`, `actions-popups`, `protocol-automation`, and `testing-quality-gates`.\n\nGoal:\n\nCreate a comprehensive focused feature-map reference for launcher special-character trigger edge cases and adjacent first-token routing:\n\n- The narrow `~`, `/`, `@`, `>`, and `?` ScriptList first-character handoffs from feature 013.\n- Source filters and source heads such as `f:`, `files:`, `n:`, `c:`, `ai:`, etc. from feature 012.\n- Menu syntax and capture/power syntax boundaries from feature 042.\n- Stale decoration/highlight risks when transitioning between menu syntax/source-filter decorated text and special-entry handoffs.\n- Detached versus embedded ACP slash/mention picker behavior after `/` and `@`.\n- The `?` actions-help disabled/no-op state and shared actions popup boundary.\n- Exact negative cases like `/tmp`, `@browser`, `>deploy -- prod`, `:`, `+`, `!`, `#`, `;todo`, `todo:`, and `cal:`.\n\nCurrent evidence:\n\n- Feature 013 already maps the basic first-character handoffs, but it leaves edge cases around stale decorations and detached ACP picker behavior.\n- Feature 012 maps root source filters including `f:` and empty browse states.\n- Feature 042 maps power/capture syntax and sibling command/refine boundaries.\n- The user explicitly wants every character trigger and special main-menu state captured, including examples like `f:` and `@`.\n\nBundle map:\n\n- Repo process docs: `AGENTS.md`, `CLAUDE.md`.\n- Owning and adjacent skills: main menu search, ACP context composer, file search portals, quick terminal, actions popups, protocol automation, testing gates.\n- Lat docs: menu syntax, ACP chat, surfaces, automation, verification.\n- Source excerpts: ScriptList filter classifier/dispatch/update paths, ACP launcher handoff helpers, menu syntax trigger popup/main hint/source heads/filter parser, render list/actions/file search, Quick Terminal opener.\n- Tests: file-search tilde entry, menu syntax source filters, tab AI routing, ACP main-menu skill launch, shortcut recorder popup contracts.\n- Prior feature-map evidence: features 012, 013, and 042.\n\nDeliverable:\n\nReturn a dense, operator-grade atlas chapter outline for local agents to distill into `feature-map/features/045-launcher-trigger-edge-cases.md`.\n\nPlease include:\n\n1. Exact current behavior for every relevant trigger/token: `~`, `~/`, `/`, `@`, `>`, `?`, `f:`, `files:`, `n:`, `c:`, `ai:`, `:`, `+`, `!`, `#`, `;target`, `target:`, and known negative examples.\n2. A precedence model explaining which parser/classifier sees each input and why.\n3. How special-entry handoffs differ from source filters, menu syntax, capture syntax, ordinary search, scriptlet keyword triggers, and ACP composer triggers.\n4. Embedded and detached ACP behavior for `/` and `@`, including picker staging, deferred opening, focus, return origin, and open gaps.\n5. File Search Mini behavior for `~` and `~/...`, including query normalization and what is not accepted.\n6. Quick Terminal behavior for bare `>` and what terminal-like text does not trigger.\n7. `?` actions-help behavior, including `has_actions()` false/no-op state.\n8. Visual/focus/decoration states, especially stale decoration risks.\n9. Automation receipts and exact verification recipes.\n10. Unsafe claims to avoid and implementation/test plan for gaps.\n\nOutput boundary:\n\nReturn your answer as text in this response only. Do not create, attach, export,\nor offer any downloadable file. Do not create local project artifacts yourself.\nThe local agent will write any needed files, plans, notes, goals, commits, or\nverification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/launcher-trigger-edge-cases.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "launcher-trigger-edge-cases",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T15:23:32.597Z",
+  "completedAt": "2026-05-15T15:30:08.543Z",
+  "usage": {
+    "inputTokens": 42432,
+    "outputTokens": 5699,
+    "reasoningTokens": 0,
+    "totalTokens": 48131
+  },
+  "elapsedMs": 394411
+}

@@ -1,0 +1,22 @@
+{
+  "featureId": "005-built-in-filterable-surfaces",
+  "title": "Built-in Filterable Surfaces",
+  "slug": "builtin-filterable-map",
+  "model": "gpt-5.5-pro",
+  "status": "completed",
+  "createdAt": "2026-05-15T04:47:37.706Z",
+  "completedAt": "2026-05-15T04:56:11.582Z",
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "bundlePath": "/Users/johnlindquist/.oracle/bundles/builtin-filterable-map.txt",
+  "files": [
+    "/Users/johnlindquist/.oracle/bundles/builtin-filterable-map.txt"
+  ],
+  "conversationUrl": null,
+  "usage": {
+    "inputTokens": 58643,
+    "outputTokens": 9692,
+    "reasoningTokens": 0,
+    "totalTokens": 68335
+  },
+  "rawSessionPath": "/Users/johnlindquist/.oracle/sessions/builtin-filterable-map"
+}

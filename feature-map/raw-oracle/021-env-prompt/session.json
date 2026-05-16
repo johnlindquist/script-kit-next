@@ -1,0 +1,97 @@
+{
+  "id": "env-prompt-atlas",
+  "createdAt": "2026-05-15T09:08:06.416Z",
+  "status": "completed",
+  "promptPreview": "[env-prompt-atlas] Produce the requested feature atlas for feature 021. Use the attached bundle and prompt. Return text only; do not create artifacts.",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T09:08:06.417Z",
+      "completedAt": "2026-05-15T09:17:58.222Z",
+      "usage": {
+        "inputTokens": 60045,
+        "outputTokens": 13821,
+        "reasoningTokens": 0,
+        "totalTokens": 73866
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 26881
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[env-prompt-atlas] Produce the requested feature atlas for feature 021. Use the attached bundle and prompt. Return text only; do not create artifacts.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/env-prompt-atlas.txt",
+      "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/021-env-prompt/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "env-prompt-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/021-env-prompt/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T09:08:06.417Z",
+  "completedAt": "2026-05-15T09:17:58.223Z",
+  "usage": {
+    "inputTokens": 60045,
+    "outputTokens": 13821,
+    "reasoningTokens": 0,
+    "totalTokens": 73866
+  },
+  "elapsedMs": 590083
+}

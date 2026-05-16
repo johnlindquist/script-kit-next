@@ -1,0 +1,97 @@
+{
+  "id": "window-control-visual-inspection-atlas",
+  "createdAt": "2026-05-15T10:45:23.168Z",
+  "status": "completed",
+  "promptPreview": "[window-control-visual-inspection-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source context. Re",
+  "model": "gpt-5.4-pro",
+  "models": [
+    {
+      "model": "gpt-5.4-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.4-pro.log"
+      },
+      "startedAt": "2026-05-15T10:45:23.170Z",
+      "completedAt": "2026-05-15T10:53:28.640Z",
+      "usage": {
+        "inputTokens": 57113,
+        "outputTokens": 12029,
+        "reasoningTokens": 0,
+        "totalTokens": 69142
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "runtime": {
+      "controllerPid": 93711
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[window-control-visual-inspection-atlas] Produce the requested operator-grade feature atlas. Use the attached packx bundle and prompt file as source context. Return text only.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/window-control-visual-inspection-atlas.txt",
+      "feature-map/raw-oracle/028-window-control-visual-inspection/prompt.md"
+    ],
+    "model": "gpt-5.4-pro",
+    "models": [
+      "gpt-5.4-pro"
+    ],
+    "effectiveModelId": "gpt-5.4-pro",
+    "filesReport": false,
+    "slug": "window-control-visual-inspection-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "chromeProfile": "Default",
+      "chromePath": null,
+      "chromeCookiePath": null,
+      "debugPort": null,
+      "inlineCookiesSource": null,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "desiredModel": "Use latest model",
+      "modelStrategy": "select",
+      "allowCookieErrors": true,
+      "thinkingTime": "extended"
+    },
+    "verbose": false,
+    "heartbeatIntervalMs": 30000,
+    "browserAttachments": "never",
+    "browserInlineFiles": false,
+    "browserBundleFiles": false,
+    "timeoutSeconds": 30,
+    "zombieUseLastActivity": false,
+    "writeOutputPath": "/Users/johnlindquist/dev/script-kit-gpui/feature-map/raw-oracle/028-window-control-visual-inspection/answer.cli.md",
+    "waitPreference": true,
+    "geminiShowThoughts": false
+  },
+  "startedAt": "2026-05-15T10:45:23.169Z",
+  "completedAt": "2026-05-15T10:53:28.644Z",
+  "usage": {
+    "inputTokens": 57113,
+    "outputTokens": 12029,
+    "reasoningTokens": 0,
+    "totalTokens": 69142
+  },
+  "elapsedMs": 483705
+}

@@ -1,0 +1,92 @@
+{
+  "id": "shortcut-refresh-atlas",
+  "createdAt": "2026-05-15T15:44:53.917Z",
+  "status": "completed",
+  "promptPreview": "[shortcut-refresh-atlas]\n\nProject briefing:\n\nThis is Script Kit GPUI, a Rust/GPUI desktop app with a Bun/TypeScript SDK and config tooling. The repository uses ",
+  "model": "gpt-5.5-pro",
+  "models": [
+    {
+      "model": "gpt-5.5-pro",
+      "status": "completed",
+      "log": {
+        "path": "models/gpt-5.5-pro.log"
+      },
+      "startedAt": "2026-05-15T15:44:53.919Z",
+      "completedAt": "2026-05-15T15:54:05.009Z",
+      "usage": {
+        "inputTokens": 52567,
+        "outputTokens": 13028,
+        "reasoningTokens": 0,
+        "totalTokens": 65595
+      }
+    }
+  ],
+  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
+  "mode": "browser",
+  "browser": {
+    "config": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "runtime": {
+      "controllerPid": 55940
+    }
+  },
+  "notifications": {
+    "enabled": true,
+    "sound": false
+  },
+  "options": {
+    "prompt": "[shortcut-refresh-atlas]\n\nProject briefing:\n\nThis is Script Kit GPUI, a Rust/GPUI desktop app with a Bun/TypeScript SDK and config tooling. The repository uses `lat.md/` as the architecture/test knowledge graph. Repo rules require `lat expand`, `lat search`, relevant skill context, `lat.md/` updates for behavior/docs changes, and `lat check`. This feature-map project is building an operator-grade atlas for humans and AI agents. Every Oracle answer is preserved under `feature-map/raw-oracle/<feature-id>/`, then locally distilled into `feature-map/features/<feature-id>.md`.\n\nFeature id:\n\n`046-shortcut-assignment-config-refresh`\n\nGoal:\n\nProduce a complete operator-grade feature atlas chapter for shortcut assignment, shortcut removal, config-backed command shortcuts, `config.ts` mutation, refresh/reload behavior, live hotkey registration, shortcut display, conflicts, and verification. This is a focused follow-up because the broader main-menu and hotkey chapters are not enough to fully explain assigning shortcuts from launcher/actions and how those writes update `~/.scriptkit/config.ts` and the app.\n\nCurrent evidence:\n\n- `lat expand \"046 Shortcut assignment config refresh: assign shortcuts from main menu actions config.ts update reload hotkeys shortcut recorder remove shortcut duplicate conflict refresh app\"` was run.\n- `lat search \"shortcut assignment config.ts refresh app main menu actions assign remove shortcut duplicate conflict hotkey reload\"` returned:\n  - `lat.md/shortcuts#Shortcuts#Removal Writes`\n  - `lat.md/shortcuts#Shortcuts#Key Facts`\n  - `lat.md/shortcuts#Shortcuts#Recorder Writes`\n  - `lat.md/tests/dictation-setup-nux#Dictation Setup NUX#Hotkey guidance does not invent default`\n  - `lat.md/shortcuts#Shortcuts`\n- The current shortcut contract says launcher shortcuts have one durable user-owned source: `~/.scriptkit/config.ts`.\n- Command-specific launcher shortcuts are read from `config.ts.commands[commandId].shortcut`.\n- Script and scriptlet metadata shortcuts remain defaults; `config.ts.commands` wins over metadata for the same command ID.\n- `shortcuts.json` is legacy only and must not be an active source.\n- Recorder saves call `scripts/update-config-shortcut.ts`, wrapping `scripts/config-cli.ts set-command-shortcut`.\n- Removal calls `scripts/remove-config-shortcut.ts`, wrapping `scripts/config-cli.ts remove-command-shortcut`.\n\nBundle map:\n\nThe attached bundle includes process docs, the goal file, owning skills, `lat.md/shortcuts.md`, config CLI/wrappers/tests, shortcut recorder implementation, shortcut action handlers, shortcut type/compat modules, command id helpers, source-audit tests, popup-window contract tests, error-message tests, config-fingerprint tests, and adjacent feature-map chapters where shortcut behavior was previously mentioned.\n\nPlease map what is present in the attached repo snapshot. Mark uncertain claims as inference. Do not invent behavior. If a user story or proof path is not implemented, call it a gap.\n\nRequired deliverable:\n\nProduce a complete operator-grade feature atlas for humans and AI agents.\n\nPrefer clarity, explicit examples, and workflow detail over compression. Explain every user workflow, UI state, shortcut, action, state transition, automation receipt, data boundary, edge case, failure mode, and verification path. Do not summarize away behavior.\n\nGround claims in the attached repo context. Prefer concrete file/function/test/script references. Mark uncertain claims as inference. Do not write code or create downloadable artifacts.\n\nRequired output shape:\n\n```markdown\n## 046 Shortcut Assignment And Config Refresh\n\n### Executive Summary\n\n### What Users Can Do\n\n### Core Concepts\n\n### Entry Points\n\n### User Workflows\n\n### Interaction Matrix\n\n| User intent | Entry point | UI state | Key/click | Code path | Result | Proof |\n|---|---|---|---|---|---|---|\n\n### State Machine\n\n### Visual And Focus States\n\n### Keystrokes And Commands\n\n### Actions And Menus\n\n### Config Write And Refresh Semantics\n\n### Command IDs And Source Priority\n\n### Automation And Protocol Surface\n\n### Data, Storage, And Privacy Boundaries\n\n### Error, Empty, Loading, Conflict, And Disabled States\n\n### Code Ownership\n\n### Invariants And Regression Risks\n\n### Verification Recipes\n\n### Agent Notes\n\n### Related Features\n\n### Open Questions And Gaps\n```\n\nSpecific questions to answer:\n\n1. How does a user assign a shortcut from the main menu or actions surfaces?\n2. Which rows/actions expose assignment or removal, and which row types should not?\n3. What is the shortcut recorder UI state machine from open -> recording modifiers/key -> conflict/no conflict -> save/cancel/clear?\n4. How are shortcuts represented in recorder state, display glyphs, config payloads, `config.ts`, and row/action hints?\n5. What exact command IDs are used for scripts, scriptlets, built-ins, and apps?\n6. What writes to `~/.scriptkit/config.ts`, and what fields are preserved or removed?\n7. What happens after a successful write: live hotkey registration, app refresh, menu row refresh, config fingerprint, or restart-required behavior?\n8. What conflict detection exists, if any, and what remains unproven?\n9. How do config-backed shortcuts override script/scriptlet metadata shortcuts?\n10. What exactly is legacy about `shortcuts.json`, and what must not read/write it?\n11. How are removals handled when a command has sibling config fields like `hidden` or `confirmationRequired`?\n12. What error states can occur from bad keys, wrapper failures, config parse/write problems, missing command IDs, hidden commands, or conflicts?\n13. How should agents verify this feature with source tests, Bun tests, protocol receipts, config fingerprint, and state-first runtime proof?\n14. What unsafe claims should feature-map chapters avoid?\n\nRepo-specific rules:\n\n- Include the `lat.md/` update rule and required `lat check` in the verification plan.\n- Treat screenshots as secondary; prefer state-first receipts where possible.\n- Preserve raw Oracle output separately from the distilled feature chapter.\n- Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
+    "file": [
+      "/Users/johnlindquist/.oracle/bundles/shortcut-config-refresh.txt"
+    ],
+    "model": "gpt-5.5-pro",
+    "models": [
+      "gpt-5.5-pro"
+    ],
+    "effectiveModelId": "gpt-5.5-pro",
+    "slug": "shortcut-refresh-atlas",
+    "mode": "browser",
+    "browserConfig": {
+      "remoteHost": "100.85.201.62:7333",
+      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
+      "url": "https://chatgpt.com/",
+      "chatgptUrl": "https://chatgpt.com/",
+      "cookieSync": true,
+      "headless": false,
+      "hideWindow": false,
+      "keepBrowser": false,
+      "manualLogin": false,
+      "manualLoginProfileDir": null,
+      "manualLoginCookieSync": false,
+      "modelStrategy": "select",
+      "thinkingTime": "extended",
+      "desiredModel": "Use latest model"
+    },
+    "heartbeatIntervalMs": 30000,
+    "search": true,
+    "waitPreference": true
+  },
+  "startedAt": "2026-05-15T15:44:53.918Z",
+  "completedAt": "2026-05-15T15:54:05.010Z",
+  "usage": {
+    "inputTokens": 52567,
+    "outputTokens": 13028,
+    "reasoningTokens": 0,
+    "totalTokens": 65595
+  },
+  "elapsedMs": 549994
+}
