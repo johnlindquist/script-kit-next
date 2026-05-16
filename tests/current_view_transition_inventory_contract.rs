@@ -225,8 +225,8 @@ fn inventory_captures_known_transition_classes() {
         ),
         (
             "src/app_impl/trigger_builtin_dispatch.rs",
-            "show_filterable_view",
-            "AppView::ClipboardHistoryView",
+            "apply_filterable_route_plan",
+            "dynamic",
         ),
         (
             "src/app_impl/acp_surface_transitions.rs",

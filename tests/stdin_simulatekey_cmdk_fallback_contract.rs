@@ -36,7 +36,7 @@ const DISPATCHERS: &[(&str, &str)] = &[
 ];
 
 const FALLBACK_LOG_LINE: &str = "SimulateKey: Cmd+K - generic actions toggle (fallback for view=";
-const UNHANDLED_VIEW_EVENT: &str = "simulateKey_unhandled_view";
+const UNHANDLED_VIEW_EVENT: &str = "event = \"simulateKey_unhandled_view\"";
 const FALLBACK_HELPER_CALL: &str = "view.simulate_key_requests_generic_actions_toggle(";
 
 fn actions_toggle_helper_body() -> &'static str {
