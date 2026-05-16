@@ -69,6 +69,12 @@
  *                         Fail-closed native picker/external return focus proof
  *   drag-cancel-payload-scope-stress
  *                         Fail-closed drag cancellation payload scope proof
+ *   runtime-appearance-churn-focused-input-stress
+ *                         Fail-closed focused input appearance churn proof
+ *   power-resume-window-generation-stress
+ *                         Fail-closed power resume window generation proof
+ *   menu-tray-notification-modal-interruption-stress
+ *                         Fail-closed menu/tray/notification modal interruption proof
  *   help                   Show this help
  *
  * Target threading:
@@ -122,6 +128,9 @@ import {
   runDisplayMigrationVisualBoundsStressScenario,
   runNativePickerExternalReturnFocusStressScenario,
   runDragCancelPayloadScopeStressScenario,
+  runRuntimeAppearanceChurnFocusedInputStressScenario,
+  runPowerResumeWindowGenerationStressScenario,
+  runMenuTrayNotificationModalInterruptionStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -723,6 +732,26 @@ function parseArgs() {
     hoverTargetIdx >= 0 && args[hoverTargetIdx + 1] ? args[hoverTargetIdx + 1] : undefined;
   const cancelIdx = args.indexOf("--cancel");
   const cancel = cancelIdx >= 0 && args[cancelIdx + 1] ? args[cancelIdx + 1] : undefined;
+  const churnIdx = args.indexOf("--churn");
+  const churn =
+    churnIdx >= 0 && args[churnIdx + 1]
+      ? args[churnIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const cyclesIdx = args.indexOf("--cycles");
+  const rawCycles = cyclesIdx >= 0 && args[cyclesIdx + 1] ? Number(args[cyclesIdx + 1]) : undefined;
+  const cycles = Number.isFinite(rawCycles) ? rawCycles : undefined;
+  const eventIdx = args.indexOf("--event");
+  const event = eventIdx >= 0 && args[eventIdx + 1] ? args[eventIdx + 1] : undefined;
+  const activeSurfaceIdx = args.indexOf("--active-surface");
+  const activeSurface =
+    activeSurfaceIdx >= 0 && args[activeSurfaceIdx + 1]
+      ? args[activeSurfaceIdx + 1]
+      : undefined;
+  const interruptionsIdx = args.indexOf("--interruptions");
+  const interruptions =
+    interruptionsIdx >= 0 && args[interruptionsIdx + 1]
+      ? args[interruptionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
   return {
     recipe,
     session,
@@ -790,6 +819,11 @@ function parseArgs() {
     foreignApp,
     hoverTarget,
     cancel,
+    churn,
+    cycles,
+    event,
+    activeSurface,
+    interruptions,
   };
 }
 
@@ -2095,6 +2129,11 @@ const {
   foreignApp,
   hoverTarget,
   cancel,
+  churn,
+  cycles,
+  event,
+  activeSurface,
+  interruptions,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -2837,6 +2876,59 @@ switch (recipe) {
     break;
   }
 
+  case "runtime-appearance-churn-focused-input-stress": {
+    const proofBundle = await runRuntimeAppearanceChurnFocusedInputStressScenario({
+      session,
+      surface,
+      churn,
+      cycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "runtime-appearance-churn-focused-input-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Runtime appearance churn focused input stress failed closed; focused input continuity, layout metrics, and renderer token receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "power-resume-window-generation-stress": {
+    const proofBundle = await runPowerResumeWindowGenerationStressScenario({
+      session,
+      surface,
+      event,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "power-resume-window-generation-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Power resume window generation stress failed closed; stale pre-sleep target rejection and post-wake revalidation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "menu-tray-notification-modal-interruption-stress": {
+    const proofBundle = await runMenuTrayNotificationModalInterruptionStressScenario({
+      session,
+      host,
+      activeSurface,
+      interruptions,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "menu-tray-notification-modal-interruption-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Menu/tray/notification modal interruption stress failed closed; active modal focus, wrong-surface rejection, and interruption receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2976,6 +3068,9 @@ switch (recipe) {
           { name: "display-migration-visual-bounds-stress", description: "Fail-closed display migration visual/text bounds, focus/selection, capture identity, and wrong-display rejection receipt", flags: ["--session", "--surfaces", "--from-display", "--to-display", "--json"] },
           { name: "native-picker-external-return-focus-stress", description: "Fail-closed native picker/external handoff origin return, focus/selection/cursor restore, and stale/foreign event receipt", flags: ["--session", "--origin", "--handoff", "--foreign-app", "--json"] },
           { name: "drag-cancel-payload-scope-stress", description: "Fail-closed drag cancellation payload scope, hover/drop cleanup, origin restoration, and side-effect boundary receipt", flags: ["--session", "--source", "--hover-target", "--cancel", "--json"] },
+          { name: "runtime-appearance-churn-focused-input-stress", description: "Fail-closed focused prompt/ACP appearance churn receipt for scale/font/theme changes", flags: ["--session", "--surface", "--churn", "--cycles", "--json"] },
+          { name: "power-resume-window-generation-stress", description: "Fail-closed power resume generation, stale target refusal, and post-wake revalidation receipt", flags: ["--session", "--surface", "--event", "--json"] },
+          { name: "menu-tray-notification-modal-interruption-stress", description: "Fail-closed tray/menu/notification interruption active modal focus ownership receipt", flags: ["--session", "--host", "--active-surface", "--interruptions", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3043,6 +3138,9 @@ switch (recipe) {
           "proofBundle.displayMigrationVisualBounds",
           "proofBundle.nativePickerExternalReturnFocus",
           "proofBundle.dragCancelPayloadScope",
+          "proofBundle.runtimeAppearanceChurnFocusedInput",
+          "proofBundle.powerResumeWindowGeneration",
+          "proofBundle.menuTrayNotificationModalInterruption",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -3143,6 +3241,12 @@ Recipes:
                          Fail-closed native picker/external return focus proof
   drag-cancel-payload-scope-stress
                          Fail-closed drag cancellation payload scope proof
+  runtime-appearance-churn-focused-input-stress
+                         Fail-closed focused input appearance churn proof
+  power-resume-window-generation-stress
+                         Fail-closed power resume window generation proof
+  menu-tray-notification-modal-interruption-stress
+                         Fail-closed menu/tray/notification modal interruption proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3239,6 +3343,12 @@ Available scenarios:
                          Emit fail-closed native picker/external return focus requirements
   drag-cancel-payload-scope-stress
                          Emit fail-closed drag cancellation payload scope requirements
+  runtime-appearance-churn-focused-input-stress
+                         Emit fail-closed focused input appearance churn requirements
+  power-resume-window-generation-stress
+                         Emit fail-closed power resume window generation requirements
+  menu-tray-notification-modal-interruption-stress
+                         Emit fail-closed menu/tray/notification interruption requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3290,6 +3400,9 @@ Examples:
   bun scripts/agentic/index.ts display-migration-visual-bounds-stress --session default --surfaces main,actionsDialog,promptPopup,acpDetached,notes --from-display primary --to-display external --json
   bun scripts/agentic/index.ts native-picker-external-return-focus-stress --session default --origin acp --handoff file-picker --foreign-app Finder --json
   bun scripts/agentic/index.ts drag-cancel-payload-scope-stress --session default --source file-search --hover-target drop-prompt --cancel escape --json
+  bun scripts/agentic/index.ts runtime-appearance-churn-focused-input-stress --session default --surface acp-composer --churn scale,font,theme --cycles 6 --json
+  bun scripts/agentic/index.ts power-resume-window-generation-stress --session default --surface main --event sleep-wake --json
+  bun scripts/agentic/index.ts menu-tray-notification-modal-interruption-stress --session default --host acpChat --active-surface actionsDialog --interruptions tray-menu,app-menu,notification --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
