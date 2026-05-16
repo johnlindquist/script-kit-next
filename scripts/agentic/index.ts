@@ -105,6 +105,12 @@
  *                         Fail-closed actions discoverability/no-op UX proof
  *   dense-list-detail-preview-readability-stress
  *                         Fail-closed dense list/detail preview readability proof
+ *   toast-notification-queue-lifecycle-stress
+ *                         Fail-closed toast/notification queue lifecycle proof
+ *   destructive-confirm-modal-safety-stress
+ *                         Fail-closed destructive confirm dry-run safety proof
+ *   loading-skeleton-progress-restoration-stress
+ *                         Fail-closed loading skeleton/progress restoration proof
  *   help                   Show this help
  *
  * Target threading:
@@ -176,6 +182,9 @@ import {
   runLongTextWrapResizeSurfaceStressScenario,
   runActionsCommandDiscoverabilityNoopStressScenario,
   runDenseListDetailPreviewReadabilityStressScenario,
+  runToastNotificationQueueLifecycleStressScenario,
+  runDestructiveConfirmModalSafetyStressScenario,
+  runLoadingSkeletonProgressRestorationStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -898,11 +907,20 @@ function parseArgs() {
     widthsIdx >= 0 && args[widthsIdx + 1]
       ? args[widthsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const fixtureIdx = args.indexOf("--fixture");
+  const fixture =
+    fixtureIdx >= 0 && args[fixtureIdx + 1] ? args[fixtureIdx + 1] : undefined;
   const fixturesIdx = args.indexOf("--fixtures");
   const fixtures =
     fixturesIdx >= 0 && args[fixturesIdx + 1]
       ? args[fixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const pathsIdx = args.indexOf("--paths");
+  const paths =
+    pathsIdx >= 0 && args[pathsIdx + 1]
+      ? args[pathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const dryRunOnly = args.includes("--dry-run-only");
   const hostsIdx = args.indexOf("--hosts");
   const hosts =
     hostsIdx >= 0 && args[hostsIdx + 1]
@@ -1011,7 +1029,10 @@ function parseArgs() {
     originSurface,
     transitions,
     widths,
+    fixture,
     fixtures,
+    paths,
+    dryRunOnly,
     hosts,
     selectionCycles,
     resizeCycles,
@@ -2348,7 +2369,10 @@ const {
   originSurface,
   transitions,
   widths,
+  fixture,
   fixtures,
+  paths,
+  dryRunOnly,
   hosts,
   selectionCycles,
   resizeCycles,
@@ -3456,6 +3480,73 @@ switch (recipe) {
     break;
   }
 
+  case "toast-notification-queue-lifecycle-stress": {
+    const proofBundle = await runToastNotificationQueueLifecycleStressScenario({
+      session,
+      surface,
+      fixtures,
+      cycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "toast-notification-queue-lifecycle-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Toast notification queue lifecycle stress failed closed; queue, bridge, duplicate, autohide, bounds, stale rejection, and no-action receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "destructive-confirm-modal-safety-stress": {
+    const proofBundle = await runDestructiveConfirmModalSafetyStressScenario({
+      session,
+      host,
+      fixture,
+      paths,
+      dryRunOnly,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "destructive-confirm-modal-safety-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Destructive confirm modal safety stress failed closed; dry-run prompt identity, Enter/Escape, restore, stale rejection, and no-system-command receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "loading-skeleton-progress-restoration-stress": {
+    const proofBundle = await runLoadingSkeletonProgressRestorationStressScenario({
+      session,
+      surfaces,
+      fixture,
+      cycles,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "loading-skeleton-progress-restoration-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Loading skeleton/progress restoration stress failed closed; request/result generation, skeleton, progress, stale rejection, and restore receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3613,6 +3704,9 @@ switch (recipe) {
           { name: "long-text-wrap-resize-surface-stress", description: "Fail-closed UX stress for long labels, paths, descriptions, snippets, and Mini/Full resize readability", flags: ["--session", "--surfaces", "--widths", "--fixtures", "--json"] },
           { name: "actions-command-discoverability-noop-stress", description: "Fail-closed UX stress for actionable, disabled, and no-op action rows with safe activation guards", flags: ["--session", "--hosts", "--states", "--json"] },
           { name: "dense-list-detail-preview-readability-stress", description: "Fail-closed UX stress for dense list/detail preview readability during filter, selection, and resize churn", flags: ["--session", "--surfaces", "--query", "--filter-cycles", "--selection-cycles", "--resize-cycles", "--json"] },
+          { name: "toast-notification-queue-lifecycle-stress", description: "Fail-closed UX stress for toast queue, notification bridge, duplicate collapse, autohide, dismiss, bounds, and stale rejection", flags: ["--session", "--surface", "--fixtures", "--cycles", "--json"] },
+          { name: "destructive-confirm-modal-safety-stress", description: "Fail-closed UX stress for destructive confirm dry-run identity, Enter/Escape safety, parent restore, and no real system command", flags: ["--session", "--host", "--fixture", "--paths", "--dry-run-only", "--json"] },
+          { name: "loading-skeleton-progress-restoration-stress", description: "Fail-closed UX stress for local loading skeleton/progress generations, stale rejection, activation blocking, and restoration", flags: ["--session", "--surfaces", "--fixture", "--cycles", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3822,6 +3916,12 @@ Recipes:
                          Fail-closed actions disabled/no-op discoverability proof
   dense-list-detail-preview-readability-stress
                          Fail-closed dense list/detail preview readability proof
+  toast-notification-queue-lifecycle-stress
+                         Fail-closed toast/notification queue lifecycle proof
+  destructive-confirm-modal-safety-stress
+                         Fail-closed destructive confirm dry-run safety proof
+  loading-skeleton-progress-restoration-stress
+                         Fail-closed loading skeleton/progress restoration proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3954,6 +4054,12 @@ Available scenarios:
                          Emit fail-closed actions disabled/no-op discoverability requirements
   dense-list-detail-preview-readability-stress
                          Emit fail-closed dense list/detail preview readability requirements
+  toast-notification-queue-lifecycle-stress
+                         Emit fail-closed toast/notification queue lifecycle requirements
+  destructive-confirm-modal-safety-stress
+                         Emit fail-closed destructive confirm dry-run safety requirements
+  loading-skeleton-progress-restoration-stress
+                         Emit fail-closed loading skeleton/progress restoration requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4023,6 +4129,9 @@ Examples:
   bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
   bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
   bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
+  bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
+  bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
+  bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
