@@ -22,3 +22,7 @@ ACP Chat tests pin Agent Chat runtime boundaries that are easy to mistake for SD
 ### Live subscription runtime
 
 Live subscription runtime tests prove `aiSubscribe`/`aiUnsubscribe` are owned by the executing script response channel and that ACP thread events fan out through scoped subscription hooks.
+
+### Existing chat mutation runtime
+
+Existing chat mutation runtime tests prove `aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt` take the direct storage-backed SDK path, settle typed errors, and leave conversation state readable after mutation.

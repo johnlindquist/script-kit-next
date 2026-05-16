@@ -60,6 +60,12 @@ Feedback messages distinguish serialization from behavior. Request-id `notify`, 
 
 SDK `find()` is not a Rust prompt protocol route. The SDK rejects it before emitting any `find` JSONL message while no GPUI prompt route, renderer, submit contract, or `onlyin` prompt semantics exist; the supported file-search protocol surface remains `fileSearch` / `fileSearchResult`, where `onlyin` is carried on the query request.
 
+### AI mutation responses
+
+Existing-chat AI mutation messages settle through direct SDK handler responses instead of prompt fallback.
+
+`aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt` carry `requestId` and are handled by [[src/ai/sdk_handlers.rs]] before UI prompt routing. Successful append/send responses return real stored message ids; request-scoped `aiError` responses carry typed codes for invalid ids, missing/deleted chats, invalid roles, and unsupported context-part sends so SDK promises reject instead of timing out.
+
 ## Query and introspection
 
 The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.

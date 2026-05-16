@@ -2872,6 +2872,7 @@ type ResponseMessage =
   | AiChatCreatedMessage
   | AiMessageAppendedMessage
   | AiMessageSentMessage
+  | AiSystemPromptSetMessage
   | AiFocusResultMessage
   | AiStreamingStatusResultMessage
   | AiSubscribedMessage
@@ -6767,14 +6768,19 @@ globalThis.aiAppendMessage = async function aiAppendMessage(
     chatId,
   };
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     addPending(requestId, (msg: ResponseMessage) => {
       if (msg.type === 'aiMessageAppended') {
         const resultMsg = msg as AiMessageAppendedMessage;
         resolve(resultMsg.messageId);
         return;
       }
-      resolve('unknown');
+      if (msg.type === 'aiError') {
+        const error = msg as AiErrorMessage;
+        reject(new Error(`${error.code}: ${error.message}`));
+        return;
+      }
+      reject(new Error(`Unexpected aiAppendMessage response: ${msg.type}`));
     }, mockResult);
 
     const sendMsg: AiAppendMessageMessage = {
@@ -6824,7 +6830,7 @@ globalThis.aiSendMessage = async function aiSendMessage(
     streamingStarted: false,
   };
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     addPending(requestId, (msg: ResponseMessage) => {
       if (msg.type === 'aiMessageSent') {
         const resultMsg = msg as AiMessageSentMessage;
@@ -6834,7 +6840,12 @@ globalThis.aiSendMessage = async function aiSendMessage(
         });
         return;
       }
-      resolve({ userMessageId: 'unknown', streamingStarted: false });
+      if (msg.type === 'aiError') {
+        const error = msg as AiErrorMessage;
+        reject(new Error(`${error.code}: ${error.message}`));
+        return;
+      }
+      reject(new Error(`Unexpected aiSendMessage response: ${msg.type}`));
     }, mockResult);
 
     const sendMsg: AiSendMessageMessage = {
@@ -6866,9 +6877,23 @@ globalThis.aiSetSystemPrompt = async function aiSetSystemPrompt(
     success: true,
   };
 
-  return new Promise((resolve) => {
-    addPending(requestId, () => {
-      resolve();
+  return new Promise((resolve, reject) => {
+    addPending(requestId, (msg: ResponseMessage) => {
+      if (msg.type === 'aiSystemPromptSet') {
+        const resultMsg = msg as AiSystemPromptSetMessage;
+        if (resultMsg.success) {
+          resolve();
+        } else {
+          reject(new Error(resultMsg.error ?? 'AI_SYSTEM_PROMPT_SET_FAILED'));
+        }
+        return;
+      }
+      if (msg.type === 'aiError') {
+        const error = msg as AiErrorMessage;
+        reject(new Error(`${error.code}: ${error.message}`));
+        return;
+      }
+      reject(new Error(`Unexpected aiSetSystemPrompt response: ${msg.type}`));
     }, mockResult);
 
     const sendMsg: AiSetSystemPromptMessage = {
