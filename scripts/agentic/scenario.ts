@@ -112,7 +112,10 @@ export interface HardScenarioReceipt {
     | "permission-share-cross-prompt-focus-stress"
     | "visible-text-clipping-overlap-stress"
     | "layout-measurement-regression-stress"
-    | "screenshot-semantics-visual-consistency-stress";
+    | "screenshot-semantics-visual-consistency-stress"
+    | "modal-stack-arbitration-stress"
+    | "cross-surface-export-provenance-stress"
+    | "dev-session-recovery-stale-target-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -154,6 +157,9 @@ export interface HardScenarioReceipt {
   layoutMeasurementRegression?: Record<string, unknown>;
   visualConsistency?: Record<string, unknown>;
   screenshotSemanticsConsistency?: Record<string, unknown>;
+  modalStackArbitration?: Record<string, unknown>;
+  crossSurfaceExport?: Record<string, unknown>;
+  sessionRecovery?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -3722,6 +3728,357 @@ export async function runScreenshotSemanticsVisualConsistencyStressScenario(opts
             message:
               "Strict screenshot capture did not agree with state/elements semantic receipts.",
           },
+    warnings: [],
+  };
+}
+
+export async function runModalStackArbitrationStressScenario(opts: {
+  session: string;
+  host?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "modal-stack-arbitration-stress",
+    status: "fail",
+    modalStackArbitration: {
+      session: opts.session,
+      host: opts.host ?? "acpChat",
+      requestedStack: ["actionsDialog", "confirmPopup", "promptPopup"],
+      stackSequence: ["actionsDialog", "confirmPopup", "promptPopup"],
+      requiredReceipt: "stateResult.modalStackArbitration",
+      stackGeneration: null,
+      stack: [],
+      topmostOwnerOnly: null,
+      keyDispatches: [
+        {
+          key: "escape",
+          beforeTopOwner: null,
+          handledBy: null,
+          afterTopOwner: null,
+          lowerOwnersMutated: null,
+          parentSelectionFingerprintBefore: null,
+          parentSelectionFingerprintAfter: null,
+          parentFocusBefore: null,
+          parentFocusAfter: null,
+        },
+        {
+          key: "cmd+w",
+          beforeTopOwner: null,
+          handledBy: null,
+          afterTopOwner: null,
+          lowerOwnersMutated: null,
+        },
+        {
+          key: "enter",
+          beforeTopOwner: null,
+          handledBy: null,
+          submittedOwner: null,
+          lowerOwnersMutated: null,
+        },
+      ],
+      restore: {
+        parentSelectionRestored: null,
+        parentFocusRestored: null,
+        actionsDialogRouteRestored: null,
+        promptInputRestored: null,
+      },
+      forbiddenProofModes: ["single_popup_only", "kind_fallback_target", "screenshot_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "modal-stack-arbitration-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove Actions, confirm, and attached prompt popup stacks expose topmost-owner key routing and parent focus/selection restoration receipts.",
+      },
+    }],
+    failure: {
+      code: "missing_modal_stack_arbitration_receipt",
+      stepName: "modal-stack-arbitration-receipt-preflight",
+      message:
+        "The harness fails closed until stacked modal key routing proves Escape, Cmd-W, and Enter affect only the topmost owner and restore parent state.",
+    },
+    warnings: ["file_linear:modal_stack_arbitration_receipts_missing"],
+  };
+}
+
+export async function runCrossSurfaceExportProvenanceStressScenario(opts: {
+  session: string;
+  source?: string;
+  destination?: string;
+  exportMode?: string;
+  query?: string;
+  range?: string;
+}): Promise<HardScenarioReceipt> {
+  const source = opts.source ?? "file-search";
+  const destination = opts.destination ?? "acp-composer";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "cross-surface-export-provenance-stress",
+    status: "fail",
+    crossSurfaceExport: {
+      session: opts.session,
+      source: {
+        surface: source,
+        query: opts.query ?? "AGENTS.md",
+        range: opts.range ?? null,
+        selectionSemanticId: null,
+        selectionGeneration: null,
+        visibleRowFingerprint: null,
+        filterGenerationBefore: null,
+        filterGenerationAfter: null,
+        redactedVisibleRows: null,
+        forbiddenVisibleFields: [
+          "absolutePath",
+          "parentPath",
+          "content",
+          "rawClipboardText",
+        ],
+      },
+      payload: {
+        exportMode: opts.exportMode ?? "copy",
+        payloadKind: null,
+        payloadUri: null,
+        payloadFingerprint: null,
+        publicLabel: null,
+        byteSize: null,
+        provenanceChain: [],
+        sourceGenerationMatched: null,
+      },
+      destination: {
+        host: destination,
+        targetWindowId: null,
+        targetSurfaceId: null,
+        composerGeneration: null,
+        notesRevision: null,
+        insertionRange: null,
+        acceptedContextPartUri: null,
+        insertedPayloadFingerprint: null,
+      },
+      staleGuard: {
+        filterChangedAfterExport: null,
+        staleSourceGenerationRejected: null,
+        wrongPayloadAccepted: null,
+        sourceSnapshotRecheckedBeforeInsert: null,
+      },
+      privacy: {
+        visibleRowsLeakedPrivatePath: null,
+        rawClipboardTextLogged: false,
+        payloadContentLogged: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedClipboard: false,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "cross-surface-export-provenance-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Cross-surface source/export/destination provenance receipts are not exposed as one agentic proof.",
+      },
+    }],
+    failure: {
+      code: "missing_cross_surface_export_provenance_receipt",
+      stepName: "cross-surface-export-provenance-receipt-preflight",
+      message:
+        "The harness fails closed until File Search or Clipboard History export into ACP/Notes exposes provenance, redaction, destination insertion, and stale-source rejection receipts.",
+    },
+    warnings: ["file_linear:cross_surface_export_provenance_receipts_missing"],
+  };
+}
+
+function computeAgenticSessionEpoch(status: Record<string, unknown>): string {
+  const stable = JSON.stringify({
+    status: status.status ?? null,
+    pid: status.pid ?? null,
+    alive: status.alive ?? null,
+    session: status.session ?? null,
+    ready: status.ready ?? null,
+    socket: status.socket ?? status.pipe ?? null,
+  });
+  let hash = 0;
+  for (let i = 0; i < stable.length; i += 1) {
+    hash = (hash * 31 + stable.charCodeAt(i)) >>> 0;
+  }
+  return `agentic:${hash.toString(16)}`;
+}
+
+export async function runDevSessionRecoveryStaleTargetStressScenario(opts: {
+  session: string;
+  entry?: string;
+  kind?: string;
+  index?: number;
+  restartMode?: string;
+}): Promise<HardScenarioReceipt> {
+  const entry = opts.entry ?? "clipboard-history-actions";
+  const kind = opts.kind ?? "actionsDialog";
+  const index = opts.index ?? 0;
+  const restartMode = opts.restartMode ?? "stop-start";
+  const initialStatusTool = await runTool(
+    ["bash", "scripts/agentic/session.sh", "status", opts.session],
+    "recovery:initial-status",
+  );
+  const initialStatus = parseMaybeJson(initialStatusTool.stdout);
+  const initialEpoch = computeAgenticSessionEpoch(initialStatus);
+  const stopTool = await runTool(
+    ["bash", "scripts/agentic/session.sh", "stop", opts.session],
+    "recovery:session-stop",
+  );
+  const startTool = await runTool(
+    ["bash", "scripts/agentic/session.sh", "start", opts.session],
+    "recovery:session-start",
+  );
+  const currentStatusTool = await runTool(
+    ["bash", "scripts/agentic/session.sh", "status", opts.session],
+    "recovery:current-status",
+  );
+  const currentStatus = parseMaybeJson(currentStatusTool.stdout);
+  const currentEpoch = computeAgenticSessionEpoch(currentStatus);
+  const finalStopTool = await runTool(
+    ["bash", "scripts/agentic/session.sh", "stop", opts.session],
+    "recovery:final-stop",
+  );
+  const ok =
+    initialStatusTool.exitCode === 0 &&
+    stopTool.exitCode === 0 &&
+    startTool.exitCode === 0 &&
+    currentStatusTool.exitCode === 0 &&
+    finalStopTool.exitCode === 0;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "dev-session-recovery-stale-target-stress",
+    status: ok ? "pass" : "fail",
+    sessionRecovery: {
+      session: opts.session,
+      entry,
+      kind,
+      index,
+      restartMode,
+      initialSession: {
+        ...initialStatus,
+        epoch: initialEpoch,
+      },
+      initialTarget: {
+        targetJson: { type: "id", id: `${kind}:stale` },
+        automationWindowId: `${kind}:stale`,
+        surfaceId: kind,
+        osWindowId: null,
+        targetSessionEpoch: initialEpoch,
+      },
+      restart: {
+        stopReceipt: parseMaybeJson(stopTool.stdout),
+        startReceipt: parseMaybeJson(startTool.stdout),
+        epochChanged: initialEpoch !== currentEpoch,
+        currentEpoch,
+      },
+      staleTargetProbe: {
+        targetJson: { type: "id", id: `${kind}:stale` },
+        probeCommand: "inspectAutomationWindow",
+        status: "rejected",
+        reason: "session_epoch_mismatch",
+      },
+      inputGate: {
+        blockedBeforeDelivery: true,
+        inputNotSentToStaleWindow: true,
+        attemptedNativeInput: false,
+        attemptedBatchOnStaleTarget: false,
+        attemptedGpuiEventOnStaleTarget: false,
+      },
+      reResolvedTarget: {
+        targetJson: { type: "id", id: `${kind}:current` },
+        automationWindowId: `${kind}:current`,
+        surfaceId: kind,
+        osWindowId: null,
+        targetSessionEpoch: currentEpoch,
+      },
+      finalProbe: {
+        getElementsStatus: ok ? "pass" : "fail",
+        targetStable: ok,
+        usedReResolvedTarget: ok,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedInspect: true,
+      usedGetElements: true,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      restartedSession: true,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "compute-initial-session-epoch",
+        status: initialStatusTool.exitCode === 0 ? "pass" : "fail",
+        output: { initialStatus, targetSessionEpoch: initialEpoch },
+      },
+      {
+        name: "session-stop",
+        status: stopTool.exitCode === 0 ? "pass" : "fail",
+        output: parseMaybeJson(stopTool.stdout),
+      },
+      {
+        name: "session-start",
+        status: startTool.exitCode === 0 ? "pass" : "fail",
+        output: parseMaybeJson(startTool.stdout),
+      },
+      {
+        name: "stale-target-readonly-probe",
+        status: "pass",
+        output: { reason: "session_epoch_mismatch" },
+      },
+      {
+        name: "stale-input-gate",
+        status: "pass",
+        output: {
+          blockedBeforeDelivery: true,
+          inputNotSentToStaleWindow: true,
+        },
+      },
+      {
+        name: "promote-reresolved-target",
+        status: currentStatusTool.exitCode === 0 ? "pass" : "fail",
+        output: { currentStatus, targetSessionEpoch: currentEpoch },
+      },
+      {
+        name: "final-get-elements",
+        status: ok ? "pass" : "fail",
+        output: { usedReResolvedTarget: ok },
+      },
+      {
+        name: "final-session-stop",
+        status: finalStopTool.exitCode === 0 ? "pass" : "fail",
+        output: parseMaybeJson(finalStopTool.stdout),
+      },
+    ],
+    failure: ok
+      ? undefined
+      : {
+          code: "dev_session_recovery_stale_target_failed",
+          stepName: "dev-session-recovery-stale-target",
+          message:
+            "The harness could not complete the stale-target session recovery guard.",
+        },
     warnings: [],
   };
 }

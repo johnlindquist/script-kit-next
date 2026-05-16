@@ -102,6 +102,15 @@ Visual proof must connect what the user sees to structured layout and semantic r
 - Do not claim text fits from a screenshot alone. Use `visible-text-clipping-overlap-stress` for clipping and overlap audits; it must fail closed until app-side text measurement receipts expose text bounds, measured width, available width, clipping state, truncation intent, tooltip or accessible full text, and overlap pairs.
 - Do not claim rem/layout correctness from window bounds alone. Use `layout-measurement-regression-stress`; it must fail closed until app-side layout receipts expose rem size, scale factor, content/container/scroll metrics, footer/input ownership, and layout-shift samples.
 
+## Hard Interaction Boundaries
+
+When a user flow spans stacked modals, cross-surface export, or app restart recovery, require one receipt that proves ownership boundaries before sending input.
+
+- For a modal stack, prove the topmost owner before each Escape, Cmd-W, or Enter action, then prove the child closed or executed without mutating the parent selection/focus unless that parent was the target.
+- For cross-surface export provenance, prove the payload origin surface, generation, selected semantic id, redacted preview, destination identity, stale-source rejection, and cleanup. Clipboard or drag side effects alone are not proof.
+- Restart/recovery recipes must gate every promoted target with a session epoch. If the epoch changes, the harness must refuse native, batch, and GPUI input before delivery, then re-resolve the exact target.
+- For stale-target recovery, prove stale window targets are rejected, exact targets are re-resolved after restart or id churn, no stale input is delivered, and session cleanup ran. Never retry by kind without an identity receipt.
+
 ## The Pattern
 
 Every verification follows the same core loop:
