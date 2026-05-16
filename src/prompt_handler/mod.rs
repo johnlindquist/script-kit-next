@@ -1434,7 +1434,11 @@ impl ScriptListApp {
             app_view_variant: (resolved.kind == protocol::AutomationWindowKind::Main)
                 .then(|| self.current_view.app_view_variant().to_string()),
             native_footer_surface: (resolved.kind == protocol::AutomationWindowKind::Main)
-                .then(|| self.current_view.native_footer_surface().map(str::to_string))
+                .then(|| {
+                    self.current_view
+                        .native_footer_surface()
+                        .map(str::to_string)
+                })
                 .flatten(),
             title: resolved.title.clone(),
             resolved_bounds: resolved.bounds.clone(),
@@ -3604,43 +3608,42 @@ impl ScriptListApp {
                     }))
                 };
 
-                let menu_syntax_main_hint = if !summary_only
-                    && matches!(self.current_view, AppView::ScriptList)
-                {
-                    // Run 12 — also treat the empty-result gate as true when
-                    // the parser returns Incomplete but the user is mid-typing
-                    // a non-source head (`has:`, `:type:`, etc.). Source heads
-                    // stay tied to visible rows so `c: sub` does not report a
-                    // no-match hint beside real Clipboard History results.
-                    let parser_thinks_empty = self
-                        .menu_syntax_mode
-                        .advanced_query_for(&self.filter_text)
-                        .is_some()
-                        && visible_choice_count == 0;
-                    let detector_owns_head =
-                        crate::menu_syntax::main_hint::has_active_head(&self.filter_text);
-                    let source_head_has_results =
-                        crate::menu_syntax::main_hint::active_head_is_source_filter(
+                let menu_syntax_main_hint =
+                    if !summary_only && matches!(self.current_view, AppView::ScriptList) {
+                        // Run 12 — also treat the empty-result gate as true when
+                        // the parser returns Incomplete but the user is mid-typing
+                        // a non-source head (`has:`, `:type:`, etc.). Source heads
+                        // stay tied to visible rows so `c: sub` does not report a
+                        // no-match hint beside real Clipboard History results.
+                        let parser_thinks_empty = self
+                            .menu_syntax_mode
+                            .advanced_query_for(&self.filter_text)
+                            .is_some()
+                            && visible_choice_count == 0;
+                        let detector_owns_head =
+                            crate::menu_syntax::main_hint::has_active_head(&self.filter_text);
+                        let source_head_has_results =
+                            crate::menu_syntax::main_hint::active_head_is_source_filter(
+                                &self.filter_text,
+                            ) && visible_choice_count > 0;
+                        let advanced_query_has_results = (self
+                            .menu_syntax_mode
+                            .advanced_query_for(&self.filter_text)
+                            .is_some()
+                            || crate::menu_syntax::query::parse_filter_query(&self.filter_text)
+                                .is_some())
+                            && visible_choice_count > 0;
+                        let advanced_query_results_empty = parser_thinks_empty
+                            || (detector_owns_head
+                                && !source_head_has_results
+                                && !advanced_query_has_results);
+                        self.menu_syntax_main_hint_snapshot(
                             &self.filter_text,
-                        ) && visible_choice_count > 0;
-                    let advanced_query_has_results = (self
-                        .menu_syntax_mode
-                        .advanced_query_for(&self.filter_text)
-                        .is_some()
-                        || crate::menu_syntax::query::parse_filter_query(&self.filter_text)
-                            .is_some())
-                        && visible_choice_count > 0;
-                    let advanced_query_results_empty = parser_thinks_empty
-                        || (detector_owns_head
-                            && !source_head_has_results
-                            && !advanced_query_has_results);
-                    self.menu_syntax_main_hint_snapshot(
-                        &self.filter_text,
-                        advanced_query_results_empty,
-                    )
-                } else {
-                    None
-                };
+                            advanced_query_results_empty,
+                        )
+                    } else {
+                        None
+                    };
 
                 // Story D slice 2: compute the capture-history popup
                 // snapshot from the current filter text. Returns None
