@@ -61,6 +61,11 @@ pub(super) fn build_search_mode_results(
             }
         };
 
+        let reserved_builtin_key =
+            reserved_exact_builtin_preferred_result_key(&results, filter_text);
+        let effective_preferred_result_key =
+            reserved_builtin_key.as_deref().or(preferred_result_key);
+
         // Pre-compute boosted score for every result
         let boosted: Vec<i32> = results
             .iter()
@@ -79,7 +84,7 @@ pub(super) fn build_search_mode_results(
                 } else {
                     0
                 };
-                let exact_query_bonus = preferred_result_key
+                let exact_query_bonus = effective_preferred_result_key
                     .and_then(|preferred| result.history_result_key().map(|key| key == preferred))
                     .map(|is_match| if is_match { preferred_match_bonus } else { 0 })
                     .unwrap_or(0);
@@ -178,4 +183,23 @@ pub(super) fn build_search_mode_results(
     );
 
     (grouped, results)
+}
+
+fn reserved_exact_builtin_preferred_result_key(
+    results: &[SearchResult],
+    filter_text: &str,
+) -> Option<String> {
+    let normalized = filter_text.trim().to_ascii_lowercase();
+    if !matches!(normalized.as_str(), "vault" | "ai-vault" | "aivault") {
+        return None;
+    }
+
+    results.iter().find_map(|result| match result {
+        SearchResult::BuiltIn(builtin)
+            if builtin.entry.feature == crate::builtins::BuiltInFeature::AiVault =>
+        {
+            result.history_result_key()
+        }
+        _ => None,
+    })
 }

@@ -171,7 +171,9 @@ These recipes exercise automation paths that previously required slow human inte
 
 `shortcut-recorder-focus-capture` is intentionally fail-closed until shortcut recorder surfaces expose focus, captured chord, and global-hotkey leak receipts without writing `config.ts`.
 
-`template-prompt-automation-parity-stress` runs as a state-first runtime proof for TemplatePrompt state, template rows, batch field input, Cmd+K actions, Escape cancel, and batch ForceSubmit explicit values.
+`template-prompt-automation-parity-stress` runs as a state-first runtime proof for TemplatePrompt state, template rows, batch field input, Cmd+K actions, Escape cancel, and batch ForceSubmit explicit values. The template open path sends the prompt without `--await-parse` because TemplatePrompt completion is correlated by prompt id rather than request id; after opening Cmd-K, the recipe targets `{kind:"actionsDialog",index:0}` and requires concrete `action:` or `choice:` rows, failing closed on `panel_only_actions_dialog`.
+
+`scripts/agentic/user-story-audit.ts` turns the stress recipe catalog into a broad 100-story UX sweep. It excludes recipes already exercised in the current thread unless `--include-known` is set, runs each selected recipe through the real `scripts/agentic/index.ts` entry point, writes `.test-output/agentic-100-user-story-audit-*.json`, and classifies `pass`, `fail_closed`, `blocked_precondition`, `runtime_failure`, and `timeout` separately so missing receipts do not masquerade as product success.
 
 `current-app-commands-frontmost-stress` is intentionally fail-closed until Do in Current App receipts expose the captured frontmost app, stable alias normalization, shared filter counts, and wrong-app execution guard.
 

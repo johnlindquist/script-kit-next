@@ -20,6 +20,7 @@ For complex investigation, pair the skill with its read-only subagent brief in `
 | Skill | Paired subagent | Primary ownership |
 | --- | --- | --- |
 | `lat-md` | `lat-md-reader` | `lat.md/` authoring, wiki links, code refs, `lat check` |
+| `script-kit-devtools` | `protocol-automation-reader` | Agent-facing DevTools primitives for inspecting, controlling, measuring, debugging, benchmarking, and proving real app UI behavior |
 | `agentic-testing` | `agentic-testing-reader` | State-first runtime proof, screenshots only when needed, cleanup of launched sessions |
 | `testing-quality-gates` | `testing-quality-gates-reader` | Choosing narrow checks, cargo/bun/lat gates, release-vs-local validation |
 | `dev-loop-observability` | `dev-loop-observability-reader` | Dev loop, compact logs, tracing, correlation IDs, runtime diagnostics |
@@ -54,7 +55,8 @@ Do not wait for a subagent when the task is small and the owning skill gives eno
 
 ## Skill selection defaults
 
-- UI behavior or visual/runtime proof: `agentic-testing`, plus the domain skill.
+- Unknown user-reported UX/UI bugs, screenshots, or flexible app investigation: `script-kit-devtools`, plus the domain skill. Use `agentic-testing` recipes only when they directly match the bug or as regression proof.
+- UI behavior or visual/runtime proof with an existing known recipe: `agentic-testing`, plus the domain skill.
 - GPUI layout/focus/keyboard implementation: `gpui-ui-foundation` and `keyboard-focus-routing`.
 - Escape close/back/cancel behavior: `escape`, plus the domain skill for the active surface.
 - Surface routing or `AppView`/`SurfaceKind`: `launcher-surface-contracts`.
@@ -63,7 +65,7 @@ Do not wait for a subagent when the task is small and the owning skill gives eno
 - Filterable built-ins: `builtin-filterable-surfaces`.
 - ACP/Agent Chat lifecycle: `acp-chat-core`.
 - ACP composer/context tokens: `acp-context-composer`.
-- Stdin protocol or automation receipts: `protocol-automation`.
+- Stdin protocol or automation receipts: `protocol-automation`. If the task is about how agents should inspect/control/measure the UI, also use `script-kit-devtools`.
 - Script execution or SDK behavior: `sdk-script-execution`.
 - Config/theme/preferences: `theme-config-preferences`.
 - Notes, dictation, terminal, platform, and storage work should use their matching ownership skill.
