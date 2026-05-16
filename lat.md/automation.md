@@ -352,6 +352,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `acp-transcript-stream-retry-virtualization-stress` is intentionally fail-closed until ACP transcript receipts expose fixture transcript and thread generations, virtualized message window, visible row ids, stream run/chunk ordering, scroll anchors, bottom stickiness, user-scrolled-away preservation, assistant error identity/text, retry button/draft/request/recovery generations, stale chunk and wrong-message retry rejection, virtualized row stability, blank-row rejection, transcript redaction, no spawned agent process/security prompt/network/submit, AFK-safe flags, and cleanup.
 
+`acp-plugin-skill-entry-thread-affinity-stress` is intentionally fail-closed until ACP skill-entry receipts expose fixture skill catalog identity, entry path, host surface identity, resolved ACP target, target thread id, embedded/detached thread reuse, selected skill id and fingerprint, slash token range, pending skill context URI, target-thread binding, composer generation, return origin snapshot, stale launcher/detached-thread rejection, no auto-submit/agent process/security prompt/network, AFK-safe flags, and cleanup.
+
+`notes-cart-acp-handoff-dedupe-stress` is intentionally fail-closed until Notes cart handoff receipts expose sandbox store identity, fixture notes, active note, cart snapshot generation, cart item ids and dedupe keys, duplicate rejection, handoff session identity, destination host/generation, staged context URIs, inline aliases, redacted preview fingerprints, dry-run consume generation, cancel restoration, switch-note cleanup, wrong-note and stale-cart rejection, no raw note body leak, no user notes mutation/network/agent process, AFK-safe flags, and cleanup.
+
+`root-file-source-filter-pagination-footer-stress` is intentionally fail-closed until root Files source-filter receipts expose fixture provider identity, source filters, rendered/stripped input text, root frame key, provider/page generations, page size, visible file rows/fingerprints, continuation row identity, selected key before/after, footer-safe visibility, scroll metrics, near-bottom page request, delayed page/provider stability, duplicate key rejection, fallback suppression, non-selectable status chips, Quick Look/native picker/pasteboard/network/submit refusal, stale page rejection, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

@@ -183,6 +183,12 @@
  *                         Fail-closed ACP composer token keyboard edit parity proof
  *   acp-transcript-stream-retry-virtualization-stress
  *                         Fail-closed ACP transcript stream retry virtualization proof
+ *   acp-plugin-skill-entry-thread-affinity-stress
+ *                         Fail-closed ACP plugin skill entry thread affinity proof
+ *   notes-cart-acp-handoff-dedupe-stress
+ *                         Fail-closed Notes cart ACP handoff dedupe proof
+ *   root-file-source-filter-pagination-footer-stress
+ *                         Fail-closed root file source-filter pagination footer proof
  *   help                   Show this help
  *
  * Target threading:
@@ -290,6 +296,9 @@ import {
   runAcpSlashMentionProviderVisibilityStressScenario,
   runAcpComposerTokenKeyboardEditParityStressScenario,
   runAcpTranscriptStreamRetryVirtualizationStressScenario,
+  runAcpPluginSkillEntryThreadAffinityStressScenario,
+  runNotesCartAcpHandoffDedupeStressScenario,
+  runRootFileSourceFilterPaginationFooterStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1203,6 +1212,39 @@ function parseArgs() {
     retryPathsIdx >= 0 && args[retryPathsIdx + 1]
       ? args[retryPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const skillIdIdx = args.indexOf("--skill-id");
+  const skillId =
+    skillIdIdx >= 0 && args[skillIdIdx + 1] ? args[skillIdIdx + 1] : undefined;
+  const entryPathsIdx = args.indexOf("--entry-paths");
+  const entryPaths =
+    entryPathsIdx >= 0 && args[entryPathsIdx + 1]
+      ? args[entryPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const notesIdx = args.indexOf("--notes");
+  const notes =
+    notesIdx >= 0 && args[notesIdx + 1]
+      ? args[notesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const cartItemsIdx = args.indexOf("--cart-items");
+  const cartItems =
+    cartItemsIdx >= 0 && args[cartItemsIdx + 1]
+      ? args[cartItemsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const handoffPathsIdx = args.indexOf("--handoff-paths");
+  const handoffPaths =
+    handoffPathsIdx >= 0 && args[handoffPathsIdx + 1]
+      ? args[handoffPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const sandboxNotesStore = args.includes("--sandbox-notes-store");
+  const pageSizeIdx = args.indexOf("--page-size");
+  const rawPageSize =
+    pageSizeIdx >= 0 && args[pageSizeIdx + 1] ? Number(args[pageSizeIdx + 1]) : undefined;
+  const pageSize = Number.isFinite(rawPageSize) ? rawPageSize : undefined;
+  const providerDelaysIdx = args.indexOf("--provider-delays");
+  const providerDelays =
+    providerDelaysIdx >= 0 && args[providerDelaysIdx + 1]
+      ? args[providerDelaysIdx + 1].split(",").map((s) => Number(s.trim())).filter(Number.isFinite)
+      : undefined;
   return {
     recipe,
     session,
@@ -1350,6 +1392,14 @@ function parseArgs() {
     streamChunks,
     errorFixtures,
     retryPaths,
+    skillId,
+    entryPaths,
+    notes,
+    cartItems,
+    handoffPaths,
+    sandboxNotesStore,
+    pageSize,
+    providerDelays,
   };
 }
 
@@ -2735,6 +2785,14 @@ const {
   streamChunks,
   errorFixtures,
   retryPaths,
+  skillId,
+  entryPaths,
+  notes,
+  cartItems,
+  handoffPaths,
+  sandboxNotesStore,
+  pageSize,
+  providerDelays,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4122,6 +4180,24 @@ switch (recipe) {
     break;
   }
 
+  case "acp-plugin-skill-entry-thread-affinity-stress": {
+    const proofBundle = await runAcpPluginSkillEntryThreadAffinityStressScenario({ session, hosts, fixture, skillId, entryPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-plugin-skill-entry-thread-affinity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP plugin skill entry thread affinity stress failed closed; skill entry, target thread, slash token, and stale thread receipts are missing", proofBundle };
+    break;
+  }
+
+  case "notes-cart-acp-handoff-dedupe-stress": {
+    const proofBundle = await runNotesCartAcpHandoffDedupeStressScenario({ session, fixture, notes, cartItems, handoffPaths, inputModes, agentFixture, noNativeInput, noNativePointer, noNativePicker, noScreenCapture, noSystemPasteboard, noNetwork, noSubmit, sandboxNotesStore, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "notes-cart-acp-handoff-dedupe-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Notes cart ACP handoff dedupe stress failed closed; cart dedupe, handoff, cancel, stale note, and no-leak receipts are missing", proofBundle };
+    break;
+  }
+
+  case "root-file-source-filter-pagination-footer-stress": {
+    const proofBundle = await runRootFileSourceFilterPaginationFooterStressScenario({ session, fixture, queries, pageSize, providerDelays, selectionSteps, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "root-file-source-filter-pagination-footer-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Root file source-filter pagination footer stress failed closed; page generation, selected row, footer-safe scroll, and stale page receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4318,6 +4394,9 @@ switch (recipe) {
           { name: "acp-slash-mention-provider-visibility-stress", description: "Fail-closed UX receipt contract for ACP slash/mention provider visibility and hint readiness", flags: ["--session", "--families", "--fixture", "--providers", "--queries", "--states", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-composer-token-keyboard-edit-parity-stress", description: "Fail-closed UX receipt contract for ACP composer token keyboard delete/reorder parity", flags: ["--session", "--hosts", "--fixture", "--token-kinds", "--edit-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-transcript-stream-retry-virtualization-stress", description: "Fail-closed UX receipt contract for ACP transcript streaming, virtualization, and retry recovery", flags: ["--session", "--hosts", "--fixture", "--message-count", "--stream-chunks", "--error-fixtures", "--retry-paths", "--scroll-positions", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-plugin-skill-entry-thread-affinity-stress", description: "Fail-closed UX receipt contract for ACP plugin skill entry thread affinity", flags: ["--session", "--hosts", "--fixture", "--skill-id", "--entry-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "notes-cart-acp-handoff-dedupe-stress", description: "Fail-closed UX receipt contract for Notes cart ACP handoff dedupe", flags: ["--session", "--fixture", "--notes", "--cart-items", "--handoff-paths", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--sandbox-notes-store", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "root-file-source-filter-pagination-footer-stress", description: "Fail-closed UX receipt contract for root Files source-filter pagination near the footer", flags: ["--session", "--fixture", "--queries", "--page-size", "--provider-delays", "--selection-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4785,6 +4864,12 @@ Available scenarios:
                          Emit fail-closed ACP composer token keyboard edit parity requirements
   acp-transcript-stream-retry-virtualization-stress
                          Emit fail-closed ACP transcript stream retry virtualization requirements
+  acp-plugin-skill-entry-thread-affinity-stress
+                         Emit fail-closed ACP plugin skill entry thread affinity requirements
+  notes-cart-acp-handoff-dedupe-stress
+                         Emit fail-closed Notes cart ACP handoff dedupe requirements
+  root-file-source-filter-pagination-footer-stress
+                         Emit fail-closed root Files source-filter pagination footer requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4893,6 +4978,9 @@ Examples:
   bun scripts/agentic/index.ts acp-slash-mention-provider-visibility-stress --session default --families slash,mention --fixture agentic-acp-provider-hints --providers dictation-history,browser-history,notes,files,skills --queries '@di,@browser-history,@missing,/new-script,/unknown' --states ready,unavailable,loading,error-recovered,filtered-empty --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts acp-composer-token-keyboard-edit-parity-stress --session default --hosts acp-composer,notes --fixture agentic-acp-composer-tokens --token-kinds mention,slash,pasted-text,pasted-image,skill-file --edit-steps backspace-delete,delete-forward,range-remove,move-token-left,move-token-right,cursor-around-token --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts acp-transcript-stream-retry-virtualization-stress --session default --hosts acp-composer,notes --fixture agentic-acp-transcript-stream --message-count 160 --stream-chunks 48 --error-fixtures tool-error,agent-error,model-timeout,cancelled --retry-paths retry-same-draft,retry-edited-draft,retry-after-scroll --scroll-positions top,middle,bottom,near-active --input-modes protocol-state,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-plugin-skill-entry-thread-affinity-stress --session loop33 --hosts embedded,detached --fixture agentic-plugin-skill-entry --skill-id new-script --entry-paths main-menu,source-filter,cmd-enter --input-modes protocol-set-filter,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts notes-cart-acp-handoff-dedupe-stress --session loop33 --fixture agentic-notes-cart --notes note-a,note-b --cart-items duplicate-link,local-snippet,repo-file,unchecked-task --handoff-paths open-acp,switch-note,cancel,consume --input-modes protocol-click,protocol-key,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --sandbox-notes-store --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts root-file-source-filter-pagination-footer-stress --session loop33 --fixture agentic-root-file-pages --queries 'f: ,f:s,files: AGENTS' --page-size 12 --provider-delays 0,150,450 --selection-steps near-bottom,next-page,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
