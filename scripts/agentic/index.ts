@@ -171,6 +171,12 @@
  *                         Fail-closed window title/status semantics proof
  *   menu-syntax-capture-validation-chip-stress
  *                         Fail-closed menu syntax capture validation chip proof
+ *   acp-footer-activity-indicator-stress
+ *                         Fail-closed ACP footer activity indicator proof
+ *   acp-model-history-popover-visual-state-stress
+ *                         Fail-closed ACP model/history popover visual state proof
+ *   acp-context-insertion-preview-parity-stress
+ *                         Fail-closed ACP context insertion preview parity proof
  *   help                   Show this help
  *
  * Target threading:
@@ -272,6 +278,9 @@ import {
   runInlineAttachmentPreviewChipStabilityStressScenario,
   runWindowTitleStatusSemanticsStressScenario,
   runMenuSyntaxCaptureValidationChipStressScenario,
+  runAcpFooterActivityIndicatorStressScenario,
+  runAcpModelHistoryPopoverVisualStateStressScenario,
+  runAcpContextInsertionPreviewParityStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1134,6 +1143,20 @@ function parseArgs() {
       ? args[casesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
   const noScreenCapture = args.includes("--no-screen-capture");
+  const activityFixturesIdx = args.indexOf("--activity-fixtures");
+  const activityFixtures =
+    activityFixturesIdx >= 0 && args[activityFixturesIdx + 1]
+      ? args[activityFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const agentFixtureIdx = args.indexOf("--agent-fixture");
+  const agentFixture =
+    agentFixtureIdx >= 0 && args[agentFixtureIdx + 1] ? args[agentFixtureIdx + 1] : undefined;
+  const insertModesIdx = args.indexOf("--insert-modes");
+  const insertModes =
+    insertModesIdx >= 0 && args[insertModesIdx + 1]
+      ? args[insertModesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noSecurityPrompts = args.includes("--no-security-prompts");
   return {
     recipe,
     session,
@@ -1270,6 +1293,10 @@ function parseArgs() {
     noNetwork,
     cases,
     noScreenCapture,
+    activityFixtures,
+    agentFixture,
+    insertModes,
+    noSecurityPrompts,
   };
 }
 
@@ -2644,6 +2671,10 @@ const {
   noNetwork,
   cases,
   noScreenCapture,
+  activityFixtures,
+  agentFixture,
+  insertModes,
+  noSecurityPrompts,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -3995,6 +4026,24 @@ switch (recipe) {
     break;
   }
 
+  case "acp-footer-activity-indicator-stress": {
+    const proofBundle = await runAcpFooterActivityIndicatorStressScenario({ session, hosts, fixture, activityFixtures, inputModes, agentFixture, noNativeInput, noNativePointer, noSecurityPrompts, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-footer-activity-indicator-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP footer activity indicator stress failed closed; footer dot status, activity transitions, repaint generation, and no-security-prompt receipts are missing", proofBundle };
+    break;
+  }
+
+  case "acp-model-history-popover-visual-state-stress": {
+    const proofBundle = await runAcpModelHistoryPopoverVisualStateStressScenario({ session, families, fixture, states, selectionCycles, filterCycles, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-model-history-popover-visual-state-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP model/history popover visual state stress failed closed; row visual states, badges, filtered/loading/error recovery, and redacted preview receipts are missing", proofBundle };
+    break;
+  }
+
+  case "acp-context-insertion-preview-parity-stress": {
+    const proofBundle = await runAcpContextInsertionPreviewParityStressScenario({ session, sources, destination, fixture, selectionCycles, filterCycles, insertModes, inputModes, noNativeInput, noNativePointer, noNativePicker, noQuickLook, noSystemPasteboard, noNetwork, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "acp-context-insertion-preview-parity-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "ACP context insertion preview parity stress failed closed; selected-row preview, accepted context URI, inserted token preview, and stale drift receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4185,6 +4234,9 @@ switch (recipe) {
           { name: "inline-attachment-preview-chip-stability-stress", description: "Fail-closed UX receipt contract for inline attachment preview chip stability", flags: ["--session", "--hosts", "--fixture", "--origins", "--chip-actions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-screen-capture", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "window-title-status-semantics-stress", description: "Fail-closed UX receipt contract for window title and visible status semantics", flags: ["--session", "--surfaces", "--states", "--transitions", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "menu-syntax-capture-validation-chip-stress", description: "Fail-closed UX receipt contract for menu syntax capture validation chips", flags: ["--session", "--fixture", "--cases", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-footer-activity-indicator-stress", description: "Fail-closed UX receipt contract for ACP footer activity indicator transitions", flags: ["--session", "--hosts", "--fixture", "--activity-fixtures", "--input-modes", "--agent-fixture", "--no-native-input", "--no-native-pointer", "--no-security-prompts", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-model-history-popover-visual-state-stress", description: "Fail-closed UX receipt contract for ACP model/history popover visual states", flags: ["--session", "--families", "--fixture", "--states", "--selection-cycles", "--filter-cycles", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "acp-context-insertion-preview-parity-stress", description: "Fail-closed UX receipt contract for ACP context insertion selected-row preview parity", flags: ["--session", "--sources", "--destination", "--fixture", "--selection-cycles", "--filter-cycles", "--insert-modes", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4279,6 +4331,9 @@ switch (recipe) {
           "proofBundle.inlineAttachmentPreviewChipStabilityReceipt",
           "proofBundle.windowTitleStatusSemanticsReceipt",
           "proofBundle.menuSyntaxCaptureValidationChipReceipt",
+          "proofBundle.acpFooterActivityIndicatorReceipt",
+          "proofBundle.acpModelHistoryPopoverVisualStateReceipt",
+          "proofBundle.acpContextInsertionPreviewParityReceipt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -4637,6 +4692,12 @@ Available scenarios:
                          Emit fail-closed window title/status semantics requirements
   menu-syntax-capture-validation-chip-stress
                          Emit fail-closed menu syntax capture validation chip requirements
+  acp-footer-activity-indicator-stress
+                         Emit fail-closed ACP footer activity indicator requirements
+  acp-model-history-popover-visual-state-stress
+                         Emit fail-closed ACP model/history popover visual state requirements
+  acp-context-insertion-preview-parity-stress
+                         Emit fail-closed ACP context insertion preview parity requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4739,6 +4800,9 @@ Examples:
   bun scripts/agentic/index.ts inline-attachment-preview-chip-stability-stress --session default --hosts acp-composer,notes --fixture agentic-inline-attachments --origins local-file,fixture-image,fixture-text,script-resource --chip-actions focus,preview,remove,reorder,overflow --input-modes protocol-set-input,protocol-click,batch --no-native-input --no-native-pointer --no-native-picker --no-screen-capture --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts window-title-status-semantics-stress --session default --surfaces main,acp-composer,actionsDialog,promptPopup,notes --states idle,busy,error,dirty,ready --transitions triggerBuiltin,cmd-k,escape,hide-show --input-modes protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts menu-syntax-capture-validation-chip-stress --session default --fixture agentic-capture-validation --cases missing-body-date,missing-date,ready,malformed-url,unresolved-date,dynamic-schema --input-modes protocol-set-filter,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-footer-activity-indicator-stress --session default --hosts acp-composer,notes --fixture agentic-acp-footer-activity --activity-fixtures context-capture,tool-call,plan-update,permission-wait,cancelled,idle-recovered --input-modes protocol-state,batch --agent-fixture scripted-local --no-native-input --no-native-pointer --no-security-prompts --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-model-history-popover-visual-state-stress --session default --families model-selector,local-history --fixture agentic-acp-popover-visual-state --states idle,filtered,empty,loading,current-selection,error-recovered --selection-cycles 8 --filter-cycles 4 --input-modes protocol-set-input,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts acp-context-insertion-preview-parity-stress --session default --sources file-search,browser-history,dictation-history,notes --destination acp-composer --fixture agentic-context-preview-parity --selection-cycles 6 --filter-cycles 4 --insert-modes protocol-accept,batch --input-modes protocol-set-filter,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

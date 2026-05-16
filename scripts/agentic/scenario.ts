@@ -172,7 +172,10 @@ export interface HardScenarioReceipt {
     | "recent-history-dedupe-root-grouping-stress"
     | "inline-attachment-preview-chip-stability-stress"
     | "window-title-status-semantics-stress"
-    | "menu-syntax-capture-validation-chip-stress";
+    | "menu-syntax-capture-validation-chip-stress"
+    | "acp-footer-activity-indicator-stress"
+    | "acp-model-history-popover-visual-state-stress"
+    | "acp-context-insertion-preview-parity-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -280,6 +283,9 @@ export interface HardScenarioReceipt {
   inlineAttachmentPreviewChipStabilityReceipt?: Record<string, unknown>;
   windowTitleStatusSemanticsReceipt?: Record<string, unknown>;
   menuSyntaxCaptureValidationChipReceipt?: Record<string, unknown>;
+  acpFooterActivityIndicatorReceipt?: Record<string, unknown>;
+  acpModelHistoryPopoverVisualStateReceipt?: Record<string, unknown>;
+  acpContextInsertionPreviewParityReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7862,6 +7868,164 @@ export async function runMenuSyntaxCaptureValidationChipStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_menu_syntax_capture_validation_chip_receipt" } }],
     failure: { code: "missing_menu_syntax_capture_validation_chip_receipt", stepName: "declare-required-receipt", message: "Missing app-side menu syntax capture validation chip receipts." },
     warnings: ["file_linear:menu_syntax_capture_validation_chip_receipts_missing"],
+  };
+}
+
+export async function runAcpFooterActivityIndicatorStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  activityFixtures?: string[];
+  inputModes?: string[];
+  agentFixture?: string;
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSecurityPrompts?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-footer-activity-indicator-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_footer_activity_indicator_receipt",
+    linearIssue: "file_linear:acp_footer_activity_indicator_receipts_missing",
+    acpFooterActivityIndicatorReceipt: {
+      kind: "ux.acpFooterActivityIndicator",
+      acpFooterActivityIndicatorStressId: "loop-thirty-one-acp-footer-activity-indicator",
+      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-acp-footer-activity",
+      requestedActivityFixtures: opts.activityFixtures ?? ["context-capture", "tool-call", "plan-update", "permission-wait", "cancelled", "idle-recovered"],
+      requestedInputModes: opts.inputModes ?? ["protocol-state", "batch"], agentFixture: opts.agentFixture ?? "scripted-local",
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSecurityPrompts: opts.noSecurityPrompts ?? true, noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true, noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true, localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureAgentEventStreamId: null, hostSurfaceIdentity: null, footerOwner: null,
+      nativeFooterSurfaceId: null, gpuiFooterDotStatus: null, nativeFooterDotStatus: null,
+      activityStatusTransitions: [], contextCapturePendingStatus: null, toolCallStatus: null,
+      planUpdateStatus: null, permissionWaitStatus: null, cancelRestoresIdle: null,
+      footerRepaintGeneration: null, dotPulseTokenStable: null, modelLabelPreserved: null,
+      noGlobalAiFooterButton: null, noAgentProcessSpawn: true, noSecurityPrompt: true,
+      staleActivityRejected: null, wrongHostRejected: null, afkSafeFlags: true,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_footer_activity_indicator_receipt" } }],
+    failure: { code: "missing_acp_footer_activity_indicator_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP footer activity indicator receipts." },
+    warnings: ["file_linear:acp_footer_activity_indicator_receipts_missing"],
+  };
+}
+
+export async function runAcpModelHistoryPopoverVisualStateStressScenario(opts: {
+  session: string;
+  families?: string[];
+  fixture?: string;
+  states?: string[];
+  selectionCycles?: number;
+  filterCycles?: number;
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-model-history-popover-visual-state-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_model_history_popover_visual_state_receipt",
+    linearIssue: "file_linear:acp_model_history_popover_visual_state_receipts_missing",
+    acpModelHistoryPopoverVisualStateReceipt: {
+      kind: "ux.acpModelHistoryPopoverVisualState",
+      acpModelHistoryPopoverVisualStateStressId: "loop-thirty-one-acp-model-history-popover-visual-state",
+      session: opts.session, requestedFamilies: opts.families ?? ["model-selector", "local-history"],
+      fixture: opts.fixture ?? "agentic-acp-popover-visual-state",
+      requestedStates: opts.states ?? ["idle", "filtered", "empty", "loading", "current-selection", "error-recovered"],
+      selectionCycles: opts.selectionCycles ?? 8, filterCycles: opts.filterCycles ?? 4,
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixturePopoverCatalogId: null, popupFamily: null, popupAutomationId: null,
+      promptPopupKind: null, anchorBounds: null, popupBounds: null, selectedRowSemanticId: null,
+      focusedRowSemanticId: null, rowVisualStateTokens: [], currentModelBadge: null,
+      historyRecencyBadge: null, historyPreviewRedactedFingerprint: null, emptyFilteredState: null,
+      loadingRefreshState: null, errorRecoveredState: null, synopsisBounds: null,
+      selectionPreservedAfterFilter: null, noTranscriptBodyLeak: null, stalePopupSnapshotRejected: null,
+      wrongPopupRejected: null, noSubmit: true, afkSafeFlags: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_model_history_popover_visual_state_receipt" } }],
+    failure: { code: "missing_acp_model_history_popover_visual_state_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP model/history popover visual-state receipts." },
+    warnings: ["file_linear:acp_model_history_popover_visual_state_receipts_missing"],
+  };
+}
+
+export async function runAcpContextInsertionPreviewParityStressScenario(opts: {
+  session: string;
+  sources?: string[];
+  destination?: string;
+  fixture?: string;
+  selectionCycles?: number;
+  filterCycles?: number;
+  insertModes?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noQuickLook?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-context-insertion-preview-parity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_context_insertion_preview_parity_receipt",
+    linearIssue: "file_linear:acp_context_insertion_preview_parity_receipts_missing",
+    acpContextInsertionPreviewParityReceipt: {
+      kind: "ux.acpContextInsertionPreviewParity",
+      acpContextInsertionPreviewParityStressId: "loop-thirty-one-acp-context-insertion-preview-parity",
+      session: opts.session, requestedSources: opts.sources ?? ["file-search", "browser-history", "dictation-history", "notes"],
+      destinationComposerIdentity: opts.destination ?? "acp-composer", fixture: opts.fixture ?? "agentic-context-preview-parity",
+      selectionCycles: opts.selectionCycles ?? 6, filterCycles: opts.filterCycles ?? 4,
+      requestedInsertModes: opts.insertModes ?? ["protocol-accept", "batch"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true, noQuickLook: opts.noQuickLook ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      sourceSurfaceIdentity: null, portalSessionId: null, sourceSelectionGeneration: null,
+      selectedRowSemanticId: null, selectedRowPreviewFingerprint: null, selectedRowPreviewTitle: null,
+      selectedRowPreviewKind: null, previewGeneration: null, acceptedContextPartUri: null,
+      insertedTokenAlias: null, insertedTokenPreviewFingerprint: null, composerGeneration: null,
+      replacementRange: null, rowPreviewMatchesInsertedContext: null, selectionPreservedAfterInsert: null,
+      selectionDriftRejected: null, stalePreviewRejected: null, wrongDestinationRejected: null,
+      noRawContentLeak: null, noNativePicker: true, noQuickLook: true, noSystemPasteboard: true,
+      noNetwork: true, noSubmit: true, afkSafeFlags: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_context_insertion_preview_parity_receipt" } }],
+    failure: { code: "missing_acp_context_insertion_preview_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP context insertion preview parity receipts." },
+    warnings: ["file_linear:acp_context_insertion_preview_parity_receipts_missing"],
   };
 }
 
