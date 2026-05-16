@@ -101,3 +101,33 @@ fn explicit_reset_paths_clear_focus_loss_restore_intent() {
     let reset_path = source_block_after(REGISTRIES_STATE, "fn reset_to_script_list", 500);
     assert!(reset_path.contains("clear_main_state_restore_after_focus_loss();"));
 }
+
+#[test]
+fn close_and_reset_marks_window_hidden_before_script_list_reset() {
+    let close_path = source_block_after(LIFECYCLE_RESET, "fn close_and_reset_window", 3200);
+    let hidden = close_path
+        .find("set_main_window_visible(false)")
+        .expect("close_and_reset_window must mark the main window hidden");
+    let footer_close = close_path
+        .find("close_main_footer_popup")
+        .expect("close_and_reset_window must close the main footer popup");
+    let reset = close_path
+        .find("reset_to_script_list(cx);")
+        .expect("close_and_reset_window must reset to ScriptList");
+    let defer_hide = close_path
+        .find("defer_hide_main_window(cx);")
+        .expect("close_and_reset_window must use the main-panel-only deferred hide");
+
+    assert!(
+        hidden < reset,
+        "windowVisible must become false before reset_to_script_list can make ScriptList current"
+    );
+    assert!(
+        footer_close < reset,
+        "footer popup must close before reset_to_script_list"
+    );
+    assert!(
+        reset < defer_hide,
+        "state reset should happen after visible=false and before the deferred AppKit hide"
+    );
+}

@@ -902,6 +902,23 @@
                                             );
                                         }
                                     }
+                                    AppView::QuickTerminalView { .. } => {
+                                        if has_cmd && key_lower == "w" {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Cmd+W - close QuickTerminal state-first",
+                                            );
+                                            view.close_quick_terminal_main_window_state_first(ctx);
+                                        } else {
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: Unhandled key '{}' in QuickTerminalView",
+                                                    key_lower
+                                                ),
+                                            );
+                                        }
+                                    }
                                     _ => {
                                         // Generic fallback: any view whose current_actions_host()
                                         // resolves (i.e. participates in the shared ActionsDialog)

@@ -8363,6 +8363,15 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
+        if semantic_id == "footer:native:close"
+            && matches!(self.current_view, AppView::QuickTerminalView { .. })
+        {
+            if submit {
+                self.close_quick_terminal_main_window_state_first(cx);
+            }
+            return Ok(semantic_id.to_string());
+        }
+
         if let AppView::FormPrompt { entity, .. } = &self.current_view {
             let entity = entity.clone();
             let selected = entity.update(cx, |form, cx| {
