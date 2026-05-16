@@ -546,6 +546,55 @@ bun scripts/agentic/index.ts screenshot-identity-acp-context-stress \
 
 ---
 
+### Recipe: verify-clipboard-history-portal-range-stress
+
+**When:** Testing Clipboard History portal host refusal, `kit://clipboard-history?id=...` round-trip, and exact range replacement on accept.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts clipboard-history-portal-range-stress \
+  --session default \
+  --portal-id 'kit://clipboard-history?id=agentic' \
+  --range composer:0..0 \
+  --json
+```
+
+**Current fail-closed behavior:** Until clipboard portal receipts expose host refusal, round-trip URI, and exact replacement range, this recipe returns `missing_clipboard_portal_range_receipt`.
+
+---
+
+### Recipe: verify-browser-tabs-cache-identity-stress
+
+**When:** Testing browser tabs/history cache identity, dedupe keys, and stale-cache rejection without activating the browser.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts browser-tabs-cache-identity-stress \
+  --session default \
+  --source browser-tabs \
+  --json
+```
+
+**Current fail-closed behavior:** Until browser cache receipts expose source identity, dedupe key, cache-only status, and browser-activation guard, this recipe returns `missing_browser_cache_identity_receipt`.
+
+---
+
+### Recipe: verify-scroll-selection-reanchor-stress
+
+**When:** Testing cross-surface wheel/drag/native-scroll selection reanchor behavior against visible rows and footer-safe viewports.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts scroll-selection-reanchor-stress \
+  --session default \
+  --kinds clipboard,browser-history,current-app-commands,file-search \
+  --json
+```
+
+**Current fail-closed behavior:** Until surfaces expose one state-first reanchor receipt across wheel/drag transitions, this recipe returns `missing_scroll_selection_reanchor_receipt`.
+
+---
+
 ### Recipe: verify-acp-input-stability
 
 **When:** Changes to single-line input rendering, cursor movement, or scroll behavior in ACP.

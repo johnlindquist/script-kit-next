@@ -99,7 +99,10 @@ export interface TargetThreadFailure {
     | "missing_drop_prompt_native_drop_receipt"
     | "drop_prompt_path_leak"
     | "path_prompt_filesystem_edge_failed"
-    | "missing_screenshot_identity_context_receipt";
+    | "missing_screenshot_identity_context_receipt"
+    | "missing_clipboard_portal_range_receipt"
+    | "missing_browser_cache_identity_receipt"
+    | "missing_scroll_selection_reanchor_receipt";
   expected?: Partial<TargetThreadIdentity>;
   actual?: Partial<TargetThreadIdentity>;
   stepName: string;
