@@ -97,7 +97,10 @@ export interface HardScenarioReceipt {
     | "screenshot-identity-acp-context-stress"
     | "clipboard-history-portal-range-stress"
     | "browser-tabs-cache-identity-stress"
-    | "scroll-selection-reanchor-stress";
+    | "scroll-selection-reanchor-stress"
+    | "permission-assistant-drag-preflight-stress"
+    | "quick-terminal-pty-apply-back-stress"
+    | "mcp-context-resource-attachment-identity-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -121,6 +124,9 @@ export interface HardScenarioReceipt {
   clipboardPortal?: Record<string, unknown>;
   browserCache?: Record<string, unknown>;
   scrollSelection?: Record<string, unknown>;
+  permissionAssistant?: Record<string, unknown>;
+  quickTerminal?: Record<string, unknown>;
+  mcpContextResource?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -2254,6 +2260,228 @@ export async function runScrollSelectionReanchorStressScenario(opts: {
       message: "The harness fails closed until scroll/drag reanchor receipts exist.",
     },
     warnings: ["file_linear:scroll_selection_reanchor_receipts_missing"],
+  };
+}
+
+export async function runPermissionAssistantDragPreflightStressScenario(opts: {
+  session: string;
+  pane?: string;
+  bundleId?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "permission-assistant-drag-preflight-stress",
+    status: "fail",
+    permissionAssistant: {
+      session: opts.session,
+      pane: opts.pane ?? "Accessibility",
+      bundleId: opts.bundleId ?? "com.scriptkit.app",
+      passivePreflight: {
+        accessibility: null,
+        screenRecording: "notPrompted",
+        microphone: "notPrompted",
+        promptApisCalled: false,
+        passiveOnly: true,
+      },
+      overlayPanel: {
+        receipt: null,
+        expectedClass: "PassiveOverlayPanel",
+        expectedStyleMask: ["nonactivatingPanel"],
+        expectedCanBecomeKey: false,
+        expectedCanBecomeMain: false,
+        expectedLevel: "statusBar",
+        activationPolicyBefore: null,
+        activationPolicyAfter: null,
+        expectedActivationPolicyStable: "accessory",
+      },
+      dragSource: {
+        receipt: null,
+        expectedClass: "AppDragSourceView",
+        expectedPasteboardType: "fileURL",
+        expectedOperation: "copy",
+        bundleUrl: null,
+        isAppBundle: null,
+        executablePathRejected: null,
+        activatedApp: false,
+      },
+      targetPane: {
+        receipt: null,
+        settingsBundleId: "com.apple.systempreferences",
+        requestedPane: opts.pane ?? "Accessibility",
+        resolvedPane: null,
+        locator: "settings_window_snapshot",
+        cachedAcrossRefreshTicks: false,
+      },
+      noMutation: {
+        openedSystemSettings: false,
+        clickedSettings: false,
+        performedDrag: false,
+        mutatedTcc: false,
+        wroteTccDb: false,
+        calledPromptingApi: false,
+      },
+      wrongPaneAccepted: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+      openedSystemSettings: false,
+      mutatedTcc: false,
+    },
+    steps: [{
+      name: "permission-assistant-drag-preflight-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Permission Assistant does not expose one read-only receipt tying passive drag-source identity, target privacy pane identity, and no-TCC-mutation proof.",
+      },
+    }],
+    failure: {
+      code: "missing_permission_assistant_drag_preflight_receipt",
+      stepName: "permission-assistant-drag-preflight-receipt",
+      message:
+        "The harness fails closed until Permission Assistant drag/preflight receipts can be proven without opening or mutating System Settings.",
+    },
+    warnings: ["file_linear:permission_assistant_drag_receipts_missing"],
+  };
+}
+
+export async function runQuickTerminalPtyApplyBackStressScenario(opts: {
+  session: string;
+  command?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "quick-terminal-pty-apply-back-stress",
+    status: "fail",
+    quickTerminal: {
+      session: opts.session,
+      command: opts.command ?? "printf 'agentic-pty-apply-back\\n'",
+      prompt: {
+        promptType: null,
+        automationWindowId: null,
+        surfaceId: null,
+        focusedBefore: null,
+        focusedAfter: null,
+      },
+      terminalSurfaceId: null,
+      ptyReady: null,
+      ptyId: null,
+      shellOutputReceipt: null,
+      stdoutContains: "agentic-loop-six",
+      exitStatus: null,
+      drained: null,
+      applyBackTarget: null,
+      sourceSelectionFingerprint: null,
+      appliedText: null,
+      focusRestored: null,
+      selectionPreserved: null,
+      ptyShutdownReceipt: null,
+      orphanPids: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "quick-terminal-pty-apply-back-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Quick Terminal does not expose one deterministic receipt for PTY readiness, shell output, apply-back target identity, focus/selection preservation, and PTY cleanup.",
+      },
+    }],
+    failure: {
+      code: "missing_quick_terminal_apply_back_receipt",
+      stepName: "quick-terminal-pty-apply-back-receipt",
+      message:
+        "The harness fails closed until Quick Terminal apply-back can be proven from PTY and target receipts without manual terminal interaction.",
+    },
+    warnings: ["file_linear:quick_terminal_apply_back_receipts_missing"],
+  };
+}
+
+export async function runMcpContextResourceAttachmentIdentityStressScenario(opts: {
+  session: string;
+  resourceUri?: string;
+  profile?: string;
+  source?: string;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "mcp-context-resource-attachment-identity-stress",
+    status: "fail",
+    mcpContextResource: {
+      session: opts.session,
+      resource: {
+        uri: opts.resourceUri ?? "kit://context/agentic-loop-six",
+        profile: opts.profile ?? "agentic-test",
+        source: opts.source ?? "mcp-resource",
+        resourceId: null,
+        generation: null,
+        contentHash: null,
+      },
+      composer: {
+        host: "acp",
+        returnTarget: null,
+        openedWithoutManualPicker: false,
+      },
+      acceptedContextPart: {
+        receipt: null,
+        uri: null,
+        profile: null,
+        source: null,
+        resourceId: null,
+        generation: null,
+      },
+      resourceCatalogIdentity: null,
+      acceptedContextPartUri: null,
+      contextSourceIdentity: null,
+      staleResource: {
+        staleUri: `${opts.resourceUri ?? "kit://context/agentic-loop-six"}?generation=stale`,
+        rejected: null,
+        reason: null,
+      },
+      returnTarget: null,
+      wrongProfileAccepted: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "mcp-context-resource-receipt-preflight",
+      status: "fail",
+      output: {
+        blockingGap:
+          "MCP context/resource attachment does not expose one receipt tying resource URI/profile/source identity to the accepted context part and return target.",
+      },
+    }],
+    failure: {
+      code: "missing_mcp_context_resource_attachment_receipt",
+      stepName: "mcp-context-resource-receipt-preflight",
+      message:
+        "The harness fails closed until resource-backed context attachment identity can be proven without manual picker interaction.",
+    },
+    warnings: ["file_linear:mcp_context_resource_attachment_receipts_missing"],
   };
 }
 
