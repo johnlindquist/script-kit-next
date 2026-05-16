@@ -169,7 +169,10 @@ export interface HardScenarioReceipt {
     | "env-prompt-redacted-status-error-recovery-stress"
     | "command-palette-breadcrumb-route-stack-stress"
     | "root-source-chip-action-semantics-stress"
-    | "recent-history-dedupe-root-grouping-stress";
+    | "recent-history-dedupe-root-grouping-stress"
+    | "inline-attachment-preview-chip-stability-stress"
+    | "window-title-status-semantics-stress"
+    | "menu-syntax-capture-validation-chip-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -274,6 +277,9 @@ export interface HardScenarioReceipt {
   commandPaletteBreadcrumbRouteStackReceipt?: Record<string, unknown>;
   rootSourceChipActionSemanticsReceipt?: Record<string, unknown>;
   recentHistoryDedupeRootGroupingReceipt?: Record<string, unknown>;
+  inlineAttachmentPreviewChipStabilityReceipt?: Record<string, unknown>;
+  windowTitleStatusSemanticsReceipt?: Record<string, unknown>;
+  menuSyntaxCaptureValidationChipReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -7709,6 +7715,153 @@ export async function runRecentHistoryDedupeRootGroupingStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_recent_history_dedupe_root_grouping_receipt" } }],
     failure: { code: "missing_recent_history_dedupe_root_grouping_receipt", stepName: "declare-required-receipt", message: "Missing app-side recent/history dedupe and root grouping receipts." },
     warnings: ["file_linear:recent_history_dedupe_root_grouping_receipts_missing"],
+  };
+}
+
+export async function runInlineAttachmentPreviewChipStabilityStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  origins?: string[];
+  chipActions?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noScreenCapture?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "inline-attachment-preview-chip-stability-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_inline_attachment_preview_chip_stability_receipt",
+    linearIssue: "file_linear:inline_attachment_preview_chip_stability_receipts_missing",
+    inlineAttachmentPreviewChipStabilityReceipt: {
+      kind: "ux.inlineAttachmentPreviewChipStability",
+      inlineAttachmentPreviewChipStabilityStressId: "loop-thirty-inline-attachment-preview-chip-stability",
+      session: opts.session, requestedHosts: opts.hosts ?? ["acp-composer", "notes"],
+      fixture: opts.fixture ?? "agentic-inline-attachments",
+      requestedOrigins: opts.origins ?? ["local-file", "fixture-image", "fixture-text", "script-resource"],
+      requestedChipActions: opts.chipActions ?? ["focus", "preview", "remove", "reorder", "overflow"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-click", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true, noScreenCapture: opts.noScreenCapture ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureAttachmentSetId: null, hostSurfaceIdentity: null, composerGeneration: null,
+      attachmentChipSemanticIds: [], chipKinds: [], chipLabels: [], chipBounds: [],
+      previewRedactedFingerprint: null, overflowChipReceipt: null, focusChipReceipt: null,
+      removeChipReceipt: null, reorderChipReceipt: null, cursorSelectionPreserved: null,
+      noRawPathOrContentLeak: null, noSystemPasteboardReceipt: null, noNativePickerReceipt: null,
+      noScreenCaptureReceipt: null, noNetworkReceipt: null, staleAttachmentRejected: null,
+      wrongHostRejected: null, localFixtureOnly: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_inline_attachment_preview_chip_stability_receipt" } }],
+    failure: { code: "missing_inline_attachment_preview_chip_stability_receipt", stepName: "declare-required-receipt", message: "Missing app-side inline attachment preview chip stability receipts." },
+    warnings: ["file_linear:inline_attachment_preview_chip_stability_receipts_missing"],
+  };
+}
+
+export async function runWindowTitleStatusSemanticsStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  states?: string[];
+  transitions?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "window-title-status-semantics-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_window_title_status_semantics_receipt",
+    linearIssue: "file_linear:window_title_status_semantics_receipts_missing",
+    windowTitleStatusSemanticsReceipt: {
+      kind: "ux.windowTitleStatusSemantics",
+      windowTitleStatusSemanticsStressId: "loop-thirty-window-title-status-semantics",
+      session: opts.session,
+      requestedSurfaces: opts.surfaces ?? ["main", "acp-composer", "actionsDialog", "promptPopup", "notes"],
+      requestedStates: opts.states ?? ["idle", "busy", "error", "dirty", "ready"],
+      requestedTransitions: opts.transitions ?? ["triggerBuiltin", "cmd-k", "escape", "hide-show"],
+      requestedInputModes: opts.inputModes ?? ["protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      resolvedTarget: null, automationWindowTitle: null, nativeWindowTitle: null,
+      semanticSurfaceTitle: null, visibleStatusText: null, titleGeneration: null,
+      statusGeneration: null, transitionReceipts: [], detachedWindowParity: null,
+      attachedPopupParentTitleUnaffected: null, statusErrorRecovery: null,
+      staleTitleRejected: null, staleStatusRejected: null, wrongSurfaceRejected: null,
+      noFocusSteal: null, noNativeInput: true, noNativePointer: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, networkAccessed: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_window_title_status_semantics_receipt" } }],
+    failure: { code: "missing_window_title_status_semantics_receipt", stepName: "declare-required-receipt", message: "Missing app-side window title/status semantics receipts." },
+    warnings: ["file_linear:window_title_status_semantics_receipts_missing"],
+  };
+}
+
+export async function runMenuSyntaxCaptureValidationChipStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  cases?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "menu-syntax-capture-validation-chip-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_menu_syntax_capture_validation_chip_receipt",
+    linearIssue: "file_linear:menu_syntax_capture_validation_chip_receipts_missing",
+    menuSyntaxCaptureValidationChipReceipt: {
+      kind: "ux.menuSyntaxCaptureValidationChip",
+      menuSyntaxCaptureValidationChipStressId: "loop-thirty-menu-syntax-capture-validation-chip",
+      session: opts.session, fixture: opts.fixture ?? "agentic-capture-validation",
+      requestedCases: opts.cases ?? ["missing-body-date", "missing-date", "ready", "malformed-url", "unresolved-date", "dynamic-schema"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "batch"],
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureMenuSyntaxCatalogId: null, filterInputText: null, menuSyntaxMainHintSnapshot: null,
+      captureValidationStatus: null, statusChipLabels: [], missingFieldLabels: [],
+      malformedFieldLabel: null, malformedReason: null, unresolvedDates: [],
+      fragmentPreviewRows: [], priorityChoicesRow: null, canSubmitFalsePreventsEnter: null,
+      noPayloadWrite: null, noHandlerSpawn: null, staleValidationRejected: null,
+      wrongSurfaceRejected: null, noNativeInput: true, noNativePointer: true,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, systemPasteboardMutated: false, networkAccessed: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_menu_syntax_capture_validation_chip_receipt" } }],
+    failure: { code: "missing_menu_syntax_capture_validation_chip_receipt", stepName: "declare-required-receipt", message: "Missing app-side menu syntax capture validation chip receipts." },
+    warnings: ["file_linear:menu_syntax_capture_validation_chip_receipts_missing"],
   };
 }
 
