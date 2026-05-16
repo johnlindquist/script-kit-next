@@ -204,6 +204,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `acp-targeted-dictation-delivery-stress` is intentionally fail-closed until ACP/dictation receipts expose targeted transcript delivery with ACP window identity, transcript generation id, cursor insertion range, wrong-window negative proof, and passive microphone/model setup flags.
 
+`clipboard-share-trust-install-stress` is intentionally fail-closed until clipboard share import exposes one receipt tying the decoded package fingerprint, parent share-trust prompt identity, explicit accept/refuse outcomes, no-install-before-trust guard, install target identity, and clipboard restoration.
+
+`clipboard-share-watcher-stale-replay-stress` is intentionally fail-closed until the clipboard share watcher exposes pasteboard generation, share URI fingerprint, latest-generation ordering, stale URI rejection, prompt replacement/cancel, duplicate-install guard, and clipboard restoration receipts.
+
+`permission-share-cross-prompt-focus-stress` is intentionally fail-closed until Permission Assistant and share trust prompts expose one cross-prompt focus receipt with passive panel identity, share prompt identity, prompt priority, no System Settings activation leak, no accidental share acceptance, no TCC/plugin mutation, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

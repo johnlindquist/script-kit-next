@@ -39,6 +39,12 @@
  *                         Fail-closed multi-window resize/monitor restoration proof
  *   acp-targeted-dictation-delivery-stress
  *                         Fail-closed ACP-targeted dictation delivery proof
+ *   clipboard-share-trust-install-stress
+ *                         Fail-closed clipboard share trust install proof
+ *   clipboard-share-watcher-stale-replay-stress
+ *                         Fail-closed clipboard watcher stale/replay proof
+ *   permission-share-cross-prompt-focus-stress
+ *                         Fail-closed permission/share cross-prompt focus proof
  *   help                   Show this help
  *
  * Target threading:
@@ -77,6 +83,9 @@ import {
   runTrayGlobalHotkeyMenuMutationStressScenario,
   runMultiWindowResizeMonitorRestorationStressScenario,
   runAcpTargetedDictationDeliveryStressScenario,
+  runClipboardShareTrustInstallStressScenario,
+  runClipboardShareWatcherStaleReplayStressScenario,
+  runPermissionShareCrossPromptFocusStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -630,6 +639,22 @@ function parseArgs() {
   const transcriptIdx = args.indexOf("--transcript");
   const transcript =
     transcriptIdx >= 0 && args[transcriptIdx + 1] ? args[transcriptIdx + 1] : undefined;
+  const fixtureIdIdx = args.indexOf("--fixture-id");
+  const fixtureId =
+    fixtureIdIdx >= 0 && args[fixtureIdIdx + 1] ? args[fixtureIdIdx + 1] : undefined;
+  const shareKindIdx = args.indexOf("--share-kind");
+  const shareKind =
+    shareKindIdx >= 0 && args[shareKindIdx + 1] ? args[shareKindIdx + 1] : undefined;
+  const acceptModeIdx = args.indexOf("--accept-mode");
+  const acceptMode =
+    acceptModeIdx >= 0 && args[acceptModeIdx + 1] ? args[acceptModeIdx + 1] : undefined;
+  const countIdx = args.indexOf("--count");
+  const rawCount = countIdx >= 0 && args[countIdx + 1] ? Number(args[countIdx + 1]) : undefined;
+  const count = Number.isFinite(rawCount) ? rawCount : undefined;
+  const burstMsIdx = args.indexOf("--burst-ms");
+  const rawBurstMs =
+    burstMsIdx >= 0 && args[burstMsIdx + 1] ? Number(args[burstMsIdx + 1]) : undefined;
+  const burstMs = Number.isFinite(rawBurstMs) ? rawBurstMs : undefined;
   return {
     recipe,
     session,
@@ -680,6 +705,11 @@ function parseArgs() {
     surfaces,
     monitorProfile,
     transcript,
+    fixtureId,
+    shareKind,
+    acceptMode,
+    count,
+    burstMs,
   };
 }
 
@@ -1968,6 +1998,11 @@ const {
   surfaces,
   monitorProfile,
   transcript,
+  fixtureId,
+  shareKind,
+  acceptMode,
+  count,
+  burstMs,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -2452,6 +2487,62 @@ switch (recipe) {
     break;
   }
 
+  case "clipboard-share-trust-install-stress": {
+    const proofBundle = await runClipboardShareTrustInstallStressScenario({
+      session,
+      fixtureId,
+      shareKind,
+      acceptMode,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "clipboard-share-trust-install-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Clipboard share trust install stress failed closed; share URI, trust prompt, no-install-before-trust, and clipboard restore receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "clipboard-share-watcher-stale-replay-stress": {
+    const proofBundle = await runClipboardShareWatcherStaleReplayStressScenario({
+      session,
+      fixtureId,
+      shareKind,
+      count,
+      burstMs,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "clipboard-share-watcher-stale-replay-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Clipboard watcher stale/replay stress failed closed; generation ordering, stale rejection, replay, duplicate, and cleanup receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "permission-share-cross-prompt-focus-stress": {
+    const proofBundle = await runPermissionShareCrossPromptFocusStressScenario({
+      session,
+      fixtureId,
+      shareKind,
+      pane,
+      bundleId,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "permission-share-cross-prompt-focus-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Permission/share cross-prompt focus stress failed closed; prompt priority, focus routing, no activation leak, and cleanup receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2576,6 +2667,9 @@ switch (recipe) {
           { name: "tray-global-hotkey-menu-mutation-stress", description: "Fail-closed tray menu/global-hotkey mutation receipt for section order, update state, action identity, duplicate guards, and hotkey route", flags: ["--session", "--loops", "--json"] },
           { name: "multi-window-resize-monitor-restoration-stress", description: "Fail-closed multi-window monitor/scale/resize restoration receipt for main, attached popup, detached ACP, and Notes windows", flags: ["--session", "--surfaces", "--monitor-profile", "--json"] },
           { name: "acp-targeted-dictation-delivery-stress", description: "Fail-closed ACP-targeted dictation delivery receipt for target identity, transcript generation, cursor insertion range, wrong-window guard, and passive setup", flags: ["--session", "--kind", "--index", "--transcript", "--json"] },
+          { name: "clipboard-share-trust-install-stress", description: "Fail-closed clipboard share trust/install receipt for prompt identity, package fingerprint, accept/refuse, install gate, and clipboard restoration", flags: ["--session", "--fixture-id", "--share-kind", "--accept-mode", "--json"] },
+          { name: "clipboard-share-watcher-stale-replay-stress", description: "Fail-closed clipboard share watcher stale/replay receipt for generation ordering, stale rejection, prompt replacement, and duplicate install guard", flags: ["--session", "--fixture-id", "--share-kind", "--count", "--burst-ms", "--json"] },
+          { name: "permission-share-cross-prompt-focus-stress", description: "Fail-closed Permission Assistant/share trust prompt focus receipt for prompt priority, window identity, no Settings activation leak, and cleanup", flags: ["--session", "--fixture-id", "--share-kind", "--pane", "--bundle-id", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2625,6 +2719,9 @@ switch (recipe) {
           "proofBundle.trayMenuMutation",
           "proofBundle.multiWindowRestore",
           "proofBundle.acpDictationDelivery",
+          "proofBundle.clipboardShareTrust",
+          "proofBundle.clipboardShareReplay",
+          "proofBundle.permissionShareCrossPrompt",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2695,6 +2792,12 @@ Recipes:
                          Fail-closed multi-window resize/monitor restoration proof
   acp-targeted-dictation-delivery-stress
                          Fail-closed ACP-targeted dictation delivery proof
+  clipboard-share-trust-install-stress
+                         Fail-closed clipboard share trust install proof
+  clipboard-share-watcher-stale-replay-stress
+                         Fail-closed clipboard watcher stale/replay proof
+  permission-share-cross-prompt-focus-stress
+                         Fail-closed permission/share cross-prompt focus proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2761,6 +2864,12 @@ Available scenarios:
                          Emit fail-closed multi-window resize/monitor requirements
   acp-targeted-dictation-delivery-stress
                          Emit fail-closed ACP dictation targeting requirements
+  clipboard-share-trust-install-stress
+                         Emit fail-closed clipboard share trust install requirements
+  clipboard-share-watcher-stale-replay-stress
+                         Emit fail-closed clipboard watcher stale/replay requirements
+  permission-share-cross-prompt-focus-stress
+                         Emit fail-closed permission/share cross-prompt focus requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2797,6 +2906,9 @@ Examples:
   bun scripts/agentic/index.ts tray-global-hotkey-menu-mutation-stress --session default --loops 5 --json
   bun scripts/agentic/index.ts multi-window-resize-monitor-restoration-stress --session default --surfaces main,actionsDialog,acpDetached,notes --monitor-profile scale-bounds-drift --json
   bun scripts/agentic/index.ts acp-targeted-dictation-delivery-stress --session default --kind acpDetached --index 0 --transcript 'agentic loop eight dictation' --json
+  bun scripts/agentic/index.ts clipboard-share-trust-install-stress --session default --fixture-id agentic-loop-nine --share-kind script --accept-mode both --json
+  bun scripts/agentic/index.ts clipboard-share-watcher-stale-replay-stress --session default --fixture-id agentic-loop-nine --share-kind script --count 3 --burst-ms 25 --json
+  bun scripts/agentic/index.ts permission-share-cross-prompt-focus-stress --session default --fixture-id agentic-loop-nine --share-kind script --pane Accessibility --bundle-id com.scriptkit.app --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
