@@ -15,13 +15,13 @@
 
 #[cfg(target_os = "macos")]
 use anyhow::Context;
-use anyhow::{bail, Result};
-#[cfg(target_os = "macos")]
-use arboard::Clipboard;
+use anyhow::{anyhow, bail, Result};
 #[cfg(target_os = "macos")]
 use get_selected_text::get_selected_text as get_selected_text_impl;
 #[cfg(target_os = "macos")]
 use macos_accessibility_client::accessibility;
+#[cfg(target_os = "macos")]
+use std::ffi::{c_void, CStr};
 #[cfg(target_os = "macos")]
 use std::process::Command;
 #[cfg(target_os = "macos")]
@@ -208,19 +208,24 @@ pub fn set_selected_text(text: &str) -> Result<()> {
 /// 4. Restores the original clipboard (best effort)
 #[cfg(target_os = "macos")]
 fn set_via_clipboard_fallback(text: &str) -> Result<()> {
-    let mut clipboard = Clipboard::new().context("Failed to access clipboard")?;
-
-    // Save original clipboard contents
-    let original = clipboard.get_text().ok();
+    let snapshot = PasteboardSnapshot::capture()
+        .context("Failed to snapshot clipboard before selected-text replacement")?;
+    let snapshot_summary = snapshot.summary();
     debug!(
-        had_original = original.is_some(),
-        "Saved original clipboard"
+        item_count = snapshot_summary.item_count,
+        type_count = snapshot_summary.type_count,
+        total_bytes = snapshot_summary.total_bytes,
+        has_text = snapshot_summary.has_text,
+        has_rich_text = snapshot_summary.has_rich_text,
+        has_image = snapshot_summary.has_image,
+        has_file_url = snapshot_summary.has_file_url,
+        has_other = snapshot_summary.has_other,
+        "Saved original clipboard snapshot"
     );
 
-    // Set new text to clipboard
-    clipboard
-        .set_text(text)
-        .context("Failed to set clipboard text")?;
+    write_plain_text_to_pasteboard(text).context("Failed to set clipboard text")?;
+    let temporary_change_count = general_pasteboard_change_count()
+        .context("Failed to read clipboard change count after selected-text replacement write")?;
 
     // Small delay to ensure clipboard is set
     thread::sleep(Duration::from_millis(10));
@@ -232,20 +237,361 @@ fn set_via_clipboard_fallback(text: &str) -> Result<()> {
     thread::sleep(Duration::from_millis(150));
 
     // Restore original clipboard (best effort)
-    if let Some(original_text) = original {
-        // Small delay before restoring
-        thread::sleep(Duration::from_millis(100));
-        if let Err(e) = clipboard.set_text(&original_text) {
-            warn!(error = %e, "Failed to restore original clipboard");
-        } else {
-            debug!("Restored original clipboard");
+    thread::sleep(Duration::from_millis(100));
+    let restore_result = match general_pasteboard_change_count() {
+        Ok(current_change_count) if current_change_count == temporary_change_count => {
+            snapshot.restore()
         }
+        Ok(_) => Err(anyhow!("Clipboard changed during selected-text replacement; skipped restore to avoid overwriting external clipboard update")),
+        Err(e) => Err(e).context("Failed to read clipboard change count before restore"),
+    };
+    if let Err(e) = &restore_result {
+        warn!(
+            error = %e,
+            item_count = snapshot_summary.item_count,
+            type_count = snapshot_summary.type_count,
+            total_bytes = snapshot_summary.total_bytes,
+            has_text = snapshot_summary.has_text,
+            has_rich_text = snapshot_summary.has_rich_text,
+            has_image = snapshot_summary.has_image,
+            has_file_url = snapshot_summary.has_file_url,
+            has_other = snapshot_summary.has_other,
+            "Failed to restore original clipboard snapshot"
+        );
+    } else {
+        debug!(
+            item_count = snapshot_summary.item_count,
+            type_count = snapshot_summary.type_count,
+            total_bytes = snapshot_summary.total_bytes,
+            has_text = snapshot_summary.has_text,
+            has_rich_text = snapshot_summary.has_rich_text,
+            has_image = snapshot_summary.has_image,
+            has_file_url = snapshot_summary.has_file_url,
+            has_other = snapshot_summary.has_other,
+            "Restored original clipboard snapshot"
+        );
     }
 
     paste_result?;
+    restore_result
+        .context("Failed to restore original clipboard after selected-text replacement")?;
 
     info!("Set selected text via clipboard fallback");
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone)]
+struct PasteboardSnapshot {
+    items: Vec<PasteboardItemSnapshot>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone)]
+struct PasteboardItemSnapshot {
+    representations: Vec<PasteboardRepresentation>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone)]
+struct PasteboardRepresentation {
+    type_name: String,
+    data: Vec<u8>,
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Copy, Default)]
+struct PasteboardSnapshotSummary {
+    item_count: usize,
+    type_count: usize,
+    total_bytes: usize,
+    has_text: bool,
+    has_rich_text: bool,
+    has_image: bool,
+    has_file_url: bool,
+    has_other: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl PasteboardSnapshot {
+    fn capture() -> Result<Self> {
+        use cocoa::appkit::NSPasteboard;
+        use cocoa::base::{id, nil};
+        use objc::{msg_send, sel, sel_impl};
+
+        // SAFETY: NSPasteboard and Foundation collection pointers are nil-checked.
+        // Payload data is copied immediately into Rust-owned Vec<u8> values.
+        unsafe {
+            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+            if pasteboard == nil {
+                bail!("NSPasteboard.generalPasteboard returned nil");
+            }
+
+            let items: id = msg_send![pasteboard, pasteboardItems];
+            if items == nil {
+                return Ok(Self { items: Vec::new() });
+            }
+
+            let item_count: usize = msg_send![items, count];
+            let mut snapshot_items = Vec::with_capacity(item_count);
+
+            for item_index in 0..item_count {
+                let item: id = msg_send![items, objectAtIndex: item_index];
+                if item == nil {
+                    bail!("NSPasteboard returned nil item while snapshotting");
+                }
+
+                let types: id = msg_send![item, types];
+                if types == nil {
+                    bail!("NSPasteboard item returned nil type list while snapshotting");
+                }
+
+                let type_count: usize = msg_send![types, count];
+                let mut representations = Vec::with_capacity(type_count);
+
+                for type_index in 0..type_count {
+                    let type_id: id = msg_send![types, objectAtIndex: type_index];
+                    if type_id == nil {
+                        bail!("NSPasteboard item returned nil type while snapshotting");
+                    }
+
+                    let type_name = nsstring_to_string(type_id)
+                        .context("Failed to read NSPasteboard type name while snapshotting")?;
+                    let data: id = msg_send![item, dataForType: type_id];
+                    if data == nil {
+                        bail!("NSPasteboard item data was unavailable while snapshotting");
+                    }
+
+                    let byte_len: usize = msg_send![data, length];
+                    let bytes_ptr: *const u8 = msg_send![data, bytes];
+                    let bytes = if byte_len == 0 {
+                        Vec::new()
+                    } else {
+                        if bytes_ptr.is_null() {
+                            bail!("NSPasteboard item data pointer was nil while snapshotting");
+                        }
+                        std::slice::from_raw_parts(bytes_ptr, byte_len).to_vec()
+                    };
+
+                    representations.push(PasteboardRepresentation {
+                        type_name,
+                        data: bytes,
+                    });
+                }
+
+                snapshot_items.push(PasteboardItemSnapshot { representations });
+            }
+
+            Ok(Self {
+                items: snapshot_items,
+            })
+        }
+    }
+
+    fn restore(&self) -> Result<()> {
+        use cocoa::appkit::NSPasteboard;
+        use cocoa::base::{id, nil};
+        use cocoa::foundation::{NSArray, NSData, NSString};
+        use objc::{class, msg_send, sel, sel_impl};
+
+        // SAFETY: Objective-C objects are nil-checked after creation. Snapshot
+        // bytes are Rust-owned and copied into NSData before writeObjects.
+        unsafe {
+            let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+            if pasteboard == nil {
+                bail!("NSPasteboard.generalPasteboard returned nil");
+            }
+
+            let _: i64 = msg_send![pasteboard, clearContents];
+
+            if self.items.is_empty() {
+                return Ok(());
+            }
+
+            let mut objects: Vec<id> = Vec::with_capacity(self.items.len());
+
+            for item in &self.items {
+                let pasteboard_item: id = msg_send![class!(NSPasteboardItem), new];
+                if pasteboard_item == nil {
+                    release_objects(&objects);
+                    bail!("Failed to create NSPasteboardItem while restoring clipboard");
+                }
+
+                for representation in &item.representations {
+                    let ns_type = NSString::alloc(nil).init_str(&representation.type_name);
+                    if ns_type == nil {
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("Failed to create NSPasteboard type while restoring clipboard");
+                    }
+
+                    let data = NSData::dataWithBytes_length_(
+                        nil,
+                        representation.data.as_ptr() as *const c_void,
+                        representation.data.len() as u64,
+                    );
+                    if data == nil {
+                        let _: () = msg_send![ns_type, release];
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("Failed to create NSData while restoring clipboard");
+                    }
+
+                    let did_set: bool = msg_send![pasteboard_item, setData: data forType: ns_type];
+                    let _: () = msg_send![ns_type, release];
+
+                    if !did_set {
+                        let _: () = msg_send![pasteboard_item, release];
+                        release_objects(&objects);
+                        bail!("NSPasteboardItem.setData returned false while restoring clipboard");
+                    }
+                }
+
+                objects.push(pasteboard_item);
+            }
+
+            let ns_objects: id = NSArray::arrayWithObjects(nil, objects.as_slice());
+            if ns_objects == nil {
+                release_objects(&objects);
+                bail!("Failed to create NSArray while restoring clipboard");
+            }
+
+            let did_write: bool = msg_send![pasteboard, writeObjects: ns_objects];
+            release_objects(&objects);
+
+            if !did_write {
+                bail!("NSPasteboard.writeObjects returned false while restoring clipboard");
+            }
+
+            Ok(())
+        }
+    }
+
+    fn summary(&self) -> PasteboardSnapshotSummary {
+        let mut summary = PasteboardSnapshotSummary {
+            item_count: self.items.len(),
+            ..Default::default()
+        };
+
+        for item in &self.items {
+            for representation in &item.representations {
+                summary.type_count += 1;
+                summary.total_bytes += representation.data.len();
+                classify_pasteboard_type(&representation.type_name, &mut summary);
+            }
+        }
+
+        summary
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn write_plain_text_to_pasteboard(text: &str) -> Result<()> {
+    use cocoa::appkit::NSPasteboard;
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::{NSArray, NSString};
+    use objc::{msg_send, sel, sel_impl};
+
+    // SAFETY: NSPasteboard, NSString, and NSArray pointers are nil-checked.
+    unsafe {
+        let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+        if pasteboard == nil {
+            bail!("NSPasteboard.generalPasteboard returned nil");
+        }
+
+        let _: i64 = msg_send![pasteboard, clearContents];
+
+        let ns_text = NSString::alloc(nil).init_str(text);
+        if ns_text == nil {
+            bail!("Failed to create NSString for selected-text replacement");
+        }
+
+        let objects: id = NSArray::arrayWithObjects(nil, &[ns_text]);
+        if objects == nil {
+            let _: () = msg_send![ns_text, release];
+            bail!("Failed to create NSArray for selected-text replacement");
+        }
+
+        let did_write: bool = msg_send![pasteboard, writeObjects: objects];
+        let _: () = msg_send![ns_text, release];
+
+        if !did_write {
+            bail!("NSPasteboard.writeObjects returned false for selected-text replacement");
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn general_pasteboard_change_count() -> Result<i64> {
+    use cocoa::appkit::NSPasteboard;
+    use cocoa::base::{id, nil};
+    use objc::{msg_send, sel, sel_impl};
+
+    // SAFETY: NSPasteboard.generalPasteboard is nil-checked and changeCount is
+    // a value-returning AppKit method.
+    unsafe {
+        let pasteboard: id = NSPasteboard::generalPasteboard(nil);
+        if pasteboard == nil {
+            bail!("NSPasteboard.generalPasteboard returned nil");
+        }
+
+        Ok(msg_send![pasteboard, changeCount])
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn classify_pasteboard_type(type_name: &str, summary: &mut PasteboardSnapshotSummary) {
+    let normalized = type_name.to_ascii_lowercase();
+
+    if normalized.contains("utf8-plain-text")
+        || normalized.contains("public.text")
+        || normalized.contains("string")
+    {
+        summary.has_text = true;
+    } else if normalized.contains("rtf") || normalized.contains("html") {
+        summary.has_rich_text = true;
+    } else if normalized.contains("image")
+        || normalized.contains("png")
+        || normalized.contains("jpeg")
+        || normalized.contains("tiff")
+    {
+        summary.has_image = true;
+    } else if normalized.contains("file-url")
+        || normalized.contains("fileurl")
+        || normalized.contains("filename")
+    {
+        summary.has_file_url = true;
+    } else {
+        summary.has_other = true;
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn nsstring_to_string(value: cocoa::base::id) -> Result<String> {
+    use cocoa::base::nil;
+    use objc::{msg_send, sel, sel_impl};
+
+    if value == nil {
+        bail!("NSString pointer was nil");
+    }
+
+    let utf8: *const std::os::raw::c_char = msg_send![value, UTF8String];
+    if utf8.is_null() {
+        bail!("NSString.UTF8String returned nil");
+    }
+
+    Ok(CStr::from_ptr(utf8).to_string_lossy().into_owned())
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn release_objects(objects: &[cocoa::base::id]) {
+    use objc::{msg_send, sel, sel_impl};
+
+    for object in objects {
+        let _: () = msg_send![*object, release];
+    }
 }
 
 /// Simulate Cmd+V paste using Core Graphics events.
@@ -343,9 +689,15 @@ pub fn simulate_paste_with_cg() -> Result<()> {
 #[cfg(test)]
 mod unit_tests {
     #[test]
-    fn test_set_via_clipboard_fallback_restores_clipboard_after_paste_attempt() {
+    fn test_set_via_clipboard_fallback_restores_snapshot_after_paste_attempt() {
         let source = include_str!("selected_text.rs");
 
+        let snapshot_idx = source
+            .find("let snapshot = PasteboardSnapshot::capture()")
+            .expect("expected selected-text replacement to snapshot the clipboard first");
+        let write_idx = source
+            .find("write_plain_text_to_pasteboard(text)")
+            .expect("expected selected-text replacement to write plain text through NSPasteboard");
         let paste_result_idx = source
             .find("let paste_result = simulate_paste_with_cg();")
             .expect("expected set_via_clipboard_fallback to capture paste result");
@@ -353,8 +705,8 @@ mod unit_tests {
             .find("thread::sleep(Duration::from_millis(150));")
             .expect("expected 150ms post-paste delay");
         let restore_idx = source
-            .find("if let Some(original_text) = original {")
-            .expect("expected clipboard restore block");
+            .find("let restore_result = snapshot.restore();")
+            .expect("expected full pasteboard snapshot restore");
         let pre_restore_delay_idx = source
             .find("thread::sleep(Duration::from_millis(100));")
             .expect("expected 100ms pre-restore delay");
@@ -362,6 +714,14 @@ mod unit_tests {
             .find("paste_result?;")
             .expect("expected paste result to be returned after restore attempt");
 
+        assert!(
+            snapshot_idx < write_idx,
+            "snapshot must happen before mutation"
+        );
+        assert!(
+            write_idx < paste_result_idx,
+            "clipboard write must precede paste"
+        );
         assert!(
             paste_result_idx < post_paste_delay_idx,
             "paste should run before post-paste delay"
@@ -378,6 +738,75 @@ mod unit_tests {
             pre_restore_delay_idx > restore_idx,
             "pre-restore delay should remain inside restore block"
         );
+    }
+
+    #[test]
+    fn test_selected_text_clipboard_restore_preserves_non_text_representations() {
+        let source = include_str!("selected_text.rs");
+        let snapshot_impl = source
+            .split("impl PasteboardSnapshot {")
+            .nth(1)
+            .expect("expected PasteboardSnapshot implementation");
+
+        assert!(
+            snapshot_impl.contains("pasteboardItems"),
+            "snapshot must inspect pasteboard items, not only text"
+        );
+        assert!(
+            snapshot_impl.contains("dataForType"),
+            "snapshot must copy every representation's bytes"
+        );
+        assert!(
+            snapshot_impl.contains("setData: data forType: ns_type"),
+            "restore must rebuild each representation by type"
+        );
+        assert!(
+            snapshot_impl.contains("writeObjects"),
+            "restore must write rebuilt pasteboard items"
+        );
+        assert!(
+            !snapshot_impl.contains("get_text()") && !snapshot_impl.contains("set_text("),
+            "selected-text restore must not fall back to text-only arboard restore"
+        );
+    }
+
+    #[test]
+    fn test_selected_text_clipboard_logs_are_content_light() {
+        let source = include_str!("selected_text.rs");
+        let fallback_body = source
+            .split("fn set_via_clipboard_fallback(text: &str) -> Result<()> {")
+            .nth(1)
+            .and_then(|rest| rest.split("struct PasteboardSnapshot").next())
+            .expect("expected selected-text fallback body");
+
+        for forbidden in [
+            "text =",
+            "%text",
+            "original_text",
+            "type_name =",
+            "representation.data",
+        ] {
+            assert!(
+                !fallback_body.contains(forbidden),
+                "selected-text fallback logs must not expose raw clipboard or replacement content: {forbidden}"
+            );
+        }
+
+        for required in [
+            "item_count",
+            "type_count",
+            "total_bytes",
+            "has_text",
+            "has_rich_text",
+            "has_image",
+            "has_file_url",
+            "has_other",
+        ] {
+            assert!(
+                fallback_body.contains(required),
+                "selected-text fallback should log content-light clipboard boundary field: {required}"
+            );
+        }
     }
 }
 
