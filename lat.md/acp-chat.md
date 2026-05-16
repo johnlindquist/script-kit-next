@@ -342,6 +342,8 @@ Pointer handling follows the same contract for `/` slash commands and `@` mentio
 
 Outside-click dismissal records the exact active trigger/query so unchanged composer text cannot immediately recreate the popup on the next refresh. The suppression clears when the input or cursor no longer matches that dismissed trigger.
 
+The composer picker lifecycle is centralized in [[src/ai/acp/composer_state.rs#AcpComposerPickerState]]. Refresh, navigation, accept, submit cleanup, slash toggle, and dismiss paths emit reducer events before `AcpChatView` applies popup sync and side effects.
+
 Mouse focus updates the existing popup row state in place. It must not resync the popup window from inside the popup click handler, because that can leave a replacement native popup visible after double-click submit.
 
 ACP close paths must always clear the shared picker before hiding or removing the chat view. This prevents detached slash or mention popups from surviving after the embedded or detached chat surface closes.
@@ -481,6 +483,9 @@ The hidden view lives in `ScriptListApp::prewarmed_acp_chat`, separate from `emb
 - it is used for harness or verification-oriented flows
 - `Tab` and `Shift+Tab` inside the terminal belong to the PTY, not to ACP focus navigation
 - `Cmd+Enter` apply-back behavior is terminal-specific and uses the harness route logic
+- `Cmd-W`, protocol `simulateKey` Cmd-W, and native footer Close tear down the PTY harness and close the main window state-first, so any ScriptList reset happens after `windowVisible:false`
+- apply-back and restore-origin callers still use the saved return view/focus instead of the main-window close path
+- agentic proof may activate the native footer Close through `selectBySemanticId("footer:native:close")`, scoped to `QuickTerminalView`
 - it stays inside the compact main-window height when opened from the launcher, while SDK-spawned `TermPrompt` views still use the full terminal height
 
 Agent Chat should not be described as that terminal surface. The current code treats them as related AI entry paths, not the same product surface.

@@ -21,6 +21,10 @@ use crate::components::text_input::{
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
+use super::composer_state::{
+    reduce_acp_composer_picker, AcpComposerPickerDismissReason, AcpComposerPickerEvent,
+    AcpComposerPickerRefreshInput, AcpComposerPickerState, AcpComposerPickerTransition,
+};
 use super::history_popup::{
     history_popup_key_intent, AcpHistoryPopupKeyIntent, HISTORY_POPUP_PAGE_JUMP,
     HISTORY_POPUP_SEARCH_LIMIT,
@@ -44,25 +48,25 @@ use crate::ai::window::context_picker::{
 #[derive(Debug, Clone)]
 pub(crate) struct AcpMentionSession {
     /// Which trigger character opened this session (`@` or `/`).
-    trigger: ContextPickerTrigger,
+    pub(crate) trigger: ContextPickerTrigger,
     /// Character range of the trigger+query in the input text.
-    trigger_range: std::ops::Range<usize>,
+    pub(crate) trigger_range: std::ops::Range<usize>,
     /// Query text typed after the trigger.
-    query: String,
+    pub(crate) query: String,
     /// Currently highlighted row index.
     pub(crate) selected_index: usize,
     /// First visible row in the popup list.
-    visible_start: usize,
+    pub(crate) visible_start: usize,
     /// Ranked picker items for the current query.
     pub(crate) items: Vec<ContextPickerItem>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct AcpDismissedMentionTrigger {
-    trigger: ContextPickerTrigger,
-    trigger_range: std::ops::Range<usize>,
-    query: String,
-    cursor: usize,
+pub(crate) struct AcpDismissedMentionTrigger {
+    pub(crate) trigger: ContextPickerTrigger,
+    pub(crate) trigger_range: std::ops::Range<usize>,
+    pub(crate) query: String,
+    pub(crate) cursor: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -1418,7 +1422,7 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.permission_options_open = false;
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.setup_agent_picker = None;
         // Clear a bare `@` / `/` trigger left over from a launcher-initiated
@@ -1445,7 +1449,7 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.permission_options_open = false;
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::PortalStaged, cx);
         self.history_menu = None;
         self.setup_agent_picker = None;
 
@@ -1991,7 +1995,7 @@ impl AcpChatView {
         );
         self.attach_menu_open = false;
         self.model_selector_open = false;
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_closed_at = None;
         self.history_menu = Some(AcpHistoryMenuState {
             selected_index: 0,
@@ -2070,7 +2074,7 @@ impl AcpChatView {
 
             self.attach_menu_open = false;
             self.model_selector_open = false;
-            self.mention_session = None;
+            self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
             self.history_closed_at = None;
             self.history_menu = Some(AcpHistoryMenuState {
                 selected_index: 0,
@@ -2101,7 +2105,7 @@ impl AcpChatView {
             if !hits.is_empty() {
                 self.attach_menu_open = false;
                 self.model_selector_open = false;
-                self.mention_session = None;
+                self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
                 self.history_closed_at = None;
                 self.history_menu = Some(AcpHistoryMenuState {
                     selected_index: 0,
@@ -2173,25 +2177,121 @@ impl AcpChatView {
             || self.attach_menu_open
     }
 
+    fn composer_picker_state(&self) -> AcpComposerPickerState {
+        if let Some(session) = self.mention_session.clone() {
+            AcpComposerPickerState::Open(session)
+        } else if let Some(trigger) = self.dismissed_mention_trigger.clone() {
+            AcpComposerPickerState::Dismissed(trigger)
+        } else {
+            AcpComposerPickerState::Closed
+        }
+    }
+
+    fn apply_composer_picker_transition(
+        &mut self,
+        transition: AcpComposerPickerTransition,
+        cx: &mut Context<Self>,
+    ) -> Option<AcpMentionSession> {
+        let AcpComposerPickerTransition {
+            state,
+            sync_popup,
+            notify,
+            close_competing_popups,
+            clear_last_accepted_item,
+            log_visible_reason,
+            accepted_session,
+            insert_slash_input,
+            clear_slash_input,
+        } = transition;
+
+        match state {
+            AcpComposerPickerState::Closed => {
+                self.mention_session.take();
+                self.dismissed_mention_trigger = None;
+            }
+            AcpComposerPickerState::Open(session) => {
+                self.mention_session = Some(session);
+                self.dismissed_mention_trigger = None;
+            }
+            AcpComposerPickerState::Dismissed(trigger) => {
+                self.mention_session.take();
+                self.dismissed_mention_trigger = Some(trigger);
+            }
+        }
+
+        if clear_last_accepted_item {
+            self.last_accepted_item = None;
+        }
+        if close_competing_popups {
+            self.attach_menu_open = false;
+            self.model_selector_open = false;
+            self.history_menu = None;
+        }
+        if clear_slash_input {
+            self.live_thread().update(cx, |thread, cx| {
+                let text = thread.input.text().to_string();
+                if text.starts_with('/') {
+                    thread.input.set_text(String::new());
+                    thread.input.set_cursor(0);
+                }
+                cx.notify();
+            });
+        }
+        if insert_slash_input {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.input.set_text("/".to_string());
+                thread.input.set_cursor(1);
+                cx.notify();
+            });
+        }
+        if let Some(reason) = log_visible_reason {
+            self.log_mention_visible_range(reason);
+        }
+        if sync_popup {
+            self.sync_acp_popup_windows_from_cached_parent(cx);
+        }
+        if notify {
+            cx.notify();
+        }
+
+        accepted_session
+    }
+
+    fn clear_composer_picker(
+        &mut self,
+        reason: AcpComposerPickerDismissReason,
+        cx: &mut Context<Self>,
+    ) {
+        let transition = reduce_acp_composer_picker(
+            self.composer_picker_state(),
+            AcpComposerPickerEvent::Dismiss { reason, cursor: 0 },
+        );
+        self.apply_composer_picker_transition(transition, cx);
+    }
+
     pub(crate) fn dismiss_mention_picker(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(session) = self.mention_session.take() else {
+        if self.mention_session.is_none() {
             return false;
         };
         let cursor = self.live_thread().read(cx).input.cursor();
-        self.dismissed_mention_trigger = Some(AcpDismissedMentionTrigger {
-            trigger: session.trigger,
-            trigger_range: session.trigger_range.clone(),
-            query: session.query.clone(),
-            cursor,
-        });
+        let transition = reduce_acp_composer_picker(
+            self.composer_picker_state(),
+            AcpComposerPickerEvent::Dismiss {
+                reason: AcpComposerPickerDismissReason::Outside,
+                cursor,
+            },
+        );
+        let trigger = match &transition.state {
+            AcpComposerPickerState::Dismissed(trigger) => Some(trigger.clone()),
+            _ => None,
+        };
+        self.apply_composer_picker_transition(transition, cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_mention_picker_dismissed",
-            trigger = ?session.trigger,
-            query = %session.query,
+            trigger = ?trigger.as_ref().map(|trigger| trigger.trigger),
+            query = %trigger.as_ref().map(|trigger| trigger.query.as_str()).unwrap_or(""),
         );
-        self.sync_mention_popup_window_from_cached_parent(cx);
-        cx.notify();
         true
     }
 
@@ -2924,7 +3024,7 @@ impl AcpChatView {
             composer_cursor,
             state: staged_state,
         });
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::PortalStaged, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -3594,7 +3694,7 @@ impl AcpChatView {
             return false;
         }
 
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -3665,7 +3765,7 @@ impl AcpChatView {
     /// context so launcher-driven submits do not inherit stale chips or
     /// queued bootstrap work from the previous draft.
     pub(crate) fn submit_reused_entry_intent(&mut self, intent: String, cx: &mut Context<Self>) {
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::SubmitStarted, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -3710,7 +3810,7 @@ impl AcpChatView {
         }
 
         self.sync_mention_popup_window_from_cached_parent(cx);
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::SubmitStarted, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -3791,7 +3891,7 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.history_menu = None;
-        self.dismissed_mention_trigger = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.set_input(trigger.to_string(), cx);
         self.refresh_mention_session(cx);
     }
@@ -4893,12 +4993,10 @@ impl AcpChatView {
             .map(|s| s.visible_start)
             .unwrap_or(0);
 
-        let mut dismissed_trigger_still_active = false;
-        let next_session = if Self::focused_inline_token_prefers_preview(
-            &text,
-            cursor,
-            &self.typed_mention_aliases,
-        ) {
+        let focused_inline_preview =
+            Self::focused_inline_token_prefers_preview(&text, cursor, &self.typed_mention_aliases);
+        let mut active_dismissed_trigger = None;
+        let next_session = if focused_inline_preview {
             None
         } else {
             match Self::find_active_trigger(&text, cursor) {
@@ -4910,7 +5008,7 @@ impl AcpChatView {
                         cursor,
                     };
                     if self.dismissed_mention_trigger.as_ref() == Some(&active_trigger) {
-                        dismissed_trigger_still_active = true;
+                        active_dismissed_trigger = Some(active_trigger);
                         None
                     } else {
                         let mut items = match trigger {
@@ -5014,21 +5112,15 @@ impl AcpChatView {
             }
         };
 
-        if !dismissed_trigger_still_active {
-            self.dismissed_mention_trigger = None;
-        }
-
-        if next_session.is_some() {
-            self.last_accepted_item = None;
-            self.attach_menu_open = false;
-            self.model_selector_open = false;
-            self.history_menu = None;
-        }
-
-        self.mention_session = next_session;
-        self.log_mention_visible_range("refresh");
-        self.sync_acp_popup_windows_from_cached_parent(cx);
-        cx.notify();
+        let transition = reduce_acp_composer_picker(
+            self.composer_picker_state(),
+            AcpComposerPickerEvent::Refresh(AcpComposerPickerRefreshInput {
+                active_trigger: active_dismissed_trigger,
+                next_session,
+                focused_inline_preview,
+            }),
+        );
+        self.apply_composer_picker_transition(transition, cx);
     }
 
     /// Log the visible window range for observability.
@@ -5077,9 +5169,7 @@ impl AcpChatView {
             self.accept_mention_selection_impl(false, cx);
         } else {
             self.sync_inline_mentions(cx);
-            self.mention_session = None;
-            self.sync_mention_popup_window_from_cached_parent(cx);
-            cx.notify();
+            self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         }
     }
 
@@ -5212,7 +5302,11 @@ impl AcpChatView {
     fn accept_mention_selection_impl(&mut self, submit: bool, cx: &mut Context<Self>) {
         use crate::ai::context_mentions::part_to_inline_token;
 
-        let session = match self.mention_session.take() {
+        let transition = reduce_acp_composer_picker(
+            self.composer_picker_state(),
+            AcpComposerPickerEvent::Accept,
+        );
+        let session = match self.apply_composer_picker_transition(transition, cx) {
             Some(s) => s,
             None => return,
         };
@@ -5224,8 +5318,11 @@ impl AcpChatView {
         // Inert items (loading spinner, empty state) are non-actionable.
         if matches!(item.kind, ContextPickerItemKind::Inert) {
             tracing::debug!(item_id = %item.id, "acp_picker_inert_item_ignored");
-            // Restore session so the picker stays open.
-            self.mention_session = Some(session);
+            let transition = reduce_acp_composer_picker(
+                self.composer_picker_state(),
+                AcpComposerPickerEvent::AcceptIgnoredKeepOpen(session),
+            );
+            self.apply_composer_picker_transition(transition, cx);
             return;
         }
 
@@ -6138,7 +6235,7 @@ impl AcpChatView {
         snapshot: AcpViewDraftSnapshot,
         cx: &mut Context<Self>,
     ) {
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -6167,7 +6264,7 @@ impl AcpChatView {
         draft_state: AcpRetryDraftState,
         cx: &mut Context<Self>,
     ) {
-        self.mention_session = None;
+        self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
         self.attach_menu_open = false;
         self.model_selector_open = false;
@@ -7183,29 +7280,15 @@ impl AcpChatView {
 
         // ── Cmd+/ → toggle slash command picker ──────────────────
         if modifiers.platform && key == "/" {
-            if self
-                .mention_session
-                .as_ref()
-                .is_some_and(|s| s.trigger == ContextPickerTrigger::Slash)
-            {
-                // Close picker and clear the "/" prefix
-                self.mention_session = None;
-                self.live_thread().update(cx, |thread, cx| {
-                    let text = thread.input.text().to_string();
-                    if text.starts_with('/') {
-                        thread.input.set_text(String::new());
-                    }
-                    cx.notify();
-                });
-            } else {
-                // Open picker by inserting "/" into input
-                self.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text("/".to_string());
-                    cx.notify();
-                });
+            let transition = reduce_acp_composer_picker(
+                self.composer_picker_state(),
+                AcpComposerPickerEvent::SlashToggle,
+            );
+            let should_refresh = transition.insert_slash_input;
+            self.apply_composer_picker_transition(transition, cx);
+            if should_refresh {
                 self.refresh_mention_session(cx);
             }
-            cx.notify();
             cx.stop_propagation();
             return;
         }
@@ -7257,56 +7340,38 @@ impl AcpChatView {
         // ── Unified picker intercept (@ mentions + / commands) ────
         if self.mention_session.is_some() {
             if crate::ui_foundation::is_key_up(key) {
-                if let Some(session) = self.mention_session.as_mut() {
-                    if !session.items.is_empty() {
-                        session.selected_index = if session.selected_index == 0 {
-                            session.items.len() - 1
-                        } else {
-                            session.selected_index - 1
-                        };
-                        let visible = Self::mention_visible_range_from_start(
-                            session.visible_start,
-                            session.selected_index,
-                            session.items.len(),
-                        );
-                        session.visible_start = visible.start;
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "acp_mention_selection_changed",
-                            direction = "prev",
-                            selected_index = session.selected_index,
-                            item_count = session.items.len(),
-                        );
-                    }
+                let transition = reduce_acp_composer_picker(
+                    self.composer_picker_state(),
+                    AcpComposerPickerEvent::NavigatePrevious,
+                );
+                self.apply_composer_picker_transition(transition, cx);
+                if let Some(session) = self.mention_session.as_ref() {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_mention_selection_changed",
+                        direction = "prev",
+                        selected_index = session.selected_index,
+                        item_count = session.items.len(),
+                    );
                 }
-                self.log_mention_visible_range("keyboard_prev");
-                self.sync_mention_popup_window_from_cached_parent(cx);
-                cx.notify();
                 cx.stop_propagation();
                 return;
             }
             if crate::ui_foundation::is_key_down(key) {
-                if let Some(session) = self.mention_session.as_mut() {
-                    if !session.items.is_empty() {
-                        session.selected_index = (session.selected_index + 1) % session.items.len();
-                        let visible = Self::mention_visible_range_from_start(
-                            session.visible_start,
-                            session.selected_index,
-                            session.items.len(),
-                        );
-                        session.visible_start = visible.start;
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "acp_mention_selection_changed",
-                            direction = "next",
-                            selected_index = session.selected_index,
-                            item_count = session.items.len(),
-                        );
-                    }
+                let transition = reduce_acp_composer_picker(
+                    self.composer_picker_state(),
+                    AcpComposerPickerEvent::NavigateNext,
+                );
+                self.apply_composer_picker_transition(transition, cx);
+                if let Some(session) = self.mention_session.as_ref() {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_mention_selection_changed",
+                        direction = "next",
+                        selected_index = session.selected_index,
+                        item_count = session.items.len(),
+                    );
                 }
-                self.log_mention_visible_range("keyboard_next");
-                self.sync_mention_popup_window_from_cached_parent(cx);
-                cx.notify();
                 cx.stop_propagation();
                 return;
             }
@@ -7317,9 +7382,14 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_escape(key) {
-                self.mention_session = None;
-                self.sync_mention_popup_window_from_cached_parent(cx);
-                cx.notify();
+                let transition = reduce_acp_composer_picker(
+                    self.composer_picker_state(),
+                    AcpComposerPickerEvent::Dismiss {
+                        reason: AcpComposerPickerDismissReason::Escape,
+                        cursor: self.live_thread().read(cx).input.cursor(),
+                    },
+                );
+                self.apply_composer_picker_transition(transition, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -7357,8 +7427,11 @@ impl AcpChatView {
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
             let permission_active = self.live_thread().read(cx).pending_permission.is_some();
-            self.mention_session = None;
-            self.sync_mention_popup_window_from_cached_parent(cx);
+            let transition = reduce_acp_composer_picker(
+                self.composer_picker_state(),
+                AcpComposerPickerEvent::SubmitStarted,
+            );
+            self.apply_composer_picker_transition(transition, cx);
             self.submit_with_expanded_tokens(cx);
             self.emit_key_route_telemetry(
                 key,
