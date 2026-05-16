@@ -216,6 +216,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `layout-measurement-regression-stress` is intentionally fail-closed until main, attached popup, and detached ACP surfaces expose rem size, scale factor, window/content/container bounds, scroll viewport/content metrics, footer ownership, input ownership, and before/after filter/resize layout-shift samples.
 
+`modal-stack-arbitration-stress` is intentionally fail-closed until nested Actions, Confirm, and Prompt popups expose one modal stack receipt proving topmost-only Escape/Cmd-W/Enter routing, lower-owner no-mutation, and parent selection/focus restoration.
+
+`cross-surface-export-provenance-stress` is intentionally fail-closed until File Search or Clipboard History exports into ACP composer or Notes expose one provenance receipt tying source selection generation, redacted visible rows, payload fingerprint, destination insertion, and stale-source rejection.
+
+`dev-session-recovery-stale-target-stress` is the pass-now restart/recovery guard. It records a session epoch with the promoted target, restarts the agentic session, refuses stale-target input before delivery when the epoch changes, re-resolves the exact target, and proves the new target with state-first receipts.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

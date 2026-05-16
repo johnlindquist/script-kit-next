@@ -51,6 +51,12 @@
  *                         Fail-closed layout measurement regression proof
  *   screenshot-semantics-visual-consistency-stress
  *                         Pass-now screenshot-to-semantics consistency proof
+ *   modal-stack-arbitration-stress
+ *                         Fail-closed stacked modal key arbitration proof
+ *   cross-surface-export-provenance-stress
+ *                         Fail-closed cross-surface export provenance proof
+ *   dev-session-recovery-stale-target-stress
+ *                         Pass-now stale target recovery proof
  *   help                   Show this help
  *
  * Target threading:
@@ -95,6 +101,9 @@ import {
   runVisibleTextClippingOverlapStressScenario,
   runLayoutMeasurementRegressionStressScenario,
   runScreenshotSemanticsVisualConsistencyStressScenario,
+  runModalStackArbitrationStressScenario,
+  runCrossSurfaceExportProvenanceStressScenario,
+  runDevSessionRecoveryStaleTargetStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -644,6 +653,17 @@ function parseArgs() {
   const group = groupIdx >= 0 && args[groupIdx + 1] ? args[groupIdx + 1] : undefined;
   const caseIdx = args.indexOf("--case");
   const caseId = caseIdx >= 0 && args[caseIdx + 1] ? args[caseIdx + 1] : undefined;
+  const destinationIdx = args.indexOf("--destination");
+  const destination =
+    destinationIdx >= 0 && args[destinationIdx + 1] ? args[destinationIdx + 1] : undefined;
+  const exportModeIdx = args.indexOf("--export-mode");
+  const exportMode =
+    exportModeIdx >= 0 && args[exportModeIdx + 1] ? args[exportModeIdx + 1] : undefined;
+  const entryIdx = args.indexOf("--entry");
+  const entry = entryIdx >= 0 && args[entryIdx + 1] ? args[entryIdx + 1] : undefined;
+  const restartModeIdx = args.indexOf("--restart-mode");
+  const restartMode =
+    restartModeIdx >= 0 && args[restartModeIdx + 1] ? args[restartModeIdx + 1] : undefined;
   const monitorProfileIdx = args.indexOf("--monitor-profile");
   const monitorProfile =
     monitorProfileIdx >= 0 && args[monitorProfileIdx + 1]
@@ -718,6 +738,10 @@ function parseArgs() {
     surfaces,
     group,
     caseId,
+    destination,
+    exportMode,
+    entry,
+    restartMode,
     monitorProfile,
     transcript,
     fixtureId,
@@ -2013,6 +2037,10 @@ const {
   surfaces,
   group,
   caseId,
+  destination,
+  exportMode,
+  entry,
+  restartMode,
   monitorProfile,
   transcript,
   fixtureId,
@@ -2612,6 +2640,60 @@ switch (recipe) {
     break;
   }
 
+  case "modal-stack-arbitration-stress": {
+    const proofBundle = await runModalStackArbitrationStressScenario({ session, host });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "modal-stack-arbitration-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Modal stack arbitration stress failed closed; topmost-owner key routing and parent focus/selection receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "cross-surface-export-provenance-stress": {
+    const proofBundle = await runCrossSurfaceExportProvenanceStressScenario({
+      session,
+      source,
+      destination,
+      exportMode,
+      query,
+      range,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "cross-surface-export-provenance-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Cross-surface export provenance stress failed closed; provenance, redaction, destination insertion, and stale-source receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "dev-session-recovery-stale-target-stress": {
+    const proofBundle = await runDevSessionRecoveryStaleTargetStressScenario({
+      session,
+      entry,
+      kind,
+      index,
+      restartMode,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "dev-session-recovery-stale-target-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Dev/session restart recovery blocked stale-target input and re-resolved the exact target"
+        : "Dev/session restart recovery failed; inspect proofBundle.sessionRecovery",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2742,6 +2824,9 @@ switch (recipe) {
           { name: "visible-text-clipping-overlap-stress", description: "Fail-closed visible text bounds, overlap, and intentional truncation receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "layout-measurement-regression-stress", description: "Fail-closed rem, bounds, scroll/input/footer ownership, and layout-shift measurement receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "screenshot-semantics-visual-consistency-stress", description: "Pass-now strict screenshot capture plus state/elements semantic consistency proof", flags: ["--session", "--group", "--case", "--surface", "--json"] },
+          { name: "modal-stack-arbitration-stress", description: "Fail-closed stacked modal topmost-owner key routing and parent focus/selection restoration receipt", flags: ["--session", "--host", "--json"] },
+          { name: "cross-surface-export-provenance-stress", description: "Fail-closed cross-surface export provenance, redaction, destination insertion, and stale-source receipt", flags: ["--session", "--source", "--destination", "--export-mode", "--query", "--range", "--json"] },
+          { name: "dev-session-recovery-stale-target-stress", description: "Pass-now stale target session-epoch rejection, exact re-resolution, no stale input, and cleanup receipt", flags: ["--session", "--entry", "--kind", "--index", "--restart-mode", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2800,6 +2885,9 @@ switch (recipe) {
           "proofBundle.layoutMeasurementRegression",
           "proofBundle.visualConsistency",
           "proofBundle.screenshotSemanticsConsistency",
+          "proofBundle.modalStackArbitration",
+          "proofBundle.crossSurfaceExport",
+          "proofBundle.sessionRecovery",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2882,6 +2970,12 @@ Recipes:
                          Fail-closed layout measurement regression proof
   screenshot-semantics-visual-consistency-stress
                          Pass-now screenshot-to-semantics consistency proof
+  modal-stack-arbitration-stress
+                         Fail-closed stacked modal key arbitration proof
+  cross-surface-export-provenance-stress
+                         Fail-closed cross-surface export provenance proof
+  dev-session-recovery-stale-target-stress
+                         Pass-now stale target recovery proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2960,6 +3054,12 @@ Available scenarios:
                          Emit fail-closed layout measurement regression requirements
   screenshot-semantics-visual-consistency-stress
                          Run strict screenshot/semantics visual consistency proof
+  modal-stack-arbitration-stress
+                         Emit fail-closed stacked modal arbitration requirements
+  cross-surface-export-provenance-stress
+                         Emit fail-closed cross-surface export provenance requirements
+  dev-session-recovery-stale-target-stress
+                         Run pass-now stale target session recovery proof
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3002,6 +3102,9 @@ Examples:
   bun scripts/agentic/index.ts visible-text-clipping-overlap-stress --session default --surfaces main,actionsDialog,acpDetached --json
   bun scripts/agentic/index.ts layout-measurement-regression-stress --session default --surfaces main,actionsDialog,acpDetached --json
   bun scripts/agentic/index.ts screenshot-semantics-visual-consistency-stress --session default --group filterable-main --case clipboard-history-visible-rows --json
+  bun scripts/agentic/index.ts modal-stack-arbitration-stress --session default --json
+  bun scripts/agentic/index.ts cross-surface-export-provenance-stress --session default --source file-search --destination acp-composer --export-mode copy --query AGENTS.md --json
+  bun scripts/agentic/index.ts dev-session-recovery-stale-target-stress --session default --entry clipboard-history-actions --kind actionsDialog --restart-mode stop-start --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
