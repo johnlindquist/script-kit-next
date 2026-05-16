@@ -142,7 +142,10 @@ export interface HardScenarioReceipt {
     | "dense-list-detail-preview-readability-stress"
     | "toast-notification-queue-lifecycle-stress"
     | "destructive-confirm-modal-safety-stress"
-    | "loading-skeleton-progress-restoration-stress";
+    | "loading-skeleton-progress-restoration-stress"
+    | "icon-image-fallback-redaction-stress"
+    | "footer-status-persistence-stress"
+    | "keyboard-hint-label-parity-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -220,6 +223,9 @@ export interface HardScenarioReceipt {
   toastNotificationQueueLifecycle?: Record<string, unknown>;
   destructiveConfirmModalSafety?: Record<string, unknown>;
   loadingSkeletonProgressRestoration?: Record<string, unknown>;
+  iconImageFallbackRedaction?: Record<string, unknown>;
+  footerStatusPersistence?: Record<string, unknown>;
+  keyboardHintLabelParity?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6423,6 +6429,194 @@ export async function runLoadingSkeletonProgressRestorationStressScenario(opts: 
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_loading_skeleton_progress_restoration_receipt" } }],
     failure: { code: "missing_loading_skeleton_progress_restoration_receipt", stepName: "declare-required-receipt", message: "Missing app-side loading skeleton/progress restoration receipts." },
     warnings: ["file_linear:loading_skeleton_progress_restoration_receipts_missing"],
+  };
+}
+
+export async function runIconImageFallbackRedactionStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fixtures?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "icon-image-fallback-redaction-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_icon_image_fallback_redaction_receipt",
+    linearIssue: "file_linear:icon_image_fallback_redaction_receipts_missing",
+    iconImageFallbackRedaction: {
+      kind: "ux.iconImageFallbackRedaction",
+      iconImageStressId: "loop-twenty-one-icon-image-fallback-redaction",
+      requestedSurfaces: opts.surfaces ?? ["app-launcher", "file-search", "clipboard-history"],
+      requestedFixtures: opts.fixtures ?? ["missing-file", "corrupt-png", "private-local-path", "data-uri-redacted"],
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateReceipt: null,
+      elementsReceipt: null,
+      imageFallbackReceipt: null,
+      assetFixtureReceipt: null,
+      fixtureKind: null,
+      requestedImageSourceKind: null,
+      requestedImageFingerprint: null,
+      rawSourceRedacted: null,
+      displayedImageKind: null,
+      fallbackIconKind: null,
+      fallbackReason: null,
+      imageLoadGeneration: null,
+      cacheKeyFingerprint: null,
+      redactedPreview: null,
+      noRawPath: null,
+      noRawUrl: null,
+      noFileContents: null,
+      brokenImageRejected: null,
+      unsupportedSchemeRejected: null,
+      staleImageGenerationRejected: null,
+      defaultIconRendered: null,
+      accessibleLabelPreserved: null,
+      rowIdentityPreserved: null,
+      footerStatePreserved: null,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_icon_image_fallback_redaction_receipt" } }],
+    failure: { code: "missing_icon_image_fallback_redaction_receipt", stepName: "declare-required-receipt", message: "Missing app-side icon/image fallback redaction receipts." },
+    warnings: ["file_linear:icon_image_fallback_redaction_receipts_missing"],
+  };
+}
+
+export async function runFooterStatusPersistenceStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  transitions?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "footer-status-persistence-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_footer_status_persistence_receipt",
+    linearIssue: "file_linear:footer_status_persistence_receipts_missing",
+    footerStatusPersistence: {
+      kind: "ux.footerStatusPersistence",
+      footerStatusStressId: "loop-twenty-one-footer-status-persistence",
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog"],
+      requestedTransitions: opts.transitions ?? ["filter", "selection", "cmd-k", "escape", "clear-filter"],
+      surfaceSamples: [],
+      surface: null,
+      hostAutomationWindowId: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateBefore: null,
+      elementsBefore: null,
+      transitionSamples: [],
+      transitionGeneration: null,
+      routeStackDepth: null,
+      filterTextBefore: null,
+      selectedSemanticIdBefore: null,
+      footerReceipt: null,
+      footerOwner: null,
+      nativeFooterSurfaceId: null,
+      gpuiFallbackVisible: null,
+      renderedButtons: [],
+      buttonSemanticIds: [],
+      buttonLabel: null,
+      buttonShortcutHint: null,
+      disabledReason: null,
+      statusBarReceipt: null,
+      statusText: null,
+      statusKind: null,
+      statusGeneration: null,
+      persistedAcrossFilter: null,
+      persistedAcrossSelection: null,
+      persistedAcrossActionsOpenClose: null,
+      persistedAcrossPopupClose: null,
+      noDuplicateFooterRows: null,
+      noStaleStatusAfterRecovery: null,
+      footerSafeSelection: null,
+      inputCollisionFree: null,
+      wrongSurfaceFooterRejected: null,
+      staleFooterGenerationRejected: null,
+      stateAfter: null,
+      elementsAfter: null,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_footer_status_persistence_receipt" } }],
+    failure: { code: "missing_footer_status_persistence_receipt", stepName: "declare-required-receipt", message: "Missing app-side footer/status persistence receipts." },
+    warnings: ["file_linear:footer_status_persistence_receipts_missing"],
+  };
+}
+
+export async function runKeyboardHintLabelParityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  families?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "keyboard-hint-label-parity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_keyboard_hint_label_parity_receipt",
+    linearIssue: "file_linear:keyboard_hint_label_parity_receipts_missing",
+    keyboardHintLabelParity: {
+      kind: "ux.keyboardHintLabelParity",
+      keyboardHintStressId: "loop-twenty-one-keyboard-hint-label-parity",
+      requestedSurfaces: opts.surfaces ?? ["main", "clipboard-history", "emoji-picker", "file-search", "actionsDialog", "menuSyntaxTriggerPopup"],
+      requestedFamilies: opts.families ?? ["footer", "row-accessory", "tooltip", "action-catalog"],
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateReceipt: null,
+      elementsReceipt: null,
+      actionCatalogReceipt: null,
+      footerHintReceipt: null,
+      rowHintSamples: [],
+      tooltipHintReceipt: null,
+      semanticId: null,
+      actionId: null,
+      hintOwner: null,
+      visibleLabel: null,
+      accessibleLabel: null,
+      footerLabel: null,
+      rowAccessoryLabel: null,
+      tooltipLabel: null,
+      tooltipNotRequiredReason: null,
+      platformShortcutLabel: null,
+      shortcutTokens: [],
+      normalizedShortcut: null,
+      glyphTokens: [],
+      labelParityMatched: null,
+      noMismatchedKeyGlyphs: null,
+      noDuplicateShortcutHints: null,
+      disabledStateParity: null,
+      activationOwner: null,
+      safeKeyboardActivation: null,
+      noAccidentalExecution: null,
+      hintGeneration: null,
+      staleHintRejected: null,
+      wrongSurfaceHintRejected: null,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_keyboard_hint_label_parity_receipt" } }],
+    failure: { code: "missing_keyboard_hint_label_parity_receipt", stepName: "declare-required-receipt", message: "Missing app-side keyboard hint label parity receipts." },
+    warnings: ["file_linear:keyboard_hint_label_parity_receipts_missing"],
   };
 }
 

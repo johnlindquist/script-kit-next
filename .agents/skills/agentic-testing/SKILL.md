@@ -137,6 +137,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For transient toast/notification feedback, prove queue generation, bridge generation, visible text, duplicate collapse, autohide/dismiss ordering, bounds/overlap, footer/input non-blocking, stale rejection, and no action execution from toast UI.
 - For destructive confirmation, prove dry-run-only fixture identity, confirm prompt identity, focused button, Enter/Escape resolution, no mutation before confirm, no mutation after cancel, no real system command request, stale/wrong-surface rejection, and parent focus/selection/filter restoration.
 - For loading skeleton/progress restoration, prove request/result generations, skeleton rows, progress text/percent monotonicity, activation blocking while loading, stale loading/progress/result rejection, skeleton cleanup after results, and selection/focus/filter/scroll restoration.
+- For icon/image fallback redaction, prove requested image source kind, redacted source fingerprint, fallback icon kind, fallback reason, image load generation, no raw path/URL/content leakage, stale image rejection, accessible label preservation, and cleanup.
+- For footer/status persistence, prove owner, native footer surface id, rendered buttons, shortcut labels, status generation, persistence across filter/selection/actions transitions, duplicate-footer rejection, stale-status rejection, wrong-surface rejection, and cleanup.
+- For keyboard hint label parity, prove footer, row accessory, tooltip, action catalog, normalized shortcut tokens, platform glyphs, disabled-state parity, activation owner, no accidental execution, stale-hint rejection, wrong-surface rejection, and cleanup.
 
 ## The Pattern
 
@@ -789,6 +792,9 @@ bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --sess
 bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
 bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
 bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
+bun scripts/agentic/index.ts icon-image-fallback-redaction-stress --session default --surfaces app-launcher,file-search,clipboard-history --fixtures missing-file,corrupt-png,private-local-path,data-uri-redacted --json
+bun scripts/agentic/index.ts footer-status-persistence-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --transitions filter,selection,cmd-k,escape,clear-filter --json
+bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,menuSyntaxTriggerPopup --families footer,row-accessory,tooltip,action-catalog --json
 ```
 
 ## Adjacent Skills
