@@ -76,6 +76,35 @@ Rules:
 - The app runs locally only — never connect to production
 - Every verification run MUST stop every Script Kit process/session it started before reporting results
 
+## AFK-Safe Proof Gate
+
+Before every runtime proof, assert the allowed and blocked capabilities explicitly. Default to `--local-fixture-only`, `--dry-run-only`, `--no-network`, `--no-external-services`, `--no-system-pasteboard`, `--no-native-picker`, `--no-quick-look`, `--no-system-settings`, `--no-tcc-mutation`, `--no-security-prompts`, `--no-native-input`, and `--no-native-pointer` unless the proof documents a protocol-only exception.
+
+Receipts for AFK-safe runs should include an `afkSafe: true` equivalent plus `blockedCapabilities` and `usedCapabilities` lists. If the app or harness cannot prove that an unsafe capability stayed blocked, fail closed and file the missing receipt.
+
+## User Bug Triage
+
+Turn a user-filed UI/UX bug into a proof plan before choosing or adding a recipe:
+
+- Surface and real entry path.
+- Observable invariant the user would notice.
+- Minimal fixture and relevant state generation.
+- Unsafe operations to simulate rather than perform.
+- Expected receipt fields and cleanup proof.
+- Pass/fail oracle, including what counts as reproduced, fixed, blocked, or inconclusive.
+
+## Stop Rule
+
+After two failed proof attempts caused by missing receipts, stale targets, unavailable handles, capture mismatch, or unsafe capability refusal, stop broadening the test. Classify the blocker as product bug, instrumentation gap, unsafe-to-prove, or test harness bug. Do not add sleeps, screenshots, focus hacks, native input, or larger recipes as a workaround.
+
+## Forbidden-State Simulation
+
+Permission denied, security prompt pending, setup required, network unavailable, pasteboard blocked, native picker unavailable, and destructive confirmation states must be represented by fixture/protocol state only. Receipts must prove no real OS prompt, settings write, install flow, API call, pasteboard mutation, or destructive command occurred.
+
+## Bug Result Schema
+
+For user-filed bug smoke tests, report a result that is more specific than generic PASS/FAIL: `reproduced`, `not-reproduced`, `fixed`, `blocked-by-missing-receipt`, `blocked-by-unsafe-operation`, or `inconclusive`. Include exact receipts/screenshots used, cleanup status, and remaining user-visible risk.
+
 ## Surface Identity Rules (MANDATORY)
 
 - Always verify the real user-facing surface through its real runtime entry path first.

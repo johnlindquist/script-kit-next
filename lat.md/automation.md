@@ -73,6 +73,8 @@ These rules describe the behavior constraints that automation changes should pre
 - Treat screenshot ambiguity as a hard failure, not a best-effort capture.
 - Treat blank or black screenshots as infrastructure failures, not visual proof.
 - Do not use SDK `keyboard.*` or `mouse.*` helpers as automation proof. They reject with `UnsupportedSdkFeatureError`; use `batch.setInput` / `batch.forceSubmit` for direct prompt mutation or submit behavior, and use `simulateKey` only when testing key routing with a follow-up `getState`, `getElements`, or `waitFor` receipt.
+- For AFK-safe smoke tests, declare blocked and used capabilities before runtime proof. Forbidden states such as permission denied, setup required, blocked pasteboard, unavailable native picker, or destructive confirmation must be fixture/protocol simulations with receipts proving no OS prompt, settings write, install flow, API call, pasteboard mutation, or destructive command occurred.
+- For user-filed bugs, classify proof results as reproduced, not-reproduced, fixed, blocked-by-missing-receipt, blocked-by-unsafe-operation, or inconclusive. After two failures from missing receipts, stale targets, unavailable handles, capture mismatch, or unsafe capability refusal, stop broadening the test and file the blocker.
 
 ## Filterable Surface Matrix
 
