@@ -75,6 +75,12 @@
  *                         Fail-closed power resume window generation proof
  *   menu-tray-notification-modal-interruption-stress
  *                         Fail-closed menu/tray/notification modal interruption proof
+ *   stream-progress-cancel-visual-stability-stress
+ *                         Fail-closed stream/progress cancellation visual stability proof
+ *   dictation-media-permission-readiness-churn-stress
+ *                         Fail-closed dictation/media permission readiness churn proof
+ *   animation-frame-capture-determinism-stress
+ *                         Fail-closed animation frame capture determinism proof
  *   help                   Show this help
  *
  * Target threading:
@@ -131,6 +137,9 @@ import {
   runRuntimeAppearanceChurnFocusedInputStressScenario,
   runPowerResumeWindowGenerationStressScenario,
   runMenuTrayNotificationModalInterruptionStressScenario,
+  runStreamProgressCancelVisualStabilityStressScenario,
+  runDictationMediaPermissionReadinessChurnStressScenario,
+  runAnimationFrameCaptureDeterminismStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -752,6 +761,22 @@ function parseArgs() {
     interruptionsIdx >= 0 && args[interruptionsIdx + 1]
       ? args[interruptionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const updatesIdx = args.indexOf("--updates");
+  const rawUpdates = updatesIdx >= 0 && args[updatesIdx + 1] ? Number(args[updatesIdx + 1]) : undefined;
+  const updates = Number.isFinite(rawUpdates) ? rawUpdates : undefined;
+  const cancelAtIdx = args.indexOf("--cancel-at");
+  const rawCancelAt =
+    cancelAtIdx >= 0 && args[cancelAtIdx + 1] ? Number(args[cancelAtIdx + 1]) : undefined;
+  const cancelAt = Number.isFinite(rawCancelAt) ? rawCancelAt : undefined;
+  const targetIdx = args.indexOf("--target");
+  const target = targetIdx >= 0 && args[targetIdx + 1] ? args[targetIdx + 1] : undefined;
+  const framesIdx = args.indexOf("--frames");
+  const rawFrames = framesIdx >= 0 && args[framesIdx + 1] ? Number(args[framesIdx + 1]) : undefined;
+  const frames = Number.isFinite(rawFrames) ? rawFrames : undefined;
+  const intervalMsIdx = args.indexOf("--interval-ms");
+  const rawIntervalMs =
+    intervalMsIdx >= 0 && args[intervalMsIdx + 1] ? Number(args[intervalMsIdx + 1]) : undefined;
+  const intervalMs = Number.isFinite(rawIntervalMs) ? rawIntervalMs : undefined;
   return {
     recipe,
     session,
@@ -824,6 +849,11 @@ function parseArgs() {
     event,
     activeSurface,
     interruptions,
+    updates,
+    cancelAt,
+    target,
+    frames,
+    intervalMs,
   };
 }
 
@@ -2134,6 +2164,11 @@ const {
   event,
   activeSurface,
   interruptions,
+  updates,
+  cancelAt,
+  target,
+  frames,
+  intervalMs,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -2929,6 +2964,59 @@ switch (recipe) {
     break;
   }
 
+  case "stream-progress-cancel-visual-stability-stress": {
+    const proofBundle = await runStreamProgressCancelVisualStabilityStressScenario({
+      session,
+      surface,
+      updates,
+      cancelAt,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "stream-progress-cancel-visual-stability-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Stream progress cancel visual stability stress failed closed; stream identity, monotonic progress, cancel ordering, stale chunk rejection, and screenshot revalidation receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "dictation-media-permission-readiness-churn-stress": {
+    const proofBundle = await runDictationMediaPermissionReadinessChurnStressScenario({
+      session,
+      target,
+      churn,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "dictation-media-permission-readiness-churn-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Dictation media permission readiness churn stress failed closed; passive setup, readiness generation, target identity, and no auto-submit receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "animation-frame-capture-determinism-stress": {
+    const proofBundle = await runAnimationFrameCaptureDeterminismStressScenario({
+      session,
+      surfaces,
+      frames,
+      intervalMs,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "animation-frame-capture-determinism-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: "Animation frame capture determinism stress failed closed; frame identity, per-frame receipts, occlusion, and stale-frame rejection receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3071,6 +3159,9 @@ switch (recipe) {
           { name: "runtime-appearance-churn-focused-input-stress", description: "Fail-closed focused prompt/ACP appearance churn receipt for scale/font/theme changes", flags: ["--session", "--surface", "--churn", "--cycles", "--json"] },
           { name: "power-resume-window-generation-stress", description: "Fail-closed power resume generation, stale target refusal, and post-wake revalidation receipt", flags: ["--session", "--surface", "--event", "--json"] },
           { name: "menu-tray-notification-modal-interruption-stress", description: "Fail-closed tray/menu/notification interruption active modal focus ownership receipt", flags: ["--session", "--host", "--active-surface", "--interruptions", "--json"] },
+          { name: "stream-progress-cancel-visual-stability-stress", description: "Fail-closed stream/progress monotonic repaint, cancellation ordering, stale chunk, and focus return receipt", flags: ["--session", "--surface", "--updates", "--cancel-at", "--json"] },
+          { name: "dictation-media-permission-readiness-churn-stress", description: "Fail-closed dictation/media passive setup, readiness generation, target identity, and no auto-submit receipt", flags: ["--session", "--target", "--churn", "--json"] },
+          { name: "animation-frame-capture-determinism-stress", description: "Fail-closed animation frame sampling, per-frame state/screenshot, occlusion, and stale-frame rejection receipt", flags: ["--session", "--surfaces", "--frames", "--interval-ms", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -3141,6 +3232,9 @@ switch (recipe) {
           "proofBundle.runtimeAppearanceChurnFocusedInput",
           "proofBundle.powerResumeWindowGeneration",
           "proofBundle.menuTrayNotificationModalInterruption",
+          "proofBundle.streamProgressCancelVisualStability",
+          "proofBundle.dictationMediaPermissionReadinessChurn",
+          "proofBundle.animationFrameCaptureDeterminism",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -3247,6 +3341,12 @@ Recipes:
                          Fail-closed power resume window generation proof
   menu-tray-notification-modal-interruption-stress
                          Fail-closed menu/tray/notification modal interruption proof
+  stream-progress-cancel-visual-stability-stress
+                         Fail-closed stream/progress cancellation visual stability proof
+  dictation-media-permission-readiness-churn-stress
+                         Fail-closed dictation/media permission readiness churn proof
+  animation-frame-capture-determinism-stress
+                         Fail-closed animation frame capture determinism proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -3349,6 +3449,12 @@ Available scenarios:
                          Emit fail-closed power resume window generation requirements
   menu-tray-notification-modal-interruption-stress
                          Emit fail-closed menu/tray/notification interruption requirements
+  stream-progress-cancel-visual-stability-stress
+                         Emit fail-closed stream/progress cancellation visual stability requirements
+  dictation-media-permission-readiness-churn-stress
+                         Emit fail-closed dictation/media readiness churn requirements
+  animation-frame-capture-determinism-stress
+                         Emit fail-closed animation frame capture determinism requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -3403,6 +3509,9 @@ Examples:
   bun scripts/agentic/index.ts runtime-appearance-churn-focused-input-stress --session default --surface acp-composer --churn scale,font,theme --cycles 6 --json
   bun scripts/agentic/index.ts power-resume-window-generation-stress --session default --surface main --event sleep-wake --json
   bun scripts/agentic/index.ts menu-tray-notification-modal-interruption-stress --session default --host acpChat --active-surface actionsDialog --interruptions tray-menu,app-menu,notification --json
+  bun scripts/agentic/index.ts stream-progress-cancel-visual-stability-stress --session default --surface acp-composer --updates 40 --cancel-at 25 --json
+  bun scripts/agentic/index.ts dictation-media-permission-readiness-churn-stress --session default --target acp-composer --churn microphone-permission,model-readiness --json
+  bun scripts/agentic/index.ts animation-frame-capture-determinism-stress --session default --surfaces main,actionsDialog,promptPopup --frames 6 --interval-ms 80 --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

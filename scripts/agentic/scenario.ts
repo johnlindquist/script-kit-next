@@ -124,7 +124,10 @@ export interface HardScenarioReceipt {
     | "drag-cancel-payload-scope-stress"
     | "runtime-appearance-churn-focused-input-stress"
     | "power-resume-window-generation-stress"
-    | "menu-tray-notification-modal-interruption-stress";
+    | "menu-tray-notification-modal-interruption-stress"
+    | "stream-progress-cancel-visual-stability-stress"
+    | "dictation-media-permission-readiness-churn-stress"
+    | "animation-frame-capture-determinism-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -178,6 +181,9 @@ export interface HardScenarioReceipt {
   runtimeAppearanceChurnFocusedInput?: Record<string, unknown>;
   powerResumeWindowGeneration?: Record<string, unknown>;
   menuTrayNotificationModalInterruption?: Record<string, unknown>;
+  streamProgressCancelVisualStability?: Record<string, unknown>;
+  dictationMediaPermissionReadinessChurn?: Record<string, unknown>;
+  animationFrameCaptureDeterminism?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -4817,6 +4823,240 @@ export async function runMenuTrayNotificationModalInterruptionStressScenario(opt
         "The harness fails closed until platform.modalInterruptionFocus receipts prove interruption identity, topmost modal preservation, wrong-surface rejection, and focus restoration.",
     },
     warnings: ["file_linear:menu_tray_notification_modal_interruption_receipts_missing"],
+  };
+}
+
+export async function runStreamProgressCancelVisualStabilityStressScenario(opts: {
+  session: string;
+  surface?: string;
+  updates?: number;
+  cancelAt?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "stream-progress-cancel-visual-stability-stress",
+    status: "fail",
+    streamProgressCancelVisualStability: {
+      session: opts.session,
+      requiredReceipt: "stream.progressCancelVisualStability",
+      streamRunId: null,
+      originSurface: opts.surface ?? "acp-composer",
+      updates: opts.updates ?? 40,
+      cancelAt: opts.cancelAt ?? 25,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      streamGenerationBefore: null,
+      streamGenerationAfterCancel: null,
+      progressSamples: [],
+      progressSequenceMonotonic: null,
+      visibleProgressMonotonic: null,
+      visibleTextSamples: [],
+      cancelRequestId: null,
+      cancelRequestedAtMs: null,
+      cancelAcknowledgedAtMs: null,
+      cancelStateVisible: null,
+      lastPaintedChunkSequence: null,
+      staleChunkAfterCancelRejected: null,
+      staleChunkIdsRejected: [],
+      staleChunkRepaintDetected: null,
+      focusSemanticIdBefore: null,
+      focusSemanticIdAfter: null,
+      cursorRangeBefore: null,
+      cursorRangeAfter: null,
+      submitCountBefore: null,
+      submitCountAfter: null,
+      layoutShiftPxMax: null,
+      screenshotSamples: [],
+      screenshotStateRevalidated: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["fixed_sleep_until_done", "screenshot_only", "log_tail_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "stream-progress-cancel-visual-stability-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove monotonic stream/progress repaint, cancellation ordering, stale post-cancel chunk rejection, focus/cursor restoration, and screenshot-to-state revalidation.",
+      },
+    }],
+    failure: {
+      code: "missing_stream_progress_cancel_visual_stability_receipt",
+      stepName: "stream-progress-cancel-visual-stability-receipt",
+      message:
+        "The harness fails closed until stream.progressCancelVisualStability receipts prove progress/cancel visual stability and stale chunk rejection.",
+    },
+    warnings: ["file_linear:stream_progress_cancel_visual_stability_receipts_missing"],
+  };
+}
+
+export async function runDictationMediaPermissionReadinessChurnStressScenario(opts: {
+  session: string;
+  target?: string;
+  churn?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "dictation-media-permission-readiness-churn-stress",
+    status: "fail",
+    dictationMediaPermissionReadinessChurn: {
+      session: opts.session,
+      requiredReceipt: "media.dictationPermissionReadinessChurn",
+      dictationSessionId: null,
+      targetSurface: opts.target ?? "acp-composer",
+      churn: opts.churn && opts.churn.length > 0
+        ? opts.churn
+        : ["microphone-permission", "model-readiness"],
+      targetAutomationWindowId: null,
+      targetOsWindowId: null,
+      targetSemanticSurface: null,
+      targetFingerprint: null,
+      setupMode: "passive",
+      passiveSetupConfirmed: null,
+      microphonePermissionBefore: null,
+      microphonePermissionAfter: null,
+      microphonePermissionGenerationBefore: null,
+      microphonePermissionGenerationAfter: null,
+      modelReadinessBefore: null,
+      modelReadinessAfter: null,
+      modelReadinessGenerationBefore: null,
+      modelReadinessGenerationAfter: null,
+      readinessChurnEvents: [],
+      transcriptGenerationId: null,
+      transcriptTargetFingerprint: null,
+      transcriptInsertedRange: null,
+      transcriptPreviewRedacted: null,
+      transcriptDeliveredToTarget: null,
+      wrongTargetDeliveryRejected: null,
+      autoSubmitPrevented: null,
+      submitCountBefore: null,
+      submitCountAfter: null,
+      focusSemanticIdBefore: null,
+      focusSemanticIdAfter: null,
+      cursorRangeBefore: null,
+      cursorRangeAfter: null,
+      noSystemSettingsOpened: true,
+      noTccMutationAttempted: true,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["permission_prompt_side_effect", "transcript_text_only", "target_label_only"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      openedSystemSettings: false,
+      mutatedTcc: false,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "dictation-media-permission-readiness-churn-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove passive dictation/media setup, permission/model readiness generation churn, target identity, no auto-submit, and wrong-target rejection.",
+      },
+    }],
+    failure: {
+      code: "missing_dictation_media_permission_readiness_churn_receipt",
+      stepName: "dictation-media-permission-readiness-churn-receipt",
+      message:
+        "The harness fails closed until media.dictationPermissionReadinessChurn receipts prove passive setup, readiness churn ordering, transcript target identity, and cleanup.",
+    },
+    warnings: ["file_linear:dictation_media_permission_readiness_churn_receipts_missing"],
+  };
+}
+
+export async function runAnimationFrameCaptureDeterminismStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  frames?: number;
+  intervalMs?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "animation-frame-capture-determinism-stress",
+    status: "fail",
+    animationFrameCaptureDeterminism: {
+      session: opts.session,
+      requiredReceipt: "visual.animationFrameCaptureDeterminism",
+      animationStressId: null,
+      surfaces: opts.surfaces && opts.surfaces.length > 0
+        ? opts.surfaces
+        : ["main", "actionsDialog", "promptPopup"],
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      capturePlanId: null,
+      animationGenerationBefore: null,
+      animationGenerationAfter: null,
+      frameSampleCount: opts.frames ?? 6,
+      frameIntervalMs: opts.intervalMs ?? 80,
+      animationClockSource: null,
+      frameSamples: [],
+      captureSequence: null,
+      frameId: null,
+      animationFrameId: null,
+      stateReceipt: null,
+      elementsReceipt: null,
+      screenshotReceipt: null,
+      visibleTextFingerprint: null,
+      layoutFingerprint: null,
+      occlusionPairs: [],
+      spinnerSemanticId: null,
+      skeletonSemanticIds: [],
+      frameIdsStrictlyIncreasing: null,
+      captureFrameIdsStable: null,
+      stateBeforeScreenshot: null,
+      screenshotTargetMatched: null,
+      screenshotStateRevalidated: null,
+      blankFrameRejected: null,
+      motionOcclusionDetected: null,
+      visibleTextNotOccluded: null,
+      layoutFingerprintStable: null,
+      staleFrameRejected: null,
+      wrongWindowFrameRejected: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["single_frame_only", "screenshot_without_state", "sleep_sampled_animation"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "animation-frame-capture-determinism-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove deterministic animated-frame capture with per-frame state/elements/screenshot receipts, visible text/layout fingerprints, occlusion pairs, and stale-frame rejection.",
+      },
+    }],
+    failure: {
+      code: "missing_animation_frame_capture_determinism_receipt",
+      stepName: "animation-frame-capture-determinism-receipt",
+      message:
+        "The harness fails closed until visual.animationFrameCaptureDeterminism receipts prove stable frame sampling, occlusion safety, and screenshot-to-state revalidation.",
+    },
+    warnings: ["file_linear:animation_frame_capture_determinism_receipts_missing"],
   };
 }
 

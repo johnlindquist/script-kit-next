@@ -119,6 +119,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For runtime appearance churn while focused input is active, prove surface/window identity, focus, text, visible text, cursor/selection, rem/font/scale/layout metrics, theme and renderer token generations, stale token repaint rejection, and wrong-surface mutation rejection.
 - For power resume recovery, prove pre-sleep target identity, post-wake target generation, stale target refusal before native/batch/GPUI/screenshot delivery, exact re-resolution, fresh state/elements/screenshot receipts, focus/selection preservation, and cleanup.
 - For menu/tray/notification interruption, prove active modal/prompt identity, interruption identity, wrong-surface action rejection, topmost modal preservation, no focus steal, no selection/input/cursor mutation, no prompt submit, and focus restoration.
+- For streaming progress cancellation, prove stream run identity, monotonic progress samples, visible progress text, cancellation request/ack ordering, stale post-cancel chunk rejection, no stale repaint, screenshot-to-state revalidation, focus/cursor restoration, no accidental submit, and cleanup.
+- For dictation/media permission readiness churn, prove passive microphone/model setup, permission and model readiness generations, churn event ordering, target identity, transcript generation identity, wrong-target delivery rejection, no auto-submit, no System Settings or TCC mutation, focus/cursor preservation, and cleanup.
+- For animation frame capture determinism, prove app animation frame ids, capture sequence ids, state/elements/screenshot receipts per sampled frame, visible text/layout fingerprints, motion occlusion pairs, stable frame ordering, stale-frame rejection, wrong-window rejection, blank-frame rejection, and cleanup.
 
 ## The Pattern
 
