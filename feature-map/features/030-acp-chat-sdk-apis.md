@@ -1,6 +1,6 @@
 # 030 ACP Chat SDK APIs
 
-This chapter maps the script-facing `ai*` SDK APIs for ACP/AI Chat state, storage reads, chat creation, focus, streaming status, deletion, and subscription gaps.
+This chapter maps the script-facing `ai*` SDK APIs for ACP/AI Chat state, storage reads, chat creation, existing-chat mutation, focus, streaming status, deletion, and live subscriptions.
 
 Raw Oracle reference: [answer](../raw-oracle/030-acp-chat-sdk-apis/answer.md), [prompt](../raw-oracle/030-acp-chat-sdk-apis/prompt.md), [bundle map](../raw-oracle/030-acp-chat-sdk-apis/bundle-map.md), [full log](../raw-oracle/030-acp-chat-sdk-apis/output.log), [session metadata](../raw-oracle/030-acp-chat-sdk-apis/session.json).
 
@@ -23,13 +23,13 @@ Feature 030 covers:
 
 These APIs are script-facing TypeScript globals in `scripts/kit-sdk.ts`. They send JSON protocol messages to the Rust/GPUI app over the script protocol. Rust protocol shapes live in `src/protocol/message/variants/ai.rs`, with shared result data types in `src/protocol/types/ai.rs`.
 
-The currently proven end-to-end APIs are `aiIsOpen`, `aiGetActiveChat`, `aiListChats`, `aiGetConversation`, `aiStartChat`, `aiFocus`, `aiGetStreamingStatus`, `aiDeleteChat`, and scoped ACP live subscriptions through `aiOn`.
+The currently proven end-to-end APIs are `aiIsOpen`, `aiGetActiveChat`, `aiListChats`, `aiGetConversation`, `aiStartChat`, `aiAppendMessage`, `aiSendMessage`, `aiSetSystemPrompt`, `aiFocus`, `aiGetStreamingStatus`, `aiDeleteChat`, and scoped ACP live subscriptions through `aiOn`.
 
-Storage-backed APIs that do not need the AI window open are `aiGetActiveChat`, `aiListChats`, `aiGetConversation`, and `aiDeleteChat`. `aiGetStreamingStatus` reads a global SDK-visible streaming snapshot and also does not open the window.
+Storage-backed APIs that do not need the AI window open are `aiGetActiveChat`, `aiListChats`, `aiGetConversation`, `aiDeleteChat`, `aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt`. `aiGetStreamingStatus` reads a global SDK-visible streaming snapshot and also does not open the window.
 
 UI-thread APIs are `aiStartChat` and `aiFocus`. `aiStartChat` opens/focuses the AI window, creates a script-sourced chat, saves optional system and user messages, attaches optional image/context parts, and optionally starts streaming. `aiFocus` opens/focuses the AI window and reports whether it was already open.
 
-Declared but not proven handled by the app: `aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt`. `aiSubscribe`, `aiUnsubscribe`, and pushed events now have app-side ACP thread routing proof.
+`aiSendMessage` now persists an existing-chat user message and reports `streamingStarted:false`; it does not claim to own an ACP model turn from the direct storage path. Context parts for existing-chat send reject explicitly until the Agent Chat UI resolver owns that route.
 
 ## What Users Can Do
 
@@ -43,9 +43,9 @@ Declared but not proven handled by the app: `aiAppendMessage`, `aiSendMessage`, 
 | Focus AI Chat. | `await aiFocus()` | Opens/focuses AI window and returns `{ wasOpen }`. |
 | Query streaming snapshot. | `await aiGetStreamingStatus(chatId?)` | Returns streaming state from global snapshot. |
 | Delete a chat. | `await aiDeleteChat(chatId, permanent)` | Soft or permanent delete; SDK resolves void and drops protocol error. |
-| Append message without AI response. | `await aiAppendMessage(...)` | SDK/protocol shaped, app-side handling unproven. |
-| Send message to existing chat. | `await aiSendMessage(...)` | SDK/protocol shaped, app-side handling unproven. |
-| Set system prompt after creation. | `await aiSetSystemPrompt(...)` | SDK/protocol shaped, app-side handling unproven. |
+| Append message without AI response. | `await aiAppendMessage(...)` | Stores a real user/assistant/system message and returns its id. |
+| Send message to existing chat. | `await aiSendMessage(...)` | Stores a real user message and returns `{ userMessageId, streamingStarted:false }`. |
+| Set system prompt after creation. | `await aiSetSystemPrompt(...)` | Updates or inserts the stored system-role message. |
 | Subscribe to events. | `await aiOn(...)` | Registers a script-owned subscription and receives scoped ACP thread events. |
 
 ## Core Concepts
@@ -90,9 +90,9 @@ Most false confidence in this surface comes from seeing SDK/protocol declaration
 | `aiListChats(limit?, includeDeleted?)` | `{ type:"aiListChats", requestId, limit, includeDeleted }` | `aiChatListResult` | Direct handler implemented. |
 | `aiGetConversation(chatId?, limit?)` | `{ type:"aiGetConversation", requestId, chatId, limit }` | `aiConversationResult` | Direct handler implemented. |
 | `aiStartChat(message, options?)` | `{ type:"aiStartChat", requestId, message, systemPrompt, image, modelId, noResponse, parts }` | `aiChatCreated` | UI-thread handler implemented. |
-| `aiAppendMessage(chatId, content, role)` | `{ type:"aiAppendMessage", requestId, chatId, content, role }` | `aiMessageAppended` | App-side handling unproven. |
-| `aiSendMessage(chatId, content, imagePath?, parts?)` | `{ type:"aiSendMessage", requestId, chatId, content, image, parts }` | `aiMessageSent` | App-side handling unproven. |
-| `aiSetSystemPrompt(chatId, prompt)` | `{ type:"aiSetSystemPrompt", requestId, chatId, prompt }` | `aiSystemPromptSet` | App-side handling unproven. |
+| `aiAppendMessage(chatId, content, role)` | `{ type:"aiAppendMessage", requestId, chatId, content, role }` | `aiMessageAppended` | Direct storage handler implemented. |
+| `aiSendMessage(chatId, content, imagePath?, parts?)` | `{ type:"aiSendMessage", requestId, chatId, content, image, parts }` | `aiMessageSent` | Direct storage handler implemented for text/image; context parts explicitly reject. |
+| `aiSetSystemPrompt(chatId, prompt)` | `{ type:"aiSetSystemPrompt", requestId, chatId, prompt }` | `aiSystemPromptSet` | Direct storage handler implemented. |
 | `aiFocus()` | `{ type:"aiFocus", requestId }` | `aiFocusResult` | UI-thread handler implemented. |
 | `aiGetStreamingStatus(chatId?)` | `{ type:"aiGetStreamingStatus", requestId, chatId }` | `aiStreamingStatusResult` | Direct handler implemented. |
 | `aiDeleteChat(chatId, permanent?)` | `{ type:"aiDeleteChat", requestId, chatId, permanent }` | `aiChatDeleted` | Direct handler implemented. |
@@ -231,9 +231,9 @@ The app-side subscription manager now lives in `src/ai/subscriptions.rs`, and AC
 | Focus AI window. | `aiFocus()` | Opens/focuses AI window. | None. | SDK -> prompt handler -> `open_ai_window`. | `{ wasOpen }`. | Smoke script and window state proof. |
 | Query streaming. | `aiGetStreamingStatus()` | No UI change. | None. | Direct handler -> `get_streaming_snapshot`. | Streaming snapshot. | Direct handler/state proof. |
 | Delete chat. | `aiDeleteChat()` | No UI change. | None. | Direct handler -> soft/permanent storage delete. | Protocol success/error; SDK void. | Storage proof. |
-| Append message. | `aiAppendMessage()` | Unproven. | None. | SDK/protocol only in captured context. | Runtime support unproven. | Negative timeout/unhandled proof needed. |
-| Send existing-chat message. | `aiSendMessage()` | Unproven. | None. | SDK/protocol only in captured context. | Runtime support unproven. | Negative timeout/unhandled proof needed. |
-| Set system prompt. | `aiSetSystemPrompt()` | Unproven. | None. | SDK/protocol only in captured context. | Runtime support unproven. | Negative timeout/unhandled proof needed. |
+| Append message. | `aiAppendMessage()` | No UI change. | None. | Direct storage handler. | Message saved and id returned. | Conversation readback proof. |
+| Send existing-chat message. | `aiSendMessage()` | No UI change. | None. | Direct storage handler. | User message saved; streaming reports false. | Conversation readback proof. |
+| Set system prompt. | `aiSetSystemPrompt()` | No UI change. | None. | Direct storage handler. | System message updated or inserted. | Conversation readback proof. |
 | Subscribe to events. | `aiOn()` | No UI change. | Optional ACP thread id filter. | SDK -> script-reader subscription registry -> ACP thread event fanout. | Scoped pushed events. | Source contract + registry proof. |
 
 ## State Machine
@@ -306,9 +306,9 @@ No Actions dialog or menu ownership is proven for this API cluster. `aiStartChat
 | Direct handlers. | Implemented for read/delete/status APIs. | `src/ai/sdk_handlers.rs`. |
 | UI prompt handlers. | Implemented for `aiStartChat` and `aiFocus`. | `src/prompt_handler/mod.rs`. |
 | `AiCommand::StartChat`. | Implemented. | Consumed in AI window render root and handled by `AiApp::handle_start_chat`. |
-| `aiAppendMessage`. | Unproven. | Protocol/SDK shapes exist; no handler proven. |
-| `aiSendMessage`. | Unproven. | Protocol/SDK shapes exist; no handler proven. |
-| `aiSetSystemPrompt`. | Unproven. | Protocol/SDK shapes exist; no handler proven. |
+| `aiAppendMessage`. | Implemented. | Direct storage handler validates active chat and saves requested role. |
+| `aiSendMessage`. | Implemented. | Direct storage handler validates active chat and saves user text/image; context parts reject explicitly. |
+| `aiSetSystemPrompt`. | Implemented. | Direct storage handler updates or inserts the system-role message. |
 | `aiSubscribe` / `aiUnsubscribe`. | Implemented for ACP thread events. | Script-reader registry owns response sender and cleanup. |
 | Pushed events. | Implemented for ACP thread events. | `AcpThread` produces message/chunk/complete/error events. |
 
@@ -318,7 +318,7 @@ No Actions dialog or menu ownership is proven for this API cluster. `aiStartChat
 
 `AiMessageInfo` exposes full message content for user, assistant, and system roles, with timestamp and optional token count. It does not expose image attachments or context part receipts.
 
-`aiStartChat` saves a provided system prompt as a stored system message before saving the user message. Post-creation `aiSetSystemPrompt` mutation is not proven.
+`aiStartChat` saves a provided system prompt as a stored system message before saving the user message. Post-creation `aiSetSystemPrompt` uses the same representation by updating the first stored system message, or inserting one when none exists.
 
 `imagePath` is read by the SDK from local disk and sent as base64 image data. Runtime attaches it as a PNG image payload. If file read fails, the SDK logs and continues without image.
 
@@ -339,9 +339,9 @@ No Actions dialog or menu ownership is proven for this API cluster. `aiStartChat
 | `aiFocus()` | Protocol has `success`, but SDK returns only `wasOpen`. |
 | `aiGetStreamingStatus()` | Snapshot can report idle after selected chat changes even if older background work is finishing. |
 | `aiDeleteChat()` | Protocol has success/error, but SDK resolves void. |
-| `aiAppendMessage()` | Runtime handling unproven; may hang outside test/autosubmit contexts. |
-| `aiSendMessage()` | Runtime handling unproven; may hang outside test/autosubmit contexts. |
-| `aiSetSystemPrompt()` | Runtime handling unproven; may hang outside test/autosubmit contexts. |
+| `aiAppendMessage()` | Invalid, missing, deleted, or invalid-role chats reject with request-scoped `aiError`. |
+| `aiSendMessage()` | Invalid, missing, deleted, or context-part sends reject with request-scoped `aiError`; direct storage send reports no streaming turn. |
+| `aiSetSystemPrompt()` | Invalid, missing, deleted, or storage failures reject through `aiSystemPromptSet.success:false`. |
 | `aiOn()` | Live ACP thread event production/routing is implemented; existing-chat mutation remains separate. |
 
 ## Code Ownership
@@ -458,7 +458,7 @@ Expected proof target:
 
 - Do not assume an SDK global is runtime-supported just because TypeScript and Rust protocol variants exist.
 - To verify implementation, prove the app sends the expected response, not only that the SDK writes a request.
-- If `aiAppendMessage`, `aiSendMessage`, `aiSetSystemPrompt`, or `aiOn` hangs, inspect `src/execute_script/mod.rs`, `src/main_sections/prompt_messages.rs`, and `src/prompt_handler/mod.rs`.
+- If `aiAppendMessage`, `aiSendMessage`, `aiSetSystemPrompt`, or `aiOn` hangs, inspect request-scoped responses in `src/ai/sdk_handlers.rs`, script response delivery in `src/execute_script/mod.rs`, and subscription routing in `src/ai/subscriptions.rs`.
 - This belongs to `sdk-script-execution` for global API shape, `acp-chat-core` for AI window side effects, and `storage-cache-security` for persisted chat/message data.
 - This does not belong to the inline `chat()` prompt, except for documentation contrast.
 - Screenshots are not needed for storage/query APIs; use protocol responses, state, and storage receipts first.
@@ -473,9 +473,9 @@ Expected proof target:
 
 ## Open Questions And Gaps
 
-- `aiAppendMessage` is declared in SDK and protocol, but app-side handling is not proven.
-- `aiSendMessage` is declared in SDK and protocol, but app-side handling is not proven.
-- `aiSetSystemPrompt` is declared in SDK and protocol, but app-side handling is not proven.
+- `aiSendMessage` persists text/image payloads but still does not start an ACP model turn from the direct storage path.
+- `aiSendMessage` context parts reject explicitly until an existing-chat UI resolver path owns them.
+- `aiSetSystemPrompt` mutates the stored system-message representation, not a separate chat metadata field.
 - SDK return types discard protocol metadata and errors.
 - `aiStartChat` reports created before storage completion is fully proven.
 - `aiIsOpen` appears to mean the Script Kit AI window is open, not detached ACP state or storage activity.

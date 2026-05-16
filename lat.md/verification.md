@@ -10,6 +10,12 @@ Shortcut assignment proof should cover config writes, save-time live route confl
 
 SDK `hotkey()` proof must stay separate from shortcut assignment. Use `cargo test --test hotkey_prompt_contract -- --nocapture` for source proof that the SDK routes to `ShowHotkey`, the prompt submits `HotkeyInfo` without config or registry mutation, and simulateKey dispatch plus getElements receipts are wired. Runtime proof should launch `hotkey("Press a keyboard shortcut")`, assert `getState.promptType:"hotkey"` and `getElements` capture rows, capture a modifier chord with `simulateKey`, verify the resolved JSON, then separately prove Escape/Cmd-W cancellation without `config.ts` fingerprint changes.
 
+## ACP Existing-Chat Mutations
+
+ACP existing-chat mutation proof must show SDK promises settle and conversation reads observe the stored result.
+
+Use `cargo test --test acp_existing_chat_mutation_contract -- --nocapture` for source proof that `aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt` route through direct storage handlers, validate invalid/deleted chats, reject typed SDK errors, and write messages that `aiGetConversation` can read back. Pair with `cargo check --lib`, `bun scripts/check-sdk-types.ts`, `cargo fmt --check`, `git diff --check`, and `lat check`.
+
 EnvPrompt secret-store proof should distinguish missing files from read, decrypt/format, parse, and cache failures. Source audits must prove result-returning lookup APIs, EnvPrompt storage-error propagation, redacted `getElements` status kinds, and `cargo check --lib`; direct lib tests may be blocked by unrelated dirty-tree `cfg(test)` failures.
 
 ## DropPrompt Native Drop

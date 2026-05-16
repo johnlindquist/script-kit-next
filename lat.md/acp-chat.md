@@ -622,6 +622,16 @@ The runtime owner is [[src/ai/subscriptions.rs]], and script stdout handling reg
 
 `AcpThread` fans out `aiNewMessage`, `aiStreamChunk`, `aiStreamComplete`, and `aiError` from the same event reducer that updates the visible transcript. Events use the ACP `ui_thread_id` as the chat/session id for filtering, so subscriptions scoped to another thread do not receive chunks or message events. Reader exit calls the owner cleanup path, which drains stale subscriptions when a script exits or its response channel disappears.
 
+## SDK existing-chat mutations
+
+Existing-chat SDK mutation APIs are storage-backed so scripts receive settled responses instead of hanging on declared-only wire shapes.
+
+`aiAppendMessage`, `aiSendMessage`, and `aiSetSystemPrompt` are handled in [[src/ai/sdk_handlers.rs]] before prompt-message routing. The handlers validate UUID shape, reject missing or soft-deleted chats with request-scoped typed errors, then save messages through the same storage path read by `aiGetConversation`.
+
+`aiAppendMessage` persists the requested role and returns the saved message id. `aiSendMessage` persists a user message, including the SDK image payload when provided, but reports `streamingStarted:false` because this direct storage path does not own an ACP turn. Typed context parts still require the Agent Chat UI resolver and therefore reject explicitly until an existing-chat UI send path owns them.
+
+`aiSetSystemPrompt` updates the first stored system message for the chat, or inserts one when none exists. This keeps the documented representation aligned with `aiStartChat`, where system prompts are stored as system-role messages before user content.
+
 ## Current code references
 
 These are the live files that define the ACP surface today.

@@ -1,6 +1,6 @@
 # 043 ACP SDK Runtime APIs
 
-This chapter maps the declared-but-unproven ACP/Agent Chat SDK runtime APIs for existing-chat mutation, event subscription, unsubscribe, and pushed AI events.
+This chapter maps the ACP/Agent Chat SDK runtime APIs for existing-chat mutation, event subscription, unsubscribe, and pushed AI events.
 
 Raw Oracle reference: [answer](../raw-oracle/043-acp-sdk-runtime-apis/answer.md), [prompt](../raw-oracle/043-acp-sdk-runtime-apis/prompt.md), [bundle map](../raw-oracle/043-acp-sdk-runtime-apis/bundle-map.md), [full log](../raw-oracle/043-acp-sdk-runtime-apis/output.log), [session metadata](../raw-oracle/043-acp-sdk-runtime-apis/session.json).
 
@@ -8,7 +8,7 @@ Raw Oracle reference: [answer](../raw-oracle/043-acp-sdk-runtime-apis/answer.md)
 
 Feature 030 maps the broad `ai*` SDK catalog and proves the implemented APIs for Agent Chat reads, storage listing, conversation reading, new chat creation, focus, streaming-status polling, and deletion.
 
-Feature 043 is the runtime gap map for the remaining declared APIs:
+Feature 043 is the runtime support map for the previously declared-only APIs:
 
 - `aiAppendMessage(chatId, content, role)`.
 - `aiSendMessage(chatId, content, imagePath?, parts?)`.
@@ -16,19 +16,19 @@ Feature 043 is the runtime gap map for the remaining declared APIs:
 - `aiOn(eventType, handler, chatId?)`.
 - Wire messages `aiSubscribe`, `aiUnsubscribe`, `aiStreamChunk`, `aiStreamComplete`, `aiNewMessage`, and `aiError`.
 
-The core finding is now split: existing-chat mutation remains a runtime gap, while live subscription management is implemented for ACP thread events through a script-owned registry. The direct AI SDK handler still returns no result for mutation messages, and the script-to-prompt bridge only maps `AiStartChat` and `AiFocus` into prompt/UI handling.
+The core finding is now split by runtime owner: existing-chat mutation is implemented as direct storage-backed SDK handling, while live subscription management is implemented for ACP thread events through a script-owned registry. Existing-chat `aiSendMessage` persists a user message but does not claim a model turn from that direct storage path.
 
 Safe wording:
 
-> Scripts can rely on the proven feature 030 APIs for reads, delete, new chat creation, focus, streaming-status polling, and scoped ACP live subscriptions. Scripts cannot safely rely on append/send/system-prompt mutation until runtime handlers and receipts exist.
+> Scripts can rely on the proven feature 030 APIs for reads, delete, new chat creation, existing-chat message mutation, focus, streaming-status polling, stored system-prompt mutation, and scoped ACP live subscriptions. Existing-chat `aiSendMessage` reports `streamingStarted:false` from the direct storage path.
 
 ## Scope
 
 | Surface | Include here | Reason |
 |---|---:|---|
-| `aiAppendMessage(chatId, content, role)` | Yes | Declared in SDK and Rust protocol; app-side runtime mutation is unproven. |
-| `aiSendMessage(chatId, content, imagePath?, parts?)` | Yes | Declared and shape-tested; existing-chat send/stream runtime is unproven. |
-| `aiSetSystemPrompt(chatId, prompt)` | Yes | Declared; post-creation system-prompt mutation is unproven. |
+| `aiAppendMessage(chatId, content, role)` | Yes | Direct storage-backed mutation is implemented. |
+| `aiSendMessage(chatId, content, imagePath?, parts?)` | Yes | Direct text/image persistence is implemented; streaming is not started from this path. |
+| `aiSetSystemPrompt(chatId, prompt)` | Yes | Post-creation stored system-message mutation is implemented. |
 | `aiOn(eventType, handler, chatId?)` | Yes | SDK-local bookkeeping now pairs with an app-side subscription registry. |
 | `aiSubscribe` / `aiUnsubscribe` | Yes | Protocol messages register/remove exact subscriptions; unsubscribe now carries subscription id. |
 | `aiStreamChunk`, `aiStreamComplete`, `aiNewMessage`, `aiError` | Yes | ACP thread events fan out through scoped subscription routing. |
@@ -47,16 +47,16 @@ Script authors can safely rely on the proven feature 030 APIs:
 - Poll streaming state with `aiGetStreamingStatus()`.
 - Delete chats with `aiDeleteChat()`.
 
-For this chapter's APIs, scripts can safely rely only on SDK message-shape emission and Rust protocol shape support. That is not proof of app-side effects.
+For this chapter's APIs, scripts can safely rely on direct storage mutation and scoped event delivery. Context-part resolution for existing-chat send remains explicitly unsupported until a UI-owned route exists.
 
 | Claim | Safe today | Wording |
 |---|---:|---|
 | `aiAppendMessage` exists as a TypeScript global. | Yes | It sends an `aiAppendMessage` payload and waits for `aiMessageAppended`. |
-| `aiAppendMessage` appends a stored message. | No | Runtime mutation is unproven. |
+| `aiAppendMessage` appends a stored message. | Yes | The direct SDK handler saves the requested role and returns the message id. |
 | `aiSendMessage` can serialize text, image data, and parts. | Yes | SDK/protocol shape exists and parts have serde coverage. |
-| `aiSendMessage` sends to an existing chat and starts streaming. | No | Existing-chat send/stream runtime is unproven. |
+| `aiSendMessage` sends to an existing chat and starts streaming. | Partial | It saves a user message and reports `streamingStarted:false`; no direct ACP turn starts. |
 | `aiSetSystemPrompt` sends a protocol message. | Yes | SDK and Rust protocol shapes exist. |
-| `aiSetSystemPrompt` changes a chat's system prompt. | No | No runtime handler is proven. |
+| `aiSetSystemPrompt` changes a chat's system prompt. | Yes | It updates or inserts the stored system-role message. |
 | `aiOn` sends `aiSubscribe` and has local handler bookkeeping. | Yes | SDK map and dispatch helper exist. |
 | `aiOn` receives live Agent Chat events. | Yes | ACP thread events are routed through the app-side subscription registry. |
 | The returned unsubscribe removes the local SDK handler. | Yes | The SDK deletes from its local subscription map. |
@@ -84,12 +84,12 @@ Most false confidence on this surface comes from seeing layers 1-4 and assuming 
 
 | Message/API | TS declared | Rust protocol | SDK sends/dispatches | Direct handler | Prompt bridge | ACP runtime | Subscription manager | Event producer | Current status |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| `aiAppendMessage` | Yes | Yes | Yes | No | No | Unproven | n/a | n/a | Shape only; runtime unproven. |
-| `aiMessageAppended` | Yes | Yes | SDK waits | No producer proven | No | Unproven | n/a | n/a | Response shape only. |
-| `aiSendMessage` | Yes | Yes | Yes | No | No | Unproven | n/a | n/a | Shape only; existing-chat send unproven. |
-| `aiMessageSent` | Yes | Yes | SDK waits | No producer proven | No | Unproven | n/a | n/a | Response shape only. |
-| `aiSetSystemPrompt` | Yes | Yes | Yes | No | No | Unproven | n/a | n/a | Shape only; post-creation mutation unproven. |
-| `aiSystemPromptSet` | Yes | Yes | SDK waits | No producer proven | No | Unproven | n/a | n/a | Response shape only. |
+| `aiAppendMessage` | Yes | Yes | Yes | Direct storage | No | Proven storage mutation | n/a | n/a | Saves message and returns id. |
+| `aiMessageAppended` | Yes | Yes | SDK waits | Direct producer | No | Proven | n/a | n/a | Response carries saved message id. |
+| `aiSendMessage` | Yes | Yes | Yes | Direct storage | No | Proven storage mutation | n/a | n/a | Saves user text/image; streaming false. |
+| `aiMessageSent` | Yes | Yes | SDK waits | Direct producer | No | Proven | n/a | n/a | Response carries saved user message id. |
+| `aiSetSystemPrompt` | Yes | Yes | Yes | Direct storage | No | Proven storage mutation | n/a | n/a | Updates/inserts stored system message. |
+| `aiSystemPromptSet` | Yes | Yes | SDK waits | Direct producer | No | Proven | n/a | n/a | Response reports success/error. |
 | `aiSubscribe` | Yes | Yes | Yes | Script reader | No | Proven for ACP thread events | Proven | n/a | Registers script-owned subscription. |
 | `aiSubscribed` | Yes | Yes | SDK waits | Script reader producer | No | Proven | Proven | n/a | Returns generated subscription id. |
 | `aiUnsubscribe` | Yes | Yes | Yes, with subscription id | Script reader | No | Proven | Proven | n/a | Removes exact subscription. |
@@ -111,12 +111,9 @@ Rust protocol variants exist for `AiAppendMessage` and `AiMessageAppended` in `s
 
 Runtime status:
 
-- `src/ai/sdk_handlers.rs` does not directly handle `Message::AiAppendMessage`.
-- `src/execute_script/mod.rs` does not map it into a dedicated prompt message.
-- `src/main_sections/prompt_messages.rs` has no prompt-message variant for append.
-- No ACP storage/thread mutation path or `aiMessageAppended` producer is proven.
-
-Do not claim this persists a user, assistant, or system message. A real script may wait indefinitely unless a test harness or mock resolves the pending callback.
+- `src/ai/sdk_handlers.rs` directly handles `Message::AiAppendMessage`.
+- The handler validates chat id shape, rejects missing or soft-deleted chats, validates role, saves the message, and returns `aiMessageAppended`.
+- Failures return request-scoped `aiError`, and the SDK rejects the promise instead of resolving an `unknown` placeholder.
 
 ### `aiSendMessage`
 
@@ -128,11 +125,9 @@ Rust protocol variants exist for `AiSendMessage` and `AiMessageSent`. Protocol t
 
 Runtime status:
 
-- `src/ai/sdk_handlers.rs` does not directly handle `Message::AiSendMessage`.
-- `src/execute_script/mod.rs` does not map it into prompt/UI handling.
-- No existing-chat user-message persistence, context resolution, assistant streaming, or `aiMessageSent` producer is proven.
-
-Do not claim `aiSendMessage` appends to an existing chat or starts streaming. Today the safe claim is that the SDK/protocol can shape the request.
+- `src/ai/sdk_handlers.rs` directly handles `Message::AiSendMessage` for text and SDK image payloads.
+- The handler validates the chat, rejects context parts explicitly, saves a user message, and returns `aiMessageSent` with `streamingStarted:false`.
+- The safe claim is existing-chat persistence, not ACP model-turn ownership.
 
 ### `aiSetSystemPrompt`
 
@@ -142,11 +137,10 @@ The SDK expects `aiSystemPromptSet` and resolves void when the pending callback 
 
 Runtime status:
 
-- `src/ai/sdk_handlers.rs` does not directly handle `Message::AiSetSystemPrompt`.
-- No prompt-message variant exists for post-creation system prompt mutation.
-- The proven `systemPrompt` path is only `aiStartChat(..., { systemPrompt })` at creation time.
-
-Do not claim it rewrites, prepends, replaces, or otherwise mutates a stored system prompt.
+- `src/ai/sdk_handlers.rs` directly handles `Message::AiSetSystemPrompt`.
+- The handler validates the chat, updates the first system message, or inserts one when absent.
+- No prompt-message variant is required for post-creation system prompt mutation because the direct storage handler owns it.
+- `aiStartChat(..., { systemPrompt })` and `aiSetSystemPrompt` now share the same stored system-role message representation.
 
 ### `aiOn` / `aiSubscribe`
 
@@ -207,13 +201,12 @@ Current actual lifecycle for `aiAppendMessage`, `aiSendMessage`, and `aiSetSyste
 2. SDK creates `requestId`.
 3. SDK sends protocol payload.
 4. Rust protocol can deserialize the message.
-5. Direct handler declines it by returning no handled response.
-6. Script execution bridge does not map it into a dedicated prompt message.
-7. Message falls through to unhandled handling.
-8. No response producer is proven.
-9. Script promise may hang outside test/mock contexts.
+5. Direct handler validates chat id shape and storage state.
+6. Missing, deleted, invalid-role, or unsupported context-part requests produce request-scoped typed errors.
+7. Storage mutations save through the same message table read by `aiGetConversation`.
+8. The SDK resolves success responses or rejects typed error responses, so promises settle.
 
-The chapter should treat this as a runtime gap, not a missing documentation detail.
+The chapter should treat existing-chat mutation as storage-backed support, with ACP model-turn streaming still outside this direct path.
 
 ### Streaming Snapshot Versus Event Stream
 
@@ -269,14 +262,6 @@ Current SDK-local lifecycle:
 
 Do not write any of these until implementation and receipts exist:
 
-- `aiAppendMessage` persists a message into an existing ACP chat.
-- `aiAppendMessage` supports all roles at runtime.
-- `aiSendMessage` appends a user message and starts streaming in an existing chat.
-- `aiSendMessage` resolves context parts the same way as `aiStartChat`.
-- `aiSetSystemPrompt` replaces or updates a chat's system prompt.
-- `aiOn` subscribes to live ACP stream events.
-- `aiUnsubscribe` stops app-side event routing.
-- `aiStreamChunk`, `aiStreamComplete`, `aiNewMessage`, or `aiError` are emitted by the ACP runtime.
 - SDK shape tests prove runtime support.
 - A Rust protocol enum means the app handles the message.
 
@@ -399,9 +384,7 @@ Once implemented, require:
 ## Documentation Caveats
 
 - `chat()` and `ai*` are different surfaces. `chat()` is the older inline prompt flow; `ai*` targets built-in Agent Chat with app-owned providers, history, storage, and streaming state.
-- `aiStartChat(..., { systemPrompt })` is proven creation-time behavior. `aiSetSystemPrompt` is not proven post-creation behavior.
+- `aiStartChat(..., { systemPrompt })` is creation-time behavior; `aiSetSystemPrompt` is post-creation storage mutation of the same system-role representation.
 - `aiGetStreamingStatus` is polling/snapshot state, not live subscription.
 - SDK tests that capture outbound JSON prove request shape only.
-- Adding protocol variants without dispatch creates APIs that look real but can hang at runtime.
-- The current unsubscribe protocol shape is incomplete for robust multi-subscription support because it lacks `subscriptionId`.
-- The current SDK event dispatch should be treated as incomplete for scoped subscriptions because it dispatches by event type rather than by subscription id plus optional chat id.
+- Adding protocol variants without dispatch creates APIs that look real but can hang at runtime; the mutation and subscription APIs now have dispatch guards for that failure mode.

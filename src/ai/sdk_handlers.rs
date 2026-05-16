@@ -3,12 +3,11 @@
 //! This module handles AI SDK protocol messages from scripts.
 //! It converts between protocol types and storage/window operations.
 
-use anyhow::Result;
 use tracing::{debug, error, info};
 
-use crate::protocol::{AiChatInfo, AiMessageInfo, Message};
+use crate::protocol::{AiChatInfo, AiContextPartInput, AiMessageInfo, Message};
 
-use super::model::{Chat, ChatId, Message as AiMessage, MessageRole};
+use super::model::{Chat, ChatId, ImageAttachment, Message as AiMessage, MessageRole};
 use super::storage;
 use super::window::{get_active_chat_id, get_streaming_snapshot};
 
@@ -36,6 +35,60 @@ fn message_to_info(msg: &AiMessage) -> AiMessageInfo {
         created_at: msg.created_at.to_rfc3339(),
         tokens_used: msg.tokens_used,
     }
+}
+
+fn ai_request_error(request_id: String, code: &'static str, message: impl Into<String>) -> Message {
+    Message::AiError {
+        subscription_id: None,
+        request_id: Some(request_id),
+        code: code.to_string(),
+        message: message.into(),
+    }
+}
+
+fn parse_chat_id_for_mutation(
+    request_id: &str,
+    chat_id: &str,
+) -> std::result::Result<ChatId, Message> {
+    ChatId::parse(chat_id).ok_or_else(|| {
+        ai_request_error(
+            request_id.to_string(),
+            "AI_INVALID_CHAT_ID",
+            format!("Invalid chat ID: {chat_id}"),
+        )
+    })
+}
+
+fn active_chat_for_mutation(request_id: &str, chat_id: &str) -> std::result::Result<Chat, Message> {
+    let parsed_id = parse_chat_id_for_mutation(request_id, chat_id)?;
+    match storage::get_chat(&parsed_id) {
+        Ok(Some(chat)) if chat.deleted_at.is_none() => Ok(chat),
+        Ok(Some(_)) => Err(ai_request_error(
+            request_id.to_string(),
+            "AI_CHAT_DELETED",
+            format!("Chat is deleted: {chat_id}"),
+        )),
+        Ok(None) => Err(ai_request_error(
+            request_id.to_string(),
+            "AI_CHAT_NOT_FOUND",
+            format!("Chat not found: {chat_id}"),
+        )),
+        Err(e) => Err(ai_request_error(
+            request_id.to_string(),
+            "AI_CHAT_LOOKUP_FAILED",
+            format!("Failed to load chat {chat_id}: {e}"),
+        )),
+    }
+}
+
+fn parse_message_role(request_id: &str, role: &str) -> std::result::Result<MessageRole, Message> {
+    MessageRole::parse(role).ok_or_else(|| {
+        ai_request_error(
+            request_id.to_string(),
+            "AI_INVALID_MESSAGE_ROLE",
+            format!("Invalid message role: {role}"),
+        )
+    })
 }
 
 /// Handle AiIsOpen request - check if AI window is open
@@ -284,6 +337,160 @@ pub fn handle_ai_delete_chat(request_id: String, chat_id: String, permanent: boo
     }
 }
 
+/// Handle AiAppendMessage request - append a stored message without streaming.
+pub fn handle_ai_append_message(
+    request_id: String,
+    chat_id: String,
+    content: String,
+    role: String,
+) -> Message {
+    let chat = match active_chat_for_mutation(&request_id, &chat_id) {
+        Ok(chat) => chat,
+        Err(response) => return response,
+    };
+    let role = match parse_message_role(&request_id, &role) {
+        Ok(role) => role,
+        Err(response) => return response,
+    };
+
+    let message = AiMessage::new(chat.id, role, content);
+    if let Err(e) = storage::save_message(&message) {
+        error!(error = %e, chat_id = %chat_id, "Failed to append AI message via SDK");
+        return ai_request_error(
+            request_id,
+            "AI_MESSAGE_APPEND_FAILED",
+            format!("Failed to append message: {e}"),
+        );
+    }
+
+    info!(
+        request_id = %request_id,
+        chat_id = %chat_id,
+        message_id = %message.id,
+        role = %message.role,
+        "ai_sdk.append_message"
+    );
+
+    Message::AiMessageAppended {
+        request_id,
+        message_id: message.id,
+        chat_id,
+    }
+}
+
+/// Handle AiSendMessage request - persist a user message for an existing chat.
+///
+/// This storage-backed path does not own an active ACP turn, so it reports
+/// `streamingStarted:false` instead of pretending a model response started.
+pub fn handle_ai_send_message(
+    request_id: String,
+    chat_id: String,
+    content: String,
+    image: Option<String>,
+    parts: Vec<AiContextPartInput>,
+) -> Message {
+    if !parts.is_empty() {
+        return ai_request_error(
+            request_id,
+            "AI_CONTEXT_PARTS_UNSUPPORTED",
+            "aiSendMessage context parts require the Agent Chat UI resolver and are not supported for direct existing-chat mutation yet",
+        );
+    }
+
+    let chat = match active_chat_for_mutation(&request_id, &chat_id) {
+        Ok(chat) => chat,
+        Err(response) => return response,
+    };
+
+    let mut message = AiMessage::user(chat.id, content);
+    if let Some(image) = image {
+        message.images.push(ImageAttachment::png(image));
+    }
+
+    if let Err(e) = storage::save_message(&message) {
+        error!(error = %e, chat_id = %chat_id, "Failed to send AI message via SDK");
+        return ai_request_error(
+            request_id,
+            "AI_MESSAGE_SEND_FAILED",
+            format!("Failed to send message: {e}"),
+        );
+    }
+
+    info!(
+        request_id = %request_id,
+        chat_id = %chat_id,
+        user_message_id = %message.id,
+        has_image = !message.images.is_empty(),
+        "ai_sdk.send_message"
+    );
+
+    Message::AiMessageSent {
+        request_id,
+        user_message_id: message.id,
+        chat_id,
+        streaming_started: false,
+    }
+}
+
+/// Handle AiSetSystemPrompt request - insert or update the stored system prompt.
+pub fn handle_ai_set_system_prompt(request_id: String, chat_id: String, prompt: String) -> Message {
+    let chat = match active_chat_for_mutation(&request_id, &chat_id) {
+        Ok(chat) => chat,
+        Err(Message::AiError { message, code, .. }) => {
+            return Message::AiSystemPromptSet {
+                request_id,
+                success: false,
+                error: Some(format!("{code}: {message}")),
+            };
+        }
+        Err(response) => return response,
+    };
+
+    let existing_system_message = match storage::get_chat_messages(&chat.id) {
+        Ok(messages) => messages
+            .into_iter()
+            .find(|message| message.role == MessageRole::System),
+        Err(e) => {
+            error!(error = %e, chat_id = %chat_id, "Failed to load messages for system prompt mutation");
+            return Message::AiSystemPromptSet {
+                request_id,
+                success: false,
+                error: Some(format!("AI_MESSAGES_LOOKUP_FAILED: {e}")),
+            };
+        }
+    };
+
+    let mut message = existing_system_message
+        .unwrap_or_else(|| AiMessage::new(chat.id, MessageRole::System, String::new()));
+    message.content = prompt;
+    message.images.clear();
+    message.tokens_used = None;
+
+    match storage::save_message(&message) {
+        Ok(()) => {
+            info!(
+                request_id = %request_id,
+                chat_id = %chat_id,
+                message_id = %message.id,
+                "ai_sdk.set_system_prompt"
+            );
+            Message::AiSystemPromptSet {
+                request_id,
+                success: true,
+                error: None,
+            }
+        }
+        Err(e) => {
+            error!(error = %e, chat_id = %chat_id, "Failed to set system prompt via SDK");
+            Message::AiSystemPromptSet {
+                request_id,
+                success: false,
+                error: Some(format!("AI_SYSTEM_PROMPT_SET_FAILED: {e}")),
+            }
+        }
+    }
+}
+
 /// Handle AiFocus request - focus the AI window
 pub fn handle_ai_focus(request_id: String) -> Option<Message> {
     // This needs to be handled by the UI thread, return None to signal forwarding needed
@@ -374,12 +581,45 @@ pub fn try_handle_ai_message(msg: &Message) -> Option<Message> {
             chat_id.clone(),
         )),
 
-        // These need UI thread - return None
+        Message::AiAppendMessage {
+            request_id,
+            chat_id,
+            content,
+            role,
+        } => Some(handle_ai_append_message(
+            request_id.clone(),
+            chat_id.clone(),
+            content.clone(),
+            role.clone(),
+        )),
+
+        Message::AiSendMessage {
+            request_id,
+            chat_id,
+            content,
+            image,
+            parts,
+        } => Some(handle_ai_send_message(
+            request_id.clone(),
+            chat_id.clone(),
+            content.clone(),
+            image.clone(),
+            parts.clone(),
+        )),
+
+        Message::AiSetSystemPrompt {
+            request_id,
+            chat_id,
+            prompt,
+        } => Some(handle_ai_set_system_prompt(
+            request_id.clone(),
+            chat_id.clone(),
+            prompt.clone(),
+        )),
+
+        // These need UI thread or script-owned response channels - return None
         Message::AiFocus { .. }
         | Message::AiStartChat { .. }
-        | Message::AiAppendMessage { .. }
-        | Message::AiSendMessage { .. }
-        | Message::AiSetSystemPrompt { .. }
         | Message::AiSubscribe { .. }
         | Message::AiUnsubscribe { .. } => None,
 
