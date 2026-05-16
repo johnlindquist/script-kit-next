@@ -534,6 +534,76 @@
                                             logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in EditorPrompt", key_lower));
                                         }
                                     }
+                                    AppView::TemplatePrompt { entity, id, .. } => {
+                                        logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to TemplatePrompt (actions_popup={})", key_lower, view.show_actions_popup));
+                                        let entity_clone = entity.clone();
+                                        let prompt_id_clone = id.clone();
+
+                                        if has_cmd
+                                            && !has_shift
+                                            && !_has_alt
+                                            && !_has_ctrl
+                                            && key_lower == "k"
+                                        {
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle template actions");
+                                            view.dispatch_actions_toggle_for_current_view(
+                                                window,
+                                                ctx,
+                                                "stdin_simulate_key_template_prompt",
+                                            );
+                                        } else {
+                                            match key_lower.as_str() {
+                                                "enter" | "return" if !has_shift && !has_cmd => {
+                                                    logging::log("STDIN", "SimulateKey: Enter - submit TemplatePrompt");
+                                                    entity_clone.update(ctx, |prompt, cx| {
+                                                        prompt.submit(cx);
+                                                    });
+                                                }
+                                                "escape" | "esc" if !has_cmd => {
+                                                    logging::log("STDIN", "SimulateKey: Escape - cancel TemplatePrompt");
+                                                    view.submit_prompt_response(
+                                                        prompt_id_clone.clone(),
+                                                        None,
+                                                        ctx,
+                                                    );
+                                                    view.cancel_script_execution(ctx);
+                                                }
+                                                "tab" if !has_cmd && !has_shift => {
+                                                    logging::log("STDIN", "SimulateKey: Tab - next TemplatePrompt field");
+                                                    entity_clone.update(ctx, |prompt, cx| {
+                                                        prompt.next_input(cx);
+                                                    });
+                                                }
+                                                "tab" if !has_cmd && has_shift => {
+                                                    logging::log("STDIN", "SimulateKey: Shift+Tab - previous TemplatePrompt field");
+                                                    entity_clone.update(ctx, |prompt, cx| {
+                                                        prompt.prev_input(cx);
+                                                    });
+                                                }
+                                                "backspace" if !has_cmd && !_has_alt && !_has_ctrl => {
+                                                    logging::log("STDIN", "SimulateKey: Backspace - edit TemplatePrompt field");
+                                                    entity_clone.update(ctx, |prompt, cx| {
+                                                        prompt.handle_backspace(cx);
+                                                    });
+                                                }
+                                                _ if !has_cmd
+                                                    && !has_shift
+                                                    && !_has_alt
+                                                    && !_has_ctrl
+                                                    && key_lower.chars().count() == 1 =>
+                                                {
+                                                    let ch = key_lower.chars().next().unwrap();
+                                                    logging::log("STDIN", &format!("SimulateKey: Char '{}' - edit TemplatePrompt field", ch));
+                                                    entity_clone.update(ctx, |prompt, cx| {
+                                                        prompt.handle_char(ch, cx);
+                                                    });
+                                                }
+                                                _ => {
+                                                    logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in TemplatePrompt", key_lower));
+                                                }
+                                            }
+                                        }
+                                    }
                                     AppView::ChatPrompt { entity, .. } => {
                                         // ChatPrompt key handling
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to ChatPrompt (actions_popup={})", key_lower, view.show_actions_popup));

@@ -47,6 +47,7 @@ impl ScriptListApp {
             AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
             AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),
             AppView::EditorPrompt { .. } => Some(ActionsDialogHost::EditorPrompt),
+            AppView::TemplatePrompt { .. } => Some(ActionsDialogHost::TemplatePrompt),
             AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
             AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
             AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
@@ -501,6 +502,7 @@ impl ScriptListApp {
             | ActionsDialogHost::AcpHistory
             | ActionsDialogHost::DivPrompt
             | ActionsDialogHost::EditorPrompt
+            | ActionsDialogHost::TemplatePrompt
             | ActionsDialogHost::TermPrompt
             | ActionsDialogHost::FormPrompt => {
                 self.toggle_actions(cx, window);
@@ -852,6 +854,7 @@ impl ScriptListApp {
             ActionsDialogHost::ArgPrompt => FocusRequest::arg_prompt(),
             ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt(),
             ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt(),
+            ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt(),
             ActionsDialogHost::FormPrompt => FocusRequest::form_prompt(),
             ActionsDialogHost::DivPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
@@ -1191,6 +1194,7 @@ mod close_actions_popup_regression_tests {
             "ActionsDialogHost::ChatPrompt => FocusRequest::chat_prompt()",
             "ActionsDialogHost::AcpChat => FocusRequest::acp_chat()",
             "ActionsDialogHost::EditorPrompt => FocusRequest::editor_prompt()",
+            "ActionsDialogHost::TemplatePrompt => FocusRequest::template_prompt()",
             "ActionsDialogHost::FormPrompt => FocusRequest::form_prompt()",
             "ActionsDialogHost::DivPrompt => FocusRequest::div_prompt()",
             "ActionsDialogHost::TermPrompt => FocusRequest::term_prompt()",

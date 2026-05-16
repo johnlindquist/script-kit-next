@@ -1353,6 +1353,8 @@ enum ActionsDialogHost {
     DivPrompt,
     /// Actions in editor prompt (restore focus to None - editor handles its own focus)
     EditorPrompt,
+    /// Actions in template prompt (restore focus to TemplatePrompt)
+    TemplatePrompt,
     /// Actions in term prompt (restore focus to None - terminal handles its own focus)
     TermPrompt,
     /// Actions in form prompt (restore focus to None - form handles field focus)

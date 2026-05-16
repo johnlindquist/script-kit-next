@@ -6302,6 +6302,7 @@ impl ScriptListApp {
                                         AppView::FormPrompt { id, .. } => Some(id.clone()),
                                         AppView::TermPrompt { id, .. } => Some(id.clone()),
                                         AppView::EditorPrompt { id, .. } => Some(id.clone()),
+                                        AppView::TemplatePrompt { id, .. } => Some(id.clone()),
                                         _ => None,
                                     };
                                     if let Some(id) = prompt_id {
@@ -6515,6 +6516,7 @@ impl ScriptListApp {
                     AppView::FormPrompt { id, .. } => Some(id.clone()),
                     AppView::TermPrompt { id, .. } => Some(id.clone()),
                     AppView::EditorPrompt { id, .. } => Some(id.clone()),
+                    AppView::TemplatePrompt { id, .. } => Some(id.clone()),
                     AppView::EmojiPickerView { .. } => None,
                     _ => None,
                 };
@@ -8216,6 +8218,11 @@ impl ScriptListApp {
                 cx.notify();
             }
             AppView::ChatPrompt { entity, .. } => {
+                let entity = entity.clone();
+                entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
+                cx.notify();
+            }
+            AppView::TemplatePrompt { entity, .. } => {
                 let entity = entity.clone();
                 entity.update(cx, |prompt, cx| prompt.set_input(text.to_string(), cx));
                 cx.notify();
