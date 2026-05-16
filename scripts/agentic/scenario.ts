@@ -106,7 +106,10 @@ export interface HardScenarioReceipt {
     | "scriptlet-bundle-execution-matrix-stress"
     | "tray-global-hotkey-menu-mutation-stress"
     | "multi-window-resize-monitor-restoration-stress"
-    | "acp-targeted-dictation-delivery-stress";
+    | "acp-targeted-dictation-delivery-stress"
+    | "clipboard-share-trust-install-stress"
+    | "clipboard-share-watcher-stale-replay-stress"
+    | "permission-share-cross-prompt-focus-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -139,6 +142,9 @@ export interface HardScenarioReceipt {
   trayMenuMutation?: Record<string, unknown>;
   multiWindowRestore?: Record<string, unknown>;
   acpDictationDelivery?: Record<string, unknown>;
+  clipboardShareTrust?: Record<string, unknown>;
+  clipboardShareReplay?: Record<string, unknown>;
+  permissionShareCrossPrompt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -3007,6 +3013,300 @@ export async function runAcpTargetedDictationDeliveryStressScenario(opts: {
         "The harness fails closed until ACP-targeted dictation delivery can be proven without starting microphone capture or model setup.",
     },
     warnings: ["file_linear:acp_targeted_dictation_delivery_receipts_missing"],
+  };
+}
+
+export async function runClipboardShareTrustInstallStressScenario(opts: {
+  session: string;
+  fixtureId?: string;
+  shareKind?: string;
+  acceptMode?: string;
+}): Promise<HardScenarioReceipt> {
+  const fixtureId = opts.fixtureId ?? "agentic-loop-nine";
+  const shareKind = opts.shareKind ?? "script";
+  const acceptMode = opts.acceptMode ?? "both";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "clipboard-share-trust-install-stress",
+    status: "fail",
+    clipboardShareTrust: {
+      session: opts.session,
+      fixture: {
+        fixtureId,
+        shareKind,
+        acceptMode,
+        shareUri: null,
+        shareUriScheme: "scriptkit-share://v1",
+        decodedPackageFingerprint: null,
+        decodedKind: null,
+        decodedTitle: null,
+        decodedPluginLabel: null,
+        decodedFileCount: null,
+        allowedPathPrefixes: ["scripts/", "scriptlets/", "skills/", "agents/"],
+        pathTraversalRejected: null,
+      },
+      clipboard: {
+        originalChangeCount: null,
+        originalFingerprint: null,
+        injectedChangeCount: null,
+        injectedFingerprint: null,
+        restoredChangeCount: null,
+        restoredFingerprint: null,
+        clipboardRestored: null,
+      },
+      parentTrustPrompt: {
+        receipt: null,
+        promptKind: "shareTrust",
+        parentWindowId: null,
+        promptWindowId: null,
+        targetWindowIdentity: null,
+        shownBeforeInstall: null,
+        displayedKind: null,
+        displayedTitle: null,
+        displayedPluginLabel: null,
+        displayedFileCount: null,
+        displayedPackageFingerprint: null,
+      },
+      trustGate: {
+        noInstallBeforeTrust: null,
+        installAttemptBeforeAccept: false,
+        explicitAcceptRequired: true,
+        explicitRefuseRequired: true,
+      },
+      refusePath: {
+        clickedIgnore: false,
+        refuseReceipt: null,
+        installCountAfterRefuse: null,
+        pluginRootFingerprintAfterRefuse: null,
+      },
+      acceptPath: {
+        clickedInstall: false,
+        acceptReceipt: null,
+        installReceipt: null,
+        installedPluginId: null,
+        pluginRootFingerprintBefore: null,
+        pluginRootFingerprintAfter: null,
+      },
+      cleanup: {
+        clipboardRestored: null,
+        removedFixturePlugin: false,
+        mutatedUserPlugins: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedClipboard: false,
+      mutatedUserData: false,
+      mutatedUserPlugins: false,
+    },
+    steps: [{
+      name: "clipboard-share-trust-install-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Clipboard share import does not expose one deterministic receipt for decoded package identity, parent trust prompt identity, accept/refuse paths, install-before-trust guard, and clipboard restoration.",
+      },
+    }],
+    failure: {
+      code: "missing_clipboard_share_trust_install_receipt",
+      stepName: "clipboard-share-trust-install-receipt",
+      message: "The harness fails closed until clipboard share trust/install receipts exist.",
+    },
+    warnings: ["file_linear:clipboard_share_trust_install_receipts_missing"],
+  };
+}
+
+export async function runClipboardShareWatcherStaleReplayStressScenario(opts: {
+  session: string;
+  fixtureId?: string;
+  shareKind?: string;
+  count?: number;
+  burstMs?: number;
+}): Promise<HardScenarioReceipt> {
+  const fixtureId = opts.fixtureId ?? "agentic-loop-nine";
+  const shareKind = opts.shareKind ?? "script";
+  const requestedUriCount = opts.count ?? 3;
+  const burstMs = opts.burstMs ?? 25;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "clipboard-share-watcher-stale-replay-stress",
+    status: "fail",
+    clipboardShareReplay: {
+      session: opts.session,
+      fixture: {
+        fixtureId,
+        shareKind,
+        requestedUriCount,
+        burstMs,
+        shareUris: [],
+        packageFingerprints: [],
+      },
+      clipboard: {
+        originalChangeCount: null,
+        originalFingerprint: null,
+        burstChangeCounts: [],
+        restoredChangeCount: null,
+        clipboardRestored: null,
+      },
+      watcher: {
+        watcherReceipt: null,
+        observedGenerations: [],
+        latestGeneration: null,
+        generationOrderingStrict: null,
+        staleUriRejected: null,
+        staleRejectionReceipts: [],
+      },
+      promptLifecycle: {
+        activePromptGeneration: null,
+        replacedPromptGenerations: [],
+        cancelledPromptGenerations: [],
+        promptReplacementReceipt: null,
+        promptCancelReceipt: null,
+      },
+      installGuard: {
+        acceptedGeneration: null,
+        installDedupeKey: null,
+        installCount: 0,
+        duplicateInstallRejected: null,
+        noDuplicateInstalls: null,
+      },
+      cleanup: {
+        clipboardRestored: null,
+        removedFixturePlugin: false,
+        mutatedUserPlugins: false,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedClipboard: false,
+      mutatedUserData: false,
+      mutatedUserPlugins: false,
+    },
+    steps: [{
+      name: "clipboard-share-watcher-replay-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Clipboard share watcher does not expose generation ordering, stale URI rejection, prompt replacement/cancel, and duplicate-install guard receipts.",
+      },
+    }],
+    failure: {
+      code: "missing_clipboard_share_watcher_replay_receipt",
+      stepName: "clipboard-share-watcher-replay-receipt",
+      message:
+        "The harness fails closed until clipboard share watcher generation/replay receipts exist.",
+    },
+    warnings: ["file_linear:clipboard_share_watcher_replay_receipts_missing"],
+  };
+}
+
+export async function runPermissionShareCrossPromptFocusStressScenario(opts: {
+  session: string;
+  fixtureId?: string;
+  shareKind?: string;
+  pane?: string;
+  bundleId?: string;
+}): Promise<HardScenarioReceipt> {
+  const fixtureId = opts.fixtureId ?? "agentic-loop-nine";
+  const shareKind = opts.shareKind ?? "script";
+  const pane = opts.pane ?? "Accessibility";
+  const bundleId = opts.bundleId ?? "com.scriptkit.app";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "permission-share-cross-prompt-focus-stress",
+    status: "fail",
+    permissionShareCrossPrompt: {
+      session: opts.session,
+      fixture: { fixtureId, shareKind, pane, bundleId },
+      permissionAssistant: {
+        panelReceipt: null,
+        panelWindowId: null,
+        panelClass: "PassiveOverlayPanel",
+        pane,
+        bundleId,
+        nonActivatingPanel: null,
+        canBecomeKey: false,
+        canBecomeMain: false,
+        level: "statusBar",
+        activationPolicyBefore: null,
+        activationPolicyAfter: null,
+        activationPolicyStable: null,
+      },
+      shareTrustPrompt: {
+        promptReceipt: null,
+        promptKind: "shareTrust",
+        parentWindowId: null,
+        promptWindowId: null,
+        promptGenerationId: null,
+        packageFingerprint: null,
+        accepted: false,
+      },
+      focusAndPriority: {
+        activePromptKind: null,
+        promptPriority: null,
+        targetWindowIdentity: null,
+        sharePromptDidNotStealPermissionDrag: null,
+        permissionPanelDidNotAcceptShare: null,
+        systemSettingsActivated: false,
+        settingsActivationLeak: false,
+      },
+      safety: {
+        accidentalShareAccepted: false,
+        openedSystemSettings: false,
+        clickedSettings: false,
+        performedDrag: false,
+        mutatedTcc: false,
+        wroteTccDb: false,
+        mutatedUserPlugins: false,
+      },
+      cleanup: {
+        clipboardRestored: null,
+        permissionPanelDismissed: null,
+        sharePromptDismissed: null,
+        activationPolicyRestored: null,
+      },
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      openedSystemSettings: false,
+      mutatedClipboard: false,
+      mutatedTcc: false,
+      mutatedUserData: false,
+      mutatedUserPlugins: false,
+    },
+    steps: [{
+      name: "permission-share-cross-prompt-focus-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "Permission Assistant and share trust prompt do not expose one receipt tying passive panel identity, share prompt identity, prompt priority, no System Settings activation leak, no accidental share acceptance, and cleanup.",
+      },
+    }],
+    failure: {
+      code: "missing_permission_share_cross_prompt_focus_receipt",
+      stepName: "permission-share-cross-prompt-focus-receipt",
+      message:
+        "The harness fails closed until Permission Assistant/share prompt focus receipts exist.",
+    },
+    warnings: ["file_linear:permission_share_cross_prompt_focus_receipts_missing"],
   };
 }
 
