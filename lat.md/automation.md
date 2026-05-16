@@ -340,6 +340,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `menu-syntax-capture-validation-chip-stress` is intentionally fail-closed until menu syntax receipts expose fixture catalog identity, filter input text, main hint snapshot, capture validation status, status chip labels, missing/malformed/unresolved field labels, fragment preview rows, priority choices row, invalid Enter prevention, no payload write, no handler spawn, stale validation rejection, AFK-safe flags, and cleanup.
 
+`acp-footer-activity-indicator-stress` is intentionally fail-closed until ACP footer receipts expose fixture event stream identity, host/footer owner, native footer surface id, GPUI/native dot status, activity status transitions, context-capture/tool-call/plan-update/permission-wait/cancelled/idle states, footer repaint generation, stable pulse tokens, preserved model label, no global AI footer button, no agent process spawn, no security prompt, stale/wrong-host rejection, AFK-safe flags, and cleanup.
+
+`acp-model-history-popover-visual-state-stress` is intentionally fail-closed until ACP popover receipts expose family/automation id/kind, anchor and popup bounds, selected/focused row ids, row visual-state tokens, current model and history recency badges, redacted history previews, empty/loading/error-recovered states, synopsis bounds, filter selection preservation, stale/wrong-popup rejection, AFK-safe flags, and cleanup.
+
+`acp-context-insertion-preview-parity-stress` is intentionally fail-closed until ACP context insertion receipts expose source/destination identities, portal session id, selection and preview generations, selected row id/title/kind/fingerprint, accepted context URI, inserted token alias and preview fingerprint, composer generation and replacement range, row preview matching inserted context, selection preservation, stale/selection-drift/wrong-destination rejection, no raw content leak, no picker/Quick Look/pasteboard/network/submit, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
