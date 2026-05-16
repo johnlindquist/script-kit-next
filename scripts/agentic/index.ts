@@ -207,6 +207,12 @@
  *                         Fail-closed Browser History time-grouped privacy proof
  *   settings-preferences-search-reset-preview-stress
  *                         Fail-closed Settings preferences search/reset preview proof
+ *   settings-preferences-readonly-detail-panel-stress
+ *                         Fail-closed Settings read-only detail panel proof
+ *   design-picker-preview-restore-visual-stress
+ *                         Fail-closed Design Picker preview restore visual proof
+ *   dictation-history-transcript-preview-redaction-stress
+ *                         Fail-closed Dictation History transcript preview redaction proof
  *   help                   Show this help
  *
  * Target threading:
@@ -326,6 +332,9 @@ import {
   runAppLauncherIconGridKeyboardNavigationStressScenario,
   runBrowserHistoryTimeGroupedPrivacyStressScenario,
   runSettingsPreferencesSearchResetPreviewStressScenario,
+  runSettingsPreferencesReadonlyDetailPanelStressScenario,
+  runDesignPickerPreviewRestoreVisualStressScenario,
+  runDictationHistoryTranscriptPreviewRedactionStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1386,6 +1395,31 @@ function parseArgs() {
     resetPathsIdx >= 0 && args[resetPathsIdx + 1]
       ? args[resetPathsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
       : undefined;
+  const sectionsIdx = args.indexOf("--sections");
+  const sections =
+    sectionsIdx >= 0 && args[sectionsIdx + 1]
+      ? args[sectionsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noSystemSettings = args.includes("--no-system-settings");
+  const noTccMutation = args.includes("--no-tcc-mutation");
+  const catalogIdsIdx = args.indexOf("--catalog-ids");
+  const catalogIds =
+    catalogIdsIdx >= 0 && args[catalogIdsIdx + 1]
+      ? args[catalogIdsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const previewStepsIdx = args.indexOf("--preview-steps");
+  const previewSteps =
+    previewStepsIdx >= 0 && args[previewStepsIdx + 1]
+      ? args[previewStepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noDesignWrite = args.includes("--no-design-write");
+  const dictationFixtureIdx = args.indexOf("--dictation-fixture");
+  const dictationFixture =
+    dictationFixtureIdx >= 0 && args[dictationFixtureIdx + 1]
+      ? args[dictationFixtureIdx + 1]
+      : undefined;
+  const noMicrophone = args.includes("--no-microphone");
+  const noMediaCapture = args.includes("--no-media-capture");
   return {
     recipe,
     session,
@@ -1569,6 +1603,15 @@ function parseArgs() {
     preferenceFixtures,
     controlTypes,
     resetPaths,
+    sections,
+    noSystemSettings,
+    noTccMutation,
+    catalogIds,
+    previewSteps,
+    noDesignWrite,
+    dictationFixture,
+    noMicrophone,
+    noMediaCapture,
   };
 }
 
@@ -2990,6 +3033,15 @@ const {
   preferenceFixtures,
   controlTypes,
   resetPaths,
+  sections,
+  noSystemSettings,
+  noTccMutation,
+  catalogIds,
+  previewSteps,
+  noDesignWrite,
+  dictationFixture,
+  noMicrophone,
+  noMediaCapture,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4449,6 +4501,24 @@ switch (recipe) {
     break;
   }
 
+  case "settings-preferences-readonly-detail-panel-stress": {
+    const proofBundle = await runSettingsPreferencesReadonlyDetailPanelStressScenario({ session, fixture, sections, queries, navigationSteps, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noExternalServices, noSecurityPrompts, noSystemSettings, noTccMutation, noConfigWrite, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "settings-preferences-readonly-detail-panel-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Settings read-only detail panel stress failed closed; row bounds, detail panel, config fingerprint, and no-write receipts are missing", proofBundle };
+    break;
+  }
+
+  case "design-picker-preview-restore-visual-stress": {
+    const proofBundle = await runDesignPickerPreviewRestoreVisualStressScenario({ session, fixture, catalogIds, previewSteps, inputModes, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noExternalServices, noSecurityPrompts, noSystemSettings, noTccMutation, noConfigWrite, noDesignWrite, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "design-picker-preview-restore-visual-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Design Picker preview restore visual stress failed closed; token fingerprints, preview restore, and no-write receipts are missing", proofBundle };
+    break;
+  }
+
+  case "dictation-history-transcript-preview-redaction-stress": {
+    const proofBundle = await runDictationHistoryTranscriptPreviewRedactionStressScenario({ session, fixture, transcriptFixtures, queries, selectionCycles, viewSteps, inputModes, dictationFixture, noMicrophone, noMediaCapture, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noExternalServices, noSecurityPrompts, noSystemSettings, noTccMutation, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "dictation-history-transcript-preview-redaction-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Dictation History transcript preview redaction stress failed closed; preview, redaction, fallback, and no-media receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4657,6 +4727,9 @@ switch (recipe) {
           { name: "app-launcher-icon-grid-keyboard-navigation-stress", description: "Fail-closed UX receipt contract for App Launcher icon-grid keyboard navigation", flags: ["--session", "--fixture", "--apps", "--grid-states", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-app-launch", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "browser-history-time-grouped-privacy-stress", description: "Fail-closed UX receipt contract for Browser History time grouping and privacy redaction", flags: ["--session", "--fixture", "--browser-fixtures", "--time-buckets", "--queries", "--privacy-modes", "--input-modes", "--browser-provider", "--no-browser-activation", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "settings-preferences-search-reset-preview-stress", description: "Fail-closed UX receipt contract for Settings preferences search and reset preview", flags: ["--session", "--fixture", "--preference-fixtures", "--control-types", "--queries", "--reset-paths", "--input-modes", "--sandbox-config", "--no-config-write", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "settings-preferences-readonly-detail-panel-stress", description: "Fail-closed UX receipt contract for Settings read-only detail panel navigation", flags: ["--session", "--fixture", "--sections", "--queries", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-config-write", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "design-picker-preview-restore-visual-stress", description: "Fail-closed visual receipt contract for Design Picker preview restore", flags: ["--session", "--fixture", "--catalog-ids", "--preview-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-config-write", "--no-design-write", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "dictation-history-transcript-preview-redaction-stress", description: "Fail-closed UX receipt contract for Dictation History transcript preview redaction", flags: ["--session", "--fixture", "--transcript-fixtures", "--queries", "--selection-cycles", "--view-steps", "--input-modes", "--dictation-fixture", "--no-microphone", "--no-media-capture", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-security-prompts", "--no-system-settings", "--no-tcc-mutation", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -5148,6 +5221,12 @@ Available scenarios:
                          Emit fail-closed Browser History time grouping and privacy requirements
   settings-preferences-search-reset-preview-stress
                          Emit fail-closed Settings preferences search/reset preview requirements
+  settings-preferences-readonly-detail-panel-stress
+                         Emit fail-closed Settings read-only detail panel requirements
+  design-picker-preview-restore-visual-stress
+                         Emit fail-closed Design Picker preview restore requirements
+  dictation-history-transcript-preview-redaction-stress
+                         Emit fail-closed Dictation History transcript preview redaction requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -5268,6 +5347,9 @@ Examples:
   bun scripts/agentic/index.ts app-launcher-icon-grid-keyboard-navigation-stress --session default --fixture agentic-app-launcher-grid --apps 'Calculator,Script Kit,Safari,Terminal,Very Long Application Name' --grid-states grid,list,filtered,empty,resized --navigation-steps right,down,left,up,home,end,filter,clear-filter --input-modes protocol-key,protocol-set-filter,batch --no-native-input --no-native-pointer --no-app-launch --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts browser-history-time-grouped-privacy-stress --session default --fixture agentic-browser-history-time-groups --browser-fixtures same-domain,private-url,long-title,favicon-missing,duplicate-visit --time-buckets today,yesterday,last-week,older --queries docs,private,missing --privacy-modes redacted-url,favicon-fallback,title-only --input-modes protocol-set-filter,protocol-key,batch --browser-provider fixture-only --no-browser-activation --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts settings-preferences-search-reset-preview-stress --session default --fixture agentic-settings-preferences --preference-fixtures theme,font-size,ui-scale,launch-at-login,agent-profile --control-types toggle,select,slider,text,reset-button --queries theme,font,missing --reset-paths single-setting,section-reset,cancel-reset --input-modes protocol-set-filter,protocol-click,protocol-key,batch --sandbox-config --no-config-write --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts settings-preferences-readonly-detail-panel-stress --session default --fixture agentic-settings-preferences-readonly --sections appearance,windowing,history,advanced --queries theme,mini,history,missing --navigation-steps filter,section-click,detail-focus,clear-filter,escape-restore --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-security-prompts --no-system-settings --no-tcc-mutation --no-config-write --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts design-picker-preview-restore-visual-stress --session default --fixture agentic-design-picker-preview --catalog-ids default,compact,high-contrast --preview-steps open-picker,preview-next,preview-previous,filter,escape-restore,cmd-w-restore --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-security-prompts --no-system-settings --no-tcc-mutation --no-config-write --no-design-write --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts dictation-history-transcript-preview-redaction-stress --session default --fixture agentic-dictation-history-preview --transcript-fixtures short,long,redacted,missing-audio,emoji --queries meeting,error,emoji,missing --selection-cycles 6 --view-steps filter,preview,expand-redacted,clear-filter,escape-restore --input-modes protocol-set-filter,protocol-click,protocol-key,batch --dictation-fixture saved-local --no-microphone --no-media-capture --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-security-prompts --no-system-settings --no-tcc-mutation --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

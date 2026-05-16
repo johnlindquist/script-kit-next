@@ -376,6 +376,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `settings-preferences-search-reset-preview-stress` is intentionally fail-closed until Settings receipts expose sandbox config identity, preference section ids, visible preference ids, control bounds/accessibility names, values before and preview values, dirty preference ids, rendered/stripped query, search highlights, reset preview/cancel restoration, disabled-control refusal, no config write or secret leak, stale preference and wrong-preference rejection, no pasteboard/network/native input, AFK-safe flags, and cleanup.
 
+`settings-preferences-readonly-detail-panel-stress` is intentionally fail-closed until Settings receipts expose fixture catalog id, settings surface id, selected section before/after filtering, detail panel generation, visible row labels/bounds/text bounds, detail body/footer bounds, empty-state copy, disabled Apply/Save reason, unchanged config fingerprint, no setup/security prompt, stale detail rejection, wrong-section mutation rejection, no System Settings/TCC/config write/native input, AFK-safe flags, and cleanup.
+
+`design-picker-preview-restore-visual-stress` is intentionally fail-closed until Design Picker receipts expose fixture design catalog id, active design before preview, preview id/generation, theme token fingerprints before/preview/restore, visible picker row ids/labels/bounds/text bounds, selected preview row visibility, screenshot-to-semantics target identity when capture is enabled, Escape and Cmd-W preview restore, unchanged persisted design/config fingerprint, stale preview and wrong-surface rejection, no design/config write/native input, AFK-safe flags, and cleanup.
+
+`dictation-history-transcript-preview-redaction-stress` is intentionally fail-closed until Dictation History receipts expose fixture dictation store id, transcript row ids/generation, query generation, selected transcript before/after filters, preview generation/source/render kind, visible preview text bounds, redacted transcript fingerprint, missing-audio fallback copy, emoji/grapheme bounds, footer/input non-overlap, no raw transcript/audio path leak, no microphone/media permission request, stale transcript and wrong-row rejection, no System Settings/TCC/native input, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
