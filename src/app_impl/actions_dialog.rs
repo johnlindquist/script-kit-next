@@ -158,7 +158,10 @@ impl ScriptListApp {
             } => {
                 let root_unified_context = if should_close
                     && matches!(host, ActionsDialogHost::MainList)
-                    && crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(&action_id).is_some()
+                    && crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(
+                        &action_id,
+                    )
+                    .is_some()
                 {
                     self.pending_root_unified_actions_subject.clone()
                 } else {
@@ -180,11 +183,7 @@ impl ScriptListApp {
                 }
                 if let Some(subject) = root_unified_context {
                     if crate::root_unified_result_actions::execute_root_unified_result_action(
-                        self,
-                        &action_id,
-                        &subject,
-                        window,
-                        cx,
+                        self, &action_id, &subject, window, cx,
                     ) {
                         return;
                     }
@@ -248,16 +247,16 @@ impl ScriptListApp {
             ActionsDialogHost::MainList => {
                 if let Some(subject) = self.pending_root_unified_actions_subject.clone() {
                     if crate::root_unified_result_actions::execute_root_unified_result_action(
-                        self,
-                        &action_id,
-                        &subject,
-                        window,
-                        cx,
+                        self, &action_id, &subject, window, cx,
                     ) {
                         return;
                     }
                 }
-                if crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(&action_id).is_some() {
+                if crate::root_unified_result_actions::RootUnifiedResultAction::from_action_id(
+                    &action_id,
+                )
+                .is_some()
+                {
                     tracing::warn!(
                         target: "script_kit::actions",
                         event = "root_unified_result_action_missing_subject",

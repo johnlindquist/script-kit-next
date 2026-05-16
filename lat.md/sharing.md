@@ -10,7 +10,7 @@ The sender path reuses the existing `copy_deeplink` action slot but produces a p
 - Scriptlets share the source markdown file under `scriptlets/<filename>`.
 - Skills share the full `skills/<skill_id>/` directory so `SKILL.md` and local assets move together.
 - Agents share their markdown file under `agents/<filename>`.
-- Non-shareable launcher items still fall back to the older `scriptkit://run/...` deeplink behavior.
+- Non-shareable config-backed launcher items copy `scriptkit://commands/{commandId}` links; rows without a launcher command ID still fall back to `scriptkit://run/...`.
 
 ## Clipboard Trust Prompt
 

@@ -70,3 +70,16 @@ fn preview_and_focused_info_read_config_shortcuts() {
         "shortcut display must not read shortcuts.json overrides"
     );
 }
+
+#[test]
+fn copy_deeplink_prefers_command_namespace_for_config_backed_rows() {
+    let files = super::read_source("src/app_actions/handle_action/files.rs");
+
+    assert!(
+        files.contains("fn deeplink_for_result(result: &scripts::SearchResult) -> String")
+            && files.contains("launcher_command_id()")
+            && files.contains("command_id_to_deeplink(&command_id)")
+            && files.contains("scriptkit://run/"),
+        "copy_deeplink should prefer scriptkit://commands/{{id}} and keep legacy run fallback"
+    );
+}

@@ -91,6 +91,13 @@ fn root_unified_source_actions_contract() {
         "script/scriptlet rows should delegate to existing script action ownership"
     );
     assert!(
+        root_actions.contains("SearchResult::BuiltIn(_)")
+            && root_actions.contains("SearchResult::App(_)")
+            && root_actions.contains("| SearchResult::BuiltIn(_)")
+            && root_actions.contains("| SearchResult::App(_)"),
+        "config-backed built-in and app rows should delegate to generic MainList actions"
+    );
+    assert!(
         preflight.contains("\"visibleActions\"")
             && preflight.contains("\"contextStableKey\"")
             && !preflight.contains("\"rawClipboard\"")
