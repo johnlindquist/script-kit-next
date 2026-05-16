@@ -168,6 +168,7 @@ fn state_result_serializes_all_fields() {
         None,
         Some("tab-ai-screenshot-20260418T063000.000Z-11474-42.png".to_string()),
         None,
+        None,
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
     assert_eq!(json["type"], "stateResult");
@@ -221,6 +222,7 @@ fn state_result_round_trips() {
         None,
         None,
         None,
+        None,
     );
     let serialized = serde_json::to_string(&msg).expect("serialize");
     assert!(
@@ -249,6 +251,7 @@ fn state_result_round_trips() {
             window_visible,
             screenshot_identity,
             drop_state,
+            path_state,
             ..
         } => {
             assert_eq!(request_id, "gs-rt");
@@ -258,6 +261,7 @@ fn state_result_round_trips() {
             assert!(window_visible);
             assert_eq!(screenshot_identity, None);
             assert_eq!(drop_state, None);
+            assert_eq!(path_state, None);
         }
         other => panic!("Expected StateResult, got: {other:?}"),
     }

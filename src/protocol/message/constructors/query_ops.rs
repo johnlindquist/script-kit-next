@@ -104,6 +104,7 @@ impl Message {
         main_list_scroll: Option<serde_json::Value>,
         screenshot_identity: Option<String>,
         drop_state: Option<serde_json::Value>,
+        path_state: Option<serde_json::Value>,
     ) -> Self {
         Message::StateResult {
             request_id,
@@ -130,6 +131,7 @@ impl Message {
             main_list_scroll,
             screenshot_identity,
             drop_state,
+            path_state,
         }
     }
 

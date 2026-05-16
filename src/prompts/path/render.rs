@@ -26,6 +26,7 @@ impl Render for PathPrompt {
         let render_rows = self.render_rows.clone();
         let filtered_count = render_rows.len();
         let selected_index = self.selected_index;
+        let status_message = self.visible_status_message();
 
         // Build list items using ListItem component for consistent styling
         let list = uniform_list(
@@ -38,7 +39,9 @@ impl Render for PathPrompt {
                         let is_selected = ix == selected_index;
 
                         // Choose icon based on entry type
-                        let icon = if entry.is_dir {
+                        let icon = if entry.is_symlink {
+                            IconKind::Emoji("↪".to_string())
+                        } else if entry.is_dir {
                             IconKind::Emoji("📁".to_string())
                         } else {
                             IconKind::Emoji("📄".to_string())
@@ -118,6 +121,20 @@ impl Render for PathPrompt {
             .flex_1()
             .w_full()
             .px(gpui::px(8.0))
+            .when(filtered_count == 0, |d| {
+                d.child(
+                    div()
+                        .id(gpui::ElementId::Name("status:path-load".into()))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .h_full()
+                        .w_full()
+                        .text_sm()
+                        .text_color(text.help)
+                        .child(gpui::SharedString::from(status_message)),
+                )
+            })
             .child(list);
 
         crate::components::emit_prompt_chrome_audit(
