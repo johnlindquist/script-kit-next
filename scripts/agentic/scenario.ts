@@ -184,7 +184,10 @@ export interface HardScenarioReceipt {
     | "root-file-source-filter-pagination-footer-stress"
     | "file-search-directory-breadcrumb-restoration-stress"
     | "emoji-picker-skin-tone-category-ux-stress"
-    | "root-window-source-filter-activation-refusal-stress";
+    | "root-window-source-filter-activation-refusal-stress"
+    | "notes-markdown-preview-scroll-sync-stress"
+    | "quick-terminal-ansi-scrollback-search-stress"
+    | "script-output-inspector-folding-recovery-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -304,6 +307,9 @@ export interface HardScenarioReceipt {
   fileSearchDirectoryBreadcrumbRestorationReceipt?: Record<string, unknown>;
   emojiPickerSkinToneCategoryUxReceipt?: Record<string, unknown>;
   rootWindowSourceFilterActivationRefusalReceipt?: Record<string, unknown>;
+  notesMarkdownPreviewScrollSyncReceipt?: Record<string, unknown>;
+  quickTerminalAnsiScrollbackSearchReceipt?: Record<string, unknown>;
+  scriptOutputInspectorFoldingRecoveryReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8673,6 +8679,154 @@ export async function runRootWindowSourceFilterActivationRefusalStressScenario(o
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_root_window_source_filter_activation_refusal_receipt" } }],
     failure: { code: "missing_root_window_source_filter_activation_refusal_receipt", stepName: "declare-required-receipt", message: "Missing app-side root Window source-filter activation refusal receipts." },
     warnings: ["file_linear:root_window_source_filter_activation_refusal_receipts_missing"],
+  };
+}
+
+export async function runNotesMarkdownPreviewScrollSyncStressScenario(opts: {
+  session: string; fixture?: string; notes?: string[]; markdownFixtures?: string[];
+  editSteps?: string[]; inputModes?: string[]; sandboxNotesStore?: boolean;
+  noNativeInput?: boolean; noNativePointer?: boolean; noNativePicker?: boolean;
+  noSystemPasteboard?: boolean; noNetwork?: boolean; noExternalServices?: boolean;
+  noSubmit?: boolean; dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "notes-markdown-preview-scroll-sync-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_notes_markdown_preview_scroll_sync_receipt",
+    linearIssue: "file_linear:notes_markdown_preview_scroll_sync_receipts_missing",
+    notesMarkdownPreviewScrollSyncReceipt: {
+      kind: "ux.notesMarkdownPreviewScrollSync",
+      notesMarkdownPreviewScrollSyncStressId: "loop-thirty-five-notes-markdown-preview-scroll-sync",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-notes-markdown-preview",
+      requestedNotes: opts.notes ?? ["note-a", "note-b"],
+      requestedMarkdownFixtures: opts.markdownFixtures ?? ["headings", "checklist", "code-block", "table", "long-link", "image-placeholder"],
+      requestedEditSteps: opts.editSteps ?? ["protocol-insert", "protocol-delete", "protocol-scroll", "preview-toggle", "split-resize", "switch-note"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-click", "protocol-key", "batch"],
+      sandboxNotesStore: opts.sandboxNotesStore ?? true,
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      sandboxNotesStoreId: null, fixtureNoteIds: [], activeNoteIdBefore: null, activeNoteIdAfter: null,
+      markdownFixtureIds: [], editorGeneration: null, previewGeneration: null,
+      renderedMarkdownBlockIds: [], previewBlockFingerprints: [], editorCursorBefore: null,
+      editorCursorAfter: null, editorSelectionRange: null, editorScrollAnchor: null,
+      previewScrollAnchor: null, scrollSyncDeltaPx: null, splitPaneBounds: null,
+      previewToggleReceipt: null, switchNoteCleanupReceipt: null, focusRestoredToEditor: null,
+      noUserNotesMutation: true, noRawNoteBodyLeak: null, stalePreviewGenerationRejected: null,
+      wrongNoteMutationRejected: null, noSystemPasteboardMutation: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_notes_markdown_preview_scroll_sync_receipt" } }],
+    failure: { code: "missing_notes_markdown_preview_scroll_sync_receipt", stepName: "declare-required-receipt", message: "Missing app-side Notes markdown preview scroll sync receipts." },
+    warnings: ["file_linear:notes_markdown_preview_scroll_sync_receipts_missing"],
+  };
+}
+
+export async function runQuickTerminalAnsiScrollbackSearchStressScenario(opts: {
+  session: string; fixture?: string; transcriptFixtures?: string[]; searchQueries?: string[];
+  scrollPositions?: string[]; inputModes?: string[]; terminalFixture?: string;
+  noShellCommand?: boolean; noNativeInput?: boolean; noNativePointer?: boolean;
+  noSystemPasteboard?: boolean; noNetwork?: boolean; noExternalServices?: boolean;
+  noSubmit?: boolean; dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "quick-terminal-ansi-scrollback-search-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_quick_terminal_ansi_scrollback_search_receipt",
+    linearIssue: "file_linear:quick_terminal_ansi_scrollback_search_receipts_missing",
+    quickTerminalAnsiScrollbackSearchReceipt: {
+      kind: "ux.quickTerminalAnsiScrollbackSearch",
+      quickTerminalAnsiScrollbackSearchStressId: "loop-thirty-five-quick-terminal-ansi-scrollback-search",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-terminal-ansi-scrollback",
+      requestedTranscriptFixtures: opts.transcriptFixtures ?? ["ansi-colors", "wide-emoji", "combining-marks", "long-lines", "hyperlinks", "stderr-block", "prompt-continuation"],
+      requestedSearchQueries: opts.searchQueries ?? ["error", "emoji", "url", "long"],
+      requestedScrollPositions: opts.scrollPositions ?? ["top", "middle", "bottom", "search-hit"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-input", "protocol-key", "batch"],
+      terminalFixture: opts.terminalFixture ?? "scripted-local",
+      noShellCommand: opts.noShellCommand ?? true,
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureTerminalTranscriptId: null, terminalSurfaceId: null, transcriptGeneration: null,
+      ansiRunIds: [], sgrTokenRuns: [], wideCellGraphemeIds: [], combiningMarkCellIds: [],
+      hyperlinkSpanIds: [], redactedHrefFingerprints: [], stderrBlockIds: [],
+      promptContinuationRows: [], scrollbackViewportRows: [], viewportRowRange: null,
+      searchQueryGeneration: null, searchHitIds: [], highlightedCellRanges: [],
+      selectedSearchHitVisible: null, wrapContinuationMarkers: [], cursorCellBounds: null,
+      promptLineBounds: null, footerInputNonOverlapping: null, staleTranscriptGenerationRejected: null,
+      noShellCommandSpawned: true, noRawHyperlinkLeak: null, noSystemPasteboardMutation: true,
+      noExternalServiceRequest: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_quick_terminal_ansi_scrollback_search_receipt" } }],
+    failure: { code: "missing_quick_terminal_ansi_scrollback_search_receipt", stepName: "declare-required-receipt", message: "Missing app-side Quick Terminal ANSI scrollback search receipts." },
+    warnings: ["file_linear:quick_terminal_ansi_scrollback_search_receipts_missing"],
+  };
+}
+
+export async function runScriptOutputInspectorFoldingRecoveryStressScenario(opts: {
+  session: string; fixture?: string; outputFixtures?: string[]; viewSteps?: string[];
+  inputModes?: string[]; scriptFixture?: string; noHandlerSpawn?: boolean;
+  noNativeInput?: boolean; noNativePointer?: boolean; noSystemPasteboard?: boolean;
+  noNetwork?: boolean; noExternalServices?: boolean; noProcessKill?: boolean;
+  noSubmit?: boolean; dryRunOnly?: boolean; localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "script-output-inspector-folding-recovery-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_script_output_inspector_folding_recovery_receipt",
+    linearIssue: "file_linear:script_output_inspector_folding_recovery_receipts_missing",
+    scriptOutputInspectorFoldingRecoveryReceipt: {
+      kind: "ux.scriptOutputInspectorFoldingRecovery",
+      scriptOutputInspectorFoldingRecoveryStressId: "loop-thirty-five-script-output-inspector-folding-recovery",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-script-output-inspector",
+      requestedOutputFixtures: opts.outputFixtures ?? ["stdout-long", "stderr-long", "ansi-stacktrace", "json-lines", "progress-rewrite", "exit-error", "exit-success"],
+      requestedViewSteps: opts.viewSteps ?? ["run-fixture", "filter-output", "fold-stderr", "expand-stack", "clear-filter", "retry-dry-run"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-click", "protocol-key", "batch"],
+      scriptFixture: opts.scriptFixture ?? "local-noop",
+      noHandlerSpawn: opts.noHandlerSpawn ?? true,
+      noNativeInput: opts.noNativeInput ?? true, noNativePointer: opts.noNativePointer ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true, noNetwork: opts.noNetwork ?? true,
+      noExternalServices: opts.noExternalServices ?? true, noProcessKill: opts.noProcessKill ?? true,
+      noSubmit: opts.noSubmit ?? true, dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureScriptRunId: null, outputFixtureIds: [], outputStreamGeneration: null,
+      stdoutBlockIds: [], stderrBlockIds: [], ansiStackFrameIds: [], jsonLineIds: [],
+      progressRewriteGeneration: null, exitBadgeKind: null, exitBadgeBounds: null,
+      filterText: null, highlightedOutputRanges: [], stderrFoldStateBefore: null,
+      stderrFoldStateAfter: null, stackTraceExpandedState: null, clearFilterRestoresOutput: null,
+      retryDryRunReceipt: null, retryDoesNotSpawnHandler: true, selectionScrollAnchorRestored: null,
+      noOutputInterleaveDrift: null, staleOutputGenerationRejected: null, wrongRunMutationRejected: null,
+      noHandlerSpawn: true, noProcessKill: true, noSystemPasteboardMutation: true,
+      noExternalServiceRequest: true, cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_script_output_inspector_folding_recovery_receipt" } }],
+    failure: { code: "missing_script_output_inspector_folding_recovery_receipt", stepName: "declare-required-receipt", message: "Missing app-side script output inspector folding recovery receipts." },
+    warnings: ["file_linear:script_output_inspector_folding_recovery_receipts_missing"],
   };
 }
 

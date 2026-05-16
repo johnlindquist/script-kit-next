@@ -195,6 +195,12 @@
  *                         Fail-closed Emoji Picker skin-tone/category UX proof
  *   root-window-source-filter-activation-refusal-stress
  *                         Fail-closed root Windows source-filter activation refusal proof
+ *   notes-markdown-preview-scroll-sync-stress
+ *                         Fail-closed Notes markdown preview scroll/focus sync proof
+ *   quick-terminal-ansi-scrollback-search-stress
+ *                         Fail-closed Quick Terminal ANSI scrollback search proof
+ *   script-output-inspector-folding-recovery-stress
+ *                         Fail-closed script output inspector folding recovery proof
  *   help                   Show this help
  *
  * Target threading:
@@ -308,6 +314,9 @@ import {
   runFileSearchDirectoryBreadcrumbRestorationStressScenario,
   runEmojiPickerSkinToneCategoryUxStressScenario,
   runRootWindowSourceFilterActivationRefusalStressScenario,
+  runNotesMarkdownPreviewScrollSyncStressScenario,
+  runQuickTerminalAnsiScrollbackSearchStressScenario,
+  runScriptOutputInspectorFoldingRecoveryStressScenario,
   runWarningBannerActionDismissSemanticsStressScenario,
   runSelectPromptMultiselectKeyboardStateStressScenario,
   runFileSearchPreviewSanitizationStressScenario,
@@ -1283,6 +1292,44 @@ function parseArgs() {
       ? args[windowProviderIdx + 1]
       : undefined;
   const noWindowActivation = args.includes("--no-window-activation");
+  const markdownFixturesIdx = args.indexOf("--markdown-fixtures");
+  const markdownFixtures =
+    markdownFixturesIdx >= 0 && args[markdownFixturesIdx + 1]
+      ? args[markdownFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const noExternalServices = args.includes("--no-external-services");
+  const transcriptFixturesIdx = args.indexOf("--transcript-fixtures");
+  const transcriptFixtures =
+    transcriptFixturesIdx >= 0 && args[transcriptFixturesIdx + 1]
+      ? args[transcriptFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const searchQueriesIdx = args.indexOf("--search-queries");
+  const searchQueries =
+    searchQueriesIdx >= 0 && args[searchQueriesIdx + 1]
+      ? args[searchQueriesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const terminalFixtureIdx = args.indexOf("--terminal-fixture");
+  const terminalFixture =
+    terminalFixtureIdx >= 0 && args[terminalFixtureIdx + 1]
+      ? args[terminalFixtureIdx + 1]
+      : undefined;
+  const noShellCommand = args.includes("--no-shell-command");
+  const outputFixturesIdx = args.indexOf("--output-fixtures");
+  const outputFixtures =
+    outputFixturesIdx >= 0 && args[outputFixturesIdx + 1]
+      ? args[outputFixturesIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const viewStepsIdx = args.indexOf("--view-steps");
+  const viewSteps =
+    viewStepsIdx >= 0 && args[viewStepsIdx + 1]
+      ? args[viewStepsIdx + 1].split(",").map((s) => s.trim()).filter(Boolean)
+      : undefined;
+  const scriptFixtureIdx = args.indexOf("--script-fixture");
+  const scriptFixture =
+    scriptFixtureIdx >= 0 && args[scriptFixtureIdx + 1]
+      ? args[scriptFixtureIdx + 1]
+      : undefined;
+  const noHandlerSpawn = args.includes("--no-handler-spawn");
   return {
     recipe,
     session,
@@ -1445,6 +1492,16 @@ function parseArgs() {
     windowStates,
     windowProvider,
     noWindowActivation,
+    markdownFixtures,
+    noExternalServices,
+    transcriptFixtures,
+    searchQueries,
+    terminalFixture,
+    noShellCommand,
+    outputFixtures,
+    viewSteps,
+    scriptFixture,
+    noHandlerSpawn,
   };
 }
 
@@ -2845,6 +2902,16 @@ const {
   windowStates,
   windowProvider,
   noWindowActivation,
+  markdownFixtures,
+  noExternalServices,
+  transcriptFixtures,
+  searchQueries,
+  terminalFixture,
+  noShellCommand,
+  outputFixtures,
+  viewSteps,
+  scriptFixture,
+  noHandlerSpawn,
 } = parseArgs();
 
 let result: RecipeReceipt;
@@ -4268,6 +4335,24 @@ switch (recipe) {
     break;
   }
 
+  case "notes-markdown-preview-scroll-sync-stress": {
+    const proofBundle = await runNotesMarkdownPreviewScrollSyncStressScenario({ session, fixture, notes, markdownFixtures, editSteps, inputModes, sandboxNotesStore, noNativeInput, noNativePointer, noNativePicker, noSystemPasteboard, noNetwork, noExternalServices, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "notes-markdown-preview-scroll-sync-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Notes markdown preview scroll sync stress failed closed; preview block, editor focus, scroll, split, and stale preview receipts are missing", proofBundle };
+    break;
+  }
+
+  case "quick-terminal-ansi-scrollback-search-stress": {
+    const proofBundle = await runQuickTerminalAnsiScrollbackSearchStressScenario({ session, fixture, transcriptFixtures, searchQueries, scrollPositions, inputModes, terminalFixture, noShellCommand, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noExternalServices, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "quick-terminal-ansi-scrollback-search-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Quick Terminal ANSI scrollback search stress failed closed; ANSI, wide text, search hit, hyperlink redaction, and no-shell receipts are missing", proofBundle };
+    break;
+  }
+
+  case "script-output-inspector-folding-recovery-stress": {
+    const proofBundle = await runScriptOutputInspectorFoldingRecoveryStressScenario({ session, fixture, outputFixtures, viewSteps, inputModes, scriptFixture, noHandlerSpawn, noNativeInput, noNativePointer, noSystemPasteboard, noNetwork, noExternalServices, noProcessKill, noSubmit, dryRunOnly, localFixtureOnly });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "script-output-inspector-folding-recovery-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Script output inspector folding recovery stress failed closed; stream, folding, retry, scroll, and no-spawn receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -4470,6 +4555,9 @@ switch (recipe) {
           { name: "file-search-directory-breadcrumb-restoration-stress", description: "Fail-closed UX receipt contract for File Search directory breadcrumb restoration", flags: ["--session", "--fixture", "--start-dir", "--queries", "--navigation-steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-quick-look", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "emoji-picker-skin-tone-category-ux-stress", description: "Fail-closed UX receipt contract for Emoji Picker skin-tone palette and category stability", flags: ["--session", "--fixture", "--categories", "--queries", "--skin-tones", "--steps", "--input-modes", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "root-window-source-filter-activation-refusal-stress", description: "Fail-closed UX receipt contract for root Windows source-filter activation refusal", flags: ["--session", "--fixture", "--queries", "--window-states", "--selection-steps", "--input-modes", "--window-provider", "--no-native-input", "--no-native-pointer", "--no-window-activation", "--no-system-pasteboard", "--no-network", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "notes-markdown-preview-scroll-sync-stress", description: "Fail-closed UX receipt contract for Notes markdown preview scroll and focus sync", flags: ["--session", "--fixture", "--notes", "--markdown-fixtures", "--edit-steps", "--input-modes", "--sandbox-notes-store", "--no-native-input", "--no-native-pointer", "--no-native-picker", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "quick-terminal-ansi-scrollback-search-stress", description: "Fail-closed UX receipt contract for Quick Terminal ANSI scrollback search readability", flags: ["--session", "--fixture", "--transcript-fixtures", "--search-queries", "--scroll-positions", "--input-modes", "--terminal-fixture", "--no-shell-command", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
+          { name: "script-output-inspector-folding-recovery-stress", description: "Fail-closed UX receipt contract for script output inspector folding and retry recovery", flags: ["--session", "--fixture", "--output-fixtures", "--view-steps", "--input-modes", "--script-fixture", "--no-handler-spawn", "--no-native-input", "--no-native-pointer", "--no-system-pasteboard", "--no-network", "--no-external-services", "--no-process-kill", "--no-submit", "--dry-run-only", "--local-fixture-only", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4949,6 +5037,12 @@ Available scenarios:
                          Emit fail-closed Emoji Picker skin-tone/category UX requirements
   root-window-source-filter-activation-refusal-stress
                          Emit fail-closed root Windows source-filter activation refusal requirements
+  notes-markdown-preview-scroll-sync-stress
+                         Emit fail-closed Notes markdown preview scroll sync requirements
+  quick-terminal-ansi-scrollback-search-stress
+                         Emit fail-closed Quick Terminal ANSI scrollback search requirements
+  script-output-inspector-folding-recovery-stress
+                         Emit fail-closed script output inspector folding recovery requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -5063,6 +5157,9 @@ Examples:
   bun scripts/agentic/index.ts file-search-directory-breadcrumb-restoration-stress --session default --fixture agentic-file-tree-breadcrumbs --start-dir repo-root --queries 'AGENTS,src,missing' --navigation-steps enter-directory,breadcrumb-parent,back,forward,filter-tighten,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-native-picker --no-quick-look --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts emoji-picker-skin-tone-category-ux-stress --session default --fixture agentic-emoji-skin-tone --categories people,symbols,flags --queries 'woman technologist,thumbs up,flag' --skin-tones default,medium-dark --steps category-click,skin-tone-open,variant-select,filter-tighten,escape-palette,clear-filter --input-modes protocol-set-filter,protocol-click,protocol-key,batch --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts root-window-source-filter-activation-refusal-stress --session default --fixture agentic-window-rows --queries 'w: ,w: safari,windows: terminal' --window-states focused,minimized,offscreen,duplicate-title --selection-steps filter,sort-z-order,actions,enter-refused,clear-filter --input-modes protocol-set-filter,protocol-key,batch --window-provider fixture-only --no-native-input --no-native-pointer --no-window-activation --no-system-pasteboard --no-network --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts notes-markdown-preview-scroll-sync-stress --session default --fixture agentic-notes-markdown-preview --notes note-a,note-b --markdown-fixtures headings,checklist,code-block,table,long-link,image-placeholder --edit-steps protocol-insert,protocol-delete,protocol-scroll,preview-toggle,split-resize,switch-note --input-modes protocol-set-input,protocol-click,protocol-key,batch --sandbox-notes-store --no-native-input --no-native-pointer --no-native-picker --no-system-pasteboard --no-network --no-external-services --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts quick-terminal-ansi-scrollback-search-stress --session default --fixture agentic-terminal-ansi-scrollback --transcript-fixtures ansi-colors,wide-emoji,combining-marks,long-lines,hyperlinks,stderr-block,prompt-continuation --search-queries error,emoji,url,long --scroll-positions top,middle,bottom,search-hit --input-modes protocol-set-input,protocol-key,batch --terminal-fixture scripted-local --no-shell-command --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-submit --dry-run-only --local-fixture-only --json
+  bun scripts/agentic/index.ts script-output-inspector-folding-recovery-stress --session default --fixture agentic-script-output-inspector --output-fixtures stdout-long,stderr-long,ansi-stacktrace,json-lines,progress-rewrite,exit-error,exit-success --view-steps run-fixture,filter-output,fold-stderr,expand-stack,clear-filter,retry-dry-run --input-modes protocol-set-filter,protocol-click,protocol-key,batch --script-fixture local-noop --no-handler-spawn --no-native-input --no-native-pointer --no-system-pasteboard --no-network --no-external-services --no-process-kill --no-submit --dry-run-only --local-fixture-only --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
