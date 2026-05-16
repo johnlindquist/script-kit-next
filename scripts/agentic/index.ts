@@ -37,6 +37,8 @@ import { resolve } from "path";
 import {
   runAcpPortalRoundTripOriginStressScenario,
   runAcpPromptPopupParityScenario,
+  runActionsCapturedSubjectFrameStressScenario,
+  runCurrentAppCommandsFrontmostStressScenario,
   runDetachedAcpTargetThreadingStressScenario,
   runActionsDialogExactIdScenario,
   runDetachedAcpExactIdScenario,
@@ -45,6 +47,7 @@ import {
   runPermissionPreflightReadonlyScenario,
   runPromptPopupExactIdScenario,
   runShortcutRecorderFocusCaptureStressScenario,
+  runTemplatePromptAutomationParityStressScenario,
 } from "./scenario";
 
 const SCHEMA_VERSION = 1;
@@ -509,6 +512,26 @@ function parseArgs() {
   const chord = chordIdx >= 0 && args[chordIdx + 1] ? args[chordIdx + 1] : undefined;
   const actionIdx = args.indexOf("--action");
   const action = actionIdx >= 0 && args[actionIdx + 1] ? args[actionIdx + 1] : undefined;
+  const templateIdx = args.indexOf("--template");
+  const template =
+    templateIdx >= 0 && args[templateIdx + 1] ? args[templateIdx + 1] : undefined;
+  const fieldIdx = args.indexOf("--field");
+  const field = fieldIdx >= 0 && args[fieldIdx + 1] ? args[fieldIdx + 1] : undefined;
+  const valueIdx = args.indexOf("--value");
+  const value = valueIdx >= 0 && args[valueIdx + 1] ? args[valueIdx + 1] : undefined;
+  const forcedValueIdx = args.indexOf("--forced-value");
+  const forcedValue =
+    forcedValueIdx >= 0 && args[forcedValueIdx + 1] ? args[forcedValueIdx + 1] : undefined;
+  const aliasIdx = args.indexOf("--alias");
+  const alias = aliasIdx >= 0 && args[aliasIdx + 1] ? args[aliasIdx + 1] : undefined;
+  const expectedAppIdx = args.indexOf("--expected-app");
+  const expectedApp =
+    expectedAppIdx >= 0 && args[expectedAppIdx + 1] ? args[expectedAppIdx + 1] : undefined;
+  const sourceIdx = args.indexOf("--source");
+  const source = sourceIdx >= 0 && args[sourceIdx + 1] ? args[sourceIdx + 1] : undefined;
+  const mutationIdx = args.indexOf("--mutation");
+  const mutation =
+    mutationIdx >= 0 && args[mutationIdx + 1] ? args[mutationIdx + 1] : undefined;
   const sandboxConfig = args.includes("--sandbox-config");
   return {
     recipe,
@@ -532,6 +555,14 @@ function parseArgs() {
     kinds,
     chord,
     action,
+    template,
+    field,
+    value,
+    forcedValue,
+    alias,
+    expectedApp,
+    source,
+    mutation,
     sandboxConfig,
   };
 }
@@ -1793,6 +1824,14 @@ const {
   kinds,
   chord,
   action,
+  template,
+  field,
+  value,
+  forcedValue,
+  alias,
+  expectedApp,
+  source,
+  mutation,
   sandboxConfig,
 } = parseArgs();
 
@@ -1960,6 +1999,70 @@ switch (recipe) {
     break;
   }
 
+  case "template-prompt-automation-parity-stress": {
+    const proofBundle = await runTemplatePromptAutomationParityStressScenario({
+      session,
+      template,
+      field,
+      value,
+      forcedValue,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "template-prompt-automation-parity-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "TemplatePrompt automation parity proved state, elements, actions, submit, cancel, and forceSubmit"
+          : "TemplatePrompt automation parity stress failed; inspect proofBundle.templatePrompt and failure",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "current-app-commands-frontmost-stress": {
+    const proofBundle = await runCurrentAppCommandsFrontmostStressScenario({
+      session,
+      query,
+      alias,
+      expectedApp,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "current-app-commands-frontmost-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Current App Commands preserved the frontmost snapshot and shared filtering semantics"
+          : "Current App Commands frontmost stress failed closed; frontmost/filter/action receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "actions-captured-subject-frame-stress": {
+    const proofBundle = await runActionsCapturedSubjectFrameStressScenario({
+      session,
+      source,
+      action,
+      mutation,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "actions-captured-subject-frame-stress",
+      status: proofBundle.status,
+      steps: proofBundle.steps as StepReceipt[],
+      summary:
+        proofBundle.status === "pass"
+          ? "Actions dialog executed the captured subject after frame drift and restored focus"
+          : "Actions captured-subject frame stress failed closed; captured subject/frame receipts are missing",
+      proofBundle,
+    };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -2066,6 +2169,9 @@ switch (recipe) {
           { name: "file-portal-origin-roundtrip", description: "Fail-closed ACP portal origin/context-part round-trip receipt", flags: ["--session", "--origin", "--portal", "--selection", "--query", "--json"] },
           { name: "permission-privacy-preflight", description: "Read-only permission preflight that never opens System Settings or mutates OS permissions", flags: ["--session", "--kinds", "--json"] },
           { name: "shortcut-recorder-focus-capture", description: "Fail-closed native shortcut recorder focus/capture receipt", flags: ["--session", "--surface", "--action", "--chord", "--sandbox-config", "--json"] },
+          { name: "template-prompt-automation-parity-stress", description: "State-first TemplatePrompt state/elements/actions/submit/cancel/forceSubmit parity receipt", flags: ["--session", "--template", "--field", "--value", "--forced-value", "--json"] },
+          { name: "current-app-commands-frontmost-stress", description: "Fail-closed Do in Current App frontmost snapshot and shared filtering receipt", flags: ["--session", "--alias", "--query", "--expected-app", "--json"] },
+          { name: "actions-captured-subject-frame-stress", description: "Fail-closed root actions captured-subject and source-frame stability receipt", flags: ["--session", "--source", "--action", "--mutation", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -2097,6 +2203,9 @@ switch (recipe) {
           "proofBundle.portal",
           "proofBundle.permissions",
           "proofBundle.shortcut",
+          "proofBundle.templatePrompt",
+          "proofBundle.currentAppCommands",
+          "proofBundle.actionsCapturedSubject",
           "proofBundle.delayedAction",
         ],
         routing: {
@@ -2131,6 +2240,12 @@ Recipes:
                          Read-only permission preflight; never opens Settings or mutates TCC
   shortcut-recorder-focus-capture
                          Fail-closed shortcut recorder focus/capture stress
+  template-prompt-automation-parity-stress
+                         State-first TemplatePrompt state/elements/actions/forceSubmit parity
+  current-app-commands-frontmost-stress
+                         Fail-closed Do in Current App frontmost/filtering/action snapshot
+  actions-captured-subject-frame-stress
+                         Fail-closed root actions captured-subject frame stability
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -2161,6 +2276,12 @@ Available scenarios:
                          Run read-only permission prerequisite receipts
   shortcut-recorder-focus-capture
                          Emit fail-closed shortcut recorder receipt requirements
+  template-prompt-automation-parity-stress
+                         Run TemplatePrompt automation parity proof
+  current-app-commands-frontmost-stress
+                         Emit fail-closed Current App Commands frontmost requirements
+  actions-captured-subject-frame-stress
+                         Emit fail-closed captured-subject frame requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -2179,6 +2300,9 @@ Examples:
   bun scripts/agentic/index.ts file-portal-origin-roundtrip --session default --host acp --portal file-search --json
   bun scripts/agentic/index.ts permission-privacy-preflight --session default --json
   bun scripts/agentic/index.ts shortcut-recorder-focus-capture --session default --chord cmd+shift+7 --json
+  bun scripts/agentic/index.ts template-prompt-automation-parity-stress --session default --template 'Hello {{name}}' --field name --value Ada --forced-value forced-template-result --json
+  bun scripts/agentic/index.ts current-app-commands-frontmost-stress --session default --alias 'Do in Current Command' --query 'close tab' --json
+  bun scripts/agentic/index.ts actions-captured-subject-frame-stress --session default --source root-file --action quick-look --mutation filter-selection-cache-frame --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

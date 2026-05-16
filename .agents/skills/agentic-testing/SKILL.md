@@ -546,6 +546,12 @@ bun scripts/agentic/index.ts permission-privacy-preflight \
   --session default --kinds accessibility,screen-recording,microphone --json
 bun scripts/agentic/index.ts shortcut-recorder-focus-capture \
   --session default --surface shortcuts --action test-agentic-shortcut --chord cmd+shift+7 --sandbox-config --json
+bun scripts/agentic/index.ts template-prompt-automation-parity-stress \
+  --session default --template 'Hello {{name}}' --field name --value Ada --forced-value forced-template-result --json
+bun scripts/agentic/index.ts current-app-commands-frontmost-stress \
+  --session default --alias 'Do in Current Command' --query 'close tab' --json
+bun scripts/agentic/index.ts actions-captured-subject-frame-stress \
+  --session default --source root-file --action quick-look --mutation filter-selection-cache-frame --json
 ```
 
 ### State-only vs screenshot checkpoints
