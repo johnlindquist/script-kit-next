@@ -419,6 +419,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             ..Default::default()
         },
         &[],
+        crate::ai_vault::RootAiVaultSectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
+        &[],
         crate::browser_tabs::RootBrowserTabsSectionOptions {
             enabled: false,
             ..Default::default()
@@ -464,6 +469,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
     root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    root_ai_vault_hits: &[crate::ai_vault::AiVaultHit],
+    root_ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     root_browser_tab_hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
     root_browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     root_browser_history_hits: &[crate::browser_history::RootBrowserHistorySearchHit],
@@ -526,11 +533,6 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             advanced_query,
             root_file_options,
         );
-    }
-    if root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)
-        && root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)
-    {
-        append_root_ai_vault_section(&mut grouped);
     }
     let mut passive_budget =
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
@@ -622,6 +624,23 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
                     &mut passive_budget,
                     root_source_filters
                         .includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations),
+                );
+            }
+            crate::config::UnifiedSearchPassiveSource::AiVault => {
+                if !root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)
+                {
+                    continue;
+                }
+                append_root_ai_vault_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_ai_vault_hits,
+                    root_ai_vault_options.clone(),
+                    &mut passive_budget,
+                    root_source_filters
+                        .includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault),
                 );
             }
             crate::config::UnifiedSearchPassiveSource::BrowserHistory => {
@@ -1260,22 +1279,64 @@ fn source_chip_result_status(
     )
 }
 
-fn append_root_ai_vault_section(grouped: &mut Vec<GroupedListItem>) {
-    let insertion_index = grouped.len();
-    grouped.splice(
-        insertion_index..insertion_index,
-        [
-            GroupedListItem::SectionHeader("AI Vault".to_string(), None),
-            GroupedListItem::Status(source_chip_status_row(
-                crate::menu_syntax::RootUnifiedSourceFilter::AiVault,
-                SourceChipStatusKind::Disabled,
-                0,
-                0,
-                Some(0),
-                "AI Vault is disabled".to_string(),
-            )),
-        ],
-    );
+#[allow(clippy::too_many_arguments)]
+fn append_root_ai_vault_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::ai_vault::AiVaultHit],
+    options: crate::ai_vault::RootAiVaultSectionOptions,
+    budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
+) {
+    if advanced_query.is_some()
+        || !crate::ai_vault::root_ai_vault_query_is_eligible(filter_text, &options)
+    {
+        return;
+    }
+
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 && !explicit_source_filter {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(limit)
+        .enumerate()
+        .map(|(rank, hit): (usize, &crate::ai_vault::AiVaultHit)| {
+            SearchResult::AiVault(crate::scripts::AiVaultMatch {
+                hit: hit.clone(),
+                subtitle: ai_vault_subtitle(hit),
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    budget.consume(rows.len());
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::AiVault,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "AI Vault", rows, status);
+}
+
+fn ai_vault_subtitle(hit: &crate::ai_vault::AiVaultHit) -> String {
+    vec![
+        hit.provider_display_name.as_str(),
+        hit.model.as_deref().unwrap_or(""),
+        hit.workspace_path.as_deref().unwrap_or(""),
+        hit.modified_at.as_deref().unwrap_or(""),
+    ]
+    .into_iter()
+    .filter(|part: &&str| !part.trim().is_empty())
+    .collect::<Vec<_>>()
+    .join(" · ")
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1996,6 +2057,7 @@ mod advanced_query_tests {
                     SearchResult::File(_) => "rootFile",
                     SearchResult::Note(_)
                     | SearchResult::AcpHistory(_)
+                    | SearchResult::AiVault(_)
                     | SearchResult::ClipboardHistory(_)
                     | SearchResult::DictationHistory(_)
                     | SearchResult::BrowserTab(_)
@@ -2017,6 +2079,7 @@ mod advanced_query_tests {
             let source = match result {
                 SearchResult::Note(_) => "Notes",
                 SearchResult::AcpHistory(_) => "AI Conversations",
+                SearchResult::AiVault(_) => "AI Vault",
                 SearchResult::ClipboardHistory(_) => "Clipboard History",
                 SearchResult::DictationHistory(_) => "Dictation History",
                 SearchResult::BrowserTab(_) => "Browser Tabs",

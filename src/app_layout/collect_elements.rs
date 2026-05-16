@@ -1627,6 +1627,7 @@ impl ScriptListApp {
             scripts::SearchResult::File(m) => m.file.name.clone(),
             scripts::SearchResult::Note(m) => m.title.clone(),
             scripts::SearchResult::AcpHistory(m) => m.entry.title_display().to_string(),
+            scripts::SearchResult::AiVault(m) => m.hit.safe_title.clone(),
             scripts::SearchResult::ClipboardHistory(m) => m.title.clone(),
             scripts::SearchResult::DictationHistory(m) => m.preview.clone(),
             scripts::SearchResult::BrowserTab(m) => m.hit.title.clone(),

@@ -14,6 +14,7 @@ pub enum ArtifactKind {
     File,
     Note,
     AcpHistory,
+    AiVault,
     ClipboardHistory,
     DictationHistory,
     BrowserTab,
@@ -36,6 +37,9 @@ impl ArtifactKind {
             "note" | "notes" => Some(Self::Note),
             "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
                 Some(Self::AcpHistory)
+            }
+            "ai-vault" | "aivault" | "vault" | "vault-session" | "vault-sessions" => {
+                Some(Self::AiVault)
             }
             "clipboard" | "clipboard-history" | "clipboardhistory" => Some(Self::ClipboardHistory),
             "dictation" | "dictation-history" | "dictationhistory" | "transcript"

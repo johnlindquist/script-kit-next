@@ -152,6 +152,9 @@ mod root_unified_passive_snapshot_contract;
 #[path = "source_audits/root_unified_config_schema_parity_contract.rs"]
 mod root_unified_config_schema_parity_contract;
 
+#[path = "source_audits/root_unified_ai_vault_contract.rs"]
+mod root_unified_ai_vault_contract;
+
 #[path = "source_audits/root_unified_passive_budget_contract.rs"]
 mod root_unified_passive_budget_contract;
 

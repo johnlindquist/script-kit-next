@@ -1,6 +1,12 @@
+#![allow(dead_code)]
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
+use std::process::Output;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -38,6 +44,12 @@ pub(crate) enum AiVaultMatchedField {
     Recent,
 }
 
+impl Default for AiVaultMatchedField {
+    fn default() -> Self {
+        Self::Recent
+    }
+}
+
 impl AiVaultMatchedField {
     pub(crate) fn label(&self) -> &'static str {
         match self {
@@ -55,14 +67,18 @@ impl AiVaultMatchedField {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AiVaultHit {
     pub provider: String,
+    #[serde(default)]
     pub provider_display_name: String,
     pub session_id: String,
     pub source_kind: Option<String>,
+    #[serde(default)]
     pub safe_title: String,
     pub workspace_path: Option<String>,
     pub model: Option<String>,
     pub modified_at: Option<String>,
+    #[serde(default)]
     pub matched_field: AiVaultMatchedField,
+    #[serde(default)]
     pub stable_key: String,
     #[serde(default)]
     pub score: i32,
@@ -88,7 +104,7 @@ pub(crate) struct AiVaultResumeReceipt {
 
 pub(crate) fn root_ai_vault_query_is_eligible(
     query: &str,
-    options: RootAiVaultSectionOptions,
+    options: &RootAiVaultSectionOptions,
 ) -> bool {
     options.enabled && query.trim().chars().count() >= options.min_query_chars
 }
@@ -97,34 +113,38 @@ pub(crate) fn search_root_ai_vault_direct(
     query: &str,
     options: RootAiVaultSectionOptions,
 ) -> Vec<AiVaultHit> {
-    let mut hits = match load_fixture_hits() {
-        Ok(Some(hits)) => hits,
-        Ok(None) => search_cmux_vault(query, options.clone()).unwrap_or_else(|error| {
+    let (mut hits, fixture_backed) = match load_fixture_hits() {
+        Ok(Some(hits)) => (hits, true),
+        Ok(None) => {
+            let hits = search_cmux_vault(query, options.clone()).unwrap_or_else(|_error| {
+                tracing::warn!(
+                    target: "script_kit::ai_vault",
+                    event = "ai_vault_cmux_search_unavailable",
+                    error_kind = "other",
+                    "AI Vault search failed"
+                );
+                Vec::new()
+            });
+            (hits, false)
+        }
+        Err(_error) => {
             tracing::warn!(
                 target: "script_kit::ai_vault",
-                event = "ai_vault_cmux_search_failed",
-                error = %error,
-                "AI Vault search failed"
-            );
-            Vec::new()
-        }),
-        Err(error) => {
-            tracing::warn!(
-                target: "script_kit::ai_vault",
-                event = "ai_vault_fixture_failed",
-                error = %error,
+                event = "ai_vault_fixture_unavailable",
+                error_kind = "other",
                 "AI Vault fixture search failed"
             );
-            Vec::new()
+            (Vec::new(), true)
         }
     };
 
-    let query = query.trim().to_ascii_lowercase();
-    if !query.is_empty() {
-        hits.retain(|hit| hit_matches_query(hit, &query, options.search_content));
-    }
     for hit in &mut hits {
         normalize_hit(hit);
+    }
+
+    let normalized_query = query.trim().to_ascii_lowercase();
+    if fixture_backed && !normalized_query.is_empty() {
+        hits.retain(|hit| hit_matches_query(hit, &normalized_query, options.search_content));
     }
     hits.truncate(options.max_results);
     hits
@@ -159,7 +179,7 @@ pub(crate) fn resume_vault_session(
         .arg("resume")
         .arg("--json")
         .arg(request.to_string());
-    match command.output() {
+    match output_with_timeout(command, Duration::from_millis(5_000)) {
         Ok(output) if output.status.success() => {
             serde_json::from_slice::<AiVaultResumeReceipt>(&output.stdout)
                 .unwrap_or_else(|_| launched_receipt(hit, terminal_routing, "launched"))
@@ -170,15 +190,15 @@ pub(crate) fn resume_vault_session(
             session_id: hit.session_id.clone(),
             terminal_routing: terminal_routing_value(terminal_routing).to_string(),
             terminal_target_id: None,
-            error: Some(String::from_utf8_lossy(&output.stderr).trim().to_string()),
+            error: Some(cmux_failure_message("resume", output.status.code())),
         },
-        Err(error) => AiVaultResumeReceipt {
+        Err(_error) => AiVaultResumeReceipt {
             status: "error".to_string(),
             provider: hit.provider.clone(),
             session_id: hit.session_id.clone(),
             terminal_routing: terminal_routing_value(terminal_routing).to_string(),
             terminal_target_id: None,
-            error: Some(error.to_string()),
+            error: Some(cmux_failure_message("resume", None)),
         },
     }
 }
@@ -202,12 +222,12 @@ pub(crate) fn reveal_vault_session(hit: &AiVaultHit) -> AiVaultResumeReceipt {
         "sourceKind": hit.source_kind,
         "workspacePath": hit.workspace_path,
     });
-    let output = command
+    command
         .arg("ai-vault")
         .arg("reveal")
         .arg("--json")
-        .arg(request.to_string())
-        .output();
+        .arg(request.to_string());
+    let output = output_with_timeout(command, Duration::from_millis(5_000));
     match output {
         Ok(output) if output.status.success() => {
             serde_json::from_slice::<AiVaultResumeReceipt>(&output.stdout).unwrap_or_else(|_| {
@@ -220,27 +240,32 @@ pub(crate) fn reveal_vault_session(hit: &AiVaultHit) -> AiVaultResumeReceipt {
             session_id: hit.session_id.clone(),
             terminal_routing: "reveal".to_string(),
             terminal_target_id: None,
-            error: Some(String::from_utf8_lossy(&output.stderr).trim().to_string()),
+            error: Some(cmux_failure_message("reveal", output.status.code())),
         },
-        Err(error) => AiVaultResumeReceipt {
+        Err(_error) => AiVaultResumeReceipt {
             status: "error".to_string(),
             provider: hit.provider.clone(),
             session_id: hit.session_id.clone(),
             terminal_routing: "reveal".to_string(),
             terminal_target_id: None,
-            error: Some(error.to_string()),
+            error: Some(cmux_failure_message("reveal", None)),
         },
     }
 }
 
 fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
+    let cache_key = ai_vault_cache_key(query, &options);
+    if let Some(hits) = ai_vault_cache_get(&cache_key, options.cache_ttl_ms) {
+        return Ok(hits);
+    }
+
     let Some(mut command) = cmux_command() else {
         return Ok(Vec::new());
     };
     let providers = options
         .providers
         .iter()
-        .map(|provider| provider.cmux_id())
+        .map(crate::config::AiVaultProvider::cmux_id)
         .collect::<Vec<_>>();
     let request = serde_json::json!({
         "type": "aiVault.search.v1",
@@ -256,7 +281,11 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
         .arg("search")
         .arg("--json")
         .arg(request.to_string());
-    let output = command.output().context("run cmux ai-vault search")?;
+    let output = output_with_timeout(
+        command,
+        Duration::from_millis(options.cache_ttl_ms.min(5_000)),
+    )
+    .context("run cmux ai-vault search")?;
     if !output.status.success() {
         return Ok(Vec::new());
     }
@@ -265,9 +294,21 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
     struct SearchResponse {
         hits: Vec<AiVaultHit>,
     }
-    Ok(serde_json::from_slice::<SearchResponse>(&output.stdout)
-        .map(|response| response.hits)
-        .unwrap_or_default())
+    match serde_json::from_slice::<SearchResponse>(&output.stdout) {
+        Ok(response) => {
+            ai_vault_cache_put(cache_key, response.hits.clone());
+            Ok(response.hits)
+        }
+        Err(_error) => {
+            tracing::warn!(
+                target: "script_kit::ai_vault",
+                event = "ai_vault_cmux_response_parse_failed",
+                error_kind = "json",
+                "AI Vault cmux response parse failed"
+            );
+            Ok(Vec::new())
+        }
+    }
 }
 
 fn load_fixture_hits() -> Result<Option<Vec<AiVaultHit>>> {
@@ -338,6 +379,69 @@ fn cmux_command() -> Option<std::process::Command> {
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "cmux".to_string());
     Some(std::process::Command::new(binary))
+}
+
+fn output_with_timeout(
+    mut command: std::process::Command,
+    timeout: Duration,
+) -> std::io::Result<Output> {
+    let mut child = command.spawn()?;
+    let started = Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            return child.wait_with_output();
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "cmux ai-vault command timed out",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+fn cmux_failure_message(action: &str, code: Option<i32>) -> String {
+    match code {
+        Some(code) => format!("cmux {action} failed with status {code}"),
+        None => format!("cmux {action} failed"),
+    }
+}
+
+fn ai_vault_cache_key(query: &str, options: &RootAiVaultSectionOptions) -> String {
+    let providers = options
+        .providers
+        .iter()
+        .map(crate::config::AiVaultProvider::cmux_id)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        query.trim(),
+        options.max_results,
+        options.search_content,
+        providers
+    )
+}
+
+fn ai_vault_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>> {
+    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+fn ai_vault_cache_get(key: &str, ttl_ms: u64) -> Option<Vec<AiVaultHit>> {
+    let ttl = Duration::from_millis(ttl_ms);
+    let cache = ai_vault_cache().lock().ok()?;
+    let (created_at, hits) = cache.get(key)?;
+    (created_at.elapsed() <= ttl).then(|| hits.clone())
+}
+
+fn ai_vault_cache_put(key: String, hits: Vec<AiVaultHit>) {
+    if let Ok(mut cache) = ai_vault_cache().lock() {
+        cache.insert(key, (Instant::now(), hits));
+    }
 }
 
 fn terminal_routing_value(routing: AiVaultTerminalRouting) -> &'static str {

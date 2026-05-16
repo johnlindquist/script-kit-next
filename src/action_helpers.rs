@@ -64,6 +64,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
         )),
+        Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("AI Vault row has no filesystem path"),
+        )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Clipboard History row has no filesystem path"),
         )),
@@ -110,6 +113,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
+        )),
+        Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("AI Vault row has no filesystem path"),
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Clipboard History row has no filesystem path"),
@@ -167,6 +173,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open AI conversations in Quick Terminal"),
+        )),
+        Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Use the AI Vault resume action to open a terminal"),
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open clipboard history in Quick Terminal"),
@@ -246,6 +255,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit AI conversations"),
+        )),
+        Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit AI Vault rows"),
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit clipboard history"),

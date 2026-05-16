@@ -238,6 +238,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("MessageCircle".to_string())),
                 ),
+                SearchResult::AiVault(am) => (
+                    am.hit.safe_title.clone(),
+                    Some(am.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("Vault".to_string())),
+                ),
                 SearchResult::ClipboardHistory(cm) => (
                     cm.title.clone(),
                     Some(cm.subtitle.clone()),

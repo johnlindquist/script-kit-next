@@ -122,6 +122,7 @@ pub mod frontmost_app_tracker;
 pub mod action_helpers;
 
 // Built-in features registry
+pub mod ai_vault;
 pub mod app_launcher;
 pub mod browser_history;
 pub mod browser_tabs;

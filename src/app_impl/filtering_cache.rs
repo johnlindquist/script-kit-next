@@ -37,6 +37,7 @@ impl ScriptListApp {
         clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
         dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
         acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+        ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
         browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
         browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
     ) -> crate::RootPassiveFrame {
@@ -48,6 +49,7 @@ impl ScriptListApp {
             clipboard_history_options,
             dictation_history_options,
             acp_history_options,
+            ai_vault_options: ai_vault_options.clone(),
             browser_tabs_options: browser_tabs_options.clone(),
             browser_history_options: browser_history_options.clone(),
         };
@@ -78,6 +80,8 @@ impl ScriptListApp {
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Dictation);
         let allow_conversations =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Conversations);
+        let allow_ai_vault =
+            source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::AiVault);
         let allow_browser_tabs =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
         let allow_browser_history =
@@ -159,6 +163,15 @@ impl ScriptListApp {
             Vec::new()
         };
 
+        let ai_vault_hits = if !advanced_query_active
+            && allow_ai_vault
+            && crate::ai_vault::root_ai_vault_query_is_eligible(search_text, &ai_vault_options)
+        {
+            crate::ai_vault::search_root_ai_vault_direct(search_text, ai_vault_options)
+        } else {
+            Vec::new()
+        };
+
         let browser_tab_hits = if !advanced_query_active
             && allow_browser_tabs
             && crate::browser_tabs::root_browser_tabs_query_is_eligible(
@@ -209,6 +222,7 @@ impl ScriptListApp {
             clipboard_history_hits,
             dictation_history_hits,
             acp_history_hits,
+            ai_vault_hits,
             browser_tab_hits,
             browser_history_hits,
             browser_tabs_snapshot_generation: browser_tabs_status.generation,
@@ -626,6 +640,7 @@ impl ScriptListApp {
             let mut root_file_options = unified_search.root_file_section_options();
             let mut notes_options = unified_search.notes_section_options();
             let mut acp_history_options = unified_search.acp_history_section_options();
+            let mut ai_vault_options = unified_search.ai_vault_section_options();
             let mut clipboard_history_options =
                 self.config.root_clipboard_history_section_options();
             let mut dictation_history_options = unified_search.dictation_history_section_options();
@@ -682,6 +697,13 @@ impl ScriptListApp {
                     .max_results
                     .max(explicit_source_result_target);
             }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault) {
+                ai_vault_options.enabled = true;
+                ai_vault_options.min_query_chars = 0;
+                ai_vault_options.max_results = ai_vault_options
+                    .max_results
+                    .max(explicit_source_result_target);
+            }
             if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs) {
                 browser_tabs_options.enabled = true;
                 browser_tabs_options.min_query_chars = 0;
@@ -705,6 +727,7 @@ impl ScriptListApp {
                 clipboard_history_options,
                 dictation_history_options,
                 acp_history_options,
+                ai_vault_options.clone(),
                 browser_tabs_options.clone(),
                 browser_history_options.clone(),
             );
@@ -784,6 +807,8 @@ impl ScriptListApp {
                 dictation_history_options,
                 &root_passive_frame.acp_history_hits,
                 acp_history_options,
+                &root_passive_frame.ai_vault_hits,
+                ai_vault_options,
                 &root_passive_frame.browser_tab_hits,
                 browser_tabs_options,
                 &root_passive_frame.browser_history_hits,

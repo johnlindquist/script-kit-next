@@ -123,6 +123,12 @@ AI Vault is a source-filtered launcher route for cmux conversation session metad
 
 The launcher-visible `builtin/vault` entry and `triggerBuiltin` aliases `vault` / `ai-vault` resolve through [[src/builtins/trigger_registry.rs#TriggerBuiltin]] and execute through [[src/app_execute/builtin_execution.rs#ScriptListApp#open_ai_vault_source_filter]]. Running the command returns to `ScriptList` with the committed `vault: ` source head already applied, so users see the AI Vault source state and can continue typing a session query instead of hitting a silent no-op.
 
+`config.ts` exposes `unifiedSearch.aiVault` as an opt-in passive source backed by the metadata-only `[[src/ai_vault.rs#search_root_ai_vault_direct]]` bridge. Explicit `vault:` / `v:` source filters temporarily enable the source, lower its length floor to browse recent Vault metadata, and render `SearchResult::AiVault` rows with `Vault Conversation` type labels instead of the disabled status placeholder.
+
+The bridge tolerates sparse cmux metadata responses, normalizes missing display fields locally, bounds cmux subprocess work with `[[src/ai_vault.rs#output_with_timeout]]`, and honors the configured cache TTL through the in-process `[[src/ai_vault.rs#ai_vault_cache_get]]` cache. Script Kit trusts cmux-filtered search hits while keeping fixture filtering deterministic, so transcript-backed cmux matches can still surface as metadata-only rows without leaking transcript text.
+
+Selecting a Vault row resumes through `[[src/ai_vault.rs#resume_vault_session]]`, which sends a narrow `aiVault.resume.v1` JSON request to cmux with provider, session id, source kind, workspace path, and terminal routing. Script Kit never builds provider resume commands or asks for transcript content; cmux owns provider lookup, command construction, and preferred-terminal routing. Failed cmux calls surface controlled status text rather than raw stderr.
+
 ## Root Unified Search Files
 
 Root file rows are a passive launcher source, so async file search cannot displace primary command intent.

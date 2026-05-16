@@ -64,6 +64,7 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
         crate::scripts::SearchResult::File(_) => MainWindowPreflightResultRole::RootFile,
         crate::scripts::SearchResult::Note(_)
         | crate::scripts::SearchResult::AcpHistory(_)
+        | crate::scripts::SearchResult::AiVault(_)
         | crate::scripts::SearchResult::ClipboardHistory(_)
         | crate::scripts::SearchResult::DictationHistory(_)
         | crate::scripts::SearchResult::BrowserTab(_)
@@ -86,6 +87,9 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
         crate::scripts::SearchResult::Note(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AcpHistory(_) => MainWindowPreflightActionKind::RunCommand,
+        crate::scripts::SearchResult::AiVault(_) => {
+            MainWindowPreflightActionKind::ResumeVaultConversation
+        }
         crate::scripts::SearchResult::ClipboardHistory(_) => {
             MainWindowPreflightActionKind::RunCommand
         }
@@ -184,6 +188,13 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
         acp_history: RootPassiveSourceReceipt {
             enabled: frame.key.acp_history_options.enabled,
             frame_count: frame.acp_history_hits.len(),
+            cache_generation: 0,
+            frame_generation: 0,
+            refreshing: false,
+        },
+        ai_vault: RootPassiveSourceReceipt {
+            enabled: frame.key.ai_vault_options.enabled,
+            frame_count: frame.ai_vault_hits.len(),
             cache_generation: 0,
             frame_generation: 0,
             refreshing: false,

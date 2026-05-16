@@ -1304,6 +1304,7 @@ export interface Config extends BaseConfig {
    *   files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" },
    *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
    *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
+   *   aiVault: { enabled: false, maxResults: 3, minQueryChars: 3, providers: ["hermesAgent", "rovoDev"], cacheTtlMs: 30000, searchContent: false },
    *   clipboardHistory: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
  *   dictationHistory: { enabled: false, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
    *   browserHistory: { enabled: false, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
@@ -1514,6 +1515,8 @@ export interface UnifiedSearchConfig {
   notes?: UnifiedSearchNotesConfig;
   /** Controls for passive root AI conversation rows backed by saved ACP history. */
   acpHistory?: UnifiedSearchAcpHistoryConfig;
+  /** Controls for passive root AI Vault rows backed by cmux session metadata. */
+  aiVault?: UnifiedSearchAiVaultConfig;
   /** Controls for opt-in passive root clipboard history rows. */
   clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
   /** Controls for opt-in passive root dictation transcript rows. */
@@ -1530,6 +1533,7 @@ export type UnifiedSearchPassiveSource =
   | "clipboardHistory"
   | "dictationHistory"
   | "acpHistory"
+  | "aiVault"
   | "browserHistory";
 
 export interface UnifiedSearchPassiveResultLimitsConfig {
@@ -1566,6 +1570,23 @@ export interface UnifiedSearchAcpHistoryConfig {
   maxResults?: number;
   /** Minimum query length before AI conversation rows appear. Clamped to 2-32. */
   minQueryChars?: number;
+}
+
+export type AiVaultProvider = "hermesAgent" | "rovoDev";
+
+export interface UnifiedSearchAiVaultConfig {
+  /** Enable cmux AI Vault rows in root launcher search. Disabled by default. */
+  enabled?: boolean;
+  /** Maximum number of AI Vault rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before AI Vault rows appear. Clamped to 3-32. */
+  minQueryChars?: number;
+  /** cmux Vault providers to ask for metadata-only session hits. */
+  providers?: AiVaultProvider[];
+  /** Milliseconds to reuse the cmux Vault metadata snapshot. Clamped to 5000-120000. */
+  cacheTtlMs?: number;
+  /** Allow provider-owned content matching while still rendering metadata-only rows. */
+  searchContent?: boolean;
 }
 
 export interface UnifiedSearchNotesConfig {
