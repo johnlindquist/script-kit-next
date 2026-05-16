@@ -19,7 +19,7 @@
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 const DESIGN_GALLERY: &str = include_str!("../src/render_builtins/design_gallery.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn collect_visible_elements_has_design_gallery_view_arm() {
     assert!(
@@ -34,7 +34,7 @@ fn collect_visible_elements_has_design_gallery_view_arm() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_arm_calls_collect_named_rows_with_design_gallery_list_name() {
     assert!(
@@ -53,7 +53,7 @@ fn design_gallery_arm_calls_collect_named_rows_with_design_gallery_list_name() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_arm_uses_shared_helpers_not_raw_contains() {
     // DesignGalleryView's filter predicate is `gallery_item_matches`
@@ -102,7 +102,7 @@ fn design_gallery_arm_uses_shared_helpers_not_raw_contains() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_item_label_helper_exists_with_all_variants() {
     // Contract on the shared helper itself — if a future edit removes

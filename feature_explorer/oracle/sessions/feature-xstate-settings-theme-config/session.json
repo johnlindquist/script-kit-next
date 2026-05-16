@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-settings-theme-config",
-  "createdAt": "2026-05-15T18:58:55.841Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-settings-theme-config-preferences]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a comple",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T18:58:55.842Z",
-      "completedAt": "2026-05-15T19:07:55.738Z",
-      "usage": {
-        "inputTokens": 176440,
-        "outputTokens": 10484,
-        "reasoningTokens": 0,
-        "totalTokens": 186924
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-settings-theme-config-preferences]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. The attached packx bundle includes repo process context, the theme-config-preferences and lat-md skills, relevant lat.md pages including feature-explorer, verification, theme, builtins, workspace, and protocol, the maintained Feature 035 chapter/raw Oracle, current authored-machine patterns/registry excerpt, and focused source/tests for Settings Hub, Theme Chooser, config/preferences, theme storage, and config fingerprint proof.\n\nGoal: audit and improve the authored XState representation to add for Feature 035 in feature_explorer/src/state/authoredFeatureMachines.ts. Feature 035 is Settings, Theme, Config, and Preferences. Preserve these layers:\n- Settings Hub is a filterable mini built-in list with SettingsView, settings native footer, visible-row helper parity across render/getState/getElements, conditional snap/window reset rows, and BuiltInEntry execution for operational rows.\n- Theme Chooser is a dedicated ThemeChooserView with theme_chooser native footer, dedicated actions catalog, handled key/click stop-propagation, explicit dismiss policy, Enter ownership, live preview, customization controls, and persisted apply/undo flows.\n- Config/theme storage is deliberately split: config.ts operational prefs and theme.presetId; theme.json active color/font/vibrancy payload; themes/<slug>.json saved user themes.\n- Config/schema boundaries: TypeScript SDK/CLI shapes must align with Rust loader/types/defaults; do not claim runtime behavior for fields with only schema/getter proof.\n- getConfigFingerprint is read-only metadata proof, not config-content disclosure.\n- Known risks: footer double-rendering, settings render/state row drift, Theme Chooser input leakage, config Rust/TS drift, stale config cache/fingerprint behavior, contrast/opacity regressions, preset id vs payload confusion, uiScale runtime overclaim.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for Feature 035 and registry keys \"035\" and \"035-settings-theme-config-preferences\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between maintained Feature 035/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if useful.\n5. Verification checklist: feature_explorer build, lat check, Settings/Theme/config/fingerprint focused tests, cargo check/fmt, config CLI caveats, and when runtime/visual proof is actually needed.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer downloadable files. The local agent will write files and run verification locally.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-settings-theme-config-preferences.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-settings-theme-config",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T18:58:55.842Z",
-  "completedAt": "2026-05-15T19:07:55.740Z",
-  "usage": {
-    "inputTokens": 176440,
-    "outputTokens": 10484,
-    "reasoningTokens": 0,
-    "totalTokens": 186924
   },
-  "elapsedMs": 537399
 }

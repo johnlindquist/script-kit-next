@@ -46,7 +46,7 @@ pub trait Story: Send + Sync {
     }
 }
 
-// @lat: [[storybook#Catalog Roles]]
+// doc-anchor-removed: [[storybook#Catalog Roles]]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum StoryCatalogRole {
     CanonicalState,

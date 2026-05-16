@@ -57,7 +57,7 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn rekey_helper_reads_post_dispatch_view_and_updates_registry() {
     let body = body_of(
@@ -80,7 +80,7 @@ fn rekey_helper_reads_post_dispatch_view_and_updates_registry() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn every_dispatcher_calls_named_rekey_after_trigger_dispatch() {
     for (src, path) in DISPATCHERS {

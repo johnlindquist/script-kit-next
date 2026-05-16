@@ -60,7 +60,7 @@ fn body_of<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("missing function body close: {signature}");
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn triggerbuiltin_dispatchers_route_design_gallery_to_appview() {
     for (name, source) in [
@@ -111,7 +111,7 @@ fn triggerbuiltin_dispatchers_route_design_gallery_to_appview() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn triggerbuiltin_dispatchers_include_design_gallery_aliases() {
     // The dispatcher intentionally accepts three aliases so operator
@@ -140,7 +140,7 @@ fn triggerbuiltin_dispatchers_include_design_gallery_aliases() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn design_gallery_appview_variant_maps_to_semantic_surface() {
     // Pass #19's re-key path looks up `semantic_surface_for_main_view`

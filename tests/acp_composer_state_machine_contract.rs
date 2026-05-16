@@ -10,7 +10,7 @@ fn function_body_after(source: &str, signature: &str, next_marker: &str) -> Stri
         .to_string()
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn acp_composer_picker_has_explicit_transition_owner() {
     assert!(COMPOSER_STATE.contains("enum AcpComposerPickerState"));
@@ -19,7 +19,7 @@ fn acp_composer_picker_has_explicit_transition_owner() {
     assert!(COMPOSER_STATE.contains("struct AcpComposerPickerRefreshInput"));
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn refresh_mention_session_delegates_to_state_machine() {
     let refresh = function_body_after(
@@ -40,7 +40,7 @@ fn refresh_mention_session_delegates_to_state_machine() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn key_handler_routes_picker_navigation_and_dismissal_through_state_machine() {
     let handle_key_down = function_body_after(ACP_VIEW, "fn handle_key_down", "impl Focusable");
@@ -63,7 +63,7 @@ fn key_handler_routes_picker_navigation_and_dismissal_through_state_machine() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn accept_handler_uses_state_machine_for_close_and_inert_keep_open() {
     let accept = function_body_after(

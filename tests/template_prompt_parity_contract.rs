@@ -29,7 +29,7 @@ fn force_submit_branch<'a>(source: &'a str, marker: &str) -> &'a str {
 
 #[test]
 fn template_prompt_has_explicit_simulate_key_arm_in_live_and_mirror_dispatchers() {
-    // @lat: [[protocol#Query and introspection#TemplatePrompt automation receipts]]
+    // doc-anchor-removed: [[protocol#Query and introspection#TemplatePrompt automation receipts]]
     for source in [
         APP_RUN_SETUP,
         RUNTIME_STDIN,

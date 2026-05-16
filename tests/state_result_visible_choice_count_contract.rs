@@ -28,7 +28,7 @@ const QUERY_OPS_VARIANTS: &str = include_str!("../src/protocol/message/variants/
 const QUERY_OPS_CONSTRUCTORS: &str =
     include_str!("../src/protocol/message/constructors/query_ops.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_variant_declares_choice_count_and_visible_choice_count() {
     // Both fields must exist side-by-side in the enum variant with
@@ -57,7 +57,7 @@ fn state_result_variant_declares_choice_count_and_visible_choice_count() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_renames_both_count_fields_to_camel_case_json() {
     // Automation clients consume the stateResult JSON — the Rust
@@ -82,7 +82,7 @@ fn state_result_renames_both_count_fields_to_camel_case_json() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_constructor_accepts_both_counts_as_distinct_args() {
     // `Message::state_result(...)` is the single choke-point where

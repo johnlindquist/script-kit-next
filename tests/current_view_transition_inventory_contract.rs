@@ -134,7 +134,7 @@ fn expected_transition_contract(helper: &str) -> serde_json::Value {
     }
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Agent-Readable Current-View Transition Inventory]]
+// doc-anchor-removed: [[removed-docs Current-View Transition Inventory]]
 #[test]
 fn generated_current_view_transition_inventory_is_not_stale() {
     let output = Command::new("bun")

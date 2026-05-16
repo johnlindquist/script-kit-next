@@ -9,7 +9,7 @@ fn function_body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_idx]
 }
 
-// @lat: [[tests/acp-portal-contract#Host transitions#Notes history host refusal clears staged session]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Host transitions#Notes history host refusal clears staged session]]
 #[test]
 fn notes_history_portal_failure_and_refusal_clear_staged_session() {
     let body = function_body(
@@ -25,7 +25,7 @@ fn notes_history_portal_failure_and_refusal_clear_staged_session() {
     assert!(body.contains("view.cancel_pending_portal_session(PortalKind::ClipboardHistory, cx)"));
 }
 
-// @lat: [[tests/acp-portal-contract#Host query seeding#Notes history popup uses originating view]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Host query seeding#Notes history popup uses originating view]]
 #[test]
 fn notes_portal_callback_uses_originating_view() {
     assert!(NOTES_ACP_HOST_SOURCE.contains("let portal_view = view.downgrade();"));

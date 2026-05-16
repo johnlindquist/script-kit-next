@@ -21,7 +21,7 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_declares_surface_contract_snapshot_field() {
     assert!(
@@ -52,7 +52,7 @@ fn state_result_declares_surface_contract_snapshot_field() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Surface Contract Registry]]
+// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn surface_contract_snapshot_schema_contains_contract_matrix_fields() {
     for field in [
@@ -76,7 +76,7 @@ fn surface_contract_snapshot_schema_contains_contract_matrix_fields() {
     }
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Surface Contract Registry]]
+// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn prompt_handler_builds_snapshot_from_active_app_view_contract() {
     let snapshot = source_between(
@@ -102,7 +102,7 @@ fn prompt_handler_builds_snapshot_from_active_app_view_contract() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Surface Contract Registry]]
+// doc-anchor-removed: [[removed-docs Contract Registry]]
 #[test]
 fn prompt_handler_exposes_actions_popup_overlay_contract() {
     assert!(
@@ -117,12 +117,12 @@ fn prompt_handler_exposes_actions_popup_overlay_contract() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
     let get_state = source_between(
         PROMPT_HANDLER_SOURCE,
-        "PromptMessage::GetState { request_id, target } =>",
+        "PromptMessage::GetState {",
         "// Collect current UI state",
     );
     assert!(
@@ -139,7 +139,7 @@ fn main_get_state_includes_surface_contract_but_target_diagnostics_do_not() {
     );
 }
 
-// @lat: [[lat.md/scripting#Scripting]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn kit_sdk_prompt_state_exposes_surface_contract_snapshot() {
     assert!(

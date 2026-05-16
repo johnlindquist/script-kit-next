@@ -4,7 +4,6 @@ This chapter maps the dedicated built-in list surfaces that share filterable row
 
 ## Executive Summary
 
-Built-in filterable surfaces are app-owned command views such as Clipboard History, App Launcher, Window Switcher, Browser Tabs, Emoji Picker, and Process Manager. They are opened by canonical `triggerBuiltin` routes and use a shared contract: the renderer, keyboard handlers, wheel handlers, state receipts, element receipts, and action execution must all resolve through the same visible-row projection.
 
 This feature owns the dedicated list views, trigger registry/planner/dispatcher entry, route-local filters and selection, surface contracts, list semantic ids, built-in footer/focus/scroll behavior, and surface-specific activation such as paste, launch, focus window, activate tab, insert emoji, or stop process.
 
@@ -31,17 +30,14 @@ It does not own root passive unified-search sources, File Search portals, ACP/No
 | Dataset count | Full backing collection size. | Reported as `choiceCount`. |
 | Visible count | Filtered row count. | Reported as `visibleChoiceCount` and must not exceed `choiceCount`. |
 | Surface contract | Automation metadata for the active view. | `getState.surfaceContract` and `automationSemanticSurface` distinguish dedicated surfaces from generic `scriptList`. |
-| List semantic id | Stable id for the main row list. | `getElements` uses ids such as `list:clipboard-history`, `list:apps`, `list:browser-tabs`, `list:emoji-results`, and `list:processes`. |
 | Actions host | Host-specific context for Cmd+K action popup. | Dedicated view owns the subject; Actions Dialog owns popup presentation and search. |
 
 ## Entry Points
 
 | Entry | Aliases | User result | Notes |
 |---|---|---|---|
-| Clipboard History | `clipboard-history`, `clipboard`, `clipboardhistory`. | Opens full preview-dense clipboard browser. | Root `clipboard:` / `c:` source is separate and metadata-only. |
 | App Launcher | `apps`, `app-launcher`, `applauncher`. | Opens mini app launcher list. | Internal route can exist without launcher catalog entry. |
 | Window Switcher | `window-switcher`, `windowswitcher`, `windows`. | Opens mini window switcher list. | Seeds `cached_windows` through window listing. |
-| Browser Tabs | `browser-tabs`, `browsertabs`, `tabs`. | Opens mini browser tab picker. | Root `tabs:` / `t:` source is separate and passive. |
 | Emoji Picker | `emoji`, `emoji-picker`, `emojipicker`. | Opens emoji grid/search view. | Frequent snapshot is frozen when opened. |
 | Process Manager | `process-manager`, `processmanager`, `processes`. | Opens active process manager list. | Periodic refresh only while active. |
 
@@ -53,8 +49,6 @@ It does not own root passive unified-search sources, File Search portals, ACP/No
 | Filter input | Typing writes the variant-owned filter, recomputes visible rows, and clamps selection. | `getState.inputValue`, `visibleChoiceCount`. |
 | Row projection | All render, state, element, navigation, scroll, and action paths use the visible-row helper. | `getElements` list count matches visible rows. |
 | Selection | Arrow, wheel, and row clicks move selected visible rows. | `selectedIndex`, `focusedSemanticId`, selected element value/id. |
-| Scroll | Wheel uses selected-row ownership and `ScrollStrategy::Nearest`; render-time reanchor must not fight live selection. | Source audits and matrix tests. |
-| Escape | Clears non-empty filter first, otherwise returns to launcher or hides according to origin. | Input clears, surface rekeys, or `windowVisible:false`. |
 | Actions | Cmd+K opens only when a valid host exists or the renderer explicitly routes it. | `activePopupContract` with host and action ids. |
 | Sizing | Mini list for compact list surfaces; expanded/full only when preview is required. | `surfaceContract.visualPolicy`, chrome audits. |
 
@@ -87,8 +81,6 @@ Clipboard History is an expanded preview browser because the user often needs to
 | Link/file/color row selected | Visible metadata entry. | Preview resolves full content where available, falls back to text preview. | Paste/copy, Quick Look, reveal/open/share where actions expose them. |
 | Image row selected | Visible image entry. | Image cache/icon, dimensions, preview image where cached. | Paste/copy, Quick Look temp preview. |
 | Full payload unavailable | `get_entry_content(id)` returns none. | Preview warns it is showing cached preview only. | Continue browse/action safely. |
-| Attachment portal | ACP portal flag active. | Footer/actions switch from ordinary paste to context attachment. | Attach selected entry as `kit://clipboard-history?id=...`. |
-| Root passive source | `clipboard:` / `c:` in launcher. | Metadata-only rows, capped, no raw content read. | Enter loads/copies/pastes existing entry through root action path. |
 
 Clipboard action states include paste selected, attach to AI, pin/unpin, Quick Look, Open With, Reveal in Finder, copy, share, delete, clear, and paste sequentially. The raw Oracle pass flagged the exact action id/shortcut catalog as a next-pass source expansion.
 
@@ -130,7 +122,6 @@ Browser Tabs is a compact picker over currently open Safari and Chromium-family 
 | No tabs | Empty tab cache. | Empty message `No open browser tabs`. | Open browser tabs or Escape. |
 | Filter miss | Filter has no fuzzy match. | Empty message `No browser tabs match your filter`. | Clear filter. |
 | Fuzzy filtered | Non-empty filter. | `fuzzy_search_browser_tabs`, rows from `display_title()`. | Enter activates selected tab. |
-| Root passive source | `tabs:` / `t:` in launcher. | Metadata-only cached rows, disabled by default. | Selecting row switches existing tab. |
 | Preload failure | Provider unavailable or script failure. | Route fails closed instead of stale rows. | Stay prior view or error path. |
 
 Root Browser Tabs must not read page content, favicons, cookies, downloads, or network data. Dedicated Browser Tabs also activates existing tabs rather than opening duplicate URLs.
@@ -149,7 +140,6 @@ Emoji Picker is a grid-oriented mini utility surface with category/frequency beh
 | Frequent use | Commit path records use. | Frequent order changes on next open. | Reopen sees updated frequent row. |
 | Cmd+K | Emoji host available. | Actions Dialog opens with `EmojiPicker` host. | Execute host-specific action or close. |
 
-Emoji count asymmetry is intentional: `choiceCount` is all emoji, while `visibleChoiceCount` is search/category narrowed. Tests should fail if these slots are swapped.
 
 ### Process Manager
 
@@ -171,7 +161,6 @@ Exact row actions, Stop All shortcuts/placement, copy-details, cleanup, confirma
 | Surface | Action | Trigger | Outcome |
 |---|---|---|---|
 | Clipboard History | Paste selected. | Enter or selected click/double-click. | Copy selected entry, hide/reset, delayed paste. |
-| Clipboard History | Attach to AI. | Cmd+Enter, Ctrl+Cmd+A, or action row. | Adds a `kit://clipboard-history?id=...` context part. |
 | Clipboard History | Pin/unpin. | Cmd+P or action row. | Toggle pinned state and update ordering/persistence. |
 | Clipboard History | Quick Look. | Cmd+Y or action row. | Native Quick Look or HUD/toast on failure. |
 | Clipboard History | Open/reveal/copy/share/delete/clear. | Actions row. | File/clipboard/history side effect. Exact ids need source pass. |
@@ -191,7 +180,6 @@ Exact row actions, Stop All shortcuts/placement, copy-details, cleanup, confirma
 | Surface | Chrome | State/elements expectations |
 |---|---|---|
 | Shared mini surfaces | Minimal list shell and native footer. | Stable `surfaceContract`, filter input id, list semantic id, selected row. |
-| Clipboard History | Expanded scaffold with preview pane. | `PromptChromeAudit::expanded("clipboard_history")`, preview content/fallback message, full vs visible counts. |
 | App Launcher | Minimal list. | No dead Cmd+K action hint, app visible-row helper used by state/elements. |
 | Window Switcher | Minimal list. | Filter on display string, trigger route seeds window cache. |
 | Browser Tabs | Compact single-column shell. | `browser-tabs-filter`, `browser-tabs` list, fuzzy order mirrored in elements. |
@@ -203,10 +191,8 @@ Fallback collector warnings such as `collector_used_current_view_fallback` are f
 
 ## Root Source Boundaries
 
-Dedicated built-in views must not be collapsed with root passive sources:
 
 - Dedicated Clipboard History can inspect full clipboard entries, preview content, paste, pin, Quick Look, and attach.
-- Root Clipboard History is capped, metadata-only, excludes raw content, and appears only through root source configuration or `clipboard:` / `c:`.
 - Dedicated Browser Tabs opens a compact browser-tab picker and activates existing tabs.
 - Root Browser Tabs is disabled by default, metadata-only, cache-backed, and selected rows switch existing tabs through the root activation path.
 - Root action palettes for files, passive rows, windows, apps, scripts, and skills are owned by MainList root result actions, not by these dedicated built-in renderers.
@@ -250,20 +236,18 @@ Dedicated built-in views must not be collapsed with root passive sources:
 | Browser tabs | `src/browser_tabs.rs` |
 | Emoji data/frecency | `src/emoji/mod.rs` |
 | Process manager | `src/process_manager/mod.rs` |
-| Surface contracts | `lat.md/builtins.md`, `lat.md/surfaces.md`, `lat.md/automation.md` |
+| Surface contracts | `removed-docs`, `removed-docs`, `removed-docs` |
 
 ## Verification Recipes
 
 ### Filterable Matrix
 
-Run:
 
 ```bash
 cargo test filterable_surface_agentic_matrix_contract
 cargo test filterable_subviews_getelements_filter_aware_contract
 ```
 
-Check:
 
 - Each supported surface opens through real `triggerBuiltin`.
 - `surfaceContract` and `automationSemanticSurface` match the active view.
@@ -272,14 +256,12 @@ Check:
 
 ### Clipboard History
 
-Run:
 
 ```bash
 cargo test clipboard_history_getelements_filter_aware_contract
 cargo test clipboard_history_state_filter_receipt_contract
 ```
 
-Check:
 
 - Filtered state/elements share the same visible-row projection.
 - Empty dataset and filter miss remain distinguishable.
@@ -287,7 +269,6 @@ Check:
 
 ### App Launcher / Window Switcher / Browser Tabs
 
-Run:
 
 ```bash
 cargo test app_launcher_visible_rows_contract
@@ -295,7 +276,6 @@ cargo test window_switcher_triggerbuiltin_contract
 cargo test collect_elements_browser_tabs_arm_contract
 ```
 
-Check:
 
 - App Launcher state/elements use app visible-row helpers.
 - Window Switcher trigger route seeds `WindowSwitcherView` through the registry.
@@ -303,7 +283,6 @@ Check:
 
 ### Emoji Picker
 
-Run:
 
 ```bash
 cargo test emoji_picker_arrow_up_down_contract
@@ -311,7 +290,6 @@ cargo test emoji_picker_state_choice_count_asymmetry_contract
 cargo test emoji_picker
 ```
 
-Check:
 
 - Up/Down are intercepted by grid navigation.
 - `choiceCount` remains full emoji dataset while `visibleChoiceCount` is narrowed.
@@ -319,14 +297,12 @@ Check:
 
 ### Process Manager
 
-Run:
 
 ```bash
 cargo test trigger_builtin_process_manager_contract
 cargo test process_manager_visible_rows_contract
 ```
 
-Check:
 
 - Process Manager trigger route resolves through canonical built-in ids.
 - Renderer, state, elements, stop actions, and refresh all use visible-row helpers.
@@ -360,7 +336,6 @@ Check:
 
 - Full `src/app_impl/trigger_builtin_dispatch.rs`, `src/app_impl/routes.rs`, `src/main_sections/app_view_state.rs`, `src/app_layout/collect_elements.rs`, and `src/prompt_handler/mod.rs` bodies should be expanded before calling route/state/elements mapping complete.
 - Clipboard Actions Dialog full catalog/action ids/shortcuts for Open With, Reveal in Finder, Copy, Share, Delete, Clear, Attach, Pin/Unpin need a source pass.
-- Emoji Picker action catalog beyond paste behavior needs the `ActionsDialogHost::EmojiPicker` owner mapped.
 - Process Manager exact row actions, Enter semantics, Stop All placement/shortcut, copy-details, cleanup, confirmation, and error states need full renderer/action context.
 - App Launcher scan/cache/icon details need a full source pass across scanning, launch, core types, and renderer rows.
 - Window Switcher tile/manage/focus action catalog and permission/error UI need full window-control and action-host context.

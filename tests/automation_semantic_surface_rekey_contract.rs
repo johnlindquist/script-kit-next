@@ -54,7 +54,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &after_start[..end_index]
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn registry_exposes_in_place_semantic_surface_update() {
     assert!(
@@ -86,7 +86,7 @@ fn registry_exposes_in_place_semantic_surface_update() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn registry_api_is_re_exported_from_windows_module() {
     assert!(
@@ -100,7 +100,7 @@ fn registry_api_is_re_exported_from_windows_module() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn app_view_defines_semantic_surface_mapping() {
     assert!(
@@ -170,7 +170,7 @@ fn app_view_defines_semantic_surface_mapping() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn trigger_builtin_dispatchers_call_rekey_after_inner_match() {
     let snippet = "view\n                                    .rekey_main_automation_surface_after_trigger_builtin_dispatch();";

@@ -1,19 +1,14 @@
 # 025 System Feedback and Prompt Control APIs
 
-This chapter maps SDK utility APIs that either show lightweight user feedback or mutate an already-running prompt: `beep()`, `say()`, `notify()`, `hud()`, `setStatus()`, `menu()`, `setActions()`, and `setInput()`.
 
-Raw Oracle reference: [answer](../raw-oracle/025-system-feedback-and-prompt-control/answer.md), [prompt](../raw-oracle/025-system-feedback-and-prompt-control/prompt.md), [bundle map](../raw-oracle/025-system-feedback-and-prompt-control/bundle-map.md), [full log](../raw-oracle/025-system-feedback-and-prompt-control/output.log), [session metadata](../raw-oracle/025-system-feedback-and-prompt-control/session.json).
 
 ## Executive Summary
 
-Feature 025 splits into two truth classes:
 
 | Class | APIs | Current truth |
 |---|---|---|
-| Implemented app behavior | `hud()`, `setActions()`, `setInput()`, `beep()`, `say()`, `notify()` | These have Rust-side behavior: HUD overlays, SDK action/shortcut updates, prompt/input mutation, and platform feedback dispatch. |
 | Explicit unsupported surfaces | `setStatus()`, `menu()` | The SDK returns typed unsupported results before sending because there is no visible GPUI status surface, tray/menu mutation handler, or receipt contract. |
 
-Operationally: use `hud()` for visible in-launcher feedback, `notify()` for OS notifications, `beep()`/`say()` for receipt-backed platform dispatch requests, `setActions()` for prompt-level actions and shortcuts, and `setInput()` or automation `batch.setInput` for prompt mutation. Do not promise visible status chrome or tray/menu mutation from `setStatus()` or `menu()` until backend behavior is added and verified.
 
 ## What Users Can Do
 
@@ -38,7 +33,6 @@ Automation should not infer success from the SDK call returning. Verify with `ge
 
 ### Protocol Message Families
 
-The relevant protocol messages include:
 
 - `hud`
 - `setInput`
@@ -55,16 +49,10 @@ Typed protocol support means the message can be serialized. It does not prove th
 
 ### Runtime Prompt Messages
 
-Captured Rust prompt-handler-facing variants:
 
 ```rust
-PromptMessage::SetInput { text }
-PromptMessage::ShowHud { text, duration_ms }
-PromptMessage::SetStatus { status, message }
-PromptMessage::SetActions { actions }
 ```
 
-Observed backend behavior:
 
 | Prompt message | Runtime behavior |
 |---|---|
@@ -77,7 +65,6 @@ Observed backend behavior:
 
 The SDK keeps action handler functions in process memory using `globalThis.__kitActionsMap`. Since functions cannot cross the protocol boundary, `setActions()` serializes only metadata and a `hasAction` boolean.
 
-When `actionTriggered` arrives, the SDK looks up the action by name:
 
 - If `onAction` exists, it calls the JS handler.
 - If only `value` exists, it sends `forceSubmit` with the value.
@@ -88,54 +75,35 @@ Action names should be unique in practice because the map is keyed by name.
 
 | Entry | SDK payload | Backend truth | Return/receipt |
 |---|---|---|---|
-| `beep()` | `{ type: "beep", requestId }` | Rust dispatches macOS `afplay /System/Library/Sounds/Tink.aiff`; unsupported platforms return typed unsupported. | `systemFeedbackResult`; delivery not verified. |
-| `say(text, voice?)` | `{ type: "say", requestId, text, voice }` | Rust dispatches macOS `say [-v voice] <text>` for non-empty text; unsupported platforms return typed unsupported. | `systemFeedbackResult`; delivery not verified. |
-| `notify(string)` | `{ type: "notify", requestId, body }` | Rust normalizes title/body and dispatches `notify-rust` on a dedicated thread. | `systemFeedbackResult`; delivery not verified. |
-| `notify({ title, body })` | `{ type: "notify", requestId, title, body }` | Rust normalizes title/body and dispatches `notify-rust`; empty payloads return typed invalid. | `systemFeedbackResult`; delivery not verified. |
-| `hud(message, options?)` | `{ type: "hud", text, duration_ms }` | Implemented HUD overlay. | Fire-and-forget; verify visually/source. |
 | `setStatus(options)` | None. | SDK returns unsupported before `send(...)`; no visible status surface exists. | `SystemFeedbackResult` with `ERR_UNSUPPORTED_SDK_FEATURE`. |
 | `menu(icon, scripts?)` | None. | SDK returns unsupported before `send(...)`; no tray/menu mutation handler exists. | `SystemFeedbackResult` with `ERR_UNSUPPORTED_SDK_FEATURE`. |
-| `setActions(actions)` | `{ type: "setActions", actions }` | Implemented for action state, shortcuts, and open dialog refresh. | Fire-and-forget; later `actionTriggered`. |
-| `setInput(text)` | `{ type: "setInput", text }` | Implemented for supported active views; batch has target-specific receipts. | Direct call no receipt; batch returns result. |
 
 ## User Workflows
 
 ### Show HUD Feedback
 
-A script calls:
 
 ```ts
-hud("Saved", { duration: 2000 })
 ```
 
-The SDK sends a `hud` message. The prompt handler receives `PromptMessage::ShowHud`, clears a pending script-hide restore intent if present, and calls `show_hud`. The HUD manager allocates a slot, creates a standalone overlay window, schedules dismissal, and queues overflow HUDs when slots are full.
 
 HUD is feedback UI, not prompt UI. It must not reveal the launcher, request main-window show, or use prompt window preparation.
 
 ### Add Runtime Actions
 
-A script calls:
 
 ```ts
 await setActions([
   {
-    name: "Copy",
-    description: "Copy current value",
-    shortcut: "cmd+c",
-    onAction: async (input, state) => {
       await copy(input)
       hud("Copied")
     },
   },
   {
-    name: "Submit",
-    shortcut: "cmd+enter",
-    value: "submitted",
   },
 ])
 ```
 
-The SDK clears `__kitActionsMap`, stores handlers by name, serializes metadata, and sends `setActions`. Rust receives `PromptMessage::SetActions`, calls `set_sdk_actions_and_shortcuts`, recalculates visible shortcuts, and updates an open actions dialog if present.
 
 ### Trigger Handler Action
 
@@ -149,7 +117,6 @@ If an action has `value` and no handler, the SDK sends `forceSubmit` with the ac
 
 ### Set Active Prompt Input
 
-A script calls:
 
 ```ts
 setInput("abc")
@@ -181,10 +148,9 @@ Scripts can call `setStatus()` or `menu()`, but both helpers return a typed unsu
 | Refresh open actions dialog. | `setActions` while dialog open. | ActionsDialog. | SDK call. | `d.set_sdk_actions(actions)`. | Open dialog sees new SDK actions. | `src/prompt_handler/mod.rs`. |
 | Trigger handler. | Action shortcut/dialog. | Current prompt. | Shortcut/Enter. | `actionTriggered` -> SDK map. | `onAction` runs. | `tests/smoke/test-sdk-actions.ts`. |
 | Trigger submit value. | Action with value. | Current prompt. | Shortcut/dialog. | SDK sends `forceSubmit`. | Prompt submits action value. | SDK handler and protocol variants. |
-| Set prompt input. | `setInput("abc")`. | Active supported prompt. | SDK call. | `PromptMessage::SetInput` -> `set_prompt_input`. | Input changes if view supports it. | `src/prompt_handler/mod.rs`. |
 | Set main input with receipt. | `batch.setInput`. | Main target. | Protocol command. | Main batch path. | Batch result success/failure. | `tests/sdk_automation_runtime/mod.rs`. |
 | Filter actions dialog by automation. | `batch.setInput` target ActionsDialog. | Actions dialog search. | Protocol command. | `dialog.set_search_text`, resize. | Rows/filter height update. | `tests/actions_dialog_batch_setinput_resize_parity_contract.rs`. |
-| Set Notes editor/composer. | `batch.setInput` target Notes. | Notes editor or embedded ACP. | Protocol command. | Notes mode dispatch. | Correct target text changes. | `lat.md/protocol.md`, `src/prompt_handler/mod.rs`. |
+| Set Notes editor/composer. | `batch.setInput` target Notes. | Notes editor or embedded ACP. | Protocol command. | Notes mode dispatch. | Correct target text changes. | `removed-docs`, `src/prompt_handler/mod.rs`. |
 | Request notification. | `notify(...)`. | OS Notification Center. | SDK call. | SDK sends `notify`, Rust dispatches `notify-rust`. | `systemFeedbackResult` dispatch receipt. | `src/execute_script/mod.rs`. |
 | Play sound. | `beep()`. | macOS sound. | SDK call. | SDK sends `beep`, Rust dispatches `afplay`. | `systemFeedbackResult` dispatch receipt. | `src/execute_script/mod.rs`. |
 | Speak text. | `say(...)`. | macOS speech. | SDK call. | SDK sends `say`, Rust dispatches `say`. | `systemFeedbackResult` dispatch receipt. | `src/execute_script/mod.rs`. |
@@ -198,7 +164,6 @@ Scripts can call `setStatus()` or `menu()`, but both helpers return a typed unsu
 | State | Trigger | Transition |
 |---|---|---|
 | Script call. | `hud(text, options)`. | SDK sends `ShowHud` protocol message. |
-| Handler receives. | `PromptMessage::ShowHud`. | Clears hide-restore intent if set. |
 | HUD requested. | `show_hud`. | HUD manager allocates a slot or queues. |
 | Visible. | HUD window created. | Non-focus overlay displays text. |
 | Expiry. | Timer / cleanup. | HUD dismisses by id, pending HUD may show. |
@@ -209,7 +174,6 @@ Scripts can call `setStatus()` or `menu()`, but both helpers return a typed unsu
 |---|---|---|
 | Script action list. | `setActions(actions)`. | SDK map cleared and repopulated. |
 | Serialized actions. | Functions removed, `hasAction` set. | Protocol `setActions` sent. |
-| Rust action state. | `PromptMessage::SetActions`. | Actions/shortcuts updated. |
 | Dialog open. | Existing ActionsDialog. | Dialog action list refreshed. |
 | User triggers action. | Shortcut/dialog row. | Rust sends `actionTriggered`. |
 | SDK handles action. | Map lookup. | Calls handler or sends `forceSubmit`. |
@@ -219,10 +183,8 @@ Scripts can call `setStatus()` or `menu()`, but both helpers return a typed unsu
 | State | Trigger | Transition |
 |---|---|---|
 | Direct script call. | `setInput(text)`. | SDK sends fire-and-forget message. |
-| Prompt handler. | `PromptMessage::SetInput`. | Calls `set_prompt_input`. |
 | Supported view. | View-specific setter exists. | Input/composer/search changes. |
 | Unsupported view. | No setter branch. | Warning/logging path, no guaranteed mutation. |
-| Automation batch. | `BatchCommand::SetInput`. | Target-specific path returns batch result. |
 
 ## Visual And Focus States
 

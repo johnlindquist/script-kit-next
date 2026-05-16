@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-clipboard-access",
-  "createdAt": "2026-05-15T16:59:06.043Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-clipboard-access]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven ",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T16:59:06.044Z",
-      "completedAt": "2026-05-15T17:07:21.347Z",
-      "usage": {
-        "inputTokens": 119009,
-        "outputTokens": 9048,
-        "reasoningTokens": 0,
-        "totalTokens": 128057
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-clipboard-access]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this repo, Oracle/packx review should include AGENTS/CLAUDE process context, owning skills, relevant lat.md pages including verification, the feature chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the feature boundary. The attached bundle includes that context for Feature 026: Clipboard, Selected Text, and Accessibility APIs.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 026 in feature_explorer/src/state/authoredFeatureMachines.ts. This feature spans SDK clipboard helpers, selected-text read/write, accessibility checks/requests, executor Submit responses, stdin typed receipts, macOS AX/focus/clipboard paste behavior, privacy boundaries, and incomplete image clipboard support. We need a complete implementation-ready XState plan for Feature Explorer that preserves all of those boundaries without overclaiming.\n\nFocus areas:\n- copy()/paste() aliases and clipboard.readText/writeText/readImage/writeImage protocol shape.\n- Message::Clipboard executor behavior, id/no-id behavior, Submit response values, and weak error signaling.\n- readText empty string ambiguity and writeText resolving despite weak success value.\n- readImage raw base64 bytes with no width/height/container metadata.\n- writeImage gap where SDK sends image/base64 but shown executor write path appears text-only.\n- getSelectedText()/setSelectedText() SDK hide + 20ms focus handoff.\n- macOS Accessibility gate, get-selected-text AX/clipboard fallback, setSelectedText clipboard save/set/Cmd+V/restore sequence.\n- text-only clipboard restoration and rich/image/file clipboard-loss risk.\n- hasAccessibilityPermission() read-only vs requestAccessibilityPermission() prompting behavior.\n- executor SDK selected-text Submit shape vs stdin typed selectedText/textSet/accessibilityStatus receipts.\n- requestId correlation, response_sender missing timeout risk, and privacy logging text_len only.\n- non-macOS unsupported/empty/error divergence.\n- SDK auto-submit fallbacks masking missing runtime handlers.\n- adjacent Clipboard History/Emoji/Sharing/AI clipboard flows that should be represented only as boundaries, not merged into this feature.\n- Wireframe metadata must use only existing FeatureWireframeMeta enum values; do not invent clipboard/accessibility-specific enum values.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for adding Feature 026 to feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between Feature 026 chapter/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if relevant.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, source audits, SDK tests, and any runtime/native proof that would catch wrong claims.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nBe direct and implementation-specific. Do not summarize generically.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-clipboard-access.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-clipboard-access",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T16:59:06.044Z",
-  "completedAt": "2026-05-15T17:07:21.347Z",
-  "usage": {
-    "inputTokens": 119009,
-    "outputTokens": 9048,
-    "reasoningTokens": 0,
-    "totalTokens": 128057
   },
-  "elapsedMs": 492709
 }

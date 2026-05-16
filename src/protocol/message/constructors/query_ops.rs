@@ -72,6 +72,7 @@ impl Message {
         Message::GetState {
             request_id,
             target: None,
+            summary_only: false,
         }
     }
 

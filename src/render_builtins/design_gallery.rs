@@ -3,7 +3,7 @@
 // (`collect_state::AppView::DesignGalleryView` in `src/prompt_handler/mod.rs`)
 // so `stateResult.visibleChoiceCount` reflects the same filtered count the UI
 // actually renders. Pinned by `tests/design_gallery_state_choice_count_asymmetry_contract.rs`.
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[derive(Clone, Debug)]
 pub(crate) enum GalleryItem {
     GroupHeaderCategory(designs::group_header_variations::GroupHeaderCategory),

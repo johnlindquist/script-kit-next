@@ -1914,7 +1914,7 @@ async function recipeSurfaceProof(
   session: string,
   opts: { kind?: SurfaceProofKind; index?: number } = {}
 ): Promise<RecipeReceipt> {
-  // @lat: [[lat.md/automation#Automation#Surface-proof CLI]]
+  // doc-anchor-removed: [[removed-docs CLI]]
   const kind = opts.kind ?? "main";
   const index = opts.index ?? 0;
   const preflightSteps = await recipeSurfaceProofPreflight(session);

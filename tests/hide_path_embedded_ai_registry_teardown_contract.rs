@@ -61,7 +61,7 @@ const HIDE_SITES: &[(&str, &str)] = &[
     ),
 ];
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn every_hide_site_calls_ensure_embedded_ai_window_false() {
     for (name, src) in HIDE_SITES {
@@ -80,7 +80,7 @@ fn every_hide_site_calls_ensure_embedded_ai_window_false() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn teardown_follows_reset_to_script_list_in_every_site() {
     for (name, src) in HIDE_SITES {
@@ -112,7 +112,7 @@ fn teardown_follows_reset_to_script_list_in_every_site() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn teardown_is_adjacent_to_semantic_surface_rekey_in_every_site() {
     for (name, src) in HIDE_SITES {

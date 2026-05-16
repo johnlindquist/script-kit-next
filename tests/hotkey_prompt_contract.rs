@@ -11,7 +11,7 @@ const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.
 
 #[test]
 fn sdk_hotkey_routes_to_real_host_prompt() {
-    // @lat: [[shortcuts#Transient SDK hotkey capture]]
+    // doc-anchor-removed: [[shortcuts#Transient SDK hotkey capture]]
     assert!(KIT_SDK.contains("globalThis.hotkey = async function hotkey("));
     assert!(!KIT_SDK.contains("hotkey() is not yet implemented"));
     assert!(KIT_SDK.contains("const message: HotkeyMessage = {"));
@@ -24,7 +24,7 @@ fn sdk_hotkey_routes_to_real_host_prompt() {
 
 #[test]
 fn hotkey_prompt_is_transient_and_does_not_use_persistent_shortcut_save() {
-    // @lat: [[shortcuts#Transient SDK hotkey capture#Does not mutate shortcut config]]
+    // doc-anchor-removed: [[shortcuts#Transient SDK hotkey capture#Does not mutate shortcut config]]
     let show_hotkey = PROMPT_HANDLER
         .split("PromptMessage::ShowHotkey { id, placeholder } => {")
         .nth(1)
@@ -46,7 +46,7 @@ fn hotkey_prompt_is_transient_and_does_not_use_persistent_shortcut_save() {
 
 #[test]
 fn hotkey_prompt_has_state_first_capture_and_cancel_receipts() {
-    // @lat: [[shortcuts#Transient SDK hotkey capture#Automation receipts]]
+    // doc-anchor-removed: [[shortcuts#Transient SDK hotkey capture#Automation receipts]]
     for source in [
         RUNTIME_STDIN,
         RUNTIME_STDIN_MATCH_SIMULATE_KEY,

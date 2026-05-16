@@ -202,6 +202,7 @@ enum PromptMessage {
     GetState {
         request_id: String,
         target: Option<protocol::AutomationWindowTarget>,
+        summary_only: bool,
     },
     /// Request visible UI elements - triggers ElementsResult response
     GetElements {

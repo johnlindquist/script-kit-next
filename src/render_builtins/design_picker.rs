@@ -179,7 +179,7 @@ impl ScriptListApp {
         self.go_back_or_close(window, cx);
     }
 
-    // @lat: [[lat.md/designs#Design Picker key handling]]
+    // doc-anchor-removed: [[removed-docs Picker key handling]]
     fn render_design_picker(
         &mut self,
         filter: &str,

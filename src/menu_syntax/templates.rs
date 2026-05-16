@@ -38,7 +38,7 @@ pub fn render_capture_handler_template(target: &str, slug: &str) -> String {
 // This handler fires whenever the launcher sees a `;{target}` or `{target}:`
 // menu-syntax invocation. Script Kit writes the parsed payload to a JSON
 // tempfile and passes its path through the `KIT_MENU_SYNTAX_PAYLOAD_PATH`
-// env var. See lat.md/menu-syntax.md#Execution Payload for the contract.
+// env var. See removed-docs Payload for the contract.
 //
 // Edit this file to decide what to do with the captured payload. The body
 // is intentionally a local-first example: it appends a JSONL line under

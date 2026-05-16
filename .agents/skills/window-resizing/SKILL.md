@@ -7,7 +7,7 @@ description: >-
 
 # Window Resizing
 
-This skill owns main-window sizing behavior for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns main-window sizing behavior for Script Kit GPUI and keeps changes grounded in current source and the narrowest useful proof.
 
 ## Use When
 
@@ -23,8 +23,6 @@ Do not use this skill as the primary owner for AppKit activation/floating-level 
 
 Start with these sources before editing:
 
-- `lat.md/windowing.md`
-- `lat.md/builtins.md`
 - `src/app_impl/ui_window.rs`
 - `src/window_resize/mod.rs`
 - `.agents/subagents/window-resizing-reader.md` for broad or high-risk investigation.
@@ -44,12 +42,11 @@ Primary paths and concepts:
 - Single-column filterable built-ins stay Mini unless their render layout has a preview/detail column.
 - Preview/detail surfaces stay Full and use `ViewType::ScriptList`.
 - Any deferred resize path must preserve the same Mini/Full classification as the open helper used to enter the surface.
-- Prefer current source, generated contracts, and `lat.md/` over legacy notes or memory.
-- If behavior, architecture, tests, or contracts change, update `lat.md/` and run `lat check`.
+- Prefer current source and generated contracts over legacy notes or memory.
 
 ## Workflow
 
-1. Run or review the required lat search/expand context from `AGENTS.md`.
+1. Review `AGENTS.md`, the owning skill, and current source context before editing.
 2. Identify every entry path that can open or resize the affected surface: main menu, triggerBuiltin, tray, shortcut, filter change, and protocol.
 3. Trace both the initial open call and any follow-up resize call. Bugs often come from a correct open helper followed by a stale deferred resize.
 4. Make the narrowest change at the shared sizing source of truth.
@@ -74,7 +71,6 @@ Default check for this skill:
 ```bash
 cargo test --test source_audits deferred_sizing -- --nocapture
 cargo test --test trigger_builtin_current_app_commands_contract -- --nocapture
-lat check
 ```
 
 ## Adjacent Skills
@@ -87,7 +83,6 @@ Use adjacent skills when the work crosses boundaries:
 - `$platform-windowing-macos` for AppKit panel placement, activation, or native window invariants.
 - `$agentic-testing` for state-first runtime bounds receipts and cleanup.
 - `$testing-quality-gates` for choosing narrow build/test gates.
-- `$lat-md` for `lat.md/` section, wiki-link, or code-ref changes.
 
 ## Migration Notes
 

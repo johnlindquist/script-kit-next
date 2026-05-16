@@ -119,7 +119,7 @@ fn parse_stdin_command_short_circuits_known_verbs_with_automation_payload_mismat
         body.contains(tag_anchor),
         "parse_stdin_command's short-circuit error must carry the literal \
          `automation_payload_mismatch:` prefix. This prefix is the stable contract \
-         documented in lat.md/automation.md §\"Session send parse receipts\" and is used \
+         documented in removed-docs §\"Session send parse receipts\" and is used \
          by agentic receipts to classify parse failures. Removing or renaming the prefix \
          is a silent contract break. Missing anchor: `{tag_anchor}`."
     );

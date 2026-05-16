@@ -585,7 +585,7 @@ pub fn close_chat_window(cx: &mut App) {
 /// Returns `false` if no detached window exists or its view entity has
 /// been deallocated, so callers can distinguish a dropped dispatch
 /// from a successful one.
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 pub fn dispatch_action_to_detached(action_id: &str, cx: &mut App) -> bool {
     let view_weak = {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));

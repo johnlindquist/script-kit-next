@@ -2,22 +2,18 @@
 
 This chapter maps the runtime bridge between JSONL stdin, protocol envelopes, MCP HTTP JSON-RPC, resources, tools, and SDK MCP helpers.
 
-Raw Oracle reference: [answer](../raw-oracle/044-mcp-protocol-runtime-bridge/answer.md), [prompt](../raw-oracle/044-mcp-protocol-runtime-bridge/prompt.md), [bundle map](../raw-oracle/044-mcp-protocol-runtime-bridge/bundle-map.md), [full log](../raw-oracle/044-mcp-protocol-runtime-bridge/output.log), [session metadata](../raw-oracle/044-mcp-protocol-runtime-bridge/session.json).
 
 ## Executive Summary
 
 This feature is the focused runtime bridge pass for the open MCP/protocol gaps from Feature 004.
 
-It maps how agents can drive Script Kit GPUI without screenshots: JSONL stdin commands, typed protocol responses, MCP JSON-RPC over HTTP, MCP resources, MCP tools, diagnostics resources, transaction traces, and TypeScript/Bun SDK helpers.
 
-The core protocol envelope and stdin dispatcher now share the same accepted range. `protocolVersion:2` is accepted by the version reader, ingress observer, and stdin dispatch, while outbound object responses stamp `protocolVersion:2`.
 
 ## Scope
 
 This chapter owns the bridge surface where external agents and scripts communicate with the app.
 
 | Surface | Included here | Boundary |
-|---|---:|---|
 | JSONL stdin protocol | Yes | Command parsing, version observation, responses, batch/wait/state receipts. |
 | `protocolVersion` | Yes | Reader, observer, deprecation warnings, outbound stamping, stdin dispatch. |
 | MCP HTTP server | Yes | `/rpc`, bearer token, tools/resources methods, lifecycle caveats. |
@@ -52,7 +48,6 @@ Agents enter the bridge through stdin, MCP, resources, tools, or SDK wrappers.
 | Non-object root | Version observer reports not-object. |
 | Non-integer/negative/overflow | Version reader reports invalid type. |
 | Too old / too new | Version reader reports unsupported. |
-| Outbound object responses | `attach_current_version` stamps or overwrites `protocolVersion:2`. |
 | Non-object outbound values | Current-version attachment returns false. |
 
 ### Ingress Observer
@@ -124,20 +119,9 @@ Resources are read-only URI surfaces backed by the app state, catalogs, context,
 
 | Resource class | URIs / examples | Contract |
 |---|---|---|
-| App state | `kit://state`. | JSON app state resource, simpler than protocol `getState`. |
-| Catalogs | `scripts://`, `scriptlets://`, `kit://scripts`, `kit://scriptlets`. | Legacy and schema-versioned script/scriptlet catalogs. |
-| SDK reference | `kit://sdk-reference`. | Shared SDK/harness reference. |
-| AI context | `kit://context`, `kit://context/schema`. | Context snapshot, query flags, diagnostics, schema. |
-| Clipboard/focus | `kit://clipboard-history`, `kit://focused-item`. | Agent context and selected/focused item data. |
-| Workspace/system | `kit://git-status`, `kit://git-diff`, `kit://processes`, `kit://system`. | Text or JSON system/workspace readouts. |
-| Dictation | `kit://dictation`, `kit://dictation-history`. | Dictation state/history resources. |
-| Reference docs | `kit://stdin-commands`, `kit://trigger-builtins`. | Drift-audited markdown references. |
-| Diagnostics | `kit://diagnostics/protocol-stats`. | Protocol counters, health flags, and thresholds. |
-| Transactions | `kit://transactions/schema`, `kit://transactions/latest`, `kit://transactions/latest?requestId=...`. | Transaction trace schema and latest lookup. |
 
 ### Context Resource
 
-`kit://context` is the main AI-facing context resource and has explicit query behavior.
 
 | Query | Behavior |
 |---|---|
@@ -150,13 +134,11 @@ Resources are read-only URI surfaces backed by the app state, catalogs, context,
 | Boolean flags | Accepts `1`, `0`, `true`, `false`. |
 | Invalid boolean | Invalid params. |
 | `diagnostics=1` | Wraps snapshot in context diagnostics metadata. |
-| `kit://context/schema` | Self-describing schema document. |
 
 ### Diagnostics Resources
 
 Protocol diagnostics and transactions let agents verify health without screenshots.
 
-`kit://diagnostics/protocol-stats` exposes counters, thresholds, health flags, and declaration-order-stable flags. Threshold policy is strict for stdin parse failures, too-large commands, and unsupported protocol versions; typo/deprecated builtin counters tolerate more noise.
 
 Transaction resources provide schema and latest traces, optionally filtered by request id. Invalid transaction URI forms should not be treated as transaction resources.
 
@@ -193,7 +175,6 @@ Computer tools are observation/capture tools, not action tools.
 
 They can inspect app/window/menu/screen/permission metadata and capture exact native windows where implemented. They must not be described as click, type, focus, launch, quit, hide, move, resize, menu-press, permission-prompt, or global status-extra action tools unless those actions are explicitly implemented later.
 
-Current computer-use boundaries:
 
 | Tool class | Boundary |
 |---|---|
@@ -211,9 +192,7 @@ Current computer-use boundaries:
 
 The SDK MCP client is separate from the app-owned HTTP server implementation.
 
-The SDK uses MCP protocol version string `2024-11-05` for MCP HTTP/stdio sessions. That string is not the numeric JSONL stdin `protocolVersion:2`.
 
-For HTTP calls, the SDK sends `content-type: application/json`, `accept: application/json`, `mcp-protocol-version: 2024-11-05`, configured server headers, and `mcp-session-id` when a session id exists.
 
 `withMcpSession` chooses stdio or HTTP based on server transport, sends `initialize`, sends `notifications/initialized`, runs the handler, and closes in `finally`. Do not claim the app-owned server supports arbitrary notifications unless the server dispatcher proves it.
 
@@ -245,26 +224,20 @@ These interactions define what agents can prove without screenshots.
 | Send legacy stdin line. | Missing version is observed as v1. | Ingress golden and command receipt. |
 | Send valid v2 stdin line. | Observer accepts v2; dispatch support remains policy-gated. | Version observer plus targeted stdin dispatch test. |
 | Send unsupported version. | Dispatch hard-rejects and diagnostics counter increments. | Protocol stats resource. |
-| Read `kit://context?profile=minimal`. | JSON context snapshot with schema version and preserved URI. | MCP `resources/read`. |
 | Read invalid context query. | JSON-RPC invalid params. | MCP resource test. |
 | Call `tools/list`. | Catalog includes kit/computer/script-derived tools. | JSON-RPC success response. |
 | Call unknown `kit/*`. | Tool-level error result. | Tool call receipt. |
 | Call `computer/see`. | Structured inspect snapshot when runtime bridge exists. | Tool call text parses as snapshot JSON. |
-| Read protocol stats. | Health/counters/thresholds returned. | `kit://diagnostics/protocol-stats`. |
-| Read transaction latest by request id. | Latest matching transaction trace returned. | `kit://transactions/latest?requestId=...`. |
 
 ## Safe Claims
 
 These are safe statements for docs and agent workflows today.
 
 - Missing stdin `protocolVersion` means legacy v1.
-- Numeric `protocolVersion:2` is current for the version reader, observer, and stdin dispatch.
-- Outbound object responses can be stamped with `protocolVersion:2`.
 - Unsupported protocol versions are observable via diagnostics; dispatch rejection is not yet the documented guarantee.
 - `triggerBuiltin.name` is deprecated in favor of `builtinId`.
 - The app-owned MCP server is HTTP JSON-RPC over `/rpc`, bearer-token protected, and localhost-oriented.
 - Current MCP method names are `initialize`, `tools/list`, `tools/call`, `resources/list`, and `resources/read`.
-- `kit://context` supports profiles, flags, diagnostics, and schema.
 - Bad context query parameters are invalid params; unknown resources are method-not-found style errors.
 - Computer tools are read-only observation/capture tools, except exact native-window capture.
 - The SDK MCP client supports HTTP and stdio configured servers and uses MCP spec version `2024-11-05`.
@@ -273,7 +246,6 @@ These are safe statements for docs and agent workflows today.
 
 Do not make these claims until implementation and proof exist.
 
-- Explicit stdin `protocolVersion:2` is fully supported by the typed stdin dispatch gate.
 - Unsupported stdin versions are rejected before dispatch.
 - The app-owned MCP server supports stdio.
 - Computer tools can click, focus, activate, type, press menus, or request permissions.
@@ -297,14 +269,12 @@ These source areas own the bridge behavior.
 | Script tools | `src/mcp_script_tools/*` |
 | Computer tools | `src/mcp_computer_use_tools.rs` |
 | SDK MCP helpers | `scripts/kit-sdk.ts` |
-| Protocol stats | `kit://diagnostics/protocol-stats`, protocol stats tests |
 | Golden tests | `tests/golden/mcp/basic_rpc.jsonl`, `tests/golden/protocol/ingress_observations.jsonl` |
 
 ## Implementation Plan
 
 Implementation should close the bridge gaps in layers.
 
-1. Keep explicit stdin `protocolVersion:2` dispatch covered for representative commands such as `show`, `getState`, and `triggerBuiltin`.
 2. Keep unsupported future versions as hard dispatch rejection with protocol-stats telemetry.
 3. Complete the MCP server lifecycle source pass for binding, discovery file, token lifecycle, wrong path/method, content-type, shutdown, and status/error boundaries.
 4. Add MCP golden rows for `tools/call` and `resources/read`.
@@ -331,7 +301,7 @@ cargo test --test mcp_resource_drift -- --nocapture
 cargo test --test mcp_resources_sdk_reference -- --nocapture
 cargo test --test context_snapshot -- --nocapture
 cargo test --test context_contract_end_to_end -- --nocapture
-lat check
+source checks
 ```
 
 ### New Receipts To Add
@@ -341,7 +311,6 @@ These receipts close the current weak spots.
 | Receipt | Proof |
 |---|---|
 | v2 stdin dispatch contract | `stdin_protocol_version_dispatch_contract` plus `protocol-v2-dispatch.ts` prove valid v2 `show`, `getState`, and `triggerBuiltin` parse, dispatch, and produce receipts. |
-| Unsupported-version policy | Inline stdin parser tests prove `protocolVersion:999` hard-rejects and increments protocol stats while invalid non-integer versions do not consume the unsupported counter. |
 | MCP discovery fixture | `server.json` endpoint/token fields and write timing are stable. |
 | MCP route matrix | Good `/rpc`, wrong path, wrong method, missing/bad token, bad JSON. |
 | Full method golden | `tools/call` and `resources/read` happy/error rows. |

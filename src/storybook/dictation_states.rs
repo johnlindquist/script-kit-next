@@ -31,6 +31,7 @@ enum DictationCanonicalPhase {
     Recording,
     Confirming,
     Transcribing,
+    Delivering,
     Finished,
     Failed,
 }
@@ -42,6 +43,7 @@ impl DictationCanonicalPhase {
             Self::Recording => "recording",
             Self::Confirming => "confirming",
             Self::Transcribing => "transcribing",
+            Self::Delivering => "delivering",
             Self::Finished => "finished",
             Self::Failed => "failed",
         }
@@ -53,6 +55,7 @@ impl DictationCanonicalPhase {
             Self::Recording => DictationSessionPhase::Recording,
             Self::Confirming => DictationSessionPhase::Confirming,
             Self::Transcribing => DictationSessionPhase::Transcribing,
+            Self::Delivering => DictationSessionPhase::Delivering,
             Self::Finished => DictationSessionPhase::Finished,
             Self::Failed => DictationSessionPhase::Failed("No speech detected".into()),
         }
@@ -71,7 +74,7 @@ impl DictationCanonicalStateSpec {
     }
 }
 
-const SPECS: [DictationCanonicalStateSpec; 10] = [
+const SPECS: [DictationCanonicalStateSpec; 11] = [
     DictationCanonicalStateSpec {
         id: "idle-hidden",
         name: "Idle / Hidden",
@@ -142,6 +145,15 @@ const SPECS: [DictationCanonicalStateSpec; 10] = [
         phase: DictationCanonicalPhase::Transcribing,
         target: DictationTarget::ExternalApp,
         elapsed_secs: 74,
+        bars: SILENT_BARS,
+    },
+    DictationCanonicalStateSpec {
+        id: "delivering",
+        name: "Delivering",
+        description: "Transcript delivery state with the same close affordance as terminal phases.",
+        phase: DictationCanonicalPhase::Delivering,
+        target: DictationTarget::ExternalApp,
+        elapsed_secs: 75,
         bars: SILENT_BARS,
     },
     DictationCanonicalStateSpec {
@@ -300,8 +312,8 @@ mod tests {
 
     #[test]
     fn dictation_state_story_exposes_canonical_lifecycle_states() {
-        assert_eq!(dictation_state_story_variants().len(), 10);
-        assert_eq!(SPECS.len(), 10);
+        assert_eq!(dictation_state_story_variants().len(), 11);
+        assert_eq!(SPECS.len(), 11);
     }
 
     #[test]

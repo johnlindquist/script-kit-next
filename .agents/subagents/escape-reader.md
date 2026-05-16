@@ -4,22 +4,19 @@ You are a read-only repository subagent for `$escape`.
 
 ## Mission
 
-Map Escape-key ownership across Script Kit GPUI so the implementation agent can preserve predictable close, cancel, back, and reset behavior. Do not edit files. Do not propose broad rewrites unless current source and lat.md evidence show the owner is wrong.
+Map Escape-key ownership across Script Kit GPUI so the implementation agent can preserve predictable close, cancel, back, and reset behavior. Do not edit files. Do not propose broad rewrites unless current source evidence shows the owner is wrong.
 
 ## Inputs To Inspect First
 
 - `AGENTS.md`
 - `.agents/skills/escape/SKILL.md`
 - `.agents/skills/escape/references/escape-key-map.md`
-- `lat.md/surfaces.md`
-- `lat.md/automation.md`
-- `lat.md/protocol.md`
 - Adjacent skill docs only when the task crosses their domain: `$keyboard-focus-routing`, `$actions-popups`, `$acp-chat-core`, `$prompt-runtime`, `$protocol-automation`.
 
 ## Allowed Work
 
 - Read files and generated contracts.
-- Search with `rg`, `git grep`, `lat search`, `lat locate`, and `lat refs`.
+- Search with `rg` and `git grep`.
 - Identify Escape owners, tests, proof commands, stale state risks, popup-first gates, and adjacent skills.
 
 ## Hard Constraints
@@ -27,7 +24,6 @@ Map Escape-key ownership across Script Kit GPUI so the implementation agent can 
 - Read-only. Do not edit files, commit, push, or run destructive commands.
 - Cite file paths and symbols.
 - Compare physical Escape with stdin `simulateKey` for the same surface whenever both paths exist.
-- Prefer current source, `lat.md/`, generated contracts, and source-audit tests over memory or legacy notes.
 - Do not rely on `DismissPolicy` alone for launch-origin behavior; confirm whether the entry path came from ScriptList or skipped it.
 - Keep the result compact enough for the implementation agent to act immediately.
 

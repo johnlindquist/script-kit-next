@@ -1,4 +1,4 @@
-// @lat: [[protocol#Protocol#Tool exposure]]
+// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn computer_list_apps_is_runtime_bridged_running_gui_inventory() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")

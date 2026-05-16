@@ -8,21 +8,12 @@ Ground claims in the attached repo context. Prefer concrete file/function/test/s
 
 ## Feature Scope
 
-Feature id: `036-tray-lifecycle-distribution-updates`
 
-Feature name: Tray Menu, App Lifecycle, Distribution, and Updates
 
-Cover these Script Kit GPUI capabilities:
 
 - macOS tray/status-bar menu sections, row labels, icons, stable action ids, accelerator display, current-app command row, social/help links, Settings/About routes, Reload Scripts, Check for Updates, Version row, and Quit.
 - Tray action dispatch through startup/runtime event loops, including main-thread update-state refresh constraints.
-- About route as the launcher-native companion to the tray menu: route contract, update card states, links, acknowledgements disclosure, keyboard handling, explicit dismissal, and prior-route restoration.
-- Update checker: `UpdateState`, latest-release request, version comparison, release asset selection, manifest SHA handling, tray/about shared state, retry/error behavior, and user-visible update/open-release paths.
-- App lifecycle: startup tray/hotkey registration, reload scripts, quit/shutdown paths, launch-at-login helper status, and removed/deferred launch-at-login UI.
-- Distribution: local bundle path, CI artifact path, tagged release path, signing/notarization/stapling, release manifest, update asset boundaries, and human-only shipping gates.
-- Automation/MCP proof surfaces for tray/about/update/distribution: tray menu model observations, tray item lookup by index/id, About open route, update source audits, release verification scripts, and packaging verification.
 
-Explicitly distinguish:
 
 - Tray model observation versus native status-item clicking.
 - Tray menu action execution versus MCP read-only tray menu tools.
@@ -80,6 +71,6 @@ Explicitly distinguish:
 
 ## Context Notes
 
-This repository requires `lat check` after atlas updates. The maintained atlas preserves the complete Oracle answer under `feature-map/raw-oracle/<feature-id>/answer.md` and distills a readable chapter under `feature-map/features/<feature-id>.md`.
+This repository requires `source checks` after atlas updates. The maintained atlas preserves the complete Oracle answer under `feature-map/raw-oracle/<feature-id>/answer.md` and distills a readable chapter under `feature-map/features/<feature-id>.md`.
 
 Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.

@@ -6,7 +6,7 @@ description: >-
 
 # ACP Context Composer
 
-This skill owns Agent Chat composer and context assembly for Script Kit GPUI and keeps changes grounded in current source, lat.md contracts, and the narrowest useful proof.
+This skill owns Agent Chat composer and context assembly for Script Kit GPUI and keeps changes grounded in current source and the narrowest useful proof.
 
 ## Use When
 
@@ -22,8 +22,6 @@ Do not use this skill as the primary owner for ACP process startup or MCP resour
 
 Start with these sources before editing:
 
-- `lat.md/acp-chat.md`
-- `lat.md/ai-context.md`
 - `.agents/subagents/acp-context-composer-reader.md` for broad or high-risk investigation.
 
 ## Owned Paths and Concepts
@@ -37,13 +35,12 @@ Primary paths and concepts:
 ## Core Rules
 
 - Identify the behavior owner before editing shared files. Path ownership is a hint; the user-visible behavior and documented contract decide the owner.
-- Prefer current source, generated contracts, and `lat.md/` over legacy notes or memory.
+- Prefer current source and generated contracts over legacy notes or memory.
 - Keep long recipes in the support skills that own them. Reference `$agentic-testing`, `$protocol-automation`, or `$testing-quality-gates` instead of duplicating proof procedures.
-- If behavior, architecture, tests, or contracts change, update `lat.md/` and run `lat check`.
 
 ## Workflow
 
-1. Run or review the required lat search/expand context from `AGENTS.md`.
+1. Review `AGENTS.md`, the owning skill, and current source context before editing.
 2. Read the first sources above and trace the smallest real owner.
 3. Check adjacent-skill boundaries before changing shared code.
 4. Make the narrowest change that preserves the domain invariant.
@@ -54,7 +51,6 @@ Primary paths and concepts:
 
 Use the smallest proof that can falsify the change. Do not escalate to screenshots, native input, broad test suites, or app launches when a lower tier proves the behavior.
 
-1. Docs/source audit proof: for docs-only, skill-only, generated-contract, or ownership-map changes. Run `lat check` when `lat.md/` or wiki links are touched.
 2. Compile/static proof: for Rust, TypeScript, or config changes where runtime behavior is not needed. Run the narrowest compile or static check that covers the touched files.
 3. Targeted test proof: for behavior encoded in unit, source-contract, SDK, or generated-artifact tests. Run the smallest named test target first.
 4. State-first runtime proof: for UI, routing, protocol, focus, selection, popup, and surface behavior. Use the real runtime entry path with `getState`, `getElements`, `waitFor`, `batch`, or targeted receipts.
@@ -66,7 +62,7 @@ Always clean up any process, session, or window the proof started. Report the ti
 Default check for this skill:
 
 ```bash
-ACP context/composer tests; getAcpState picker proof; lat check
+ACP context/composer tests; getAcpState picker proof
 ```
 
 ## Adjacent Skills
@@ -75,7 +71,6 @@ Use adjacent skills when the work crosses boundaries:
 
 - `$agentic-testing` for state-first runtime proof, screenshots, and cleanup.
 - `$testing-quality-gates` for choosing narrow build/test gates.
-- `$lat-md` for `lat.md/` section, wiki-link, or code-ref changes.
 - `$protocol-automation` when stdin JSON, receipts, target identity, `waitFor`, or `batch` are the behavior owner.
 
 ## Migration Notes

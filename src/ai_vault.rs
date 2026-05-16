@@ -3,10 +3,12 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::process::Output;
 use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -106,7 +108,8 @@ pub(crate) fn root_ai_vault_query_is_eligible(
     query: &str,
     options: &RootAiVaultSectionOptions,
 ) -> bool {
-    options.enabled && query.trim().chars().count() >= options.min_query_chars
+    let query = query.trim();
+    options.enabled && (query.is_empty() || query.chars().count() >= options.min_query_chars)
 }
 
 pub(crate) fn search_root_ai_vault_direct(
@@ -116,10 +119,10 @@ pub(crate) fn search_root_ai_vault_direct(
     let (mut hits, fixture_backed) = match load_fixture_hits() {
         Ok(Some(hits)) => (hits, true),
         Ok(None) => {
-            let hits = search_cmux_vault(query, options.clone()).unwrap_or_else(|_error| {
+            let hits = search_local_vault(query, options.clone()).unwrap_or_else(|_error| {
                 tracing::warn!(
                     target: "script_kit::ai_vault",
-                    event = "ai_vault_cmux_search_unavailable",
+                    event = "ai_vault_local_search_unavailable",
                     error_kind = "other",
                     "AI Vault search failed"
                 );
@@ -309,6 +312,326 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
             Ok(Vec::new())
         }
     }
+}
+
+fn search_local_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
+    let cache_key = ai_vault_cache_key(query, &options);
+    if let Some(hits) = ai_vault_cache_get(&cache_key, options.cache_ttl_ms) {
+        return Ok(hits);
+    }
+
+    let normalized_query = query.trim().to_ascii_lowercase();
+    let mut hits = Vec::new();
+    hits.extend(read_claude_vault_hits(&normalized_query)?);
+    hits.extend(read_codex_vault_hits(&normalized_query)?);
+    hits.sort_by(|a, b| {
+        b.modified_at
+            .cmp(&a.modified_at)
+            .then_with(|| a.stable_key.cmp(&b.stable_key))
+    });
+    hits.truncate(options.max_results);
+    ai_vault_cache_put(cache_key, hits.clone());
+    Ok(hits)
+}
+
+fn read_claude_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
+    let root = home_dir().join(".claude").join("projects");
+    let mut files = Vec::new();
+    collect_jsonl_files(&root, &mut files);
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+    files.truncate(300);
+
+    let mut hits = Vec::new();
+    for (path, mtime) in files {
+        if let Some(hit) = read_claude_vault_hit(&path, mtime, query) {
+            hits.push(hit);
+        }
+    }
+    Ok(hits)
+}
+
+fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<AiVaultHit> {
+    let file = File::open(path).ok()?;
+    let reader = BufReader::new(file);
+    let session_id = path.file_stem()?.to_string_lossy().to_string();
+    let mut title = None;
+    let mut cwd = None;
+    let mut model = None;
+    let mut newest = mtime;
+
+    for line in reader.lines().map_while(Result::ok).take(1000) {
+        let event: serde_json::Value = serde_json::from_str(&line).ok()?;
+        if let Some(timestamp) = event.get("timestamp").and_then(|value| value.as_str()) {
+            if let Some(parsed) = parse_timestamp(timestamp) {
+                newest = newest.max(parsed);
+            }
+        }
+        if cwd.is_none() {
+            cwd = event
+                .get("cwd")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.trim().is_empty())
+                .map(ToString::to_string);
+        }
+        if model.is_none() {
+            model = event
+                .pointer("/message/model")
+                .and_then(|value| value.as_str())
+                .filter(|value| !value.trim().is_empty())
+                .map(ToString::to_string);
+        }
+        if title.is_some() || event.get("isMeta").and_then(|value| value.as_bool()) == Some(true) {
+            continue;
+        }
+        let role = event
+            .pointer("/message/role")
+            .or_else(|| event.get("type"))
+            .and_then(|value| value.as_str());
+        if role != Some("user") {
+            continue;
+        }
+        let content = event
+            .pointer("/message/content")
+            .or_else(|| event.get("content"));
+        title = content.and_then(text_from_content_for_title);
+    }
+
+    let safe_title =
+        title.unwrap_or_else(|| format!("Claude Code session {}", short_id(&session_id)));
+    let matched_field = matched_field(
+        query,
+        &safe_title,
+        cwd.as_deref(),
+        Some("Claude Code"),
+        &session_id,
+    );
+    if !query.is_empty() && matched_field.is_none() {
+        return None;
+    }
+
+    Some(AiVaultHit {
+        provider: "claude".to_string(),
+        provider_display_name: "Claude Code".to_string(),
+        session_id: session_id.clone(),
+        source_kind: Some("cli".to_string()),
+        safe_title,
+        workspace_path: cwd,
+        model,
+        modified_at: Some(system_time_to_rfc3339(newest)),
+        matched_field: matched_field.unwrap_or(AiVaultMatchedField::Recent),
+        stable_key: format!("ai-vault/claude/cli/{session_id}"),
+        score: 0,
+    })
+}
+
+fn read_codex_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
+    let index_path = home_dir().join(".codex").join("session_index.jsonl");
+    let Ok(file) = File::open(index_path) else {
+        return Ok(Vec::new());
+    };
+    let reader = BufReader::new(file);
+    let mut hits = Vec::new();
+    for line in reader.lines().map_while(Result::ok) {
+        let Ok(row) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
+        let Some(session_id) = row
+            .get("id")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
+        else {
+            continue;
+        };
+        let safe_title = row
+            .get("thread_name")
+            .and_then(|value| value.as_str())
+            .and_then(normalize_title)
+            .unwrap_or_else(|| format!("Codex session {}", short_id(session_id)));
+        let cwd = row
+            .get("cwd")
+            .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
+            .map(ToString::to_string);
+        let matched_field = matched_field(
+            query,
+            &safe_title,
+            cwd.as_deref(),
+            Some("Codex"),
+            session_id,
+        );
+        if !query.is_empty() && matched_field.is_none() {
+            continue;
+        }
+        let modified = row
+            .get("updated_at")
+            .and_then(|value| value.as_str())
+            .and_then(parse_timestamp)
+            .unwrap_or(UNIX_EPOCH);
+        hits.push(AiVaultHit {
+            provider: "codex".to_string(),
+            provider_display_name: "Codex".to_string(),
+            session_id: session_id.to_string(),
+            source_kind: Some("cli".to_string()),
+            safe_title,
+            workspace_path: cwd,
+            model: row
+                .get("model")
+                .and_then(|value| value.as_str())
+                .map(ToString::to_string),
+            modified_at: Some(system_time_to_rfc3339(modified)),
+            matched_field: matched_field.unwrap_or(AiVaultMatchedField::Recent),
+            stable_key: format!("ai-vault/codex/cli/{session_id}"),
+            score: 0,
+        });
+    }
+    hits.truncate(300);
+    Ok(hits)
+}
+
+fn collect_jsonl_files(root: &Path, files: &mut Vec<(PathBuf, SystemTime)>) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if metadata.is_dir() {
+            collect_jsonl_files(&path, files);
+        } else if metadata.is_file()
+            && path.extension().and_then(|ext| ext.to_str()) == Some("jsonl")
+        {
+            files.push((path, metadata.modified().unwrap_or(UNIX_EPOCH)));
+        }
+    }
+}
+
+fn text_from_content_for_title(content: &serde_json::Value) -> Option<String> {
+    let mut fragments = Vec::new();
+    collect_text_fragments(content, &mut fragments);
+    normalize_title(&fragments.join("\n\n"))
+}
+
+fn collect_text_fragments(value: &serde_json::Value, fragments: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(text) => fragments.push(text.clone()),
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_text_fragments(item, fragments);
+            }
+        }
+        serde_json::Value::Object(object) => {
+            let value_type = object.get("type").and_then(|value| value.as_str());
+            if matches!(
+                value_type,
+                Some("tool_use" | "tool_result" | "function_call" | "function_call_output")
+            ) {
+                return;
+            }
+            if let Some(text) = object.get("text").and_then(|value| value.as_str()) {
+                fragments.push(text.to_string());
+                return;
+            }
+            for key in ["content", "message"] {
+                if let Some(child) = object.get(key) {
+                    collect_text_fragments(child, fragments);
+                    if !fragments.is_empty() {
+                        return;
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn normalize_title(raw: &str) -> Option<String> {
+    let mut value = raw.replace('\r', " ").replace('\n', " ").replace('\t', " ");
+    for tag in [
+        "system-reminder",
+        "command-name",
+        "command-message",
+        "command-args",
+    ] {
+        value = strip_tag(&value, tag);
+    }
+    value = value
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace("[Image #1]", "")
+        .trim()
+        .to_string();
+    if value.is_empty() {
+        None
+    } else if value.chars().count() > 160 {
+        Some(format!(
+            "{}...",
+            value.chars().take(157).collect::<String>().trim_end()
+        ))
+    } else {
+        Some(value)
+    }
+}
+
+fn strip_tag(input: &str, tag: &str) -> String {
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
+    input.replace(&open, " ").replace(&close, " ")
+}
+
+fn matched_field(
+    query: &str,
+    title: &str,
+    workspace: Option<&str>,
+    provider: Option<&str>,
+    session_id: &str,
+) -> Option<AiVaultMatchedField> {
+    if query.is_empty() {
+        return Some(AiVaultMatchedField::Recent);
+    }
+    let query = query.to_ascii_lowercase();
+    if title.to_ascii_lowercase().contains(&query) {
+        return Some(AiVaultMatchedField::Title);
+    }
+    if workspace
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .contains(&query)
+    {
+        return Some(AiVaultMatchedField::Workspace);
+    }
+    if provider.unwrap_or("").to_ascii_lowercase().contains(&query) {
+        return Some(AiVaultMatchedField::Provider);
+    }
+    if session_id.to_ascii_lowercase().contains(&query) {
+        return Some(AiVaultMatchedField::Recent);
+    }
+    None
+}
+
+fn parse_timestamp(timestamp: &str) -> Option<SystemTime> {
+    chrono::DateTime::parse_from_rfc3339(timestamp)
+        .ok()
+        .map(|value| {
+            UNIX_EPOCH
+                + Duration::from_secs(value.timestamp().max(0) as u64)
+                + Duration::from_nanos(value.timestamp_subsec_nanos() as u64)
+        })
+}
+
+fn system_time_to_rfc3339(time: SystemTime) -> String {
+    let datetime: chrono::DateTime<chrono::Utc> = time.into();
+    datetime.to_rfc3339()
+}
+
+fn home_dir() -> PathBuf {
+    dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn short_id(session_id: &str) -> String {
+    session_id.chars().take(12).collect()
 }
 
 fn load_fixture_hits() -> Result<Option<Vec<AiVaultHit>>> {

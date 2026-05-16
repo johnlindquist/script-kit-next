@@ -1,4 +1,3 @@
-# Oracle Prompt: 030 ACP Chat SDK APIs
 
 [acp-chat-sdk-apis-atlas]
 
@@ -12,15 +11,13 @@ Return your answer as text in this response only. Do not create, attach, export,
 
 ## Project Briefing
 
-This is the Script Kit GPUI repository. It is a Rust/GPUI desktop app with a TypeScript/Bun Script Kit SDK shim in `scripts/kit-sdk.ts`. The project uses `lat.md/` as its architecture and verification knowledge graph. Repo process requires:
 
-- Run `lat expand` and `lat search` before feature-map work.
-- Include `AGENTS.md`, `CLAUDE.md`, owning skills, relevant `lat.md/` pages, and `lat.md/verification.md` in Oracle context or prompt.
+- Run `source context expansion` and `source search` before feature-map work.
+- Include `AGENTS.md`, `CLAUDE.md`, owning skills, relevant `removed-docs/` pages, and `removed-docs` in Oracle context or prompt.
 - Preserve raw Oracle output under `feature-map/raw-oracle/<feature-id>/`.
 - Distill the maintained chapter under `feature-map/features/<feature-id>.md`.
-- Run `lat check` after each task.
+- Run `source checks` after each task.
 
-Owning skills for this pass:
 
 - `acp-chat-core`
 - `acp-context-composer`
@@ -31,9 +28,7 @@ Owning skills for this pass:
 
 ## Feature Scope
 
-Map feature `030-acp-chat-sdk-apis`: the script-facing ACP/AI Chat SDK APIs.
 
-Cover these APIs and their full behavior:
 
 - `aiIsOpen()`
 - `aiGetActiveChat()`
@@ -49,7 +44,6 @@ Cover these APIs and their full behavior:
 - `aiOn(eventType, handler, chatId?)`
 - `aiSubscribe` / `aiUnsubscribe` protocol messages and pushed event variants if relevant.
 
-This pass is specifically the script-facing SDK/protocol/runtime contract. Do not repeat the whole ACP UI/context-composer chapter unless needed to explain SDK side effects. Distinguish:
 
 - SDK globals and TypeScript message/result shapes.
 - Rust protocol variants and request ids.
@@ -64,27 +58,22 @@ This pass is specifically the script-facing SDK/protocol/runtime contract. Do no
 
 ## Current Evidence From Local Inspection
 
-`lat expand` was run with:
 
 ```bash
-lat expand "030 ACP Chat SDK APIs: aiIsOpen aiGetActiveChat aiListChats aiGetConversation aiStartChat aiAppendMessage aiSendMessage aiSetSystemPrompt aiFocus aiGetStreamingStatus aiDeleteChat aiOn"
 ```
 
-`lat search` was run with:
 
 ```bash
-lat search "ACP Chat SDK AI APIs aiIsOpen aiGetActiveChat aiListChats aiGetConversation aiStartChat aiAppendMessage aiSendMessage aiSetSystemPrompt aiFocus aiGetStreamingStatus aiDeleteChat aiOn"
+source search "ACP Chat SDK AI APIs aiIsOpen aiGetActiveChat aiListChats aiGetConversation aiStartChat aiAppendMessage aiSendMessage aiSetSystemPrompt aiFocus aiGetStreamingStatus aiDeleteChat aiOn"
 ```
 
-Top relevant `lat.md` sections:
 
-- `lat.md/acp-chat#ACP Chat`
-- `lat.md/ai-context#AI Context and MCP#ACP handoff`
-- `lat.md/acp-chat#ACP Chat#Mini AI And Full ACP Handoff Parity`
-- `lat.md/acp-chat#ACP Chat#Entry paths`
-- `lat.md/acp-chat#ACP Chat#ACP composer`
+- `removed-docs Chat`
+- `removed-docs Context and MCP#ACP handoff`
+- `removed-docs Chat#Mini AI And Full ACP Handoff Parity`
+- `removed-docs Chat#Entry paths`
+- `removed-docs Chat#ACP composer`
 
-Local scan findings that need Oracle scrutiny:
 
 - `scripts/kit-sdk.ts` declares all listed `ai*` globals and pushed event types.
 - `src/protocol/message/variants/ai.rs` defines protocol variants for request/result/event messages.
@@ -100,7 +89,6 @@ Local scan findings that need Oracle scrutiny:
 
 ## Bundle Map
 
-The attached bundle is a symbol-window packx bundle generated around the `ai*` SDK/protocol/runtime symbols. It includes focused extracts from:
 
 - `scripts/kit-sdk.ts`
 - `src/protocol/message/variants/ai.rs`
@@ -123,11 +111,10 @@ The attached bundle is a symbol-window packx bundle generated around the `ai*` S
 - `tests/protocol_ai_parts.rs`
 - `tests/smoke/test-ai-start-chat.ts`
 
-Process and domain context is included in this prompt because the focused bundle intentionally excludes full `AGENTS.md`, `CLAUDE.md`, skills, and full `lat.md` pages to keep the bundle readable.
+Process and domain context is included in this prompt because the focused bundle intentionally excludes full `AGENTS.md`, `CLAUDE.md`, skills, and full `removed-docs` pages to keep the bundle readable.
 
 ## Required Output Shape
 
-Return this exact structure:
 
 ```markdown
 ## 030 ACP Chat SDK APIs
@@ -182,7 +169,6 @@ Return this exact structure:
 4. Which SDK/protocol APIs are declared but not proven handled by the app?
 5. How do `parts` and `imagePath` flow into runtime state and persistence?
 6. How does `noResponse` change `aiStartChat` behavior?
-7. What does `aiIsOpen` actually mean: AI window handle, ACP embedded state, detached ACP, or something else?
 8. What are the data boundaries for `aiListChats`, `aiGetConversation`, and `aiDeleteChat`?
 9. Are `aiOn`/subscriptions real live streaming subscriptions or only SDK-local handler bookkeeping plus unproven protocol shapes?
 10. What exact verification recipes should an agent run to prove the implemented pieces without screenshots?

@@ -169,7 +169,7 @@ fn atomic_write(path: &Path, contents: &str) -> Result<()> {
 
 /// Minimal structural validation. Rejects payloads where the hover opacity is
 /// not strictly less than the selected opacity, matching the row-state
-/// contract documented in `lat.md/theme.md`.
+/// contract documented in `removed-docs`.
 fn validate_payload(payload: &Value) -> Result<()> {
     let Some(opacity) = payload
         .get("opacity")

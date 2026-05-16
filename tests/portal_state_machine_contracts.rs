@@ -1,7 +1,7 @@
 use script_kit_gpui::ai::message_parts::AiContextPart;
 use script_kit_gpui::test_support::acp_portal as portal;
 
-// @lat: [[tests/acp-portal-contract#Clipboard history portal#Host-aware refusal leaves ACP idle]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Clipboard history portal#Host-aware refusal leaves ACP idle]]
 #[test]
 fn clipboard_history_host_aware_refusal_leaves_acp_idle() {
     assert_eq!(
@@ -18,7 +18,7 @@ fn clipboard_history_host_aware_refusal_leaves_acp_idle() {
     );
 }
 
-// @lat: [[tests/acp-portal-contract#Clipboard history portal#Round-trip accepts kit id URIs and preserves the inline token]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Clipboard history portal#Round-trip accepts kit id URIs and preserves the inline token]]
 #[test]
 fn clipboard_history_round_trip_accepts_id_uri_and_preserves_inline_token() {
     let part = AiContextPart::ResourceUri {
@@ -44,7 +44,7 @@ fn clipboard_history_round_trip_accepts_id_uri_and_preserves_inline_token() {
     );
 }
 
-// @lat: [[tests/acp-portal-contract#Clipboard history portal#Attach replaces exact range and terminal states clear to idle]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Clipboard history portal#Attach replaces exact range and terminal states clear to idle]]
 #[test]
 fn clipboard_history_attach_replaces_exact_range_and_terminal_states_clear() {
     assert_eq!(
@@ -83,7 +83,7 @@ fn clipboard_history_attach_replaces_exact_range_and_terminal_states_clear() {
     assert_eq!(next_cursor, next_text.chars().count());
 }
 
-// @lat: [[tests/acp-portal-contract#Dictation history portal#Host-aware refusal leaves ACP idle]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Dictation history portal#Host-aware refusal leaves ACP idle]]
 #[test]
 fn dictation_history_host_aware_refusal_leaves_acp_idle() {
     assert_eq!(
@@ -100,7 +100,7 @@ fn dictation_history_host_aware_refusal_leaves_acp_idle() {
     );
 }
 
-// @lat: [[tests/acp-portal-contract#Dictation history portal#Production URI construction pairs with inline token]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Dictation history portal#Production URI construction pairs with inline token]]
 #[test]
 fn dictation_history_production_uri_pairs_with_inline_token() {
     let id = "test-id-7f3a";
@@ -136,7 +136,7 @@ fn dictation_history_production_uri_pairs_with_inline_token() {
     );
 }
 
-// @lat: [[tests/acp-portal-contract#Dictation history portal#Round-trip preserves history id but opens unfiltered]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Dictation history portal#Round-trip preserves history id but opens unfiltered]]
 #[test]
 fn dictation_history_round_trip_preserves_history_id_but_opens_unfiltered() {
     assert_eq!(
@@ -157,7 +157,7 @@ fn dictation_history_round_trip_preserves_history_id_but_opens_unfiltered() {
     );
 }
 
-// @lat: [[tests/acp-portal-contract#Dictation history portal#Attach replaces exact range and terminal states clear to idle]]
+// doc-anchor-removed: [[tests/acp-portal-contract#Dictation history portal#Attach replaces exact range and terminal states clear to idle]]
 #[test]
 fn dictation_history_attach_replaces_exact_range_and_terminal_states_clear() {
     assert_eq!(

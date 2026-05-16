@@ -96,6 +96,18 @@ pub struct AutomationInspectSnapshot {
     /// Automation window kind as a string (e.g. `"Main"`, `"Notes"`, `"AcpDetached"`).
     pub window_kind: String,
 
+    /// Stable launcher surface kind when the target is backed by an AppView.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_kind: Option<String>,
+
+    /// Active AppView variant when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app_view_variant: Option<String>,
+
+    /// Native footer surface id for the active AppView, when one exists.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_footer_surface: Option<String>,
+
     /// Window title if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
@@ -179,6 +191,9 @@ mod tests {
             schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: "main:0".to_string(),
             window_kind: "Main".to_string(),
+            surface_kind: None,
+            app_view_variant: None,
+            native_footer_surface: None,
             title: None,
             resolved_bounds: None,
             target_bounds_in_screenshot: None,
@@ -216,6 +231,9 @@ mod tests {
             schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: "notes:0".to_string(),
             window_kind: "Notes".to_string(),
+            surface_kind: Some("NotesWindow".to_string()),
+            app_view_variant: None,
+            native_footer_surface: None,
             title: Some("Script Kit Notes".to_string()),
             resolved_bounds: Some(crate::protocol::AutomationWindowBounds {
                 x: 100.0,
@@ -313,6 +331,9 @@ mod tests {
         assert!(!json.contains("warnings"));
         // None options should not appear
         assert!(!json.contains("title"));
+        assert!(!json.contains("surfaceKind"));
+        assert!(!json.contains("appViewVariant"));
+        assert!(!json.contains("nativeFooterSurface"));
         assert!(!json.contains("screenshotWidth"));
         assert!(!json.contains("osWindowId"));
         // New v2 fields should also be absent when None/empty

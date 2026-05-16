@@ -201,7 +201,9 @@ fn get_state_actions_dialog_target_round_trip() {
     });
     let msg: Message = serde_json::from_value(json).expect("parse");
     match msg {
-        Message::GetState { request_id, target } => {
+        Message::GetState {
+            request_id, target, ..
+        } => {
             assert_eq!(request_id, "gs-actions-1");
             let target = target.expect("target should be present");
             match target {
@@ -774,6 +776,9 @@ fn actions_dialog_inspect_result_with_panel_only_quality() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "actionsDialog:0".into(),
         window_kind: "ActionsDialog".into(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Actions".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,
@@ -802,6 +807,9 @@ fn prompt_popup_inspect_result_with_full_quality() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "promptPopup:0".into(),
         window_kind: "PromptPopup".into(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Confirm".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,

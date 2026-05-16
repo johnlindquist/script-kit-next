@@ -10,7 +10,7 @@ const STDIN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const STDIN_MATCH: &str = include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Settings entry opens setup]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Settings entry opens setup]]
 fn settings_exposes_first_class_dictation_setup_entry() {
     assert!(
         BUILTINS.contains("SettingsCommandType::DictationSetup"),
@@ -29,7 +29,7 @@ fn settings_exposes_first_class_dictation_setup_entry() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Pure readiness model]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Pure readiness model]]
 fn setup_state_model_keeps_hotkey_optional_but_microphone_required() {
     assert!(
         SETUP_MODEL.contains("pub struct DictationSetupState")
@@ -41,7 +41,7 @@ fn setup_state_model_keeps_hotkey_optional_but_microphone_required() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Non-prompting microphone preflight]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Non-prompting microphone preflight]]
 fn microphone_permission_preflight_is_read_only() {
     let permission_body = DEVICE
         .split("pub fn microphone_permission_status()")
@@ -58,7 +58,7 @@ fn microphone_permission_preflight_is_read_only() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Missing readiness opens setup]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Missing readiness opens setup]]
 fn dictation_start_paths_open_setup_when_microphone_is_not_ready() {
     for marker in [
         "BuiltInFeature::Dictation =>",
@@ -79,7 +79,7 @@ fn dictation_start_paths_open_setup_when_microphone_is_not_ready() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Safe download prompt actions]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Safe download prompt actions]]
 fn dictation_setup_prompt_preserves_safe_download_actions() {
     assert!(
         BUILTIN_EXECUTION.contains("transcription is local after Parakeet installs"),
@@ -100,7 +100,7 @@ fn dictation_setup_prompt_preserves_safe_download_actions() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Protocol Enter submits setup prompt]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Protocol Enter submits setup prompt]]
 fn protocol_enter_submits_mini_setup_prompt() {
     for (label, source) in [
         ("app_run_setup", STDIN_SETUP),
@@ -121,7 +121,7 @@ fn protocol_enter_submits_mini_setup_prompt() {
 }
 
 #[test]
-// @lat: [[tests/dictation-setup-nux#Dictation Setup NUX#Hotkey guidance does not invent default]]
+// doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Hotkey guidance does not invent default]]
 fn ready_copy_reports_real_hotkey_or_config_guidance() {
     assert!(
         BUILTIN_EXECUTION.contains("no default is assumed"),

@@ -51,7 +51,7 @@ const QUERY_OPS_CONSTRUCTORS: &str =
 const SCREENSHOT_FILES_SOURCE: &str = include_str!("../src/ai/harness/screenshot_files.rs");
 const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_variant_declares_screenshot_identity_with_camel_case_rename() {
     assert!(
@@ -79,7 +79,7 @@ fn state_result_variant_declares_screenshot_identity_with_camel_case_rename() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_constructor_accepts_screenshot_identity_as_trailing_param() {
     assert!(
@@ -98,7 +98,7 @@ fn state_result_constructor_accepts_screenshot_identity_as_trailing_param() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn screenshot_files_exposes_identity_accessor_and_capture_paths_record_it() {
     assert!(
@@ -154,7 +154,7 @@ fn screenshot_files_exposes_identity_accessor_and_capture_paths_record_it() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn prompt_handler_main_state_snapshot_reads_through_screenshot_identity_accessor() {
     assert!(

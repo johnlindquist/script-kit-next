@@ -71,7 +71,7 @@ const PASS_1_COMMENT_PHRASES: &[&str] = &[
     "pre-filter height when visibleChoiceCount drops.",
 ];
 
-// @lat: [[lat.md/automation#Automation#Actions dialog filter resize parity]]
+// doc-anchor-removed: [[removed-docs dialog filter resize parity]]
 #[test]
 fn actions_dialog_batch_section_anchor_exists_exactly_once() {
     let count = PROMPT_HANDLER.matches(ACTIONS_BATCH_ANCHOR).count();
@@ -86,7 +86,7 @@ fn actions_dialog_batch_section_anchor_exists_exactly_once() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Actions dialog filter resize parity]]
+// doc-anchor-removed: [[removed-docs dialog filter resize parity]]
 #[test]
 fn actions_dialog_batch_setinput_arm_calls_set_search_text_then_resize_in_order() {
     let anchor_idx = PROMPT_HANDLER
@@ -127,7 +127,7 @@ fn actions_dialog_batch_setinput_arm_calls_set_search_text_then_resize_in_order(
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Actions dialog filter resize parity]]
+// doc-anchor-removed: [[removed-docs dialog filter resize parity]]
 #[test]
 fn actions_dialog_batch_setinput_arm_is_self_contained_set_then_resize() {
     let anchor_idx = PROMPT_HANDLER
@@ -180,7 +180,7 @@ fn actions_dialog_batch_setinput_arm_is_self_contained_set_then_resize() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Actions dialog filter resize parity]]
+// doc-anchor-removed: [[removed-docs dialog filter resize parity]]
 #[test]
 fn actions_dialog_batch_setinput_carries_pass_1_run_8_anchor_comment() {
     let anchor_idx = PROMPT_HANDLER

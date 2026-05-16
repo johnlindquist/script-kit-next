@@ -1,3 +1,0 @@
-[mcp_servers.lat]
-command = "npx"
-args = ["lat.md@latest", "mcp"]

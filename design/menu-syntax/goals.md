@@ -4,7 +4,6 @@ Design and implement additional power-user syntaxes for the Script Kit main menu
 
 ## User goals (verbatim)
 
-> I'd like for the main menu to support a few more custom syntaxes:
 >
 > ## Current
 > / - Open Agent chat with the slash command popup menu
@@ -25,22 +24,19 @@ Design and implement additional power-user syntaxes for the Script Kit main menu
 
 ## Constraints
 
-- Existing triggers in `src/app_impl/filter_input_core.rs` (`is_transient_script_list_trigger`, `special_entry_from_script_list_filter`): `~` `/` `@` `>` `?` — must keep working.
 - Power-user syntax should be **composable** and **repeatable** without LLM inference for the common path.
 - Scripts / scriptlets / skills should be able to opt in via metadata so the matching result only surfaces when the typed syntax applies.
 - Must ship with a handful of working examples per syntax family.
-- Follow `lat.md/` patterns — every new concept gets a section; tests should have `@lat:` comments.
 - Do not break `make smoke-main-menu`.
 
 ## Success criteria (iteration exit condition)
 
-When Oracle and the implementation together reach a state where:
 
 1. At least one non-AI advanced-filter syntax is shipped end-to-end (parser → filter pass → examples → test).
 2. A tagging syntax family has a target-routing mechanism that can hand off the parsed payload to a script/scriptlet via a stable contract.
 3. Date inference produces a normalised `{iso, relative}` pair that at least one example script consumes.
 4. Script/scriptlet metadata has a new field (or equivalent) so handlers can opt in to a syntax family, and the main menu filters accordingly.
-5. `lat.md/` has a new section documenting the syntax layer; `lat check` passes.
+5. `removed-docs/` has a new section documenting the syntax layer; `source checks` passes.
 6. At least three shipped example scripts/scriptlets demonstrate the new syntaxes.
 7. Commit trail reads cleanly — one commit per concern; each commit message is an agent-reproducible prompt.
 

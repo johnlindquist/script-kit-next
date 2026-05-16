@@ -2,11 +2,9 @@
 
 This chapter maps main-window visibility controls, debug grid commands, window bounds, screenshot capture, and layout inspection APIs.
 
-Raw Oracle reference: [answer](../raw-oracle/028-window-control-visual-inspection/answer.md), [prompt](../raw-oracle/028-window-control-visual-inspection/prompt.md), [bundle map](../raw-oracle/028-window-control-visual-inspection/bundle-map.md), [full log](../raw-oracle/028-window-control-visual-inspection/output.log), [session metadata](../raw-oracle/028-window-control-visual-inspection/session.json).
 
 ## Executive Summary
 
-Feature 028 covers:
 
 - `show()`.
 - `hide()`.
@@ -21,7 +19,6 @@ These APIs split into two families. `show`, `hide`, `blur`, `showGrid`, and `hid
 
 `getWindowBounds`, `captureScreenshot`, and `getLayoutInfo` are request-backed queries. They allocate request ids, register pending SDK callbacks, and expect correlated responses. Bounds and layout are structural proof surfaces; screenshots are high-sensitivity pixel evidence and require content audit before they count as visual proof.
 
-The main ambiguity Oracle flagged is show-response drift: `lat.md/protocol.md` and `tests/stdin_show_hide_simulatekey_no_response_envelope_contract.rs` describe stdin show/hide/simulateKey as no-envelope commands, while one bundled `app_run_setup.rs` snippet includes a `window_visibility_ack` send in a Show branch. Treat `show()`/`hide()` as unreceipted at the SDK level and verify the active dispatcher before relying on any visibility ack.
 
 ## What Users Can Do
 
@@ -30,7 +27,6 @@ The main ambiguity Oracle flagged is show-response drift: `lat.md/protocol.md` a
 | Reveal Script Kit. | `await show()` | Sends `show`; no SDK receipt. |
 | Hide the main window. | `await hide()` | Sends `hide`; no SDK receipt. |
 | Defocus/blur Script Kit. | `await blur()` | Sends `blur`; exact runtime path is a proof gap in the captured context. |
-| Show visual debug grid. | `await showGrid({ gridSize: 16 })` | Sends grid options; visual proof requires screenshot. |
 | Hide visual debug grid. | `await hideGrid()` | Sends grid hide command; no SDK receipt. |
 | Read main bounds. | `await getWindowBounds()` | Resolves `{ x, y, width, height }`; SDK may mask error JSON as zero values. |
 | Capture pixels. | `await captureScreenshot({ hiDpi })` | Resolves base64 PNG data, width, and height, or rejects typed screenshot errors. |
@@ -62,50 +58,35 @@ Screenshots can expose private user data and can fail because of Screen Recordin
 
 | Entry | Payload | Response | Notes |
 |---|---|---|---|
-| `show()` | `{ type:"show" }` | None at SDK level. | Prove with follow-up state/window inspection. |
-| `hide()` | `{ type:"hide" }` | None at SDK level. | Prove `windowVisible:false` or automation registry state. |
-| `blur()` | `{ type:"blur" }` | None at SDK level. | Runtime side effect needs focused-window proof. |
-| `showGrid(options?)` | `{ type:"showGrid", ...options }` | None at SDK level. | Visual grid proof requires screenshot. |
-| `hideGrid()` | `{ type:"hideGrid" }` | None at SDK level. | Visual absence requires screenshot if it matters. |
-| `getWindowBounds()` | `{ type:"getWindowBounds", requestId }` | SDK script path expects JSON bounds through `submit`; stdin path has typed `windowBounds`. | Zero bounds can mean error or missing registry data. |
-| `captureScreenshot(options?)` | `{ type:"captureScreenshot", requestId, hiDpi }` | `screenshotResult`. | SDK wrapper shown does not expose protocol `target`. |
-| `getLayoutInfo()` | `{ type:"getLayoutInfo", requestId }` | `layoutInfoResult`. | Protocol has target, but handler is main-window limited in captured context. |
 
 ## User Workflows
 
 ### Show The Main Window
 
-A script calls:
 
 ```ts
 await show()
 ```
 
-The SDK sends `{ type:"show" }` and resolves. Runtime show paths activate/focus the main panel and sync the main automation-window record. To prove it, query `getState`, `listAutomationWindows`, or `inspectAutomationWindow({ id:"main" })`. Capture a screenshot only when visual proof is required.
 
 ### Hide The Main Window
 
-A script calls:
 
 ```ts
 await hide()
 ```
 
-The SDK sends `{ type:"hide" }` and resolves. Main hide should be a main-panel-only dismissal, not a broad app hide that conceals Notes or other independent hosts. For reset-sensitive flows, prove `windowVisible:false`, then show again and assert the surface returned to ScriptList.
 
 ### Blur Or Defocus
 
-`blur()` sends `{ type:"blur" }`, but the bundled context did not prove the exact Rust/AppKit dispatch path. Treat it as a focus-affecting, unreceipted command. Prove focus with automation-window focused id, frontmost app observation, or the appropriate platform receipt.
 
 ### Show Or Hide Debug Grid
 
-`showGrid()` forwards grid options to the debug grid path. Options include grid size, bounds, box model, alignment guides, dimensions, depth, and color scheme. Stdin ExternalCommand snippets construct `color_scheme: None`, so custom grid colors need path-specific proof.
 
 Use screenshots to prove that the grid rendered or disappeared. `getLayoutInfo()` can prove the expected structural bounds, but not overlay pixels.
 
 ### Read Window Bounds
 
-`getWindowBounds()` differs by runtime path. The SDK script-execution path reads main NSWindow bounds and returns JSON through a submit-style response. Error JSON like `{"error":"Main window not found"}` can parse into zero-like bounds because the SDK defaults missing numeric fields to `0`.
 
 The stdin automation path reads `list_automation_windows()`, filters id `main`, emits typed `windowBounds`, and logs request-scoped `get_window_bounds_result`.
 
@@ -124,7 +105,6 @@ Screenshot capture uses Screen Recording preflight and rejects blank/black/solid
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
 | Reveal main window. | `show()` | Main hidden/behind. | None. | SDK `ShowMessage`; runtime show/focus/sync path. | Main should be visible/focused. | Follow-up state or automation-window inspection. |
-| Hide main window. | `hide()` | Main visible. | None. | SDK `HideMessage`; `PromptMessage::HideWindow`; hide/reset paths. | Main hidden; next show should return to ScriptList. | `windowVisible:false`, registry state, next-show surface. |
 | Defocus. | `blur()` | Main focused. | None. | SDK `BlurMessage`. | Focus changes, exact route unproven. | Focus/frontmost observation. |
 | Show grid. | `showGrid(options)` | Visible prompt/window. | None. | SDK/protocol grid message -> `show_grid`. | Overlay rendered. | Screenshot with content audit. |
 | Hide grid. | `hideGrid()` | Grid active. | None. | SDK/protocol grid hide -> `hide_grid`. | Overlay removed. | Screenshot if visual absence matters. |
@@ -157,7 +137,6 @@ Screenshot capture uses Screen Recording preflight and rejects blank/black/solid
 | State | How it appears | Proof path |
 |---|---|---|
 | Main visible. | Launcher/prompt panel visible. | `getState`, automation window registry, optional screenshot. |
-| Main hidden. | Main panel dismissed. | `windowVisible:false`, registry visible flag. |
 | Main focused. | Script Kit accepts input. | focused automation-window id or platform frontmost/focus receipt. |
 | Main blurred. | Focus returned elsewhere. | frontmost/focus observation. |
 | Grid visible. | Overlay lines/bounds/dimensions on prompt. | Screenshot content audit. |
@@ -196,7 +175,6 @@ These APIs do not own Actions dialog rows or menu actions. They are supporting s
 
 Screenshots can contain private user content, filenames, clipboard/history text, browser/app surfaces, and debug overlays. Store screenshots only when the proof requires pixels, and reject blank/black captures as infrastructure failures.
 
-Layout info reveals structural state: prompt type, component names, bounds, hierarchy, and explanations. It is less sensitive than pixels but still exposes active UI shape.
 
 Bounds reveal screen geometry and window placement. Hide paths may persist per-display main-window position. Show/hide/blur change visible focus state and can interrupt the user.
 
@@ -242,7 +220,6 @@ Bounds reveal screen geometry and window placement. Hide paths may persist per-d
 
 ### Prove Show
 
-Send `show`, use a parse receipt only as command-acceptance proof, then query `getState`, `listAutomationWindows`, or `inspectAutomationWindow({ id:"main" })`. Assert visible/focused main state.
 
 ### Prove Hide And Reset
 
@@ -258,11 +235,9 @@ Render visible content, prove state first, call `captureScreenshot`, then verify
 
 ### Prove HiDPI
 
-Capture once with `hiDpi:false` and once with `hiDpi:true`. Assert HiDPI dimensions are greater than or equal to the 1x dimensions.
 
 ### Prove Debug Grid
 
-Call `showGrid({ gridSize: 16 })`, capture a screenshot, audit pixels, and inspect for grid overlay. Call `hideGrid()` and capture again if absence matters.
 
 ### Prove Layout Info
 
@@ -273,7 +248,6 @@ Render a known prompt, call `getLayoutInfo()`, assert positive `windowWidth`/`wi
 - Do not wait for a `showResult`, `hideResult`, `showGridResult`, `hideGridResult`, or `blurResult`.
 - Treat the `window_visibility_ack` evidence as a dispatcher-specific proof gap until verified in the active build.
 - Prefer state, elements, automation-window inspection, and bounds before screenshots.
-- Use screenshots only for pixel claims: grid overlay, clipping, rendered color, blur/vibrancy, or screenshot behavior.
 - Always audit screenshots; a blank or black PNG is not visual proof.
 - Treat zero bounds from SDK `getWindowBounds()` as likely infrastructure/error unless corroborated.
 - Do not use targeted `getState` for secondary surfaces. Use `getElements(target)` and `inspectAutomationWindow(target)`.

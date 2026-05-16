@@ -2,13 +2,11 @@
 
 The tray menu is Script Kit's secondary macOS entry point and the visible bridge between app lifecycle, update state, About, and release distribution.
 
-Raw Oracle reference: [primary answer](../raw-oracle/036-tray-lifecycle-distribution-updates/answer.md), [primary prompt](../raw-oracle/036-tray-lifecycle-distribution-updates/prompt.md), [primary bundle map](../raw-oracle/036-tray-lifecycle-distribution-updates/bundle-map.md), [primary full log](../raw-oracle/036-tray-lifecycle-distribution-updates/output.log), [primary session metadata](../raw-oracle/036-tray-lifecycle-distribution-updates/session.json). Supplemental tray/global-entry pass: [answer](../raw-oracle/036-tray-menu-global-entry-points/answer.md), [prompt](../raw-oracle/036-tray-menu-global-entry-points/prompt.md), [bundle map](../raw-oracle/036-tray-menu-global-entry-points/bundle-map.md), [full log](../raw-oracle/036-tray-menu-global-entry-points/output.log), [session metadata](../raw-oracle/036-tray-menu-global-entry-points/session.json).
 
 ## Executive Summary
 
 Feature 036 covers the macOS status-bar tray menu, tray-driven lifecycle actions, the launcher-native About route, the GitHub-release-backed update checker, release/distribution contracts, and the read-only MCP observation model for Script Kit's own tray menu.
 
-The tray is built once at startup by `TrayManager`, then mutated in place for update/version state on the GPUI main thread. It does not implement a full self-updater: current behavior detects releases, exposes update state, opens release URLs, and publishes `release-manifest.json` for future installer integrity verification.
 
 ## What Users Can Do
 
@@ -66,8 +64,6 @@ Stable ids are the automation-safe way to refer to tray rows because visible tit
 | `Open AI` / Agent Chat | Open agent chat | Main window ACP tab |
 | `Settings` | Edit config | Config editor path |
 | `Reload Scripts` | Refresh script catalog | Runtime script refresh |
-| `Check for Updates...` | Start update check | `updates::check_now` |
-| Version/update row | Open release URL when available | `UpdateState::Available` release URL |
 | `About Script Kit` | Open launcher-native About | `open_about_surface` |
 | `Quit Script Kit` | Shutdown app | Tray dispatcher shutdown path |
 | MCP tray tools | Observe menu model | Read-only tray model handlers |
@@ -76,11 +72,9 @@ Stable ids are the automation-safe way to refer to tray rows because visible tit
 
 ### Startup And Tray Construction
 
-At startup, the app waits briefly so window creation and initial render can proceed, creates `UpdateState::Idle`, converts the configured launcher hotkey into a tray shortcut accelerator, constructs `TrayManager`, and starts a delayed update check worker.
 
 ### Open Script Kit From Tray
 
-The user selects Open Script Kit. The tray event is converted through `TrayMenuAction::from_id`, the dispatcher handles the action, and the main window is shown without relying on MCP tray observation or native menu automation.
 
 ### Open Current App Commands
 
@@ -94,11 +88,9 @@ The visible row is **Open AI**, while the stable id is `tray.open_agent_chat`. A
 
 ### Check For Updates
 
-The tray Check for Updates row starts `updates::check_now`, then waits on the background executor before refreshing the version label on the GPUI main thread. The worker writes `UpdateState`; native menu mutation happens only on the GPUI/main-thread path.
 
 ### Open Release Page
 
-The dynamic Version row is disabled unless `UpdateState::Available` has a release URL. When available, selecting it opens the release URL. No installer, replacement, relaunch, or artifact verification happens in the current in-app update path.
 
 ### Open About From Tray
 
@@ -130,8 +122,6 @@ Local release work builds the release binary, bundles the macOS app, and verifie
 | Open social link | Tray menu | Social section | Click Follow/GitHub/Discord | External URL open | Pinned URL opens | HTTPS/pinned URL tests |
 | Open Settings | Tray menu | System section | Click Settings | Config editor path | `config.ts` opens in editor | Tray action contract |
 | Reload scripts | Tray menu | System section | Click Reload Scripts | `view.refresh_scripts` | Script catalog refreshes | Runtime dispatch proof |
-| Check updates | Tray menu | System section | Click Check for Updates | `updates::check_now` | Update state changes and version row refreshes | Update state tests |
-| Open release | Tray menu | Version row available | Click update row | `UpdateState::release_url` | Release URL opens | Available-only proof |
 | Open About | Tray menu | System section | Click About | `open_about_surface` | About route opens with shared update state | About contract tests |
 | Quit app | Tray menu | Exit section | Click Quit | Shutdown flag, child cleanup, PID cleanup, `cx.quit` | App exits | Shutdown path audit |
 | Inspect tray model | MCP | Read-only model | Tool call | `current_tray_menu_observation_snapshot` | JSON menu model returned | MCP source audits |
@@ -143,7 +133,6 @@ Local release work builds the release binary, bundles the macOS app, and verifie
 |---|---|---|---|
 | Tray initializing | App startup | Tray idle | Waits for initial render/window work before tray creation. |
 | Tray idle | Tray created | Menu action, delayed update check | Version row reflects Idle/UpToDate/Error/Available state. |
-| Tray dispatching action | Menu event | Target surface/action, tray idle, shutdown | Event id must map through `TrayMenuAction::from_id`. |
 | Update checking | Startup worker or Check for Updates | UpToDate, Available, Error | Existing check prevents duplicate checking. |
 | Update available | `pick_release` finds newer tag with asset | Open release page, future check | Version row is enabled and has release URL. |
 | Update unavailable | UpToDate or newer tag without asset | Future check | Newer tag without downloadable asset is not advertised. |
@@ -162,25 +151,15 @@ The Version row is always present but disabled unless a release URL is available
 | `UpToDate` | `Version <current>` | false |
 | `Checking` | `Checking for updates... (v<current>)` | false |
 | `Error(_)` | `Version <current> (update check failed)` | false |
-| `Available { version, url }` | `Update Available: v<version>` | true |
 
 ## Visual And Focus States
 
-- Tray menu Open band: launcher, current-app commands, Notes, and Agent Chat rows.
-- Tray Help/Social bands: feedback and pinned external links.
-- Tray System band: Settings, Reload Scripts, Check for Updates, dynamic Version row, and About.
-- Tray Exit band: icon-less Quit Script Kit row.
-- Dynamic Version row: disabled for Idle/Checking/UpToDate/Error and enabled only for Available.
-- About route: full-window surface with fixed header, scrollable body, quick actions, update card, acknowledgements disclosure, and footer.
-- About focus: no launcher filter; Escape, Tab, Enter, and Space are owned by About controls.
-- MCP tray model: JSON sections/items with stable ids and destination kinds, not a native menu screenshot.
 
 ## Keystrokes And Commands
 
 | Key/command | Context | Behavior |
 |---|---|---|
 | Configured launcher hotkey | Tray Open Script Kit row | Displayed as key equivalent via `main_shortcut_accelerator` at next launch. |
-| Click menu row | Native tray menu | Emits row id that maps through `TrayMenuAction::from_id`. |
 | Escape | About route | Dismisses About back to prior route. |
 | Tab / Shift+Tab | About route | Walks close, link, update, and acknowledgements controls. |
 | Enter / Space | About focused control | Activates the focused About control. |
@@ -192,15 +171,8 @@ The Version row is always present but disabled unless a release URL is available
 
 The tray action enum currently has 14 stable `tray.*` ids. The core invariant is that every native row, action enum variant, string id, `from_id` conversion, `all()` list, observation model row, and dispatcher branch stay aligned.
 
-Menu bands:
 
-- Open: `tray.open_script_kit`, current app commands, `tray.open_notes`, `tray.open_agent_chat`.
-- Help: feedback URL.
-- Social: Follow Us, GitHub, Discord.
-- System: Settings, Reload Scripts, Check for Updates, dynamic Version/Open Release row, About.
-- Exit: Quit Script Kit.
 
-Icons are intentional: Open Script Kit uses the shared logo; most rows use template native icons or template-rendered SVGs; Settings, About, and Quit intentionally render icon-less to avoid noisy full-color status images.
 
 ## Automation And Protocol Surface
 
@@ -229,7 +201,6 @@ Icons are intentional: Open Script Kit uses the shared logo; most rows use templ
 - Shortcut conversion can fail. Open Script Kit remains enabled, but the key equivalent is omitted rather than showing a misleading shortcut.
 - SVG render failures are non-fatal for rows with fallback icons.
 - Check for Updates shows Checking state and disables version/open-release behavior until a result lands.
-- Request or parse failures become `UpdateState::Error`.
 - Newer release without downloadable assets is treated as UpToDate.
 - Version row is disabled unless update state is Available.
 - About checking disables the update button; errors remain retryable.
@@ -258,7 +229,6 @@ Icons are intentional: Open Script Kit uses the shared logo; most rows use templ
 ## Invariants And Regression Risks
 
 - Native tray item mutation must happen on the GPUI/main-thread path, not inside update worker threads.
-- Tray action ids must roundtrip through `TrayMenuAction::id` and `TrayMenuAction::from_id`.
 - Native menu order and MCP observation section order must match.
 - Tray observation rows must not expose click, execute, action, or event handles.
 - MCP tray tools are read-only observations, not native tray automation.
@@ -271,7 +241,6 @@ Icons are intentional: Open Script Kit uses the shared logo; most rows use templ
 
 ## Verification Recipes
 
-Tray and MCP source audits:
 
 ```bash
 cargo test tray_menu_action_id_roundtrip
@@ -281,7 +250,6 @@ cargo test --test source_audits mcp_computer_get_tray_menu_item_contract
 cargo test --test source_audits mcp_computer_get_tray_menu_item_by_id_contract
 ```
 
-Supplemental tray/global-entry checks from the focused pass:
 
 ```bash
 cargo test tray_menu_action_ids_are_unique
@@ -300,7 +268,6 @@ cargo test test_main_shortcut_accelerator_default
 cargo test test_tray_urls_are_https_and_pinned
 ```
 
-About and update checks:
 
 ```bash
 cargo test --test about_surface_contract
@@ -308,7 +275,6 @@ cargo test --test about_surface_source_audit
 cargo test --test source_audits update_picker_contract
 ```
 
-Distribution checks:
 
 ```bash
 bash scripts/verify-release-version.sh
@@ -316,23 +282,21 @@ bash scripts/verify-macos-bundle.sh
 make verify
 ```
 
-Human-only packaging gate:
 
 ```bash
 make ship-check
 ```
 
-Atlas/explorer gates after this chapter:
 
 ```bash
 npm run build
-lat check
-git diff --check -- feature-map FEATURE_MAP.md feature_explorer lat.md
+source checks
+git diff --check -- feature-map FEATURE_MAP.md feature_explorer removed-docs
 ```
 
 ## Agent Notes
 
-Use `.agents/skills/platform-windowing-macos/SKILL.md` as the primary owner, with `$protocol-automation` for MCP observation boundaries and `$testing-quality-gates` for selecting checks. Treat `src/tray/mod.rs`, `src/updates.rs`, `src/app_impl/about_route.rs`, and `lat.md/tray-menu.md` as stronger source of truth than stale-looking tray action names in older runtime excerpts.
+Use `.agents/skills/platform-windowing-macos/SKILL.md` as the primary owner, with `$protocol-automation` for MCP observation boundaries and `$testing-quality-gates` for selecting checks. Treat `src/tray/mod.rs`, `src/updates.rs`, `src/app_impl/about_route.rs`, and `removed-docs` as stronger source of truth than stale-looking tray action names in older runtime excerpts.
 
 Use stable `tray.*` ids, not visible tray labels, in automation. Titles can be dynamic (`<App> Commands`) or product-copy-specific (`Open AI`). Do not infer dictation tray behavior from dictation protocol resources; the tray menu snapshot does not show a dictation row. Do not add a tray runtime bridge path because source audits explicitly forbid `ComputerUseRuntimeBridge` tray observation methods.
 

@@ -1163,8 +1163,15 @@ fn prompt_message_from_protocol_message(
         }
         Message::Webcam { id } => Some(PromptMessage::WebcamComingSoon { id }),
         Message::Mic { id } => Some(PromptMessage::MicComingSoon { id }),
-        Message::GetState { request_id, target } => {
-            Some(PromptMessage::GetState { request_id, target })
+        Message::GetState {
+            request_id,
+            target,
+            summary_only,
+        } => Some(PromptMessage::GetState {
+            request_id,
+            target,
+            summary_only,
+        }),
         }
         Message::GetElements {
             request_id,
@@ -1282,6 +1289,9 @@ impl ScriptListApp {
                     schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
                     window_id: String::new(),
                     window_kind: "unknown".to_string(),
+                    surface_kind: None,
+                    app_view_variant: None,
+                    native_footer_surface: None,
                     title: None,
                     resolved_bounds: None,
                     target_bounds_in_screenshot: None,
@@ -1420,6 +1430,13 @@ impl ScriptListApp {
             schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: resolved.id.clone(),
             window_kind: format!("{:?}", resolved.kind),
+            surface_kind: (resolved.kind == protocol::AutomationWindowKind::Main)
+                .then(|| format!("{:?}", self.current_view.surface_kind())),
+            app_view_variant: (resolved.kind == protocol::AutomationWindowKind::Main)
+                .then(|| self.current_view.app_view_variant().to_string()),
+            native_footer_surface: (resolved.kind == protocol::AutomationWindowKind::Main)
+                .then(|| self.current_view.native_footer_surface().map(str::to_string))
+                .flatten(),
             title: resolved.title.clone(),
             resolved_bounds: resolved.bounds.clone(),
             target_bounds_in_screenshot,
@@ -2701,7 +2718,11 @@ impl ScriptListApp {
                 cx.notify();
             }
 
-            PromptMessage::GetState { request_id, target } => {
+            PromptMessage::GetState {
+                request_id,
+                target,
+                summary_only,
+            } => {
                 tracing::info!(
                     category = "UI",
                     request_id = %request_id,
@@ -3584,7 +3605,9 @@ impl ScriptListApp {
                     }))
                 };
 
-                let menu_syntax_main_hint = if matches!(self.current_view, AppView::ScriptList) {
+                let menu_syntax_main_hint = if !summary_only
+                    && matches!(self.current_view, AppView::ScriptList)
+                {
                     // Run 12 — also treat the empty-result gate as true when
                     // the parser returns Incomplete but the user is mid-typing
                     // a non-source head (`has:`, `:type:`, etc.). Source heads
@@ -3634,7 +3657,9 @@ impl ScriptListApp {
                 // legacy fall-through with `source: None`. Scripts
                 // that DO declare enums → schema rows ranked first
                 // with `Some(SchemaEnum)` discriminators.
-                let capture_history_picker =
+                let capture_history_picker = if summary_only {
+                    None
+                } else {
                     crate::menu_syntax::capture_history_picker::snapshot_from_filter_text_with_overrides(
                         &self.filter_text,
                         &crate::menu_syntax::history::HistoryStore::from_env(),
@@ -3647,9 +3672,10 @@ impl ScriptListApp {
                             let refs: Vec<&crate::menu_syntax::MenuSyntaxHandlerSpec> = specs.iter().collect();
                             crate::menu_syntax::capture_kv_enum_values_for_specs(target, key, &refs)
                         },
-                    );
+                    )
+                };
                 let script_list_active = matches!(self.current_view, AppView::ScriptList);
-                let main_window_preflight = if script_list_active {
+                let main_window_preflight = if !summary_only && script_list_active {
                     self.rebuild_main_window_preflight_if_needed();
                     self.cached_main_window_preflight
                         .as_ref()

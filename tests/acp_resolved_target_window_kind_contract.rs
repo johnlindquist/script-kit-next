@@ -46,7 +46,7 @@ use script_kit_gpui::protocol::AutomationWindowKind;
 const HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
 const AUTOMATION_WINDOW: &str = include_str!("../src/protocol/types/automation_window.rs");
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#getAcpState  routes to main's collector]]
+// doc-anchor-removed: [[removed-docs window behavior#getAcpState  routes to main's collector]]
 #[test]
 fn automation_window_kind_has_as_camel_case_helper() {
     assert!(
@@ -59,7 +59,7 @@ fn automation_window_kind_has_as_camel_case_helper() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#getAcpState  routes to main's collector]]
+// doc-anchor-removed: [[removed-docs window behavior#getAcpState  routes to main's collector]]
 #[test]
 fn as_camel_case_matches_serde_for_every_variant() {
     // Exhaustive match — adding a new variant without adding a case here
@@ -93,7 +93,7 @@ fn as_camel_case_matches_serde_for_every_variant() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#getAcpState  routes to main's collector]]
+// doc-anchor-removed: [[removed-docs window behavior#getAcpState  routes to main's collector]]
 #[test]
 fn build_acp_resolved_target_main_arm_reads_info_kind() {
     let start = HANDLER

@@ -494,7 +494,7 @@ fn report_optimal_selected_subtle() {
 /// `(preset_id, pair)` so the audit still catches new regressions in every
 /// other surface of the same preset.
 ///
-/// Documented in `lat.md/theme.md#Preset contrast guardrail`.
+/// Documented in `removed-docs contrast guardrail`.
 fn is_chrome_contrast_exempt(preset_id: &str, pair: &str) -> bool {
     matches!(
         (preset_id, pair),

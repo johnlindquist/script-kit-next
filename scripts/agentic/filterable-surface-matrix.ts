@@ -78,7 +78,7 @@ const SAFE_NON_SUBMITTING_INTERACTIONS: SafeSurfaceInteractions = {
   submit: false,
 };
 
-// @lat: [[lat.md/automation#Automation#Operational Rules]]
+// doc-anchor-removed: [[removed-docs Rules]]
 export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
   {
     id: "current-app-commands-visible-rows",

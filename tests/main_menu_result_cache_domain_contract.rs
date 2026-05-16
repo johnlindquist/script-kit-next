@@ -80,7 +80,7 @@ fn result_cache_owner_names_behavior_accessors() {
     }
 }
 
-// @lat: [[lat.md/architecture#Architecture#App State Domains]]
+// doc-anchor-removed: [[removed-docs State Domains]]
 #[test]
 fn result_caches_have_a_named_domain_owner() {
     let cache_body = source_between(

@@ -2,18 +2,15 @@
 
 This chapter maps the SDK-visible `hotkey()` capture prompt and separates it from the implemented shortcut recorder/config system.
 
-Raw Oracle reference: [answer](../raw-oracle/022-hotkey-prompt/answer.md), [prompt](../raw-oracle/022-hotkey-prompt/prompt.md), [bundle map](../raw-oracle/022-hotkey-prompt/bundle-map.md), [full log](../raw-oracle/022-hotkey-prompt/output.log), [session metadata](../raw-oracle/022-hotkey-prompt/session.json).
 
 ## Executive Summary
 
-Feature 022 has two related but separate systems:
 
 | System | Status | Meaning |
 |---|---|---|
 | SDK `hotkey(placeholder?)` | Implemented transient capture. | Exposed in TypeScript, opens `HotkeyPrompt`, and returns `HotkeyInfo` without writing config or registering shortcuts. |
 | Shortcut recorder | Implemented. | Persistent app shortcut assignment UI used from action menus; writes `config.ts`, updates live hotkey registration, and refreshes visible scripts. |
 
-Current product truth: SDK `hotkey()` sends a `type:"hotkey"` prompt message, Rust opens `AppView::HotkeyPrompt`, and capture resolves through prompt submission with a JSON `HotkeyInfo` payload. The implemented shortcut recorder remains a separate app feature that mutates `config.ts` and live hotkey registrations.
 
 The implemented shortcut recorder is a separate app feature. It is a compact popup/modal for assigning/removing persistent shortcuts. It mutates `~/.scriptkit/config.ts` via `update-config-shortcut.ts` / `remove-config-shortcut.ts`, registers command hotkeys live through `src/hotkeys/mod.rs`, and refreshes script/scriptlet data.
 
@@ -37,7 +34,6 @@ The implemented shortcut recorder is a separate app feature. It is a compact pop
 | SDK `hotkey()` | Transient capture API. | Captures one shortcut and returns `HotkeyInfo`; should not persist or register anything. |
 | `HotkeyPrompt` | Rust host route. | Displays transient capture and submits `HotkeyInfo` or null on cancel. |
 | Shortcut recorder | Implemented persistent shortcut UI. | Captures modifier-based shortcuts for commands. |
-| `HotkeyConfig` | Persistent config shape. | `modifiers: KeyModifier[]`, `key: KeyCode`. |
 | `config.ts` shortcuts | Source of truth for command shortcuts. | Replaces legacy `shortcuts.json`. |
 | Global hotkey registry | Live OS shortcut routing. | Config-backed command shortcuts register before inline metadata shortcuts. |
 | Transactional rebind | Hotkey update safety. | Register new hotkey before unregistering old one. |
@@ -46,27 +42,22 @@ The implemented shortcut recorder is a separate app feature. It is a compact pop
 
 | Entry | Context | Result |
 |---|---|---|
-| `globalThis.hotkey` in `scripts/kit-sdk.ts`. | Script calls SDK hotkey. | Sends `type:"hotkey"` and resolves submitted `HotkeyInfo`. |
-| `PromptMessage::ShowHotkey`. | Rust receives hotkey request. | Opens `HotkeyPrompt` with transient capture state. |
 | Shortcut action aliases. | Actions menu rows. | `configure_shortcut`, `add_shortcut`, `update_shortcut` open recorder. |
 | `remove_shortcut`. | Actions menu row. | Removes config-backed command shortcut. |
 | `show_shortcut_recorder`. | App implementation. | Opens detached native recorder popup. |
 | `update-config-shortcut.ts`. | Save shortcut. | Writes command shortcut into config. |
 | `remove-config-shortcut.ts`. | Remove shortcut. | Deletes command shortcut from config. |
-| `hotkeys::update_script_hotkey`. | Live update. | Registers new shortcut and handles old binding. |
 | `refresh_scriptlets`. | Scriptlet metadata changes. | Registers, updates, or unregisters scriptlet shortcuts on refresh. |
 
 ## User Workflows
 
 ### SDK hotkey() transient capture
 
-A script calls:
 
 ```ts
 const shortcut = await hotkey("Press a keyboard shortcut")
 ```
 
-The SDK sends `type:"hotkey"` with an optional placeholder. Rust handles the request as `ShowHotkey`, opens `HotkeyPrompt`, and resolves the pending SDK call with `HotkeyInfo` JSON when a modifier chord is captured. Escape and Cmd+W submit null so the SDK follows its cancellation path.
 
 ### Assign Shortcut From Actions
 
@@ -89,7 +80,7 @@ On startup, global hotkey registration loads config-backed command shortcuts bef
 | Open recorder. | Shortcut action. | Detached shortcut recorder popup. | Cmd+K -> action row. | Action handler -> `show_shortcut_recorder`. | Recorder visible. | `src/app_impl/shortcut_recorder.rs`, source audits. |
 | Capture shortcut. | Recorder popup. | Recording active. | Modifier + key. | `ShortcutRecorder` component. | Recorded shortcut. | `src/components/shortcut_recorder/*`. |
 | Save shortcut. | Recorder with value. | Popup active. | Save. | `write_config_command_shortcut` -> `update-config-shortcut.ts` -> `update_script_hotkey`. | Config and live registry update. | `src/app_impl/shortcut_recorder.rs`, scripts. |
-| Cancel recorder. | Recorder popup. | Popup active. | Escape/Cmd+W/backdrop. | Cancel callback/teardown. | Popup closes, focus returns. | `lat.md/design.md`, popup contract tests. |
+| Cancel recorder. | Recorder popup. | Popup active. | Escape/Cmd+W/backdrop. | Cancel callback/teardown. | Popup closes, focus returns. | `removed-docs`, popup contract tests. |
 | Remove shortcut. | Action menu. | Shortcut exists. | Remove action. | `remove_config_command_shortcut` -> refresh. | Config shortcut removed. | source audits, scripts. |
 | Refresh metadata shortcut. | Scriptlet refresh. | App running. | File change/refresh. | `refresh_scriptlets` register/update/unregister paths. | Live shortcut registry changes. | `src/app_impl/refresh_scriptlets.rs`. |
 
@@ -110,7 +101,6 @@ On startup, global hotkey registration loads config-backed command shortcuts bef
 
 | State | Visible result | Focus owner | Automation signal |
 |---|---|---|---|
-| SDK hotkey prompt. | Compact capture surface. | HotkeyPrompt recorder focus. | `getState.promptType:"hotkey"`, `getElements` capture rows. |
 | Shortcut recorder popup. | Compact modal/popup capture UI. | Detached recorder popup. | `listAutomationWindows` / popup registration. |
 | Recording active. | Shortcut capture state visible. | Recorder component. | Physical key capture preferred for proof. |
 | Recorder conflict/error. | Conflict/error copy when a live route already owns the shortcut. | Recorder. | Conflict checker is wired for app-owned routes; OS/global reservations surface at save-time registration. |
@@ -137,7 +127,6 @@ On startup, global hotkey registration loads config-backed command shortcuts bef
 | `update_shortcut`. | Alias/path to open recorder with existing shortcut. |
 | `remove_shortcut`. | Removes config-backed command shortcut. |
 
-Action identity should use `SearchResult::launcher_command_id()`, not labels or display names. Unsupported row types should fail with clear user feedback.
 
 ## Automation And Protocol Surface
 
@@ -169,7 +158,6 @@ Action identity should use `SearchResult::launcher_command_id()`, not labels or 
 | Duplicate/conflict shortcut. | The normal recorder path blocks conflicts from live Script Kit routes; OS/global conflicts outside that table surface at live registration. |
 | Reserved shortcut. | Global registration can fail; user-facing message needs proof. |
 | Config write failure. | Should show error and avoid claiming active shortcut. |
-| Live registration failure after config write. | Risk: config may already be mutated; rollback policy not proven. |
 | Remove shortcut. | Config removal and immediate app route removal are source-audited; OS unregister failures remain recoverable. |
 
 ## Code Ownership
@@ -216,7 +204,6 @@ Action identity should use `SearchResult::launcher_command_id()`, not labels or 
 
 ## Agent Notes
 
-Treat this as two tracks: SDK `hotkey()` is transient capture; shortcut recorder/config registration is persistent assignment.
 
 For SDK `hotkey()` work, do not mutate `config.ts` and do not register global hotkeys. It should return transient `HotkeyInfo`.
 
@@ -242,7 +229,6 @@ Do not treat `tests/sdk/test-hotkey.ts` as proof of real GPUI capture.
 - SDK fallback timing is not fully visible in the excerpt.
 - Exact hotkey message conversion path is partly omitted.
 - Conflict enforcement now covers live app routes for config commands, scripts, scriptlets, and top-level app hotkeys; reserved OS/global shortcuts outside the route table remain a save-time registration policy.
-- Reserved shortcut UX is explicit policy: the recorder allows capture, then save reports saved-not-active if OS registration rejects it after config write.
 - Remove shortcut immediate live-unregister is source-audited for config-backed dynamic routes; absent live routes are no-ops and app routes are removed before best-effort OS unregister.
 - Config write plus live registration is not atomic in visible code.
 - Detached recorder popup key-capture automation is under-specified.

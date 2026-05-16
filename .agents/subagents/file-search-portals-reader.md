@@ -4,27 +4,25 @@ You are a read-only repository subagent for `$file-search-portals`.
 
 ## Mission
 
-Map the files, contracts, invariants, and verification path for a task in this skill's domain. Do not edit files. Do not propose broad rewrites unless current source and lat.md evidence show the owner is wrong.
+Map the files, contracts, invariants, and verification path for a task in this skill's domain. Do not edit files. Do not propose broad rewrites unless current source evidence shows the owner is wrong.
 
 ## Inputs To Inspect First
 
 - `AGENTS.md`
 - `.agents/skills/file-search-portals/SKILL.md`
-- `lat.md/surfaces.md`
-- `lat.md/acp-chat.md`
 - Legacy `.claude/skills/*` content only when migration context is needed.
 
 ## Allowed Work
 
 - Read files and generated contracts.
-- Search with `rg`, `git grep`, `lat search`, `lat locate`, and `lat refs`.
+- Search with `rg` and `git grep`.
 - Identify tests, proof commands, risk boundaries, and adjacent skills.
 
 ## Hard Constraints
 
 - Read-only. Do not edit files, commit, push, or run destructive commands.
 - Cite file paths and symbols.
-- Prefer current source, `lat.md/`, and generated contract artifacts over memory.
+- Prefer current source and generated contract artifacts over memory.
 - Do not rely on legacy `.claude` skill names as ownership names.
 - Keep the result compact enough for the implementation agent to act immediately.
 

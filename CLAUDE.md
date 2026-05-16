@@ -1,13 +1,14 @@
-# Before starting work
+# Before Starting Work
 
-- Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
-- Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
+- Inspect the relevant source, tests, and repo-local skills before editing.
+- Prefer current code and generated artifacts over stale notes or memory.
+- Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
 
-## Oracle / packx bundle context
+## Oracle / Packx Bundle Context
 
-For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`/`CLAUDE.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant `lat.md/` pages found by `lat search`/`lat expand`. Include `lat.md/verification.md` whenever implementation or review checks are part of the question. If packx filters would omit that context, add explicit include filters or paste the relevant checklist into the Oracle prompt. The Oracle prompt should mention the `lat.md/` update rule and required `lat check`.
+For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`/`CLAUDE.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant source, tests, generated contracts, and verification notes.
 
-# Codex repo skills
+# Codex Repo Skills
 
 Use the repo-local Codex skills in `.agents/skills/` as the primary task routing map. These are the canonical skill names for this repository; legacy `.claude/skills/*` names are migration source material only.
 
@@ -15,14 +16,13 @@ Codex may load a skill automatically when the task matches the skill description
 
 For complex investigation, pair the skill with its read-only subagent brief in `.agents/subagents/`. Subagent briefs are prompts/checklists for read-only exploration; they do not automatically spawn subagents.
 
-## Skill and subagent map
+## Skill and Subagent Map
 
 | Skill | Paired subagent | Primary ownership |
 | --- | --- | --- |
-| `lat-md` | `lat-md-reader` | `lat.md/` authoring, wiki links, code refs, `lat check` |
 | `script-kit-devtools` | `protocol-automation-reader` | Agent-facing DevTools primitives for inspecting, controlling, measuring, debugging, benchmarking, and proving real app UI behavior |
 | `agentic-testing` | `agentic-testing-reader` | State-first runtime proof, screenshots only when needed, cleanup of launched sessions |
-| `testing-quality-gates` | `testing-quality-gates-reader` | Choosing narrow checks, cargo/bun/lat gates, release-vs-local validation |
+| `testing-quality-gates` | `testing-quality-gates-reader` | Choosing narrow checks, cargo/bun gates, release-vs-local validation |
 | `dev-loop-observability` | `dev-loop-observability-reader` | Dev loop, compact logs, tracing, correlation IDs, runtime diagnostics |
 | `gpui-ui-foundation` | `gpui-ui-foundation-reader` | GPUI layout, focus, keyboard handlers, theme usage, component lifecycle |
 | `theme-config-preferences` | `theme-config-preferences-reader` | `config.ts`, `theme.json`, preferences, font/scale/runtime settings |
@@ -47,13 +47,13 @@ For complex investigation, pair the skill with its read-only subagent brief in `
 | `platform-windowing-macos` | `platform-windowing-macos-reader` | macOS windowing, screenshots, AppKit/AX/focus, bundle/platform behavior |
 | `storage-cache-security` | `storage-cache-security-reader` | Local storage, caches, SQLite, secrets, encryption, cleanup/security boundaries |
 
-## Subagent usage
+## Subagent Usage
 
-Use a paired subagent when the task spans multiple modules, touches a high-risk surface contract, or needs evidence before editing. The subagent must stay read-only and return relevant files/symbols, applicable `lat.md` sections or generated contracts, invariants, the smallest verification command or agentic proof, and legacy `.claude/skills` material worth migrating.
+Use a paired subagent when the task spans multiple modules, touches a high-risk surface contract, or needs evidence before editing. The subagent must stay read-only and return relevant files/symbols, invariants, the smallest verification command or agentic proof, and legacy `.claude/skills` material worth migrating.
 
 Do not wait for a subagent when the task is small and the owning skill gives enough context. Subagents are not automatic; spawn them only when the user explicitly asks for subagents/parallel delegation or when the task has broad, noisy exploration that benefits from a read-only sidecar.
 
-## Skill selection defaults
+## Skill Selection Defaults
 
 - Unknown user-reported UX/UI bugs, screenshots, or flexible app investigation: `script-kit-devtools`, plus the domain skill. Use `agentic-testing` recipes only when they directly match the bug or as regression proof.
 - UI behavior or visual/runtime proof with an existing known recipe: `agentic-testing`, plus the domain skill.
@@ -70,9 +70,9 @@ Do not wait for a subagent when the task is small and the owning skill gives eno
 - Config/theme/preferences: `theme-config-preferences`.
 - Notes, dictation, terminal, platform, and storage work should use their matching ownership skill.
 
-## Main-window resizing
+## Main-Window Resizing
 
-Before changing launcher/window sizing, read `lat.md/windowing.md`, `lat.md/builtins.md`, `.agents/skills/window-resizing/SKILL.md`, and the domain skill for the surface being resized.
+Before changing launcher/window sizing, read `.agents/skills/window-resizing/SKILL.md`, the paired reader brief when useful, and the domain skill for the surface being resized.
 
 Do not call `update_window_size_deferred`, `update_window_size`, or `resize_to_view_sync(ViewType::ScriptList, ...)` after a presenter that already owns a Mini surface unless `calculate_window_size_params` proves that view still resolves to `ViewType::MiniMainWindow`.
 
@@ -80,103 +80,9 @@ For built-in filterable views, choose width from layout: Mini for single-column 
 
 When fixing resize behavior in a dirty worktree, inspect `git status --short`, patch only the minimal responsible hunk, and add a focused source audit for the entry path that regressed.
 
-# Post-task checklist (REQUIRED — do not skip)
+# Post-Task Checklist
 
-After EVERY task, before responding to the user:
+After every task, before responding to the user:
 
-- [ ] Update `lat.md/` if you added or changed any functionality, architecture, tests, or behavior
-- [ ] Run `lat check` — all wiki links and code refs must pass
-- [ ] Do not skip these steps. Do not consider your task done until both are complete.
-
----
-
-# What is lat.md?
-
-This project uses [lat.md](https://www.npmjs.com/package/lat.md) to maintain a structured knowledge graph of its architecture, design decisions, and test specs in the `lat.md/` directory. It is a set of cross-linked markdown files that describe **what** this project does and **why** — the domain concepts, key design decisions, business logic, and test specifications. Use it to ground your work in the actual architecture rather than guessing.
-
-# Commands
-
-```bash
-lat locate "Section Name"      # find a section by name (exact, fuzzy)
-lat refs "file#Section"        # find what references a section
-lat search "natural language"  # semantic search across all sections
-lat expand "user prompt text"  # expand [[refs]] to resolved locations
-lat check                      # validate all links and code refs
-```
-
-Run `lat --help` when in doubt about available commands or options.
-
-If `lat search` fails because no API key is configured, explain to the user that semantic search requires a key provided via `LAT_LLM_KEY` (direct value), `LAT_LLM_KEY_FILE` (path to key file), or `LAT_LLM_KEY_HELPER` (command that prints the key). Supported key prefixes: `sk-...` (OpenAI) or `vck_...` (Vercel). If the user doesn't want to set it up, use `lat locate` for direct lookups instead.
-
-# Syntax primer
-
-- **Section ids**: `lat.md/path/to/file#Heading#SubHeading` — full form uses project-root-relative path (e.g. `lat.md/tests/search#RAG Replay Tests`). Short form uses bare file name when unique (e.g. `search#RAG Replay Tests`, `cli#search#Indexing`).
-- **Wiki links**: `[[target]]` or `[[target|alias]]` — cross-references between sections. Can also reference source code: `[[src/foo.ts#myFunction]]`.
-- **Source code links**: Wiki links in `lat.md/` files can reference functions, classes, constants, and methods in TypeScript/JavaScript/Python/Rust/Go/C files. Use the full path: `[[src/config.ts#getConfigDir]]`, `[[src/server.ts#App#listen]]` (class method), `[[lib/utils.py#parse_args]]`, `[[src/lib.rs#Greeter#greet]]` (Rust impl method), `[[src/app.go#Greeter#Greet]]` (Go method), `[[src/app.h#Greeter]]` (C struct). `lat check` validates these exist.
-- **Code refs**: `// @lat: [[section-id]]` (JS/TS/Rust/Go/C) or `# @lat: [[section-id]]` (Python) — ties source code to concepts
-
-# Test specs
-
-Key tests can be described as sections in `lat.md/` files (e.g. `tests.md`). Add frontmatter to require that every leaf section is referenced by a `// @lat:` or `# @lat:` comment in test code:
-
-```markdown
----
-lat:
-  require-code-mention: true
----
-# Tests
-
-Authentication and authorization test specifications.
-
-## User login
-
-Verify credential validation and error handling for the login endpoint.
-
-### Rejects expired tokens
-Tokens past their expiry timestamp are rejected with 401, even if otherwise valid.
-
-### Handles missing password
-Login request without a password field returns 400 with a descriptive error.
-```
-
-Every section MUST have a description — at least one sentence explaining what the test verifies and why. Empty sections with just a heading are not acceptable. (This is a specific case of the general leading paragraph rule below.)
-
-Each test in code should reference its spec with exactly one comment placed next to the relevant test — not at the top of the file:
-
-```python
-# @lat: [[tests#User login#Rejects expired tokens]]
-def test_rejects_expired_tokens():
-    ...
-
-# @lat: [[tests#User login#Handles missing password]]
-def test_handles_missing_password():
-    ...
-```
-
-Do not duplicate refs. One `@lat:` comment per spec section, placed at the test that covers it. `lat check` will flag any spec section not covered by a code reference, and any code reference pointing to a nonexistent section.
-
-# Section structure
-
-Every section in `lat.md/` **must** have a leading paragraph — at least one sentence immediately after the heading, before any child headings or other block content. The first paragraph must be ≤250 characters (excluding `[[wiki link]]` content). This paragraph serves as the section's overview and is used in search results, command output, and RAG context — keeping it concise guarantees the section's essence is always captured.
-
-```markdown
-# Good Section
-
-Brief overview of what this section documents and why it matters.
-
-More detail can go in subsequent paragraphs, code blocks, or lists.
-
-## Child heading
-
-Details about this child topic.
-```
-
-```markdown
-# Bad Section
-
-## Child heading
-
-Details about this child topic.
-```
-
-The second example is invalid because `Bad Section` has no leading paragraph. `lat check` validates this rule and reports errors for missing or overly long leading paragraphs.
+- [ ] Run the smallest source, test, build, or runtime proof that can fail for the changed behavior.
+- [ ] Report any skipped verification and why it was skipped.

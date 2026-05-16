@@ -17,7 +17,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_ix..start_ix + end_rel]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection#PathPrompt filesystem receipts]]
+// doc-anchor-removed: [[removed-docs and introspection#PathPrompt filesystem receipts]]
 #[test]
 fn path_prompt_load_status_has_explicit_filesystem_edge_kinds() {
     assert!(
@@ -46,7 +46,7 @@ fn path_prompt_load_status_has_explicit_filesystem_edge_kinds() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection#PathPrompt filesystem receipts]]
+// doc-anchor-removed: [[removed-docs and introspection#PathPrompt filesystem receipts]]
 #[test]
 fn path_prompt_load_entries_does_not_collapse_error_edges_to_empty() {
     let load_entries = source_between(
@@ -74,7 +74,7 @@ fn path_prompt_load_entries_does_not_collapse_error_edges_to_empty() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection#PathPrompt filesystem receipts]]
+// doc-anchor-removed: [[removed-docs and introspection#PathPrompt filesystem receipts]]
 #[test]
 fn path_prompt_get_state_exposes_path_receipts() {
     let state_result_variant = source_between(
@@ -112,7 +112,7 @@ fn path_prompt_get_state_exposes_path_receipts() {
     }
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection#PathPrompt filesystem receipts]]
+// doc-anchor-removed: [[removed-docs and introspection#PathPrompt filesystem receipts]]
 #[test]
 fn path_prompt_get_elements_exposes_status_and_symlink_rows() {
     let collector = source_between(
@@ -135,7 +135,7 @@ fn path_prompt_get_elements_exposes_status_and_symlink_rows() {
     }
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection#PathPrompt filesystem receipts]]
+// doc-anchor-removed: [[removed-docs and introspection#PathPrompt filesystem receipts]]
 #[test]
 fn sdk_get_state_surfaces_path_prompt_receipts() {
     assert!(

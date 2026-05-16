@@ -36,7 +36,7 @@ fn arm_body<'a>(start_pat: &str, end_pat: &str) -> &'a str {
     &COLLECT_ELEMENTS[start..start + end_rel]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn app_launcher_arm_narrows_by_variant_filter() {
     let body = arm_body(
@@ -57,7 +57,7 @@ fn app_launcher_arm_narrows_by_variant_filter() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn window_switcher_arm_narrows_by_variant_filter() {
     let body = arm_body(
@@ -80,7 +80,7 @@ fn window_switcher_arm_narrows_by_variant_filter() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn process_manager_arm_narrows_by_variant_filter() {
     let body = arm_body(
@@ -101,7 +101,7 @@ fn process_manager_arm_narrows_by_variant_filter() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn current_app_commands_arm_narrows_by_variant_filter() {
     let body = arm_body(

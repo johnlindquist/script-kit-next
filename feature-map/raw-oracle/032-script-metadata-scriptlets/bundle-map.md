@@ -1,4 +1,3 @@
-# Bundle Map: 032 Script Metadata, Scriptlets, and Execution Catalog
 
 ## Packx Command
 
@@ -15,10 +14,6 @@ packx --limit 49k -l 18 \
   -s "parse_scriptlet_section" \
   -s "ScriptletMetadata" \
   -s "run_scriptlet" \
-  -s "kit://scripts" \
-  -s "kit://scriptlets" \
-  -s "kit://failed-scripts" \
-  -s "kit://script-templates" \
   -s "register_scheduled_scripts" \
   -s "discover_plugins" \
   -s "NewScriptFromTemplate" \
@@ -26,7 +21,7 @@ packx --limit 49k -l 18 \
   AGENTS.md CLAUDE.md .goals/feature_map.md \
   .agents/skills/sdk-script-execution/SKILL.md \
   .claude/skills/script-kit-scripting/SKILL.md \
-  lat.md/scripting.md lat.md/workspace.md lat.md/menu-syntax.md lat.md/protocol.md lat.md/verification.md \
+  removed-docs removed-docs removed-docs removed-docs removed-docs \
   src/scripts/metadata.rs src/metadata_parser/mod.rs src/schema_parser/mod.rs \
   src/scripts/loader.rs src/scripts/types.rs src/scripts/validation.rs src/scripts/scheduling.rs \
   src/scripts/search/scripts.rs src/scripts/search/scriptlets.rs src/scripts/grouping.rs \
@@ -47,18 +42,11 @@ packx --limit 49k -l 18 \
 
 ## Pack Summary
 
-- Total files: 47
-- Search mode: ripgrep
-- Context lines: 18 around each match
-- Total matches: 163
-- Context windows: 54
-- Total tokens: about 41.3K
-- Total chars: 154,882 in packx summary; 157,195 bytes on disk
 
 ## Inclusion Rationale
 
 - Repo process files and skills establish the feature-map and scripting-domain contracts.
-- `lat.md/scripting.md`, `lat.md/workspace.md`, `lat.md/menu-syntax.md`, and `lat.md/protocol.md` capture architectural intent.
+- `removed-docs`, `removed-docs`, `removed-docs`, and `removed-docs` capture architectural intent.
 - Script loading, metadata, validation, scheduling, search, and grouping files define the script catalog.
 - Scriptlet parser/loader/metadata/executor files define markdown bundle parsing and tool execution.
 - MCP resources and plugin/setup files define agent-visible catalogs and workspace bootstrap.

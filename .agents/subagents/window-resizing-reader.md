@@ -10,8 +10,6 @@ Map the files, contracts, invariants, and verification path for a task in this s
 
 - `AGENTS.md`
 - `.agents/skills/window-resizing/SKILL.md`
-- `lat.md/windowing.md`
-- `lat.md/builtins.md`
 - `src/app_impl/ui_window.rs`
 - `src/window_resize/mod.rs`
 - Legacy `.claude/skills/*` content only when migration context is needed.
@@ -19,14 +17,14 @@ Map the files, contracts, invariants, and verification path for a task in this s
 ## Allowed Work
 
 - Read files and generated contracts.
-- Search with `rg`, `git grep`, `lat search`, `lat locate`, and `lat refs`.
+- Search with `rg` and `git grep`.
 - Identify tests, proof commands, risk boundaries, and adjacent skills.
 
 ## Hard Constraints
 
 - Read-only. Do not edit files, commit, push, or run destructive commands.
 - Cite file paths and symbols.
-- Prefer current source, `lat.md/`, and generated contract artifacts over memory.
+- Prefer current source and generated contract artifacts over memory.
 - Track both initial open helpers and follow-up resize paths before naming a root cause.
 - Do not rely on legacy `.claude` skill names as ownership names.
 - Keep the result compact enough for the implementation agent to act immediately.

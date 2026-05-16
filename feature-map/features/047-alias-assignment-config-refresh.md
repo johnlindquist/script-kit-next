@@ -2,13 +2,11 @@
 
 This chapter maps launcher alias assignment, AliasInput editing, alias override persistence, command-id ownership, refresh semantics, and current proof gaps.
 
-Raw Oracle reference: [answer](../raw-oracle/047-alias-assignment-config-refresh/answer.md), [prompt](../raw-oracle/047-alias-assignment-config-refresh/prompt.md), [full log](../raw-oracle/047-alias-assignment-config-refresh/output.log), [session metadata](../raw-oracle/047-alias-assignment-config-refresh/session.json).
 
 ## Executive Summary
 
 Launcher alias assignment is implemented separately from shortcut assignment, even though both share `src/app_actions/handle_action/shortcuts.rs` for action dispatch. Alias add/update/remove actions use launcher command IDs, open or mutate an AliasInput overlay, and persist user alias overrides in `~/.scriptkit/aliases.json`, not `config.ts`.
 
-The safe product model is:
 
 | Area | Current contract |
 |---|---|
@@ -39,7 +37,6 @@ The safe product model is:
 | Alias override | User-owned alias for a command ID. | Stored in `~/.scriptkit/aliases.json` and cached in memory. |
 | Metadata alias | Alias declared by script/scriptlet metadata. | Duplicate metadata aliases are fatal catalog validation issues. |
 | AliasInput | Modal overlay for editing one command alias. | Owns text validation, Save/Cancel/Clear, local keyboard handling, and focus. |
-| Command deeplink | `scriptkit://commands/{commandId}` identity path. | Uses command IDs; aliases do not replace deeplinks. |
 
 ## Entry Points
 
@@ -49,8 +46,6 @@ The safe product model is:
 | `update_alias`. | Action selected for supported launcher row. | Same dispatch as add; preloads persisted override if present. |
 | `remove_alias`. | Action selected for supported launcher row. | Removes persisted override and refreshes scripts. |
 | `show_alias_input`. | App integration. | Loads overrides, creates `AliasInputState`, clears actions popup state, notifies UI. |
-| `AliasInputAction::Save`. | Valid text saved. | Calls `save_alias_override`, shows HUD, refreshes scripts, closes overlay. |
-| `AliasInputAction::Clear`. | Existing alias cleared. | Calls `remove_alias_override` via empty save; refresh is not shown. |
 | `load_alias_overrides`. | Modal prefill and cache use. | Reads `~/.scriptkit/aliases.json`; missing file returns empty map. |
 | `save_alias_override`. | Persist alias. | Creates `~/.scriptkit`, writes pretty JSON, invalidates cache. |
 | `remove_alias_override`. | Remove alias. | Removes command key, writes JSON, invalidates cache. |
@@ -61,7 +56,6 @@ The safe product model is:
 
 The user selects a supported launcher row and invokes `add_alias`. `handle_shortcut_alias_action` checks that there is a selected row, rejects unsupported row types, resolves `launcher_command_id()` and `launcher_command_name()`, logs `launcher_alias_input_requested`, and calls `show_alias_input(command_id, command_name, cx)`.
 
-`show_alias_input` loads user overrides, preloads the override for the command ID if one exists, stores `AliasInputState`, clears action popup state, and causes the AliasInput overlay to render. The user types a valid alias and saves. The app writes `~/.scriptkit/aliases.json`, shows `Alias set: ...`, calls `refresh_scripts(cx)`, and closes the overlay.
 
 ### Update Alias
 
@@ -73,7 +67,6 @@ The user invokes `remove_alias` on a supported row. The handler resolves the com
 
 ### Clear Alias From AliasInput
 
-If AliasInput opens with a current override, it renders a Clear button and accepts command/control Backspace/Delete. Clear produces `AliasInputAction::Clear`, which calls `save_alias_with_text(Some(String::new()), cx)`. Empty text removes the alias override and closes the overlay. The captured code does not call `refresh_scripts(cx)` on this path, so stale launcher alias state is a real gap.
 
 ### Cancel Editing
 
@@ -88,7 +81,6 @@ Escape, Cancel, and backdrop click produce cancel behavior. The app clears `alia
 | Remove alias. | `remove_alias`. | Supported row selected. | Action activation. | `remove_alias_override` -> HUD -> `refresh_scripts`. | Override removed and launcher refreshed. | `src/app_actions/handle_action/shortcuts.rs`. |
 | Save valid alias. | AliasInput. | Valid input. | Save or Enter. | `validate_alias_input` -> `save_alias_override` -> refresh. | Override written. | `src/components/alias_input/*`, `src/app_impl/alias_input.rs`. |
 | Reject invalid alias. | AliasInput. | Invalid input. | Save disabled / Enter ignored. | `validate_alias_input` fails. | Error copy shown; no save. | `src/components/alias_input/component.rs`, tests. |
-| Clear alias. | AliasInput. | Current alias exists. | Clear or modifier+Backspace/Delete. | `AliasInputAction::Clear` -> empty save -> `remove_alias_override`. | Override removed; refresh gap. | `src/app_impl/alias_input.rs`. |
 | Cancel editing. | AliasInput. | Overlay open. | Escape, Cancel, backdrop. | `close_alias_input`. | Overlay closes; main filter focus intent restored. | `src/app_impl/alias_input.rs`. |
 | Unsupported add/update. | Action surface. | Window/Skill/Note/Browser/Agent row. | Action activation. | Unsupported match arm. | Error outcome. | `src/app_actions/handle_action/shortcuts.rs`. |
 | No selected row. | Action surface. | Nothing selected. | Action activation. | Selection-required helper. | Action-specific no-selection error. | `src/app_actions/helpers.rs`. |
@@ -152,19 +144,15 @@ The persistence module creates the `~/.scriptkit` directory when saving, writes 
 
 ## Command IDs And Source Priority
 
-Alias overrides use launcher command IDs. The command-id helper supports categories such as builtin, app, script, and scriptlet, and command deeplinks use `scriptkit://commands/{commandId}`.
 
-The included snapshot does not prove the effective merge priority between user overrides in `aliases.json` and metadata aliases on scripts/scriptlets. Safe wording: user overrides are persisted by command ID; metadata aliases are validated separately; final effective search/display priority is a proof gap until the merge layer is inspected.
 
 ## Automation And Protocol Surface
 
-No alias-specific protocol verb is shown. Automation should drive the real UI/action route:
 
 | Receipt | Expected proof |
 |---|---|
 | Open actions and invoke `add_alias`. | AliasInput overlay appears. |
 | `getElements`. | `alias-input-overlay`, modal content, and alias field are visible. |
-| Type valid alias and save. | `aliases.json` contains `{ commandId: alias }`. |
 | Remove alias. | `aliases.json` no longer contains command ID. |
 | Refresh proof. | Non-empty save and dedicated remove refresh scripts; modal clear refresh remains a gap. |
 
@@ -234,7 +222,7 @@ Screenshots are secondary. Prefer state receipts, file-content assertions, and a
 | `cargo test duplicate_alias_normalizes_case`. | Metadata duplicate aliases normalize case. |
 | `bun tests/smoke/test-alias-conflict.ts`. | Duplicate metadata alias conflict is surfaced at runtime. |
 | Runtime AliasInput proof. | Open add alias, assert overlay/elements, save, inspect `aliases.json`, remove, inspect file again. |
-| Atlas gates. | `lat check`, `git diff --check`, and `feature_explorer` build after index/chapter updates. |
+| Atlas gates. | `source checks`, `git diff --check`, and `feature_explorer` build after index/chapter updates. |
 
 ## Agent Notes
 

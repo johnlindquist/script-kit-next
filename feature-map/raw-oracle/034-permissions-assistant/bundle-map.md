@@ -1,23 +1,19 @@
 # 034 Permissions and Permission Assistant Bundle Map
 
-Oracle slug: `permissions-assistant-atlas`
 
-Bundle path: `/Users/johnlindquist/.oracle/bundles/permissions-assistant-atlas.txt`
 
 ## Lat context
 
 ```bash
-lat expand "034 Permissions and Permission Assistant: accessibility screen recording microphone setup guidance system settings locator permission preflight"
-lat search "permissions permission assistant accessibility screen recording microphone system settings setup prompt preflight"
+source search "permissions permission assistant accessibility screen recording microphone system settings setup prompt preflight"
 ```
 
-Top sections:
 
-- `lat.md/tests/dictation-setup-nux#Dictation Setup NUX#Non-prompting microphone preflight`
-- `lat.md/tests/permission-assistant#Permission Assistant#Built-in assistant entry points`
-- `lat.md/tests/permission-assistant#Permission Assistant`
-- `lat.md/permissions#Permissions#Permission Assistant`
-- `lat.md/tests/permission-assistant#Permission Assistant#Passive detection does not prompt`
+- `removed-docs Setup NUX#Non-prompting microphone preflight`
+- `removed-docs Assistant#Built-in assistant entry points`
+- `removed-docs Assistant`
+- `removed-docs Assistant`
+- `removed-docs Assistant#Passive detection does not prompt`
 
 ## Packx command
 
@@ -45,8 +41,8 @@ packx --limit 49k -l 18 \
   .agents/skills/platform-windowing-macos/SKILL.md \
   .agents/skills/actions-popups/SKILL.md \
   .agents/skills/storage-cache-security/SKILL.md \
-  lat.md/permissions.md lat.md/tests/permission-assistant.md lat.md/tests/dictation-setup-nux.md \
-  lat.md/protocol.md lat.md/automation.md lat.md/verification.md lat.md/builtins.md \
+  removed-docs removed-docs removed-docs \
+  removed-docs removed-docs removed-docs removed-docs \
   src/platform/permiso/mod.rs src/platform/permiso/panel.rs src/platform/permiso/host_app.rs \
   src/platform/permiso/locator.rs src/platform/permiso/overlay_window.rs src/platform/permiso/drag_source.rs \
   src/platform/permiso_detect.rs src/platform/screenshots_window_open.rs src/builtins/mod.rs \

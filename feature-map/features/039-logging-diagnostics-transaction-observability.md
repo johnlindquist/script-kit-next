@@ -2,7 +2,6 @@
 
 Logging, diagnostics, and transaction observability turn runtime debugging into bounded, privacy-safe, machine-readable evidence for humans and agents.
 
-Raw Oracle reference: [answer](../raw-oracle/039-logging-diagnostics-transaction-observability/answer.md), [prompt](../raw-oracle/039-logging-diagnostics-transaction-observability/prompt.md), [bundle map](../raw-oracle/039-logging-diagnostics-transaction-observability/bundle-map.md), [full log](../raw-oracle/039-logging-diagnostics-transaction-observability/output.log), [session metadata](../raw-oracle/039-logging-diagnostics-transaction-observability/session.json). A duplicate retry is also preserved as [answer](../raw-oracle/039-logging-diagnostics-transaction-observability/answer-duplicate-retry.md), [full log](../raw-oracle/039-logging-diagnostics-transaction-observability/output-duplicate-retry.log), and [session metadata](../raw-oracle/039-logging-diagnostics-transaction-observability/session-duplicate-retry.json).
 
 ## Executive Summary
 
@@ -15,8 +14,6 @@ This feature is an operator/developer capability. It does not own UI semantics. 
 - Start `./dev.sh` and inspect compact, low-token runtime logs.
 - Switch to verbose `RUST_LOG` output when compact logs are insufficient.
 - Tail recent JSONL session logs for post-failure diagnosis.
-- Filter live debug sessions by stable markers such as `DO_IN_TRACE`, `SCROLL_TRACE`, and `script_kit::input_history`.
-- Inspect protocol health via `kit://diagnostics/protocol-stats`.
 - Capture deterministic `waitFor` and `batch` transaction traces.
 - Read the latest transaction trace through MCP resources instead of manually tailing files.
 - Replay or dedupe transaction requests safely using request id plus command fingerprint.
@@ -31,11 +28,10 @@ This feature is an operator/developer capability. It does not own UI semantics. 
 | Structured JSONL logs | Persistent machine-readable session and audit logs. | `src/logging/`, `~/.scriptkit/logs/` |
 | Safe user-value preview | Byte-capped, UTF-8-safe preview of untrusted values. | `src/logging/` |
 | Log rate limiter | Time-window suppression keyed without retaining raw untrusted strings. | `src/logging/` |
-| Debug markers | Stable strings for focused reproduction filtering. | `lat.md/logging.md`, source trace targets |
+| Debug markers | Stable strings for focused reproduction filtering. | `removed-docs`, source trace targets |
 | Protocol stats | Live counters and health thresholds for protocol boundary failures. | `src/protocol_stats.rs` |
 | Transaction executor | Deterministic `waitFor`/`batch` execution with receipts and traces. | `src/protocol/transaction_executor.rs` |
 | Transaction trace | Schema-versioned JSONL execution trace with snapshots, observations, timings, and errors. | `src/protocol/transaction_trace.rs` |
-| Transaction MCP resources | `kit://transactions/latest` and `kit://transactions/schema`. | `src/mcp_resources/transaction_resources.rs` |
 | AI preflight audit | Bounded JSONL audit for ACP/AI context preparation and submit decisions. | `src/ai/preflight_audit.rs` |
 
 ## Entry Points
@@ -47,28 +43,22 @@ This feature is an operator/developer capability. It does not own UI semantics. 
 | `RUST_LOG=debug ./dev.sh` | Full verbose tracing | Pretty/full tracing output |
 | `~/.scriptkit/logs/latest-session.jsonl` | Inspect latest session records | JSONL log file |
 | Stable markers | Filter a live reproduction | `DO_IN_TRACE`, `SCROLL_TRACE`, input history targets |
-| `kit://diagnostics/protocol-stats` | Inspect protocol boundary health | MCP resource JSON |
 | `waitFor` / `batch` with trace mode | Capture deterministic transaction proof | Transaction trace records |
-| `kit://transactions/latest` | Read latest transaction trace | MCP resource JSON/text |
-| `kit://transactions/schema` | Inspect trace schema | MCP resource |
 | AI preflight audit log | Inspect context submit decisions | `ai-preflight-audits.jsonl` |
 
 ## User Workflows
 
 ### Dev Loop Triage
 
-The operator starts with compact logs:
 
 ```bash
 ./dev.sh
 ```
 
-`dev.sh` defaults `SCRIPT_KIT_AI_LOG=1`, announces the log mode, and keeps output compact enough for agents. Escalate only when needed:
 
 ```bash
 SCRIPT_KIT_AI_LOG=0 ./dev.sh
 RUST_LOG=debug ./dev.sh
-RUST_LOG=script_kit::theme=debug ./dev.sh
 ```
 
 ### Safe Log Review
@@ -77,27 +67,22 @@ When a log line includes user-controlled values such as stdin text, queries, tit
 
 ### Trace A UI Reproduction
 
-The operator runs the app and filters by stable markers:
 
 - `DO_IN_TRACE` for current-app command normalization, intent resolution, and built-in execution routing.
 - `SCROLL_TRACE` for wheel ownership, scroll metrics, and reanchor decisions.
-- `script_kit::input_history` for main-menu Up/Down routing, render acknowledgments, history indices, and echo suppression.
 
 User-entered text in these traces still uses safe previews.
 
 ### Inspect Protocol Health
 
-The operator reads `kit://diagnostics/protocol-stats` before grepping logs. The resource exposes counters, health flags, and thresholds for parse failures, too-large stdin commands, unsupported protocol versions, unknown triggerBuiltin calls, and deprecated triggerBuiltin names.
 
 Zero-tolerance counters such as parse failures and unsupported protocol versions fail health immediately. Expected/noisy counters such as unknown triggerBuiltin typos have higher thresholds.
 
 ### Capture A Transaction Trace
 
-An agent runs a failing `waitFor` or `batch` flow with trace mode enabled. The transaction executor records request id, fingerprint, per-command before/after snapshots, poll observations, timings, typed errors, failure index, and suggestions. `TransactionTraceMode::OnFailure` captures traces only when a transaction fails.
 
 ### Read Latest Transaction Resource
 
-The operator reads `kit://transactions/latest`, optionally filtered by request id. Missing traces return an explicit empty payload, not an unstructured failure. Malformed JSONL lines are skipped with warnings so one bad line does not make the log unreadable.
 
 ### Inspect AI Preflight Decisions
 
@@ -132,7 +117,6 @@ When an ACP/AI submit appears to use stale or missing context, inspect the AI pr
 
 ## Visual And Focus States
 
-This feature has minimal visual UI of its own. Its user-visible shape is operator output:
 
 - Compact stderr lines for live development.
 - JSONL session or audit records.
@@ -150,13 +134,9 @@ Screenshots are not the right first proof for this feature. Use screenshots only
 | `RUST_LOG=debug ./dev.sh` | Repo root | Enables full debug tracing. |
 | `SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui` | Direct runtime | Runs app with compact logs. |
 | `tail -50 ~/.scriptkit/logs/latest-session.jsonl` | Shell | Reads recent structured session records. |
-| `kit://diagnostics/protocol-stats` | MCP resource | Returns protocol counters, health, and thresholds. |
-| `kit://transactions/latest` | MCP resource | Returns latest transaction trace or explicit empty payload. |
-| `kit://transactions/schema` | MCP resource | Returns transaction trace schema. |
 
 ## Actions And Menus
 
-There are no ordinary end-user action menus owned by this feature. Related UI actions belong to their owning surfaces; observability supplies receipts and logs for those actions. Examples:
 
 - Main menu actions should emit domain-owned state and actions receipts.
 - ACP context actions should emit context/preflight/audit receipts.
@@ -166,9 +146,6 @@ There are no ordinary end-user action menus owned by this feature. Related UI ac
 
 | Surface | Target/proof | Notes |
 |---|---|---|
-| Protocol stats | `kit://diagnostics/protocol-stats` | Machine-readable health instead of grep-only diagnostics. |
-| Transaction latest | `kit://transactions/latest` | Latest trace, optional request-id filtering, empty payload when none exist. |
-| Transaction schema | `kit://transactions/schema` | Schema for agent-readable trace parsing. |
 | `waitFor` | Transaction executor | Poll observations, timeout/failure suggestions, typed errors. |
 | `batch` | Transaction executor | Per-command snapshots, failure index, total elapsed time. |
 | AI preflight audit | `ai-preflight-audits.jsonl` | Correlation-level decision ledger for ACP/AI submits. |
@@ -204,7 +181,6 @@ There are no ordinary end-user action menus owned by this feature. Related UI ac
 | Protocol stats | `src/protocol_stats.rs` | Counters, thresholds, health report. |
 | Transaction executor | `src/protocol/transaction_executor.rs` | `waitFor`/`batch` execution and receipts. |
 | Transaction traces | `src/protocol/transaction_trace.rs` | Append/read/compact/replay identity. |
-| Transaction MCP resources | `src/mcp_resources/transaction_resources.rs` | `kit://transactions/latest` and schema. |
 | AI preflight audit | `src/ai/preflight_audit.rs`, `src/ai/acp/preflight.rs`, `src/ai/window/context_preflight.rs` | Decision records, dedupe, schema handling. |
 | Main-window preflight | `src/main_window_preflight/` | Runtime preflight receipts. |
 | Source audits | `tests/source_audits/structured_logging.rs`, `tests/source_audits/trace_propagation.rs` | Privacy and trace propagation contracts. |
@@ -228,27 +204,23 @@ There are no ordinary end-user action menus owned by this feature. Related UI ac
 
 ## Verification Recipes
 
-Baseline docs and compile:
 
 ```bash
 cargo check --lib
-lat check
+source checks
 ```
 
-Safe logging and trace propagation:
 
 ```bash
 cargo test --test source_audits structured_logging -- --nocapture
 cargo test --test source_audits trace_propagation -- --nocapture
 ```
 
-Protocol stats:
 
 ```bash
 cargo test --test protocol_stats_report_contract -- --nocapture
 ```
 
-Transaction traces and resources:
 
 ```bash
 cargo test --test transaction_trace_contract -- --nocapture
@@ -257,34 +229,29 @@ cargo test --test tx_trace_replay_idempotency_contract -- --nocapture
 cargo test --test tx_trace_wait_for_runtime_contract -- --nocapture
 ```
 
-AI preflight audits:
 
 ```bash
 cargo test --test ai_preflight_persistent_audit_contract -- --nocapture
 cargo test --test context_preflight_source_audits -- --nocapture
 ```
 
-Runtime compact log proof:
 
 ```bash
 SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui
 ```
 
-Atlas update gates:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq empty feature-map/receipts/oracle-sessions.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 ```
 
 ## Agent Notes
 
 - Do not use this feature as a substitute for UI behavior ownership; load the adjacent domain skill for the surface being debugged.
 - To verify a log privacy fix, inspect both safe preview metadata and rate-limit suppression.
-- If a transaction proof is missing, check trace mode first: `Off`, `On`, and `OnFailure` have different persistence behavior.
-- If protocol health is red, inspect `kit://diagnostics/protocol-stats` before grepping logs.
 - If an AI submit has missing/stale context, inspect the AI preflight audit by correlation id and generation.
 - If a JSONL file has malformed lines, the correct behavior is recovery with warnings, not total read failure.
 - Screenshots are only useful after logs/receipts establish that the failing behavior is visual.

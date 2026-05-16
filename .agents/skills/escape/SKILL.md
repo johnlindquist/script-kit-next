@@ -23,9 +23,6 @@ Do not use this as the primary owner for non-Escape keyboard work; use `$keyboar
 
 Start with these sources before editing:
 
-- `lat.md/surfaces.md`
-- `lat.md/automation.md`
-- `lat.md/protocol.md`
 - `.agents/subagents/escape-reader.md` for broad or high-risk investigation.
 - `.agents/skills/escape/references/escape-key-map.md` when tracing multiple Escape paths.
 
@@ -51,18 +48,16 @@ Primary paths and concepts:
 
 ## Workflow
 
-1. Run or review the required `lat search` / `lat expand` context from `AGENTS.md`.
+1. Review `AGENTS.md`, the owning skill, and current source context before editing.
 2. Identify which layer owns the Escape press: popup, prompt, surface, launch origin, window lifecycle, or OS/secondary window.
 3. Trace both physical key routing and stdin `simulateKey` for the same surface.
 4. Check source-audit contracts before changing lifecycle, surface registry, ACP, actions popup, or automation re-key paths.
-5. Make the narrowest change and update `lat.md/` when behavior, architecture, tests, or contracts change.
 6. Verify with the smallest proof that would fail if Escape regressed.
 
 ## Proof Ladder
 
 Use the smallest proof that can falsify the Escape behavior.
 
-1. Docs/source audit proof: skill docs, source contracts, or ownership-map changes; run `lat check`.
 2. Targeted source tests: Escape contracts such as app view policy, hide/reset, actions dialog Escape, ACP shortcut, or stdin simulateKey audits.
 3. State-first runtime proof: physical or simulated Escape from the real entry path, followed by `getState`, `getElements`, or `listAutomationWindows`.
 4. Native input proof: only when OS focus, global hotkeys, AppKit routing, or actual hardware delivery is the behavior under test.
@@ -70,7 +65,6 @@ Use the smallest proof that can falsify the Escape behavior.
 Default check for this skill:
 
 ```bash
-lat check
 cargo test --test app_view_policy_contract
 cargo test --test hide_rpc_surface_reset_contract
 cargo test --test actions_dialog_escape_filter_agnostic_contract

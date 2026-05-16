@@ -149,9 +149,6 @@ mod root_unified_source_actions_contract;
 #[path = "source_audits/root_unified_passive_snapshot_contract.rs"]
 mod root_unified_passive_snapshot_contract;
 
-#[path = "source_audits/root_unified_config_schema_parity_contract.rs"]
-mod root_unified_config_schema_parity_contract;
-
 #[path = "source_audits/root_unified_ai_vault_contract.rs"]
 mod root_unified_ai_vault_contract;
 
@@ -169,51 +166,6 @@ mod root_unified_browser_tabs_contract;
 
 #[path = "source_audits/mcp_computer_list_tray_menu_observation_only.rs"]
 mod mcp_computer_list_tray_menu_observation_only;
-
-#[path = "source_audits/computer_get_tray_menu_item_contract.rs"]
-mod computer_get_tray_menu_item_contract;
-
-#[path = "source_audits/computer_get_tray_menu_item_by_id_contract.rs"]
-mod computer_get_tray_menu_item_by_id_contract;
-
-#[path = "source_audits/computer_get_menu_item_contract.rs"]
-mod computer_get_menu_item_contract;
-
-#[path = "source_audits/computer_list_menu_item_paths_contract.rs"]
-mod computer_list_menu_item_paths_contract;
-
-#[path = "source_audits/computer_get_menu_item_by_index_path_contract.rs"]
-mod computer_get_menu_item_by_index_path_contract;
-
-#[path = "source_audits/computer_list_apps_by_bundle_id_contract.rs"]
-mod computer_list_apps_by_bundle_id_contract;
-
-#[path = "source_audits/computer_list_native_windows_contract.rs"]
-mod computer_list_native_windows_contract;
-
-#[path = "source_audits/computer_list_app_windows_contract.rs"]
-mod computer_list_app_windows_contract;
-
-#[path = "source_audits/computer_window_observation_contract.rs"]
-mod computer_window_observation_contract;
-
-#[path = "source_audits/computer_list_app_windows_by_bundle_id_contract.rs"]
-mod computer_list_app_windows_by_bundle_id_contract;
-
-#[path = "source_audits/computer_get_app_window_by_bundle_id_contract.rs"]
-mod computer_get_app_window_by_bundle_id_contract;
-
-#[path = "source_audits/computer_get_native_window_contract.rs"]
-mod computer_get_native_window_contract;
-
-#[path = "source_audits/computer_get_frontmost_native_window_contract.rs"]
-mod computer_get_frontmost_native_window_contract;
-
-#[path = "source_audits/computer_list_frontmost_app_windows_contract.rs"]
-mod computer_list_frontmost_app_windows_contract;
-
-#[path = "source_audits/computer_get_frontmost_app_window_contract.rs"]
-mod computer_get_frontmost_app_window_contract;
 
 #[path = "source_audits/root_unified_acp_history_contract.rs"]
 mod root_unified_acp_history_contract;
@@ -241,9 +193,6 @@ mod mcp_computer_list_permissions_observation_only;
 
 #[path = "source_audits/computer_list_permissions_contract.rs"]
 mod computer_list_permissions_contract;
-
-#[path = "source_audits/computer_get_permission_contract.rs"]
-mod computer_get_permission_contract;
 
 #[path = "source_audits/verify_shot_pixel_audit_contract.rs"]
 mod verify_shot_pixel_audit_contract;

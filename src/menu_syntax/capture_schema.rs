@@ -165,7 +165,7 @@ pub fn validate(payload: &CaptureInvocation, schema: &CaptureFieldSchema) -> Val
     // Forbidden fields take Malformed precedence over Incomplete: a payload
     // shipping a field the schema explicitly disallows is wrong-shape, not
     // missing-shape, so the author sees the actual error first. See
-    // [[lat.md/menu-syntax#Menu Syntax#Capture Payload Validation]].
+    // [[removed-docs Syntax#Capture Payload Validation]].
     for forbidden in &schema.forbidden {
         if forbidden.is_satisfied(payload) {
             let label = forbidden.label();

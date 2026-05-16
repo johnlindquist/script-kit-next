@@ -2,23 +2,18 @@
 
 This chapter maps the SDK environment-variable prompt, secret storage path, footer ownership, and privacy boundaries.
 
-Raw Oracle reference: [answer](../raw-oracle/021-env-prompt/answer.md), [prompt](../raw-oracle/021-env-prompt/prompt.md), [bundle map](../raw-oracle/021-env-prompt/bundle-map.md), [full log](../raw-oracle/021-env-prompt/output.log), [session metadata](../raw-oracle/021-env-prompt/session.json).
 
 ## Executive Summary
 
-`env()` resolves environment variables for scripts and can show `EnvPrompt` when the value is missing. Current SDK truth in the Oracle bundle:
 
 ```ts
-function env(key: string, promptFn?: () => Promise<string>): Promise<string>
 ```
 
 The SDK first returns `process.env[key]` if already set. If a custom `promptFn` is provided, it calls that function, stores the result in `process.env[key]`, and does not show the GPUI `EnvPrompt`. Only the missing-value/no-prompt-function path sends an env message to Rust.
 
-Secret detection is SDK name-based: lowercase keys containing `secret`, `password`, `token`, or `key` are marked secret. Secret submissions are persisted through `src/secrets.rs` into `~/.scriptkit/secrets.age`, an age-encrypted local file with secure permissions. This is not macOS Keychain in the captured source, despite older smoke-test wording and variable names like `exists_in_keyring`.
 
 Secret-store lookup distinguishes a missing key/file from storage failures. `SecretStoreErrorKind` classifies path, read, format, decrypt, parse, and cache failures, and EnvPrompt carries a storage-error state so corrupt or unreadable storage is not shown as a first-run missing value.
 
-`EnvPrompt` is routed through `AppView::EnvPrompt`, owns focus, uses form-like `DivPrompt` sizing, has native footer surface `env_prompt`, and exposes a Submit-only footer. Native Run dispatches to `EnvPrompt::submit` before launcher fallback; launcher AI is omitted.
 
 ## What Users Can Do
 
@@ -26,7 +21,6 @@ Secret-store lookup distinguishes a missing key/file from storage failures. `Sec
 |---|---|---|
 | Read existing env value. | `await env("MY_KEY")` with `process.env.MY_KEY` set. | Resolves immediately, no UI. |
 | Use custom prompt function. | `await env("MY_KEY", async () => "...")`. | Calls function, stores result in `process.env`, no EnvPrompt. |
-| Prompt for missing value. | `await env("MY_CONFIG")`. | Opens `AppView::EnvPrompt`, user enters value, script receives it. |
 | Prompt for secret-like key. | `await env("API_TOKEN")`. | Opens secret prompt, masks value, stores secret persistently. |
 | Auto-submit stored secret. | Secret exists and no contextual title/prompt. | Rust returns stored value without showing UI. |
 | Update stored secret. | Contextual API-key prompt with title/prompt. | Shows update UI instead of auto-submit. |
@@ -52,12 +46,7 @@ Secret-store lookup distinguishes a missing key/file from storage failures. `Sec
 | Entry | Context | Result |
 |---|---|---|
 | `globalThis.env` in `scripts/kit-sdk.ts`. | Script calls `env(key, promptFn?)`. | Resolves process value, custom prompt value, or sends EnvMessage. |
-| `Message::Env`. | Protocol message. | Converts to `PromptMessage::ShowEnv`; Rust supports prompt/title fields. |
 | `show_api_key_prompt`. | App flow needs provider API key. | Creates EnvPrompt directly from Rust with contextual title/prompt and completion channel. |
-| `AppView::EnvPrompt`. | Active prompt view. | Focus target, native footer, layout info, render dispatch. |
-| `EnvPrompt::submit`. | Enter/footer Submit. | Validates non-empty, stores secret if needed, resolves callback. |
-| `EnvPrompt::delete`. | Existing stored value UI. | Deletes local secret and completes/cancels; exact SDK semantics need proof. |
-| `try_set_prompt_input`. | Protocol/automation input. | Routes text into `EnvPrompt::set_input`. |
 | `collect_elements`. | Protocol inspection. | Exposes key, value/status, redacted secret values. |
 
 ## User Workflows
@@ -68,7 +57,6 @@ A script calls `env("MY_KEY")`. The SDK checks `process.env.MY_KEY`. If it is de
 
 ### Custom Prompt Function
 
-A script calls:
 
 ```ts
 const value = await env("CUSTOM_KEY", async () => "value")
@@ -78,11 +66,9 @@ If there is no existing process value, the SDK calls the supplied function and s
 
 ### Missing Non-secret Value
 
-For a non-secret key with no existing value, the SDK sends an env message with `secret` false/absent. Rust creates `EnvPrompt`, installs `AppView::EnvPrompt`, focuses `FocusTarget::EnvPrompt`, and sizes as `ViewType::DivPrompt`. The user enters a value and submits. The SDK stores the returned value into `process.env[key]` for the current script.
 
 ### Missing Secret Value
 
-For a secret-like key, the SDK sends `secret: true`. EnvPrompt masks the input and, on non-empty submit, persists the value to `~/.scriptkit/secrets.age`. The SDK receives the actual value, but automation and UI snapshots should remain redacted.
 
 ### Stored Secret Auto-submit
 
@@ -98,15 +84,11 @@ Rust app flows such as inline chat setup call `show_api_key_prompt` directly. Th
 |---|---|---|---|---|---|---|
 | Resolve existing env. | `env(key)`. | No UI. | SDK call. | `globalThis.env` checks `process.env[key]`. | Promise resolves value. | `scripts/kit-sdk.ts`. |
 | Use custom prompt. | `env(key, promptFn)`. | PromptFn-owned. | SDK call. | SDK calls `promptFn`, sets `process.env`. | Promise resolves custom value. | `scripts/kit-sdk.ts`. |
-| Show EnvPrompt. | `env(key)` missing value. | `AppView::EnvPrompt`. | SDK call. | EnvMessage -> `ShowEnv` -> `EnvPrompt::new`. | Prompt appears. | `src/prompt_handler/mod.rs`, `src/prompts/env/prompt.rs`. |
-| Submit non-secret. | EnvPrompt active. | Input has value. | Enter/footer Submit. | `EnvPrompt::submit`, no secret persistence. | SDK resolves value. | `src/prompts/env/prompt.rs`. |
-| Submit secret. | Secret EnvPrompt. | Masked input. | Enter/footer Submit. | `EnvPrompt::submit` -> `secrets::set_secret`. | Secret stored and returned to script. | `src/prompts/env/prompt.rs`, `src/secrets.rs`. |
 | Block empty submit. | EnvPrompt active. | Empty input. | Submit. | Validation helper blocks empty. | Prompt remains active with error. | `src/prompts/env/helpers.rs`. |
 | Auto-submit stored secret. | Stored secret, no context. | No UI or transient prompt. | Rust route. | `check_keyring_and_auto_submit`. | Stored value resolves. | `src/prompt_handler/mod.rs`, `src/prompts/env/prompt.rs`. |
 | Update stored secret. | Contextual prompt/title. | Existing-value UI. | Submit new value. | EnvPrompt update path. | Secret replaced. | `src/app_execute/execution_helpers.rs`, `src/prompts/env/prompt.rs`. |
 | Delete stored secret. | Existing-value UI. | Delete target. | Click Delete. | `delete_secret`. | Stored value removed; completion semantics need proof. | `src/prompts/env/prompt.rs`, `src/secrets.rs`. |
 | Inspect safely. | Automation. | Secret EnvPrompt. | `getElements`. | Env collector redacts secret value. | Secret not exposed. | `src/app_layout/collect_elements.rs`, `tests/tab_ai_input_coverage.rs`. |
-| Footer submit. | EnvPrompt active. | Native footer. | Run/Submit. | UI window dispatches to `EnvPrompt::submit`. | No launcher fallback. | `src/app_impl/ui_window.rs`, `tests/minimal_chrome_audit.rs`. |
 
 ## State Machine
 
@@ -117,7 +99,6 @@ Rust app flows such as inline chat setup call `show_api_key_prompt` directly. Th
 | Env message sent. | Missing value, no promptFn. | SDK sends key/secret/id. | Secret inferred by key name. |
 | Rust route. | `ShowEnv`. | Check stored secret info. | Prompt/title fields can come from Rust/protocol routes. |
 | Auto-submit. | Stored secret and no context. | Callback with stored secret. | No visible UI. |
-| Prompt visible. | Missing or contextual update. | `AppView::EnvPrompt`. | Focus and DivPrompt sizing. |
 | Editing. | User types/pastes/dictates. | EnvPrompt input state mutates. | Secret display may be masked. |
 | Validation. | Submit. | Empty value blocked. | Current behavior rejects empty env values. |
 | Persist secret. | Secret submit. | Write encrypted store. | Non-secret not persisted by EnvPrompt. |
@@ -127,7 +108,6 @@ Rust app flows such as inline chat setup call `show_api_key_prompt` directly. Th
 
 | State | Visible result | Focus owner | Automation signal |
 |---|---|---|---|
-| Non-secret EnvPrompt. | Form-like prompt with env key, input, status copy. | `FocusTarget::EnvPrompt`. | Prompt type `env`, value visible. |
 | Secret EnvPrompt. | Masked input, secret/storage copy. | EnvPrompt. | Value redacted as `[secret]` or masked. |
 | Existing secret update. | Update/delete stored value UI. | EnvPrompt. | `exists_in_keyring`/status elements. |
 | Empty invalid submit. | Validation error/status. | EnvPrompt. | No callback result. |
@@ -139,9 +119,7 @@ Rust app flows such as inline chat setup call `show_api_key_prompt` directly. Th
 | Input | Scope | Behavior |
 |---|---|---|
 | Text input. | EnvPrompt. | Updates value. |
-| Dictation/setInput. | EnvPrompt. | Routes to `EnvPrompt::set_input`. |
 | Enter. | EnvPrompt. | Attempts submit. |
-| Footer Submit/Run. | EnvPrompt. | Dispatches to `EnvPrompt::submit`. |
 | Escape. | EnvPrompt. | Cancels; SDK exits on null. |
 | Delete stored value. | Existing secret UI. | Deletes stored secret and completes/cancels. |
 
@@ -220,8 +198,6 @@ EnvPrompt is Submit-only in the captured footer contract. It should not expose l
 | Recipe | Expected proof |
 |---|---|
 | SDK env test. | Existing env, secret key, custom prompt function, and missing prompt paths behave as documented. |
-| Prompt routing. | Missing key creates `AppView::EnvPrompt`, `FocusTarget::EnvPrompt`, `ViewType::DivPrompt`. |
-| Footer proof. | Native footer has Submit only, no launcher AI, Run dispatches to `EnvPrompt::submit`. |
 | Non-secret submit. | `getElements` shows value; submit resolves and sets `process.env`; no secret store write. |
 | Secret submit. | Value is masked/redacted in UI/automation; script receives actual value; encrypted store created. |
 | Stored secret auto-submit. | Second `env(secretKey)` returns without visible UI. |
@@ -235,7 +211,6 @@ EnvPrompt is Submit-only in the captured footer contract. It should not expose l
 
 Do not say EnvPrompt uses macOS Keychain unless the storage backend changes. The current proof is `~/.scriptkit/secrets.age`.
 
-Do not say `env(key, { secret: true })` is supported from the visible SDK. The second arg is currently a prompt function.
 
 Do not add Cmd+K or launcher AI footer affordances to EnvPrompt without a product decision and tests.
 
@@ -245,7 +220,7 @@ Do not log secret values. Avoid logging full env protocol payloads.
 
 If adding SDK options support, update TypeScript overloads, message serialization, protocol parsing, smoke tests, docs, and this chapter together.
 
-If changing storage backend, update `src/secrets.rs`, UI copy, smoke tests, lat.md, and privacy docs together.
+If changing storage backend, update `src/secrets.rs`, UI copy, smoke tests, removed-docs, and privacy docs together.
 
 ## Related Features
 
@@ -261,7 +236,6 @@ If changing storage backend, update `src/secrets.rs`, UI copy, smoke tests, lat.
 
 ## Open Questions And Gaps
 
-- Should SDK support `env(key, { secret: true })`, or should stale tests be corrected?
 - Should product copy say Keychain or encrypted local `secrets.age`?
 - Should public SDK expose prompt/title fields that Rust already supports?
 - Exact `None` callback serialization is inferred from SDK null handling; `make_submit_callback` was not in the tight excerpt.
@@ -270,5 +244,4 @@ If changing storage backend, update `src/secrets.rs`, UI copy, smoke tests, lat.
 - Full text editing behavior for Backspace/arrows/paste/IME is outside the tight bundle.
 - Secret-store load/decrypt failures are surfaced separately from missing secrets via typed storage-error kinds.
 - Should empty env values be allowed?
-- What exactly happens after Delete stored value: cancel/exit, close prompt, or require re-entry?
 - Exact activeFooter JSON shape for EnvPrompt should be captured in runtime receipts.

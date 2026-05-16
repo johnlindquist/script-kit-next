@@ -194,7 +194,7 @@ fn fixture_for(id: BuiltInBrowserStateId) -> BrowserFixture {
             rows: vec![
                 row("src/storybook/main_menu_variations/mod.rs", "Rust source - 46 KB", "rs"),
                 row("src/storybook/dictation_states.rs", "Rust source - state fixtures", "rs"),
-                row("lat.md/storybook.md", "Architecture notes - markdown", "md"),
+                row("removed-docs", "Architecture notes - markdown", "md"),
                 row(".claude/skills/storybook/SKILL.md", "Agent workflow notes", "md"),
                 row("src/bin/storybook.rs", "Standalone Storybook binary", "rs"),
             ],
@@ -252,7 +252,7 @@ fn fixture_for(id: BuiltInBrowserStateId) -> BrowserFixture {
                 row("cargo build --features storybook --bin storybook", "Shell - copied 8m ago", "sh"),
                 row("https://github.com/script-kit/script-kit-gpui", "URL - copied yesterday", "url"),
                 row("Main menu state matrix", "Plain text - copied yesterday", "txt"),
-                row("lat check", "Shell - copied Mon", "sh"),
+                row("source checks", "Shell - copied Mon", "sh"),
             ],
             selected_index: 0,
             preview: PreviewPane {

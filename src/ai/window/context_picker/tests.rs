@@ -1057,7 +1057,7 @@ fn provider_backed_items_are_hidden_when_unavailable() {
 }
 
 #[test]
-// @lat: [[tests/tests#Context picker provider hints]]
+// doc-anchor-removed: [[tests/tests#Context picker provider hints]]
 fn provider_backed_items_appear_when_slot_data_exists() {
     let _env = ProviderTestEnv::new();
 

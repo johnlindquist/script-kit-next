@@ -21,7 +21,7 @@
 
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn collect_visible_elements_has_browser_tabs_view_arm() {
     assert!(
@@ -36,7 +36,7 @@ fn collect_visible_elements_has_browser_tabs_view_arm() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn browser_tabs_arm_calls_collect_named_rows_with_browser_tabs_list_name() {
     assert!(
@@ -55,7 +55,7 @@ fn browser_tabs_arm_calls_collect_named_rows_with_browser_tabs_list_name() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn browser_tabs_arm_uses_fuzzy_search_not_raw_contains() {
     // BrowserTabsView uses `fuzzy_search_browser_tabs` for its filter

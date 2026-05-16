@@ -84,7 +84,7 @@ fn forwarded_field_names(source: &str) -> Vec<String> {
         .collect()
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_constructor_signature_and_forwarding_match_variant_field_order() {
     let variant = source_between(

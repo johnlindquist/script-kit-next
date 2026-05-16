@@ -7,14 +7,9 @@ This receipt tracks what was verified while creating the atlas scaffold and benc
 - `feature-map/raw-oracle/` preserves all completed Oracle session prompts, bundle maps, extracted answers, full logs, and session metadata.
 - [features/006-notes-window.md](../features/006-notes-window.md) is the benchmark distilled chapter.
 - [features/001-main-menu.md](../features/001-main-menu.md) distills the first launcher Oracle pass, including source filters, legacy triggers, actions, shortcut recording, and config-backed shortcut persistence.
-- [features/002-file-search.md](../features/002-file-search.md) distills the File Search pass, including root Files, `f:` source filters, dedicated mini/full File Search, file actions, drag-out, and attachment portal boundaries.
 - [features/003-agent-chat-context.md](../features/003-agent-chat-context.md) distills the ACP/context pass, including entry paths, embedded/detached lifecycle, composer tokens, portal staging, agent/model setup, and automation targets.
 - [features/004-mcp-sdk-protocol.md](../features/004-mcp-sdk-protocol.md) distills the MCP/SDK/protocol pass, including stdin command states, query receipts, `waitFor`/`batch`, MCP resources, MCP tools, SDK helpers, and agentic proof routing.
 - [features/005-built-in-filterable-surfaces.md](../features/005-built-in-filterable-surfaces.md) distills the built-in filterable surfaces pass, including shared visible-row contracts, Clipboard History, App Launcher, Window Switcher, Browser Tabs, Emoji Picker, Process Manager, actions, and state/elements receipts.
-- [features/007-root-notes.md](../features/007-root-notes.md) distills the root Notes pass, including metadata-only passive rows, `n:`/`notes:` source filters, passive frame isolation, source-only browse, and the non-toggle Notes open path.
-- [features/008-root-clipboard-history.md](../features/008-root-clipboard-history.md) distills the root Clipboard History pass, including opt-in metadata-only passive rows, `c:`/`clipboard:` source filters, cache-stable frames, and the Enter paste route.
-- [features/009-root-dictation-history.md](../features/009-root-dictation-history.md) distills the root Dictation History pass, including disabled-by-default transcript-safe metadata rows, `d:`/`dictation:` source filters, local JSONL cache behavior, and explicit transcript paste loading.
-- [features/010-root-acp-history.md](../features/010-root-acp-history.md) distills the root ACP History pass, including AI Conversations passive rows, `ai:`/`conversations:` source filters, cache-stable saved-conversation metadata, and the shared resume helper path.
 - [features/011-root-source-actions.md](../features/011-root-source-actions.md) distills the root source actions pass, including captured MainList subjects, typed root action ids, source-specific action palettes, content-light receipts, and root file handoffs.
 - [features/012-root-source-filters.md](../features/012-root-source-filters.md) distills the root source filters pass, including source head parsing, stripped queries, source-only browse, status rows, Files lazy paging, source-filter frame isolation, and automation receipts.
 - [raw-oracle/012-root-source-filters/](../raw-oracle/012-root-source-filters/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `root-source-filters-atlas`.
@@ -22,11 +17,9 @@ This receipt tracks what was verified while creating the atlas scaffold and benc
 - [raw-oracle/013-scriptlist-special-entry-triggers/](../raw-oracle/013-scriptlist-special-entry-triggers/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `scriptlist-special-triggers-atlas`.
 - [features/014-quick-terminal-pty.md](../features/014-quick-terminal-pty.md) distills the Quick Terminal PTY pass, including `QuickTerminalView`, `TermPrompt`, warm PTY reuse, terminal key ownership, native footer, apply-back, path cwd handoff, zsh prompt suppression, and proof recipes.
 - [raw-oracle/014-quick-terminal-pty/](../raw-oracle/014-quick-terminal-pty/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `quick-terminal-pty-atlas`.
-- [features/015-sdk-term-prompt.md](../features/015-sdk-term-prompt.md) distills the SDK TermPrompt pass, including `term()`, `AppView::TermPrompt`, full-height sizing, terminal actions, output return semantics, automation identity, and Quick Terminal boundary risks.
 - [raw-oracle/015-sdk-term-prompt/](../raw-oracle/015-sdk-term-prompt/) preserves the full Oracle prompt, bundle map, extracted answer, full log, session metadata, and failed-attempt logs for the successful CLI fallback `sdk-term-atlas-cli`.
 - [features/016-prompt-runtime-core.md](../features/016-prompt-runtime-core.md) distills the core prompt runtime pass, including `arg()`, `select()`, `div()`, `md()`, prompt ids, submit paths, actions hosts, automation receipts, and prompt runtime boundaries.
 - [raw-oracle/016-prompt-runtime-core/](../raw-oracle/016-prompt-runtime-core/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `prompt-runtime-core-atlas`.
-- [features/017-form-fields-prompt.md](../features/017-form-fields-prompt.md) distills the Form and Fields pass, including `form()`, `AppView::FormPrompt`, field focus, validation, form actions, automation receipts, and the current incomplete `fields()` GPUI backend.
 - [raw-oracle/017-form-fields-prompt/](../raw-oracle/017-form-fields-prompt/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `form-fields-prompt-atlas`.
 - [features/018-editor-template-prompt.md](../features/018-editor-template-prompt.md) distills the Editor and Template pass, including `editor()`, `template()`, full-height editor sizing, snippet tabstops, TemplatePrompt validation, editor actions, and automation gaps.
 - [raw-oracle/018-editor-template-prompt/](../raw-oracle/018-editor-template-prompt/) preserves the full Oracle prompt, bundle map, extracted answer, full log, and session metadata for `editor-template-prompt-atlas`.
@@ -85,40 +78,34 @@ This receipt tracks what was verified while creating the atlas scaffold and benc
 
 ## Checks
 
-Run before considering the migration done:
 
 ```bash
-lat check
+source checks
 git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md
 ```
 
-Latest feature gate for `040-main-window-sizing-surface-contracts`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 40 indexed features, 40 raw Oracle feature ids, 40 chapters, and no pending rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Follow-up build repair:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `feature_explorer/src/state/featureRuntime.ts` now builds explicit `FeatureRuntimeTransition[]` values with a typed accumulator, avoiding TypeScript `flatMap` inference failures after the atlas reached 40 generated features. All commands passed; the backlog scan returned no matches with exit code 1, as expected.
 
-Supplemental Oracle archive:
 
 ```bash
 cp feature_explorer/oracle/feature-xstate-001-005-prompt.md feature-map/raw-oracle/supplemental-feature-xstate-001-005/prompt.md
@@ -126,85 +113,72 @@ cp ~/.oracle/sessions/feature-xstate-001-005/output.log feature-map/raw-oracle/s
 cp ~/.oracle/sessions/feature-xstate-001-005/meta.json feature-map/raw-oracle/supplemental-feature-xstate-001-005/session.json
 ```
 
-Result: `feature-xstate-001-005` completed with a ChatGPT renderer error and only 17 output tokens, so it is archived as `supplemental-error` and is not counted as a completed feature chapter.
 
-Latest feature gate for `041-main-menu-renderer-key-handling`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 41 indexed features, 41 raw Oracle feature ids, 41 chapters, and no pending rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Latest feature gate for `042-menu-syntax-power-capture`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 42 indexed features, 42 raw Oracle feature ids, 42 chapters, and no pending or incomplete raw rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Latest feature gate for `043-acp-sdk-runtime-apis`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 43 indexed features, 43 raw Oracle feature ids, 43 chapters, and no pending or incomplete raw rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Latest feature gate for `044-mcp-protocol-runtime-bridge`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 44 indexed features, 44 raw Oracle feature ids, 44 chapters, and no pending or incomplete raw rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Latest feature gate for `045-launcher-trigger-edge-cases`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 45 indexed features, 45 raw Oracle feature ids, 45 chapters, and no pending or incomplete raw rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
-Latest feature gate for `046-shortcut-assignment-config-refresh`:
 
 ```bash
 npm run build # from feature_explorer/
-lat check
+source checks
 jq '.featureCount, .coverage' feature_explorer/src/data/features.generated.json
-git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer lat.md/feature-explorer.md lat.md/lat.md
+git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md feature_explorer removed-docs removed-docs
 jq empty feature-map/receipts/oracle-sessions.json
 rg -n "\| Backlog \|" feature-map/index.md feature-map/features feature-map/receipts
 ```
 
-Result: `npm run build`, `lat check`, `jq empty`, and `git diff --check` passed. The generated explorer data reports 46 indexed features, 46 raw Oracle feature ids, 46 chapters, and no pending or incomplete raw rows. The backlog scan returned no matches; exit code 1 is expected for `rg` with no results.
 
 ## Remaining Risk
 

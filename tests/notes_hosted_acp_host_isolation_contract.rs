@@ -7,7 +7,7 @@
 //! `host` field today, so `getAcpState.host` is structurally unverifiable
 //! (same class of gap as Pass #12's missing `dictationStatus`); (2) the
 //! story's "main-host staging is cleared" wording is misleading — the actual
-//! design invariant (per `lat.md/tests/acp-portal-contract#Host transitions`)
+//! design invariant (per `removed-docs transitions`)
 //! is that staged portal sessions SURVIVE host transitions. What the story
 //! is really asking for is *host isolation*: the Notes ACP surface must not
 //! inherit the main launcher's ACP state, and vice versa.
@@ -41,7 +41,7 @@
 //!    (attach menu, model selector, permission options, mention session,
 //!    history menu, setup agent picker) but does NOT clear
 //!    `pending_portal_session`. This matches
-//!    `lat.md/tests/acp-portal-contract#Host transitions#Host hide keeps
+//!    `removed-docs transitions#Host hide keeps
 //!    the staged session` — the staged portal contract outlives host
 //!    hides so reattach can deliver the token.
 
@@ -77,7 +77,7 @@ fn prepare_for_host_hide_slice() -> &'static str {
     &tail[..end]
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Reattach preserves embedded view identity]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn notes_and_script_list_have_distinct_embedded_acp_chat_fields() {
     assert!(
@@ -98,7 +98,7 @@ fn notes_and_script_list_have_distinct_embedded_acp_chat_fields() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Reattach preserves embedded view identity]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn spawn_hosted_view_always_constructs_a_fresh_view() {
     assert!(
@@ -115,7 +115,7 @@ fn spawn_hosted_view_always_constructs_a_fresh_view() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Reattach preserves embedded view identity]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn freshly_constructed_acp_chat_view_has_no_pending_portal_session() {
     let occurrences = VIEW_SOURCE.matches("pending_portal_session: None,").count();
@@ -129,7 +129,7 @@ fn freshly_constructed_acp_chat_view_has_no_pending_portal_session() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Reattach preserves embedded view identity]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn open_or_focus_embedded_acp_emits_host_swap_tracing_event() {
     assert!(
@@ -148,7 +148,7 @@ fn open_or_focus_embedded_acp_emits_host_swap_tracing_event() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Reattach preserves embedded view identity]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Reattach preserves embedded view identity]]
 #[test]
 fn prepare_for_host_hide_clears_popups_but_not_pending_portal_session() {
     let slice = prepare_for_host_hide_slice();
@@ -171,7 +171,7 @@ fn prepare_for_host_hide_clears_popups_but_not_pending_portal_session() {
         !slice.contains("pending_portal_session"),
         "prepare_for_host_hide MUST NOT touch pending_portal_session — \
          staged portal contracts outlive host hides per \
-         lat.md/tests/acp-portal-contract#Host transitions. If this \
+         removed-docs transitions. If this \
          regresses (the field appears anywhere in the function body), a \
          reattach after a host swap silently drops the staged token \
          before the user can deliver it."

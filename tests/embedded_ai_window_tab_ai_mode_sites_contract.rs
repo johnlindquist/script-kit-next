@@ -20,7 +20,7 @@
 //! and the 2 close-flow teardowns.
 //!
 //! **Refactor threat**: the `self.current_view = AppView::AcpChatView { ... }`
-//! entry sites are labelled in `lat.md/acp-chat.md` as setup helper,
+//! entry sites are labelled in `removed-docs` as setup helper,
 //! reuse path, and full-launch path — a plausible
 //! consolidation. A contributor extracting a shared `enter_acp_chat_view`
 //! helper could easily drop the paired `ensure_embedded_ai_window(true)`
@@ -77,7 +77,7 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     panic!("unterminated function body: {signature}");
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn exactly_one_ensure_embedded_ai_window_true_call() {
     let count: usize = production_sources()
@@ -99,7 +99,7 @@ fn exactly_one_ensure_embedded_ai_window_true_call() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn exactly_two_ensure_embedded_ai_window_false_calls() {
     let count = SRC
@@ -114,7 +114,7 @@ fn exactly_two_ensure_embedded_ai_window_false_calls() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn shared_entry_owner_preserves_transition_order() {
     let body = function_body(
@@ -139,7 +139,7 @@ fn shared_entry_owner_preserves_transition_order() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn entry_paths_delegate_to_shared_owner() {
     let count: usize = production_sources()
@@ -177,7 +177,7 @@ fn entry_paths_delegate_to_shared_owner() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn false_calls_live_inside_both_acp_close_bodies() {
     for header in [

@@ -8,7 +8,7 @@
 //! truncation, or transformation. The sole bound is the stdin line cap
 //! `MAX_STDIN_COMMAND_BYTES = 16 KiB`. Run 9 Pass #2 adopts acceptance
 //! option (a) from the anomaly menu: document the verbatim contract in
-//! `lat.md/protocol.md` AND pin it at source level here, mirroring the
+//! `removed-docs` AND pin it at source level here, mirroring the
 //! Run 8 Pass #23 pin for `stateResult.inputValue`.
 //!
 //! Refactor threat: a well-meaning contributor "hardens"
@@ -47,7 +47,7 @@ fn external_command_request_id_block() -> &'static str {
     &after[..terminator]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_is_transparent_newtype_over_bare_string() {
     // The declaration MUST be a transparent newtype over `String`.
@@ -72,7 +72,7 @@ fn external_command_request_id_is_transparent_newtype_over_bare_string() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_has_no_length_bounded_wrapper() {
     // Forbid specific length-cap construct names in the declaration +
@@ -99,7 +99,7 @@ fn external_command_request_id_has_no_length_bounded_wrapper() {
     }
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn external_command_request_id_from_string_is_pass_through() {
     // `impl From<String>` MUST be a bare `Self(value)` pass-through
@@ -139,14 +139,14 @@ fn external_command_request_id_from_string_is_pass_through() {
     }
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn max_stdin_command_bytes_remains_sole_bound() {
     // The verbatim-requestId contract names `MAX_STDIN_COMMAND_BYTES =
     // 16 * 1024` as the sole bound. Pinning the literal here forces a
     // cross-file consistency check: any change to the cap must ripple
     // into the doc comment at `ExternalCommandRequestId` AND the
-    // lat.md/protocol.md paragraph in the same commit.
+    // removed-docs paragraph in the same commit.
     assert!(
         STDIN_COMMANDS.contains("const MAX_STDIN_COMMAND_BYTES: usize = 16 * 1024;"),
         "src/stdin_commands/mod.rs must keep MAX_STDIN_COMMAND_BYTES = \
@@ -155,7 +155,7 @@ fn max_stdin_command_bytes_remains_sole_bound() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn state_result_request_id_is_bare_string_with_verbatim_doc() {
     // The response side (`StateResult.request_id`) MUST remain a bare

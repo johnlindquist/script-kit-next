@@ -134,11 +134,11 @@ fn fixture_for(id: QuickTerminalStateId) -> QuickTerminalFixture {
         QuickTerminalStateId::ThemeVariant => QuickTerminalFixture {
             title: "Quick Terminal — themed",
             cwd: "~/dev/script-kit-gpui",
-            command: "lat check",
+            command: "source checks",
             rows: &[
-                "$ lat check",
+                "$ source checks",
                 "lat: 142 sections checked",
-                "lat: 0 broken wiki links",
+                "lat: 0 broken doc links",
                 "lat: 0 stale code refs",
                 "lat: ok",
             ],

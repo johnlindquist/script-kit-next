@@ -668,6 +668,61 @@ impl LauncherSurfaceContract {
 }
 
 impl AppView {
+    /// Stable variant name for DevTools target identity receipts.
+    pub(crate) fn app_view_variant(&self) -> &'static str {
+        match self {
+            AppView::ScriptList => "ScriptList",
+            AppView::About { .. } => "About",
+            AppView::ActionsDialog => "ActionsDialog",
+            AppView::ArgPrompt { .. } => "ArgPrompt",
+            AppView::DivPrompt { .. } => "DivPrompt",
+            AppView::FormPrompt { .. } => "FormPrompt",
+            AppView::TermPrompt { .. } => "TermPrompt",
+            AppView::EditorPrompt { .. } => "EditorPrompt",
+            AppView::SelectPrompt { .. } => "SelectPrompt",
+            AppView::PathPrompt { .. } => "PathPrompt",
+            AppView::EnvPrompt { .. } => "EnvPrompt",
+            AppView::DropPrompt { .. } => "DropPrompt",
+            AppView::TemplatePrompt { .. } => "TemplatePrompt",
+            AppView::HotkeyPrompt { .. } => "HotkeyPrompt",
+            AppView::ChatPrompt { .. } => "ChatPrompt",
+            AppView::MiniPrompt { .. } => "MiniPrompt",
+            AppView::MicroPrompt { .. } => "MicroPrompt",
+            AppView::NamingPrompt { .. } => "NamingPrompt",
+            AppView::CreateAiPresetView { .. } => "CreateAiPresetView",
+            AppView::WebcamView { .. } => "WebcamView",
+            AppView::ClipboardHistoryView { .. } => "ClipboardHistoryView",
+            AppView::AppLauncherView { .. } => "AppLauncherView",
+            AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
+            AppView::BrowserTabsView { .. } => "BrowserTabsView",
+            AppView::BrowseKitsView { .. } => "BrowseKitsView",
+            AppView::InstalledKitsView { .. } => "InstalledKitsView",
+            AppView::SettingsView { .. } => "SettingsView",
+            AppView::SearchAiPresetsView { .. } => "SearchAiPresetsView",
+            AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
+            AppView::ProcessManagerView { .. } => "ProcessManagerView",
+            AppView::CurrentAppCommandsView { .. } => "CurrentAppCommandsView",
+            AppView::DesignGalleryView { .. } => "DesignGalleryView",
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => "DesignExplorerView",
+            AppView::ScratchPadView { .. } => "ScratchPadView",
+            AppView::QuickTerminalView { .. } => "QuickTerminalView",
+            AppView::FileSearchView { .. } => "FileSearchView",
+            AppView::ThemeChooserView { .. } => "ThemeChooserView",
+            AppView::EmojiPickerView { .. } => "EmojiPickerView",
+            AppView::CreationFeedback { .. } => "CreationFeedback",
+            AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
+            AppView::SdkReferenceView { .. } => "SdkReferenceView",
+            AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
+            AppView::AcpHistoryView { .. } => "AcpHistoryView",
+            AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
+            AppView::DictationHistoryView { .. } => "DictationHistoryView",
+            AppView::NotesBrowseView { .. } => "NotesBrowseView",
+            AppView::AcpChatView { .. } => "AcpChatView",
+            AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
+        }
+    }
+
     /// Payload-free surface identity for the active top-level launcher view.
     ///
     /// Do **not** add `_ => ...` here. The point is to make rustc fail when a

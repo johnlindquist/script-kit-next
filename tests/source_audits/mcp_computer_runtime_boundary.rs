@@ -1,4 +1,4 @@
-// @lat: [[protocol#Protocol#Tool exposure]]
+// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn mcp_server_routes_runtime_without_reimplementing_ui_inspection() {
     let source = std::fs::read_to_string("src/mcp_server/mod.rs").expect("read mcp_server/mod.rs");

@@ -1,12 +1,9 @@
 # 042 Menu Syntax Power Commands and Capture Composer
 
-This chapter maps the ScriptList-owned Power Syntax capture flow for `;target`, legacy `+target`, and registered `target:` aliases.
 
-Raw Oracle reference: [answer](../raw-oracle/042-menu-syntax-power-capture/answer.md), [prompt](../raw-oracle/042-menu-syntax-power-capture/prompt.md), [bundle map](../raw-oracle/042-menu-syntax-power-capture/bundle-map.md), [full log](../raw-oracle/042-menu-syntax-power-capture/output.log), [session metadata](../raw-oracle/042-menu-syntax-power-capture/session.json).
 
 ## Executive Summary
 
-Menu Syntax Power Capture turns explicit capture expressions such as `;todo Renew passport #errands p1`, legacy `+todo ...`, or registered keyword aliases like `note: ...` into `capture.v1` payloads routed to opted-in handlers.
 
 The feature is deliberately target-gated. Unknown capture heads, top-level tags, URLs, localhost strings, legacy handoff triggers, and normal fuzzy queries stay launcher search unless a built-in or metadata-registered capture target owns them.
 
@@ -14,9 +11,7 @@ The feature is deliberately target-gated. Unknown capture heads, top-level tags,
 
 - Type bare `;` or legacy `+` to open the capture target picker.
 - Filter capture targets with `;<partial>` before locking a target.
-- Type `;todo <body>`, `+todo <body>`, or registered `todo: <body>` to compose a structured capture payload.
 - Use tags, priority, URLs, durations, dates, and key/value tokens inside a capture body.
-- Register dynamic capture targets through script metadata with `family: "capture.v1"`.
 - Press Enter to validate and run a matching capture handler.
 - Use footer actions to create a local handler scaffold or request an AI scaffold for an unknown target.
 - Inspect read-only capture hints and validation details from state receipts instead of screenshots.
@@ -25,7 +20,6 @@ The feature is deliberately target-gated. Unknown capture heads, top-level tags,
 
 | Concept | Meaning | Owner |
 |---|---|---|
-| Power Syntax capture | Target-gated `;target`, `+target`, or `target:` capture expression. | `src/menu_syntax/parse.rs` |
 | Capture target | Built-in or metadata-registered slug that may own capture syntax. | `src/menu_syntax/payload.rs`, `src/menu_syntax/metadata.rs` |
 | Capture invocation | Parsed target, body, tags, priority, URL, dates, duration, key/value, and raw input. | `src/menu_syntax/capture.rs`, `src/menu_syntax/payload.rs` |
 | Trigger picker | Detached popup for capture targets, qualifiers, command rows, and setup footer actions. | `src/menu_syntax/trigger_picker.rs` |
@@ -42,7 +36,6 @@ The feature is deliberately target-gated. Unknown capture heads, top-level tags,
 | `;<partial>` | ScriptList input | Filters target picker rows by slug and label. |
 | `;target <body>` | ScriptList input | Enters capture composer when target is built in or registered. |
 | `+target <body>` | Legacy alias | Runs the same target-gated capture path while preserving legacy compatibility. |
-| `target: <body>` | Keyword alias | Captures only when the keyword head is built in or registered. |
 | Create-handler footer | Trigger picker | Writes a local scaffold or emits an AI scaffold outcome. |
 | Cmd+K in capture mode | ScriptList actions | Opens capture-specific Power Syntax actions. |
 | Cmd+Enter in capture mode | ScriptList input | Builds a structured AI request from the current `CaptureInvocation`. |
@@ -59,7 +52,6 @@ After a known target plus body boundary, the picker closes and ScriptList enters
 
 ### Register A Dynamic Target
 
-A script opts in with `menuSyntax.family: "capture.v1"` and `targets: ["slug"]` or `targets: ["*"]`. Optional labels, accepted token kinds, field schemas, defaults, and enum metadata shape picker rows, handler ranking, and validation hints.
 
 ### Validate And Execute
 
@@ -106,14 +98,6 @@ Cmd+K opens Power Syntax actions such as cancel, copy raw expression, edit paylo
 
 ## Visual And Focus States
 
-- Trigger picker: detached popup cached as `menu-syntax-trigger-popup` with target, detail, footer, and selection rows.
-- Capture composer: normal selectable launcher rows are suppressed while the main hint owns the list body.
-- Main hint: read-only grammar, validation, handler, setup, examples, and proposal details exposed through `stateResult.menuSyntaxMainHint`.
-- Unknown target setup: focused create-handler guidance and scaffold path without unrelated examples.
-- Validation missing: target-aware required-field rows and examples.
-- Validation malformed: field-specific error copy.
-- Handler ranking hint: selected handler, why selected, other matches, and conflict warnings.
-- AI proposal: pending inline proposal only if current input still matches the originating raw input.
 
 ## Keystrokes And Commands
 
@@ -121,7 +105,6 @@ Cmd+K opens Power Syntax actions such as cancel, copy raw expression, edit paylo
 |---|---|---|
 | `;` | ScriptList | Opens capture target picker. |
 | `+` | ScriptList | Legacy capture alias, target-gated like `;`. |
-| `target:` | ScriptList | Keyword capture alias only for built-in or registered targets. |
 | Arrow Up/Down | Trigger picker | Moves popup row selection before main-list navigation. |
 | Home/End | Trigger picker | Moves to first or last selectable row. |
 | Page Up/Page Down | Trigger picker | Jumps to first or last selectable row. |
@@ -142,7 +125,6 @@ Cmd+K opens Power Syntax actions such as cancel, copy raw expression, edit paylo
 | Edit payload JSON | Opens the generated payload JSON for inspection/edit flow where supported. |
 | Change handler | Lets the user choose among matching capture handlers. |
 | Open captures browser | Opens local capture artifact/history browsing. |
-| Default time | For date-missing calendar captures, appends a safe `start:<quoted phrase>` fix. |
 | Create handler | Writes a local non-overwriting capture handler scaffold. |
 | AI scaffold | Requests a handler scaffold without writing a file directly. |
 
@@ -197,7 +179,6 @@ Cmd+K opens Power Syntax actions such as cancel, copy raw expression, edit paylo
 ## Invariants And Regression Risks
 
 - `parse` is the public classifier for Power Syntax ownership.
-- `;target`, `+target`, and `target:` are all target-gated.
 - Unknown capture heads, unknown keyword heads, URLs, localhost strings, top-level tags, and legacy triggers must not become capture.
 - Capture body text is payload, not fuzzy search.
 - Handler matching is metadata-based, not body-search-based.
@@ -214,7 +195,6 @@ Cmd+K opens Power Syntax actions such as cancel, copy raw expression, edit paylo
 
 ## Verification Recipes
 
-Source/static checks:
 
 ```bash
 cargo test menu_syntax
@@ -222,14 +202,11 @@ cargo test menu_syntax_source_filters
 cargo test file_search_tilde_entry
 cargo fmt --check
 git diff --check
-lat check
+source checks
 ```
 
-Targeted receipts should assert:
 
 - `;todo Renew passport #errands p1` parses target, body, tag, and priority.
-- `note: Decision #ship` parses only when `note` is a known or registered target.
-- `localhost:3000`, `#work`, and unknown keyword heads remain search.
 - `;github body` captures only after `github` is registered by metadata.
 - Bare `;` opens the trigger picker and exposes popup elements.
 - `;gcal` with no match shows footer-only create-handler setup guidance.

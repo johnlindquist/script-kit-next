@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-tray-lifecycle",
-  "createdAt": "2026-05-15T19:16:18.766Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-tray-lifecycle]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app with an in-repo feature atlas and a standalone `feature_explorer` XS",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T19:16:18.766Z",
-      "completedAt": "2026-05-15T19:21:08.473Z",
-      "usage": {
-        "inputTokens": 50078,
-        "outputTokens": 4026,
-        "reasoningTokens": 0,
-        "totalTokens": 54104
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-tray-lifecycle]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS app with an in-repo feature atlas and a standalone `feature_explorer` XState mockup. This repo requires `lat search` / `lat expand` before work, and after every task it requires updating `lat.md/` when functionality, architecture, tests, or behavior documentation changes, then running `lat check`. The bundle includes AGENTS.md/CLAUDE.md, the owning repo skills (`platform-windowing-macos`, `testing-quality-gates`, `lat-md`), relevant `lat.md` excerpts including verification guidance, Feature 036 docs/raw Oracle excerpt, current feature-explorer machine context, and focused tray/update/about/MCP/test source excerpts.\n\nGoal: review and sharpen the local implementation plan for adding an authored XState machine for Feature 036, `036-tray-lifecycle-distribution-updates`, into `feature_explorer/src/state/authoredFeatureMachines.ts`. The authored machine should faithfully represent the current tray lifecycle, update checker, About surface, release/distribution boundaries, MCP tray observation model, and known regressions/gaps without overclaiming behavior that the production code does not implement.\n\nCurrent evidence and constraints:\n- Features 001-035 already have authored machines and catalog registrations.\n- Feature 036 must be added in the same style, registered under both `\"036\"` and `\"036-tray-lifecycle-distribution-updates\"`.\n- The implementation should update `feature_explorer/README.md` coverage and `lat.md/feature-explorer.md` rationale, then run `lat check`.\n- The current source facts include: 14 stable `tray.*` action ids; tray manager owns icon/current-app row/version row/shared update state; tray events dispatch through `TrayMenuAction::from_id`; update checker only detects/open release URLs, not installing/verifying artifacts; About is a launcher-native route with explicit focus/escape/tab contracts; MCP tray tools are read-only model-backed observation tools; release workflow signs/notarizes/staples/uploads zip and manifest, but runtime updater does not verify downloads.\n- There is a stale-looking `runtime_tray_hotkeys.rs` path in broader repo history with old action names; the current source of truth is `src/tray/mod.rs`, `src/main_entry/app_run_setup.rs`, `lat.md/tray-menu.md`, and the current tests.\n\nBundle map:\n- Process/repo rules: AGENTS.md, CLAUDE.md, skills, verification excerpt.\n- Feature source: Feature 036 chapter excerpt and raw Oracle atlas excerpt.\n- Feature explorer context: README, feature machine types, previous authored machine/registry excerpt.\n- Production source: focused excerpts from tray manager, updates, tray dispatcher, About route/render, AppView/About contract, MCP tray handlers, branding/release workflow.\n- Verification context: About tests, startup/current-app tests, and tray MCP source audits.\n\nDeliverable: please produce a critical review plan for the local authored-machine implementation. I need:\n1. The highest-priority states and transitions the Feature 036 machine must include.\n2. Boundaries/gaps/regression states that must be explicit so the atlas does not overclaim runtime behavior.\n3. Exact receipts/names/ids worth putting in machine meta.\n4. Any likely omissions in the current local plan, especially update/distribution/About/MCP boundary issues.\n5. A focused verification list for this feature explorer change, including which source audits should be wired/run.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-tray-lifecycle.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-tray-lifecycle",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T19:16:18.766Z",
-  "completedAt": "2026-05-15T19:21:08.475Z",
-  "usage": {
-    "inputTokens": 50078,
-    "outputTokens": 4026,
-    "reasoningTokens": 0,
-    "totalTokens": 54104
   },
-  "elapsedMs": 288236
 }

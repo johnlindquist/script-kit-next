@@ -15,7 +15,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini mode toggles]]
+// doc-anchor-removed: [[removed-docs mode toggles]]
 #[test]
 fn main_window_mode_helper_updates_prompt_footer_popup_and_size() {
     let helper = source_between(
@@ -39,7 +39,7 @@ fn main_window_mode_helper_updates_prompt_footer_popup_and_size() {
     }
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini mode caller routing]]
+// doc-anchor-removed: [[removed-docs mode caller routing]]
 #[test]
 fn mode_callers_route_through_helpers_not_direct_assignment() {
     for (name, source) in [
@@ -60,7 +60,7 @@ fn mode_callers_route_through_helpers_not_direct_assignment() {
     );
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini resize width clamp]]
+// doc-anchor-removed: [[removed-docs resize width clamp]]
 #[test]
 fn resize_current_view_to_width_clamps_mini_width() {
     let body = source_between(

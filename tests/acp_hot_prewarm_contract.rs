@@ -32,7 +32,7 @@ fn script_list_app_has_separate_hidden_acp_prewarm_slot() {
         fs::read_to_string("src/main_sections/app_state.rs").expect("read app state source");
     let startup = fs::read_to_string("src/app_impl/startup.rs").expect("read startup source");
 
-    // @lat: [[lat.md/acp-chat#ACP Chat#Model selection#Hot prewarm before first submit]]
+    // doc-anchor-removed: [[removed-docs Chat#Model selection#Hot prewarm before first submit]]
     assert!(
         app_state
             .contains("prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,"),
@@ -47,6 +47,7 @@ fn script_list_app_has_separate_hidden_acp_prewarm_slot() {
 #[test]
 fn startup_schedules_acp_connection_prewarm() {
     let startup = fs::read_to_string("src/app_impl/startup.rs").expect("read startup source");
+    let dev_sh = fs::read_to_string("dev.sh").expect("read dev.sh");
 
     assert!(
         startup.contains("crate::ai::acp::prewarm_agent_config();"),
@@ -67,6 +68,10 @@ fn startup_schedules_acp_connection_prewarm() {
         config_idx < chat_idx,
         "agent config prewarm should be kicked off before ACP chat prewarm"
     );
+    assert!(
+        dev_sh.contains("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM"),
+        "./dev.sh must opt out of hidden ACP connection prewarm so dev launch cannot trigger codex-acp keychain prompts"
+    );
 }
 
 #[test]
@@ -74,6 +79,10 @@ fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
     let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
     let body = fn_body(&tab_ai, "pub(crate) fn warm_acp_chat_on_startup(");
 
+    assert!(
+        body.contains("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM"),
+        "warm_acp_chat_on_startup must honor the dev opt-out before spawning an ACP runtime"
+    );
     assert!(
         body.contains("crate::ai::acp::hosted::spawn_hosted_view("),
         "warm_acp_chat_on_startup must use the host-neutral ACP bootstrap"
@@ -94,8 +103,9 @@ fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
 
 #[test]
 fn acp_open_consumes_prewarm_before_spawning_fresh_runtime() {
-    let tab_ai = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab ai source");
-    let body = fn_body(&tab_ai, "fn open_tab_ai_acp_view_from_request_impl(");
+    let acp_launch = fs::read_to_string("src/app_impl/tab_ai_mode/acp_launch.rs")
+        .expect("read ACP launch source");
+    let body = fn_body(&acp_launch, "fn open_tab_ai_acp_view_from_request_impl(");
 
     let consume_idx = body
         .find("self.take_prewarmed_acp_chat_for_launch(")

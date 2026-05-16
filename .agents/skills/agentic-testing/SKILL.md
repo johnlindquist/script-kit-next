@@ -42,20 +42,18 @@ Primary paths and concepts:
 
 Start with these sources before editing or proving behavior:
 
-- `lat.md/automation.md`
-- `lat.md/verification.md`
 - `.agents/subagents/agentic-testing-reader.md` for broad or high-risk investigation.
 
 ## Workflow
 
-1. Run or review the required `lat search` / `lat expand` context from `AGENTS.md`.
+1. Review `AGENTS.md`, the owning skill, and current source context before editing.
 2. Identify the behavior owner before editing shared files. Path ownership is a hint; the user-visible behavior and documented contract decide the owner.
 3. Check adjacent-skill boundaries before changing shared code.
 4. Make the narrowest change that preserves the domain invariant.
 5. For user-visible UX/UI reports, reproduce the real visible workflow first; then verify with the smallest receipt-backed proof that can fail if the behavior regresses.
 6. Report changed files, proof tier, exact commands or receipts, adjacent skills consulted, cleanup status, and remaining risk.
 
-Do not use this skill as the primary owner for test authoring or product ownership decisions; load `$testing-quality-gates`, `$protocol-automation`, `$lat-md`, or the relevant domain skill when those surfaces own the behavior.
+Do not use this skill as the primary owner for test authoring or product ownership decisions; load `$testing-quality-gates`, `$protocol-automation`, `$script-kit-devtools`, or the relevant domain skill when those surfaces own the behavior.
 
 ## When to Use
 
@@ -943,13 +941,11 @@ bun scripts/agentic/index.ts acp-context-insertion-preview-parity-stress --sessi
 Use adjacent skills when the work crosses boundaries:
 
 - `$testing-quality-gates` for choosing narrow build/test gates.
-- `$lat-md` for `lat.md/` section, wiki-link, or code-ref changes.
 - `$protocol-automation` when stdin JSON, receipts, target identity, `waitFor`, or `batch` are the behavior owner.
 - The domain skill for the active surface, such as `$acp-chat-core`, `$actions-popups`, `$keyboard-focus-routing`, `$launcher-surface-contracts`, or `$window-resizing`.
 
 ## Migration Notes
 
-This skill intentionally absorbs the long-form `.codex/skills/agentic-testing` and `.claude/skills/agentic-testing` recipes so future agents do not have to choose between duplicate `agentic-testing` definitions. Keep future updates here first, then update `lat.md/agent-skills.md` when the canonical routing or proof contract changes.
 
 ## Key Gotchas
 

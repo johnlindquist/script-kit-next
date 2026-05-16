@@ -601,7 +601,7 @@ pub struct MenuSyntaxHandlerSpec {
     /// capture body for one of `targets`, the popup ranks
     /// `kv_enums[key]` first (in declared order, dimming any non-matching
     /// history values). Empty map → fall through to pure-history ranking.
-    /// See [[lat.md/menu-syntax#Menu Syntax#Schema Overrides History]].
+    /// See [[removed-docs Syntax#Schema Overrides History]].
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub kv_enums: std::collections::BTreeMap<String, Vec<String>>,
     /// `capture.v1` only: required field tokens (e.g. `"body"`, `"url"`,

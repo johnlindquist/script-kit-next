@@ -11,7 +11,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini popup dismiss parity]]
+// doc-anchor-removed: [[removed-docs popup dismiss parity]]
 #[test]
 fn non_actions_footer_click_closes_shared_and_detached_actions_only() {
     let body = source_between(

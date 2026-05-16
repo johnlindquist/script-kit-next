@@ -46,7 +46,7 @@ fn handler_slice() -> &'static str {
     &tail[..end]
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn ai_chat_composer_delivery_uses_set_ai_input_without_auto_submit() {
     let handler = handler_slice();
@@ -64,7 +64,7 @@ fn ai_chat_composer_delivery_uses_set_ai_input_without_auto_submit() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn tab_ai_harness_delivery_opens_acp_with_transcript_entry_intent() {
     let handler = handler_slice();
@@ -82,7 +82,7 @@ fn tab_ai_harness_delivery_opens_acp_with_transcript_entry_intent() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn history_is_recorded_before_delivery_routing() {
     let handler = handler_slice();
@@ -100,7 +100,7 @@ fn history_is_recorded_before_delivery_routing() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn finish_dictation_dispatch_is_guarded_against_double_fire_for_tab_ai() {
     let handler = handler_slice();
@@ -124,7 +124,7 @@ fn finish_dictation_dispatch_is_guarded_against_double_fire_for_tab_ai() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn dictation_session_phase_idle_is_a_valid_inactive_state() {
     assert!(

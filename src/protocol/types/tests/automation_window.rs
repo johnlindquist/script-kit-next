@@ -311,7 +311,9 @@ fn legacy_get_state_request_still_parses_without_target() {
     let json = r#"{"type":"getState","requestId":"gs-1"}"#;
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
     match msg {
-        crate::protocol::Message::GetState { request_id, target } => {
+        crate::protocol::Message::GetState {
+            request_id, target, ..
+        } => {
             assert_eq!(request_id, "gs-1");
             assert!(target.is_none());
         }
@@ -467,6 +469,9 @@ fn automation_inspect_result_round_trip_and_request_id() {
             schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: "acpDetached:thread-1".into(),
             window_kind: "AcpDetached".into(),
+            surface_kind: None,
+            app_view_variant: None,
+            native_footer_surface: None,
             title: Some("Script Kit ACP".into()),
             resolved_bounds: None,
             target_bounds_in_screenshot: None,

@@ -5,9 +5,9 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-// @lat: [[lat.md/tests/acp-portal-contract#Conversation export dedupe#Single export path]]
-// @lat: [[lat.md/tests/acp-portal-contract#Conversation export dedupe#Stable context part dedupe]]
-// @lat: [[lat.md/tests/acp-portal-contract#Conversation export dedupe#No duplicate seeded user message]]
+// doc-anchor-removed: [[removed-docs export dedupe#Single export path]]
+// doc-anchor-removed: [[removed-docs export dedupe#Stable context part dedupe]]
+// doc-anchor-removed: [[removed-docs export dedupe#No duplicate seeded user message]]
 fn conversation_export_builder_is_single_public_path() {
     let source = read("src/ai/acp/conversation_export.rs");
     assert!(source.contains("pub(crate) struct AcpConversationExport"));

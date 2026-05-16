@@ -1,92 +1,18 @@
 {
-  "id": "root-source-filters-atlas",
-  "createdAt": "2026-05-15T06:35:04.287Z",
-  "status": "completed",
-  "promptPreview": "[root-source-filters-atlas]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK and agentic automation scripts. This repo uses `lat.md/` ",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T06:35:04.288Z",
-      "completedAt": "2026-05-15T06:44:16.491Z",
-      "usage": {
-        "inputTokens": 61974,
-        "outputTokens": 11955,
-        "reasoningTokens": 0,
-        "totalTokens": 73929
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 55940
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[root-source-filters-atlas]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK and agentic automation scripts. This repo uses `lat.md/` as a source-of-truth architecture graph. Repo rules require `lat search`/`lat expand` before work, `lat.md/` updates when behavior changes, and `lat check` after tasks. The local agent will write files; Oracle should return text only.\n\nGoal: Produce a complete operator-grade feature atlas for feature 012: Root Unified Source Filters / source-chip query routing and lazy row paging.\n\nThis atlas must cover how root launcher source filters work for every committed source head and source-only browse state:\n\n- Files: `files:` / `f:`\n- Notes: `notes:` / `n:`\n- Clipboard History: `clipboard:` / `c:`\n- Browser Tabs: `tabs:` / `t:`\n- Browser History: `history:` / `h:`\n- Apps: `apps:` / `a:`\n- Scripts: `scripts:` / `s:`\n- Commands: `commands:` / `cmd:`\n- AI Conversations: `conversations:` / `ai:`\n- AI Vault: `vault:` and related aliases if implemented\n- Dictation History: `dictation:` / `d:`\n- Windows: `windows:` / `w:`\n- Processes: `processes:` / `p:` as uncommitted/planned if that is the current contract\n\nMap attached query syntax (`c:skip`, `files:s`), spaced syntax (`c: skip`), anywhere standalone source tokens (`png files:`), source-only browse (`f: `, `n: `, `c: `, `ai: `, `d: `, etc.), quoted/unknown heads, exclusion semantics, source-filter frame keys, source-chip/status rows, lazy source paging, source-filter suppression of primary/fallback rows, input-history blocking, main-window preflight receipts, getElements status rows, and source-specific proof scripts.\n\nImportant known requirements from current docs:\n\n- Leading `:` is source discovery/filter discovery, not committed source syntax.\n- Completed source heads must not open the unrelated menu-syntax power hint.\n- Source-filter mode suppresses primary/fallback rows and disallowed sources.\n- Positive source heads explicitly enable their source for the active stripped query, even if ordinary passive defaults are disabled.\n- Source-only browse keeps empty stripped search text and returns the source's default browse rows where implemented.\n- Files source filters can start at a 12-row source-chip page and expand near the bottom without Enter.\n- Explicit Files source filters allow one-character ASCII alphanumeric stripped queries such as `f:s`, while plain `s` remains below the ordinary global file threshold.\n- Source status metadata must be non-selectable and excluded from ScriptList row counts, scroll height, executable results, and action subjects, while still visible to `getElements` as status/sourceStatus.\n- Source-filter mode blocks launcher input-history recall so Up/Down remain row navigation.\n- Root file/passive frame keys must include the source-filter set so async provider/cache results cannot bleed across source modes.\n\nBundle map:\n\n- Process context: `AGENTS.md`, `CLAUDE.md`\n- Skills: main-menu-search-selection, actions-popups, protocol-automation, agentic-testing, theme-config-preferences\n- `lat.md`: builtins, menu-syntax, verification, surfaces, automation\n- Source: menu source heads/payload/query/hints, filtering cache, root file search, filter input, grouping, result types, preflight, list/status row support, config\n- Tests/scripts: menu syntax source filter tests, source audits, passive snapshot/stability/config audits, source-filter agentic scripts and source-chip pagination proof\n\nDeliverable: Produce a complete operator-grade feature atlas for humans and AI agents.\n\nPrefer clarity, explicit examples, and workflow detail over compression. Explain every user workflow, UI state, shortcut, action, state transition, automation receipt, data boundary, edge case, failure mode, and verification path. Do not summarize away behavior.\n\nGround claims in the attached repo context. Prefer concrete file/function/test/script references. Mark uncertain claims as inference. Do not write code or create downloadable artifacts.\n\nRequired output shape:\n\n## 012 Root Unified Source Filters / Source Chips / Lazy Paging\n\n### Executive Summary\n\n### What Users Can Do\n\n### Core Concepts\n\n### Entry Points\n\n### User Workflows\n\n### Interaction Matrix\n\n| User intent | Entry point | UI state | Key/click | Code path | Result | Proof |\n|---|---|---|---|---|---|---|\n\n### State Machine\n\n### Visual And Focus States\n\n### Keystrokes And Commands\n\n### Actions And Menus\n\n### Automation And Protocol Surface\n\n### Data, Storage, And Privacy Boundaries\n\n### Error, Empty, Loading, And Disabled States\n\n### Code Ownership\n\n### Invariants And Regression Risks\n\n### Verification Recipes\n\n### Agent Notes\n\n### Related Features\n\n### Open Questions And Gaps\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/root-source-filters-atlas.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "root-source-filters-atlas",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T06:35:04.287Z",
-  "completedAt": "2026-05-15T06:44:16.492Z",
-  "usage": {
-    "inputTokens": 61974,
-    "outputTokens": 11955,
-    "reasoningTokens": 0,
-    "totalTokens": 73929
   },
-  "elapsedMs": 548651
 }

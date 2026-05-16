@@ -27,7 +27,6 @@ The primary risk is losing user draft/context across reuse, agent switch, portal
 | Concept | Meaning | Owner |
 |---|---|---|
 | `AcpChatView` | Live chat/composer surface for embedded, detached, and hosted ACP. | `src/ai/acp/view.rs` |
-| Embedded ACP | Main-window `AppView::AcpChatView` with automation child `kind:"ai"`. | `src/app_impl/tab_ai_mode/` |
 | Detached ACP | Separate Agent Chat popup sharing semantic surface `acpChat` and kind `acpDetached`. | `src/ai/acp/chat_window.rs` |
 | Entry request | Typed handoff carrying origin, target thread, seed policy, staging, and return origin. | `src/app_impl/tab_ai_mode/acp_entry.rs` |
 | Composer state | Text, caret, pending context, typed aliases, pasted tokens, inline-owned tokens, picker state. | `src/ai/acp/composer_state.rs` |
@@ -85,16 +84,13 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
-| Open embedded ACP | Main launcher | ScriptList | Cmd+Enter | `open_acp_chat_from_entry_request` | Main `AppView::AcpChatView` | `semanticSurface:"acpChat"` |
 | Submit launcher text | Main launcher | ScriptList | Tab with text | Launcher Tab ACP route | Text submits or seeds ACP | `tab_ai_plain_tab_*` traces |
-| Focus existing detached | Any ACP entry | Detached open | Cmd+Enter/Tab | Detached reuse path | Existing popup focused | `kind:"acpDetached"` |
 | Stage plugin skill | ScriptList | Skill selected | Enter | `open_acp_with_selected_skill` | Slash token + `SkillFile` | Skill thread affinity tests |
 | Set composer input | Protocol/user | Composer | Type / setAcpInput | `set_input_in_window` | Text/caret/popup refresh | `getAcpState` |
 | Open slash picker | Composer | Idle | `/` | ACP picker popup | `acp-mention-popup` rows | PromptPopup getElements |
 | Open mention picker | Composer | Idle | `@` | ACP picker popup | Context/portal rows | PromptPopup getElements |
 | Accept picker row | Picker | Row selected | Enter/Tab | `accept_mention_selection` | Token/part/portal staged | Picker tests |
 | Dismiss picker | Picker | Open | Escape | Picker dismiss owner | Suppressed trigger/query | Popup lifecycle receipt |
-| Open file portal | Mention picker | Portal row | Enter | Portal staging + File Search | Attachment portal active | `AcpSurfaceState::AttachmentPortal` |
 | Accept portal | Portal host | Selection | Enter | `attach_portal_part` | Composer token replaced | Portal contract tests |
 | Cancel portal | Portal host | Active | Escape | `cancel_pending_portal_session` | Draft restored | Portal cancel receipt |
 | Reopen focused portal | Composer | Caret in token | Cmd+. | `open_focused_mention_portal` | Same portal opens | Focused preview receipt |
@@ -110,8 +106,6 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 
 | State | Enters from | Exits to | Guards |
 |---|---|---|---|
-| Hidden ACP | Startup/close | Embedded/detached entry | Embedded `kind:"ai"` registry removed. |
-| Embedded open | Entry request | Close, detach, portal, stream | Registers child `kind:"ai"` and main `semanticSurface:"acpChat"`. |
 | Embedded reuse | Existing cached view | Focus/submit/stage | Preserves thread and view identity. |
 | Detached open | Detach/open window | Close, reattach, focus | Runtime and automation registry pair must clean on both close paths. |
 | Streaming | Submit | Cancel/finish/permission/tool | Escape cancels before close. |
@@ -127,16 +121,6 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 
 ## Visual And Focus States
 
-- Embedded ACP: main-window assistant surface with composer focus and `semanticSurface:"acpChat"`.
-- Detached ACP: separate window titled Script Kit Agent Chat, focused true, `kind:"acpDetached"`.
-- ACP footer: actions, close, history/model/agent affordances, and active dot for streaming/tool/thought/permission/context capture.
-- Setup card: inline setup blocker with Agent Catalog entry when agent/auth/config is unavailable.
-- Slash/mention popup: attached PromptPopup id `acp-mention-popup` with row-aware elements.
-- Model selector: attached PromptPopup id `acp-model-selector-popup`.
-- History popup: attached PromptPopup id `acp-history-popup`.
-- Actions dialog: ACP action route with Change Agent, Change Model, history, copy/export/save/retry/new conversation, close, and reattach where applicable.
-- Context chips: inline attached mentions highlighted; pasted text/image preview-only tokens stay compact.
-- Attachment portal: host surface replaces main view temporarily and restores origin/focus/width on accept/cancel.
 
 ## Keystrokes And Commands
 
@@ -180,22 +164,13 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 | Portal | Trigger examples | Host | Accept result | Important guard |
 |---|---|---|---|---|
 | File Search | `@file`, file token, file row | File Search | `FilePath` part | Portal mode Enter attaches, not OS-open. |
-| Clipboard History | `@clipboard`, `@clipboard:<id>` | Clipboard browser | `kit://clipboard-history?id=...` | Canonical token replacement. |
-| Dictation History | `@dictation`, `@dictation:<id>` | Dictation browser | `kit://dictation-history?id=...` | Query can force empty browse. |
 | Browser History | `@browser-history` | Browser history browser | Focused visit target | No page content in row receipts. |
-| Notes Browse | `@note:*` | Notes Browse | Focused note target | Notes-hosted ACP has separate limits. |
-| ACP History | `@history:*`, footer history | ACP history popup | Conversation/history part | Detached/Notes support history locally. |
-| Script Search | `@script:*` | ScriptList portal | Script target | Placeholder Search scripts. |
-| Scriptlet Search | `@scriptlet:*` | ScriptList portal | Scriptlet target | Placeholder Search scriptlets. |
-| Skill Search | `@skill:*`, plugin skill | ScriptList portal | Skill target / SkillFile | Main-menu and slash paths equivalent. |
 
 ## Automation And Protocol Surface
 
 | Receipt | What it proves |
 |---|---|
-| `listAutomationWindows` | Embedded `kind:"ai"`, detached `kind:"acpDetached"`, semantic surface `acpChat`. |
 | `getAcpState` target main | Reads embedded main ACP state. |
-| `getAcpState {kind:"ai"}` | Routes embedded AI target to main collector while reporting `windowKind:"ai"`. |
 | `getAcpState` detached | Reads detached ACP entity state. |
 | `getAcpTestProbe` | Internal ACP test/probe state such as selected picker row. |
 | PromptPopup getElements | Slash/mention/model/history row-aware popup elements. |
@@ -239,7 +214,7 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 | Picker/popup registry | `src/ai/acp/picker_popup.rs`, `src/ai/acp/popup_registry.rs`, `src/ai/acp/history_popup.rs` |
 | Context parts | `src/ai/acp/context.rs`, `src/ai/context_mentions/mod.rs`, `src/ai/message_parts.rs` |
 | Attachment portals | `src/app_impl/attachment_portal.rs`, `src/ai/acp/portal_contract.rs` |
-| Context snapshots/resources | `src/context_snapshot/`, `lat.md/ai-context.md` |
+| Context snapshots/resources | `src/context_snapshot/`, `removed-docs` |
 | Key tests | `tests/acp_cmd_enter_entry_request_contract.rs`, `tests/acp_portal_contract.rs`, `tests/acp_portal_host_refusal_contract.rs`, `tests/acp_agent_switch_draft_contract.rs`, `tests/acp_popup_automation_parity_contract.rs`, `tests/acp_mention_popup_registry_lifecycle_contract.rs`, `tests/context_part_composer_state.rs`, `tests/context_part_resolution.rs`, `tests/context_part_submission_flow.rs`, `tests/context_picker.rs` |
 
 ## Invariants And Regression Risks
@@ -248,19 +223,16 @@ The detached window reuses the live thread, has kind `acpDetached`, semantic sur
 - Detached reuse must focus the existing thread, not create a second detached window.
 - Plugin skill handoff stages context on the thread that will receive focus.
 - Large pastes bypass ScriptList filtering and become ACP context.
-- Picker popup ids must stay exact: `acp-mention-popup`, `acp-model-selector-popup`, `acp-history-popup`.
 - Portal staging must happen before host open and only when the host supports the portal.
 - Portal accept must replace the exact original token when unchanged; otherwise insert at fallback cursor.
 - Portal cancel must restore composer text/caret snapshot and clear terminal state to idle.
 - Escape must cancel streaming before embedded/detached close behavior.
 - Agent switch must preserve draft/context/aliases/tokens and suppress fresh focused host staging.
-- `getAcpState {kind:"ai"}` routes to main ACP state while reporting resolved `windowKind:"ai"`.
 - Detached close paths must use take-from-mutex cleanup and drain runtime/automation registries exactly once.
 - Main semantic surface must re-key when detaching, hiding, reattaching, or triggering built-ins.
 
 ## Verification Recipes
 
-Source/static checks:
 
 ```bash
 cargo test --test acp_cmd_enter_entry_request_contract
@@ -278,10 +250,9 @@ cargo test --test context_picker
 cargo check --lib
 cargo fmt --check
 git diff --check
-lat check
+source checks
 ```
 
-Runtime/state-first proofs:
 
 ```bash
 bun scripts/agentic/index.ts acp-setup-recovery --select-agent codex-acp --json
@@ -289,7 +260,6 @@ bun scripts/agentic/notes-acp-draft-agent-switch-replay.ts
 bun scripts/agentic/notes-acp-actions-originating-view.ts
 ```
 
-Targeted receipts should assert:
 
 - Cmd+Enter from ScriptList opens/reuses ACP with correct return origin.
 - `setAcpInput "/"` opens `acp-mention-popup` with row-aware getElements.
@@ -308,7 +278,6 @@ Screenshots are only needed for visual acceptance of popup placement, setup card
 - To verify composer/picker behavior, use `getAcpState`, `getAcpTestProbe`, and exact PromptPopup ids before screenshots.
 - If a portal accept replaces the wrong text, inspect the replacement target and original-token equality guard.
 - If draft text disappears after agent switch, inspect draft snapshot fields for typed aliases, pasted tokens, pending context, and portal state.
-- If automation cannot target embedded ACP, use `kind:"ai"` and confirm the read routed to main with `windowKind:"ai"`.
 - This belongs to `acp-chat-core` for lifecycle/runtime and `acp-context-composer` for composer/context/portal behavior.
 - Screenshots are only needed when visual rendering is the asserted behavior.
 

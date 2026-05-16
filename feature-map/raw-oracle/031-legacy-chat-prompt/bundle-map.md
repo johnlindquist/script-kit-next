@@ -1,12 +1,6 @@
-# Bundle Map: 031 Legacy `chat()` Prompt
 
 ## Session Attempts
 
-- Attempt 1: `legacy-chat-prompt-atlas`, about 47.3K tokens. This completed successfully and is promoted to the root raw files for this feature.
-- Attempt 2: `legacy-chat-prompt-retry`, about 33.4K tokens. The browser session initially looked stale but later completed; the complete supplemental session output is preserved under `attempt-2-stale-session/`.
-- Attempt 3: `legacy-chat-prompt-api`. Oracle API fallback failed because `OPENAI_API_KEY` is not configured; the failed session output is preserved under `attempt-3-api-missing-key/`.
-- Attempt 4: `legacy-chat-prompt-files`, about 33.4K tokens, uploaded as real browser attachments. The browser run failed before submit because attachments were not present in the composer; the complete failed session output is preserved under `attempt-4-attachment-failed/`.
-- Attempt 5: `legacy-chat-summary-atlas`, compact source-derived evidence prompt with no attachments. This run completed and is preserved under `attempt-5-summary-atlas/`, but it was superseded by the completed first bundle session for chapter authorship.
 
 ## Successful Packx Command
 
@@ -14,7 +8,6 @@
 packx --limit 49k -l 15 \
   -s "chatFn" \
   -s "ChatPrompt" \
-  -s "Message::Chat" \
   -s "ChatSubmit" \
   -s "ChatStream" \
   -s "chatSubmit" \
@@ -31,7 +24,7 @@ packx --limit 49k -l 15 \
   .agents/skills/sdk-script-execution/SKILL.md \
   .agents/skills/acp-chat-core/SKILL.md \
   .agents/skills/protocol-automation/SKILL.md \
-  lat.md/protocol.md lat.md/acp-chat.md lat.md/design.md lat.md/verification.md \
+  removed-docs removed-docs removed-docs removed-docs \
   scripts/kit-sdk.ts \
   src/protocol/message/variants/prompts_media.rs \
   src/protocol/types/chat.rs \
@@ -71,19 +64,12 @@ packx --limit 49k -l 15 \
 
 ## Successful Pack Summary
 
-- Total files: 45
-- Search mode: ripgrep
-- Context lines: 15 around each match
-- Total matches: 268
-- Context windows: 76
-- Total tokens: about 47.3K
-- Total chars: 178,764 in packx summary; 181,003 bytes on disk
 
 ## Inclusion Rationale
 
 - `AGENTS.md`, `CLAUDE.md`, and `.goals/feature_map.md` preserve repo process rules and the feature-map/oracle-loop contract.
 - Prompt, SDK, ACP, and protocol skills provide ownership context and distinguish legacy `chat()` from ACP Chat.
-- `lat.md/protocol.md`, `lat.md/acp-chat.md`, `lat.md/design.md`, and `lat.md/verification.md` provide architectural context and verification expectations.
+- `removed-docs`, `removed-docs`, `removed-docs`, and `removed-docs` provide architectural context and verification expectations.
 - `scripts/kit-sdk.ts` is the SDK entry point and controller implementation.
 - `src/protocol/...` and `src/main_sections/prompt_messages.rs` define message shapes and protocol handling.
 - `src/prompt_handler/mod.rs`, `src/prompts/chat/*`, and `src/render_prompts/other.rs` define prompt construction, rendering, streaming, setup, input, actions, and shell integration.

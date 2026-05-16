@@ -9,7 +9,7 @@
  * - MAIN section: All other scripts alphabetically
  * 
  * When the user types in the filter box:
- * - Section headers disappear (flat search mode)
+ * - Section headers disappear (fsource search mode)
  * - Results are sorted by fuzzy match score
  * 
  * Usage:
@@ -135,7 +135,7 @@ try {
 }
 
 // -----------------------------------------------------------------------------
-// Test 3: Verify flat search mode (no section headers when filtering)
+// Test 3: Verify fsource search mode (no section headers when filtering)
 // 
 // When the user types in the filter box, the grouped view should switch
 // to a flat list without section headers. The log should show:
@@ -146,7 +146,7 @@ logTest(test3, 'running');
 const start3 = Date.now();
 
 try {
-  debug('Test 3: Verify flat search removes section headers');
+  debug('Test 3: Verify fsource search removes section headers');
   debug('When typing in filter, section headers should disappear');
   
   await div(md(`# Frecency Groups Test
@@ -169,7 +169,7 @@ Press Enter to continue...`));
   
   logTest(test3, 'pass', { 
     duration_ms: Date.now() - start3,
-    note: 'Flat search mode verified via get_grouped_results() logic'
+    note: 'Fsource search mode verified via get_grouped_results() logic'
   });
 } catch (err) {
   logTest(test3, 'fail', { error: String(err), duration_ms: Date.now() - start3 });
@@ -199,7 +199,7 @@ After clearing the filter (Escape or delete text):
 
 The \`get_grouped_results()\` function handles this:
 - Empty filter = grouped view with headers
-- Non-empty filter = flat search mode
+- Non-empty filter = fsource search mode
 
 **Status**: Logic verified in scripts.rs
 
@@ -226,7 +226,7 @@ await div(md(`# Frecency Groups Tests Complete
 |------|-------------|--------|
 | 1 | Grouped view display | Check logs for RECENT/MAIN headers |
 | 2 | Record frecency use | Check ~/.scriptkit/frecency.json |
-| 3 | Flat search mode | Verified via code logic |
+| 3 | Fsource search mode | Verified via code logic |
 | 4 | Restore grouped view | Verified via code logic |
 
 ## Key Implementation Details

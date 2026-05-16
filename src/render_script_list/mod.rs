@@ -1063,7 +1063,7 @@ impl ScriptListApp {
 
                         let scroll_top_after = this.main_list_state.logical_scroll_top();
                         this.sync_main_list_selection_to_visible_window("wheel");
-                        // @lat: [[design#Footer-safe list reveal]]
+                        // doc-anchor-removed: [[design#Footer-safe list reveal]]
                         tracing::debug!(
                             target: "SCROLL_STATE",
                             delta_lines,

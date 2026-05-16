@@ -158,7 +158,7 @@ const domains: Domain[] = [
     name: "Sources, Scripts, and Owners",
     chromeAnalogue: "Sources",
     purpose: "Map observed UI nodes and failed measurements to script metadata, prompt type, source files, and likely Rust owners.",
-    currentPrimitives: ["promptType", "surfaceContract", "lat.md refs"],
+    currentPrimitives: ["promptType", "surfaceContract", "doc refs"],
     nextPrimitives: ["owner metadata on semantic nodes", "script provenance receipts", "source jump hints"],
   },
   {

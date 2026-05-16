@@ -20,7 +20,7 @@ fn section<'a>(source: &'a str, start_needle: &str, end_needle: &str) -> &'a str
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn design_picker_commit_paths_persist_but_preview_paths_do_not() {
     let source = fs::read_to_string("src/render_builtins/design_picker.rs")
         .expect("design_picker.rs must be readable");
@@ -87,7 +87,7 @@ fn design_picker_commit_paths_persist_but_preview_paths_do_not() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn startup_hydrates_design_from_config_instead_of_default_variant() {
     let startup =
         fs::read_to_string("src/app_impl/startup.rs").expect("startup.rs must be readable");
@@ -118,7 +118,7 @@ fn startup_hydrates_design_from_config_instead_of_default_variant() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn save_active_design_id_helper_exists_and_is_exported() {
     let loader =
         fs::read_to_string("src/config/loader.rs").expect("config/loader.rs must be readable");
@@ -147,7 +147,7 @@ fn save_active_design_id_helper_exists_and_is_exported() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn cmd1_design_picker_honors_configured_behavior() {
     let source = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("builtin_execution.rs must be readable");
@@ -193,7 +193,7 @@ fn cmd1_design_picker_honors_configured_behavior() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn save_design_overrides_helper_exists_and_is_exported() {
     let loader =
         fs::read_to_string("src/config/loader.rs").expect("config/loader.rs must be readable");
@@ -236,7 +236,7 @@ fn save_design_overrides_helper_exists_and_is_exported() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn design_override_action_commits_through_config_helper() {
     let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
         .expect("actions_dialog.rs must be readable");
@@ -251,7 +251,7 @@ fn design_override_action_commits_through_config_helper() {
 }
 
 #[test]
-// @lat: [[designs#Persistence]]
+// doc-anchor-removed: [[designs#Persistence]]
 fn cycle_design_remains_in_memory_only() {
     let source =
         fs::read_to_string("src/app_impl/theme_focus.rs").expect("theme_focus.rs must be readable");

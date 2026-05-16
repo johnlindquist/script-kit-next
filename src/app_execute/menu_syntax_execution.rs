@@ -124,7 +124,7 @@ impl ScriptListApp {
         // about (builtin first, dynamic from the script's own spec second)
         // says the payload is incomplete or malformed. No schema → permissive
         // Allow so handlers without declared shape still execute. See
-        // [[lat.md/menu-syntax#Menu Syntax#Capture Validation Gate]].
+        // [[removed-docs Syntax#Capture Validation Gate]].
         match crate::menu_syntax::decide_capture_gate_for_script(&invocation, &script) {
             crate::menu_syntax::CaptureGateDecision::Allow => {}
             crate::menu_syntax::CaptureGateDecision::BlockMissing { hud_message, .. }

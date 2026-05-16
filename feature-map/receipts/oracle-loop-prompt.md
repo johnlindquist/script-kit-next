@@ -6,15 +6,14 @@ Use this prompt for each new feature-map Oracle pass. It is intentionally expans
 
 1. Pick a stable feature id such as `012-window-resizing`.
 2. Identify owner skills and adjacent skills.
-3. Run `lat expand "<feature prompt>"`.
-4. Run `lat search "<feature concepts>"` and read the relevant sections.
-5. Build a focused bundle that includes:
+3. Run `source context expansion "<feature prompt>"`.
+4. Run `source search "<feature concepts>"` and read the relevant sections.
    - `AGENTS.md`
    - `CLAUDE.md`
    - owning `.agents/skills/<skill>/SKILL.md`
    - adjacent skills for crossed boundaries
-   - relevant `lat.md/` pages
-   - `lat.md/verification.md`
+   - relevant `removed-docs/` pages
+   - `removed-docs`
    - focused source files, tests, and agentic scripts
 
 ## Prompt
@@ -26,7 +25,6 @@ Prefer clarity, explicit examples, and workflow detail over compression. Explain
 
 Ground claims in the attached repo context. Prefer concrete file/function/test/script references. Mark uncertain claims as inference. Do not write code or create downloadable artifacts.
 
-Use this output shape:
 
 ## <feature id> <feature name>
 
@@ -55,7 +53,6 @@ Use this output shape:
 
 ## Required Saves
 
-Save these files before distilling:
 
 - `feature-map/raw-oracle/<feature-id>/prompt.md`
 - `feature-map/raw-oracle/<feature-id>/bundle-map.md`
@@ -63,10 +60,9 @@ Save these files before distilling:
 - `feature-map/raw-oracle/<feature-id>/output.log`
 - `feature-map/raw-oracle/<feature-id>/session.json`
 
-Then update:
 
 - `feature-map/features/<feature-id>.md`
 - `feature-map/index.md`
 - `feature-map/receipts/oracle-sessions.md`
 
-Run `lat check` before calling the loop done.
+Run `source checks` before calling the loop done.

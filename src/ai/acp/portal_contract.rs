@@ -448,7 +448,7 @@ pub(crate) fn apply_portal_replacement(
 mod tests {
     use super::*;
 
-    // @lat: [[tests/acp-portal-contract#Exact replacement target#Replaces only the matching token]]
+    // doc-anchor-removed: [[tests/acp-portal-contract#Exact replacement target#Replaces only the matching token]]
     #[test]
     fn replaces_only_when_the_current_text_matches_the_original_token() {
         let target = AcpPortalReplacementTarget::ExactToken {
@@ -465,7 +465,7 @@ mod tests {
         assert_eq!(next_cursor, "compare @file:bar.rs ".chars().count());
     }
 
-    // @lat: [[tests/acp-portal-contract#Exact replacement target#Falls back when the token changed]]
+    // doc-anchor-removed: [[tests/acp-portal-contract#Exact replacement target#Falls back when the token changed]]
     #[test]
     fn falls_back_when_the_token_changed() {
         let target = AcpPortalReplacementTarget::ExactToken {
@@ -482,7 +482,7 @@ mod tests {
         assert_eq!(next_cursor, "compare @file:bar.rs ".chars().count());
     }
 
-    // @lat: [[tests/acp-portal-contract#Preview contract#Preview copy names the replacement target]]
+    // doc-anchor-removed: [[tests/acp-portal-contract#Preview contract#Preview copy names the replacement target]]
     #[test]
     fn portal_preview_names_the_replacement_target() {
         let intent = intent_from_inline_token(
@@ -501,7 +501,7 @@ mod tests {
         );
     }
 
-    // @lat: [[tests/acp-portal-contract#Preview contract#Preview-only mentions stay explicit]]
+    // doc-anchor-removed: [[tests/acp-portal-contract#Preview contract#Preview-only mentions stay explicit]]
     #[test]
     fn preview_only_mentions_stay_explicit() {
         let part = AiContextPart::TextBlock {

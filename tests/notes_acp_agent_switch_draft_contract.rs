@@ -11,7 +11,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_idx]
 }
 
-// @lat: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Draft snapshot preserves text and context]]
+// doc-anchor-removed: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Draft snapshot preserves text and context]]
 #[test]
 fn draft_snapshot_types_exist_on_thread_and_view() {
     assert!(
@@ -40,7 +40,7 @@ fn draft_snapshot_types_exist_on_thread_and_view() {
     );
 }
 
-// @lat: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Agent switch restores snapshot after relaunch]]
+// doc-anchor-removed: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Agent switch restores snapshot after relaunch]]
 #[test]
 fn notes_agent_switch_captures_before_drop_and_restores_after_relaunch() {
     assert!(
@@ -70,7 +70,7 @@ fn notes_agent_switch_captures_before_drop_and_restores_after_relaunch() {
     );
 }
 
-// @lat: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Reused Notes ACP does not overwrite composer]]
+// doc-anchor-removed: [[tests/notes-acp#Notes ACP draft snapshot across agent switch#Reused Notes ACP does not overwrite composer]]
 #[test]
 fn ensure_embedded_acp_view_does_not_set_input_on_reuse() {
     let body = source_between(

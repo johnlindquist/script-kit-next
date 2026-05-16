@@ -131,7 +131,7 @@ fn primary_selection_surface_passes_for_all_presets_except_documented_exemption(
             panic!(
                 "{} no longer needs the chrome-contrast exemption ({:.2}:1 >= 4.5:1) — \
                  remove it from src/theme/tests.rs::is_chrome_contrast_exempt and from \
-                 lat.md/theme.md#Preset contrast guardrail",
+                 removed-docs contrast guardrail",
                 preset.id, ratio
             );
         }

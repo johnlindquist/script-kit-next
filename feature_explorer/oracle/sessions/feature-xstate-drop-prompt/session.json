@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-drop-prompt",
-  "createdAt": "2026-05-15T16:22:02.447Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-drop-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/moc",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T16:22:02.449Z",
-      "completedAt": "2026-05-15T16:29:02.779Z",
-      "usage": {
-        "inputTokens": 201354,
-        "outputTokens": 7006,
-        "reasoningTokens": 0,
-        "totalTokens": 208360
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-drop-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/mockup atlas. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. For this Oracle pass, use the attached packx bundle and return text only.\n\nTask: produce an implementation-ready authored XState runtime machine plan for Feature 020: Drop Prompt / drop(). Focus on SDK no-arg drop(), FileInfo return shape, Message::Drop -> ShowDrop -> AppView::DropPrompt, FocusTarget::DropPrompt, DivPrompt sizing, empty Submit disabled with actionDisabled:\"no_files\", DropPrompt::submit empty guard, files-present submit JSON metadata, Escape cancel/null, getState/getElements/getLayoutInfo receipts, active footer identity, OS drop event wiring gap around DropPrompt::handle_drop, Actions/Cmd+K affordance gap, ForceSubmit gap, adjacent ACP/chat drop and File Search drag boundaries, privacy/path exposure, file size precision, directory/non-file/deleted-before-submit edge cases.\n\nReturn:\n1. Concrete XState states and transitions suitable for feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance for each major state, using existing FeatureWireframeMeta style and avoiding unsupported enum values.\n3. Invariants/regression states that should be represented.\n4. Any discrepancies between Feature 020 chapter and attached source that should be corrected before/while authoring.\n5. Verification checklist for this feature explorer iteration.\n\nDo not edit files. Do not summarize generically; give direct implementation guidance.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-drop-prompt.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-drop-prompt",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T16:22:02.448Z",
-  "completedAt": "2026-05-15T16:29:02.780Z",
-  "usage": {
-    "inputTokens": 201354,
-    "outputTokens": 7006,
-    "reasoningTokens": 0,
-    "totalTokens": 208360
   },
-  "elapsedMs": 418447
 }

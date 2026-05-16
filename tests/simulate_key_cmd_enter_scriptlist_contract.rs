@@ -23,7 +23,7 @@ const CANONICAL_SIMULATEKEY: &str =
     include_str!("../src/main_entry/runtime_stdin_match_simulate_key.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture() {
     for (name, source) in [
@@ -84,7 +84,7 @@ fn simulate_key_dispatchers_route_cmd_enter_in_scriptlist_to_acp_context_capture
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
     // Ordering contract: the Cmd+Enter arm MUST appear before the
@@ -130,7 +130,7 @@ fn simulate_key_cmd_enter_arm_precedes_plain_enter_in_scriptlist() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn try_route_global_cmd_enter_to_acp_context_capture_still_defined() {
     // If the helper is renamed or removed, the stdin arms above would

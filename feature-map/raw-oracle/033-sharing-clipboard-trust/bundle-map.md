@@ -1,10 +1,8 @@
 # 033 Sharing and Clipboard Trust Install Bundle Map
 
-Oracle slug: `sharing-clipboard-trust-cli`
 
 Initial browser MCP attempts using `sharing-clipboard-trust-atlas`, `sharing-clipboard-trust-atlas-retry`, and `sharing-clipboard-trust-atlas-compact` produced empty model logs after the 120s MCP wrapper timeout. Those failed attempts are preserved in this directory under `attempt-*`.
 
-The successful canonical Oracle run used the CLI fallback with `--write-output`:
 
 ```bash
 oracle --engine browser --model "5.5 Pro" --browser-attachments never --timeout 3600 \
@@ -15,24 +13,20 @@ oracle --engine browser --model "5.5 Pro" --browser-attachments never --timeout 
   -p "[sharing-clipboard-trust-cli] ..."
 ```
 
-Canonical bundle path: `/Users/johnlindquist/.oracle/bundles/sharing-clipboard-trust-atlas-retry.txt`
 
-Original larger bundle path: `/Users/johnlindquist/.oracle/bundles/sharing-clipboard-trust-atlas.txt`
 
 ## Lat context
 
 ```bash
-lat expand "033 Sharing and Clipboard Trust Install: share scripts scriptlets skills agents copy deeplink clipboard watcher install trust prompt plugin import"
-lat search "sharing clipboard trust prompt share URI install plugin scripts scriptlets skills agents deeplink"
+source search "sharing clipboard trust prompt share URI install plugin scripts scriptlets skills agents deeplink"
 ```
 
-Top sections:
 
-- `lat.md/sharing#Sharing`
-- `lat.md/sharing#Sharing#Clipboard Trust Prompt`
-- `lat.md/agent-skills#Agent Skills`
-- `lat.md/tests/acp-portal-contract#ACP Portal Contract#Plugin skill target-thread contract`
-- `lat.md/acp-chat#ACP Chat#Entry paths#Plugin Skill Thread Affinity`
+- `removed-docs`
+- `removed-docs Trust Prompt`
+- `removed-docs Skills`
+- `removed-docs Portal Contract#Plugin skill target-thread contract`
+- `removed-docs Chat#Entry paths#Plugin Skill Thread Affinity`
 
 ## Packx command
 
@@ -56,7 +50,7 @@ packx --limit 49k -l 18 \
   .agents/skills/storage-cache-security/SKILL.md \
   .agents/skills/platform-windowing-macos/SKILL.md \
   .agents/skills/actions-popups/SKILL.md \
-  lat.md/sharing.md lat.md/scripting.md lat.md/workspace.md lat.md/verification.md lat.md/surfaces.md lat.md/automation.md \
+  removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs \
   src/script_sharing.rs src/app_actions/handle_action/files.rs src/actions/builders/script_context.rs \
   src/app_impl/startup.rs src/confirm/parent_dialog.rs src/confirm/window.rs \
   src/plugins/discovery.rs src/plugins/manifest.rs src/plugins/types.rs \

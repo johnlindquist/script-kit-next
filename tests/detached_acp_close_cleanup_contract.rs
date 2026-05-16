@@ -151,7 +151,7 @@ fn find_adjacent_cleanup_pair(body: &str) -> Option<(usize, usize)> {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn close_chat_window_cleans_up_registry_before_remove_window() {
     let body = close_chat_window_body(CHAT_WINDOW_RS);
@@ -224,7 +224,7 @@ fn close_chat_window_cleans_up_registry_before_remove_window() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn both_close_paths_carry_the_cleanup_pair() {
     // The file must have ≥ 2 adjacent-cleanup-pair sites: one for the

@@ -1,6 +1,6 @@
 //! Source-level contract test for the ACP detached-to-panel reattach flow.
 //!
-//! Backs `lat.md/acp-chat#ACP Chat#Detached window behavior` and user story
+//! Backs `removed-docs Chat#Detached window behavior` and user story
 //! `detach-then-reattach-identity`. When the user fires "Return to Panel" from
 //! a detached ACP chat window, the handle_action dispatcher closes the
 //! detached window and MUST reuse the cached embedded AcpChatView (which
@@ -20,7 +20,7 @@
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn reattach_method_exists_and_reuses_cached_embedded_view_first() {
     assert!(
@@ -44,7 +44,7 @@ fn reattach_method_exists_and_reuses_cached_embedded_view_first() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn handle_action_reattach_arm_routes_to_the_preserving_helper() {
     assert!(
@@ -63,7 +63,7 @@ fn handle_action_reattach_arm_routes_to_the_preserving_helper() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn try_reuse_embedded_acp_view_handles_none_intent_without_submit() {
     // The preserving reattach path calls try_reuse_embedded_acp_view(None, cx).
@@ -87,7 +87,7 @@ fn try_reuse_embedded_acp_view_handles_none_intent_without_submit() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn embedded_cache_is_populated_on_detach_so_reattach_has_a_target() {
     // The whole reattach-preserves-history story rests on this: when the

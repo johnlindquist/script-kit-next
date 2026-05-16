@@ -1891,7 +1891,7 @@ mod tests {
 
     #[test]
     fn normalize_do_in_current_app_request_does_not_clear_launcher_prefixes() {
-        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        // doc-anchor-removed: [[removed-docs and introspection]]
         assert_eq!(normalize_do_in_current_app_request(Some("do")), Some("do"));
         assert_eq!(
             normalize_do_in_current_app_request(Some("do in")),
@@ -1905,7 +1905,7 @@ mod tests {
 
     #[test]
     fn normalize_do_in_current_app_labeled_request_only_extracts_full_label_requests() {
-        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        // doc-anchor-removed: [[removed-docs and introspection]]
         assert_eq!(
             normalize_do_in_current_app_labeled_request(Some("do")),
             None
@@ -1946,7 +1946,7 @@ mod tests {
 
     #[test]
     fn effective_do_in_current_app_query_for_submission_clears_plain_launcher_filters() {
-        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        // doc-anchor-removed: [[removed-docs and introspection]]
         assert_eq!(
             effective_do_in_current_app_query_for_submission("do", None),
             ""
@@ -1979,7 +1979,7 @@ mod tests {
 
     #[test]
     fn normalize_do_in_current_app_request_drops_current_command_aliases() {
-        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        // doc-anchor-removed: [[removed-docs and introspection]]
         assert_eq!(
             normalize_do_in_current_app_request(Some("Do in Current Command")),
             None
