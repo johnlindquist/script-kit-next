@@ -500,6 +500,7 @@ impl ScriptListApp {
                     // Clone response_tx for the reader thread to handle direct responses
                     // (e.g., getSelectedText, setSelectedText, checkAccessibility)
                     let reader_response_tx = response_tx.clone();
+                    let subscription_owner_id = format!("script:{}", uuid::Uuid::new_v4());
 
                     // Writer thread - handles sending responses to script
                     std::thread::spawn(move || {
@@ -617,6 +618,7 @@ impl ScriptListApp {
                         // to complete (with timeout) before reading to prevent partial captures.
                         let stderr_capture = stderr_capture;
                         let script_path = script_path_clone;
+                        let subscription_owner_id = subscription_owner_id;
 
                         loop {
                             // Use next_message_graceful_with_handler to skip non-JSON lines and report parse issues
@@ -1512,6 +1514,54 @@ impl ScriptListApp {
                                             );
                                         }
                                         continue;
+                                    }
+
+                                    // Handle AI SDK live subscriptions. These need the current
+                                    // script's response channel and owner id, so they cannot live
+                                    // in the stateless direct SDK handler.
+                                    match &msg {
+                                        Message::AiSubscribe {
+                                            request_id,
+                                            events,
+                                            chat_id,
+                                        } => {
+                                            let response =
+                                                crate::ai::subscriptions::handle_subscribe(
+                                                    subscription_owner_id.clone(),
+                                                    request_id.clone(),
+                                                    events.clone(),
+                                                    chat_id.clone(),
+                                                    reader_response_tx.clone(),
+                                                );
+                                            if let Err(e) = reader_response_tx.send(response) {
+                                                tracing::info!(
+                                                    category = "EXEC",
+                                                    error = %e,
+                                                    "Failed to send AI subscription response"
+                                                );
+                                            }
+                                            continue;
+                                        }
+                                        Message::AiUnsubscribe {
+                                            request_id,
+                                            subscription_id,
+                                        } => {
+                                            let response =
+                                                crate::ai::subscriptions::handle_unsubscribe(
+                                                    &subscription_owner_id,
+                                                    request_id.clone(),
+                                                    subscription_id.clone(),
+                                                );
+                                            if let Err(e) = reader_response_tx.send(response) {
+                                                tracing::info!(
+                                                    category = "EXEC",
+                                                    error = %e,
+                                                    "Failed to send AI unsubscribe response"
+                                                );
+                                            }
+                                            continue;
+                                        }
+                                        _ => {}
                                     }
 
                                     // Handle AI SDK messages that can be processed directly
@@ -2533,6 +2583,15 @@ impl ScriptListApp {
                                     break;
                                 }
                             }
+                        }
+                        let cleaned =
+                            crate::ai::subscriptions::cleanup_owner(&subscription_owner_id);
+                        if cleaned > 0 {
+                            tracing::info!(
+                                category = "EXEC",
+                                cleaned,
+                                "Cleaned AI live subscriptions for exited script"
+                            );
                         }
                         tracing::info!(
                             category = "EXEC",
