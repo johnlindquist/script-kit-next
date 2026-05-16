@@ -2693,6 +2693,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -2714,6 +2715,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3654,6 +3656,21 @@ impl ScriptListApp {
                     } else {
                         None
                     };
+                let drop_state = match &self.current_view {
+                    AppView::DropPrompt { entity, .. } => {
+                        let drop_prompt = entity.read(cx);
+                        Some(serde_json::json!({
+                            "fileCount": drop_prompt.dropped_files.len(),
+                            "files": drop_prompt
+                                .dropped_files
+                                .iter()
+                                .enumerate()
+                                .map(|(index, file)| file.automation_metadata(index))
+                                .collect::<Vec<_>>(),
+                        }))
+                    }
+                    _ => None,
+                };
 
                 // Create the response
                 let response = Message::state_result(
@@ -3680,6 +3697,7 @@ impl ScriptListApp {
                     root_file_search,
                     main_list_scroll,
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
+                    drop_state,
                 );
 
                 tracing::info!(

@@ -10,6 +10,12 @@ Shortcut assignment proof should cover config writes, save-time live route confl
 
 EnvPrompt secret-store proof should distinguish missing files from read, decrypt/format, parse, and cache failures. Source audits must prove result-returning lookup APIs, EnvPrompt storage-error propagation, redacted `getElements` status kinds, and `cargo check --lib`; direct lib tests may be blocked by unrelated dirty-tree `cfg(test)` failures.
 
+## DropPrompt Native Drop
+
+DropPrompt native-drop verification must prove both the GPUI file-drop hook and the redacted automation receipt boundary.
+
+Use `cargo test --test drop_prompt_native_drop_contract -- --nocapture` for source proof that `DropPrompt` wires `.on_drop` through `ExternalPaths`, `getState.drop` carries only `{index,name,size}`, `getElements` no longer exposes paths as row values, and SDK submit remains full-fidelity `FileInfo[]`. Runtime proof should start empty, assert Submit disabled through `activeFooter`, assert `getState.drop.fileCount:0` and no dropped-file elements, perform a native file drop onto `window:drop`, then assert redacted state/elements, enabled Submit, full SDK submit payload, and Escape cancel behavior. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
+
 ## SDK find unsupported boundary
 
 `find()` verification is a negative SDK contract, not a UI prompt proof.

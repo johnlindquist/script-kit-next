@@ -202,6 +202,10 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         screenshot_identity: Option<String>,
+        /// Redacted DropPrompt file metadata for state-first automation receipts.
+        /// Omitted outside DropPrompt; contains count/name/size only, never paths.
+        #[serde(rename = "drop", default, skip_serializing_if = "Option::is_none")]
+        drop_state: Option<serde_json::Value>,
     },
 
     // ============================================================

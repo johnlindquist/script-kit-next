@@ -887,7 +887,7 @@ impl ScriptListApp {
                 source_name: None,
                 selectable: None,
                 status_kind: None,
-            action_disabled: None,
+                action_disabled: None,
             });
         }
 
@@ -1058,7 +1058,7 @@ impl ScriptListApp {
                         source_name: None,
                         selectable: None,
                         status_kind: None,
-            action_disabled: None,
+                        action_disabled: None,
                     }
                 }
             };
@@ -1296,7 +1296,7 @@ impl ScriptListApp {
                     source_name: None,
                     selectable: None,
                     status_kind: None,
-            action_disabled: None,
+                    action_disabled: None,
                 },
             );
         }
@@ -1352,12 +1352,25 @@ impl ScriptListApp {
             if elements.len() >= limit {
                 break;
             }
-            elements.push(Self::choice_element(
-                index,
-                file.name.clone(),
-                file.path.clone(),
-                false,
-            ));
+            elements.push(protocol::ElementInfo {
+                semantic_id: protocol::generate_semantic_id_named(
+                    "choice",
+                    &format!("dropped-file-{index}"),
+                ),
+                element_type: protocol::ElementType::Choice,
+                text: Some(file.name.clone()),
+                value: Some(file.automation_metadata(index).to_string()),
+                selected: Some(false),
+                focused: None,
+                index: Some(index),
+                role: Some("file".to_string()),
+                kind: Some("dropped_file".to_string()),
+                source: None,
+                source_name: Some(file.name.clone()),
+                selectable: Some(false),
+                status_kind: None,
+                action_disabled: None,
+            });
         }
 
         (elements, total_count)
@@ -1612,7 +1625,7 @@ impl ScriptListApp {
                         source_name: result.source_name().map(str::to_string),
                         selectable: Some(true),
                         status_kind: None,
-            action_disabled: None,
+                        action_disabled: None,
                     };
                     if matches!(result, scripts::SearchResult::File(_)) {
                         element.kind = Some("file".to_string());
@@ -1639,7 +1652,7 @@ impl ScriptListApp {
                         source_name: Some(status.source_name.clone()),
                         selectable: Some(false),
                         status_kind: Some(status.status_kind.as_str().to_string()),
-            action_disabled: None,
+                        action_disabled: None,
                     });
                     row_index += 1;
                 }
@@ -1668,7 +1681,7 @@ impl ScriptListApp {
                 source_name: Some(status.source_name.clone()),
                 selectable: Some(false),
                 status_kind: Some(status.status_kind.as_str().to_string()),
-            action_disabled: None,
+                action_disabled: None,
             });
             row_index += 1;
         }
