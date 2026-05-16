@@ -131,6 +131,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For empty/error/retry state UX, prove empty, loading, error, retry, and recovered states with visible text, semantic retry identity, footer-safe actions, stable selection, and no stale error after recovery.
 - For form validation and inline error recovery, prove invalid submit prevention, focus first invalid field, preserve user input, inline error identity, clear errors on valid edits, final submit recovery, prevent accidental submit, and no cross-field error leakage.
 - For navigation/back-stack history, prove transition generations, route stack depth, actions discoverability, disabled/no-op affordances, Escape/back/Cmd-K close behavior, and return-to-origin restore selection, filter, scroll, footer, and focus without stale surface state.
+- For long text wrapping/resizing UX stress, prove fixture identity, width mode, resize generation, full text, visible text, text/rendered/element bounds, available width, measured width, wrap line count, truncation intent, tooltip or accessible full text, overlap pairs, footer/input collision, focus and selection preservation, stale resize rejection, wrong-surface rejection, and cleanup.
+- For actions/command discoverability no-op UX, prove actionable, disabled, and no-op row identities with labels, sections, disabled reasons, no-op reasons, keyboard selectability, skipped-row explanations, activation-prevention receipts, no host mutation, no accidental execution, focus restoration, stale action rejection, and cleanup.
+- For dense list/detail preview readability, prove selected row identity, preview source identity, preview title/body bounds, metadata chip readability, footer action readability, filter generations, selection generations, resize generations, stale-preview rejection, row reanchor, focus preservation, no column/footer overlap, and cleanup.
 
 ## The Pattern
 
@@ -773,6 +776,14 @@ picker is still open but the screenshot looks fine, the test must FAIL.
 ## Verification Recipes
 
 See [references/recipes.md](references/recipes.md) for named verification patterns.
+
+Other hard-scenario recipes:
+
+```bash
+bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
+bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
+bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
+```
 
 ## Adjacent Skills
 
