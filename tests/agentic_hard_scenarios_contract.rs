@@ -89,6 +89,12 @@ fn target_thread_helper_promotes_kind_targets_to_exact_id() {
         "untargeted_rpc_forbidden",
         "target_identity_drift",
         "targetJson: { type: \"id\"",
+        "originAcpViewId",
+        "originAcpGeneration",
+        "portalId",
+        "portalFamily",
+        "recorderId",
+        "recorderGeneration",
     ] {
         assert!(
             TARGET_THREAD.contains(token),

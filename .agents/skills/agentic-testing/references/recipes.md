@@ -381,6 +381,63 @@ bun scripts/agentic/index.ts notes-acp-delayed-action-origin-stress \
 
 ---
 
+### Recipe: verify-file-portal-origin-roundtrip
+
+**When:** Testing ACP or Notes-hosted ACP attachment portal flows where portal return must preserve the original ACP host, generation, portal session, and accepted context-part URI.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts file-portal-origin-roundtrip \
+  --session default \
+  --origin acp \
+  --portal file-search \
+  --selection file \
+  --query AGENTS.md \
+  --json
+```
+
+**Pass:** A future app-side receipt proves origin host/generation, portal session id, return target, and accepted context-part URI all match.
+**Current fail-closed behavior:** Until those receipts exist, this recipe returns `missing_portal_round_trip_origin_receipt` and does not infer safety from generic ACP state.
+
+---
+
+### Recipe: verify-permission-privacy-preflight
+
+**When:** Testing permission or screenshot/native-input prerequisites without opening System Settings, prompting macOS, or mutating TCC state.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts permission-privacy-preflight \
+  --session default \
+  --kinds accessibility,screen-recording,microphone \
+  --json
+```
+
+**Pass:** Receipt reports read-only prerequisite checks and `openedSystemSettings:false`, `mutatedTcc:false`, and `clickedSettings:false`.
+**Fail:** Any prerequisite check fails; the receipt must still show that the harness did not attempt remediation.
+
+---
+
+### Recipe: verify-shortcut-recorder-focus-capture
+
+**When:** Testing native shortcut recorder focus/capture behavior without writing `config.ts` or registering a global hotkey.
+
+**Command:**
+```bash
+bun scripts/agentic/index.ts shortcut-recorder-focus-capture \
+  --session default \
+  --surface shortcuts \
+  --action test-agentic-shortcut \
+  --chord cmd+shift+7 \
+  --sandbox-config \
+  --json
+```
+
+**Pass:** A future recorder receipt proves the exact recorder surface retained focus, the native chord was captured, and no unrelated global hotkey fired.
+**Current fail-closed behavior:** Until recorder focus/capture receipts exist, this recipe returns `missing_shortcut_recorder_capture_receipt` and does not write user config.
+
+---
+
 ### Recipe: verify-acp-input-stability
 
 **When:** Changes to single-line input rendering, cursor movement, or scroll behavior in ACP.
