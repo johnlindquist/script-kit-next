@@ -1,14 +1,32 @@
 ---
 name: agentic-testing
 description: >-
-  State-first runtime proof for UI, protocol, behavior, ACP, actions dialogs, surface changes, screenshots only when needed, and cleanup of launched sessions.
+  Human-first runtime testing for Script Kit GPUI: operate the real app through visible user paths to surface UX/UI interaction bugs, then back findings with receipts, screenshots, exact targets, and cleanup.
 ---
 
 # Agentic Testing
 
-This canonical repo-local skill owns runtime proof and session cleanup for Script Kit GPUI. It combines the current `.agents/skills` routing policy with the full operational recipe previously kept under `.codex/skills` / `.claude/skills`.
+This canonical repo-local skill owns human-first runtime testing and session cleanup for Script Kit GPUI. It combines the current `.agents/skills` routing policy with the full operational recipe previously kept under `.codex/skills` / `.claude/skills`.
 
-Verify code changes with the fastest proof that can establish correctness. Reuse warm sessions, prefer state receipts and exact targets, and escalate to screenshots or OS-level focus only when lower-cost proof cannot answer the question.
+The core purpose is to act like a real user would with the actual app so interaction, UX, and UI bugs surface before code is declared correct. Receipts, state snapshots, screenshots, and exact targets exist to make that user-like exploration trustworthy; they are not a substitute for reproducing the real user path.
+
+<CRITICAL>
+This skill is not a receipt factory, a contract checklist, or a way to avoid looking at the app. Its foundation is interaction-driving testing: open the real product, exercise the real surface, perform the action a user would perform, and surface the UX/UI bug as an observable interaction failure.
+</CRITICAL>
+
+<CRITICAL>
+If a user reports something visual, behavioral, confusing, broken, clipped, hidden, misfocused, misrouted, unclickable, unreadable, or otherwise wrong in the UI, the default response is to drive the app like a user until the bug is reproduced, disproved, fixed, or explicitly blocked. A state receipt without user-path interaction is not enough.
+</CRITICAL>
+
+## Human-First Purpose
+
+For user-reported UX/UI bugs, start by recreating the user's visible workflow against the real product surface. Open the app when the report is about what a user sees or does, drive the same entry path, interact with the visible controls, and capture evidence that another person can inspect.
+
+State-first receipts are still required, but they support the user-path proof. A fail-closed receipt contract is useful only after the skill has identified the actual surface, entry path, visible invariant, and interaction sequence the user cares about.
+
+<CRITICAL>
+Never let "state-first" become "user-last." State is the witness, not the experience. The experience is the real app being driven through the user's path so bugs actually reveal themselves.
+</CRITICAL>
 
 ## Canonical Ownership
 
@@ -17,7 +35,7 @@ Use this `.agents/skills/agentic-testing` file as the source of truth for Codex 
 Primary paths and concepts:
 
 - `scripts/agentic/`, `.test-output/`, `.test-screenshots/`
-- Runtime proof, exact automation targets, screenshots, native input escalation, and cleanup
+- Human-like runtime exploration, exact automation targets, screenshots, native input escalation, and cleanup
 - State-first receipts from `getState`, `getElements`, `inspectAutomationWindow`, `waitFor`, `batch`, ACP state/probe APIs, and recipe receipts
 
 ## First Reads
@@ -34,7 +52,7 @@ Start with these sources before editing or proving behavior:
 2. Identify the behavior owner before editing shared files. Path ownership is a hint; the user-visible behavior and documented contract decide the owner.
 3. Check adjacent-skill boundaries before changing shared code.
 4. Make the narrowest change that preserves the domain invariant.
-5. Verify with the smallest proof that can fail if the behavior regresses.
+5. For user-visible UX/UI reports, reproduce the real visible workflow first; then verify with the smallest receipt-backed proof that can fail if the behavior regresses.
 6. Report changed files, proof tier, exact commands or receipts, adjacent skills consulted, cleanup status, and remaining risk.
 
 Do not use this skill as the primary owner for test authoring or product ownership decisions; load `$testing-quality-gates`, `$protocol-automation`, `$lat-md`, or the relevant domain skill when those surfaces own the behavior.
@@ -42,22 +60,26 @@ Do not use this skill as the primary owner for test authoring or product ownersh
 ## When to Use
 
 - After implementing any UI, protocol, or behavior change
+- For user-reported interaction, UX, or UI bugs where the app should be opened and exercised like a user would
 - For routine UI and behavior work, this is the default smoke test
 - When Oracle's autonomous verification says "Run the agentic-testing skill"
 - Before marking a task as complete
 - Especially after changes to: prompts, views, keyboard handlers, ACP chat, actions dialog
 
-## Seconds-First Default
+## Human-First, Receipts-Backed Default
 
-Most verification runs should complete in seconds, not minutes. Default to the smallest proof tier that answers the question without stealing focus or blocking the user.
+Most verification runs should complete in seconds, not minutes, but speed must not erase the user's visible workflow. Default to the smallest proof tier that answers the question without stealing focus or blocking the user.
 
 1. No-runtime proof: docs, skills, source audits, or focused tests only. Do not launch the app if runtime evidence is unnecessary.
-2. State-first runtime proof: reuse a warm session and prove behavior with `getElements`, `getState`, `waitFor`, `batch`, and exact automation targets. This is the default for routing, selection, focus, popup ownership, and protocol bugs.
-3. Visual proof: capture one screenshot only when layout, styling, visibility, animation, or real-shell composition is part of the acceptance criteria.
-4. Native input and focus enforcement: use only when protocol-level and GPUI-level paths cannot exercise the real bug.
+2. Visible user-path proof: for user-reported UX/UI/interaction bugs, open or reveal the real app, enter through the same product path, perform the user action visibly, and capture at least one screenshot or equivalent visual receipt when the bug is about what the user sees.
+3. State-first runtime proof: reuse a warm session and prove behavior with `getElements`, `getState`, `waitFor`, `batch`, and exact automation targets. This backs the visible workflow and is the default for routing, selection, focus, popup ownership, and protocol bugs.
+4. Visual diagnostics proof: capture screenshots when layout, styling, visibility, animation, or real-shell composition is part of the acceptance criteria, and tie those pixels back to semantic receipts.
+5. Native input and focus enforcement: use when protocol-level and GPUI-level paths cannot exercise the real user bug or when the report is specifically about real keyboard, pointer, AppKit focus, or OS delivery.
 
 Rules:
-- If your plan starts with cold start -> show -> screenshot -> log scrape, stop and look for a state-first proof.
+- <CRITICAL>If the proof does not drive the actual app surface through a user-recognizable interaction path, it has not tested a UX/UI bug. It has only inspected implementation state.</CRITICAL>
+- If the user report is about visible UI or interaction and your plan never opens/reveals the real app, stop and redesign the proof around the user's path.
+- If your plan starts with cold start -> show -> screenshot -> log scrape, add state/elements receipts so the screenshot is grounded in the correct surface.
 - Reuse an existing healthy session before starting a new one.
 - Avoid stealing OS focus unless the bug specifically involves native focus or the proof requires real keyboard or mouse delivery.
 - Prefer exact target threading and targeted receipts over reading generic global state.
@@ -87,11 +109,17 @@ Receipts for AFK-safe runs should include an `afkSafe: true` equivalent plus `bl
 Turn a user-filed UI/UX bug into a proof plan before choosing or adding a recipe:
 
 - Surface and real entry path.
+- Visible user workflow, including the app actions a person would take.
 - Observable invariant the user would notice.
 - Minimal fixture and relevant state generation.
 - Unsafe operations to simulate rather than perform.
+- Screenshot, visual receipt, or explicit reason visual capture is unnecessary.
 - Expected receipt fields and cleanup proof.
 - Pass/fail oracle, including what counts as reproduced, fixed, blocked, or inconclusive.
+
+<CRITICAL>
+Do not answer a user-filed UX/UI bug with only "missing receipt", "blocked by instrumentation", or "state proof unavailable" unless you first attempted or explicitly designed the visible user interaction that would expose the bug. Missing instrumentation is a blocker for final proof, not permission to skip user-like exploration.
+</CRITICAL>
 
 ## Stop Rule
 
@@ -128,8 +156,12 @@ Visual proof must connect what the user sees to structured layout and semantic r
 - For layout measurement, require rem/font/scale metrics, window/content/container/scroll/input/footer bounds, footer/input ownership, and before/after layout-shift fingerprints for filtering or resizing.
 - For screenshot-to-semantics checks, require the screenshot crop target to match the exact automation window and semantic surface, then cross-check selected row, focus ring, footer actions, and visible text against `getElements` receipts.
 - Do not treat pixels alone as proof. A PNG can show that something rendered, but it does not prove the selected row, focus target, visible text, or footer actions are the correct semantic objects unless the receipt ties pixels back to the same target window.
-- Do not claim text fits from a screenshot alone. Use `visible-text-clipping-overlap-stress` for clipping and overlap audits; it must fail closed until app-side text measurement receipts expose text bounds, measured width, available width, clipping state, truncation intent, tooltip or accessible full text, and overlap pairs.
-- Do not claim rem/layout correctness from window bounds alone. Use `layout-measurement-regression-stress`; it must fail closed until app-side layout receipts expose rem size, scale factor, content/container/scroll metrics, footer/input ownership, and layout-shift samples.
+- Do not claim text fits from a screenshot alone. Use `visible-text-clipping-overlap-stress` for clipping and overlap audits; it opens the real main window and combines `getElements`, `getLayoutInfo`, and AppKit text measurement to report text bounds, measured width, available width, clipping state, truncation intent, tooltip or accessible full text, overlap pairs, and cleanup.
+- Do not claim rem/layout correctness from window bounds alone. Use `layout-measurement-regression-stress`; it opens the real main window, records `getLayoutInfo` component bounds plus bounded `getElements` semantics, then drives `setFilter` and reset to prove filter-churn layout fingerprints stay stable. Treat non-main surface warnings as remaining coverage gaps, not proof.
+- Do not claim dynamic choice sizing works from source constants alone. Use `main-menu-dynamic-choice-resize-stress`; it opens real small and large choice prompts in one app session, compares `visibleChoiceCount` against the fixture counts, measures `getWindowBounds` before/after, requires height growth with stable width, and cleans up through Escape.
+- Do not claim Notes auto-resize works from source constants alone. Use `notes-window-resize-stress`; it opens the real Notes window against a sandbox notes DB, drives targeted Notes `batch.setInput` through the editor path, measures Notes window bounds before tall content, after tall content, and after short content, and requires height growth, height shrink, stable width, and cleanup.
+- Do not claim a tall `div` or container is scroll-safe from a screenshot alone. Use `div-container-scroll-overflow-stress`; it opens a real DivPrompt, requires a `DivContent` layout component instead of launcher ScriptList/PreviewPanel components, estimates fixture content height against the viewport, proves scrolling is required, checks cleanup, and warns until div scroll position is exposed as a first-class receipt.
+- Do not claim contrast/readability from screenshots alone. Use `visual-contrast-readable-state-stress`; it opens the real main window for visible semantics and collects `AGENTIC_THEME_CONTRAST_RECEIPT` foreground/background token samples with contrast ratios, minimum ratios, pass flags, theme fingerprints, and cleanup.
 
 ## Hard Interaction Boundaries
 
@@ -161,7 +193,8 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For form validation and inline error recovery, prove invalid submit prevention, focus first invalid field, preserve user input, inline error identity, clear errors on valid edits, final submit recovery, prevent accidental submit, and no cross-field error leakage.
 - For navigation/back-stack history, prove transition generations, route stack depth, actions discoverability, disabled/no-op affordances, Escape/back/Cmd-K close behavior, and return-to-origin restore selection, filter, scroll, footer, and focus without stale surface state.
 - For long text wrapping/resizing UX stress, prove fixture identity, width mode, resize generation, full text, visible text, text/rendered/element bounds, available width, measured width, wrap line count, truncation intent, tooltip or accessible full text, overlap pairs, footer/input collision, focus and selection preservation, stale resize rejection, wrong-surface rejection, and cleanup.
-- For actions/command discoverability no-op UX, prove actionable, disabled, and no-op row identities with labels, sections, disabled reasons, no-op reasons, keyboard selectability, skipped-row explanations, activation-prevention receipts, no host mutation, no accidental execution, focus restoration, stale action rejection, and cleanup.
+- For actions/command discoverability UX, use `actions-command-discoverability-noop-stress` to drive real Cmd-K action popups and prove visible action row ids, labels, sections, shortcuts, destructive/enabled flags, context identity, safe Escape cleanup, and no accidental execution. Treat disabled/no-op state warnings as coverage gaps until fixtures expose those row kinds.
+- For Notes window resizing UX, use `notes-window-resize-stress` to prove a real Notes window opened through `openNotes`, targeted Notes editor input changed through `batch.setInput`, a sandbox notes DB isolated user data, tall content grew the window, short content shrank it, width stayed stable, Notes stayed visible, and the launched session was stopped.
 - For dense list/detail preview readability, prove selected row identity, preview source identity, preview title/body bounds, metadata chip readability, footer action readability, filter generations, selection generations, resize generations, stale-preview rejection, row reanchor, focus preservation, no column/footer overlap, and cleanup.
 - For transient toast/notification feedback, prove queue generation, bridge generation, visible text, duplicate collapse, autohide/dismiss ordering, bounds/overlap, footer/input non-blocking, stale rejection, and no action execution from toast UI.
 - For destructive confirmation, prove dry-run-only fixture identity, confirm prompt identity, focused button, Enter/Escape resolution, no mutation before confirm, no mutation after cancel, no real system command request, stale/wrong-surface rejection, and parent focus/selection/filter restoration.

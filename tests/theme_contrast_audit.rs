@@ -9,6 +9,7 @@
 use script_kit_gpui::theme::{
     audit_theme_contrast, theme_contrast_score, worst_theme_contrast, Theme, ThemeContrastSample,
 };
+use serde_json::json;
 
 #[test]
 fn default_light_theme_passes_all_contrast_checks() {
@@ -128,4 +129,72 @@ fn all_samples_have_positive_ratios() {
             );
         }
     }
+}
+
+#[test]
+fn agentic_theme_contrast_receipt() {
+    if std::env::var("AGENTIC_THEME_CONTRAST_RECEIPT")
+        .ok()
+        .as_deref()
+        != Some("1")
+    {
+        return;
+    }
+
+    let themes = [
+        ("dark", Theme::dark_default()),
+        ("light", Theme::light_default()),
+    ];
+    let theme_samples = themes
+        .into_iter()
+        .map(|(theme_id, theme)| {
+            let samples = audit_theme_contrast(&theme);
+            let passing = samples.iter().filter(|sample| sample.passes()).count();
+            let worst = worst_theme_contrast(&theme);
+            json!({
+                "themeId": theme_id,
+                "passing": passing,
+                "total": samples.len(),
+                "worst": {
+                    "label": worst.label,
+                    "ratio": worst.ratio,
+                    "minimum": worst.minimum,
+                    "foregroundColor": format!("#{:06X}", worst.foreground_hex),
+                    "backgroundColor": format!("#{:06X}", worst.background_hex),
+                    "contrastPass": worst.passes(),
+                },
+                "samples": samples
+                    .into_iter()
+                    .map(|sample| json!({
+                        "label": sample.label,
+                        "foregroundColor": format!("#{:06X}", sample.foreground_hex),
+                        "backgroundColor": format!("#{:06X}", sample.background_hex),
+                        "contrastRatio": sample.ratio,
+                        "minimumContrastRatio": sample.minimum,
+                        "contrastPass": sample.passes(),
+                        "readabilityPass": sample.passes(),
+                    }))
+                    .collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    let failing = theme_samples
+        .iter()
+        .filter(|theme| theme["passing"] != theme["total"])
+        .count();
+    let receipt = json!({
+        "schemaVersion": 1,
+        "receiptKind": "visual.contrastReadableState",
+        "source": "script_kit_gpui::theme::audit_theme_contrast",
+        "themeCount": theme_samples.len(),
+        "failingThemeCount": failing,
+        "themes": theme_samples,
+    });
+
+    println!("AGENTIC_THEME_CONTRAST_RECEIPT={receipt}");
+    assert_eq!(
+        failing, 0,
+        "agentic contrast receipt must have no failing themes"
+    );
 }

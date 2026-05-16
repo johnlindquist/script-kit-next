@@ -154,6 +154,7 @@ fn visual_contrast_readable_state_pins_theme_state_text_and_screenshot_receipts(
         "runVisualContrastReadableStateStressScenario",
         "missing_visual_contrast_readable_state_receipt",
         "visual.contrastReadableState",
+        "AGENTIC_THEME_CONTRAST_RECEIPT",
         "visualContrastStressId",
         "surfaceSamples",
         "surface",
@@ -196,7 +197,7 @@ fn visual_contrast_readable_state_pins_theme_state_text_and_screenshot_receipts(
         "wrongSurfaceContrastRejected",
         "blankScreenshotRejected",
         "cleanupConfirmed",
-        "file_linear:visual_contrast_readable_state_receipts_missing",
+        "usedCargoThemeContrastAudit",
     ] {
         assert!(
             INDEX.contains(token) || SCENARIO.contains(token) || AUTOMATION.contains(token),

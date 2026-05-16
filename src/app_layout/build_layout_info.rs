@@ -129,11 +129,16 @@ impl ScriptListApp {
 
         if matches!(
             self.current_view,
-            AppView::EditorPrompt { .. }
+            AppView::DivPrompt { .. }
+                | AppView::EditorPrompt { .. }
                 | AppView::TermPrompt { .. }
                 | AppView::QuickTerminalView { .. }
         ) {
             let (component_name, explanation) = match &self.current_view {
+                AppView::DivPrompt { .. } => (
+                    "DivContent",
+                    "DivPrompt fills the content area with scrollable HTML content and footer ownership routed through the shared main-window footer slot.",
+                ),
                 AppView::EditorPrompt { .. } => (
                     "EditorContent",
                     "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot.",

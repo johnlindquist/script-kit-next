@@ -46,9 +46,9 @@
  *   permission-share-cross-prompt-focus-stress
  *                         Fail-closed permission/share cross-prompt focus proof
  *   visible-text-clipping-overlap-stress
- *                         Fail-closed visible text clipping/overlap visual proof
+ *                         Pass-now main-window visible text clipping/overlap visual proof
  *   layout-measurement-regression-stress
- *                         Fail-closed layout measurement regression proof
+ *                         Pass-now main-window layout measurement regression proof
  *   screenshot-semantics-visual-consistency-stress
  *                         Pass-now screenshot-to-semantics consistency proof
  *   modal-stack-arbitration-stress
@@ -92,7 +92,7 @@
  *   multi-context-attachment-dedupe-provenance-stress
  *                         Fail-closed multi-context attachment dedupe/provenance proof
  *   visual-contrast-readable-state-stress
- *                         Fail-closed visual contrast/readable-state proof
+ *                         Pass-now theme contrast/readable-state proof
  *   empty-error-retry-state-ux-stress
  *                         Fail-closed empty/error/retry state UX proof
  *   form-validation-inline-recovery-stress
@@ -100,9 +100,15 @@
  *   navigation-back-stack-history-stress
  *                         Fail-closed navigation/back-stack history proof
  *   long-text-wrap-resize-surface-stress
- *                         Fail-closed long text wrapping/resizing UX proof
+ *                         Pass-now long text wrapping/resizing UX proof
+ *   div-container-scroll-overflow-stress
+ *                         Pass-now DivPrompt tall-container overflow layout proof
+ *   main-menu-dynamic-choice-resize-stress
+ *                         Pass-now dynamic choice-count window resize proof
+ *   notes-window-resize-stress
+ *                         Pass-now sandboxed Notes window grow/shrink resize proof
  *   actions-command-discoverability-noop-stress
- *                         Fail-closed actions discoverability/no-op UX proof
+ *                         Pass-now actions popup row measurement proof
  *   dense-list-detail-preview-readability-stress
  *                         Fail-closed dense list/detail preview readability proof
  *   toast-notification-queue-lifecycle-stress
@@ -282,6 +288,9 @@ import {
   runFormValidationInlineRecoveryStressScenario,
   runNavigationBackStackHistoryStressScenario,
   runLongTextWrapResizeSurfaceStressScenario,
+  runDivContainerScrollOverflowStressScenario,
+  runMainMenuDynamicChoiceResizeStressScenario,
+  runNotesWindowResizeStressScenario,
   runActionsCommandDiscoverabilityNoopStressScenario,
   runDenseListDetailPreviewReadabilityStressScenario,
   runToastNotificationQueueLifecycleStressScenario,
@@ -1099,6 +1108,26 @@ function parseArgs() {
   const rawResizeCycles =
     resizeCyclesIdx >= 0 && args[resizeCyclesIdx + 1] ? Number(args[resizeCyclesIdx + 1]) : undefined;
   const resizeCycles = Number.isFinite(rawResizeCycles) ? rawResizeCycles : undefined;
+  const itemCountIdx = args.indexOf("--item-count");
+  const rawItemCount =
+    itemCountIdx >= 0 && args[itemCountIdx + 1] ? Number(args[itemCountIdx + 1]) : undefined;
+  const itemCount = Number.isFinite(rawItemCount) ? rawItemCount : undefined;
+  const smallCountIdx = args.indexOf("--small-count");
+  const rawSmallCount =
+    smallCountIdx >= 0 && args[smallCountIdx + 1] ? Number(args[smallCountIdx + 1]) : undefined;
+  const smallCount = Number.isFinite(rawSmallCount) ? rawSmallCount : undefined;
+  const largeCountIdx = args.indexOf("--large-count");
+  const rawLargeCount =
+    largeCountIdx >= 0 && args[largeCountIdx + 1] ? Number(args[largeCountIdx + 1]) : undefined;
+  const largeCount = Number.isFinite(rawLargeCount) ? rawLargeCount : undefined;
+  const shortLineCountIdx = args.indexOf("--short-line-count");
+  const rawShortLineCount =
+    shortLineCountIdx >= 0 && args[shortLineCountIdx + 1] ? Number(args[shortLineCountIdx + 1]) : undefined;
+  const shortLineCount = Number.isFinite(rawShortLineCount) ? rawShortLineCount : undefined;
+  const tallLineCountIdx = args.indexOf("--tall-line-count");
+  const rawTallLineCount =
+    tallLineCountIdx >= 0 && args[tallLineCountIdx + 1] ? Number(args[tallLineCountIdx + 1]) : undefined;
+  const tallLineCount = Number.isFinite(rawTallLineCount) ? rawTallLineCount : undefined;
   const pasteboardScopeIdx = args.indexOf("--pasteboard-scope");
   const pasteboardScope =
     pasteboardScopeIdx >= 0 && args[pasteboardScopeIdx + 1] ? args[pasteboardScopeIdx + 1] : undefined;
@@ -1525,6 +1554,11 @@ function parseArgs() {
     hosts,
     selectionCycles,
     resizeCycles,
+    itemCount,
+    smallCount,
+    largeCount,
+    shortLineCount,
+    tallLineCount,
     pasteboardScope,
     noSystemPasteboard,
     cancelMethods,
@@ -2955,6 +2989,11 @@ const {
   hosts,
   selectionCycles,
   resizeCycles,
+  itemCount,
+  smallCount,
+  largeCount,
+  shortLineCount,
+  tallLineCount,
   pasteboardScope,
   noSystemPasteboard,
   cancelMethods,
@@ -3592,7 +3631,9 @@ switch (recipe) {
       recipe: "visible-text-clipping-overlap-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "Visible text clipping/overlap stress failed closed; text bounds, overlap, and truncation diagnostics are missing",
+      summary: proofBundle.status === "pass"
+        ? "Visible text clipping/overlap stress measured text widths, layout bounds, fit, truncation, overlap, and cleanup without relying on screenshots"
+        : "Visible text clipping/overlap stress failed; inspect proofBundle.visibleTextLayoutAudit for missing or failing measurement receipts",
       proofBundle,
     };
     break;
@@ -3608,7 +3649,9 @@ switch (recipe) {
       recipe: "layout-measurement-regression-stress",
       status: proofBundle.status,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "Layout measurement regression stress failed closed; rem, bounds, ownership, and layout-shift receipts are missing",
+      summary: proofBundle.status === "pass"
+        ? "Layout measurement regression stress collected layout component bounds, input/list/content/window geometry, ownership receipts, and cleanup without relying on screenshots"
+        : "Layout measurement regression stress failed; inspect proofBundle.layoutMeasurementRegression for missing measurement receipts",
       proofBundle,
     };
     break;
@@ -4003,7 +4046,9 @@ switch (recipe) {
       missingReceipt: proofBundle.missingReceipt,
       linearIssue: proofBundle.linearIssue,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "Visual contrast readable-state stress failed closed; theme, contrast, state cue, readability, and screenshot revalidation receipts are missing",
+      summary: proofBundle.status === "pass"
+        ? "Visual contrast readable-state stress collected theme token foreground/background contrast ratios, visible main-window semantics, and cleanup without relying on screenshots"
+        : "Visual contrast readable-state stress failed; inspect proofBundle.visualContrastReadableState for missing contrast or visible-surface receipts",
       proofBundle,
     };
     break;
@@ -4095,7 +4140,77 @@ switch (recipe) {
       missingReceipt: proofBundle.missingReceipt,
       linearIssue: proofBundle.linearIssue,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "Long text wrapping/resizing UX stress failed closed; text bounds, accessible full text, overlap, footer collision, and resize receipts are missing",
+      summary: proofBundle.status === "pass"
+        ? "Long text wrapping/resizing UX stress measured visible text bounds, widths, overlap, footer/input collision fields, and cleanup without relying on screenshots"
+        : "Long text wrapping/resizing UX stress failed; inspect proofBundle.longTextWrapResizeSurface for missing or failing measurement receipts",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "div-container-scroll-overflow-stress": {
+    const proofBundle = await runDivContainerScrollOverflowStressScenario({
+      session,
+      itemCount,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "div-container-scroll-overflow-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Div container overflow stress opened a real DivPrompt, measured DivContent bounds, proved tall content requires scrolling, and cleaned up without screenshots"
+        : "Div container overflow stress failed; inspect proofBundle.divContainerScrollOverflow for missing DivContent or overflow receipts",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "main-menu-dynamic-choice-resize-stress": {
+    const proofBundle = await runMainMenuDynamicChoiceResizeStressScenario({
+      session,
+      smallCount,
+      largeCount,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "main-menu-dynamic-choice-resize-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Main menu dynamic choice resize stress measured small and large choice prompts, visible counts, height growth, stable width, and cleanup"
+        : "Main menu dynamic choice resize stress failed; inspect proofBundle.mainMenuDynamicChoiceResize for missing count or bounds receipts",
+      proofBundle,
+    };
+    break;
+  }
+
+  case "notes-window-resize-stress": {
+    const proofBundle = await runNotesWindowResizeStressScenario({
+      session,
+      shortLineCount,
+      tallLineCount,
+    });
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "notes-window-resize-stress",
+      status: proofBundle.status,
+      failClosed: proofBundle.failClosed,
+      failureMode: proofBundle.failureMode,
+      missingReceipt: proofBundle.missingReceipt,
+      linearIssue: proofBundle.linearIssue,
+      steps: proofBundle.steps as StepReceipt[],
+      summary: proofBundle.status === "pass"
+        ? "Notes window resize stress used a sandbox notes DB, drove targeted Notes setInput, measured grow/shrink bounds, and cleaned up without screenshots"
+        : "Notes window resize stress failed; inspect proofBundle.notesWindowResize for missing sandbox, bounds, grow, shrink, or cleanup receipts",
       proofBundle,
     };
     break;
@@ -4116,7 +4231,9 @@ switch (recipe) {
       missingReceipt: proofBundle.missingReceipt,
       linearIssue: proofBundle.linearIssue,
       steps: proofBundle.steps as StepReceipt[],
-      summary: "Actions command discoverability no-op stress failed closed; disabled/no-op row, keyboard skip, activation guard, and host mutation receipts are missing",
+      summary: proofBundle.status === "pass"
+        ? "Actions command discoverability stress opened real Cmd-K action popups, measured visible action rows, and closed without executing actions"
+        : "Actions command discoverability stress failed; inspect proofBundle.actionsCommandDiscoverabilityNoop for missing popup action receipts",
       proofBundle,
     };
     break;
@@ -4646,8 +4763,8 @@ switch (recipe) {
           { name: "clipboard-share-trust-install-stress", description: "Fail-closed clipboard share trust/install receipt for prompt identity, package fingerprint, accept/refuse, install gate, and clipboard restoration", flags: ["--session", "--fixture-id", "--share-kind", "--accept-mode", "--json"] },
           { name: "clipboard-share-watcher-stale-replay-stress", description: "Fail-closed clipboard share watcher stale/replay receipt for generation ordering, stale rejection, prompt replacement, and duplicate install guard", flags: ["--session", "--fixture-id", "--share-kind", "--count", "--burst-ms", "--json"] },
           { name: "permission-share-cross-prompt-focus-stress", description: "Fail-closed Permission Assistant/share trust prompt focus receipt for prompt priority, window identity, no Settings activation leak, and cleanup", flags: ["--session", "--fixture-id", "--share-kind", "--pane", "--bundle-id", "--json"] },
-          { name: "visible-text-clipping-overlap-stress", description: "Fail-closed visible text bounds, overlap, and intentional truncation receipt", flags: ["--session", "--surfaces", "--json"] },
-          { name: "layout-measurement-regression-stress", description: "Fail-closed rem, bounds, scroll/input/footer ownership, and layout-shift measurement receipt", flags: ["--session", "--surfaces", "--json"] },
+          { name: "visible-text-clipping-overlap-stress", description: "Pass-now main-window visible text width, bounds, overlap, and intentional truncation receipt", flags: ["--session", "--surfaces", "--json"] },
+          { name: "layout-measurement-regression-stress", description: "Pass-now main-window bounds, scroll/input/footer ownership, and layout measurement receipt", flags: ["--session", "--surfaces", "--json"] },
           { name: "screenshot-semantics-visual-consistency-stress", description: "Pass-now strict screenshot capture plus state/elements semantic consistency proof", flags: ["--session", "--group", "--case", "--surface", "--json"] },
           { name: "modal-stack-arbitration-stress", description: "Fail-closed stacked modal topmost-owner key routing and parent focus/selection restoration receipt", flags: ["--session", "--host", "--json"] },
           { name: "cross-surface-export-provenance-stress", description: "Fail-closed cross-surface export provenance, redaction, destination insertion, and stale-source receipt", flags: ["--session", "--source", "--destination", "--export-mode", "--query", "--range", "--json"] },
@@ -4669,12 +4786,15 @@ switch (recipe) {
           { name: "high-volume-virtualized-list-stability-stress", description: "Fail-closed virtualized row identity, selection reanchor, scroll/filter generation, and screenshot-to-semantics receipt", flags: ["--session", "--surface", "--fixture-count", "--filter-cycles", "--scroll-cycles", "--json"] },
           { name: "input-modality-transition-ownership-stress", description: "Fail-closed input-device modality transition hover/focus/selection, scroll, shortcut, and activation ownership receipt", flags: ["--session", "--surface", "--interleave", "--cycles", "--json"] },
           { name: "multi-context-attachment-dedupe-provenance-stress", description: "Fail-closed multi-context attachment dedupe, provenance, ordering, and privacy receipt", flags: ["--session", "--origins", "--destinations", "--reorder-cycles", "--json"] },
-          { name: "visual-contrast-readable-state-stress", description: "Fail-closed visual contrast, readable state, non-color cue, and screenshot revalidation receipt", flags: ["--session", "--surfaces", "--themes", "--scale-factors", "--states", "--json"] },
+          { name: "visual-contrast-readable-state-stress", description: "Pass-now theme token contrast/readable-state receipt plus visible main-window semantics", flags: ["--session", "--surfaces", "--themes", "--scale-factors", "--states", "--json"] },
           { name: "empty-error-retry-state-ux-stress", description: "Fail-closed empty/loading/error/retry/recovery UX state receipt", flags: ["--session", "--surfaces", "--query", "--retry-cycles", "--json"] },
           { name: "form-validation-inline-recovery-stress", description: "Fail-closed form validation inline error recovery and submit guard receipt", flags: ["--session", "--surface", "--fields", "--invalid", "--valid", "--json"] },
           { name: "navigation-back-stack-history-stress", description: "Fail-closed navigation/back-stack history restoration and stale state receipt", flags: ["--session", "--origin", "--surfaces", "--transitions", "--json"] },
-          { name: "long-text-wrap-resize-surface-stress", description: "Fail-closed UX stress for long labels, paths, descriptions, snippets, and Mini/Full resize readability", flags: ["--session", "--surfaces", "--widths", "--fixtures", "--json"] },
-          { name: "actions-command-discoverability-noop-stress", description: "Fail-closed UX stress for actionable, disabled, and no-op action rows with safe activation guards", flags: ["--session", "--hosts", "--states", "--json"] },
+          { name: "long-text-wrap-resize-surface-stress", description: "Pass-now main-window long text bounds, width, overlap, footer/input collision, and cleanup receipt", flags: ["--session", "--surfaces", "--widths", "--fixtures", "--json"] },
+          { name: "div-container-scroll-overflow-stress", description: "Pass-now real DivPrompt tall-container overflow layout and cleanup receipt", flags: ["--session", "--item-count", "--json"] },
+          { name: "main-menu-dynamic-choice-resize-stress", description: "Pass-now small/large choice-count window height resize receipt", flags: ["--session", "--small-count", "--large-count", "--json"] },
+          { name: "notes-window-resize-stress", description: "Pass-now sandboxed Notes window grow/shrink resize receipt", flags: ["--session", "--short-line-count", "--tall-line-count", "--json"] },
+          { name: "actions-command-discoverability-noop-stress", description: "Pass-now real Cmd-K action popup row measurement with safe no-execution guards", flags: ["--session", "--hosts", "--states", "--json"] },
           { name: "dense-list-detail-preview-readability-stress", description: "Fail-closed UX stress for dense list/detail preview readability during filter, selection, and resize churn", flags: ["--session", "--surfaces", "--query", "--filter-cycles", "--selection-cycles", "--resize-cycles", "--json"] },
           { name: "toast-notification-queue-lifecycle-stress", description: "Fail-closed UX stress for toast queue, notification bridge, duplicate collapse, autohide, dismiss, bounds, and stale rejection", flags: ["--session", "--surface", "--fixtures", "--cycles", "--json"] },
           { name: "destructive-confirm-modal-safety-stress", description: "Fail-closed UX stress for destructive confirm dry-run identity, Enter/Escape safety, parent restore, and no real system command", flags: ["--session", "--host", "--fixture", "--paths", "--dry-run-only", "--json"] },
@@ -4904,9 +5024,9 @@ Recipes:
   permission-share-cross-prompt-focus-stress
                          Fail-closed permission/share cross-prompt focus proof
   visible-text-clipping-overlap-stress
-                         Fail-closed visible text clipping/overlap visual proof
+                         Pass-now main-window visible text clipping/overlap visual proof
   layout-measurement-regression-stress
-                         Fail-closed layout measurement regression proof
+                         Pass-now main-window layout measurement regression proof
   screenshot-semantics-visual-consistency-stress
                          Pass-now screenshot-to-semantics consistency proof
   modal-stack-arbitration-stress
@@ -4950,7 +5070,7 @@ Recipes:
   multi-context-attachment-dedupe-provenance-stress
                          Fail-closed multi-context attachment dedupe/provenance proof
   visual-contrast-readable-state-stress
-                         Fail-closed visual contrast/readable-state proof
+                         Pass-now theme contrast/readable-state proof
   empty-error-retry-state-ux-stress
                          Fail-closed empty/error/retry state UX proof
   form-validation-inline-recovery-stress
@@ -4958,9 +5078,15 @@ Recipes:
   navigation-back-stack-history-stress
                          Fail-closed navigation/back-stack history proof
   long-text-wrap-resize-surface-stress
-                         Fail-closed long text wrapping/resizing UX proof
+                         Pass-now long text wrapping/resizing UX proof
+  div-container-scroll-overflow-stress
+                         Pass-now DivPrompt tall-container overflow layout proof
+  main-menu-dynamic-choice-resize-stress
+                         Pass-now dynamic choice-count window resize proof
+  notes-window-resize-stress
+                         Pass-now sandboxed Notes window grow/shrink resize proof
   actions-command-discoverability-noop-stress
-                         Fail-closed actions disabled/no-op discoverability proof
+                         Pass-now action popup row measurement proof
   dense-list-detail-preview-readability-stress
                          Fail-closed dense list/detail preview readability proof
   toast-notification-queue-lifecycle-stress
@@ -5060,9 +5186,9 @@ Available scenarios:
   permission-share-cross-prompt-focus-stress
                          Emit fail-closed permission/share cross-prompt focus requirements
   visible-text-clipping-overlap-stress
-                         Emit fail-closed visible text clipping/overlap requirements
+                         Measure main-window visible text clipping/overlap
   layout-measurement-regression-stress
-                         Emit fail-closed layout measurement regression requirements
+                         Measure main-window layout geometry
   screenshot-semantics-visual-consistency-stress
                          Run strict screenshot/semantics visual consistency proof
   modal-stack-arbitration-stress
@@ -5106,7 +5232,7 @@ Available scenarios:
   multi-context-attachment-dedupe-provenance-stress
                          Emit fail-closed multi-context attachment dedupe/provenance requirements
   visual-contrast-readable-state-stress
-                         Emit fail-closed visual contrast/readable-state requirements
+                         Collect theme contrast/readable-state receipts
   empty-error-retry-state-ux-stress
                          Emit fail-closed empty/error/retry state UX requirements
   form-validation-inline-recovery-stress
@@ -5116,7 +5242,7 @@ Available scenarios:
   long-text-wrap-resize-surface-stress
                          Emit fail-closed long text wrapping/resizing UX requirements
   actions-command-discoverability-noop-stress
-                         Emit fail-closed actions disabled/no-op discoverability requirements
+                         Measure real Cmd-K action popup rows
   dense-list-detail-preview-readability-stress
                          Emit fail-closed dense list/detail preview readability requirements
   toast-notification-queue-lifecycle-stress
@@ -5294,6 +5420,9 @@ Examples:
   bun scripts/agentic/index.ts form-validation-inline-recovery-stress --session default --surface fields-prompt --fields email,required-text,number --invalid email:not-an-email,required-text:,number:not-a-number --valid email:ada@example.com,required-text:Ada,number:42 --json
   bun scripts/agentic/index.ts navigation-back-stack-history-stress --session default --origin main --surfaces clipboard-history,emoji-picker,file-search,actionsDialog --transitions triggerBuiltin,cmd-k,escape,back --json
   bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
+  bun scripts/agentic/index.ts div-container-scroll-overflow-stress --session default --item-count 80 --json
+  bun scripts/agentic/index.ts main-menu-dynamic-choice-resize-stress --session default --small-count 3 --large-count 15 --json
+  bun scripts/agentic/index.ts notes-window-resize-stress --session default --short-line-count 2 --tall-line-count 80 --json
   bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
   bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
   bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json

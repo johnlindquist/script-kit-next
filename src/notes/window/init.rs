@@ -283,7 +283,7 @@ impl NotesApp {
     }
 
     /// Handle editor content changes with auto-resize
-    pub(super) fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn on_editor_change(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let content = self.editor_state.read(cx).value();
         let content_string = content.to_string();
 
@@ -323,6 +323,24 @@ impl NotesApp {
             }
 
             cx.notify();
+        }
+    }
+
+    pub(crate) fn set_editor_text_for_automation(
+        &mut self,
+        text: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor_state.update(cx, |state, inner_cx| {
+            state.set_value(text.clone(), window, inner_cx);
+        });
+        self.on_editor_change(window, cx);
+
+        let new_line_count = text.lines().count().max(1);
+        if new_line_count != self.last_line_count {
+            self.last_line_count = new_line_count;
+            self.update_window_height(window, new_line_count, cx);
         }
     }
 
@@ -392,6 +410,22 @@ impl NotesApp {
             );
 
             window.resize(new_size);
+            crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+                id: "notes".to_string(),
+                kind: crate::protocol::AutomationWindowKind::Notes,
+                title: Some("Notes".to_string()),
+                focused: true,
+                visible: true,
+                semantic_surface: Some("notes".to_string()),
+                bounds: Some(crate::protocol::AutomationWindowBounds {
+                    x: f32::from(current_bounds.origin.x) as f64,
+                    y: f32::from(current_bounds.origin.y) as f64,
+                    width: f32::from(new_size.width) as f64,
+                    height: f32::from(new_size.height) as f64,
+                }),
+                parent_window_id: None,
+                parent_kind: None,
+            });
             self.last_window_height = clamped_height;
         }
     }

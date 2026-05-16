@@ -22,8 +22,7 @@ use gpui::{
 use std::sync::{Mutex, OnceLock};
 
 use super::constants::{
-    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
-    SECTION_HEADER_HEIGHT,
+    ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
 };
 use super::dialog::{
     first_selectable_index, last_selectable_index, selectable_index_at_or_after,
@@ -882,10 +881,22 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
-        let empty_height =
-            actions_window_dynamic_height(0, 0, false, false, false, POPUP_MAX_HEIGHT);
-        let single_row_height =
-            actions_window_dynamic_height(1, 0, false, false, false, POPUP_MAX_HEIGHT);
+        let empty_height = actions_window_dynamic_height(
+            0,
+            0,
+            false,
+            false,
+            false,
+            super::constants::POPUP_MAX_HEIGHT,
+        );
+        let single_row_height = actions_window_dynamic_height(
+            1,
+            0,
+            false,
+            false,
+            false,
+            super::constants::POPUP_MAX_HEIGHT,
+        );
 
         assert!(
             (empty_height - single_row_height).abs() < 0.001,
@@ -895,9 +906,22 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_includes_footer_height() {
-        let without_footer =
-            actions_window_dynamic_height(3, 1, false, true, false, POPUP_MAX_HEIGHT);
-        let with_footer = actions_window_dynamic_height(3, 1, false, true, true, POPUP_MAX_HEIGHT);
+        let without_footer = actions_window_dynamic_height(
+            3,
+            1,
+            false,
+            true,
+            false,
+            super::constants::POPUP_MAX_HEIGHT,
+        );
+        let with_footer = actions_window_dynamic_height(
+            3,
+            1,
+            false,
+            true,
+            true,
+            super::constants::POPUP_MAX_HEIGHT,
+        );
 
         assert!(
             (with_footer - without_footer - 32.0).abs() < 0.001,

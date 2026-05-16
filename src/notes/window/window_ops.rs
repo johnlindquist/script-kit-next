@@ -241,11 +241,15 @@ fn open_notes_window_with_close_behavior(
 
     let default_bounds = calculate_top_right_bounds(window_width, window_height, padding);
     let displays = crate::platform::get_macos_displays();
-    let bounds = crate::window_state::get_initial_bounds(
-        crate::window_state::WindowRole::Notes,
-        default_bounds,
-        &displays,
-    );
+    let bounds = if std::env::var_os("SCRIPT_KIT_TEST_NOTES_DB_PATH").is_some() {
+        default_bounds
+    } else {
+        crate::window_state::get_initial_bounds(
+            crate::window_state::WindowRole::Notes,
+            default_bounds,
+            &displays,
+        )
+    };
 
     // Load theme to determine window background appearance (vibrancy)
     let theme = get_cached_theme();

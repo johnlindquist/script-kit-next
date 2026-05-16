@@ -8,7 +8,7 @@ The canonical Codex skills live under `.agents/skills/`, while `.agents/subagent
 
 The 26 ownership and support skills are `lat-md`, `agentic-testing`, `testing-quality-gates`, `dev-loop-observability`, `gpui-ui-foundation`, `theme-config-preferences`, `storybook-design`, `launcher-surface-contracts`, `window-resizing`, `main-menu-search-selection`, `keyboard-focus-routing`, `escape`, `actions-popups`, `builtin-filterable-surfaces`, `file-search-portals`, `prompt-runtime`, `sdk-script-execution`, `protocol-automation`, `mcp-context-resources`, `acp-chat-core`, `acp-context-composer`, `quick-terminal-pty`, `notes-window`, `dictation-media`, `platform-windowing-macos`, and `storage-cache-security`.
 
-The canonical `agentic-testing` skill embeds both routing policy and the full runtime proof recipe, including session management, state-first receipts, exact target threading, screenshot escalation, ACP golden paths, and cleanup requirements.
+The canonical `agentic-testing` skill is human-first: for UX/UI bugs it opens the real app, follows the visible user path, and uses receipts, screenshots, exact targets, and cleanup to make that interaction proof trustworthy.
 
 `escape` is the cross-surface Escape-key UX owner. It routes work around close-vs-back decisions, direct launch vs launcher return, prompt cancellation, ACP streaming/popup guards, actions/confirm popup precedence, `simulateKey` parity, and automation reset state.
 

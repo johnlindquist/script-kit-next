@@ -30,8 +30,7 @@ use super::builders::{
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
 use super::constants::{
-    ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
-    SECTION_HEADER_HEIGHT,
+    ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -4040,7 +4039,7 @@ mod tests {
             true,
             true,
             true,
-            POPUP_MAX_HEIGHT,
+            super::constants::POPUP_MAX_HEIGHT,
         );
 
         // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (36) - HEADER_HEIGHT (24) - footer (32)
@@ -4055,7 +4054,7 @@ mod tests {
             true,
             true,
             true,
-            POPUP_MAX_HEIGHT,
+            super::constants::POPUP_MAX_HEIGHT,
         );
 
         assert_eq!(viewport_height, 120.0);

@@ -5368,9 +5368,11 @@ impl ScriptListApp {
                                                     );
                                                 });
                                             } else {
-                                                app.editor_state.update(cx, |state, inner_cx| {
-                                                    state.set_value(text.clone(), window, inner_cx);
-                                                });
+                                                app.set_editor_text_for_automation(
+                                                    text.clone(),
+                                                    window,
+                                                    cx,
+                                                );
                                             }
                                         });
                                         tracing::info!(

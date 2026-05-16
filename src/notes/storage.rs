@@ -102,6 +102,10 @@ pub(crate) fn root_notes_query_is_eligible(query: &str, options: RootNotesSectio
 
 /// Get the path to the notes database
 fn get_notes_db_path() -> PathBuf {
+    if let Ok(path) = std::env::var("SCRIPT_KIT_TEST_NOTES_DB_PATH") {
+        return PathBuf::from(path);
+    }
+
     if cfg!(test) {
         return std::env::temp_dir()
             .join("script-kit-gpui-tests")
