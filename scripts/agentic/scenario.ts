@@ -178,7 +178,10 @@ export interface HardScenarioReceipt {
     | "acp-context-insertion-preview-parity-stress"
     | "acp-slash-mention-provider-visibility-stress"
     | "acp-composer-token-keyboard-edit-parity-stress"
-    | "acp-transcript-stream-retry-virtualization-stress";
+    | "acp-transcript-stream-retry-virtualization-stress"
+    | "acp-plugin-skill-entry-thread-affinity-stress"
+    | "notes-cart-acp-handoff-dedupe-stress"
+    | "root-file-source-filter-pagination-footer-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -292,6 +295,9 @@ export interface HardScenarioReceipt {
   acpSlashMentionProviderVisibilityReceipt?: Record<string, unknown>;
   acpComposerTokenKeyboardEditParityReceipt?: Record<string, unknown>;
   acpTranscriptStreamRetryVirtualizationReceipt?: Record<string, unknown>;
+  acpPluginSkillEntryThreadAffinityReceipt?: Record<string, unknown>;
+  notesCartAcpHandoffDedupeReceipt?: Record<string, unknown>;
+  rootFileSourceFilterPaginationFooterReceipt?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -8207,6 +8213,243 @@ export async function runAcpTranscriptStreamRetryVirtualizationStressScenario(op
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_transcript_stream_retry_virtualization_receipt" } }],
     failure: { code: "missing_acp_transcript_stream_retry_virtualization_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP transcript streaming retry virtualization receipts." },
     warnings: ["file_linear:acp_transcript_stream_retry_virtualization_receipts_missing"],
+  };
+}
+
+export async function runAcpPluginSkillEntryThreadAffinityStressScenario(opts: {
+  session: string;
+  hosts?: string[];
+  fixture?: string;
+  skillId?: string;
+  entryPaths?: string[];
+  inputModes?: string[];
+  agentFixture?: string;
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noSecurityPrompts?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "acp-plugin-skill-entry-thread-affinity-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_acp_plugin_skill_entry_thread_affinity_receipt",
+    linearIssue: "file_linear:acp_plugin_skill_entry_thread_affinity_receipts_missing",
+    acpPluginSkillEntryThreadAffinityReceipt: {
+      kind: "ux.acpPluginSkillEntryThreadAffinity",
+      acpPluginSkillEntryThreadAffinityStressId: "loop-thirty-three-acp-plugin-skill-entry-thread-affinity",
+      session: opts.session,
+      requestedHosts: opts.hosts ?? ["embedded", "detached"],
+      fixture: opts.fixture ?? "agentic-plugin-skill-entry",
+      skillId: opts.skillId ?? "new-script",
+      requestedEntryPaths: opts.entryPaths ?? ["main-menu", "source-filter", "cmd-enter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "batch"],
+      agentFixture: opts.agentFixture ?? "scripted-local",
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noSecurityPrompts: opts.noSecurityPrompts ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureSkillCatalogId: null,
+      entryPath: null,
+      hostSurfaceIdentity: null,
+      resolvedAcpTarget: null,
+      targetThreadId: null,
+      detachedThreadReused: null,
+      embeddedThreadReused: null,
+      selectedSkillId: null,
+      selectedSkillFileFingerprint: null,
+      slashTokenText: null,
+      slashTokenRange: null,
+      pendingSkillContextPartUri: null,
+      skillContextBoundToTargetThread: null,
+      composerGeneration: null,
+      returnOriginSnapshot: null,
+      noAutoSubmit: true,
+      noAgentProcessSpawn: true,
+      noSecurityPrompt: true,
+      staleLauncherSelectionRejected: null,
+      staleDetachedThreadRejected: null,
+      wrongHostRejected: null,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_acp_plugin_skill_entry_thread_affinity_receipt" } }],
+    failure: { code: "missing_acp_plugin_skill_entry_thread_affinity_receipt", stepName: "declare-required-receipt", message: "Missing app-side ACP plugin skill entry thread affinity receipts." },
+    warnings: ["file_linear:acp_plugin_skill_entry_thread_affinity_receipts_missing"],
+  };
+}
+
+export async function runNotesCartAcpHandoffDedupeStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  notes?: string[];
+  cartItems?: string[];
+  handoffPaths?: string[];
+  inputModes?: string[];
+  agentFixture?: string;
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noScreenCapture?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  sandboxNotesStore?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "notes-cart-acp-handoff-dedupe-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_notes_cart_acp_handoff_dedupe_receipt",
+    linearIssue: "file_linear:notes_cart_acp_handoff_dedupe_receipts_missing",
+    notesCartAcpHandoffDedupeReceipt: {
+      kind: "ux.notesCartAcpHandoffDedupe",
+      notesCartAcpHandoffDedupeStressId: "loop-thirty-three-notes-cart-acp-handoff-dedupe",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-notes-cart",
+      requestedNotes: opts.notes ?? ["note-a", "note-b"],
+      requestedCartItems: opts.cartItems ?? ["duplicate-link", "local-snippet", "repo-file", "unchecked-task"],
+      requestedHandoffPaths: opts.handoffPaths ?? ["open-acp", "switch-note", "cancel", "consume"],
+      requestedInputModes: opts.inputModes ?? ["protocol-click", "protocol-key", "batch"],
+      agentFixture: opts.agentFixture ?? "scripted-local",
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true,
+      noScreenCapture: opts.noScreenCapture ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      sandboxNotesStore: opts.sandboxNotesStore ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      sandboxNotesStoreId: null,
+      fixtureNoteIds: [],
+      activeNoteId: null,
+      cartSnapshotGeneration: null,
+      cartItemIds: [],
+      cartDedupeKeys: [],
+      dedupedCartItemIds: [],
+      duplicateCartItemsRejected: null,
+      handoffSessionId: null,
+      destinationHostIdentity: null,
+      destinationAcpGeneration: null,
+      stagedContextPartUris: [],
+      inlineTokenAliases: [],
+      redactedPreviewFingerprints: [],
+      consumeRequestGeneration: null,
+      consumeIsDryRunOnly: true,
+      cancelRestoresCartSnapshot: null,
+      switchNoteClearsPreviousNoteContext: null,
+      wrongNoteConsumeRejected: null,
+      staleCartGenerationRejected: null,
+      noRawNoteBodyLeak: null,
+      noUserNotesMutation: true,
+      noAgentProcessSpawn: true,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_notes_cart_acp_handoff_dedupe_receipt" } }],
+    failure: { code: "missing_notes_cart_acp_handoff_dedupe_receipt", stepName: "declare-required-receipt", message: "Missing app-side Notes cart ACP handoff dedupe receipts." },
+    warnings: ["file_linear:notes_cart_acp_handoff_dedupe_receipts_missing"],
+  };
+}
+
+export async function runRootFileSourceFilterPaginationFooterStressScenario(opts: {
+  session: string;
+  fixture?: string;
+  queries?: string[];
+  pageSize?: number;
+  providerDelays?: number[];
+  selectionSteps?: string[];
+  inputModes?: string[];
+  noNativeInput?: boolean;
+  noNativePointer?: boolean;
+  noNativePicker?: boolean;
+  noQuickLook?: boolean;
+  noSystemPasteboard?: boolean;
+  noNetwork?: boolean;
+  noSubmit?: boolean;
+  dryRunOnly?: boolean;
+  localFixtureOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "root-file-source-filter-pagination-footer-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_root_file_source_filter_pagination_footer_receipt",
+    linearIssue: "file_linear:root_file_source_filter_pagination_footer_receipts_missing",
+    rootFileSourceFilterPaginationFooterReceipt: {
+      kind: "ux.rootFileSourceFilterPaginationFooter",
+      rootFileSourceFilterPaginationFooterStressId: "loop-thirty-three-root-file-source-filter-pagination-footer",
+      session: opts.session,
+      fixture: opts.fixture ?? "agentic-root-file-pages",
+      requestedQueries: opts.queries ?? ["f: ", "f:s", "files: AGENTS"],
+      pageSize: opts.pageSize ?? 12,
+      providerDelays: opts.providerDelays ?? [0, 150, 450],
+      requestedSelectionSteps: opts.selectionSteps ?? ["near-bottom", "next-page", "filter-tighten", "clear-filter"],
+      requestedInputModes: opts.inputModes ?? ["protocol-set-filter", "protocol-key", "batch"],
+      noNativeInput: opts.noNativeInput ?? true,
+      noNativePointer: opts.noNativePointer ?? true,
+      noNativePicker: opts.noNativePicker ?? true,
+      noQuickLook: opts.noQuickLook ?? true,
+      noSystemPasteboard: opts.noSystemPasteboard ?? true,
+      noNetwork: opts.noNetwork ?? true,
+      noSubmit: opts.noSubmit ?? true,
+      dryRunOnly: opts.dryRunOnly ?? true,
+      localFixtureOnly: opts.localFixtureOnly ?? true,
+      fixtureFileProviderId: null,
+      sourceFilterSet: [],
+      renderedInputText: null,
+      strippedSearchText: null,
+      rootFrameKey: null,
+      providerGeneration: null,
+      pageGeneration: null,
+      visibleFileRowIds: [],
+      fileRowFingerprints: [],
+      searchFilesContinuationRowId: null,
+      selectedStableKeyBefore: null,
+      selectedStableKeyAfter: null,
+      selectedRowVisible: null,
+      selectedRowAboveFooter: null,
+      mainListScroll: null,
+      viewportHeight: null,
+      contentHeight: null,
+      footerHeight: null,
+      maxScrollTop: null,
+      nearBottomPageRequest: null,
+      pageAppendDoesNotChangeSelectedKey: null,
+      providerPublishDoesNotReplaceFrame: null,
+      duplicateFileKeyRejected: null,
+      fallbackSuppressedWhileSourceFilterActive: null,
+      statusChipsNonSelectable: null,
+      quickLookRefused: true,
+      noNativePicker: true,
+      noSystemPasteboard: true,
+      noNetwork: true,
+      noSubmit: true,
+      stalePageGenerationRejected: null,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedNativePointer: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, systemPasteboardMutated: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_root_file_source_filter_pagination_footer_receipt" } }],
+    failure: { code: "missing_root_file_source_filter_pagination_footer_receipt", stepName: "declare-required-receipt", message: "Missing app-side root file source-filter pagination footer receipts." },
+    warnings: ["file_linear:root_file_source_filter_pagination_footer_receipts_missing"],
   };
 }
 
