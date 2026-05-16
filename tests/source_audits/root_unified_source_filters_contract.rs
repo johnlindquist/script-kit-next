@@ -220,9 +220,38 @@ fn colon_opens_discoverability_picker_while_source_filters_do_not_open_hint() {
     assert!(hint.contains("if query.is_source_filter_only()"));
     assert!(hint.contains("return None;"));
     assert!(hint.contains("pub fn active_head_is_source_filter(raw: &str) -> bool"));
-    assert!(render.contains("!crate::menu_syntax::main_hint::active_head_is_source_filter"));
-    assert!(prompt_handler.contains("source_head_has_results"));
-    assert!(prompt_handler.contains("detector_owns_head && !source_head_has_results"));
+    let source_filter_only_guard = hint
+        .find("if query.is_source_filter_only()")
+        .map(|index| &hint[index..hint.len().min(index + 120)])
+        .unwrap_or("");
+    assert!(
+        source_filter_only_guard.contains("return None;"),
+        "build_menu_syntax_main_hint must suppress source-filter-only main hints"
+    );
+    let source_head_has_results_gate = prompt_handler
+        .find("let source_head_has_results")
+        .map(|index| &prompt_handler[index..prompt_handler.len().min(index + 260)])
+        .unwrap_or("")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(source_head_has_results_gate
+        .contains("crate::menu_syntax::main_hint::active_head_is_source_filter"));
+    assert!(source_head_has_results_gate.contains("&self.filter_text"));
+    assert!(source_head_has_results_gate.contains("&& visible_choice_count > 0"));
+    let advanced_query_results_empty_gate = prompt_handler
+        .find("let advanced_query_results_empty")
+        .map(|index| &prompt_handler[index..prompt_handler.len().min(index + 320)])
+        .unwrap_or("")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        advanced_query_results_empty_gate.contains(
+            "detector_owns_head && !source_head_has_results && !advanced_query_has_results"
+        ),
+        "getState empty-hint gate must be detector-owned, suppressed when source heads already have results, and suppressed when advanced-query results exist"
+    );
     assert!(render.contains("There are no search results with this filter applied."));
     assert!(render.contains("query.has_source_filters() || query.has_predicates()"));
 }
