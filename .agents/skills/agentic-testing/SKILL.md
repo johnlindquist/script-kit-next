@@ -134,6 +134,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For long text wrapping/resizing UX stress, prove fixture identity, width mode, resize generation, full text, visible text, text/rendered/element bounds, available width, measured width, wrap line count, truncation intent, tooltip or accessible full text, overlap pairs, footer/input collision, focus and selection preservation, stale resize rejection, wrong-surface rejection, and cleanup.
 - For actions/command discoverability no-op UX, prove actionable, disabled, and no-op row identities with labels, sections, disabled reasons, no-op reasons, keyboard selectability, skipped-row explanations, activation-prevention receipts, no host mutation, no accidental execution, focus restoration, stale action rejection, and cleanup.
 - For dense list/detail preview readability, prove selected row identity, preview source identity, preview title/body bounds, metadata chip readability, footer action readability, filter generations, selection generations, resize generations, stale-preview rejection, row reanchor, focus preservation, no column/footer overlap, and cleanup.
+- For transient toast/notification feedback, prove queue generation, bridge generation, visible text, duplicate collapse, autohide/dismiss ordering, bounds/overlap, footer/input non-blocking, stale rejection, and no action execution from toast UI.
+- For destructive confirmation, prove dry-run-only fixture identity, confirm prompt identity, focused button, Enter/Escape resolution, no mutation before confirm, no mutation after cancel, no real system command request, stale/wrong-surface rejection, and parent focus/selection/filter restoration.
+- For loading skeleton/progress restoration, prove request/result generations, skeleton rows, progress text/percent monotonicity, activation blocking while loading, stale loading/progress/result rejection, skeleton cleanup after results, and selection/focus/filter/scroll restoration.
 
 ## The Pattern
 
@@ -783,6 +786,9 @@ Other hard-scenario recipes:
 bun scripts/agentic/index.ts long-text-wrap-resize-surface-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --widths mini,narrow,full --fixtures long-name,long-path,long-description,multiline-snippet --json
 bun scripts/agentic/index.ts actions-command-discoverability-noop-stress --session default --hosts main,clipboard-history,emoji-picker,file-search,app-launcher --states actionable,disabled,no-op --json
 bun scripts/agentic/index.ts dense-list-detail-preview-readability-stress --session default --surfaces file-search,sdk-reference,script-template-catalog --query agentic-loop-nineteen-preview --filter-cycles 4 --selection-cycles 8 --resize-cycles 3 --json
+bun scripts/agentic/index.ts toast-notification-queue-lifecycle-stress --session default --surface main --fixtures success,duplicate,persistent,dismiss,autohide --cycles 3 --json
+bun scripts/agentic/index.ts destructive-confirm-modal-safety-stress --session default --host main --fixture agentic-destructive-dry-run --paths cancel,confirm,stale-confirm --dry-run-only --json
+bun scripts/agentic/index.ts loading-skeleton-progress-restoration-stress --session default --surfaces sdk-reference,script-template-catalog --fixture delayed-local --cycles 4 --json
 ```
 
 ## Adjacent Skills

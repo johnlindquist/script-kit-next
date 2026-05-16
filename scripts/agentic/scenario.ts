@@ -139,7 +139,10 @@ export interface HardScenarioReceipt {
     | "navigation-back-stack-history-stress"
     | "long-text-wrap-resize-surface-stress"
     | "actions-command-discoverability-noop-stress"
-    | "dense-list-detail-preview-readability-stress";
+    | "dense-list-detail-preview-readability-stress"
+    | "toast-notification-queue-lifecycle-stress"
+    | "destructive-confirm-modal-safety-stress"
+    | "loading-skeleton-progress-restoration-stress";
   status: "pass" | "fail" | "error";
   failClosed?: boolean;
   failureMode?: string;
@@ -214,6 +217,9 @@ export interface HardScenarioReceipt {
   longTextWrapResizeSurface?: Record<string, unknown>;
   actionsCommandDiscoverabilityNoop?: Record<string, unknown>;
   denseListDetailPreviewReadability?: Record<string, unknown>;
+  toastNotificationQueueLifecycle?: Record<string, unknown>;
+  destructiveConfirmModalSafety?: Record<string, unknown>;
+  loadingSkeletonProgressRestoration?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -6200,6 +6206,223 @@ export async function runDenseListDetailPreviewReadabilityStressScenario(opts: {
     steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_dense_list_detail_preview_readability_receipt" } }],
     failure: { code: "missing_dense_list_detail_preview_readability_receipt", stepName: "declare-required-receipt", message: "Missing app-side dense list/detail preview readability receipts." },
     warnings: ["file_linear:dense_list_detail_preview_readability_receipts_missing"],
+  };
+}
+
+export async function runToastNotificationQueueLifecycleStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixtures?: string[];
+  cycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "toast-notification-queue-lifecycle-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_toast_notification_queue_lifecycle_receipt",
+    linearIssue: "file_linear:toast_notification_queue_lifecycle_receipts_missing",
+    toastNotificationQueueLifecycle: {
+      kind: "ux.toastNotificationQueueLifecycle",
+      requiredReceipt: "ux.toastNotificationQueueLifecycle",
+      receiptKind: "ux.toastNotificationQueueLifecycle",
+      toastStressId: "loop-twenty-toast-notification-queue-lifecycle",
+      requestedSurface: opts.surface ?? "main",
+      requestedFixtures: opts.fixtures ?? ["success", "duplicate", "persistent", "dismiss", "autohide"],
+      requestedCycles: opts.cycles ?? 3,
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateReceipt: null,
+      elementsReceipt: null,
+      toastQueueReceipt: null,
+      queueGeneration: null,
+      notificationBridgeGeneration: null,
+      toastSamples: [],
+      toastId: null,
+      message: null,
+      variant: null,
+      persistent: null,
+      autoHideMs: null,
+      duplicateCount: null,
+      visible: null,
+      visibleText: null,
+      createdAtMs: null,
+      expiresAtMs: null,
+      dismissedAtMs: null,
+      dismissReason: null,
+      autohideObserved: null,
+      manualDismissObserved: null,
+      duplicateCollapsed: null,
+      orderingPreserved: null,
+      maxVisibleCount: null,
+      toastBounds: null,
+      overlapPairs: [],
+      doesNotBlockInput: null,
+      doesNotCoverFooter: null,
+      staleToastRejected: null,
+      noActionExecutionFromToast: null,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_toast_notification_queue_lifecycle_receipt" } }],
+    failure: { code: "missing_toast_notification_queue_lifecycle_receipt", stepName: "declare-required-receipt", message: "Missing app-side toast queue lifecycle receipts." },
+    warnings: ["file_linear:toast_notification_queue_lifecycle_receipts_missing"],
+  };
+}
+
+export async function runDestructiveConfirmModalSafetyStressScenario(opts: {
+  session: string;
+  host?: string;
+  fixture?: string;
+  paths?: string[];
+  dryRunOnly?: boolean;
+}): Promise<HardScenarioReceipt> {
+  const dryRunOnly = opts.dryRunOnly === true;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "destructive-confirm-modal-safety-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_destructive_confirm_modal_safety_receipt",
+    linearIssue: "file_linear:destructive_confirm_modal_safety_receipts_missing",
+    destructiveConfirmModalSafety: {
+      kind: "ux.destructiveConfirmModalSafety",
+      requiredReceipt: "ux.destructiveConfirmModalSafety",
+      receiptKind: "ux.destructiveConfirmModalSafety",
+      confirmSafetyStressId: "loop-twenty-destructive-confirm-modal-safety",
+      requestedHost: opts.host ?? "main",
+      requestedFixture: opts.fixture ?? "agentic-destructive-dry-run",
+      requestedPaths: opts.paths ?? ["cancel", "confirm", "stale-confirm"],
+      dryRunOnly,
+      dryRunOnlyRequired: !dryRunOnly,
+      hostSurface: null,
+      hostAutomationWindowId: null,
+      hostSemanticSurface: null,
+      stateBefore: null,
+      elementsBefore: null,
+      confirmReceipt: null,
+      confirmPromptId: null,
+      confirmRouteGeneration: null,
+      confirmSurfaceKind: null,
+      parentAutomationWindowId: null,
+      previousViewIdentity: null,
+      dangerActionId: null,
+      dangerActionLabel: null,
+      dangerLevel: null,
+      destructiveActionFixture: opts.fixture ?? "agentic-destructive-dry-run",
+      confirmButtonSemanticId: null,
+      cancelButtonSemanticId: null,
+      focusedButtonBefore: null,
+      tabFocusSamples: [],
+      enterResolutionSamples: [],
+      escapeCancelReceipt: null,
+      cancelResolvedFalse: null,
+      confirmResolvedTrue: null,
+      actionMutationCountBefore: null,
+      actionMutationCountAfter: null,
+      noMutationBeforeConfirm: null,
+      noMutationAfterCancel: null,
+      noExecutionWithoutConfirm: null,
+      destructiveCommandExecuted: false,
+      systemCommandRequested: false,
+      quitRequested: false,
+      trashMutationRequested: false,
+      restartRequested: false,
+      shutdownRequested: false,
+      staleConfirmRejected: null,
+      wrongSurfaceConfirmRejected: null,
+      focusRestored: null,
+      selectionRestored: null,
+      filterRestored: null,
+      routeStackRestored: null,
+      footerActionsSafe: null,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: dryRunOnly ? "missing_destructive_confirm_modal_safety_receipt" : "dryRunOnlyRequired" } }],
+    failure: { code: dryRunOnly ? "missing_destructive_confirm_modal_safety_receipt" : "dryRunOnlyRequired", stepName: "declare-required-receipt", message: "Missing app-side destructive confirm dry-run safety receipts." },
+    warnings: ["file_linear:destructive_confirm_modal_safety_receipts_missing"],
+  };
+}
+
+export async function runLoadingSkeletonProgressRestorationStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+  fixture?: string;
+  cycles?: number;
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "loading-skeleton-progress-restoration-stress",
+    status: "fail",
+    failClosed: true,
+    failureMode: "fail_closed",
+    missingReceipt: "missing_loading_skeleton_progress_restoration_receipt",
+    linearIssue: "file_linear:loading_skeleton_progress_restoration_receipts_missing",
+    loadingSkeletonProgressRestoration: {
+      kind: "ux.loadingSkeletonProgressRestoration",
+      requiredReceipt: "ux.loadingSkeletonProgressRestoration",
+      receiptKind: "ux.loadingSkeletonProgressRestoration",
+      loadingSkeletonStressId: "loop-twenty-loading-skeleton-progress-restoration",
+      requestedSurfaces: opts.surfaces ?? ["sdk-reference", "script-template-catalog"],
+      requestedFixture: opts.fixture ?? "delayed-local",
+      requestedCycles: opts.cycles ?? 4,
+      surfaceSamples: [],
+      surface: null,
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      stateBefore: null,
+      elementsBefore: null,
+      requestGeneration: null,
+      loadingReceipt: null,
+      loadingState: null,
+      skeletonVisible: null,
+      skeletonRows: [],
+      skeletonRowSemanticIds: [],
+      skeletonBounds: null,
+      progressReceipt: null,
+      progressText: null,
+      progressPercent: null,
+      progressMonotonic: null,
+      resultGeneration: null,
+      resultsReadyReceipt: null,
+      stateAfter: null,
+      elementsAfter: null,
+      realRowsVisible: null,
+      skeletonCleared: null,
+      noSkeletonAfterResults: null,
+      selectedSemanticIdBefore: null,
+      selectedSemanticIdAfter: null,
+      selectionRestored: null,
+      focusRestored: null,
+      filterTextPreserved: null,
+      scrollAnchorPreserved: null,
+      footerActionStateDuringLoading: null,
+      activationBlockedWhileLoading: null,
+      noSubmitDuringLoading: null,
+      staleLoadingGenerationRejected: null,
+      staleProgressRejected: null,
+      staleResultRejected: null,
+      noBlankFrame: null,
+      localFixtureOnly: true,
+      networkAccessed: false,
+      externalServiceContacted: false,
+      cleanupConfirmed: true,
+    },
+    usage: { stateFirst: true, usedGetState: true, usedGetElements: true, usedNativeInput: false, usedScreenshot: false, openedSystemSettings: false, mutatedTcc: false, installedAgents: false, triggeredSecurityPrompt: false, networkAccessed: false, externalServiceContacted: false },
+    steps: [{ name: "declare-required-receipt", status: "fail", output: { reason: "missing_loading_skeleton_progress_restoration_receipt" } }],
+    failure: { code: "missing_loading_skeleton_progress_restoration_receipt", stepName: "declare-required-receipt", message: "Missing app-side loading skeleton/progress restoration receipts." },
+    warnings: ["file_linear:loading_skeleton_progress_restoration_receipts_missing"],
   };
 }
 

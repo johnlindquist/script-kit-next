@@ -274,6 +274,12 @@ The actions receipt must cover disabled/no-op/actionable rows with reasons so ke
 
 The dense preview receipt must keep row identity, preview text, metadata chips, keyboard focus, and footer actions readable through filtering, selection changes, and resize.
 
+`toast-notification-queue-lifecycle-stress` is intentionally fail-closed until toast/notification receipts expose queue generation, bridge generation, visible text, duplicate collapse, autohide and manual dismiss ordering, bounds and overlap pairs, footer/input non-blocking, stale-toast rejection, no action execution from toast UI, and cleanup.
+
+`destructive-confirm-modal-safety-stress` is intentionally fail-closed until destructive confirm receipts expose dry-run-only fixture identity, confirm prompt identity, focused button, Enter/Escape resolution, no mutation before confirm, no mutation after cancel, no real system command request, stale or wrong-surface confirm rejection, parent focus/selection/filter/route restoration, and cleanup.
+
+`loading-skeleton-progress-restoration-stress` is intentionally fail-closed until loading/skeleton/progress receipts expose request and result generations, skeleton rows and bounds, visible progress text and monotonic percent, activation blocking while loading, stale loading/progress/result rejection, skeleton cleanup after results, selection/focus/filter/scroll restoration, local-fixture-only proof, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
