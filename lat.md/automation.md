@@ -174,6 +174,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `actions-captured-subject-frame-stress` is intentionally fail-closed until MainList action receipts expose the captured root subject stable key, source-frame identity, execution subject key, and focus-restore target after filter/selection/cache drift.
 
+`drop-prompt-native-drop-privacy-stress` is intentionally fail-closed until scripts/agentic can inject a deterministic native file drop and prove DropPrompt state/elements expose only index, name, and size without path/content leakage.
+
+`path-prompt-filesystem-edge-stress` wraps the tracked PathPrompt filesystem edge helper so missing, empty, file-start, and permission-denied fixture cases prove `stateResult.path` and `getElements` status rows agree.
+
+`screenshot-identity-acp-context-stress` is intentionally fail-closed until ACP context receipts expose the same screenshot identity as `stateResult.screenshotIdentity` without filesystem greps.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

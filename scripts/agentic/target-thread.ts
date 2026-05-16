@@ -95,7 +95,11 @@ export interface TargetThreadFailure {
     | "actions_subject_missing"
     | "actions_subject_drift"
     | "actions_frame_drift"
-    | "actions_focus_restore_failed";
+    | "actions_focus_restore_failed"
+    | "missing_drop_prompt_native_drop_receipt"
+    | "drop_prompt_path_leak"
+    | "path_prompt_filesystem_edge_failed"
+    | "missing_screenshot_identity_context_receipt";
   expected?: Partial<TargetThreadIdentity>;
   actual?: Partial<TargetThreadIdentity>;
   stepName: string;

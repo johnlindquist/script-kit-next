@@ -91,7 +91,10 @@ export interface HardScenarioReceipt {
     | "shortcut-recorder-focus-capture"
     | "template-prompt-automation-parity-stress"
     | "current-app-commands-frontmost-stress"
-    | "actions-captured-subject-frame-stress";
+    | "actions-captured-subject-frame-stress"
+    | "drop-prompt-native-drop-privacy-stress"
+    | "path-prompt-filesystem-edge-stress"
+    | "screenshot-identity-acp-context-stress";
   status: "pass" | "fail" | "error";
   targetThread?: {
     stable: boolean;
@@ -109,6 +112,9 @@ export interface HardScenarioReceipt {
   templatePrompt?: Record<string, unknown>;
   currentAppCommands?: Record<string, unknown>;
   actionsCapturedSubject?: Record<string, unknown>;
+  dropPrompt?: Record<string, unknown>;
+  pathPrompt?: Record<string, unknown>;
+  screenshotIdentity?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -1965,6 +1971,158 @@ export async function runActionsCapturedSubjectFrameStressScenario(opts: {
         "The harness fails closed until root actions can prove execution uses the captured subject after filter/selection/cache/frame drift.",
     },
     warnings: ["file_linear:actions_captured_subject_receipts_missing"],
+  };
+}
+
+export async function runDropPromptNativeDropPrivacyStressScenario(opts: {
+  session: string;
+  fileName?: string;
+  size?: number;
+}): Promise<HardScenarioReceipt> {
+  const fileName = opts.fileName ?? "agentic-drop.txt";
+  const size = opts.size ?? 12;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "drop-prompt-native-drop-privacy-stress",
+    status: "fail",
+    dropPrompt: {
+      session: opts.session,
+      fileName,
+      size,
+      expectedState: "stateResult.drop.files[index,name,size]",
+      expectedElements: "list:dropped-files + kind:dropped_file rows",
+      forbiddenFields: ["path", "parentPath", "content", "mimeType", "modifiedTime"],
+      nativeDropInjected: false,
+      pathLeakDetected: null,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "drop-native-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          fileName,
+          blockingGap:
+            "DropPrompt automation has redacted state/elements receipts, but scripts/agentic does not yet have a deterministic native file-drop injection receipt.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_drop_prompt_native_drop_receipt",
+      stepName: "drop-native-receipt-preflight",
+      message:
+        "The harness fails closed until native DropPrompt file-drop injection can prove redacted automation receipts without leaking paths.",
+    },
+    warnings: ["file_linear:drop_prompt_native_drop_receipts_missing"],
+  };
+}
+
+export async function runPathPromptFilesystemEdgeStressScenario(opts: {
+  session: string;
+}): Promise<HardScenarioReceipt> {
+  const result = await runTool(
+    ["bun", "scripts/agentic/path-prompt-fs-edges.ts"],
+    "path-prompt-filesystem-edge-stress",
+  );
+  const output = parseMaybeJson(result.stdout);
+  const passed = result.exitCode === 0 && (output as Record<string, unknown>).status === "ok";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "path-prompt-filesystem-edge-stress",
+    status: passed ? "pass" : "fail",
+    pathPrompt: {
+      session: opts.session,
+      helper: "scripts/agentic/path-prompt-fs-edges.ts",
+      cases: ["missing", "empty", "file-start", "permission-denied"],
+      statusKinds: ["missing", "empty", "loaded", "permissionDenied"],
+      output,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "path-prompt-fs-edges-helper",
+        status: passed ? "pass" : "fail",
+        output,
+      },
+    ],
+    failure: passed
+      ? undefined
+      : {
+          code: "path_prompt_filesystem_edge_failed",
+          stepName: "path-prompt-fs-edges-helper",
+          message: result.stderr || "PathPrompt filesystem edge helper failed.",
+        },
+    warnings: passed ? [] : ["path_prompt_filesystem_edge_helper_failed"],
+  };
+}
+
+export async function runScreenshotIdentityAcpContextStressScenario(opts: {
+  session: string;
+  source?: string;
+}): Promise<HardScenarioReceipt> {
+  const source = opts.source ?? "tab-ai-screenshot";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "screenshot-identity-acp-context-stress",
+    status: "fail",
+    screenshotIdentity: {
+      session: opts.session,
+      source,
+      stateField: "stateResult.screenshotIdentity",
+      expectedIdentityShape: "bare screenshot filename",
+      captureReceipt: null,
+      acpContextPart: null,
+      identityMatched: null,
+      filesystemGrepUsed: false,
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: false,
+      usedGetElements: false,
+      usedWaitFor: false,
+      usedNativeInput: false,
+      usedScreenshot: false,
+      usedFixedSleepMs: 0,
+      mutatedUserData: false,
+    },
+    steps: [
+      {
+        name: "screenshot-identity-context-receipt-preflight",
+        status: "fail",
+        output: {
+          session: opts.session,
+          source,
+          blockingGap:
+            "ACP context automation does not yet expose one receipt tying capture identity, stateResult.screenshotIdentity, and accepted ACP context part identity together.",
+        },
+      },
+    ],
+    failure: {
+      code: "missing_screenshot_identity_context_receipt",
+      stepName: "screenshot-identity-context-receipt-preflight",
+      message:
+        "The harness fails closed until screenshot identity threading can be proven from state and ACP context receipts without grepping the filesystem.",
+    },
+    warnings: ["file_linear:screenshot_identity_context_receipts_missing"],
   };
 }
 
