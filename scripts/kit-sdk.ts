@@ -8201,6 +8201,7 @@ export interface PromptState {
   activePopupContract?: LauncherSurfaceContractSnapshot;
   activeFooter?: ActiveFooterSnapshot;
   drop?: DropPromptState;
+  path?: PathPromptState;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8219,6 +8220,65 @@ export interface DropPromptState {
     name: string;
     size: number;
   }>;
+}
+
+export interface PathPromptState {
+  currentPath: string;
+  currentDirectory: string;
+  requestedStartPath?: string;
+  startPathKind:
+    | 'defaultHome'
+    | 'defaultRoot'
+    | 'directory'
+    | 'file'
+    | 'symlinkDirectory'
+    | 'symlinkFile'
+    | 'brokenSymlink'
+    | 'missing'
+    | 'permissionDenied'
+    | 'readError';
+  filter: string;
+  loadStatus: 'loaded' | 'empty' | 'error';
+  loadErrorKind?: 'missing' | 'permissionDenied' | 'notDirectory' | 'readError' | null;
+  emptyKind?:
+    | 'emptyDirectory'
+    | 'hiddenOnly'
+    | 'noMatches'
+    | 'missing'
+    | 'permissionDenied'
+    | 'notDirectory'
+    | 'readError'
+    | null;
+  statusMessage: string;
+  entryCount: number;
+  visibleEntryCount: number;
+  selectedIndex: number;
+  selectedPath?: string | null;
+  hiddenPolicy: 'omitDotfiles' | string;
+  hiddenEntriesOmitted: number;
+  entryErrorsOmitted: number;
+  symlinkPolicy: 'followDirectoryTargets' | string;
+  selected?: {
+    name: string;
+    path: string;
+    isDir: boolean;
+    isSymlink: boolean;
+  };
+  status: {
+    kind:
+      | 'ready'
+      | 'empty'
+      | 'filtered_empty'
+      | 'missing'
+      | 'not_directory'
+      | 'permission_denied'
+      | 'read_error';
+    message: string;
+    isError: boolean;
+    hiddenPolicy: 'omitDotfiles' | string;
+    hiddenCount: number;
+    failedEntryCount: number;
+  };
 }
 
 export interface LauncherSurfaceContractSnapshot {
@@ -8268,6 +8328,13 @@ export interface ElementInfo {
   selected?: boolean;
   focused?: boolean;
   index?: number;
+  role?: string;
+  kind?: string;
+  source?: string;
+  sourceName?: string;
+  selectable?: boolean;
+  statusKind?: string;
+  actionDisabled?: string;
 }
 
 export interface ElementsSnapshot {
@@ -8358,6 +8425,7 @@ type StateResultMessage = {
   activePopupContract?: LauncherSurfaceContractSnapshot;
   activeFooter?: ActiveFooterSnapshot;
   drop?: DropPromptState;
+  path?: PathPromptState;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8460,6 +8528,7 @@ globalThis.getState = async function getState(): Promise<PromptState> {
           activePopupContract: state.activePopupContract,
           activeFooter: state.activeFooter,
           drop: state.drop,
+          path: state.path,
           promptId: state.promptId,
           placeholder: state.placeholder,
           inputValue: state.inputValue,

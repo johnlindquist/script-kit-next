@@ -16,6 +16,12 @@ DropPrompt native-drop verification must prove both the GPUI file-drop hook and 
 
 Use `cargo test --test drop_prompt_native_drop_contract -- --nocapture` for source proof that `DropPrompt` wires `.on_drop` through `ExternalPaths`, `getState.drop` carries only `{index,name,size}`, `getElements` no longer exposes paths as row values, and SDK submit remains full-fidelity `FileInfo[]`. Runtime proof should start empty, assert Submit disabled through `activeFooter`, assert `getState.drop.fileCount:0` and no dropped-file elements, perform a native file drop onto `window:drop`, then assert redacted state/elements, enabled Submit, full SDK submit payload, and Escape cancel behavior. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
 
+## PathPrompt Filesystem Edges
+
+PathPrompt filesystem-edge verification must prove directory load states through prompt-owned receipts, not by inferring from an empty list.
+
+Use `cargo test --lib prompts::path::prompt::tests:: -- --nocapture` for direct load-entry proof of missing paths, non-directory starts, empty directories, hidden-dotfile policy, symlink rows, and simulated permission denial. Use `cargo test --test path_prompt_filesystem_edges_contract -- --nocapture` for source proof that `stateResult.path`, `getElements` path-status rows, SDK `PathPromptState`, and stable status copy remain wired. Runtime proof should launch `path({ startPath })` against a missing path, an empty temp directory, and a permission-denied or chmod-simulated directory, then assert `getState.path.status.kind`, `getState.path.status.message`, `visibleEntryCount`, and `getElements` `path-status.statusKind` before cleanup. Use `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check` before closing the slice.
+
 ## SDK find unsupported boundary
 
 `find()` verification is a negative SDK contract, not a UI prompt proof.

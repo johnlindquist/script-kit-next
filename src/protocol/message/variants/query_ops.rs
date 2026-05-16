@@ -206,6 +206,10 @@ macro_rules! protocol_message_variants_query_ops {
         /// Omitted outside DropPrompt; contains count/name/size only, never paths.
         #[serde(rename = "drop", default, skip_serializing_if = "Option::is_none")]
         drop_state: Option<serde_json::Value>,
+        /// PathPrompt filesystem load and selection state for edge-case proofs.
+        /// Omitted outside PathPrompt.
+        #[serde(rename = "path", default, skip_serializing_if = "Option::is_none")]
+        path_state: Option<serde_json::Value>,
     },
 
     // ============================================================

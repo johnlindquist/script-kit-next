@@ -1170,7 +1170,7 @@ impl ScriptListApp {
         path_prompt: &PathPrompt,
         limit: usize,
     ) -> (Vec<protocol::ElementInfo>, usize) {
-        let total_count = path_prompt.filtered_entries.len() + 3;
+        let total_count = path_prompt.filtered_entries.len() + 4;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
         Self::push_limited_element(
@@ -1200,6 +1200,26 @@ impl ScriptListApp {
             limit,
             protocol::ElementInfo::list("path-entries", path_prompt.filtered_entries.len()),
         );
+        Self::push_limited_element(
+            &mut elements,
+            limit,
+            protocol::ElementInfo {
+                semantic_id: protocol::generate_semantic_id_named("panel", "path-status"),
+                element_type: protocol::ElementType::Panel,
+                text: Some(path_prompt.visible_status_message()),
+                value: Some(path_prompt.automation_state()["status"].to_string()),
+                selected: None,
+                focused: None,
+                index: Some(2),
+                role: Some("status".to_string()),
+                kind: Some("path_status".to_string()),
+                source: None,
+                source_name: None,
+                selectable: Some(false),
+                status_kind: Some(path_prompt.visible_status_kind().as_str().to_string()),
+                action_disabled: None,
+            },
+        );
 
         for (index, entry) in path_prompt.filtered_entries.iter().enumerate() {
             if elements.len() >= limit {
@@ -1210,12 +1230,21 @@ impl ScriptListApp {
             } else {
                 entry.name.clone()
             };
-            elements.push(Self::choice_element(
+            let mut element = Self::choice_element(
                 index,
                 label,
                 entry.path.clone(),
                 index == path_prompt.selected_index,
-            ));
+            );
+            element.kind = Some(if entry.is_symlink {
+                "symlink".to_string()
+            } else if entry.is_dir {
+                "directory".to_string()
+            } else {
+                "file".to_string()
+            });
+            element.selectable = Some(true);
+            elements.push(element);
         }
 
         (elements, total_count)

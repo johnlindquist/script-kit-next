@@ -2694,6 +2694,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                             ));
                         }
                         return;
@@ -2715,6 +2716,7 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3671,6 +3673,13 @@ impl ScriptListApp {
                     }
                     _ => None,
                 };
+                let path_state = match &self.current_view {
+                    AppView::PathPrompt { entity, .. } => {
+                        let path_prompt = entity.read(cx);
+                        Some(path_prompt.automation_state())
+                    }
+                    _ => None,
+                };
 
                 // Create the response
                 let response = Message::state_result(
@@ -3698,6 +3707,7 @@ impl ScriptListApp {
                     main_list_scroll,
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
                     drop_state,
+                    path_state,
                 );
 
                 tracing::info!(
@@ -6538,8 +6548,8 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "UI",
                     id = %id,
-                    start_path = ?start_path,
-                    hint = ?hint,
+                    has_start_path = start_path.is_some(),
+                    has_hint = hint.is_some(),
                     "Showing path prompt"
                 );
 
@@ -6549,7 +6559,7 @@ impl ScriptListApp {
                         tracing::info!(
                             category = "UI",
                             id = %id,
-                            value = ?value,
+                            has_value = value.is_some(),
                             "PathPrompt submit callback called"
                         );
                         path_submit_callback(id, value);
@@ -6583,7 +6593,7 @@ impl ScriptListApp {
                         PathPromptEvent::ShowActions(path_info) => {
                             tracing::info!(
                                 category = "UI",
-                                path = %path_info.path,
+                                is_dir = path_info.is_dir,
                                 "PathPromptEvent::ShowActions received"
                             );
                             this.handle_show_path_actions(path_info.clone(), cx);

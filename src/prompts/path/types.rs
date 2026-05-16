@@ -53,6 +53,8 @@ pub struct PathPrompt {
     pub id: String,
     /// Starting directory path (defaults to home if None)
     pub start_path: Option<String>,
+    /// How the initial start path resolved for automation receipts.
+    pub start_path_kind: String,
     /// Hint text to display
     pub hint: Option<String>,
     /// Current directory being browsed
@@ -65,6 +67,8 @@ pub struct PathPrompt {
     pub selected_index: usize,
     /// List of entries in current directory
     pub entries: Vec<PathEntry>,
+    /// Last filesystem load status for the current directory.
+    pub load_status: PathLoadStatus,
     /// Filtered entries based on filter_text
     pub filtered_entries: Vec<PathEntry>,
     /// Focus handle for keyboard input
@@ -98,6 +102,7 @@ pub struct PathPrompt {
 pub struct PathEntryRenderRow {
     pub name: gpui::SharedString,
     pub is_dir: bool,
+    pub is_symlink: bool,
 }
 
 /// A file system entry (file or directory)
@@ -109,4 +114,73 @@ pub struct PathEntry {
     pub path: String,
     /// Whether this is a directory
     pub is_dir: bool,
+    /// Whether this entry is a filesystem symlink
+    pub is_symlink: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PathLoadStatusKind {
+    Ready,
+    Empty,
+    FilteredEmpty,
+    Missing,
+    NotDirectory,
+    PermissionDenied,
+    ReadError,
+}
+
+impl PathLoadStatusKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            PathLoadStatusKind::Ready => "ready",
+            PathLoadStatusKind::Empty => "empty",
+            PathLoadStatusKind::FilteredEmpty => "filtered_empty",
+            PathLoadStatusKind::Missing => "missing",
+            PathLoadStatusKind::NotDirectory => "not_directory",
+            PathLoadStatusKind::PermissionDenied => "permission_denied",
+            PathLoadStatusKind::ReadError => "read_error",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PathLoadStatus {
+    pub kind: PathLoadStatusKind,
+    pub message: String,
+    pub hidden_policy: String,
+    pub hidden_count: usize,
+    pub failed_entry_count: usize,
+}
+
+impl PathLoadStatus {
+    pub fn new(
+        kind: PathLoadStatusKind,
+        message: impl Into<String>,
+        hidden_count: usize,
+        failed_entry_count: usize,
+    ) -> Self {
+        Self {
+            kind,
+            message: message.into(),
+            hidden_policy: "omitDotfiles".to_string(),
+            hidden_count,
+            failed_entry_count,
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(
+            self.kind,
+            PathLoadStatusKind::Missing
+                | PathLoadStatusKind::NotDirectory
+                | PathLoadStatusKind::PermissionDenied
+                | PathLoadStatusKind::ReadError
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PathLoadResult {
+    pub entries: Vec<PathEntry>,
+    pub status: PathLoadStatus,
 }
