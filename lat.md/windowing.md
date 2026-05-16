@@ -92,6 +92,18 @@ Mini and Full footer dismissals share one close-only behavior when an actions po
 
 For any non-Actions footer target, `dispatch_main_window_footer_action` closes both the shared dialog host and the detached hostless actions window when present, logs `main_window_footer_action_closed_actions_only` with `main_window_mode`, and returns without dispatching the clicked footer action.
 
+## Selected Text Clipboard Restore
+
+Selected-text replacement must preserve the user's whole pasteboard when it borrows the clipboard to paste.
+
+`set_selected_text` still uses the clipboard plus Core Graphics Cmd+V fallback, but `src/selected_text.rs` now snapshots every `NSPasteboardItem` type/data representation before writing the replacement text. Snapshot failure aborts before mutation. After the paste attempt, the helper rebuilds the saved pasteboard items and returns an explicit restore error if AppKit cannot restore them.
+
+The helper records the pasteboard change count after writing the temporary text. If another process changes the pasteboard during the paste window, restore is skipped and `setSelectedText` returns an explicit error instead of overwriting newer clipboard state.
+
+The snapshot summary logged around this path is content-light: item count, type count, total byte count, and coarse booleans for text, rich text, image, file URL, and other types. Logs must not include selected text, replacement text, pasteboard type names, file names, or pasteboard bytes.
+
+The source-audit proof lives in `tests/source_audits/selected_text_clipboard_restore.rs`; it pins snapshot-before-mutation, item/type/data preservation, explicit restore failure, and content-light logging without running a live native paste in CI.
+
 ## Main Panel Invariants Contract
 
 The main NSPanel's floating-panel posture is a runtime invariant, not just a sequence of one-time AppKit calls.
