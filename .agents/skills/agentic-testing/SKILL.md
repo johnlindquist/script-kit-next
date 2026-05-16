@@ -122,6 +122,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For streaming progress cancellation, prove stream run identity, monotonic progress samples, visible progress text, cancellation request/ack ordering, stale post-cancel chunk rejection, no stale repaint, screenshot-to-state revalidation, focus/cursor restoration, no accidental submit, and cleanup.
 - For dictation/media permission readiness churn, prove passive microphone/model setup, permission and model readiness generations, churn event ordering, target identity, transcript generation identity, wrong-target delivery rejection, no auto-submit, no System Settings or TCC mutation, focus/cursor preservation, and cleanup.
 - For animation frame capture determinism, prove app animation frame ids, capture sequence ids, state/elements/screenshot receipts per sampled frame, visible text/layout fingerprints, motion occlusion pairs, stable frame ordering, stale-frame rejection, wrong-window rejection, blank-frame rejection, and cleanup.
+- For accessibility tree semantic parity, prove visible controls, automation elements, and AX nodes share roles, labels, focus order, tab order, disabled states, safe keyboard activation semantics, hit targets, screenshot-to-semantics alignment, stale-tree rejection, wrong-window rejection, and cleanup.
+- For RTL/bidirectional/emoji text rendering, prove direction runs, bidi levels, grapheme clusters, emoji ZWJ and combining mark sequences, cursor visual positions, selection rectangles, visible/rendered text bounds, truncation intent, search/filter semantics, stale layout rejection, wrong-surface mutation rejection, no accidental submit, and cleanup.
+- For high-volume virtualized list stability, prove fixture identity, row identity, virtualization generations, selected-row reanchor, selection reanchor, scroll anchor preservation, rapid filter ordering, stale result rejection, duplicate-key rejection, blank-row rejection, footer-safe selection, screenshot-to-semantics consistency, and cleanup.
 
 ## The Pattern
 
@@ -598,6 +601,12 @@ bun scripts/agentic/index.ts browser-tabs-cache-identity-stress \
   --session default --source browser-tabs --json
 bun scripts/agentic/index.ts scroll-selection-reanchor-stress \
   --session default --kinds clipboard,browser-history,current-app-commands,file-search --json
+bun scripts/agentic/index.ts accessibility-tree-semantic-parity-stress \
+  --session default --surfaces main,actionsDialog,promptPopup --json
+bun scripts/agentic/index.ts rtl-bidi-emoji-text-rendering-stress \
+  --session default --surface acp-composer --text 'abc שלום 👩🏽‍💻 é مرحبا 123' --json
+bun scripts/agentic/index.ts high-volume-virtualized-list-stability-stress \
+  --session default --surface clipboard-history --fixture-count 5000 --filter-cycles 8 --scroll-cycles 12 --json
 ```
 
 ### State-only vs screenshot checkpoints

@@ -246,6 +246,12 @@ These recipes exercise automation paths that previously required slow human inte
 
 `animation-frame-capture-determinism-stress` is intentionally fail-closed until animated/loading visual states expose deterministic frame ids, capture sequence ids, state/elements/screenshot receipts per frame, visible text and layout fingerprints, occlusion pairs, stale-frame rejection, wrong-window rejection, blank-frame rejection, and cleanup.
 
+`accessibility-tree-semantic-parity-stress` is intentionally fail-closed until accessibility receipts expose visible control ids, automation element ids, AX node ids, role parity, label parity, focus order, tab order, disabled-state parity, safe keyboard activation parity, screenshot-to-semantics alignment, stale AX tree rejection, wrong-window rejection, and cleanup.
+
+`rtl-bidi-emoji-text-rendering-stress` is intentionally fail-closed until text rendering receipts expose RTL/LTR direction runs, bidi embedding levels, grapheme clusters, emoji ZWJ sequences, combining mark sequences, cursor visual positions, selection visual rects, visible/rendered text bounds, truncation intent, search/filter fingerprints, stale layout rejection, wrong-surface mutation rejection, no accidental submit, and cleanup.
+
+`high-volume-virtualized-list-stability-stress` is intentionally fail-closed until virtualized list receipts expose high-volume fixture identity, total and visible counts, virtualization generations, stable row keys, selected-row reanchor, scroll anchor preservation, row/text bounds, rapid filter generations, stale-filter rejection, duplicate-key rejection, blank-row rejection, footer-safe selection, screenshot-to-semantics consistency, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.

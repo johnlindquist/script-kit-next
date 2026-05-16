@@ -127,8 +127,14 @@ export interface HardScenarioReceipt {
     | "menu-tray-notification-modal-interruption-stress"
     | "stream-progress-cancel-visual-stability-stress"
     | "dictation-media-permission-readiness-churn-stress"
-    | "animation-frame-capture-determinism-stress";
+    | "animation-frame-capture-determinism-stress"
+    | "accessibility-tree-semantic-parity-stress"
+    | "rtl-bidi-emoji-text-rendering-stress"
+    | "high-volume-virtualized-list-stability-stress";
   status: "pass" | "fail" | "error";
+  failureMode?: string;
+  missingReceipt?: string;
+  error?: Record<string, unknown>;
   targetThread?: {
     stable: boolean;
     initial?: TargetThreadIdentity;
@@ -184,6 +190,9 @@ export interface HardScenarioReceipt {
   streamProgressCancelVisualStability?: Record<string, unknown>;
   dictationMediaPermissionReadinessChurn?: Record<string, unknown>;
   animationFrameCaptureDeterminism?: Record<string, unknown>;
+  accessibilityTreeSemanticParity?: Record<string, unknown>;
+  rtlBidiEmojiTextRendering?: Record<string, unknown>;
+  highVolumeVirtualizedListStability?: Record<string, unknown>;
   delayedAction?: Record<string, unknown>;
   usage: Record<string, unknown>;
   captureTarget?: Record<string, unknown> | null;
@@ -5057,6 +5066,292 @@ export async function runAnimationFrameCaptureDeterminismStressScenario(opts: {
         "The harness fails closed until visual.animationFrameCaptureDeterminism receipts prove stable frame sampling, occlusion safety, and screenshot-to-state revalidation.",
     },
     warnings: ["file_linear:animation_frame_capture_determinism_receipts_missing"],
+  };
+}
+
+export async function runAccessibilityTreeSemanticParityStressScenario(opts: {
+  session: string;
+  surfaces?: string[];
+}): Promise<HardScenarioReceipt> {
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "accessibility-tree-semantic-parity-stress",
+    status: "fail",
+    failureMode: "missing_app_receipt",
+    missingReceipt: "accessibility.treeSemanticParity",
+    error: {
+      code: "missing_accessibility_tree_semantic_parity_receipt",
+      linear: "file_linear:accessibility_tree_semantic_parity_receipts_missing",
+    },
+    accessibilityTreeSemanticParity: {
+      session: opts.session,
+      requiredReceipt: "accessibility.treeSemanticParity",
+      accessibilityAuditId: null,
+      surfaceSamples: (opts.surfaces && opts.surfaces.length > 0
+        ? opts.surfaces
+        : ["main", "actionsDialog", "promptPopup"]).map((surface) => ({
+          surface,
+          automationWindowId: null,
+          osWindowId: null,
+          semanticSurface: null,
+          stateReceipt: null,
+          elementsReceipt: null,
+          axTreeReceipt: null,
+          screenshotReceipt: null,
+          visibleControlIds: [],
+          automationElementIds: [],
+          axNodeIds: [],
+          roleParity: null,
+          labelParity: null,
+          focusOrder: [],
+          tabOrder: [],
+          disabledStateParity: null,
+          keyboardActivationParity: null,
+          activationPlan: {
+            sideEffectSafe: true,
+            activationMethod: null,
+            activatedSemanticId: null,
+            activationResult: null,
+          },
+          disabledActivationPrevented: null,
+          focusSemanticIdBefore: null,
+          focusSemanticIdAfter: null,
+          hitTargetBounds: [],
+          screenshotSemanticAlignment: null,
+          missingAxNodes: [],
+          extraAxNodes: [],
+          staleAxTreeRejected: null,
+          wrongWindowAxRejected: null,
+        })),
+      accessibilityPermissionBefore: null,
+      noSystemSettingsOpened: true,
+      noTccMutationAttempted: true,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["screenshot_only", "ax_tree_without_window_identity", "unsafe_activation"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+      openedSystemSettings: false,
+      mutatedTcc: false,
+    },
+    steps: [{
+      name: "accessibility-tree-semantic-parity-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove visible controls, automation elements, and AX nodes share roles, labels, focus/tab order, activation semantics, hit targets, and screenshot-to-semantics alignment.",
+      },
+    }],
+    failure: {
+      code: "missing_accessibility_tree_semantic_parity_receipt",
+      stepName: "accessibility-tree-semantic-parity-receipt",
+      message:
+        "The harness fails closed until accessibility.treeSemanticParity receipts prove role/label/focus/activation parity, stale AX rejection, wrong-window rejection, and cleanup.",
+    },
+    warnings: ["file_linear:accessibility_tree_semantic_parity_receipts_missing"],
+  };
+}
+
+export async function runRtlBidiEmojiTextRenderingStressScenario(opts: {
+  session: string;
+  surface?: string;
+  text?: string;
+}): Promise<HardScenarioReceipt> {
+  const rawText = opts.text ?? "abc שלום 👩🏽‍💻 é مرحبا 123";
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "rtl-bidi-emoji-text-rendering-stress",
+    status: "fail",
+    failureMode: "missing_app_receipt",
+    missingReceipt: "text.rtlBidiEmojiTextRendering",
+    error: {
+      code: "missing_rtl_bidi_emoji_text_rendering_receipt",
+      linear: "file_linear:rtl_bidi_emoji_text_rendering_receipts_missing",
+    },
+    rtlBidiEmojiTextRendering: {
+      session: opts.session,
+      requiredReceipt: "text.rtlBidiEmojiTextRendering",
+      bidiStressId: null,
+      surface: opts.surface ?? "acp-composer",
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      inputSemanticId: null,
+      rawText,
+      normalizedText: null,
+      textDirectionBase: "auto",
+      directionRuns: [],
+      bidiEmbeddingLevels: [],
+      graphemeClusters: [],
+      clusterBoundaries: [],
+      emojiZwJSequences: [],
+      combiningMarkSequences: [],
+      cursorSamples: [{
+        cursorLogicalIndex: null,
+        cursorUtf16Index: null,
+        cursorVisualRect: null,
+        cursorInVisibleWindow: null,
+      }],
+      selectionSamples: [{
+        selectionLogicalRange: null,
+        selectionUtf16Range: null,
+        selectionVisualRects: [],
+      }],
+      visibleTextBounds: null,
+      renderedTextBounds: null,
+      availableWidth: null,
+      measuredWidth: null,
+      truncationState: {
+        isTruncated: null,
+        truncationIntentional: null,
+        accessibleFullText: null,
+      },
+      searchFilterSamples: [{
+        query: null,
+        normalizedQuery: null,
+        matchingSemanticIds: [],
+        filterResultFingerprint: null,
+      }],
+      backspaceClusterAtomicity: null,
+      selectionPreservedAcrossFilter: null,
+      cursorRangeBefore: null,
+      cursorRangeAfter: null,
+      screenshotStateRevalidated: null,
+      staleTextLayoutRejected: null,
+      wrongSurfaceMutationRejected: null,
+      noAccidentalSubmit: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["utf16_index_only", "screenshot_only", "plain_text_echo"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+    },
+    steps: [{
+      name: "rtl-bidi-emoji-text-rendering-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove mixed RTL/LTR/emoji/combining-mark rendering, cursor visual positions, selection rectangles, grapheme-aware editing, search/filter normalization, and stale layout rejection.",
+      },
+    }],
+    failure: {
+      code: "missing_rtl_bidi_emoji_text_rendering_receipt",
+      stepName: "rtl-bidi-emoji-text-rendering-receipt",
+      message:
+        "The harness fails closed until text.rtlBidiEmojiTextRendering receipts prove bidi, grapheme, cursor, selection, filter, truncation, and cleanup semantics.",
+    },
+    warnings: ["file_linear:rtl_bidi_emoji_text_rendering_receipts_missing"],
+  };
+}
+
+export async function runHighVolumeVirtualizedListStabilityStressScenario(opts: {
+  session: string;
+  surface?: string;
+  fixtureCount?: number;
+  filterCycles?: number;
+  scrollCycles?: number;
+}): Promise<HardScenarioReceipt> {
+  const fixtureItemCount = opts.fixtureCount ?? 5000;
+  return {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "high-volume-virtualized-list-stability-stress",
+    status: "fail",
+    failureMode: "missing_app_receipt",
+    missingReceipt: "list.highVolumeVirtualizedListStability",
+    error: {
+      code: "missing_high_volume_virtualized_list_stability_receipt",
+      linear: "file_linear:high_volume_virtualized_list_stability_receipts_missing",
+    },
+    highVolumeVirtualizedListStability: {
+      session: opts.session,
+      requiredReceipt: "list.highVolumeVirtualizedListStability",
+      virtualizedListStressId: null,
+      surface: opts.surface ?? "clipboard-history",
+      automationWindowId: null,
+      osWindowId: null,
+      semanticSurface: null,
+      datasetId: null,
+      fixtureItemCount,
+      totalItemCount: null,
+      visibleWindowSize: null,
+      virtualizationGenerationBefore: null,
+      virtualizationGenerationAfter: null,
+      rowSamples: [],
+      semanticId: null,
+      stableRowKey: null,
+      dataIndex: null,
+      visibleIndex: null,
+      rowBounds: null,
+      textBounds: null,
+      renderedTextBounds: null,
+      selectedSemanticIdBefore: null,
+      selectedSemanticIdAfter: null,
+      selectedStableKeyBefore: null,
+      selectedStableKeyAfter: null,
+      selectionReanchored: null,
+      scrollAnchorKey: null,
+      scrollTopBefore: null,
+      scrollTopAfter: null,
+      viewportBounds: null,
+      contentHeight: null,
+      filterCycles: Array.from({ length: opts.filterCycles ?? 8 }, () => ({
+        query: null,
+        expectedCount: null,
+        actualCount: null,
+        firstVisibleKey: null,
+        selectedKey: null,
+        rowFingerprintBefore: null,
+        rowFingerprintAfter: null,
+        elementsFingerprint: null,
+      })),
+      scrollCycles: opts.scrollCycles ?? 12,
+      rapidFilterTransitions: [],
+      filterGeneration: null,
+      staleFilterResultsRejected: null,
+      screenshotReceipt: null,
+      screenshotStateRevalidated: null,
+      semanticVisibleTextMatchesRows: null,
+      duplicateRowKeysRejected: null,
+      rowReuseIdentityPreserved: null,
+      blankRowsRejected: null,
+      footerSafeSelectedRow: null,
+      cleanupConfirmed: null,
+      forbiddenProofModes: ["row_count_only", "screenshot_only", "unscoped_user_data_fixture"],
+    },
+    usage: {
+      stateFirst: true,
+      usedGetState: true,
+      usedGetElements: true,
+      usedScreenshot: false,
+      usedNativeInput: false,
+      mutatedAppBehavior: false,
+      mutatedUserData: false,
+    },
+    steps: [{
+      name: "high-volume-virtualized-list-stability-receipt",
+      status: "fail",
+      output: {
+        blockingGap:
+          "The harness cannot yet prove high-volume fixture identity, stable row keys, selected-row reanchor, scroll anchor preservation, rapid filter generation ordering, stale result rejection, and screenshot-to-semantics consistency.",
+      },
+    }],
+    failure: {
+      code: "missing_high_volume_virtualized_list_stability_receipt",
+      stepName: "high-volume-virtualized-list-stability-receipt",
+      message:
+        "The harness fails closed until list.highVolumeVirtualizedListStability receipts prove virtualized row identity, filter/scroll ordering, screenshot-to-state consistency, and cleanup.",
+    },
+    warnings: ["file_linear:high_volume_virtualized_list_stability_receipts_missing"],
   };
 }
 
