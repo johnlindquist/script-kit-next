@@ -123,6 +123,12 @@
  *                         Fail-closed quiet chrome/card nesting proof
  *   scroll-shadow-sticky-header-density-stress
  *                         Fail-closed scroll shadow/sticky header/density proof
+ *   popup-focus-keycap-visual-semantics-stress
+ *                         Fail-closed popup focus/keycap visual semantics proof
+ *   reduced-motion-animation-disable-stress
+ *                         Fail-closed reduced-motion animation disable proof
+ *   command-search-highlighting-accessory-badges-stress
+ *                         Fail-closed command search highlight/badge proof
  *   help                   Show this help
  *
  * Target threading:
@@ -203,6 +209,9 @@ import {
   runRowStateParityWithoutPointerStressScenario,
   runQuietChromeCardNestingStressScenario,
   runScrollShadowStickyHeaderDensityStressScenario,
+  runPopupFocusKeycapVisualSemanticsStressScenario,
+  runReducedMotionAnimationDisableStressScenario,
+  runCommandSearchHighlightingAccessoryBadgesStressScenario,
   runScreenshotIdentityAcpContextStressScenario,
   runScrollSelectionReanchorStressScenario,
   runShortcutRecorderFocusCaptureStressScenario,
@@ -3619,6 +3628,24 @@ switch (recipe) {
     break;
   }
 
+  case "popup-focus-keycap-visual-semantics-stress": {
+    const proofBundle = await runPopupFocusKeycapVisualSemanticsStressScenario({ session, surfaces });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "popup-focus-keycap-visual-semantics-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Popup focus/keycap visual semantics stress failed closed; focus/keycap parity, glyph, topmost, stale rejection, and no-execution receipts are missing", proofBundle };
+    break;
+  }
+
+  case "reduced-motion-animation-disable-stress": {
+    const proofBundle = await runReducedMotionAnimationDisableStressScenario({ session, surfaces, fixture });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "reduced-motion-animation-disable-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Reduced-motion animation disable stress failed closed; fixture policy, animation generation, stable frame, and no-TCC receipts are missing", proofBundle };
+    break;
+  }
+
+  case "command-search-highlighting-accessory-badges-stress": {
+    const proofBundle = await runCommandSearchHighlightingAccessoryBadgesStressScenario({ session, hosts, query });
+    result = { schemaVersion: SCHEMA_VERSION, recipe: "command-search-highlighting-accessory-badges-stress", status: proofBundle.status, failClosed: proofBundle.failClosed, failureMode: proofBundle.failureMode, missingReceipt: proofBundle.missingReceipt, linearIssue: proofBundle.linearIssue, steps: proofBundle.steps as StepReceipt[], summary: "Command search highlighting/accessory badges stress failed closed; highlight ranges, badge ordering, action-catalog parity, and stale rejection receipts are missing", proofBundle };
+    break;
+  }
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -3785,6 +3812,9 @@ switch (recipe) {
           { name: "row-state-parity-without-pointer-stress", description: "Fail-closed UX receipt contract for row selected/focused/hover state parity without native pointer input", flags: ["--session", "--surfaces", "--states", "--json"] },
           { name: "quiet-chrome-card-nesting-stress", description: "Fail-closed UX receipt contract for quiet chrome/card nesting and visual token budgets", flags: ["--session", "--surfaces", "--chrome", "--json"] },
           { name: "scroll-shadow-sticky-header-density-stress", description: "Fail-closed UX receipt contract for scroll shadows, sticky headers, and density drift", flags: ["--session", "--surfaces", "--scroll-positions", "--density", "--json"] },
+          { name: "popup-focus-keycap-visual-semantics-stress", description: "Fail-closed UX receipt contract for popup focus, keycap visual semantics, shortcut glyphs, and parent preservation", flags: ["--session", "--surfaces", "--json"] },
+          { name: "reduced-motion-animation-disable-stress", description: "Fail-closed UX receipt contract for fixture-only reduced motion and disabled animation semantics", flags: ["--session", "--surfaces", "--fixture", "--json"] },
+          { name: "command-search-highlighting-accessory-badges-stress", description: "Fail-closed UX receipt contract for command search highlighting, accessory badges, and action-catalog parity", flags: ["--session", "--hosts", "--query", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
@@ -4012,6 +4042,12 @@ Recipes:
                          Fail-closed quiet chrome/card nesting proof
   scroll-shadow-sticky-header-density-stress
                          Fail-closed scroll shadow/sticky header/density proof
+  popup-focus-keycap-visual-semantics-stress
+                         Fail-closed popup focus/keycap semantics proof
+  reduced-motion-animation-disable-stress
+                         Fail-closed reduced-motion animation disable proof
+  command-search-highlighting-accessory-badges-stress
+                         Fail-closed command search highlight/badge proof
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
@@ -4162,6 +4198,12 @@ Available scenarios:
                          Emit fail-closed quiet chrome/card nesting requirements
   scroll-shadow-sticky-header-density-stress
                          Emit fail-closed scroll shadow/sticky header/density requirements
+  popup-focus-keycap-visual-semantics-stress
+                         Emit fail-closed popup focus/keycap visual semantics requirements
+  reduced-motion-animation-disable-stress
+                         Emit fail-closed reduced-motion animation disable requirements
+  command-search-highlighting-accessory-badges-stress
+                         Emit fail-closed command search highlighting/accessory badge requirements
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
@@ -4240,6 +4282,9 @@ Examples:
   bun scripts/agentic/index.ts row-state-parity-without-pointer-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --states selected,focused,hovered,selected-hovered --json
   bun scripts/agentic/index.ts quiet-chrome-card-nesting-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,promptPopup --chrome quiet --json
   bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --session default --surfaces clipboard-history,emoji-picker,file-search,app-launcher,actionsDialog --scroll-positions top,middle,bottom --density compact,default --json
+  bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,menuSyntaxTriggerPopup,confirmPrompt --json
+  bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
+  bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
   bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
   bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0

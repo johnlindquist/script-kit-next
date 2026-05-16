@@ -143,6 +143,9 @@ When a user flow spans stacked modals, cross-surface export, or app restart reco
 - For row state parity without native pointer input, prove selected, focused, hovered, and selected-hovered row states through semantic row ids, state/elements receipts, modality receipts, tokenized fill/focus/text/icon states, stale-row rejection, wrong-surface rejection, no accidental execution, and cleanup.
 - For quiet chrome/card nesting regressions, prove shell/content/row/popup/footer chrome layers, border/fill/shadow tokens, card depth, inset/gap/radius, duplicate-border rejection, opaque-fill rejection, stale-token rejection, wrong-surface rejection, and cleanup.
 - For scroll shadows, sticky headers, and density drift, prove scroll position, viewport/content bounds, sticky header bounds/z-index, scroll shadow opacity tokens, row/header/input/footer heights, rem/scale metrics, footer-safe viewport, selected-row visibility, stale-scroll rejection, wrong-surface rejection, and cleanup.
+- For popup focus/keycap visual semantics, prove popup owner identity, focused button/keycap parity, normalized shortcut glyphs, danger semantics on labels rather than keycaps, parent focus/selection preservation, stale focus rejection, wrong-surface rejection, no accidental execution, AFK-safe flags, and cleanup.
+- For reduced-motion animation disable behavior, prove fixture-only reduced-motion policy, animation/transition generations, stable opacity/transform/frame receipts, disabled shimmer/spinner/pulse motion, focus/selection/cursor preservation, stale motion rejection, wrong-surface rejection, no System Settings or TCC mutation, AFK-safe flags, and cleanup.
+- For command search highlighting/accessory badges, prove query/search generations, highlighted ranges, command row identity, accessory badge order/kinds/tooltips, disabled/no-op/loading reasons, action-catalog parity, stale highlight/badge rejection, wrong-host rejection, no accidental execution, AFK-safe flags, and cleanup.
 
 ## The Pattern
 
@@ -801,6 +804,9 @@ bun scripts/agentic/index.ts keyboard-hint-label-parity-stress --session default
 bun scripts/agentic/index.ts row-state-parity-without-pointer-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog --states selected,focused,hovered,selected-hovered --json
 bun scripts/agentic/index.ts quiet-chrome-card-nesting-stress --session default --surfaces main,clipboard-history,emoji-picker,file-search,actionsDialog,promptPopup --chrome quiet --json
 bun scripts/agentic/index.ts scroll-shadow-sticky-header-density-stress --session default --surfaces clipboard-history,emoji-picker,file-search,app-launcher,actionsDialog --scroll-positions top,middle,bottom --density compact,default --json
+bun scripts/agentic/index.ts popup-focus-keycap-visual-semantics-stress --session default --surfaces actionsDialog,menuSyntaxTriggerPopup,confirmPrompt --json
+bun scripts/agentic/index.ts reduced-motion-animation-disable-stress --session default --surfaces main,actionsDialog,menuSyntaxTriggerPopup --fixture reduced-motion --json
+bun scripts/agentic/index.ts command-search-highlighting-accessory-badges-stress --session default --hosts main,actionsDialog,app-launcher,menuSyntaxTriggerPopup --query agentic-loop-twenty-three --json
 ```
 
 ## Adjacent Skills

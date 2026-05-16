@@ -292,6 +292,12 @@ The dense preview receipt must keep row identity, preview text, metadata chips, 
 
 `scroll-shadow-sticky-header-density-stress` is intentionally fail-closed until scroll and density receipts expose scroll positions, viewport/content bounds, sticky header bounds/z-index, scroll shadow opacity tokens, row/header/input/footer heights, rem/scale metrics, footer-safe viewport, selected-row visibility, stale-scroll rejection, wrong-surface rejection, AFK-safe flags, and cleanup.
 
+`popup-focus-keycap-visual-semantics-stress` is intentionally fail-closed until popup receipts expose popup owner identity, focused button/keycap parity, normalized shortcut glyphs, danger semantics on labels rather than keycaps, parent focus and selection preservation, stale focus rejection, wrong-surface rejection, no accidental execution, AFK-safe flags, and cleanup.
+
+`reduced-motion-animation-disable-stress` is intentionally fail-closed until reduced-motion receipts expose fixture-only motion policy, animation and transition generations, stable opacity/transform/frame receipts, disabled shimmer/spinner/pulse motion, focus/selection/cursor preservation, stale motion rejection, wrong-surface rejection, no System Settings or TCC mutation, AFK-safe flags, and cleanup.
+
+`command-search-highlighting-accessory-badges-stress` is intentionally fail-closed until command search receipts expose query/search generations, highlighted ranges, command row identity, accessory badge order/kinds/tooltips, disabled/no-op/loading reasons, action-catalog parity, stale highlight/badge rejection, wrong-host rejection, no accidental execution, AFK-safe flags, and cleanup.
+
 ## Root Search Frame Stability Proof
 
 Root unified search has a dedicated state-first proof for target stability after late provider work.
