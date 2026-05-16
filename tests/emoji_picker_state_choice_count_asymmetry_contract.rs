@@ -10,7 +10,7 @@
 //! visibleChoiceCount:296` (correct, empty filter), but `setFilter
 //! "heart"` + `getState` → `choiceCount:24, visibleChoiceCount:24`
 //! — both shrank with the filter, violating the Run 9 Pass #2
-//! contract pinned in `lat.md/protocol.md` §"Query and introspection":
+//! contract pinned in `removed-docs` §"Query and introspection":
 //!
 //!   > `stateResult` carries both `choiceCount` (total dataset) and
 //!   > `visibleChoiceCount` (filter-aware). Automation harnesses
@@ -66,7 +66,7 @@ fn emoji_picker_state_arm() -> &'static str {
     &PROMPT_HANDLER[start..start + end_rel]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_derives_dataset_count_from_unfiltered_emojis() {
     // The `choice_count` slot MUST be populated from a `dataset_count`
@@ -91,7 +91,7 @@ fn emoji_picker_state_arm_derives_dataset_count_from_unfiltered_emojis() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_derives_visible_count_from_search_emojis() {
     // The `visible_choice_count` slot MUST be populated from a
@@ -110,7 +110,7 @@ fn emoji_picker_state_arm_derives_visible_count_from_search_emojis() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_tuple_slots_are_dataset_then_visible() {
     // The state tuple slots for EmojiPicker are, in order:
@@ -134,7 +134,7 @@ fn emoji_picker_state_arm_tuple_slots_are_dataset_then_visible() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn emoji_picker_state_arm_forbids_single_count_tuple_shape() {
     // The pre-fix shape was a single `filtered_count` binding

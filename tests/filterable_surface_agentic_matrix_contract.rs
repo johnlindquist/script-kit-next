@@ -26,7 +26,7 @@ fn function_body<'a>(source: &'a str, name: &str, next_name: &str) -> &'a str {
     &source[start..start + end_rel]
 }
 
-// @lat: [[lat.md/automation#Automation#Operational Rules]]
+// doc-anchor-removed: [[removed-docs Rules]]
 #[test]
 fn matrix_declares_current_app_commands_visible_row_case() {
     assert!(

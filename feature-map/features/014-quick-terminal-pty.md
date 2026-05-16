@@ -2,19 +2,13 @@
 
 This chapter maps the PTY-backed Quick Terminal surface, its terminal child, warm pool, native footer, and apply-back lifecycle.
 
-Raw Oracle reference: [answer](../raw-oracle/014-quick-terminal-pty/answer.md), [prompt](../raw-oracle/014-quick-terminal-pty/prompt.md), [bundle map](../raw-oracle/014-quick-terminal-pty/bundle-map.md), [full log](../raw-oracle/014-quick-terminal-pty/output.log), [session metadata](../raw-oracle/014-quick-terminal-pty/session.json).
 
 ## Executive Summary
 
-Quick Terminal is the app's compact PTY-backed terminal surface. It is represented as `AppView::QuickTerminalView`, contains a `TermPrompt` entity, owns terminal input/focus semantics, and is used by the launcher Quick Terminal route, path-based "Open in Quick Terminal", and verification-oriented Tab AI harness flows.
 
-Quick Terminal is not ACP Chat and it is not the SDK `term()` prompt. The important boundaries are:
 
 | Surface | Route | Sizing | Footer | Primary behavior |
 |---|---|---|---|---|
-| Quick Terminal | `AppView::QuickTerminalView` | Compact launcher terminal height. | Native `quick_terminal` surface. | PTY shell, warm pool, state-first close, optional apply-back. |
-| SDK TermPrompt | `AppView::TermPrompt { id, entity }` | Full terminal prompt height. | Prompt-owned; no `quick_terminal` native surface. | SDK `term()` / prompt handler terminal. |
-| ACP Chat | `AppView::AcpChatView` | Chat layout. | Chat/composer-owned. | Agent threads, composer, slash/mention/context flow. |
 
 The load-bearing contracts are compact launcher sizing, warm PTY reuse that fails open to cold spawn, terminal-scoped native footer buttons, and apply-back visibility gated by both an apply route and a return view.
 
@@ -23,21 +17,17 @@ The load-bearing contracts are compact launcher sizing, warm PTY reuse that fail
 | User capability | Entry | Result |
 |---|---|---|
 | Open plain Quick Terminal. | Launcher `>` handoff or built-in Quick Terminal route. | Opens `QuickTerminalView`, focuses `TermPrompt`, uses warm PTY if available, and stays compact. |
-| Open at a file or directory. | `file:open_in_quick_terminal` action. | Opens Quick Terminal, resolves cwd to directory or file parent, and writes quoted `cd <dir>` to the PTY. |
 | Type into a real PTY. | Printable keys, Ctrl chords, terminal special keys, Tab, Shift+Tab, Escape. | Bytes are forwarded to the PTY, not ACP navigation, launcher filter traversal, or global cancel. |
 | Close the wrapper. | Cmd+W, protocol `simulateKey` Cmd+W, or native footer Close. | Closes state-first and clears harness/apply-back terminal state. |
 | Apply terminal output back. | Native Apply or Cmd+Enter when Apply is visible. | Reads selected terminal text when possible, falls back to clipboard only if needed, and applies to the saved route. |
-| Use terminal actions. | Terminal action shortcut/actions dialog. | Opens `ActionsDialogHost::TermPrompt` actions, distinct from launcher actions/footer buttons. |
 
 ## Core Concepts
 
 | Concept | Meaning | Contract |
 |---|---|---|
-| `AppView::QuickTerminalView` | Top-level launcher utility route that stores a terminal entity. | Owns Quick Terminal lifecycle, native footer surface, compact height, and terminal focus. |
 | `TermPrompt` | Terminal renderer/input component used by multiple terminal surfaces. | Quick Terminal contains one, but SDK `term()` also uses one through a different route. |
 | `TerminalHandle` / PTY manager | Alacritty/PTY-backed runtime handle. | Cold terminals are themed on creation; attached warm terminals are rethemed. |
 | Warm PTY pool | One-slot idle terminal cache on `ScriptListApp`. | Tracks handle, inflight state, and creation time; stale/dead/missing/inflight states cold-spawn. |
-| Native footer surface | `AppView::native_footer_surface()` returns `Some("quick_terminal")`. | Applies only to Quick Terminal; SDK `TermPrompt` deliberately has no native `quick_terminal` footer. |
 | Apply-back state | Harness route state for sending terminal output back to origin. | `quick_terminal_can_apply_back()` is true only when apply route and return view both exist. |
 | Zsh prompt suppression | Spawn-time shell environment/shim behavior. | Uses `PROMPT_EOL_MARK=""` and zsh-only `ZDOTDIR` shim; do not use attach-time clear bytes. |
 
@@ -47,19 +37,14 @@ The load-bearing contracts are compact launcher sizing, warm PTY reuse that fail
 |---|---|---|
 | Launcher `>` special entry. | Main ScriptList filter contains exactly `>`. | Calls `open_quick_terminal(None, cx)`. |
 | Built-in Quick Terminal. | Built-in utility command / triggerBuiltin route. | Calls the same Quick Terminal opener without cwd. |
-| File/path action. | A file, directory, or path row exposes `file:open_in_quick_terminal`. | Resolves cwd and calls `open_quick_terminal(Some(cwd), cx)`. |
 | Tab AI verification harness. | Verification flow needs PTY-backed execution instead of ACP chat. | Saves return view/focus, seeds apply-back route, opens Quick Terminal, then submits/captures terminal output. |
-| SDK `term()`. | Script prompt handler creates a terminal prompt. | Creates `AppView::TermPrompt { id, entity }`, not Quick Terminal. |
 | Fallback "run in terminal". | Utility fallback command terminal path. | Uses a terminal prompt with full terminal resize while sharing some QuickTerminalView wrapper behavior; do not confuse with compact launcher Quick Terminal. |
-| Automation. | Stdin protocol / agentic scripts. | Can trigger Quick Terminal, inspect state/footer ownership, and select `footer:native:close`. |
 
 ## User Workflows
 
 ### Open From Launcher
 
-The user types `>` or invokes the built-in Quick Terminal command. `open_quick_terminal(None, cx)` attempts to take a fresh, live warm PTY. If one is available, it attaches through `TermPrompt::with_existing_terminal`; otherwise it cold-spawns through `TermPrompt::with_height`.
 
-The app sets `current_view = AppView::QuickTerminalView`, clears ordinary editable input focus, sets `pending_focus = Some(FocusTarget::TermPrompt)`, refills the warm pool, and notifies GPUI. The main window stays at compact Quick Terminal height rather than SDK terminal height.
 
 ### Open From File Or Directory
 
@@ -85,16 +70,13 @@ Apply reads terminal selection directly when available. Clipboard priming is onl
 
 ### Use Terminal Actions
 
-Terminal actions are scoped to `ActionsDialogHost::TermPrompt`. They are separate from ScriptList actions, ACP popups, and launcher footer actions. The Quick Terminal footer itself shows only Close or Apply + Close.
 
 ## Interaction Matrix
 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
 | Open plain Quick Terminal. | Launcher `>` or built-in route. | ScriptList -> QuickTerminalView. | Type `>` / select command. | `open_quick_terminal(None)` -> warm attach or cold spawn. | Compact PTY terminal focused. | `tests/quick_terminal_contracts.rs`; feature 013 trigger tests. |
-| Open at cwd. | File/path action. | File/path row actions. | Select `file:open_in_quick_terminal`. | Path execution -> `open_quick_terminal(Some(cwd))`. | Terminal opens and receives quoted `cd`. | Path action source audit plus runtime cwd proof. |
 | Type text. | Quick Terminal. | Terminal focused. | Printable chars. | `TermPrompt` input path. | Bytes go to PTY. | Terminal input contract tests. |
-| Use shell Ctrl chords. | Quick Terminal. | Terminal focused. | Ctrl+A through Ctrl+Z and bracket variants. | `TermPrompt::ctrl_key_to_byte`. | Control byte reaches PTY. | `tests/quick_terminal_contracts.rs`. |
 | Use completion. | Quick Terminal. | Terminal focused. | Tab. | Quick Terminal key interceptor. | Writes `b"\t"` and stops propagation. | Tab contract tests. |
 | Use backtab. | Quick Terminal. | Terminal focused. | Shift+Tab. | Special-key encoding. | Writes `b"\x1b[Z"`. | Shift+Tab contract tests. |
 | Use shell/TUI Escape. | Quick Terminal. | Terminal focused. | Escape. | Quick Terminal terminal input path. | ESC reaches PTY; wrapper stays open. | Escape contract and runtime proof. |
@@ -102,10 +84,7 @@ Terminal actions are scoped to `ActionsDialogHost::TermPrompt`. They are separat
 | Press Cmd+Enter without Apply. | Plain Quick Terminal or incomplete harness state. | Close-only footer. | Cmd+Enter. | Predicate false. | Falls through; no invisible apply. | Apply visibility contract. |
 | Close wrapper. | Quick Terminal. | Terminal visible. | Cmd+W. | Quick Terminal key handler. | State-first close. | `tests/quick_terminal_contracts.rs`. |
 | Close through protocol. | Automation target main. | Terminal visible. | `simulateKey` Cmd+W. | `runtime_stdin_match_simulate_key.rs`. | State-first close. | Protocol close contract. |
-| Close through footer. | Quick Terminal. | Native footer active. | `footer:native:close`. | Footer dispatch -> state-first close. | Window hidden, terminal state cleared. | `scripts/agentic/footer-ownership-matrix.ts`; runtime receipt. |
-| Open terminal actions. | Terminal surface. | Terminal focused. | Terminal action shortcut. | `toggle_term_prompt_actions` / `ActionsDialogHost::TermPrompt`. | Terminal actions dialog opens. | Terminal action source tests. |
 | Clear terminal. | Terminal surface. | Terminal focused. | Clear shortcut. | `is_term_prompt_clear_shortcut` branch. | Terminal clear action runs. | Needs local source confirmation for exact plain Cmd+K chord. |
-| Scroll terminal. | Quick Terminal wrapper. | Terminal content overflows. | Trackpad/mouse wheel. | Wrapper forwards to `TermPrompt::handle_external_scroll_wheel`. | Terminal scrollback moves. | Renderer source / runtime scroll proof. |
 | Verify footer owner. | Automation. | Quick Terminal visible. | Footer ownership script. | `native_footer_surface()`. | Surface `quick_terminal`, owner `native`. | `scripts/agentic/footer-ownership-matrix.ts`. |
 
 ## State Machine
@@ -127,12 +106,6 @@ Terminal actions are scoped to `ActionsDialogHost::TermPrompt`. They are separat
 
 | State | Visible result | Focus owner | Automation signal |
 |---|---|---|---|
-| Launcher before route. | ScriptList filter and rows. | Launcher filter/list. | `AppView::ScriptList`. |
-| Plain Quick Terminal. | Compact terminal panel with native footer Close. | `FocusTarget::TermPrompt`. | `QuickTerminalView`, prompt id `quick-terminal`, native surface `quick_terminal`. |
-| Harness Quick Terminal. | Compact terminal panel with Apply + Close. | `FocusTarget::TermPrompt`. | Apply route and return view present. |
-| SDK `term()`. | Full terminal prompt surface. | `FocusTarget::TermPrompt`. | `AppView::TermPrompt`; no native `quick_terminal` footer. |
-| Terminal actions. | Actions dialog for terminal actions. | Actions dialog. | `ActionsDialogHost::TermPrompt`. |
-| Closing. | Window becomes invisible before launcher content returns. | No terminal focus after close. | `windowVisible:false` before ScriptList receipt. |
 
 ## Keystrokes And Commands
 
@@ -146,19 +119,14 @@ Terminal actions are scoped to `ActionsDialogHost::TermPrompt`. They are separat
 | Cmd+W | Quick Terminal | State-first wrapper close. |
 | Cmd+Enter | Quick Terminal | Applies only when `quick_terminal_can_apply_back()` is true; otherwise falls through. |
 | Cmd+K / clear shortcut | Terminal surface | Source shows a terminal clear shortcut branch; exact plain Cmd+K behavior needs local confirmation before stronger claims. |
-| Terminal actions shortcut | Terminal surface | Opens/toggles `ActionsDialogHost::TermPrompt`; visible tests pin Cmd+Shift+K behavior. |
 | Native Apply | Quick Terminal footer | Runs `apply_tab_ai_result_from_terminal` when Apply is visible. |
-| Native Close | Quick Terminal footer | Runs state-first close through `footer:native:close`. |
 
 ## Actions And Menus
 
-Quick Terminal has three distinct action/menu surfaces:
 
 | Surface | Owner | Behavior |
 |---|---|---|
 | Native footer | Main-window native footer. | Shows Close only, or Apply + Close for apply-back harness state. |
-| Terminal actions dialog | `ActionsDialogHost::TermPrompt`. | Terminal-specific actions such as clear/action commands. |
-| File/path row actions | File/path action builder and execution path. | Offers `file:open_in_quick_terminal` before terminal is open. |
 
 Launcher Run, AI, and Actions footer buttons are not copied into Quick Terminal. ACP slash/mention popups are also unrelated; Quick Terminal is terminal-owned after route handoff.
 
@@ -167,18 +135,14 @@ Launcher Run, AI, and Actions footer buttons are not copied into Quick Terminal.
 | Automation target | Assertion |
 |---|---|
 | `getState` after open. | Current view/prompt type identifies Quick Terminal, not SDK term or ACP chat. |
-| `getElements` / footer receipts. | Native footer exposes `footer:native:close`; Apply appears only in apply-back state. |
 | `simulateKey` Cmd+W. | Closes Quick Terminal state-first. |
 | `simulateKey` Escape. | Must not close Quick Terminal. |
-| `selectBySemanticId("footer:native:close", submit=true)`. | Dispatches native Close and returns a close receipt. |
 | Footer ownership matrix. | SDK terminal is prompt-owned with no native surface; Quick Terminal is native-owned with `quick_terminal`. |
-| Close ordering proof. | `windowVisible:false` is observed before ScriptList content returns. |
 
 ## Data, Storage, And Privacy Boundaries
 
 - Terminal content is PTY content, not ordinary prompt text.
 - Context extraction should treat `TermPrompt` and `QuickTerminalView` as terminal content rather than editable user input.
-- PTY spawn environment is allowlisted: terminal vars plus selected `HOME`, `USER`, `PATH`, `SHELL`, `TMPDIR`, and `LANG`.
 - `PROMPT_EOL_MARK=""` is part of spawn-time terminal behavior.
 - Zsh-only `ZDOTDIR` points to `~/.scriptkit/quick-terminal-zsh/`, whose shim forwards user zsh config before disabling prompt marker options.
 - Apply-back prefers direct terminal selection. Clipboard use is fallback only.
@@ -220,7 +184,6 @@ Launcher Run, AI, and Actions footer buttons are not copied into Quick Terminal.
 
 - Quick Terminal is not ACP Chat.
 - SDK `TermPrompt` must not inherit Quick Terminal's native `quick_terminal` footer.
-- Launcher Quick Terminal must stay compact and avoid SDK `ViewType::TermPrompt` resize behavior.
 - Warm PTY pool must fail open to cold spawn.
 - Warm attach must retheme the terminal.
 - Tab and Shift+Tab must go to the PTY, not focus traversal.
@@ -228,29 +191,25 @@ Launcher Run, AI, and Actions footer buttons are not copied into Quick Terminal.
 - Cmd+W physical, simulated Cmd+W, and native footer Close must converge on state-first close.
 - Apply visibility and Cmd+Enter must share `quick_terminal_can_apply_back()`.
 - Close must clear apply-back route/capture state.
-- Footer buttons must stay terminal-scoped: Close or Apply + Close.
 - Zsh prompt suppression must happen at spawn time, not through attach-time clear bytes.
 - Terminal edge inset, render padding, resize math, and mouse hit testing must remain aligned.
-- The Oracle pass flagged stale documentation risk around footer Close naming and footer spacer/hint-strip wording; source/tests should be treated as authoritative before editing `lat.md/`.
+- The Oracle pass flagged stale documentation risk around footer Close naming and footer spacer/hint-strip wording; source/tests should be treated as authoritative before editing `removed-docs/`.
 
 ## Verification Recipes
 
-Targeted source and agentic checks:
 
 ```bash
 cargo test --test quick_terminal_contracts -- --nocapture
 cargo test --test tab_ai_routing quick_terminal -- --nocapture
 cargo test --test main_window_footer_surface_owner_contract -- --nocapture
 bun scripts/agentic/footer-ownership-matrix.ts
-lat check
+source checks
 ```
 
-Runtime proof checklist:
 
 1. Trigger Quick Terminal from the launcher and assert `QuickTerminalView`, terminal focus, compact height, and native footer `quick_terminal`.
 2. Trigger from a file action for a directory, a file parent, and a path with spaces/apostrophes; assert quoted cwd handoff.
 3. Send Tab, Shift+Tab, Escape, printable text, and Ctrl chords; assert terminal ownership and no ACP/global focus movement.
-4. Close via physical Cmd+W, protocol `simulateKey` Cmd+W, and `selectBySemanticId("footer:native:close")`; assert `windowVisible:false` before ScriptList content returns.
 5. Start a harness Quick Terminal with apply-back route and return view; assert Apply + Close, Cmd+Enter apply, route cleanup on close.
 6. Open plain Quick Terminal; assert Close-only footer and Cmd+Enter fallthrough.
 7. Switch themes across cold and warm opens; assert terminal theme updates.
@@ -260,7 +219,6 @@ Runtime proof checklist:
 
 Do not collapse Quick Terminal, SDK `term()`, and ACP Chat into one model. They share some terminal or harness primitives but have separate route identity, sizing, footer ownership, and input semantics.
 
-When changing close behavior, prove all three close paths: physical Cmd+W, simulated Cmd+W, and native footer Close. When changing footer behavior, prove both visibility and dispatch. When changing terminal input, assume Tab, Shift+Tab, and Escape regressions will be immediately user-visible in shells and TUIs.
 
 ## Related Features
 
@@ -273,7 +231,6 @@ When changing close behavior, prove all three close paths: physical Cmd+W, simul
 ## Open Questions And Gaps
 
 - Confirm the exact plain Cmd+K behavior inside Quick Terminal from local source before documenting it as the clear chord. The Oracle snapshot saw the clear branch and Cmd+Shift+K terminal-action test, but not enough to make a precise plain-Cmd+K claim.
-- Reconcile stale documentation around footer Close naming: Oracle saw docs naming `close_tab_ai_harness_terminal_with_window` while source/tests pointed at `close_quick_terminal_main_window_state_first`.
-- Reconcile footer spacer versus terminal hint-strip wording before writing this into `lat.md/`.
+- Reconcile footer spacer versus terminal hint-strip wording before writing this into `removed-docs/`.
 - Add explicit runtime receipt examples for Close-only and Apply + Close footer states once the current `getState`/footer schema is inspected.
 - Name the fallback "run in terminal" route separately in future docs so compact launcher Quick Terminal constraints are not applied to full-height command terminal behavior.

@@ -31,7 +31,7 @@ const RUNTIME_STDIN_MATCH_TAIL: &str =
     include_str!("../src/main_entry/runtime_stdin_match_tail.rs");
 const ACP_VIEW: &str = include_str!("../src/ai/acp/view.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_clipboard_into_acp_variant_is_defined_with_request_id_only() {
     // The command takes no args beyond the standard request_id — the
@@ -51,7 +51,7 @@ fn paste_clipboard_into_acp_variant_is_defined_with_request_id_only() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_clipboard_into_acp_is_wired_into_request_id_and_command_type() {
     // Both `request_id()` and `command_type()` are the structured-log
@@ -78,7 +78,7 @@ fn paste_clipboard_into_acp_is_wired_into_request_id_and_command_type() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_is_reachable_from_crate_scope() {
     // The stdin handler calls `chat.paste_text_from_clipboard(cx)` from
@@ -100,7 +100,7 @@ fn paste_text_from_clipboard_is_reachable_from_crate_scope() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn all_three_dispatchers_handle_paste_clipboard_into_acp() {
     // The triple-embedded stdin dispatcher pattern is a known rough
@@ -164,7 +164,7 @@ fn all_three_dispatchers_handle_paste_clipboard_into_acp() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_handler_bypasses_os_frontmost_heuristic() {
     // The documented reason this command exists is to bypass the OS

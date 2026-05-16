@@ -1889,7 +1889,7 @@ mod advanced_query_tests {
         let _ = m.clone();
     }
 
-    // @lat: menu-syntax Advanced Query
+    // doc-anchor-removed: menu-syntax Advanced Query
     #[test]
     fn query_predicates_suppress_issue_row_prepend() {
         // Deep proof that `:type:script <text>` never prepends an issue row even
@@ -4949,7 +4949,7 @@ mod capture_mode_tests {
         }
     }
 
-    // @lat: menu-syntax Capture Handler Filtering
+    // doc-anchor-removed: menu-syntax Capture Handler Filtering
     #[test]
     fn only_opted_in_handlers_appear_and_shape_is_header_then_items() {
         let todo_handler = script_with_menu_syntax(
@@ -5064,7 +5064,7 @@ mod capture_mode_tests {
         }
     }
 
-    // @lat: menu-syntax Parser Boundary
+    // doc-anchor-removed: menu-syntax Parser Boundary
     #[test]
     fn menu_syntax_parse_incomplete_wires_into_hint_helper() {
         use crate::menu_syntax::MenuSyntaxParse;

@@ -21,7 +21,7 @@ pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 8.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
-/// Font size for the visible shortcut rail.
+/// Font size for the visible shortcut/action rail.
 pub(crate) const SHORTCUT_TEXT_SIZE_PX: f32 = 10.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
@@ -171,9 +171,9 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, prelude::*, px, rgb, App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement, Styled, Task,
-    Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgb, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
+    KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement,
+    Styled, Task, Window, WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
@@ -200,14 +200,24 @@ static DICTATION_OVERLAY_WINDOW: OnceLock<Mutex<Option<gpui::WindowHandle<Dictat
 
 /// Callback type for overlay escape actions (abort dictation).
 type OverlayAbortCallback = Box<dyn Fn(&mut App) + Send + Sync + 'static>;
+/// Callback type for overlay submit actions (stop and transcribe dictation).
+type OverlaySubmitCallback = Box<dyn Fn(&mut App) + Send + Sync + 'static>;
 
 /// Global abort callback set by the dictation runtime.
 static OVERLAY_ABORT_CALLBACK: Mutex<Option<OverlayAbortCallback>> = Mutex::new(None);
+/// Global submit callback set by the dictation runtime.
+static OVERLAY_SUBMIT_CALLBACK: Mutex<Option<OverlaySubmitCallback>> = Mutex::new(None);
 
 /// Register a callback to be invoked when the user confirms stop via
 /// Enter or the Stop button in the overlay.
 pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 'static) {
     *OVERLAY_ABORT_CALLBACK.lock() = Some(Box::new(callback));
+}
+
+/// Register a callback to be invoked when the user clicks Stop on the
+/// recording overlay.
+pub fn set_overlay_submit_callback(callback: impl Fn(&mut App) + Send + Sync + 'static) {
+    *OVERLAY_SUBMIT_CALLBACK.lock() = Some(Box::new(callback));
 }
 
 // ---------------------------------------------------------------------------
@@ -345,19 +355,18 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 // Confirming-phase copy constants (single source of truth)
 // ---------------------------------------------------------------------------
 
-/// Button label for the Stop action in the confirming overlay.
-const CONFIRM_STOP_LABEL: &str = "Stop Enter";
-/// Button label for the Continue action in the confirming overlay.
-const CONFIRM_CONTINUE_LABEL: &str = "Continue Esc";
-/// Hint text shown in the confirming overlay footer.
-const CONFIRM_HINT: &str = "Enter Stop \u{00b7} Esc Continue";
-/// Recording hint shown while audio capture is active.
-const RECORDING_HINT: &str = "Hotkey again Submit \u{00b7} Esc Cancel";
-/// Recording hint when the target badge can cycle destinations.
-const RECORDING_TARGET_HINT: &str =
-    "Hotkey again Submit \u{00b7} Esc Cancel \u{00b7} Click target to change";
-/// Close hint shown for non-recording terminal phases.
-const CLOSE_HINT: &str = "Esc Close";
+/// Single-word action label for stopping/submitting the current recording.
+const ACTION_STOP_LABEL: &str = "Stop";
+/// Single-word action label for discarding the current recording.
+const ACTION_CANCEL_LABEL: &str = "Cancel";
+/// Single-word action label for resuming from confirmation.
+const ACTION_CONTINUE_LABEL: &str = "Continue";
+/// Single-word action label for closing terminal overlay states.
+const ACTION_CLOSE_LABEL: &str = "Close";
+/// Keycap shown for Escape.
+const ESC_KEYCAP: &str = "esc";
+/// Keycap shown for Enter.
+const ENTER_KEYCAP: &str = "\u{21b5}";
 
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
@@ -375,28 +384,19 @@ pub(crate) enum OverlayEscapeAction {
     Propagate,
 }
 
-/// Return phase-appropriate (headline, hint) copy for the dictation overlay.
+/// Return phase-appropriate (headline, action label) copy for the dictation overlay.
 ///
 /// The headline is the primary status text (e.g. "Listening…", "Stop dictation?").
-/// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Stop · ⎋ Continue").
+/// The action label names the visible compact action chip for each phase.
 pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str, &'static str) {
     match phase {
-        DictationSessionPhase::Recording => ("Listening\u{2026}", RECORDING_HINT),
-        DictationSessionPhase::Confirming => ("Stop dictation?", CONFIRM_HINT),
-        DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", CLOSE_HINT),
-        DictationSessionPhase::Delivering => ("Delivering\u{2026}", CLOSE_HINT),
-        DictationSessionPhase::Finished => ("Done", CLOSE_HINT),
-        DictationSessionPhase::Failed(_) => ("Dictation failed", CLOSE_HINT),
+        DictationSessionPhase::Recording => ("Listening\u{2026}", ACTION_CANCEL_LABEL),
+        DictationSessionPhase::Confirming => ("Stop dictation?", ACTION_CONTINUE_LABEL),
+        DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", ACTION_CLOSE_LABEL),
+        DictationSessionPhase::Delivering => ("Delivering\u{2026}", ACTION_CLOSE_LABEL),
+        DictationSessionPhase::Finished => ("Done", ACTION_CLOSE_LABEL),
+        DictationSessionPhase::Failed(_) => ("Dictation failed", ACTION_CLOSE_LABEL),
         DictationSessionPhase::Idle => ("", ""),
-    }
-}
-
-/// Return the visible shortcut hint for the recording state.
-pub(crate) fn recording_shortcut_hint(can_cycle_target: bool) -> &'static str {
-    if can_cycle_target {
-        RECORDING_TARGET_HINT
-    } else {
-        RECORDING_HINT
     }
 }
 
@@ -545,6 +545,7 @@ impl DictationOverlay {
     /// next toggle.
     fn abort_overlay_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let callback = OVERLAY_ABORT_CALLBACK.lock().take();
+        *OVERLAY_SUBMIT_CALLBACK.lock() = None;
         // Pre-clear the global slot so if the callback calls
         // close_dictation_overlay, the handle is already gone and that
         // call becomes a harmless no-op.
@@ -562,6 +563,32 @@ impl DictationOverlay {
         );
     }
 
+    /// Submit the active recording via the registered callback.
+    ///
+    /// Closing happens before callback dispatch so the app-owned stop path can
+    /// reopen/update the overlay into its transcribing state without reentrant
+    /// updates to this entity.
+    fn submit_overlay_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let callback = OVERLAY_SUBMIT_CALLBACK.lock().take();
+        *OVERLAY_ABORT_CALLBACK.lock() = None;
+        let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
+        slot.lock().take();
+        remove_global_escape_monitor();
+        prepare_overlay_window_for_close(window);
+        window.remove_window();
+
+        if let Some(cb) = callback {
+            cx.defer(move |cx| {
+                cb(cx);
+            });
+        }
+
+        tracing::info!(
+            category = "DICTATION",
+            "Overlay closed from within entity (submit)"
+        );
+    }
+
     /// Close the overlay window directly from within the entity.
     ///
     /// Same reentrant-borrow avoidance as `abort_overlay_session`, but
@@ -570,6 +597,7 @@ impl DictationOverlay {
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().take();
         *OVERLAY_ABORT_CALLBACK.lock() = None;
+        *OVERLAY_SUBMIT_CALLBACK.lock() = None;
         remove_global_escape_monitor();
         prepare_overlay_window_for_close(window);
         window.remove_window();
@@ -748,9 +776,73 @@ impl DictationOverlay {
             .child(badge)
     }
 
-    /// Render a visible shortcut rail below the primary overlay controls.
-    fn render_shortcut_hint(&self, hint: &'static str) -> impl IntoElement {
-        render_shortcut_hint_text(hint)
+    /// Render the runtime recording action rail.
+    fn render_recording_actions(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("dictation-action-rail")
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .gap(px(12.))
+            .child(render_clickable_action_chip(
+                "dictation-stop-button",
+                ACTION_STOP_LABEL,
+                dictation_stop_keycap(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.submit_overlay_session(window, cx);
+                }),
+            ))
+            .child(render_clickable_action_chip(
+                "dictation-cancel-button",
+                ACTION_CANCEL_LABEL,
+                ESC_KEYCAP.into(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.abort_overlay_session(window, cx);
+                }),
+            ))
+            .into_any_element()
+    }
+
+    /// Render the runtime confirmation action rail.
+    fn render_confirming_actions(&self, cx: &mut Context<Self>) -> AnyElement {
+        div()
+            .id("dictation-action-rail")
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .gap(px(12.))
+            .child(render_clickable_action_chip(
+                "dictation-stop-button",
+                ACTION_STOP_LABEL,
+                ENTER_KEYCAP.into(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.abort_overlay_session(window, cx);
+                }),
+            ))
+            .child(render_clickable_action_chip(
+                "dictation-continue-button",
+                ACTION_CONTINUE_LABEL,
+                ESC_KEYCAP.into(),
+                cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                    this.resume_recording(window, cx);
+                }),
+            ))
+            .into_any_element()
+    }
+
+    /// Render a compact Close action for terminal phases.
+    fn render_close_action(&self, cx: &mut Context<Self>) -> AnyElement {
+        render_clickable_action_chip(
+            "dictation-close-button",
+            ACTION_CLOSE_LABEL,
+            ESC_KEYCAP.into(),
+            cx.listener(|this, _event: &MouseDownEvent, window, _cx| {
+                this.close_overlay_from_within(window);
+            }),
+        )
+        .into_any_element()
     }
 
     /// Handle key-down events for the overlay.
@@ -885,7 +977,6 @@ impl Render for DictationOverlay {
                 let timer_text = format_elapsed(*elapsed);
                 let active = has_sound(bars);
                 let target_badge_interactive = crate::dictation::can_cycle_dictation_target();
-                let hint = recording_shortcut_hint(target_badge_interactive);
 
                 div()
                     .flex()
@@ -929,18 +1020,10 @@ impl Render for DictationOverlay {
                             // Right: destination badge
                             .child(self.render_target_badge_slot(target_badge_interactive, cx)),
                     )
-                    .child(self.render_shortcut_hint(hint))
+                    .child(self.render_recording_actions(cx))
             }
             DictationSessionPhase::Confirming => {
                 let timer_text = format_elapsed(*elapsed);
-                let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
-                let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
-                let stop_bg = theme.colors.ui.error.with_opacity(0.14);
-                let continue_bg = theme.colors.ui.success.with_opacity(0.08);
-                let stop_hover_bg = theme.colors.ui.error.with_opacity(0.22);
-                let stop_active_bg = theme.colors.ui.error.with_opacity(0.30);
-                let continue_hover_bg = theme.colors.ui.success.with_opacity(0.16);
-                let continue_active_bg = theme.colors.ui.success.with_opacity(0.24);
 
                 div()
                     .flex()
@@ -979,64 +1062,11 @@ impl Render for DictationOverlay {
                                     .flex_row()
                                     .items_center()
                                     .justify_center()
-                                    .gap(px(10.))
-                                    .child(
-                                        div()
-                                            .id("dictation-stop-button")
-                                            .px(px(8.))
-                                            .py(px(2.))
-                                            .bg(stop_bg)
-                                            .rounded(px(999.))
-                                            .border_1()
-                                            .border_color(theme.colors.ui.error.with_opacity(0.45))
-                                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                                            .font_family(FONT_MONO)
-                                            .text_color(stop_color)
-                                            .cursor_pointer()
-                                            .hover(move |style| style.bg(stop_hover_bg))
-                                            .active(move |style| style.bg(stop_active_bg))
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(
-                                                    |this, _event: &MouseDownEvent, window, cx| {
-                                                        this.abort_overlay_session(window, cx);
-                                                    },
-                                                ),
-                                            )
-                                            .child(CONFIRM_STOP_LABEL),
-                                    )
-                                    .child(
-                                        div()
-                                            .id("dictation-continue-button")
-                                            .px(px(8.))
-                                            .py(px(2.))
-                                            .bg(continue_bg)
-                                            .rounded(px(999.))
-                                            .border_1()
-                                            .border_color(
-                                                theme.colors.ui.success.with_opacity(0.35),
-                                            )
-                                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                                            .font_family(FONT_MONO)
-                                            .text_color(continue_color)
-                                            .cursor_pointer()
-                                            .hover(move |style| style.bg(continue_hover_bg))
-                                            .active(move |style| style.bg(continue_active_bg))
-                                            .on_mouse_down(
-                                                MouseButton::Left,
-                                                cx.listener(
-                                                    |this, _event: &MouseDownEvent, window, cx| {
-                                                        this.resume_recording(window, cx);
-                                                    },
-                                                ),
-                                            )
-                                            .child(CONFIRM_CONTINUE_LABEL),
-                                    ),
+                                    .child(self.render_confirming_actions(cx)),
                             )
                             // Right: destination badge
                             .child(self.render_target_badge_slot(false, cx)),
                     )
-                    .child(self.render_shortcut_hint(CONFIRM_HINT))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -1055,8 +1085,24 @@ impl Render for DictationOverlay {
                     .gap(px(4.))
                     .w_full()
                     .child(render_transcribing_dots(&dot_opacities))
-                    .child(self.render_shortcut_hint(CLOSE_HINT))
+                    .child(self.render_close_action(cx))
             }
+            DictationSessionPhase::Delivering => div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(px(3.))
+                .w_full()
+                .child(
+                    div()
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                        .font_family(FONT_MONO)
+                        .text_color(text_color)
+                        .overflow_hidden()
+                        .child("Delivering\u{2026}"),
+                )
+                .child(self.render_close_action(cx)),
             DictationSessionPhase::Finished => div()
                 .flex()
                 .flex_col()
@@ -1072,7 +1118,7 @@ impl Render for DictationOverlay {
                         .overflow_hidden()
                         .child(finished_label()),
                 )
-                .child(self.render_shortcut_hint(CLOSE_HINT)),
+                .child(self.render_close_action(cx)),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div()
@@ -1090,10 +1136,9 @@ impl Render for DictationOverlay {
                             .overflow_hidden()
                             .child(err_text),
                     )
-                    .child(self.render_shortcut_hint(CLOSE_HINT))
+                    .child(self.render_close_action(cx))
             }
-            // Idle / Delivering — render nothing meaningful
-            _ => div(),
+            DictationSessionPhase::Idle => div(),
         };
 
         // Same capsule radius for all phases; confirming swaps content inline.
@@ -1206,18 +1251,91 @@ fn render_transcribing_dots(opacities: &[f32; TRANSCRIBING_DOT_COUNT]) -> impl I
     container
 }
 
-fn render_shortcut_hint_text(hint: &'static str) -> impl IntoElement {
+fn dictation_stop_keycap() -> SharedString {
+    crate::config::load_config()
+        .get_dictation_hotkey()
+        .map(|hotkey| hotkey.to_display_string())
+        .filter(|key| !key.trim().is_empty())
+        .unwrap_or_else(|| "again".to_string())
+        .into()
+}
+
+fn render_action_keycap(key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
 
     div()
-        .id("dictation-shortcut-hint")
-        .text_size(px(SHORTCUT_TEXT_SIZE_PX))
+        .px(px(6.))
+        .py(px(2.))
+        .min_w(px(24.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(7.))
+        .bg(theme.colors.background.main.with_opacity(OPACITY_SELECTED))
+        .border_1()
+        .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
+        .text_size(px(SHORTCUT_TEXT_SIZE_PX + 0.5))
         .font_family(FONT_MONO)
-        .text_color(theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED))
-        .overflow_hidden()
-        .text_ellipsis()
+        .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
         .whitespace_nowrap()
-        .child(hint)
+        .child(key)
+}
+
+fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
+    let theme = get_cached_theme();
+
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(6.))
+        .text_size(px(SHORTCUT_TEXT_SIZE_PX + 1.0))
+        .font_family(FONT_MONO)
+        .text_color(theme.colors.text.primary.with_opacity(OPACITY_TEXT_MUTED))
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .child(label)
+        .child(render_action_keycap(key))
+}
+
+fn render_clickable_action_chip(
+    id: &'static str,
+    label: &'static str,
+    key: SharedString,
+    listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
+) -> impl IntoElement {
+    let theme = get_cached_theme();
+    let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SUBTLE);
+    let active_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
+
+    div()
+        .id(id)
+        .px(px(5.))
+        .py(px(2.))
+        .rounded(px(8.))
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover_bg))
+        .active(move |style| style.bg(active_bg))
+        .on_mouse_down(MouseButton::Left, listener)
+        .child(render_action_chip(label, key))
+}
+
+fn render_static_action_rail(
+    actions: impl IntoIterator<Item = (&'static str, SharedString)>,
+) -> impl IntoElement {
+    let mut rail = div()
+        .id("dictation-action-rail")
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(12.));
+
+    for (label, key) in actions {
+        rail = rail.child(render_action_chip(label, key));
+    }
+
+    rail
 }
 
 /// Render the live compact capsule from a fixed state for Storybook previews.
@@ -1290,14 +1408,13 @@ pub(crate) fn render_dictation_overlay_state_preview(
                         )
                         .child(render_static_target_badge_slot(state.target)),
                 )
-                .child(render_shortcut_hint_text(recording_shortcut_hint(false)))
+                .child(render_static_action_rail([
+                    (ACTION_STOP_LABEL, dictation_stop_keycap()),
+                    (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
+                ]))
         }
         DictationSessionPhase::Confirming => {
             let timer_text = format_elapsed(state.elapsed);
-            let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
-            let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
-            let stop_bg = theme.colors.ui.error.with_opacity(0.14);
-            let continue_bg = theme.colors.ui.success.with_opacity(0.08);
             div()
                 .flex()
                 .flex_col()
@@ -1333,39 +1450,13 @@ pub(crate) fn render_dictation_overlay_state_preview(
                                 .flex_row()
                                 .items_center()
                                 .justify_center()
-                                .gap(px(10.))
-                                .child(
-                                    div()
-                                        .id("dictation-stop-button")
-                                        .px(px(8.))
-                                        .py(px(2.))
-                                        .bg(stop_bg)
-                                        .rounded(px(999.))
-                                        .border_1()
-                                        .border_color(theme.colors.ui.error.with_opacity(0.45))
-                                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                                        .font_family(FONT_MONO)
-                                        .text_color(stop_color)
-                                        .child(CONFIRM_STOP_LABEL),
-                                )
-                                .child(
-                                    div()
-                                        .id("dictation-continue-button")
-                                        .px(px(8.))
-                                        .py(px(2.))
-                                        .bg(continue_bg)
-                                        .rounded(px(999.))
-                                        .border_1()
-                                        .border_color(theme.colors.ui.success.with_opacity(0.35))
-                                        .text_size(px(STATUS_TEXT_SIZE_PX))
-                                        .font_family(FONT_MONO)
-                                        .text_color(continue_color)
-                                        .child(CONFIRM_CONTINUE_LABEL),
-                                ),
+                                .child(render_static_action_rail([
+                                    (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
+                                    (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
+                                ])),
                         )
                         .child(render_static_target_badge_slot(state.target)),
                 )
-                .child(render_shortcut_hint_text(CONFIRM_HINT))
         }
         DictationSessionPhase::Transcribing => div()
             .flex()
@@ -1377,7 +1468,29 @@ pub(crate) fn render_dictation_overlay_state_preview(
             .child(render_transcribing_dots(
                 &transcribing_dot_opacities_static(),
             ))
-            .child(render_shortcut_hint_text(CLOSE_HINT)),
+            .child(render_static_action_rail([(
+                ACTION_CLOSE_LABEL,
+                ESC_KEYCAP.into(),
+            )])),
+        DictationSessionPhase::Delivering => div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(3.))
+            .w_full()
+            .child(
+                div()
+                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                    .font_family(FONT_MONO)
+                    .text_color(text_color)
+                    .overflow_hidden()
+                    .child("Delivering\u{2026}"),
+            )
+            .child(render_static_action_rail([(
+                ACTION_CLOSE_LABEL,
+                ESC_KEYCAP.into(),
+            )])),
         DictationSessionPhase::Finished => div()
             .flex()
             .flex_col()
@@ -1393,7 +1506,10 @@ pub(crate) fn render_dictation_overlay_state_preview(
                     .overflow_hidden()
                     .child(finished_label()),
             )
-            .child(render_shortcut_hint_text(CLOSE_HINT)),
+            .child(render_static_action_rail([(
+                ACTION_CLOSE_LABEL,
+                ESC_KEYCAP.into(),
+            )])),
         DictationSessionPhase::Failed(msg) => {
             let err_text: SharedString = format!("Error: {msg}").into();
             div()
@@ -1411,9 +1527,12 @@ pub(crate) fn render_dictation_overlay_state_preview(
                         .overflow_hidden()
                         .child(err_text),
                 )
-                .child(render_shortcut_hint_text(CLOSE_HINT))
+                .child(render_static_action_rail([(
+                    ACTION_CLOSE_LABEL,
+                    ESC_KEYCAP.into(),
+                )]))
         }
-        DictationSessionPhase::Delivering | DictationSessionPhase::Idle => div(),
+        DictationSessionPhase::Idle => div(),
     };
 
     div()
@@ -1797,6 +1916,7 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
 /// Close the dictation overlay window.
 pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     *OVERLAY_ABORT_CALLBACK.lock() = None;
+    *OVERLAY_SUBMIT_CALLBACK.lock() = None;
     ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
     // Overlay window already gone is a warning, not an error.
     remove_global_escape_monitor();

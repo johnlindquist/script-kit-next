@@ -7,7 +7,7 @@
 //! is pure — same inputs always yield the same output — so the resolver
 //! is trivially cacheable by `(id, overrides_hash)`.
 //!
-// @lat: [[lat.md/designs#Catalog invariants]]
+// doc-anchor-removed: [[removed-docs invariants]]
 
 use std::hash::{Hash, Hasher};
 

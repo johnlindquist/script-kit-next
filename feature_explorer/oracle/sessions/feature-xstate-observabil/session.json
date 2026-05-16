@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-observabil",
-  "createdAt": "2026-05-15T19:52:38.392Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-observability]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with a standalone TypeScript/Vite/XState Feature Explorer in feature_explorer/",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T19:52:38.393Z",
-      "completedAt": "2026-05-15T19:58:54.154Z",
-      "usage": {
-        "inputTokens": 99488,
-        "outputTokens": 4412,
-        "reasoningTokens": 0,
-        "totalTokens": 103900
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-observability]\n\nProject: Script Kit GPUI, a Rust/GPUI desktop app with a standalone TypeScript/Vite/XState Feature Explorer in feature_explorer/. This repo uses lat.md as an architecture knowledge graph. For this repo, implementation/review work must keep lat.md updated when functionality, architecture, tests, or behavior change, and must run lat check. The canonical Codex skills are under .agents/skills/; legacy .claude/skills are migration material.\n\nGoal: Help the local agent author Feature 039 (Logging, Diagnostics, and Transaction Observability) as a rich hand-authored XState representation in feature_explorer/src/state/authoredFeatureMachines.ts. Features 001-038 already have authored machines. Feature 039 should model the live observability contracts precisely enough for the Feature Explorer to distinguish compact dev-loop logs, safe user-value logging, rate limiting, stable debug markers, protocol stats resource health, transaction execution/traces/resources/replay, AI preflight audits, and the boundary that observability supports but does not replace surface-owned UI proof.\n\nCurrent evidence: The bundle includes AGENTS/CLAUDE process context, repo-local skills for dev-loop-observability/protocol-automation/testing-quality-gates/lat-md, relevant lat.md pages including logging/protocol/automation/verification/feature-explorer, the Feature 039 chapter and prior raw Oracle answer, current authoredFeatureMachines excerpts, and focused source/tests for logging helpers, protocol stats, transaction traces/resources/replay, and preflight audit persistence.\n\nDeliverable: Return an implementation-ready authoring plan for Feature 039's authored machine. Please provide:\n1. the key state clusters this machine should preserve;\n2. the most important state names and transitions/events to encode;\n3. regression/gap states that must stay visible so the explorer does not overclaim support;\n4. metadata/wireframe/receipt fields worth putting into state meta so the UI remains auditable;\n5. the focused verification commands to run after implementation;\n6. overlap cautions where this feature supports but must not replace UI/domain proof from other features.\n\nRepo-specific constraints: Mention the lat.md update rule and required lat check. Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-observability.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-observabil",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T19:52:38.392Z",
-  "completedAt": "2026-05-15T19:58:54.155Z",
-  "usage": {
-    "inputTokens": 99488,
-    "outputTokens": 4412,
-    "reasoningTokens": 0,
-    "totalTokens": 103900
   },
-  "elapsedMs": 373864
 }

@@ -17,7 +17,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &after_start[..end_index]
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Shared Actions Contract]]
+// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn actions_native_close_hides_mainlist_with_preserved_state() {
     let callback = source_between(

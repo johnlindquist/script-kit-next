@@ -16,7 +16,7 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Global Key Intent Routing]]
+// doc-anchor-removed: [[removed-docs Key Intent Routing]]
 #[test]
 fn actions_chords_are_classified_as_named_main_window_intents() {
     assert!(

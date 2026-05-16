@@ -1,93 +1,19 @@
 {
-  "id": "feature-xstate-special-entry",
-  "createdAt": "2026-05-15T15:26:35.443Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-special-entry]\n\nYou are reviewing Script Kit GPUI's feature atlas and Feature Explorer. The attached bundles include repo process rules, relevan",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T15:26:35.444Z",
-      "completedAt": "2026-05-15T15:36:13.605Z",
-      "usage": {
-        "inputTokens": 131438,
-        "outputTokens": 6144,
-        "reasoningTokens": 0,
-        "totalTokens": 137582
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-special-entry]\n\nYou are reviewing Script Kit GPUI's feature atlas and Feature Explorer. The attached bundles include repo process rules, relevant repo-local skills, lat.md context, Feature 013 chapter and raw Oracle answer, current Feature Explorer XState runtime/machines, and source/test excerpts for special entry trigger routing.\n\nTask: produce an implementation-ready authored XState runtime machine plan for Feature 013: ScriptList Special Entry Triggers / First-character Route Handoffs.\n\nPlease identify the concrete states/events/guards/metadata the explorer machine should model so the wireframe covers every scenario in the chapter and source excerpts. Pay special attention to tilde file search, slash and at-sign ACP context composer pickers, greater-than Quick Terminal, actions/help triggers, literal fallback boundaries, stale decoration/reset regressions, and ownership boundaries with root source filters/actions.\n\nConstraints:\n- This repo requires lat.md updates for behavior/architecture/test changes and `lat check` after edits.\n- Keep the plan compatible with the current `authoredFeatureMachines.ts` style.\n- Prefer exhaustive state coverage over minimalism.\n\nReturn: (1) coverage checklist keyed to chapter claims, (2) proposed machine states/events/guards, (3) likely missed edge cases, (4) verification gates.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-special-entry-base.txt",
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-special-entry-context.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-special-entry",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T15:26:35.443Z",
-  "completedAt": "2026-05-15T15:36:13.605Z",
-  "usage": {
-    "inputTokens": 131438,
-    "outputTokens": 6144,
-    "reasoningTokens": 0,
-    "totalTokens": 137582
   },
-  "elapsedMs": 575799
 }

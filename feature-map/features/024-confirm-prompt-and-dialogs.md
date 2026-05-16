@@ -1,28 +1,19 @@
 # 024 Confirm Prompt and Dialogs / confirm()
 
-This chapter maps Script Kit's explicit yes/no decision layer: SDK `confirm()`, the Rust protocol confirm message, the in-window `ConfirmPrompt` state, and the parent confirm popup fallback.
 
-Raw Oracle reference: [answer](../raw-oracle/024-confirm-prompt-and-dialogs/answer.md), [prompt](../raw-oracle/024-confirm-prompt-and-dialogs/prompt.md), [bundle map](../raw-oracle/024-confirm-prompt-and-dialogs/bundle-map.md), [full log](../raw-oracle/024-confirm-prompt-and-dialogs/output.log), [session metadata](../raw-oracle/024-confirm-prompt-and-dialogs/session.json).
 
 ## Executive Summary
 
-Confirm Prompt and Dialogs is the fail-closed yes/no gate for scripts and destructive app actions. The feature includes:
 
 - SDK `confirm()` in `scripts/kit-sdk.ts`.
-- Protocol `type: "confirm"` messages.
-- `PromptMessage::ShowConfirm` routing.
-- The in-window `AppView::ConfirmPrompt` route.
 - The attached/native `confirm-popup` fallback route.
 - Automation receipts for confirm state and popup buttons.
 
-There are two UI routes:
 
 | Route | When used | Result |
 |---|---|---|
-| In-window confirm state | Main window is visible and the startup router can reach `ScriptListApp`. | `AppView::ConfirmPrompt` replaces the current main view and uses the native footer for Confirm/Cancel. |
 | Parent popup fallback | Main window is hidden or the active GPUI context is not the main root. | Attached prompt popup opens and is registered under the prompt-popup automation family, commonly as `confirm-popup`. |
 
-The contract is fail-closed: user cancel, Escape, `null` submit values, dialog-open failure, and SDK auto-submit fallback all resolve as `false`.
 
 ## What Users Can Do
 
@@ -41,40 +32,25 @@ The contract is fail-closed: user cancel, Escape, `null` submit values, dialog-o
 
 ### SDK `confirm()`
 
-The SDK installs `globalThis.confirm` with these public shapes:
 
 ```ts
-confirm(): Promise<boolean>
-confirm(message: string): Promise<boolean>
-confirm(message: string, confirmText?: string, cancelText?: string): Promise<boolean>
-confirm(config: ConfirmConfig): Promise<boolean>
 ```
 
 `ConfirmConfig` carries `message`, `confirmText`, and `cancelText`. With no argument, the SDK uses `Are you sure?`. Missing confirm/cancel labels are omitted from the protocol message and default on the Rust side to `OK` and `Cancel`.
 
-The SDK pending handler uses `{ value: "false" }` as the auto-submit fallback. `msg.value === null` resolves `false`; only `msg.value === "true"` resolves `true`.
 
 ### Protocol Confirm Message
 
-The SDK sends:
 
 ```json
 {
-  "type": "confirm",
-  "id": "<prompt-id>",
-  "message": "<message>",
-  "confirmText": "<optional>",
-  "cancelText": "<optional>"
 }
 ```
 
-Rust deserializes this through the protocol confirm variant and routes it to `PromptMessage::ShowConfirm`.
 
 ### `ParentConfirmOptions`
 
-`ParentConfirmOptions` is the shared Rust configuration object for both confirm routes. It carries title, body, confirm text, cancel text, variant, width, and destructive intent. Destructive callers commonly use `ParentConfirmOptions::destructive(...)`.
 
-SDK confirm maps to:
 
 | Field | Value |
 |---|---|
@@ -85,14 +61,8 @@ SDK confirm maps to:
 
 ### ConfirmPrompt Surface
 
-The in-window surface is:
 
 ```rust
-AppView::ConfirmPrompt {
-    options: ParentConfirmOptions,
-    sender: async_channel::Sender<bool>,
-    focused_button: ConfirmFocusedButton,
-    previous: Box<AppView>,
 }
 ```
 
@@ -102,9 +72,6 @@ AppView::ConfirmPrompt {
 
 | Entry | Context | Result |
 |---|---|---|
-| `globalThis.confirm` | Script calls SDK API. | Registers pending resolver, sends `type:"confirm"`, waits for submit. |
-| `PromptMessage::ShowConfirm` | Rust receives protocol message. | Builds `ParentConfirmOptions`, calls `confirm_with_parent_dialog`, submits `"true"` or `"false"`. |
-| `register_in_window_router` | Startup. | Allows parent confirm helper to push `AppView::ConfirmPrompt` into main `ScriptListApp`. |
 | `open_confirm_prompt` | Main window can host confirm. | Captures previous view, switches to `ConfirmPrompt`, focuses app root. |
 | `open_parent_confirm_dialog` | Main cannot host confirm. | Opens attached/native popup fallback. |
 | `open_parent_confirm_dialog_for_entity` | Entity-owned action flows. | Opens parent-owned popup with callbacks. |
@@ -117,7 +84,6 @@ A script calls `await confirm()`. The SDK sends a confirm message with body `Are
 
 ### SDK Custom Labels
 
-A script calls:
 
 ```ts
 const yes = await confirm("Delete?", "Delete", "Keep")
@@ -127,7 +93,6 @@ The SDK forwards `confirmText` and `cancelText`. Rust shows title `Confirm`, bod
 
 ### In-Window Confirm
 
-When the main window is visible and routable, `AppView::ConfirmPrompt` replaces the current main view. The previous view is stored. The title/body render in the content area, while the native footer shows Confirm/Cancel buttons. Tab changes the focused button. Enter resolves based on focus. Escape resolves false. Resolution sends the bool and restores the previous view.
 
 ### Popup Fallback Confirm
 
@@ -156,19 +121,14 @@ Notes and ACP/chat flows are adjacent callers. The bundle confirms the fallback 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
 | Ask default confirm. | `confirm()` | In-window or popup. | Confirm/cancel. | SDK -> `ShowConfirm`. | Boolean Promise. | `scripts/kit-sdk.ts`. |
-| Ask with message. | `confirm("Continue?")` | In-window or popup. | Confirm/cancel. | `type:"confirm"` with message. | Boolean Promise. | SDK/protocol variant. |
 | Ask with labels. | `confirm("Delete?", "Delete", "Keep")` | In-window or popup. | Confirm/cancel. | Positional labels -> Rust options. | Boolean Promise. | SDK/protocol variant. |
 | Ask with config. | `confirm({ message, confirmText, cancelText })` | In-window or popup. | Confirm/cancel. | `ConfirmConfig` -> message. | Boolean Promise. | `ConfirmConfig`. |
-| Confirm in main window. | Routable main window. | `AppView::ConfirmPrompt`. | Enter on Confirm / footer Apply. | `resolve_confirm_prompt(true)`. | Sends true, restores previous view. | `ui_window.rs`, `lat.md/design.md`. |
-| Cancel in main window. | Routable main window. | `AppView::ConfirmPrompt`. | Escape / footer Close. | `resolve_confirm_prompt(false)`. | Sends false, restores previous view. | `ui_window.rs`. |
 | Toggle focus. | In-window confirm. | Native footer selected flag. | Tab. | `toggle_confirm_prompt_focus`. | Confirm/Cancel focus flips. | `ConfirmFocusedButton`. |
 | Confirm built-in. | Confirmation-gated built-in. | In-window or popup. | Confirm. | Built-in confirmation gate. | Built-in executes. | `builtin_execution.rs`. |
 | Cancel built-in. | Confirmation-gated built-in. | In-window or popup. | Cancel/Escape. | Confirmation gate returns false. | Built-in does not execute. | `builtin_execution.rs`. |
 | Move file to trash. | File action. | In-window or popup. | Confirm. | `move_to_trash` action. | File moves to Trash. | `files.rs`. |
 | Cancel file trash. | File action. | In-window or popup. | Cancel/Escape. | Cancel branch. | Target cleared, focus restored. | `files.rs`. |
-| Inspect in-window state. | Automation. | Main window state. | `getState`. | ConfirmPrompt collector. | `promptType:"confirmPrompt"`. | `prompt_handler/mod.rs`. |
 | Inspect popup. | Automation. | PromptPopup target. | `getElements`. | Confirm popup snapshot. | Panel + two buttons. | `automation_surface_collector.rs`. |
-| Select popup confirm. | Automation batch. | PromptPopup target. | `selectBySemanticId("button:0:confirm")`. | Confirm batch helper. | Confirms. | `prompt_handler/mod.rs`. |
 | Select popup cancel. | Automation batch. | PromptPopup target. | `selectByValue("cancel")`. | Confirm batch helper. | Cancels. | `prompt_handler/mod.rs`. |
 | Hide while popup open. | Hide/reset path. | Main hidden. | Hide. | Remove `confirm-popup`. | No stale registry entry. | `hide_path_confirm_popup_registry_teardown_contract.rs`. |
 
@@ -179,8 +139,6 @@ Notes and ACP/chat flows are adjacent callers. The bundle confirms the fallback 
 | State | Trigger | Transition |
 |---|---|---|
 | Script call. | `confirm(...)`. | SDK creates id and pending resolver. |
-| Message sent. | `send(confirmMessage)`. | Rust receives `type:"confirm"`. |
-| Rust route. | `PromptMessage::ShowConfirm`. | Builds options and calls parent dialog helper. |
 | Route decision. | Main/root availability. | In-window `ConfirmPrompt` or popup fallback. |
 | User choice. | Confirm/cancel/open failure. | Rust sends submit `"true"` or `"false"`. |
 | Promise resolution. | SDK pending handler. | Resolves `true` only for `"true"`. |
@@ -211,10 +169,8 @@ Notes and ACP/chat flows are adjacent callers. The bundle confirms the fallback 
 | State | Visible result | Focus/automation signal |
 |---|---|---|
 | In-window body. | Main content area shows title and body. | No editable input. |
-| In-window footer. | Apply/Close footer labels use confirm/cancel text. | `nativeFooterSurface:"confirm_prompt"`. |
 | Confirm focused. | Confirm footer button selected. | Enter resolves true. |
 | Cancel focused. | Cancel footer button selected. | Enter resolves false. |
-| Popup normal. | Attached popup with title/body and two buttons. | `panel:confirm-dialog`. |
 | Popup destructive. | Destructive verb is error-colored. | Danger lives on label, not keycap glyph. |
 | Popup focused keycap. | Focused keycap uses accent selected styling. | `focused_semantic_id` points at confirm/cancel button. |
 
@@ -249,7 +205,6 @@ Confirm is a gate, not the owner of destructive side effects. The caller owns th
 
 ### `getState`
 
-For in-window `AppView::ConfirmPrompt`, state should expose:
 
 | Field | Expected shape |
 |---|---|
@@ -259,19 +214,13 @@ For in-window `AppView::ConfirmPrompt`, state should expose:
 | `visibleChoiceCount` | `0`. |
 | Selected index | `-1`. |
 | Selected value | The confirm options title in the captured state path. |
-| Surface contract | `SurfaceKind::ConfirmPrompt`, automation semantic `confirmPrompt`, native footer `confirm_prompt`. |
 
 ### `getElements`
 
-For popup fallback, `getElements` should expose:
 
 | Semantic id | Type | Value |
 |---|---|---|
-| `panel:confirm-dialog` | Panel | Title/body. |
-| `button:0:confirm` | Button | Label, value `confirm`. |
-| `button:1:cancel` | Button | Label, value `cancel`. |
 
-`focused_semantic_id` should be `button:0:confirm` or `button:1:cancel`.
 
 ### `batch`
 
@@ -279,8 +228,6 @@ PromptPopup batch selection tries mention/model-selector helpers before confirm 
 
 | Batch command | Result |
 |---|---|
-| `selectBySemanticId("button:0:confirm")` | Confirm. |
-| `selectBySemanticId("button:1:cancel")` | Cancel. |
 | `selectByValue("confirm")` | Confirm. |
 | `selectByValue("cancel")` | Cancel. |
 
@@ -290,7 +237,6 @@ The confirm popup fallback registers as an attached prompt popup, commonly `conf
 
 ## Data, Storage, And Privacy Boundaries
 
-Confirm carries visible text:
 
 - SDK prompt message.
 - Title/body.
@@ -323,9 +269,7 @@ Confirm itself does not persist decisions. The caller may persist, delete, insta
 | Owner | Responsibility |
 |---|---|
 | `actions-popups` | Confirm popup, parent popup routing, popup registry, attached popup behavior. |
-| `prompt-runtime` | SDK prompt route, `PromptMessage::ShowConfirm`, submit response behavior. |
 | `keyboard-focus-routing` | Enter/Escape/Tab handling, popup-first routing, propagation. |
-| `launcher-surface-contracts` | `AppView::ConfirmPrompt`, `SurfaceKind::ConfirmPrompt`, footer ownership. |
 | `protocol-automation` | `getState`, `getElements`, `batch`, automation target identity. |
 | `agentic-testing` | State-first proof and visual proof only when needed. |
 
@@ -337,7 +281,6 @@ Key files include `scripts/kit-sdk.ts`, `src/protocol/message/variants/prompts_m
 |---|---|
 | `confirm()` fails closed. | Cancel/open failure could accidentally run destructive behavior. |
 | Auto-submit fallback remains `"false"`. | Script cancellation could resolve true. |
-| `AppView::ConfirmPrompt` stays explicit. | Blur/shortcut/routing can treat it like a normal prompt. |
 | Previous view restores after resolution. | App can strand users in ConfirmPrompt. |
 | Confirm keys stop propagation. | Enter/Escape/Tab can leak to launcher, ACP, or actions. |
 | Popup fallback unregisters. | Automation can see phantom `confirm-popup` windows. |
@@ -352,8 +295,6 @@ Key files include `scripts/kit-sdk.ts`, `src/protocol/message/variants/prompts_m
 |---|---|
 | SDK source check | Inspect `ConfirmConfig`, `ConfirmMessage`, default message, fallback `"false"`, `null` handling in `scripts/kit-sdk.ts`. |
 | Protocol source check | Inspect `serde(rename = "confirm")`, `confirmText`, `cancelText` in `src/protocol/message/variants/prompts_media.rs`. |
-| Prompt handler check | Inspect `PromptMessageRoute::ConfirmDialog`, `ShowConfirm`, fail-closed submit branch in `src/prompt_handler/mod.rs`. |
-| In-window surface check | Inspect `AppView::ConfirmPrompt`, footer `Apply`/`Close`, `native_footer_surface:"confirm_prompt"`. |
 | Popup automation check | Open popup fallback, run `listAutomationWindows`, then `getElements`, expect panel and two buttons. |
 | Batch selection check | Use `selectBySemanticId` or `selectByValue` for confirm/cancel. |
 | Smoke visual/focus check | Use `tests/smoke/test-confirm-screenshot.ts`, `test-confirm-focus.ts`, `test-confirm-tab.ts` when visual/focus behavior matters. |
@@ -364,7 +305,6 @@ Key files include `scripts/kit-sdk.ts`, `src/protocol/message/variants/prompts_m
 
 Treat confirm as a routing and decision contract. Do not treat it as the owner of destructive side effects.
 
-Use state-first proof: `getState` for the in-window route, `getElements` for popup fallback, `listAutomationWindows` for popup identity, and `batch` for deterministic confirm/cancel.
 
 Do not assume `PromptPopup` means confirm. It can also refer to ACP mention/model/history popups. Prefer exact popup ids or semantic ids when driving confirm automation.
 

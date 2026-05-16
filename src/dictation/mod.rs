@@ -55,7 +55,7 @@ pub(crate) use window::render_dictation_overlay_state_preview;
 pub use window::{
     begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,
     open_dictation_overlay, overlay_generation, set_overlay_abort_callback,
-    update_dictation_overlay, DictationOverlay, DictationOverlayState,
+    set_overlay_submit_callback, update_dictation_overlay, DictationOverlay, DictationOverlayState,
 };
 
 #[cfg(test)]

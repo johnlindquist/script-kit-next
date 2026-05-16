@@ -19,7 +19,7 @@ fn window_switcher_body() -> &'static str {
     &body[..end]
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn registry_accepts_window_switcher_aliases() {
     for alias in ["\"window-switcher\"", "\"windowswitcher\"", "\"windows\""] {
@@ -30,7 +30,7 @@ fn registry_accepts_window_switcher_aliases() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn planner_routes_window_switcher_to_filterable_view() {
     assert!(
@@ -39,7 +39,7 @@ fn planner_routes_window_switcher_to_filterable_view() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn dispatcher_loads_windows_before_opening_view() {
     let body = window_switcher_body();
@@ -56,7 +56,7 @@ fn dispatcher_loads_windows_before_opening_view() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn dispatcher_handles_window_listing_errors_without_panic() {
     let body = window_switcher_body();

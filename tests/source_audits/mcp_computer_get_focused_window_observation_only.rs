@@ -1,4 +1,4 @@
-// @lat: [[protocol#Protocol#Tool exposure]]
+// doc-anchor-removed: [[protocol#Protocol#Tool exposure]]
 #[test]
 fn computer_get_focused_window_reads_automation_registry_only() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")

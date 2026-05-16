@@ -56,7 +56,7 @@ fn matrix_entries() -> Vec<serde_json::Value> {
         .clone()
 }
 
-// @lat: [[lat.md/surfaces#Surfaces#Agent-Readable Surface Contract Matrix]]
+// doc-anchor-removed: [[removed-docs Surface Contract Matrix]]
 #[test]
 fn generated_surface_contract_matrix_is_not_stale() {
     let output = Command::new("bun")

@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-hotkey-prompt",
-  "createdAt": "2026-05-15T16:41:59.904Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-hotkey-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/m",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T16:41:59.906Z",
-      "completedAt": "2026-05-15T16:50:14.988Z",
-      "usage": {
-        "inputTokens": 239707,
-        "outputTokens": 5474,
-        "reasoningTokens": 0,
-        "totalTokens": 245181
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-hotkey-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into an XState-driven wireframe/mockup atlas. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. The attached bundle includes AGENTS/process context, repo-local skills, relevant lat.md pages including verification/shortcuts, Feature 022 chapter/raw Oracle, current authoredFeatureMachines.ts, Feature Explorer runtime, SDK hotkey source, HotkeyComingSoon route, shortcut recorder/config/action code, and shortcut source audits.\n\nGoal: audit and improve the authored XState representation for Feature 022: Hotkey Prompt / hotkey(). Current product truth appears split: SDK hotkey(placeholder?) is a stub/coming-soon path with mock Escape HotkeyInfo fallback, while the implemented shortcut recorder is a separate persistent config.ts shortcut-assignment workflow. We need a complete, implementation-ready XState plan for Feature Explorer that preserves this boundary and maps all interaction, error, storage, focus, automation, and regression states.\n\nFocus areas: SDK hotkey stub vs real recorder boundary, HotkeyInfo return shape, PromptMessage::HotkeyComingSoon/no AppView::HotkeyPrompt, placeholder logging, action aliases configure_shortcut/add_shortcut/update_shortcut/remove_shortcut, launcher_command_id identity, unsupported target handling, detached shortcut recorder popup, modifier-only feedback, bare key rejection, modifier+non-modifier capture, conflict model, save/cancel, config.ts source of truth, update-config-shortcut/remove-config-shortcut scripts, live hotkey registration/unregistration, non-atomic config/live registry gap, listAutomationWindows/getConfigFingerprint receipts, simulateKey/physical key proof gap, config vs inline metadata priority, reserved shortcut/conflict proof gaps, no mutation on cancel, and not using shortcut recorder as proof of SDK hotkey().\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for feature_explorer/src/state/authoredFeatureMachines.ts.\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta enum values; explicitly call out unsupported enum values to avoid.\n3. Invariants/regression/gap states that must be represented.\n4. Discrepancies between Feature 022 chapter, current authored machine, and attached source; include exact state additions/removals/renames if needed.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, source audits, and any runtime proof that would catch wrong claims.\n\nBe direct and implementation-specific. Do not summarize generically.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-hotkey-prompt.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-hotkey-prompt",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T16:41:59.905Z",
-  "completedAt": "2026-05-15T16:50:14.990Z",
-  "usage": {
-    "inputTokens": 239707,
-    "outputTokens": 5474,
-    "reasoningTokens": 0,
-    "totalTokens": 245181
   },
-  "elapsedMs": 493214
 }

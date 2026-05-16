@@ -15,7 +15,7 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Automation state snapshots]]
+// doc-anchor-removed: [[removed-docs Chat#Automation state snapshots]]
 #[test]
 fn collect_acp_state_snapshot_delegates_to_named_builders() {
     let body = source_between(

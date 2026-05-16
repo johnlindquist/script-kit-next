@@ -4998,6 +4998,7 @@ impl ScriptListApp {
     /// only need one change.
     fn start_dictation_overlay_session(&mut self, cx: &mut Context<Self>) {
         let _ = crate::dictation::begin_overlay_session();
+        let app_entity = cx.entity().downgrade();
         crate::dictation::set_overlay_abort_callback(|cx| {
             if let Err(error) = crate::dictation::abort_dictation() {
                 tracing::error!(
@@ -5008,6 +5009,13 @@ impl ScriptListApp {
             }
             let _ = crate::dictation::close_dictation_overlay(cx);
         });
+        crate::dictation::set_overlay_submit_callback(move |cx| {
+            if let Some(app) = app_entity.upgrade() {
+                app.update(cx, |this, cx| {
+                    this.submit_active_dictation_from_overlay(cx);
+                });
+            }
+        });
         let _ = crate::dictation::open_dictation_overlay(cx);
         let _ = crate::dictation::update_dictation_overlay(
             crate::dictation::DictationOverlayState {
@@ -5017,6 +5025,59 @@ impl ScriptListApp {
             cx,
         );
         self.spawn_dictation_overlay_pump(cx);
+    }
+
+    /// Stop the active recording from the overlay Stop action and continue
+    /// through the same transcription/delivery path as the dictation hotkey.
+    fn submit_active_dictation_from_overlay(&mut self, cx: &mut Context<Self>) {
+        let dictation_target = crate::dictation::get_dictation_target()
+            .unwrap_or_else(|| self.resolve_dictation_target());
+
+        match crate::dictation::toggle_dictation(dictation_target) {
+            Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                let _ = crate::dictation::begin_overlay_session();
+                let _ = crate::dictation::open_dictation_overlay(cx);
+                self.begin_dictation_transcription(capture, dictation_target, cx);
+            }
+            Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                let _ = crate::dictation::close_dictation_overlay(cx);
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                    cx,
+                );
+            }
+            Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                tracing::warn!(
+                    category = "DICTATION",
+                    ?dictation_target,
+                    "Overlay submit started dictation unexpectedly"
+                );
+                self.start_dictation_overlay_session(cx);
+            }
+            Err(error) => {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to stop dictation from overlay"
+                );
+                let _ = crate::dictation::open_dictation_overlay(cx);
+                let _ = crate::dictation::update_dictation_overlay(
+                    crate::dictation::DictationOverlayState {
+                        phase: crate::dictation::DictationSessionPhase::Failed(error.to_string()),
+                        ..Default::default()
+                    },
+                    cx,
+                );
+                self.schedule_dictation_overlay_close(
+                    cx,
+                    std::time::Duration::from_millis(800),
+                );
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                    cx,
+                );
+            }
+        }
     }
 
     /// Transition a completed capture into the transcribing overlay state

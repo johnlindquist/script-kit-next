@@ -272,7 +272,7 @@ mod tests {
         assert_eq!(parse("hello world!"), MenuSyntaxParse::None);
     }
 
-    // @lat: menu-syntax Parser Boundary
+    // doc-anchor-removed: menu-syntax Parser Boundary
     #[test]
     fn existing_triggers_return_none() {
         for trigger in ["~", "~/Desktop", "/", "@", ">", "?"] {
@@ -410,7 +410,7 @@ mod tests {
         }
     }
 
-    // @lat: menu-syntax Parser Boundary
+    // doc-anchor-removed: menu-syntax Parser Boundary
     #[test]
     fn unknown_capture_prefix_head_falls_back_to_normal_search() {
         assert_eq!(parse(";github"), MenuSyntaxParse::None);
@@ -420,7 +420,7 @@ mod tests {
         assert_eq!(parse("+react component"), MenuSyntaxParse::None);
     }
 
-    // @lat: menu-syntax Parser Boundary
+    // doc-anchor-removed: menu-syntax Parser Boundary
     #[test]
     fn prefix_ownership_conformance_matrix() {
         let registered = vec!["github".to_string()];

@@ -48,7 +48,7 @@ fn template(id: &str, title: &str, category: &str, description: &str) -> ScriptT
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Filterable Surface Matrix]]
+// doc-anchor-removed: [[removed-docs Surface Matrix]]
 #[test]
 fn sdk_reference_visible_rows_preserve_display_and_source_indices() {
     let entries = vec![

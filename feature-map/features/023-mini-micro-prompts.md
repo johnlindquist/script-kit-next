@@ -2,22 +2,16 @@
 
 This chapter maps compact SDK choice prompts and the boundary between MiniPrompt, MicroPrompt, Mini window mode, and microphone stubs.
 
-Raw Oracle reference: [answer](../raw-oracle/023-mini-micro-prompts/answer.md), [prompt](../raw-oracle/023-mini-micro-prompts/prompt.md), [bundle map](../raw-oracle/023-mini-micro-prompts/bundle-map.md), [full log](../raw-oracle/023-mini-micro-prompts/output.log), [session metadata](../raw-oracle/023-mini-micro-prompts/session.json).
 
 ## Executive Summary
 
-`mini()` and `micro()` are compact, choice-backed SDK prompt surfaces:
 
 ```ts
-function mini(placeholder: string, choices: (string | Choice)[]): Promise<string>
-function micro(placeholder: string, choices: (string | Choice)[]): Promise<string>
 ```
 
-The SDK comments/runtime warnings say these APIs are not yet implemented and suggest `arg()`, but the Rust app contradicts that warning. The captured source includes real `Message::Mini` / `Message::Micro`, `PromptMessage::ShowMini` / `ShowMicro`, `AppView::MiniPrompt` / `MicroPrompt`, render dispatch, state reporting, element collection, batch selection support, Tab AI context coverage, and tests.
 
 Treat the SDK warning as stale product copy, not as the actual capability boundary.
 
-`MiniPrompt` is a compact arg-like list prompt with shared choice filtering, selected values, Enter submit, Escape cancel, native footer surface `mini_prompt`, and compact `ViewType::MiniPrompt` sizing. It must not inherit full ArgPrompt width.
 
 `MicroPrompt` is also choice-backed and arg-like internally, but visually ultra-compact and footerless. It stays off native-footer routing and must remain distinct from `mic()` / microphone media stubs.
 
@@ -42,7 +36,6 @@ Treat the SDK warning as stale product copy, not as the actual capability bounda
 | `MiniPrompt` | Compact arg-like choice prompt. | Has native footer and compact MiniPrompt sizing. |
 | `MicroPrompt` | Ultra-compact arg-like choice prompt. | Footerless and off native footer routing. |
 | Shared arg state | `arg_input`, selected index, filtered choices. | Mini/Micro reuse arg-like filtering and selection. |
-| Choice normalization | SDK string-to-choice conversion. | String `A` becomes `{ name: "A", value: "A" }`. |
 | Mini window mode | Main-window mode. | Separate from SDK `mini()`. |
 | `mic()` | Media/microphone stub. | Separate from SDK `micro()`. |
 
@@ -50,11 +43,6 @@ Treat the SDK warning as stale product copy, not as the actual capability bounda
 
 | Entry | Context | Result |
 |---|---|---|
-| `globalThis.mini` in `scripts/kit-sdk.ts`. | Script calls `mini(placeholder, choices)`. | Normalizes choices, sends `type: "mini"`, resolves string. |
-| `globalThis.micro` in `scripts/kit-sdk.ts`. | Script calls `micro(placeholder, choices)`. | Normalizes choices, sends `type: "micro"`, resolves string. |
-| `Message::Mini` / `Message::Micro`. | Rust protocol ingress. | Converts to `ShowMini` / `ShowMicro`; Mini ingress parity should be verified across all paths. |
-| `PromptMessage::ShowMini`. | Rust prompt handler. | Installs `AppView::MiniPrompt`, resets arg state, focuses filter, resizes. |
-| `PromptMessage::ShowMicro`. | Rust prompt handler. | Installs `AppView::MicroPrompt`, resets arg state, focuses app root, resizes ultra-compact. |
 | `render_mini_prompt`. | Render dispatch. | Minimal list prompt shell with footer. |
 | `render_micro_prompt`. | Render dispatch. | Ultra-compact no-footer prompt. |
 | `collect_elements`. | Automation. | Shared choice elements for Mini and Micro. |
@@ -63,23 +51,19 @@ Treat the SDK warning as stale product copy, not as the actual capability bounda
 
 ### Mini Choice Prompt
 
-A script calls:
 
 ```ts
 const value = await mini("Pick fruit", ["Apple", "Banana", "Cherry"])
 ```
 
-The SDK normalizes choices, sends a mini prompt message, and waits. Rust installs `AppView::MiniPrompt`, shares arg input/selection state, focuses the prompt, and renders compact list chrome. Typing filters choices. Enter submits current prompt state. The SDK resolves selected `choice.value`.
 
 ### Micro Choice Prompt
 
-A script calls:
 
 ```ts
 const value = await micro("Pick fruit", ["Apple", "Banana", "Cherry"])
 ```
 
-The runtime path is similar but installs `AppView::MicroPrompt`. Micro is footerless, ultra-compact, and must not reserve native footer space. Automation selection helpers support Micro, but direct `simulateKey` handling is a known gap in the captured source.
 
 ### Filtering
 
@@ -93,8 +77,6 @@ Escape cancels Mini through the captured simulateKey path. SDK Promise cancellat
 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
-| Open MiniPrompt. | `mini(prompt, choices)`. | `AppView::MiniPrompt`. | SDK call. | SDK `type:"mini"` -> `ShowMini`. | Compact choice prompt appears. | `scripts/kit-sdk.ts`, `src/prompt_handler/mod.rs`. |
-| Open MicroPrompt. | `micro(prompt, choices)`. | `AppView::MicroPrompt`. | SDK call. | SDK `type:"micro"` -> `ShowMicro`. | Ultra-compact choice prompt appears. | `scripts/kit-sdk.ts`, `src/prompt_handler/mod.rs`. |
 | Filter choices. | Mini/Micro active. | Input text. | Type/setInput. | Shared arg input and filtered choices. | visibleChoiceCount changes. | `src/app_impl/prompt_ai.rs`, `src/prompt_handler/mod.rs`. |
 | Submit Mini. | MiniPrompt active. | Selected choice. | Enter. | `submit_arg_prompt_from_current_state`. | SDK resolves value. | `src/render_prompts/mini.rs`, simulateKey route. |
 | Submit Micro. | MicroPrompt active. | Selected choice. | Batch helper / physical path. | Shared submit helpers include Micro. | SDK resolves value. | `src/prompt_handler/mod.rs`; simulateKey gap noted. |
@@ -118,9 +100,7 @@ Escape cancels Mini through the captured simulateKey path. SDK Promise cancellat
 
 | State | Visible result | Focus owner | Automation signal |
 |---|---|---|---|
-| MiniPrompt. | Compact minimal-list prompt with footer/hints. | Prompt/main filter focus. | `promptType:"mini"`, native footer `mini_prompt`. |
 | Mini filtered. | Compact list narrowed. | Mini prompt. | `inputValue`, `visibleChoiceCount`, selected value. |
-| MicroPrompt. | Ultra-compact inline prompt. | App root / micro prompt focus. | `promptType:"micro"`, no native footer. |
 | Micro filtered. | Ultra-compact filtered choices. | Micro prompt. | Shared choice elements. |
 | No matches. | Empty visible list / typed fallback possible. | Prompt focus. | Runtime proof needed per prompt. |
 
@@ -144,8 +124,6 @@ Mini/Micro are arg-like choice prompts. Mini can participate in native footer/hi
 
 | Automation target | Assertion |
 |---|---|
-| `getState` Mini. | `promptType:"mini"`, placeholder, inputValue, choiceCount, visibleChoiceCount, selectedValue. |
-| `getState` Micro. | `promptType:"micro"` with same choice-state fields. |
 | `getElements`. | Shared choice row elements for both. |
 | `inputValue`. | Verbatim prompt input, subject to stdin command byte cap only. |
 | Batch select by value/semantic id. | Shared helper supports Mini and Micro. |
@@ -192,7 +170,6 @@ Mini/Micro are arg-like choice prompts. Mini can participate in native footer/hi
 - Do not treat stale SDK warnings as actual absence of Mini/Micro.
 - Do not conflate SDK `mini()` with Mini main-window mode or Mini AI.
 - Do not conflate `micro()` with `mic()`.
-- Mini must use compact `ViewType::MiniPrompt` sizing, not full ArgPrompt width.
 - Micro must remain footerless and off native footer routing.
 - `inputValue` must remain verbatim.
 - `choiceCount` and `visibleChoiceCount` must remain distinct.
@@ -218,7 +195,6 @@ Mini/Micro are arg-like choice prompts. Mini can participate in native footer/hi
 
 Use `getState`, `getElements`, `getLayoutInfo`, `batch`, and script result assertions before screenshots. Screenshots are only useful for compactness/double-padding/footer visual regressions.
 
-Audit both sizing paths when changing Mini: `calculate_window_size_params` and immediate `ShowMini` resize.
 
 Do not reserve native footer space for MicroPrompt.
 
@@ -240,8 +216,7 @@ Do not use microphone/media tests as proof of SDK `micro()`.
 ## Open Questions And Gaps
 
 - SDK warning text is stale relative to Rust support.
-- `Message::Mini` prompt-handler ingress was partly unproven in one visible route; `execute_script` proves a mapping.
-- `lat.md/protocol.md` mentions micro but may omit mini in one prompt-family list.
+- `removed-docs` mentions micro but may omit mini in one prompt-family list.
 - `ShowMini` immediate resize appears to use ArgPrompt view types, conflicting with compact sizing contract.
 - MicroPrompt lacks a visible simulateKey arm.
 - Micro physical key handling was not fully visible.

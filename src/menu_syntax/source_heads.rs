@@ -27,7 +27,7 @@ pub struct SourceHeadDescriptor {
     pub lat_section_id: &'static str,
 }
 
-pub const ADVANCED_QUERY_LAT_SECTION: &str = "lat.md/menu-syntax#Menu Syntax#Advanced Query";
+pub const ADVANCED_QUERY_LAT_SECTION: &str = "removed-docs Syntax#Advanced Query";
 
 pub const SOURCE_HEAD_DESCRIPTORS: &[SourceHeadDescriptor] = &[
     SourceHeadDescriptor {

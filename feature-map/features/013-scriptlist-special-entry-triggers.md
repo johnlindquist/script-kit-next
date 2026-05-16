@@ -2,13 +2,11 @@
 
 This chapter maps the narrow ScriptList trigger handoffs for `~`, `/`, `@`, `>`, and `?`.
 
-Raw Oracle reference: [answer](../raw-oracle/013-scriptlist-special-entry-triggers/answer.md), [prompt](../raw-oracle/013-scriptlist-special-entry-triggers/prompt.md), [bundle map](../raw-oracle/013-scriptlist-special-entry-triggers/bundle-map.md), [full log](../raw-oracle/013-scriptlist-special-entry-triggers/output.log), [session metadata](../raw-oracle/013-scriptlist-special-entry-triggers/session.json).
 
 ## Executive Summary
 
 ScriptList special entries are route handoffs typed through the main launcher filter. They are not ordinary root search, source filters, menu syntax, capture syntax, or a general command parser.
 
-The owner is `ScriptListSpecialEntry` in `src/app_impl/filter_input_core.rs`. It has five committed variants:
 
 | Variant | User input | Destination |
 |---|---|---|
@@ -18,9 +16,7 @@ The owner is `ScriptListSpecialEntry` in `src/app_impl/filter_input_core.rs`. It
 | `QuickTerminal` | `>` | PTY-backed Quick Terminal. |
 | `ActionsHelp` | `?` | Shared actions/help dialog when actions are available. |
 
-The runtime handoff happens in `ScriptListApp::handle_filter_input_change` in `src/app_impl/filter_input_change.rs`. When a special entry matches, the handler logs `script_list_special_entry_routed`, dispatches the destination helper, and returns before normal menu-syntax mode processing continues.
 
-The negative space is load-bearing. `/tmp`, `@browser`, `>deploy -- prod`, `:`, `+`, `!`, `#`, capture syntax, task/calendar-style menu syntax, and source filters must not route through this classifier.
 
 ## What Users Can Do
 
@@ -32,7 +28,6 @@ The negative space is load-bearing. `/tmp`, `@browser`, `>deploy -- prod`, `:`, 
 | Open ACP mention/context picker. | `@` | Opens Agent Chat and stages the mention/context picker. |
 | Open Quick Terminal. | `>` | Opens `QuickTerminalView`, focuses the terminal prompt, and uses PTY-owned key behavior. |
 | Open actions/help. | `?` | Opens or toggles actions only when `has_actions()` is true. |
-| Type literal/power syntax safely. | `/tmp`, `@browser`, `>deploy -- prod`, `:`, `+`, `!`, `#`, `;todo ...`, `todo: ...`, `cal: ...` | Falls through to ordinary ScriptList, menu syntax, capture syntax, or another owner. |
 
 Transient trigger text is exactly `~`, `/`, `@`, `>`, and `?`. These are control gestures, not durable launcher queries, and should not persist when returning to ScriptList.
 
@@ -53,7 +48,6 @@ Transient trigger text is exactly `~`, `/`, `@`, `>`, and `?`. These are control
 
 | Entry | Context | Result |
 |---|---|---|
-| Main launcher filter input | `AppView::ScriptList`, shared filter focused. | `handle_filter_input_change` calls the special-entry classifier. |
 | Programmatic filter changes | Any path that reaches the same filter-change handler. | Same classifier and route behavior. |
 | Built-in Quick Terminal command | Built-in/triggerBuiltin utility path. | Calls the same `open_quick_terminal` helper, but is not the `>` special-entry classifier. |
 | ACP entry request | Slash/mention helper after route. | Uses ACP entry/open logic and stages the picker trigger. |
@@ -63,12 +57,9 @@ Transient trigger text is exactly `~`, `/`, `@`, `>`, and `?`. These are control
 
 ### Open Mini File Search With `~`
 
-The user types `~` in the main launcher. `special_entry_from_script_list_filter("~")` returns `FileSearchMini { query: "~/" }` because `normalize_mini_file_search_query("~")` converts bare tilde to `~/`.
 
-`handle_filter_input_change` dispatches:
 
 ```text
-open_file_search_view(query, FileSearchPresentation::Mini, cx)
 ```
 
 File Search Mini takes over. It owns directory listing, path filtering, hidden-file behavior, selection, file actions, and later File Search-to-ACP handoffs. The tilde route seeds directory rows before first paint so the mini window does not show a zero-row flash while the async stream catches up.
@@ -81,7 +72,6 @@ Absolute paths like `/tmp` must not use this route. They fall through to ordinar
 
 ### Open ACP Slash Picker With `/`
 
-The user types `/` by itself. The classifier returns `AcpSlashPicker`; the input-change handler calls:
 
 ```text
 open_tab_ai_acp_with_slash_picker(window, cx)
@@ -91,25 +81,21 @@ The ACP helper stages `tab_ai_harness_script_list_trigger = Some('/')`, opens AC
 
 ### Open ACP Mention Picker With `@`
 
-The user types `@` by itself. The classifier returns `AcpMentionPicker`; the input-change handler calls:
 
 ```text
 open_tab_ai_acp_with_mention_picker(window, cx)
 ```
 
-The ACP helper stages `tab_ai_harness_script_list_trigger = Some('@')`, opens ACP, and defers the mention/context picker. The ACP context composer then owns provider filtering, inline tokens, context parts, file/folder entries behind explicit `@file:` intent, and portal entries.
 
 `@browser` is not a ScriptList handoff. It remains ordinary input at this layer.
 
 ### Open Quick Terminal With `>`
 
-The user types `>` by itself. The classifier returns `QuickTerminal`; the input-change handler calls:
 
 ```text
 open_quick_terminal(None, cx)
 ```
 
-Quick Terminal switches the main view to `AppView::QuickTerminalView`, clears ordinary text-input focus, requests `FocusTarget::TermPrompt`, refills the warm PTY pool, and notifies GPUI.
 
 From that point on, Quick Terminal owns behavior. It is not ACP Chat. Tab and Shift+Tab go to the PTY, Escape belongs to the terminal rather than global cancel, Cmd+W closes through the Quick Terminal close path, and Cmd+Enter applies back only when the terminal apply predicate says Apply is available.
 
@@ -123,30 +109,17 @@ When `has_actions()` is false, the route is consumed and no actions dialog opens
 
 ### Preserve Power Syntax And Literal Text
 
-Inputs such as `:`, `+`, `!`, `#`, `;todo Renew passport tomorrow`, `todo: Renew passport tomorrow`, `cal: Lunch next friday`, `/tmp`, `@browser`, and `>deploy -- prod` return `None` from the classifier. The rest of ScriptList processing may treat them as root search, menu syntax, source filters, capture syntax, or another feature.
 
 ## Interaction Matrix
 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
-| Open mini File Search at home. | Main launcher filter. | `AppView::ScriptList`. | Type `~`. | `special_entry_from_script_list_filter` -> `FileSearchMini` -> `open_file_search_view(..., Mini)`. | Mini File Search opens with `~/`. | `test_normalize_mini_file_search_query`, `tests/file_search_tilde_entry.rs`. |
-| Open mini File Search at subpath. | Main launcher filter. | `AppView::ScriptList`. | Type `~/src`. | `should_enter_file_search_from_script_list` sees `~/`. | Mini File Search opens with `~/src`. | `test_should_enter_file_search_from_script_list`. |
-| Keep absolute path literal. | Main launcher filter. | `AppView::ScriptList`. | Type `/tmp`. | Classifier returns `None`. | No ACP slash picker. | `test_special_entry_from_script_list_filter`. |
-| Open ACP slash picker. | Main launcher filter. | `AppView::ScriptList`. | Type `/`. | `AcpSlashPicker` -> `open_tab_ai_acp_with_slash_picker`. | ACP opens with slash picker staged/deferred. | `tests/file_search_tilde_entry.rs`, ACP trigger ordering tests. |
-| Keep mention-like text literal. | Main launcher filter. | `AppView::ScriptList`. | Type `@browser`. | Classifier returns `None`. | No ACP mention picker. | `test_special_entry_from_script_list_filter`. |
-| Open ACP mention picker. | Main launcher filter. | `AppView::ScriptList`. | Type `@`. | `AcpMentionPicker` -> `open_tab_ai_acp_with_mention_picker`. | ACP opens with mention picker staged/deferred. | `tests/file_search_tilde_entry.rs`, ACP popup/mention registry tests. |
-| Open Quick Terminal. | Main launcher filter. | `AppView::ScriptList`. | Type `>`. | `QuickTerminal` -> `open_quick_terminal(None, cx)`. | `QuickTerminalView` opens and terminal prompt gets focus. | `tests/file_search_tilde_entry.rs`, `tests/quick_terminal_contracts.rs`. |
-| Keep terminal command literal. | Main launcher filter. | `AppView::ScriptList`. | Type `>deploy -- prod`. | Classifier returns `None`. | No Quick Terminal handoff. | `test_power_syntax_prefixes_do_not_route_to_special_surfaces`. |
-| Open actions/help. | Main launcher filter. | `AppView::ScriptList` with actions. | Type `?`. | `ActionsHelp` -> `has_actions()` -> `toggle_actions`. | Shared actions dialog opens. | `tests/file_search_tilde_entry.rs`, actions popup contracts. |
 | Disabled actions/help. | Main launcher filter. | No actions available. | Type `?`. | `ActionsHelp` -> `has_actions() == false`. | No dialog, no crash. | Source branch; runtime proof recommended. |
-| Preserve menu/power syntax. | Main launcher filter. | `AppView::ScriptList`. | Type `:`, `+`, `!`, `#`, `;todo ...`, `todo: ...`, `cal: ...`. | Classifier returns `None`. | Owned by menu syntax/capture/ordinary search. | `test_power_syntax_prefixes_do_not_route_to_special_surfaces`. |
 
 ## State Machine
 
 | State | Trigger | Transition | Destination owner |
 |---|---|---|---|
-| ScriptList shared filter | `~` | Normalize to `~/`, open `FileSearchView { presentation: Mini }`. | File Search. |
-| ScriptList shared filter | `~/...` | Open `FileSearchView { presentation: Mini }` with typed query. | File Search. |
 | ScriptList shared filter | `/` | Stage slash trigger, open ACP, defer slash picker. | ACP context composer. |
 | ScriptList shared filter | `@` | Stage mention trigger, open ACP, defer mention picker. | ACP context composer. |
 | ScriptList shared filter | `>` | Open `QuickTerminalView`, focus terminal prompt. | Quick Terminal. |
@@ -164,7 +137,6 @@ ACP and terminal close/return state matter after handoff. Agents should inspect 
 | Mini File Search from `~`. | Compact File Search with path query and seeded rows. | Shared filter/File Search selection. | `semanticSurface`/surface contract for File Search Mini, file-search receipts. |
 | ACP slash picker. | Agent Chat with slash picker popup. | ACP composer/popup. | `promptPopup` / ACP picker state, expected popup id. |
 | ACP mention picker. | Agent Chat with mention/context picker popup. | ACP composer/popup. | `promptPopup`, context picker rows, `acp-mention-popup` target. |
-| Quick Terminal. | Compact terminal wrapper. | Terminal prompt. | `AppView::QuickTerminalView`, `FocusTarget::TermPrompt`, native footer surface `quick_terminal`. |
 | Actions/help. | Shared actions dialog. | Actions search/list. | `actionsDialog`, popup target `actions-dialog`, parent surface metadata. |
 | Non-route literal. | ScriptList remains active. | Main filter/list. | Classifier `None`, no `script_list_special_entry_routed` log. |
 
@@ -204,10 +176,8 @@ ACP slash and mention pickers are not ScriptList actions menus. They are ACP com
 | `getElements` | ACP prompt popup rows, actions dialog rows, Quick Terminal/native footer elements, File Search rows. |
 | ACP popup proof | Use ACP runtime/popup receipts for slash and mention, not screenshots unless layout is the risk. |
 | Quick Terminal proof | Assert `QuickTerminalView`, terminal focus, native footer surface, Cmd+W/Tab contracts. |
-| File Search proof | Assert `FileSearchPresentation::Mini`, query normalization, seeded rows, mini sizing. |
 | Actions proof | Assert `actionsDialog` only when `has_actions()` allows it and parent surface metadata is preserved. |
 
-Recommended runtime smoke:
 
 ```text
 1. Type "~" and assert mini File Search query "~/".
@@ -221,7 +191,6 @@ Recommended runtime smoke:
 9. Type ">deploy -- prod" and assert Quick Terminal does not open.
 10. Type "?" with actions and assert actions dialog.
 11. Type "?" without actions and assert no dialog/no crash.
-12. Type ":", "+", "!", "#", "todo:", "cal:", ";todo ..." and assert no special-entry route.
 ```
 
 ## Data, Storage, And Privacy Boundaries
@@ -254,7 +223,6 @@ Recommended runtime smoke:
 |---|---|
 | Special-entry enum and classifier | `src/app_impl/filter_input_core.rs#ScriptListSpecialEntry`, `special_entry_from_script_list_filter`, `is_transient_script_list_trigger`, `should_enter_file_search_from_script_list`, `normalize_mini_file_search_query` |
 | Runtime dispatch | `src/app_impl/filter_input_change.rs`, special-entry branch and `script_list_special_entry_routed` logs |
-| Mini File Search handoff | `open_file_search_view`, `FileSearchPresentation::Mini`, mini sizing and seeded directory results |
 | ACP slash/mention | `src/app_impl/tab_ai_mode/mod.rs#open_tab_ai_acp_with_slash_picker`, `open_tab_ai_acp_with_mention_picker`, `schedule_embedded_acp_picker_open` |
 | ACP entry request | `src/app_impl/tab_ai_mode/acp_entry.rs#AcpEntryRequest` |
 | ACP context picker | `src/ai/window/context_picker/mod.rs`, `src/ai/window/context_picker/types.rs` |
@@ -285,18 +253,12 @@ Recommended runtime smoke:
 
 ### Classifier
 
-Run:
 
 ```bash
-cargo test --lib filter_input_core::test_special_entry_from_script_list_filter -- --nocapture
-cargo test --lib filter_input_core::test_normalize_mini_file_search_query -- --nocapture
-cargo test --lib filter_input_core::test_is_transient_script_list_trigger -- --nocapture
-cargo test --lib filter_input_core::test_power_syntax_prefixes_are_not_transient_triggers -- --nocapture
 ```
 
 ### ScriptList Dispatch
 
-Run:
 
 ```bash
 cargo test --test file_search_tilde_entry -- --nocapture
@@ -306,14 +268,12 @@ This checks the shared classifier call, Mini File Search route, ACP slash/mentio
 
 ### ACP Slash/Mention
 
-Run targeted source contracts if changing ACP handoff ordering:
 
 ```bash
 cargo test --lib script_list_trigger_routes_stage_trigger_before_acp_open_contract -- --nocapture
 cargo test --lib script_list_trigger_routes_defer_embedded_picker_contract -- --nocapture
 ```
 
-Runtime proof path:
 
 ```bash
 bun scripts/agentic/tx_wait_for_acp_runtime_semantics.ts
@@ -323,7 +283,6 @@ For popup layout or attachment proof, use the attached-popup matrix with `trigge
 
 ### Quick Terminal
 
-Run:
 
 ```bash
 cargo test --test quick_terminal_contracts -- --nocapture
@@ -334,7 +293,6 @@ Check terminal-owned Tab/Shift+Tab, Escape pass-through, Cmd+W close, apply-back
 
 ### Actions/Help
 
-Run or adapt:
 
 ```bash
 cargo test --test source_audits actions_popup_contract -- --nocapture
@@ -344,10 +302,9 @@ If parent-surface preservation is the risky behavior, locate the current named t
 
 ### Hygiene
 
-Run after atlas/doc updates:
 
 ```bash
-lat check
+source checks
 git diff --check -- .goals/feature_map.md feature-map FEATURE_MAP.md
 ```
 

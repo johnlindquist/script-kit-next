@@ -154,7 +154,7 @@ fn extract_doc_comment(source: &str) -> &str {
     &source[lookback..fn_start]
 }
 
-// @lat: [[lat.md/surfaces#Shared Actions Contract]]
+// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn was_actions_recently_closed_exists_with_exact_signature() {
     let hits: Vec<_> = SOURCE.match_indices(FN_SIGNATURE).collect();
@@ -174,7 +174,7 @@ fn was_actions_recently_closed_exists_with_exact_signature() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Shared Actions Contract]]
+// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn was_actions_recently_closed_pins_300ms_debounce_window() {
     let body = extract_function_body(SOURCE);
@@ -192,7 +192,7 @@ fn was_actions_recently_closed_pins_300ms_debounce_window() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Shared Actions Contract]]
+// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn was_actions_recently_closed_uses_strict_less_than_comparator() {
     let body = extract_function_body(SOURCE);
@@ -222,7 +222,7 @@ fn was_actions_recently_closed_uses_strict_less_than_comparator() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Shared Actions Contract]]
+// doc-anchor-removed: [[removed-docs Actions Contract]]
 #[test]
 fn was_actions_recently_closed_anchor_comment_carries_rationale() {
     let doc = extract_doc_comment(SOURCE);

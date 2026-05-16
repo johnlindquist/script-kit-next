@@ -13,7 +13,7 @@
 //! empty filter), but `setFilter "icon"` + `getState` →
 //! `choiceCount:85, visibleChoiceCount:85` — `visibleChoiceCount`
 //! did NOT narrow, despite the renderer filtering the visible list.
-//! This violated the `lat.md/protocol.md` §"Query and introspection"
+//! This violated the `removed-docs` §"Query and introspection"
 //! invariant:
 //!
 //!   > `stateResult` carries both `choiceCount` (total dataset) and
@@ -85,7 +85,7 @@ fn design_gallery_state_arm() -> &'static str {
     &PROMPT_HANDLER[start..start + end_rel]
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_state_arm_derives_dataset_count_from_shared_helper() {
     // The `choice_count` slot MUST be populated from a `dataset_count`
@@ -111,7 +111,7 @@ fn design_gallery_state_arm_derives_dataset_count_from_shared_helper() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_state_arm_derives_visible_count_from_filter_helper() {
     // The `visible_choice_count` slot MUST be populated from a
@@ -131,7 +131,7 @@ fn design_gallery_state_arm_derives_visible_count_from_filter_helper() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_state_arm_tuple_slots_are_dataset_then_visible() {
     // The state tuple slots for DesignGallery are, in order:
@@ -154,7 +154,7 @@ fn design_gallery_state_arm_tuple_slots_are_dataset_then_visible() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_state_arm_forbids_single_count_tuple_shape() {
     // The pre-fix shape was a single `total_items` binding appearing
@@ -172,7 +172,7 @@ fn design_gallery_state_arm_forbids_single_count_tuple_shape() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_module_exposes_shared_helpers() {
     // The shared helpers at the top of
@@ -210,7 +210,7 @@ fn design_gallery_module_exposes_shared_helpers() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn design_gallery_renderer_uses_shared_builder() {
     // The renderer MUST call `build_gallery_items()` and

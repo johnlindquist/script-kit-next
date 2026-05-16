@@ -11,7 +11,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini close reset]]
+// doc-anchor-removed: [[removed-docs close reset]]
 #[test]
 fn hide_path_snapshots_mini_mode_before_reset() {
     let body = source_between(

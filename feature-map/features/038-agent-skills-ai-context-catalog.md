@@ -2,11 +2,9 @@
 
 Agent skills and AI context are typed, previewable, staged inputs to ACP Agent Chat, not loose pasted strings or hidden side effects.
 
-Raw Oracle reference: [answer](../raw-oracle/038-agent-skills-ai-context-catalog/answer.md), [prompt](../raw-oracle/038-agent-skills-ai-context-catalog/prompt.md), [bundle map](../raw-oracle/038-agent-skills-ai-context-catalog/bundle-map.md), [full log](../raw-oracle/038-agent-skills-ai-context-catalog/output.log), [session metadata](../raw-oracle/038-agent-skills-ai-context-catalog/session.json).
 
 ## Executive Summary
 
-Feature 038 covers the agent-facing skill catalog and the AI context catalog. It spans plugin skill discovery, slash/main-menu skill staging, `AiContextPart` variants, `kit://context` MCP resources, context preview metadata, attachment portals, focused-target handoff, SDK `aiStartChat` parts, and submit-time resolution receipts.
 
 The core contract is that the composer displays compact tokens and chips while preserving typed pending context parts. Resolution happens at submit time, produces deterministic prompt blocks, and records exactly what succeeded or failed in `ContextResolutionReceipt`.
 
@@ -15,7 +13,6 @@ The core contract is that the composer displays compact tokens and chips while p
 - Discover repo-local and plugin-owned skills from `skills/<skill_id>/SKILL.md`.
 - Search skills by title, id, plugin title, and description.
 - Attach a skill from slash picker, main menu, or skill search without pasting the full skill body into the composer.
-- Attach MCP resources such as `kit://context?profile=minimal`.
 - Attach files, focused targets, ambient context chips, and text blocks as typed context parts.
 - Preview context chips without resolving large resource bodies.
 - Use attachment portals for files, clipboard history, dictation history, notes, ACP history, scripts, scriptlets, and skills.
@@ -31,8 +28,6 @@ The core contract is that the composer displays compact tokens and chips while p
 | `AiContextPart` | Tagged attachment enum for resource URIs, files, skills, focused targets, ambient context, and text blocks. | `src/ai/message_parts.rs` |
 | `pending_context_parts` | Composer-side source of truth for staged context attachments. | `src/ai/message_parts.rs` |
 | `ContextResolutionReceipt` | Submit-time receipt for attempted, resolved, failed, and prompt-prefix context. | `src/ai/message_parts.rs` |
-| `kit://context` | Main AI-facing MCP desktop context resource. | `src/mcp_resources/mod.rs` |
-| `kit://context/schema` | Self-describing schema resource for context profiles and fields. | `src/mcp_resources/mod.rs` |
 | `ContextPreviewInfo` | Synchronous preview metadata for staged context chips. | `src/ai/window/context_preview.rs` |
 | Attachment portal | Host return flow that opens context search surfaces and converts accepted rows into `AiContextPart`. | `src/app_impl/attachment_portal.rs` |
 | Focused target | Explicit surface-native target handed to ACP instead of inferred ambient context. | `src/ai/message_parts.rs` |
@@ -50,14 +45,11 @@ The core contract is that the composer displays compact tokens and chips while p
 | Ask Anything ambient chip | Promote lightweight desktop context | `AmbientContext` display chip |
 | Paste / raw text staging | Add explicit text snippets, logs, or URLs | `TextBlock` part |
 | SDK `aiStartChat` parts | Programmatically start chat with context | Ordered typed parts submitted to ACP |
-| MCP `kit://context` | Resolve desktop context resource | `<context>` prompt block |
-| MCP `kit://context/schema` | Inspect context resource contract | Schema/example resource |
 
 ## User Workflows
 
 ### Browse And Attach A Skill
 
-The user searches available skills from a skill search surface or slash picker. Discovery scans plugin skill folders, derives title and description from frontmatter or fallback content, and returns deterministic skill matches. Accepting a skill inserts a compact `/{slash-name}` token and stages an `AiContextPart::SkillFile`.
 
 ### Submit A Skill-backed ACP Message
 
@@ -65,7 +57,6 @@ The composer keeps the visible skill token small. On submit, the staged `SkillFi
 
 ### Attach MCP Context
 
-The user chooses a context resource such as `kit://context?profile=minimal`. The pending part remains `ResourceUri` until submit, where MCP resource resolution produces a `<context>` block or records failure without erasing other successful parts.
 
 ### Use Attachment Portal
 
@@ -88,9 +79,6 @@ The composer derives `ContextPreviewInfo` from part metadata so chips can render
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
 | Browse skills | Skill search | Empty or filtered list | Type query | `fuzzy_search_skills` | Ranked `SkillMatch` rows | Skill search tests |
-| Attach skill | Slash picker / skill row | Composer active | Enter / click row | `AiContextPart::SkillFile` staging | Visible slash token plus pending skill part | Composer state tests |
-| Attach context resource | Context picker | Picker active | Enter / click row | `AiContextPart::ResourceUri` | Resource chip staged | Context picker tests |
-| Attach file | File portal | Portal active | Enter / click row | `AiContextPart::FilePath` | File chip staged | Portal and file part tests |
 | Attach focused target | Surface handoff | ACP opens | Handoff action | `FocusedTarget` part | Explicit target chip staged | Focused-target resolution tests |
 | Add ambient context | Ask Anything chip | Composer active | Promote chip | `AmbientContext` part | Display-only chip staged | Preparation receipt tests |
 | Add text block | Paste/text action | Composer active | Paste / attach text | `TextBlock` part | Text context staged | Context part resolution tests |
@@ -98,7 +86,6 @@ The composer derives `ContextPreviewInfo` from part metadata so chips can render
 | Partial failure | Submit path | Mixed valid/invalid parts | Send | Resolver keeps successes | Message can send with failure receipt | Partial-failure tests |
 | All failure | Submit path | No usable context | Send | Resolver blocks false success | Send blocked or raw-only path avoided | All-failure tests |
 | SDK start chat | SDK script | Ordered parts | API call | `aiStartChat(..., { parts })` | Ordered typed parts delivered | SDK context-parts tests |
-| Read context schema | MCP resource | Resource request | `kit://context/schema` | MCP resource handler | Schema returned | MCP resource tests |
 
 ## State Machine
 
@@ -141,16 +128,11 @@ The composer derives `ContextPreviewInfo` from part metadata so chips can render
 | Enter | Skill search / picker row | Accepts selected skill or context item. |
 | Escape | Attachment portal | Cancels portal and restores ACP state. |
 | Send / Enter | ACP composer | Calls prompt preparation and context resolution for pending parts. |
-| `kit://context?profile=minimal` | MCP resource URI | Resolves lean desktop context. |
-| `kit://context?profile=full` | MCP resource URI | Resolves fuller desktop metadata. |
-| `kit://context?diagnostics=1` | MCP resource URI | Resolves diagnostics wrapper with per-field status. |
-| `kit://context/schema` | MCP resource URI | Returns resource schema/examples. |
 | `aiStartChat(..., { parts })` | SDK | Starts ACP with ordered typed context parts. |
-| `lat check` | Docs/contract changes | Validates wiki links and code references. |
+| `source checks` | Docs/contract changes | Validates doc links and code references. |
 
 ## Actions And Menus
 
-Skill-related actions should stage context, not paste content. Main-menu skill activation and slash picker skill acceptance both converge on the same model: a visible slash token plus a hidden typed `SkillFile` part that resolves at submit time.
 
 Context actions should preserve source identity. Resource URIs stay resource URIs, files stay file paths, focused targets stay focused targets, and text snippets stay text blocks until the shared resolver produces prompt content and receipts.
 
@@ -164,7 +146,6 @@ Context actions should preserve source identity. Resource URIs stay resource URI
 | Start chat parts | `tests/context_part_start_chat_flow.rs`, `tests/sdk/test-ai-context-parts.ts` | Proves ordered typed parts from SDK or ACP start paths. |
 | Context picker | `tests/context_picker.rs`, `tests/context_part_composer_state.rs` | Proves picker item creation, pending context state, dedup, and removal. |
 | Preflight | `tests/context_preflight.rs`, `tests/context_preflight_source_audits.rs` | Proves recommendation profile and nonblocking preflight behavior. |
-| MCP resources | `tests/context_snapshot.rs`, `tests/transaction_trace_resources.rs` | Proves `kit://context`, schema, diagnostics, examples, and resource listing. |
 | Runtime ACP | `getAcpState`, `getElements`, `waitFor`, `batch` | Use state-first receipts for UI/routing/focus changes before screenshots. |
 
 ## Data, Storage, And Privacy Boundaries
@@ -219,13 +200,12 @@ Context actions should preserve source identity. Resource URIs stay resource URI
 - All failures must not look like successful context sends.
 - `AmbientContext` remains display-only unless separate capture context is staged.
 - Portal attach/cancel must restore ACP state and clear staged portal sessions.
-- `kit://context` and `kit://context/schema` must remain listed and self-describing MCP resources.
 - Legacy `.claude/skills/*` names are not canonical routing names.
 
 ## Verification Recipes
 
 ```bash
-lat check
+source checks
 git diff --check
 cargo test --test context_part_resolution -- --nocapture
 cargo test --test context_part_submission_flow -- --nocapture
@@ -262,5 +242,4 @@ For runtime UI changes, use state-first ACP receipts (`getAcpState`, `getElement
 
 - Detached ACP currently supports only narrower local portal flows; broader main-window portal parity depends on embedded launcher return contracts.
 - Preview metadata is intended to be synchronous and cheap, but file/skill size display may still read filesystem metadata, so avoid claiming zero I/O without checking the current source.
-- New resource types should update schema examples and MCP resource tests so `kit://context/schema` remains an honest contract.
 - Skill metadata changes need discovery/search tests because title, description, plugin owner, and slash-name fallback are part of user-facing behavior.

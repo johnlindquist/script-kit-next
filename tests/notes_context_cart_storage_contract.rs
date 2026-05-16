@@ -9,7 +9,7 @@ fn function_body<'a>(source: &'a str, signature: &str, next_signature: &str) -> 
     &rest[..end]
 }
 
-// @lat: [[tests/notes-acp#Notes context cart consume and dedupe#Storage lists cart items once per dedupe key]]
+// doc-anchor-removed: [[tests/notes-acp#Notes context cart consume and dedupe#Storage lists cart items once per dedupe key]]
 #[test]
 fn list_note_cart_items_deduped_uses_note_cart_dedup_key() {
     let body = function_body(
@@ -22,7 +22,7 @@ fn list_note_cart_items_deduped_uses_note_cart_dedup_key() {
     assert!(body.contains("seen.insert(item.dedup_key())"));
 }
 
-// @lat: [[tests/notes-acp#Notes context cart consume and dedupe#Storage delete is note scoped]]
+// doc-anchor-removed: [[tests/notes-acp#Notes context cart consume and dedupe#Storage delete is note scoped]]
 #[test]
 fn delete_note_cart_items_is_transactional_and_scoped_to_note_id() {
     let body = function_body(

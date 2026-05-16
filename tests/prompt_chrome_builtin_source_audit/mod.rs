@@ -386,7 +386,7 @@ fn footer_popup_accepts_config_driven_refresh() {
 
 #[test]
 fn native_footer_height_uses_shared_token() {
-    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    // doc-anchor-removed: [[removed-docs Rules]]
     assert!(
         WINDOW_RESIZE_SOURCE
             .contains("pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;"),
@@ -416,7 +416,7 @@ fn native_footer_height_uses_shared_token() {
 
 #[test]
 fn footer_popup_notify_none_removes_native_footer_host() {
-    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    // doc-anchor-removed: [[removed-docs Rules]]
     let notify_pos = FOOTER_POPUP_SOURCE
         .find("pub(crate) fn notify_main_footer_popup")
         .expect("footer_popup.rs must define notify_main_footer_popup");

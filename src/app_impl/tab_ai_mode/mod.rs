@@ -2282,6 +2282,19 @@ impl ScriptListApp {
 
     /// Startup prewarm: respects `warmOnStartup=false`.
     pub(crate) fn warm_acp_chat_on_startup(&mut self, cx: &mut Context<Self>) {
+        if std::env::var("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_hot_prewarm_skipped",
+                correlation_id = "acp_hot_prewarm",
+                reason = "disabled_by_env",
+            );
+            return;
+        }
+
         if self.prewarmed_acp_chat.is_some() || self.embedded_acp_chat.is_some() {
             tracing::info!(
                 target: "script_kit::tab_ai",

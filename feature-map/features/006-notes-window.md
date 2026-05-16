@@ -6,11 +6,7 @@ Notes is a dedicated floating host with its own editor, storage, keyboard routin
 
 The Notes feature lets users create, edit, search, organize, delete, restore, and export Markdown notes in a separate window. The same host can switch into a Notes-owned embedded ACP chat, stage notes or note carts as context, show local ACP actions/history, and return to the editor without borrowing the main launcher ACP state.
 
-Notes has three related but distinct surfaces:
 
-- Floating Notes editor: the persistent `NotesApp` window for note editing, note switching, trash, search, actions, preview, and focus mode.
-- Notes-hosted ACP: an embedded `AcpChatView` reused inside the Notes window with Notes-specific callbacks and close/focus behavior.
-- Notes Browse portal: a main-window expanded attachment portal for searching active notes, previewing one, and attaching it to ACP context.
 
 ## What Users Can Do
 
@@ -23,17 +19,12 @@ Notes has three related but distinct surfaces:
 - Send the current note, selection, or note cart into embedded Agent Chat without opening the main ACP surface.
 - Use ACP actions, model/agent changes, and ACP history from inside Notes.
 - Use Notes Browse as an attachment portal when another ACP surface requests a note target.
-- Target the Notes window through automation as `kind:"notes"` instead of accidentally targeting the main window.
 
 ## Core Concepts
 
 | Concept | Meaning | Owned by |
 |---|---|---|
 | `NotesApp` | Floating Notes host, editor state, note list, actions, search, trash, and embedded ACP cache. | `src/notes/window.rs` |
-| `NotesSurfaceMode::Notes` | Normal editor/list/trash/search surface. | `src/notes/window.rs` |
-| `NotesSurfaceMode::Acp` | Embedded Notes-hosted ACP surface. | `src/notes/window/acp_host.rs` |
-| `NotesViewMode::AllNotes` | Active note list. | `src/notes/window.rs`, `src/notes/window/notes.rs` |
-| `NotesViewMode::Trash` | Soft-deleted notes and restore/permanent-delete actions. | `src/notes/window/notes.rs` |
 | Notes Browse | Expanded portal for selecting a note as ACP context. | `src/render_builtins/notes_browse.rs` |
 | Note cart | Stored note-scoped context payloads staged into ACP and consumed after successful handoff. | `src/notes/storage.rs`, `src/notes/window/acp_host.rs` |
 | Notes automation target | Stable runtime target for state/protocol receipts. | `tests/automation/notes_window_targeting.rs` |
@@ -44,10 +35,7 @@ Notes has three related but distinct surfaces:
 |---|---|---|
 | Notes command/hotkey | Open or focus the floating Notes host. | `open_notes_window` in `src/notes/window/window_ops.rs` |
 | Root Note row | Open a specific note from launcher search. | `open_note_in_notes_window`, not the toggle helper |
-| `Cmd+N` | Create a blank note. | `NotesApp::create_note` |
-| `Cmd+Shift+N` | Create a note from clipboard. | `NotesApp::create_note_from_clipboard` |
 | `Cmd+P` | Open Notes note switcher in the floating host. | Notes `CommandBar` note switcher |
-| ACP note attachment request | Browse and attach an active note. | `AppView::NotesBrowseView` |
 | `Cmd+Enter` / `Cmd+Shift+A` in Notes | Open embedded ACP and stage note context. | `open_or_focus_embedded_acp` |
 | `Cmd+K` in ACP mode | Open Notes-hosted ACP actions. | `toggle_acp_actions` |
 
@@ -55,7 +43,6 @@ Notes has three related but distinct surfaces:
 
 ### Open And Edit A Note
 
-Start with Notes closed or already open. Open Notes, create a note with `Cmd+N`, type Markdown, and wait for the debounce save. The selected note should update title/content, show dirty then saved feedback, and preserve the floating Notes window bounds under `WindowRole::Notes`.
 
 ### Switch, Search, And Preview
 
@@ -88,7 +75,6 @@ When ACP asks for a Notes portal, the main window shows `NotesBrowseView` with a
 | Delete note | Floating Notes | Confirm dialog | Delete shortcut, Enter | `request_delete_selected_note` | Soft delete or permanent delete | Deleted state / Trash view |
 | Restore note | Floating Notes | Trash | `Cmd+Z` | `restore_note` | Note returns to active list | Active note list |
 | Open embedded ACP | Floating Notes | Editor | `Cmd+Enter` | `open_or_focus_embedded_acp` | ACP replaces editor body | Notes target state, ACP mode |
-| Close embedded ACP | Floating Notes | ACP | Escape when idle / ACP close action | `switch_to_notes_surface` | Editor returns | `NotesSurfaceMode::Notes` |
 | Dismiss ACP local popup | Floating Notes | ACP popup | Escape | Notes ACP keyboard branch | Popup closes before editor return | Escape ordering tests/logs |
 | Cancel ACP stream | Floating Notes | Streaming ACP | Escape | Notes ACP keyboard branch | Stream cancels, ACP stays open | `notes_acp_escape_cancelled_streaming` |
 | Open ACP actions | Floating Notes | ACP | `Cmd+K` | `toggle_acp_actions` | Notes-parented actions popup | `parent="notes"` action receipt |
@@ -115,15 +101,6 @@ When ACP asks for a Notes portal, the main window shows `NotesBrowseView` with a
 
 ## Visual And Focus States
 
-- Floating editor: custom Notes chrome, Markdown editor, optional footer metadata, selected note stats, saved/dirty feedback, and auto-size indicators. Editor focus is default.
-- Empty active notes: creation affordance and `Cmd+N` / `Cmd+Shift+N` hints while the Notes target remains resolvable.
-- Trash: deleted note list or empty Trash message with restore/permanent-delete/back actions.
-- Search: search input owns focus; results replace active list until cleared.
-- Preview: rendered Markdown blocks are visible but not the source of truth.
-- Actions/command bar: overlay list owns focus; `Cmd+K` and Escape close it.
-- Notes-hosted ACP: embedded chat replaces editor body; ACP composer owns focus; external ACP footer appears inside the Notes host.
-- Notes ACP actions/history: popup owns focus and returns focus to ACP composer on close.
-- Notes Browse: main-window two-pane portal with filter, list, preview, and attach/cancel footer.
 
 ## Keystrokes And Commands
 
@@ -172,9 +149,7 @@ Use state-first receipts before screenshots.
 
 | Surface | Target/proof | Notes |
 |---|---|---|
-| Floating Notes | `kind:"notes"`, `semanticSurface:"notes"` | Distinct from the main launcher automation window. |
 | Notes editor | `getState`, `getElements`, `waitFor`, `batch` against Notes target | Use selected note/editor/search/trash state when exposed. |
-| Notes-hosted ACP | Target Notes first, then inspect ACP state/logs | Current `AcpState` may not expose `host:"notes"` directly. |
 | Notes ACP actions | Inspect parented actions popup and action ids | Parent must be `notes`; focus returns to ACP composer. |
 | Notes Browse | `getState`/`getElements` on `NotesBrowseView` | Verify filter, selected row, preview, attach/cancel result. |
 
@@ -184,7 +159,6 @@ Use state-first receipts before screenshots.
 - Note bodies belong to Notes storage and editor state. Root search rows should expose metadata, not full note content.
 - Note cart rows are note-scoped staged context payloads and should be deleted only after successful ACP staging.
 - Trash is soft-delete first; permanent delete removes stored data.
-- Window bounds persist under `WindowRole::Notes`, separate from the main launcher.
 - Embedded ACP context chips should be replaced when the host stages a new note target, not appended to stale chips from a previous note.
 
 ## Error, Empty, Loading, And Disabled States
@@ -234,7 +208,6 @@ Use state-first receipts before screenshots.
 
 Use the smallest proof that can fail for the touched behavior.
 
-Source/static checks:
 
 ```bash
 cargo test --test notes_acp_agent_switch_draft_contract
@@ -248,10 +221,9 @@ cargo test --test notes_ai_routing
 cargo check --lib
 cargo fmt --check
 git diff --check
-lat check
+source checks
 ```
 
-Runtime/state-first proofs:
 
 ```bash
 bun scripts/agentic/notes-embedded-acp-context-cart.ts
@@ -259,25 +231,20 @@ bun scripts/agentic/notes-acp-draft-agent-switch-replay.ts
 bun scripts/agentic/notes-acp-actions-originating-view.ts
 ```
 
-Targeted runtime scenarios should prove:
 
-- Notes automation resolves as `kind:"notes"` and remains separate from main.
 - Note-cart handoff produces one deduped ACP chip and consumes cart rows only after staging.
 - ACP draft text survives reuse or agent-switch relaunch byte-for-byte.
 - Notes ACP Escape closes local popup before cancelling stream and returns to editor only when idle.
 - Notes Browse filter, selected row, preview, attach, and cancel are state-verifiable without screenshots.
 
-Screenshots are only needed for visual acceptance of chrome, preview rendering, focus-mode opacity, ACP footer layout, or Notes Browse two-pane layout. Native input proof is only needed for real AppKit key-window, traffic-light, `setCanHide:false`, or accessibility focus regressions.
 
 ## Agent Notes
 
-- Do not assume Notes is another `AppView::ScriptList` panel; it owns a separate window, entity cache, focus routing, and close path.
 - Do not use main-window focus as a proxy for Notes actions popup focus. Notes-owned popups must use the `notes` parent.
 - Do not call the toggle open helper when opening a root Note row. Use the non-toggle note-open path.
 - To verify embedded ACP identity, target the Notes automation window first and combine state receipts with Notes ACP logs; current ACP state may not expose a host field directly.
 - If context chips look stale, inspect note target staging, note-cart consumption, `select_note_internal`, and `clear_notes_hosted_acp_context_for_note`.
 - If Escape returns to the editor too early, inspect ACP-local popup state and streaming cancellation before the surface-mode branch.
-- If Notes disappears when hiding the launcher, inspect AppKit `setCanHide:false` and main-panel hide paths for app-level hide calls.
 - If Notes Browse attaches the wrong note, inspect stable note id construction and selection/preview synchronization.
 - This belongs to `notes-window` unless the failing behavior is generic ACP composer, generic actions popup chrome, or root search ranking.
 - Screenshots are only needed when visual layout is the behavior under test; most Notes contracts should be proven with state, logs, source contracts, or agentic receipts.
@@ -298,7 +265,6 @@ Screenshots are only needed for visual acceptance of chrome, preview rendering, 
 
 ## Open Questions And Gaps
 
-- `AcpState` may need an explicit host field if agents need to prove `host:"notes"` without relying on target identity plus logs.
 - `Cmd+Shift+D` may have a display/behavior conflict between copy deeplink metadata and date/time insertion. Verify live behavior before documenting it as canonical.
 - The floating Notes note switcher and main-window Notes Browse portal are easy to confuse; keep them separate in future chapters.
 - Include ACP portal test specs in future Oracle bundles when changing Notes-hosted history or mention replacement behavior.

@@ -267,7 +267,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     // with the same `text_primary + opacity.text_placeholder` recipe that the
     // actions dialog and launcher ask-ai hint use. Widgets that previously read
     // a distinct `colors.text.muted` hex now land on the shared alpha tier,
-    // per the design contract in `lat.md/design.md#Chrome style`.
+    // per the design contract in `removed-docs style`.
     theme_color.muted_foreground = subtle_overlay(colors.text.primary, opacity.text_placeholder);
 
     // Title bar - transparent when vibrancy enabled

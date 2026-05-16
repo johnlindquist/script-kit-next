@@ -175,7 +175,7 @@ fn open_notes_window_with_close_behavior(
     if let Some(handle) = existing_handle {
         // Window exists - check if it's valid and close it (toggle OFF)
         // Lock is released, safe to call handle.update()
-        // @lat: [[notes#Notes#Host Contract]]
+        // doc-anchor-removed: [[notes#Notes#Host Contract]]
         if handle
             .update(cx, |root, window, cx| {
                 // Save bounds before closing (fixes bounds persistence on toggle close)

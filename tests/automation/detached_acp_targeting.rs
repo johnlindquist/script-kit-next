@@ -315,6 +315,9 @@ fn acp_test_probe_result_carries_resolved_target() {
     probe.state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::acp_test_probe_result("probe-read-det-1".into(), probe);
@@ -348,6 +351,9 @@ fn acp_state_result_carries_resolved_target() {
     state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::acp_state_result("acp-state-det-1".into(), state);
@@ -414,6 +420,9 @@ fn acp_setup_action_result_with_resolved_target_round_trips() {
     state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::AcpSetupActionResult {
@@ -638,6 +647,9 @@ fn acp_detached_inspect_result_carries_semantic_quality() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "acpDetached:thread-1".into(),
         window_kind: "AcpDetached".into(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Script Kit ACP".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,
@@ -678,6 +690,9 @@ fn acp_detached_full_quality_inspect_receipt() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "acpDetached:thread-2".into(),
         window_kind: "AcpDetached".into(),
+        surface_kind: None,
+        app_view_variant: None,
+        native_footer_surface: None,
         title: Some("Script Kit ACP".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,

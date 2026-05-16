@@ -74,7 +74,7 @@ const CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const HANDLERS_SOURCE: &str = include_str!("../src/ai/acp/handlers.rs");
 const THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn submit_edge_emits_resolved_context_parts_event_with_receipt_fields() {
     assert!(
@@ -107,7 +107,7 @@ fn submit_edge_emits_resolved_context_parts_event_with_receipt_fields() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn session_created_edge_emitted_from_both_prompt_paths() {
     let count = CLIENT_SOURCE.matches("\"acp_session_created\"").count();
@@ -122,7 +122,7 @@ fn session_created_edge_emitted_from_both_prompt_paths() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn turn_completed_edge_emits_with_stop_reason_field() {
     assert!(
@@ -143,7 +143,7 @@ fn turn_completed_edge_emits_with_stop_reason_field() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn legacy_prompt_path_termination_edge_retained() {
     assert!(
@@ -156,7 +156,7 @@ fn legacy_prompt_path_termination_edge_retained() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn session_notification_per_kind_fanout_preserves_granular_names() {
     for kind_event in [
@@ -180,7 +180,7 @@ fn session_notification_per_kind_fanout_preserves_granular_names() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn unhandled_session_update_has_a_catch_all_event() {
     assert!(

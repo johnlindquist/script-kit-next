@@ -1,25 +1,20 @@
 # 035 Settings, Theme, Config, and Preferences Bundle Map
 
-Oracle prompt slug: `settings-theme-config-preferences-atlas`
 
-Actual Oracle session directory: `settings-theme-config-preference-atlas`
 
-Bundle path: `/Users/johnlindquist/.oracle/bundles/settings-theme-config-preferences-atlas.txt`
 
 ## Lat Context
 
 ```bash
-lat expand "035 Settings Theme Config Preferences: settings built-in theme chooser config.ts user preferences font ui scale model provider runtime settings"
-lat search "settings theme config preferences theme chooser font scale model provider config.ts user preferences runtime settings"
+source search "settings theme config preferences theme chooser font scale model provider config.ts user preferences runtime settings"
 ```
 
-Top sections used:
 
-- `lat.md/theme#Theme`
-- `lat.md/windowing#Windowing`
-- `lat.md/theme#Theme#User themes directory`
-- `lat.md/design#Design#Rem sizing`
-- `lat.md/builtins#Built-ins#Settings Hub`
+- `removed-docs`
+- `removed-docs`
+- `removed-docs themes directory`
+- `removed-docs sizing`
+- `removed-docs Hub`
 
 ## Skills
 
@@ -52,7 +47,7 @@ packx --limit 90k -l 8 \
   .agents/skills/builtin-filterable-surfaces/SKILL.md \
   .agents/skills/protocol-automation/SKILL.md \
   .agents/skills/testing-quality-gates/SKILL.md \
-  lat.md/theme.md lat.md/builtins.md lat.md/design.md lat.md/windowing.md lat.md/workspace.md lat.md/protocol.md lat.md/verification.md \
+  removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs \
   src/render_builtins/settings.rs src/render_builtins/theme_chooser.rs src/render_builtins/theme_chooser_customize_controls.rs \
   src/render_builtins/theme_chooser_preview_panel.rs src/render_builtins/theme_chooser_list_header.rs src/render_builtins/theme_chooser_setup_key.rs \
   src/config/mod.rs src/config/loader.rs src/config/defaults.rs src/config/types.rs src/config/editor.rs src/config/command_ids.rs \
@@ -63,5 +58,3 @@ packx --limit 90k -l 8 \
   tests/theme_contrast_audit.rs tests/config_contract_alignment.rs tests/get_config_fingerprint_contract.rs tests/config_reload_during_streaming_contract.rs tests/config-schema.test.ts scripts/config-cli.test.ts \
   > ~/.oracle/bundles/settings-theme-config-preferences-atlas.txt
 ```
-
-Final bundle summary: 52 files, ripgrep search mode, 8 context lines, 205 matches, 91 context windows, 29,959 exact tokens, 119,739 bytes.

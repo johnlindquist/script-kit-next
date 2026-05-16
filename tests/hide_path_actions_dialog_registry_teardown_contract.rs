@@ -98,7 +98,7 @@ const CLOSE_ACTIONS_CALL_PREFIX: &str = "crate::actions::close_actions_window(";
 const LEGACY_BARE_REGISTRY_CALL: &str =
     "crate::windows::remove_automation_window(\"actions-dialog\")";
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn every_hide_site_closes_actions_window_fully() {
     for (name, src) in HIDE_SITES {
@@ -124,7 +124,7 @@ fn every_hide_site_closes_actions_window_fully() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn no_hide_site_uses_legacy_bare_registry_teardown() {
     for (name, src) in HIDE_SITES {
@@ -147,7 +147,7 @@ fn no_hide_site_uses_legacy_bare_registry_teardown() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn actions_dialog_teardown_follows_embedded_ai_teardown_in_every_site() {
     for (name, src) in HIDE_SITES {
@@ -197,7 +197,7 @@ fn actions_dialog_teardown_follows_embedded_ai_teardown_in_every_site() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#Detached window behavior#Embedded AI subview — addressable via  in the automation registry]]
+// doc-anchor-removed: [[removed-docs window behavior#Embedded AI subview — addressable via  in the automation registry]]
 #[test]
 fn actions_dialog_teardown_is_adjacent_to_embedded_ai_teardown() {
     for (name, src) in HIDE_SITES {

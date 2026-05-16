@@ -111,7 +111,7 @@ fn await_response_matches_stdin_parse_failed_event_type_literal() {
     // parse failures) and falsely attribute them to this request. The
     // Rust-side tracing field is `event_type=stdin_parse_failed` emitted
     // from src/stdin_commands/mod.rs's Err-arm; this is the documented
-    // stable contract name (see lat.md/automation.md §"Session send
+    // stable contract name (see removed-docs §"Session send
     // parse receipts").
     assert!(
         AWAIT_RESPONSE_SRC.contains("\"event_type=stdin_parse_failed\""),

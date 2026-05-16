@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-legacy-chat-prompt",
-  "createdAt": "2026-05-15T18:04:37.759Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-legacy-chat-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-drive",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T18:04:37.760Z",
-      "completedAt": "2026-05-15T18:14:19.591Z",
-      "usage": {
-        "inputTokens": 124776,
-        "outputTokens": 10732,
-        "reasoningTokens": 0,
-        "totalTokens": 135508
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-legacy-chat-prompt]\n\nProject: Script Kit GPUI. We are iterating through feature-map/ and evolving feature_explorer/ into a complete XState-driven wireframe/mockup atlas for every app feature. Repository rules: update lat.md/ when behavior/docs/contracts change and run lat check. The attached bundle includes repo process context, prompt-runtime and adjacent skills, relevant lat.md pages including verification, the maintained Feature 031 chapter/raw Oracle, current Feature Explorer authored-machine implementation, and source/tests for the legacy chat() prompt boundary.\n\nGoal: audit and improve the authored XState representation we need to add for Feature 031 in feature_explorer/src/state/authoredFeatureMachines.ts. Feature 031 is the legacy SDK chat() conversational prompt. Preserve the boundary with Feature 030 ACP ai* APIs: legacy chat() is AppView::ChatPrompt / PromptMessage::ShowChat / chatSubmit / chatStream* / chatSetError / chatClear* / Mini AI reuse; it is not the ai* ACP SDK API surface.\n\nImportant current split:\n- SDK chat(options) opens ChatPrompt, normalizes initial messages, prepends system shorthand, uses global currentChatId/currentConversationId/currentModel/chatMessages, sends type:'chat'.\n- Callback mode with onMessage loops user submits back through chatSubmit and script-controlled controller helpers.\n- Built-in AI mode is enabled only when no onInit and no onMessage; no providers show setup card.\n- ChatPrompt owns visible turns, input, streaming, stopped/error state, image paste/capture, setup actions, actions dialog, model selection, clear/copy/capture, scroll follow, persistence, and AI-window handoff.\n- Inline Mini AI reuses ChatPrompt with inline-ai / inline-ai-setup ids and has snapshot/action/sizing contracts.\n- Known risks: onMessage pending resolution/currentChatId race, listener cleanup, saveHistory default mismatch, model selection field drift, callback-mode image boundary, stale-id no-ops, try_send backpressure, retry path proof gap, simple chat result semantics.\n\nDeliverables:\n1. Concrete XState states/transitions suitable for Feature 031 and registry keys \"031\" and \"031-legacy-chat-prompt\".\n2. Wireframe metadata guidance using only existing FeatureWireframeMeta values; call out unsupported enum values to avoid.\n3. Invariants, regression states, and gap states that must be represented.\n4. Discrepancies between maintained Feature 031/raw Oracle, current Feature Explorer fallback behavior, and attached source; include exact state additions/removals/renames if useful.\n5. Verification checklist for this Feature Explorer iteration: build, lat check, SDK chat tests, chat smoke suite or focused smoke, mini AI contracts, and any source-audit proof for the known gaps.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer downloadable files. The local agent will write files and run verification locally.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-legacy-chat-prompt.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-legacy-chat-prompt",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T18:04:37.760Z",
-  "completedAt": "2026-05-15T18:14:19.591Z",
-  "usage": {
-    "inputTokens": 124776,
-    "outputTokens": 10732,
-    "reasoningTokens": 0,
-    "totalTokens": 135508
   },
-  "elapsedMs": 580124
 }

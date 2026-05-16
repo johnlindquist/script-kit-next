@@ -4,7 +4,7 @@
 //! override is in place — config defaults, detector, per-source cap
 //! override, passive-budget raise, lazy-source hint snapshot, no
 //! window-resize calls — so the runtime behaviour cannot silently
-//! regress past `lat check`.
+//! regress past `source checks`.
 
 const DEFAULTS: &str = include_str!("../../src/config/defaults.rs");
 const TYPES: &str = include_str!("../../src/config/types.rs");

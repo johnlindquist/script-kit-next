@@ -10,7 +10,6 @@ Script Kit DevTools should feel closer to Chrome DevTools Protocol than to a fol
 
 Use `bun scripts/devtools/coverage.ts` to ask what DevTools can currently inspect, what remains partial, and which runtime primitive should be built next.
 
-Examples:
 
 ```bash
 bun scripts/devtools/coverage.ts --surface notes
@@ -32,7 +31,7 @@ The coverage map intentionally mirrors Chrome DevTools breadth while using Scrip
 - Layout and Box Model: target-scoped bounds, scroll extents, anchor rects, safe areas, overlap pairs, and resize deltas.
 - Styles, Theme, and Text Fit: theme tokens, computed colors, contrast, font metrics, wrapping, truncation, and clipping.
 - Console, Logs, and Events: app logs, response logs, parse failures, warnings, traces, and action-correlated spans.
-- Sources, Scripts, and Owners: prompt type, script provenance, source owners, and `lat.md` context for likely fixes.
+- Sources, Scripts, and Owners: prompt type, script provenance, source owners, generated contracts, feature-map chapters, and direct source file references for likely fixes.
 - Performance and Timeline: input-to-paint, resize timelines, provider refresh, focus transitions, and layout shifts.
 - Storage, Resources, and Privacy: context resources, redaction, cache/store generations, attachment provenance, and privacy boundaries.
 - Accessibility: semantic-to-AX parity, focus order, disabled state, labels, and keyboard activation.

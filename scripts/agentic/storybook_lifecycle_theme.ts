@@ -4,7 +4,7 @@ import { join } from "node:path";
 const root = process.cwd();
 const moduleSource = readFileSync(join(root, "src/storybook/mod.rs"), "utf8");
 const browserSource = readFileSync(join(root, "src/storybook/browser.rs"), "utf8");
-const storybookDocs = readFileSync(join(root, "lat.md/storybook.md"), "utf8");
+const storybookDocs = readFileSync(join(root, "removed-docs"), "utf8");
 
 for (const token of [
   "StorybookWindowRegistry",
@@ -21,7 +21,7 @@ for (const token of [
 
 for (const token of ["Theme Reveal Synchronization", "Storybook Window Lifecycle"]) {
   if (!storybookDocs.includes(token)) {
-    throw new Error(`missing Storybook lat.md section ${token}`);
+    throw new Error(`missing Storybook removed-docs section ${token}`);
   }
 }
 

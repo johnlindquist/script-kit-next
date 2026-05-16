@@ -1248,7 +1248,7 @@ fn synthetic_active_head_empty_hint(
         ActiveHeadKind::Source => {
             // Only render source-attached zero copy when there IS a typed
             // partial. Bare source heads (`c:`) keep the prior no-hint
-            // behavior owned by [[lat.md/menu-syntax#Source Filter Legend]].
+            // behavior owned by [[removed-docs Filter Legend]].
             if active.value_partial.is_empty() {
                 return None;
             }

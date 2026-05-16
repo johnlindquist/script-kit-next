@@ -18,7 +18,7 @@ fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> 
 
 #[test]
 fn prompt_spawned_term_resize_is_state_guarded() {
-    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/prompt_handler/mod.rs");
     let block = source_between(
         &source,
@@ -48,7 +48,7 @@ fn prompt_spawned_term_resize_is_state_guarded() {
 
 #[test]
 fn prompt_spawned_editor_resize_is_state_guarded() {
-    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/prompt_handler/mod.rs");
     let block = source_between(
         &source,
@@ -78,7 +78,7 @@ fn prompt_spawned_editor_resize_is_state_guarded() {
 
 #[test]
 fn resize_guard_helper_delegates_to_canonical_state_sizing() {
-    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    // doc-anchor-removed: [[removed-docs Rules]]
     let source = read("src/app_impl/ui_window.rs");
     let block = source_between(
         &source,

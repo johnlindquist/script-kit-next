@@ -449,7 +449,7 @@ fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Footer activity indicator]]
+// doc-anchor-removed: [[removed-docs Chat#Footer activity indicator]]
 #[test]
 fn acp_plain_escape_cancels_streaming_before_host_close() {
     let escape_block_start = ACP_VIEW_SOURCE
@@ -483,7 +483,7 @@ fn acp_plain_escape_cancels_streaming_before_host_close() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+// doc-anchor-removed: [[removed-docs Chat#Entry paths]]
 #[test]
 fn acp_root_escape_interceptor_cancels_streaming_before_returning_to_menu() {
     for (name, source) in [
@@ -515,7 +515,7 @@ fn acp_root_escape_interceptor_cancels_streaming_before_returning_to_menu() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+// doc-anchor-removed: [[removed-docs Chat#Entry paths]]
 #[test]
 fn acp_stdin_simulate_key_escape_cancels_streaming_before_returning_to_menu() {
     for (name, source) in [
@@ -540,7 +540,7 @@ fn acp_stdin_simulate_key_escape_cancels_streaming_before_returning_to_menu() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+// doc-anchor-removed: [[removed-docs Chat#Telemetry]]
 #[test]
 fn acp_cancel_streaming_sends_session_cancel_to_agent() {
     assert!(
@@ -556,7 +556,7 @@ fn acp_cancel_streaming_sends_session_cancel_to_agent() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn acp_plain_up_recalls_latest_user_prompt_when_composer_is_empty() {
     let up_block_start = ACP_VIEW_SOURCE
@@ -582,7 +582,7 @@ fn acp_plain_up_recalls_latest_user_prompt_when_composer_is_empty() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn acp_cmd_0_resets_agent_chat_zoom_through_theme_sync() {
     let cmd_0_block_start = ACP_VIEW_SOURCE
@@ -843,7 +843,7 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn acp_actions_dialog_preserves_route_backed_agent_actions() {
     let acp_dialog_start = ACTIONS_TOGGLE_SOURCE
@@ -880,7 +880,7 @@ fn acp_actions_dialog_preserves_route_backed_agent_actions() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Footer activity indicator]]
+// doc-anchor-removed: [[removed-docs Chat#Footer activity indicator]]
 #[test]
 fn acp_footer_omits_global_cmd_enter_ai_button() {
     let footer_start = UI_WINDOW_SOURCE

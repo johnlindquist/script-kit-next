@@ -1,92 +1,18 @@
 {
-  "id": "acp-sdk-runtime-apis",
-  "createdAt": "2026-05-15T14:53:56.520Z",
-  "status": "completed",
-  "promptPreview": "[acp-sdk-runtime-apis]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun script SDK compatibility.\n- The feature ma",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T14:53:56.521Z",
-      "completedAt": "2026-05-15T15:00:15.014Z",
-      "usage": {
-        "inputTokens": 42735,
-        "outputTokens": 7320,
-        "reasoningTokens": 0,
-        "totalTokens": 50055
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 55940
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[acp-sdk-runtime-apis]\n\nProject briefing:\n\n- Repository: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun script SDK compatibility.\n- The feature map is a human-and-agent atlas. Each feature chapter must fully explain capabilities, entry points, interactions, state machines, APIs, proof paths, and open risk.\n- Repo process requires `lat.md/` updates for changed behavior/docs and `lat check` verification. For this atlas loop, every Oracle session's full output is preserved under `feature-map/raw-oracle/<feature-id>/` and distilled into `feature-map/features/<feature-id>.md`.\n- Relevant ownership skills for this pass: `acp-chat-core`, `sdk-script-execution`, `protocol-automation`, `agentic-testing`, and `testing-quality-gates`.\n\nGoal:\n\nCreate a comprehensive feature-map reference for the ACP/Agent Chat script-facing SDK runtime APIs, focused on the gap left by feature 030:\n\n- `aiAppendMessage(chatId, content, role)`.\n- `aiSendMessage(chatId, content, imagePath?, parts?)`.\n- `aiSetSystemPrompt(chatId, prompt)`.\n- `aiOn(eventType, handler, chatId?)`, `aiSubscribe`, `aiUnsubscribe`, and pushed event messages such as `aiStreamChunk`, `aiStreamComplete`, `aiNewMessage`, and `aiError`.\n\nCurrent evidence:\n\n- Feature 030 established that `aiIsOpen`, `aiGetActiveChat`, `aiListChats`, `aiGetConversation`, `aiStartChat`, `aiFocus`, `aiGetStreamingStatus`, and `aiDeleteChat` are proven through SDK/protocol/direct-handler or prompt-message paths.\n- Feature 030 explicitly left `aiAppendMessage`, `aiSendMessage`, `aiSetSystemPrompt`, and `aiOn` as declared but unproven for app-side runtime handling.\n- This pass should not repeat the already-proven API catalog except where needed to explain the contrast between proven and unproven runtime paths.\n\nBundle map:\n\n- Repo process docs: `AGENTS.md`, `CLAUDE.md`.\n- Owning skills: ACP core, SDK script execution, protocol automation, agentic testing, testing gates.\n- Lat docs: ACP chat, protocol, scripting, verification.\n- SDK/protocol/runtime source excerpts: `scripts/kit-sdk.ts`, `src/protocol/message/variants/ai.rs`, `src/protocol/types/ai.rs`, `src/ai/sdk_handlers.rs`, `src/execute_script/mod.rs`, `src/main_sections/prompt_messages.rs`, `src/prompt_handler/mod.rs`, ACP state/source excerpts.\n- Tests: SDK and protocol tests around ACP/AI APIs and targeted ACP reads.\n- Prior feature-map evidence: feature 030 chapter and raw Oracle answer, plus feature 003 context where relevant.\n\nDeliverable:\n\nReturn a dense, implementation-ready atlas chapter outline for local agents to distill into `feature-map/features/043-acp-sdk-runtime-apis.md`.\n\nPlease include:\n\n1. Exact current behavior and runtime status for each unproven SDK API.\n2. Where each API is declared in TypeScript and Rust protocol.\n3. Whether each API has a direct handler, prompt-message bridge, ACP runtime handler, subscription manager, or event producer.\n4. The user-visible capabilities a script author can safely rely on today.\n5. The unsafe claims the atlas must avoid until implementation/proof exists.\n6. State machine / lifecycle details for existing-chat mutation, streaming, event subscription, event delivery, and unsubscribe if supported or intentionally absent.\n7. Concrete source file/function targets that prove current behavior.\n8. The highest-leverage implementation plan if the team wants to make the unproven APIs real.\n9. Tests and agentic receipts that would prove the current behavior and any future implementation.\n10. Any docs wording or SDK compatibility caveats that should be explicit for humans and AI agents.\n\nOutput boundary:\n\nReturn your answer as text in this response only. Do not create, attach, export,\nor offer any downloadable file. Do not create local project artifacts yourself.\nThe local agent will write any needed files, plans, notes, goals, commits, or\nverification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/acp-sdk-runtime-apis.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "acp-sdk-runtime-apis",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T14:53:56.521Z",
-  "completedAt": "2026-05-15T15:00:15.016Z",
-  "usage": {
-    "inputTokens": 42735,
-    "outputTokens": 7320,
-    "reasoningTokens": 0,
-    "totalTokens": 50055
   },
-  "elapsedMs": 377505
 }

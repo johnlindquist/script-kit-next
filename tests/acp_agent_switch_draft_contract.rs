@@ -1,6 +1,6 @@
 //! Source-level contract test for the ACP agent-switching draft-preservation flow.
 //!
-//! Backs `lat.md/acp-chat#ACP Chat#Agent switching` and user story
+//! Backs `removed-docs Chat#Agent switching` and user story
 //! `acp-agent-switch-preserves-draft`. When the user switches agents from the
 //! ACP actions menu, the relaunch path must stage a retry payload that carries
 //! the current draft (input text, cursor, pending inline context parts) and
@@ -14,7 +14,7 @@ const VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn agent_switch_dispatch_stages_retry_payload_before_relaunch() {
     assert!(
@@ -32,7 +32,7 @@ fn agent_switch_dispatch_stages_retry_payload_before_relaunch() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn stage_agent_switch_retry_captures_draft_and_launch_requirements() {
     assert!(
@@ -62,7 +62,7 @@ fn stage_agent_switch_retry_captures_draft_and_launch_requirements() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn agent_switch_relaunch_restores_input_cursor_and_context_parts() {
     assert!(
@@ -87,7 +87,7 @@ fn agent_switch_relaunch_restores_input_cursor_and_context_parts() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn rapid_agent_switch_churn_never_orphans_pending_retry_state() {
     // Story: `rapid-agent-switch-churn` — 3 back-to-back switches within 2s.
@@ -157,7 +157,7 @@ fn rapid_agent_switch_churn_never_orphans_pending_retry_state() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn cached_retry_request_forces_fresh_open_not_view_reuse() {
     assert!(
@@ -183,7 +183,7 @@ fn cached_retry_request_forces_fresh_open_not_view_reuse() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
 fn explicit_agent_switch_resolution_does_not_fallback_to_ready_agent() {
     assert!(

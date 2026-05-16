@@ -1,4 +1,4 @@
-// @lat: [[tests#ACP Chat#Live subscription runtime]]
+// doc-anchor-removed: [[tests#ACP Chat#Live subscription runtime]]
 
 use script_kit_gpui::protocol::Message;
 

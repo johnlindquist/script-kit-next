@@ -5,7 +5,7 @@
 //! [`DesignVariant`] enum stays in place as a migration shim; production
 //! code should consume designs by id via [`lookup`] and [`fallback`].
 //!
-// @lat: [[lat.md/designs#Catalog invariants]]
+// doc-anchor-removed: [[removed-docs invariants]]
 
 use std::hash::{Hash, Hasher};
 
@@ -127,7 +127,7 @@ pub enum RendererMode {
 }
 
 /// A single curated design entry. Every field is intentional — see
-/// `lat.md/designs.md#Catalog invariants` for the uniqueness rule.
+/// `removed-docs invariants` for the uniqueness rule.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DesignDef {
     pub id: DesignId,

@@ -5,7 +5,7 @@ const ABOUT_STORY_SOURCE: &str = include_str!("../src/stories/about_surface.rs")
 
 #[test]
 fn about_route_owns_focus_without_launcher_filter_on_open() {
-    // @lat: [[lat.md/about#About#Keyboard behavior]]
+    // doc-anchor-removed: [[removed-docs behavior]]
     assert!(
         ABOUT_ROUTE_SOURCE.contains("self.focused_input = FocusedInput::None"),
         "About open should clear launcher input focus"
@@ -22,7 +22,7 @@ fn about_route_owns_focus_without_launcher_filter_on_open() {
 
 #[test]
 fn about_surface_contract_declares_no_editable_input_and_explicit_dismissal() {
-    // @lat: [[lat.md/about#About#Route contract]]
+    // doc-anchor-removed: [[removed-docs contract]]
     let start = APP_VIEW_STATE_SOURCE
         .find("SurfaceKind::About => LauncherSurfaceContract::new")
         .expect("About surface contract arm exists");
@@ -40,7 +40,7 @@ fn about_surface_contract_declares_no_editable_input_and_explicit_dismissal() {
 
 #[test]
 fn about_surface_controls_are_keyboard_reachable_in_contract_order() {
-    // @lat: [[lat.md/about#About#Keyboard behavior]]
+    // doc-anchor-removed: [[removed-docs behavior]]
     let ids = [
         "about-close-button",
         "about-open-github",
@@ -82,7 +82,7 @@ fn about_surface_controls_are_keyboard_reachable_in_contract_order() {
 
 #[test]
 fn about_escape_is_surface_captured() {
-    // @lat: [[lat.md/about#About#Keyboard behavior]]
+    // doc-anchor-removed: [[removed-docs behavior]]
     assert!(
         ABOUT_RENDER_SOURCE.contains(".capture_key_down("),
         "About should capture Escape at the surface before child controls can swallow it"
@@ -91,7 +91,7 @@ fn about_escape_is_surface_captured() {
 
 #[test]
 fn about_dismiss_restores_filter_owned_previous_routes() {
-    // @lat: [[lat.md/about#About#Keyboard behavior]]
+    // doc-anchor-removed: [[removed-docs behavior]]
     assert!(
         ABOUT_ROUTE_SOURCE.contains("focus_for_about_restore"),
         "About dismiss should centralize previous-route focus restoration"
@@ -108,7 +108,7 @@ fn about_dismiss_restores_filter_owned_previous_routes() {
 
 #[test]
 fn about_story_covers_update_states_and_acknowledgements_open() {
-    // @lat: [[lat.md/about#About#Storybook coverage]]
+    // doc-anchor-removed: [[removed-docs coverage]]
     for id in ["idle", "checking", "up-to-date", "available", "error"] {
         assert!(
             ABOUT_STORY_SOURCE.contains(id),

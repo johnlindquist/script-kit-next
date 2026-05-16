@@ -6,7 +6,7 @@
 //! finishes (Phase 6), the enum gets `#[deprecated]` and lives solely
 //! here for config rewrites.
 //!
-// @lat: [[lat.md/designs#Legacy migration]]
+// doc-anchor-removed: [[removed-docs migration]]
 
 use crate::designs::core::registry::{fallback, lookup, DesignDef, FALLBACK_ID};
 use crate::designs::DesignVariant;

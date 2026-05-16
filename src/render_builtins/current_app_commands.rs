@@ -1,5 +1,5 @@
 impl ScriptListApp {
-    // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+    // doc-anchor-removed: [[removed-docs and introspection]]
     fn current_app_commands_filtered_entries<'a>(
         entries: &'a [builtins::BuiltInEntry],
         filter: &str,

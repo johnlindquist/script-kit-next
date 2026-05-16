@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-agent-context",
-  "createdAt": "2026-05-15T14:34:12.673Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-agent-context]\n\nProject briefing:\n- Repo: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK surfaces and a standalone Vite/XState",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T14:34:12.674Z",
-      "completedAt": "2026-05-15T14:43:12.211Z",
-      "usage": {
-        "inputTokens": 50657,
-        "outputTokens": 7312,
-        "reasoningTokens": 0,
-        "totalTokens": 57969
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-agent-context]\n\nProject briefing:\n- Repo: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK surfaces and a standalone Vite/XState feature explorer under `feature_explorer/`.\n- The repo uses `lat.md/` as the architecture/test knowledge graph. Any local implementation that changes behavior, architecture, or verification contracts must update `lat.md/` and pass `lat check`.\n- The feature atlas lives in `feature-map/features/*.md`, with raw Oracle harvests under `feature-map/raw-oracle/*/answer.md`.\n- The Feature Explorer reads the atlas and builds executable XState runtime models. It already has authored machines for Features 001 and 002 in `feature_explorer/src/state/authoredFeatureMachines.ts`, and falls back to derived table parsing for all other features.\n\nGoal:\nCreate an implementation-ready authored XState representation for Feature 003, `Agent Chat Context Composer`, that can be added to `feature_explorer/src/state/authoredFeatureMachines.ts` using the existing `AuthoredFeatureMachineConfig` schema.\n\nCurrent evidence:\n- The local agent has already added authored machines for Features 001 and 002.\n- `npm run build` in `feature_explorer/` passes.\n- `lat check` passes.\n- Generated explorer coverage reports 41 index rows, 41 raw Oracle sessions, and 41 feature chapters.\n- The next local implementation should add Feature 003 without rewriting the runtime schema unless a schema limitation is unavoidable.\n\nBundle map:\n- Included repo process docs: `AGENTS.md`, `CLAUDE.md`.\n- Included verification docs: `lat.md/feature-explorer.md`, `lat.md/verification.md`.\n- Included Feature 003 chapter and its raw Oracle harvest.\n- Included current explorer state/runtime code, including the authored machines for 001/002 as the local style target.\n- Included owning skills for ACP composer/chat, MCP context resources, protocol automation, and agentic testing.\n\nDeliverable:\nReturn a concrete authored-machine design for Feature 003 that a local agent can paste/adapt into `feature_explorer/src/state/authoredFeatureMachines.ts`.\n\nPlease include:\n1. A compact state inventory with state ids, labels, status, wireframe hints, and why each state exists.\n2. An event inventory with transition targets, especially slash command, inline mention, attachment token, portal return, focused target, submit, cancel, and history/session flows.\n3. A TypeScript object literal compatible with the existing `AuthoredFeatureMachineConfig` type and style. Prefer direct code that matches the existing file over pseudocode.\n4. Notes on whether the current schema is sufficient; if not, propose the smallest schema addition and explain why it is worth it.\n5. Verification guidance for the local agent: exact static/build checks and any state-first runtime receipts that would matter later.\n6. Any unresolved ambiguity that should remain visible in the explorer instead of being invented.\n\nRepo-specific rules:\n- Respect the `lat.md/` update rule and required `lat check`.\n- Do not ask for downloadable files or create project artifacts.\n- Keep the output focused on real implementation progress for this iteration, not a vague plan.\n\nReturn your answer as text in this response only. Do not create, attach, export,\nor offer any downloadable file. Do not create local project artifacts yourself.\nThe local agent will write any needed files, plans, notes, goals, commits, or\nverification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-agent-context.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-agent-context",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T14:34:12.674Z",
-  "completedAt": "2026-05-15T14:43:12.212Z",
-  "usage": {
-    "inputTokens": 50657,
-    "outputTokens": 7312,
-    "reasoningTokens": 0,
-    "totalTokens": 57969
   },
-  "elapsedMs": 538467
 }

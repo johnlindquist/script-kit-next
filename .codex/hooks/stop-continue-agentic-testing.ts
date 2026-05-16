@@ -288,15 +288,14 @@ function buildAgenticTestingPrompt(config: ActiveRunConfig, state: RunState): st
     "Do exactly one bounded improvement pass, then stop normally. This Stop hook will continue the run while the active marker remains enabled.",
     "",
     "Required loop:",
-    "1. Re-read the current user request, `AGENTS.md`, and relevant `lat.md` context before editing.",
+    "1. Re-read the current user request, `AGENTS.md`, the owning skill, and relevant source context before editing.",
     "2. Inspect `git status --porcelain`; never revert or overwrite user changes.",
     "3. Pick the smallest high-signal fix, test/tooling improvement, or verification target that advances the run instructions.",
     "4. Implement only that scoped pass.",
     "5. Use `$agentic-testing` for proof when behavior, UI, protocol, ACP, actions dialog, keyboard handling, or automation surfaces are touched. Prefer warm sessions, exact targets, and state receipts first. Stop any Script Kit session you start.",
     "6. If no runtime proof is needed, state the no-runtime proof path explicitly.",
-    "7. Update `lat.md/` if functionality, architecture, tests, or behavior changed.",
-    "8. Run `lat check` before reporting done.",
-    "9. Report the changed files and evidence concisely, then stop.",
+    "7. Run the smallest source, test, build, or runtime proof that can fail for the changed behavior.",
+    "8. Report the changed files and evidence concisely, then stop.",
     "",
     "Safety gates:",
     "- Do not push, force-push, amend, rebase, reset hard, delete files, or run destructive commands.",
@@ -323,10 +322,10 @@ function buildMarketingPrompt(config: ActiveRunConfig, state: RunState): string 
     MARKETING_STYLE_DIRECTIONS[state.continuations % MARKETING_STYLE_DIRECTIONS.length];
   const assets = config.brandAssets?.length
     ? config.brandAssets.map((asset) => `\`${asset}\``).join(", ")
-    : "`assets/logo.svg`, `assets/icon.png`, `.impeccable.md`, `lat.md/theme.md`";
+    : "`assets/logo.svg`, `assets/icon.png`, `.impeccable.md`";
   const themeRefs = config.themeRefs?.length
     ? config.themeRefs.map((ref) => `\`${ref}\``).join(", ")
-    : "`lat.md/theme.md`, `.impeccable.md`";
+    : "`.impeccable.md`";
 
   return [
     `Continue Script Kit GPUI marketing infographic run \`${config.runId}\`.`,
@@ -345,8 +344,7 @@ function buildMarketingPrompt(config: ActiveRunConfig, state: RunState): string 
     "3. If needed, inspect `assets/icon.png` or `assets/logo.svg` so the generated image can echo the Script Kit mark. Use the icon/logo as a visual reference, not as an exact vector recreation requirement.",
     "4. Generate one fresh infographic prompt that materially differs from prior passes. Anchor it in Script Kit GPUI: fast focused minimal automation, keyboard-first launcher, native macOS vibrancy, dark UI, gold accent #fbbf24, stdin JSON automation, proof-bearing workflows, actions via Cmd-K, AI via Tab.",
     "5. Keep any in-image copy short and exact. Prefer phrases like `Script Kit`, `Fast. Focused. Minimal.`, `Run`, `Actions`, `AI`, `Proof`, or `Automate everything`.",
-    "6. Run `lat check` before the image call. If this pass changes hook behavior, docs, tests, or architecture, update `lat.md/` first.",
-    "7. Make the image generation call as the final action of the pass. Do not add commentary after the image tool call.",
+    "6. Make the image generation call as the final action of the pass. Do not add commentary after the image tool call.",
     "",
     "Prompt requirements:",
     "- Use case: `infographic-diagram`, `product-mockup`, `stylized-concept`, or `photorealistic-natural`, whichever best fits this pass.",

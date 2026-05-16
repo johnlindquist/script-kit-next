@@ -177,7 +177,9 @@ fn get_state_notes_target_round_trip() {
     });
     let msg: Message = serde_json::from_value(json).expect("parse getState with notes target");
     match msg {
-        Message::GetState { request_id, target } => {
+        Message::GetState {
+            request_id, target, ..
+        } => {
             assert_eq!(request_id, "gs-notes-1");
             let target = target.expect("target should be present");
             match target {

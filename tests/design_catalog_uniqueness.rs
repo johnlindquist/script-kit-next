@@ -4,7 +4,7 @@
 //! At every phase no two designs may share the same token signature
 //! (palette + typography + density + chrome + vibrancy).
 //!
-//! See `lat.md/designs.md#Catalog invariants`.
+//! See `removed-docs invariants`.
 
 use std::collections::HashSet;
 

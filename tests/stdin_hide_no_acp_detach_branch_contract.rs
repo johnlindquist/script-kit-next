@@ -143,7 +143,7 @@ fn assert_stdin_hide_arm_is_detach_free(src: &str, path: &str) {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn runtime_stdin_match_core_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(
@@ -152,13 +152,13 @@ fn runtime_stdin_match_core_hide_arm_has_no_detach_branch() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn runtime_stdin_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(RUNTIME_STDIN, "src/main_entry/runtime_stdin.rs");
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn app_run_setup_hide_arm_has_no_detach_branch() {
     assert_stdin_hide_arm_is_detach_free(APP_RUN_SETUP, "src/main_entry/app_run_setup.rs");

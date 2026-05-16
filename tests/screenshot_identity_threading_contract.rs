@@ -62,7 +62,7 @@ const HARNESS_CONTEXT_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 const ACP_CONTEXT_SOURCE: &str = include_str!("../src/ai/acp/context.rs");
 const TAB_CONTEXT_SOURCE: &str = include_str!("../src/ai/tab_context.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn screenshot_filename_format_encodes_three_independent_identity_axes() {
     assert!(
@@ -86,7 +86,7 @@ fn screenshot_filename_format_encodes_three_independent_identity_axes() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn sequence_counter_is_atomic_and_monotonic() {
     assert!(
@@ -109,7 +109,7 @@ fn sequence_counter_is_atomic_and_monotonic() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn both_capture_helpers_route_through_the_same_filename_builder() {
     for helper in [
@@ -136,7 +136,7 @@ fn both_capture_helpers_route_through_the_same_filename_builder() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn tab_ai_screenshot_file_has_identity_tuple_fields() {
     for field in [
@@ -157,7 +157,7 @@ fn tab_ai_screenshot_file_has_identity_tuple_fields() {
     }
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn screenshot_path_is_threaded_into_context_text_block() {
     assert!(
@@ -178,7 +178,7 @@ fn screenshot_path_is_threaded_into_context_text_block() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Context staging]]
+// doc-anchor-removed: [[removed-docs Chat#Context staging]]
 #[test]
 fn acp_context_block_builder_is_text_only_preserving_path_identity() {
     assert!(

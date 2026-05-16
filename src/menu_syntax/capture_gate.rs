@@ -1,4 +1,4 @@
-// @lat: [[lat.md/menu-syntax#Menu Syntax#Capture Validation Gate]]
+// doc-anchor-removed: [[removed-docs Syntax#Capture Validation Gate]]
 //
 // Pure decision module that branches Enter on a `+target` invocation into
 // Allow / Block based on the resolved [[src/menu_syntax/capture_schema.rs#CaptureFieldSchema]].

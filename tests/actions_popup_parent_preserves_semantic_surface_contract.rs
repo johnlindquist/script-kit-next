@@ -21,7 +21,7 @@
 //! `[?] actions-cmdk-clipboard-main-surface-flip` in Run 7 Pass #17;
 //! Fix landed Run 7 Pass #21 (commit `69d5846f0`).
 //!
-//! `lat.md/automation.md#Window metadata` explicitly identified a
+//! `removed-docs metadata` explicitly identified a
 //! source-level Pin pass against this invariant as "a natural follow-up
 //! because it's a quiet preserve-existing-value contract that any
 //! future 'simplification' of the synthesis path could regress without
@@ -85,7 +85,7 @@ const PASS_21_COMMENT_PHRASES: &[&str] = &[
     "Run 7 Pass #17",
 ];
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_automation_id_function_exists() {
     let count = ACTIONS_WINDOW.matches(FN_HEAD).count();
@@ -100,7 +100,7 @@ fn resolve_actions_popup_parent_automation_id_function_exists() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_reads_registry_before_upsert() {
     let fn_start = ACTIONS_WINDOW
@@ -182,7 +182,7 @@ fn resolve_actions_popup_parent_reads_registry_before_upsert() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_forbids_hardcoded_scriptlist_upsert() {
     let fn_start = ACTIONS_WINDOW
@@ -225,7 +225,7 @@ fn resolve_actions_popup_parent_forbids_hardcoded_scriptlist_upsert() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn resolve_actions_popup_parent_carries_pass_21_anchor_comment() {
     let fn_start = ACTIONS_WINDOW

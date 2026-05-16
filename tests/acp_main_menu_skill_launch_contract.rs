@@ -21,7 +21,7 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+// doc-anchor-removed: [[removed-docs Chat#Entry paths]]
 #[test]
 fn main_menu_skill_launch_opens_acp_without_entry_intent_submit() {
     let body = compact(source_between(

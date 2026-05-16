@@ -5,7 +5,7 @@
 //! ("previously used"). Values appearing in BOTH enum and history keep their
 //! enum slot but carry the history count/recency for tie-breaking.
 //!
-//! See [[lat.md/menu-syntax#Menu Syntax#Schema Overrides History]].
+//! See [[removed-docs Syntax#Schema Overrides History]].
 
 use serde::{Deserialize, Serialize};
 

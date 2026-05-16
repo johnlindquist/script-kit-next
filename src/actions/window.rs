@@ -1152,7 +1152,7 @@ fn resized_actions_window_origin_y(
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 /// Compute the new GPUI `Bounds<Pixels>` of the actions popup after a
 /// resize. GPUI uses top-left origin, so the pinning semantics are
 /// inverted from `resized_actions_window_origin_y` which operates on
@@ -1188,7 +1188,7 @@ fn resized_actions_window_gpui_bounds(
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 /// Convert a GPUI popup bounds to the protocol shape and publish it
 /// into the automation registry under the stable `actions-dialog` ID.
 /// Keeps the float conversion site identical to the open-time

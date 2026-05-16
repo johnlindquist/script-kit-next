@@ -9,7 +9,7 @@ const REGISTRY: &str = include_str!("../src/builtins/trigger_registry.rs");
 const ROUTES: &str = include_str!("../src/app_impl/routes.rs");
 const DISPATCH: &str = include_str!("../src/app_impl/trigger_builtin_dispatch.rs");
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn registry_accepts_process_manager_aliases() {
     for alias in ["\"process-manager\"", "\"processmanager\"", "\"processes\""] {
@@ -20,7 +20,7 @@ fn registry_accepts_process_manager_aliases() {
     }
 }
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn planner_routes_process_manager_to_filterable_view() {
     assert!(
@@ -29,7 +29,7 @@ fn planner_routes_process_manager_to_filterable_view() {
     );
 }
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn dispatcher_seeds_process_manager_view_state() {
     let start = DISPATCH

@@ -5,8 +5,8 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-// @lat: [[lat.md/tests/acp-portal-contract#Plugin skill target-thread contract#Main menu and slash picker are equivalent]]
-// @lat: [[lat.md/tests/acp-portal-contract#Plugin skill target-thread contract#Detached reuse stages into detached thread]]
+// doc-anchor-removed: [[removed-docs skill target-thread contract#Main menu and slash picker are equivalent]]
+// doc-anchor-removed: [[removed-docs skill target-thread contract#Detached reuse stages into detached thread]]
 fn main_menu_skill_stages_on_target_acp_view() {
     let tab_ai = read("src/app_impl/tab_ai_mode/mod.rs");
     let body = tab_ai
@@ -19,7 +19,7 @@ fn main_menu_skill_stages_on_target_acp_view() {
 }
 
 #[test]
-// @lat: [[lat.md/tests/acp-portal-contract#Plugin skill target-thread contract#Agent switch revalidates staged skill]]
+// doc-anchor-removed: [[removed-docs skill target-thread contract#Agent switch revalidates staged skill]]
 fn skill_context_identity_is_bound_to_thread_and_revalidated_on_agent_switch() {
     let thread = read("src/ai/acp/thread.rs");
     assert!(thread.contains("pub(crate) struct SkillContextIdentity"));

@@ -19,7 +19,7 @@ fn compact(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// @lat: [[acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
+// doc-anchor-removed: [[acp-chat#ACP Chat#Detached window behavior#Dictation delivery to the composer]]
 #[test]
 fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
     let section = section_between(
@@ -70,29 +70,58 @@ fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
     );
 }
 
-// @lat: [[dictation-overlay-shortcuts#Dictation Overlay Shortcuts#Visible shortcut rail]]
+// doc-anchor-removed: [[dictation-overlay-shortcuts#Dictation Overlay Shortcuts#Visible shortcut rail]]
 #[test]
 fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
         DICTATION_WINDOW.contains("pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;")
             && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 58.0;"),
-        "dictation overlay must reserve enough room for visible controls and shortcut hints"
+        "dictation overlay must reserve enough room for visible controls and action chips"
     );
     assert!(
-        DICTATION_WINDOW.contains("const RECORDING_HINT: &str = \"Hotkey again Submit")
-            && DICTATION_WINDOW.contains("Esc Cancel")
-            && DICTATION_WINDOW.contains("const CONFIRM_HINT: &str")
-            && DICTATION_WINDOW.contains("Enter")
-            && DICTATION_WINDOW.contains("Continue")
-            && DICTATION_WINDOW.contains("const CLOSE_HINT: &str = \"Esc Close\""),
-        "recording, confirming, and terminal phases must have visible shortcut copy"
+        DICTATION_WINDOW.contains("const ACTION_STOP_LABEL: &str = \"Stop\";")
+            && DICTATION_WINDOW.contains("const ACTION_CANCEL_LABEL: &str = \"Cancel\";")
+            && DICTATION_WINDOW.contains("const ACTION_CONTINUE_LABEL: &str = \"Continue\";")
+            && DICTATION_WINDOW.contains("const ACTION_CLOSE_LABEL: &str = \"Close\";")
+            && DICTATION_WINDOW.contains("const ESC_KEYCAP: &str = \"esc\";")
+            && DICTATION_WINDOW.contains("const ENTER_KEYCAP: &str = \"\\u{21b5}\";"),
+        "recording, confirming, and terminal phases must use compact action labels plus keycaps"
     );
     assert!(
-        DICTATION_WINDOW.contains("fn render_shortcut_hint_text")
-            && DICTATION_WINDOW.contains(".id(\"dictation-shortcut-hint\")")
-            && DICTATION_WINDOW.contains(".child(self.render_shortcut_hint(hint))")
-            && DICTATION_WINDOW
-                .contains(".child(render_shortcut_hint_text(recording_shortcut_hint(false)))"),
-        "runtime and preview renders must both include the visible shortcut rail"
+        DICTATION_WINDOW.contains("fn render_action_chip")
+            && DICTATION_WINDOW.contains("fn render_clickable_action_chip")
+            && DICTATION_WINDOW.contains(".id(\"dictation-action-rail\")")
+            && DICTATION_WINDOW.contains(".child(self.render_recording_actions(cx))")
+            && DICTATION_WINDOW.contains(".child(render_static_action_rail(["),
+        "runtime and preview renders must both include the visible compact action rail"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("\"dictation-stop-button\"")
+            && DICTATION_WINDOW.contains("\"dictation-cancel-button\"")
+            && DICTATION_WINDOW.contains("this.submit_overlay_session(window, cx)")
+            && DICTATION_WINDOW.contains("this.abort_overlay_session(window, cx)"),
+        "recording Stop and Cancel controls must be clickable from the overlay"
+    );
+
+    let runtime_render = section_between(
+        DICTATION_WINDOW,
+        "impl Render for DictationOverlay",
+        "/// Format the finished overlay state label.",
+    );
+    let preview_render = section_between(
+        DICTATION_WINDOW,
+        "pub(crate) fn render_dictation_overlay_state_preview",
+        "fn render_static_target_badge_slot",
+    );
+    assert!(
+        runtime_render.contains("DictationSessionPhase::Delivering")
+            && runtime_render.contains(".child(self.render_close_action(cx))"),
+        "runtime Delivering state must render the compact Close + esc action"
+    );
+    assert!(
+        preview_render.contains("DictationSessionPhase::Delivering")
+            && preview_render.contains("ACTION_CLOSE_LABEL")
+            && preview_render.contains("ESC_KEYCAP"),
+        "preview Delivering state must render the same compact Close + esc action"
     );
 }

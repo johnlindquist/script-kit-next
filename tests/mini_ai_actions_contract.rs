@@ -13,7 +13,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini AI actions]]
+// doc-anchor-removed: [[removed-docs AI actions]]
 #[test]
 fn mini_ai_actions_callback_sends_typed_parent_request() {
     let body = source_between(
@@ -35,7 +35,7 @@ fn mini_ai_actions_callback_sends_typed_parent_request() {
     );
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini AI actions receiver]]
+// doc-anchor-removed: [[removed-docs AI actions receiver]]
 #[test]
 fn mini_ai_actions_receiver_dispatches_through_real_window() {
     let body = source_between(

@@ -1,90 +1,16 @@
 {
-  "id": "legacy-chat-summary-atlas",
-  "createdAt": "2026-05-15T11:45:01.658Z",
-  "status": "completed",
-  "promptPreview": "[legacy-chat-summary-atlas]\n\nProduce an operator-grade feature atlas for Script Kit GPUI feature 031, Legacy `chat()` Prompt. Return text only. Do not create/do",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T11:45:01.659Z",
-      "completedAt": "2026-05-15T11:50:32.281Z",
-      "usage": {
-        "inputTokens": 1292,
-        "outputTokens": 8708,
-        "reasoningTokens": 0,
-        "totalTokens": 10000
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 55940
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[legacy-chat-summary-atlas]\n\nProduce an operator-grade feature atlas for Script Kit GPUI feature 031, Legacy `chat()` Prompt. Return text only. Do not create/download/attach files.\n\nProject: Rust/GPUI desktop runtime plus TypeScript SDK. Feature map chapters must help humans and AI agents fully understand capabilities, states, interactions, script APIs, runtime routing, tests, receipts, and gaps. `lat check` is required after local docs work.\n\nScope: legacy SDK `chat()` conversational prompt surface, distinct from ACP `ai*` APIs. Include SDK entry, protocol messages, Rust ChatPrompt UI, callback mode, built-in AI mode, setup mode, actions dialog, inline Mini AI reuse, persistence, handoff, keyboard/mouse interactions, tests, observability, gaps.\n\nSource-derived evidence from local inspection:\n- `scripts/kit-sdk.ts` defines `chat()`. It creates a unique id, stores `currentChatId`, sets `currentConversationId = conv-${id}`, normalizes initial messages, prepends `system` shorthand, and emits `{ type: \"chat\", id, placeholder, messages, hint, footer, actions, model, models, saveHistory, useBuiltinAi }`.\n- SDK `useBuiltinAi` is true only when neither `onInit` nor `onMessage` is supplied. If `onInit` exists, SDK awaits it after opening prompt. If `onMessage` exists, app-to-SDK `chatSubmit` is routed to script callback; SDK appends user message locally, awaits `onMessage`, and keeps listening.\n- SDK controller helpers require `currentChatId`: `chat.addMessage`, `chat.startStream`, `chat.appendChunk`, `chat.completeStream`, `chat.clear`, `chat.setError`, `chat.clearError`, `chat.getMessages`, `chat.getResult`. They send `chatMessage`, `chatStreamStart`, `chatStreamChunk`, `chatStreamComplete`, `chatClear`, `chatSetError`, and `chatClearError`.\n- Rust protocol defines `Message::Chat`, `ChatAddMessage`, `ChatStreamStart`, `ChatStreamChunk`, `ChatStreamComplete`, `ChatClear`, `ChatSetError`, `ChatClearError`, and app-to-SDK `ChatSubmit`. `ChatPromptMessage` has role/position/content/text/id/model/streaming/error/created_at/image behavior.\n- `src/prompt_handler/mod.rs` creates `ChatPrompt`, wires `ChatSubmitCallback` to send `Message::ChatSubmit { id, text }`, applies models/default model/save history, sets `current_view = AppView::ChatPrompt { id, entity }`, focus target `ChatPrompt`, and resizes to compact AI view for mode.\n- In `use_builtin_ai`, prompt handler builds provider registry. Providers present: `with_builtin_ai`, maybe `needs_initial_response`. No providers: `needs_setup`, configure and Claude Code callbacks.\n- Chat prompt control messages are accepted only when current view is `AppView::ChatPrompt` and ids match; mismatches are ignored.\n- `ChatPrompt` state includes messages, placeholder, hint, footer, title, input, callbacks, save_history, provider registry, selected model/models, built-in streaming state, pending submit, setup state, action callbacks, image/paste state, scroll/list state, mini mode.\n- Submit flow: empty input without image ignored; pasted text tokens expanded. Callback mode invokes SDK submit callback. Built-in AI mode blocks concurrent streaming, expands context mentions, applies slash command transforms, adds user message, creates empty streaming assistant message, chooses provider/model, and spawns streaming reveal. Missing provider/model creates assistant error messages.\n- State flow: turn cache, scroll-follow, add message, stream start/chunk/complete, clear, `is_streaming`, `stop_streaming`. Escape/Cmd+. stops streaming and preserves partial content; otherwise Escape closes.\n- Keyboard: Escape, Cmd+., End/Cmd+Down, Cmd+K, Cmd+Enter, Enter, Shift+Enter, Cmd+C, Cmd+Backspace, Cmd+V, text input delegation. Setup mode maps Tab/Shift+Tab/Up/Down/Enter/Space/Escape across Configure and Claude Code buttons.\n- `actions.rs` saves non-empty conversations to AI DB as `ChatSource::ChatPrompt` when closing inline with `saveHistory`; skips inline save when transferring to AI window and opens AI window with pending messages. Also copy last response, clear conversation, script-generation save/run status, and delegates actions popup to parent.\n- `render_prompts/other.rs` renders ChatPrompt through shared simple shell with no outer footer because chat owns its footer. Parent shell intercepts Cmd+K and routes actions dialog keys for `ActionsDialogHost::ChatPrompt`.\n- Parent actions: `ActionsDialog::with_chat` exposes model selection and chat actions. `execute_chat_action` handles `select_model_*`, `continue_in_chat`, `expand_full_chat`, `copy_response`, destructive-confirm `clear_conversation`, and `capture_screen_area`.\n- Inline Mini AI reuse: `prompt_ai.rs` opens `inline-ai-setup` setup card if no providers; otherwise opens `inline-ai` with built-in AI, optional initial query/pending submit, save history on, and typed `MiniAiUiRequest::ToggleActions` channel.\n- `render_impl.rs` drains inline chat channels: escape captures Mini AI close snapshot and returns main menu; actions dispatch through parent window; continue hides/removes main window for AI handoff; configure opens API key prompt; Claude Code enables config.\n- Tests: SDK chat test; smoke chat prompt/onInit/callback/error/visual tests; Rust contracts for Mini AI close snapshots, sizing, and actions routing.\n\nDeliverable shape:\n1. Capability summary and ACP boundary.\n2. Entry points and activation paths.\n3. User stories.\n4. State model.\n5. Interaction contract.\n6. SDK/protocol contract.\n7. Persistence and side effects.\n8. Agent/API observability.\n9. Boundaries/non-goals.\n10. Verification map.\n11. Risks/gaps.\n12. A concise maintained-chapter draft for `feature-map/features/031-legacy-chat-prompt.md`.\n\nBe comprehensive and practical. Mark inferred behavior clearly.",
-    "file": [],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "legacy-chat-summary-atlas",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T11:45:01.659Z",
-  "completedAt": "2026-05-15T11:50:32.283Z",
-  "usage": {
-    "inputTokens": 1292,
-    "outputTokens": 8708,
-    "reasoningTokens": 0,
-    "totalTokens": 10000
   },
-  "elapsedMs": 328840
 }

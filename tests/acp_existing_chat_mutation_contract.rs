@@ -1,4 +1,4 @@
-// @lat: [[tests#ACP Chat#Existing chat mutation runtime]]
+// doc-anchor-removed: [[tests#ACP Chat#Existing chat mutation runtime]]
 
 fn read(path: &str) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|error| panic!("failed to read {path}: {error}"))

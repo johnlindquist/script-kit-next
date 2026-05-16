@@ -20,7 +20,7 @@ fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a st
     &source[start..start + end_rel]
 }
 
-// @lat: [[lat.md/architecture#Architecture#App State Domains]]
+// doc-anchor-removed: [[removed-docs State Domains]]
 #[test]
 fn main_menu_render_diagnostics_have_a_named_domain_owner() {
     let diagnostics_body = source_between(

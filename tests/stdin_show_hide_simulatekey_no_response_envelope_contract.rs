@@ -187,13 +187,13 @@ fn assert_no_response_sink(arm: &str, label: &str) {
              would break every automation script that matches by \
              `requestId` and currently treats absence-of-envelope as \
              'fire-and-forget; follow with getState'. See \
-             `lat.md/protocol.md` §\"Prompt and control messages\" for the \
+             `removed-docs` §\"Prompt and control messages\" for the \
              rationale."
         );
     }
 }
 
-// @lat: [[lat.md/protocol#Protocol#Prompt and control messages]]
+// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn show_arm_emits_no_response_envelope() {
     // Both source-audit snippets AND the mega-dispatcher must keep
@@ -208,7 +208,7 @@ fn show_arm_emits_no_response_envelope() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Prompt and control messages]]
+// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn hide_arm_emits_no_response_envelope() {
     assert_no_response_sink(
@@ -221,7 +221,7 @@ fn hide_arm_emits_no_response_envelope() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Prompt and control messages]]
+// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn simulatekey_arm_emits_no_response_envelope() {
     // `runtime_stdin_match_simulate_key.rs` IS the SimulateKey arm
@@ -234,7 +234,7 @@ fn simulatekey_arm_emits_no_response_envelope() {
     assert_no_response_sink(app_simulatekey_arm(), "app_run_setup.rs (SimulateKey arm)");
 }
 
-// @lat: [[lat.md/protocol#Protocol#Prompt and control messages]]
+// doc-anchor-removed: [[removed-docs and control messages]]
 #[test]
 fn dispatcher_snippets_do_not_import_response_sender() {
     // A contributor adding an echo envelope would first have to bring

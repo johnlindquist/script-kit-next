@@ -1,92 +1,18 @@
 {
-  "id": "feature-xstate-composer-lite",
-  "createdAt": "2026-05-15T14:39:36.530Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-composer-lite]\n\nProject briefing:\n- Repo: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK surfaces and a standalone Vite/XState",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T14:39:36.531Z",
-      "completedAt": "2026-05-15T14:48:19.027Z",
-      "usage": {
-        "inputTokens": 34879,
-        "outputTokens": 7021,
-        "reasoningTokens": 0,
-        "totalTokens": 41900
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-composer-lite]\n\nProject briefing:\n- Repo: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK surfaces and a standalone Vite/XState feature explorer under `feature_explorer/`.\n- The feature atlas lives in `feature-map/features/*.md`; the explorer turns those chapters into wireframe/runtime XState models.\n- Authored machine examples for Features 001 and 002 already exist in `feature_explorer/src/state/authoredFeatureMachines.ts`.\n- Any local implementation that changes behavior, architecture, tests, or contracts must update `lat.md/` and pass `lat check`.\n\nGoal:\nDesign a paste-ready authored machine for Feature 003, `Agent Chat Context Composer`, using the existing `AuthoredFeatureMachineConfig` schema and local style.\n\nContext:\n- A larger raw-harvest bundle for the same feature may be too large for ChatGPT display. This smaller bundle intentionally uses the distilled Feature 003 chapter plus current explorer/runtime code and owner skills.\n- Do not require a broad schema rewrite. If the existing enums are too launcher/file-search-specific for ACP, propose only the smallest enum additions needed to make ACP wireframes honest.\n\nDeliverable:\nReturn text only with:\n1. A state inventory for Feature 003.\n2. An event/transition inventory.\n3. A TypeScript object literal compatible with the current authored-machine file.\n4. Any minimal type/schema edits needed.\n5. Static/build and later state-first verification guidance.\n6. Ambiguities that should remain visible instead of invented.\n\nFocus the machine on:\n- embedded, detached, and setup-required ACP entries;\n- composer idle/draft state;\n- slash and mention popup;\n- context token/pasted-token staging;\n- portal staged, active, accepted, cancelled, and refused paths;\n- focused portal reopen;\n- agent/model switch with draft preservation;\n- streaming cancel before close;\n- actions/history popup surfaces.\n\nReturn your answer as text in this response only. Do not create, attach, export,\nor offer any downloadable file. Do not create local project artifacts yourself.\nThe local agent will write any needed files, plans, notes, goals, commits, or\nverification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-composer-lite.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-composer-lite",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T14:39:36.531Z",
-  "completedAt": "2026-05-15T14:48:19.028Z",
-  "usage": {
-    "inputTokens": 34879,
-    "outputTokens": 7021,
-    "reasoningTokens": 0,
-    "totalTokens": 41900
   },
-  "elapsedMs": 521036
 }

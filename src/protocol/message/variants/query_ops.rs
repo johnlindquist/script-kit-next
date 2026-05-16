@@ -63,6 +63,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Optional window target (defaults to focused window).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         target: Option<AutomationWindowTarget>,
+        /// Return only compact state fields suitable for agent tooling.
+        #[serde(rename = "summaryOnly", default)]
+        summary_only: bool,
     },
 
     /// Response with current UI state.

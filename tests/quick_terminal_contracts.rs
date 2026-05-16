@@ -104,7 +104,7 @@ fn quick_terminal_theme_respects_light_dark_contract() {
 
 #[test]
 fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
-    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    // doc-anchor-removed: [[removed-docs Chat#Boundary with #Quick Terminal native footer]]
     assert!(
         APP_VIEW_STATE_SOURCE
             .contains("AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")"),
@@ -127,7 +127,7 @@ fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
 
 #[test]
 fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
-    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    // doc-anchor-removed: [[removed-docs Chat#Boundary with #Quick Terminal native footer]]
     assert!(
         UI_WINDOW_SOURCE.contains("pub(crate) fn quick_terminal_can_apply_back(&self) -> bool"),
         "Quick Terminal must expose one apply-back predicate"
@@ -148,7 +148,7 @@ fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
 
 #[test]
 fn quick_terminal_keyboard_and_footer_close_share_state_first_close() {
-    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    // doc-anchor-removed: [[removed-docs Chat#Boundary with #Quick Terminal native footer]]
     assert!(
         RENDER_TERM_PROMPT_SOURCE
             .contains("this.close_quick_terminal_main_window_state_first(cx);"),
@@ -166,7 +166,7 @@ fn quick_terminal_keyboard_and_footer_close_share_state_first_close() {
 
 #[test]
 fn quick_terminal_native_footer_close_is_semantically_selectable_for_agentic_proof() {
-    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    // doc-anchor-removed: [[removed-docs Chat#Boundary with #Quick Terminal native footer]]
     assert!(
         PROMPT_HANDLER_SOURCE.contains("semantic_id == \"footer:native:close\"")
             && PROMPT_HANDLER_SOURCE.contains("AppView::QuickTerminalView { .. }")

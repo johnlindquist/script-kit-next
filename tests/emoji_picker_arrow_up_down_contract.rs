@@ -45,7 +45,7 @@
 
 const STARTUP_RS: &str = include_str!("../src/app_impl/startup.rs");
 
-// @lat: [[lat.md/surfaces#Surfaces]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn up_down_match_has_emoji_picker_arm_before_fallthrough() {
     // The arm must live in the Up/Down block — i.e. AFTER the Left/Right
@@ -230,7 +230,7 @@ fn up_down_match_has_emoji_picker_arm_before_fallthrough() {
     );
 }
 
-// @lat: [[lat.md/surfaces#Surfaces]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn left_right_emoji_arm_still_uses_compute_scroll_row_for_single_step() {
     // The Left/Right block is an EARLIER, inline `if let

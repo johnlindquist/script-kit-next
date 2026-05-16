@@ -48,7 +48,7 @@
 //!     test that asserts the resolved surface tag on a detached fixture.
 //!   - `tests/dispatcher_semantic_surface_symmetry_contract.rs` — pins
 //!     the Main-hosted half (`AcpChatView` → `"acpChat"`).
-//!   - `lat.md/acp-chat.md#Detached window behavior` — design doc.
+//!   - `removed-docs window behavior` — design doc.
 
 const CHAT_WINDOW_RS: &str = include_str!("../src/ai/acp/chat_window.rs");
 
@@ -96,7 +96,7 @@ fn count_occurrences(haystack: &str, needle: &str) -> usize {
     n
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn chat_window_registers_detached_popup_with_acp_chat_surface_parity() {
     let body = upsert_block_body(CHAT_WINDOW_RS);
@@ -127,7 +127,7 @@ fn chat_window_registers_detached_popup_with_acp_chat_surface_parity() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#Detached window behavior]]
+// doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn chat_window_has_single_detached_upsert_site() {
     let src = CHAT_WINDOW_RS;

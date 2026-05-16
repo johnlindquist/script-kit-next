@@ -1,6 +1,6 @@
 use std::fs;
 
-// @lat: [[tests/permission-assistant#Permission Assistant#Overlay lifetime and teardown]]
+// doc-anchor-removed: [[tests/permission-assistant#Permission Assistant#Overlay lifetime and teardown]]
 #[test]
 fn permiso_teardown_contract_retains_one_active_handle_and_drops_controller() {
     let permiso = fs::read_to_string("src/platform/permiso/mod.rs").expect("read permiso mod");

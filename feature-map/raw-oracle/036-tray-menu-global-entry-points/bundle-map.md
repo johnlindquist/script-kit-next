@@ -1,23 +1,19 @@
 # 036 Tray Menu and Global App Entry Points Bundle Map
 
-Oracle slug: `tray-menu-entry-atlas`
 
-Bundle path: `/Users/johnlindquist/.oracle/bundles/tray-menu-entry-atlas.txt`
 
 ## Lat Context
 
 ```bash
-lat expand "036 Tray Menu and Global App Entry Points: menu bar tray status item show main window settings notes quit restart global shortcuts"
-lat search "tray menu menu bar status item global entry points show main window settings notes quit restart shortcuts"
+source search "tray menu menu bar status item global entry points show main window settings notes quit restart shortcuts"
 ```
 
-Top sections used:
 
-- `lat.md/tray-menu#Tray menu`
-- `lat.md/tray-menu#Tray menu#Sections`
-- `lat.md/verification#Verification#Main menu and footer`
-- `lat.md/notes#Notes`
-- `lat.md/automation#Automation#Surface-proof CLI#Surface classes`
+- `removed-docs menu`
+- `removed-docs menu#Sections`
+- `removed-docs menu and footer`
+- `removed-docs`
+- `removed-docs CLI#Surface classes`
 
 ## Skills
 
@@ -49,7 +45,7 @@ packx --preview --limit 49k -l 12 \
   .agents/skills/protocol-automation/SKILL.md \
   .agents/skills/testing-quality-gates/SKILL.md \
   .agents/skills/builtin-filterable-surfaces/SKILL.md \
-  lat.md/tray-menu.md lat.md/protocol.md lat.md/automation.md lat.md/verification.md lat.md/surfaces.md lat.md/notes.md lat.md/acp-chat.md lat.md/builtins.md \
+  removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs removed-docs \
   src/tray/mod.rs src/main_entry/app_run_setup.rs src/main_entry/runtime_tray_hotkeys.rs src/hotkeys/mod.rs \
   src/menu_bar/current_app_commands.rs src/menu_bar/mod.rs src/menu_bar/tests.rs src/protocol/types/menu_bar.rs \
   src/mcp_computer_use_tools.rs src/updates.rs src/branding.rs src/login_item.rs src/main_sections/app_view_state.rs src/render_builtins/about.rs \

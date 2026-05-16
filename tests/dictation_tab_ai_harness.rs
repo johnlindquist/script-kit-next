@@ -198,7 +198,7 @@ fn tab_ai_harness_delivery_seeds_script_list_return_origin_before_open() {
     );
 }
 
-// @lat: [[tests/acp-dictation#Detached window handoff#Closes detached before embedded reveal]]
+// doc-anchor-removed: [[tests/acp-dictation#Detached window handoff#Closes detached before embedded reveal]]
 #[test]
 fn tab_ai_harness_delivery_closes_detached_acp_before_embedded_open() {
     let fn_start = BUILTIN_EXECUTION_SOURCE

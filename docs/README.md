@@ -6,7 +6,6 @@ Script Kit GPUI is a native command palette, scripting runtime, Agent Chat host,
 
 - [Getting Started](./guides/getting-started.md) — build the app, create your first script, and learn the core workflow.
 - [Feature Tour](./guides/feature-tour.md) — a guided map of the built-ins and AI features people usually miss.
-- [Main Menu Input](./guides/main-menu-input.md) — every launcher trigger: search, source filters, capture, commands, Agent Chat, file search, and Quick Terminal.
 - [SDK Scripting](./guides/sdk-scripting.md) — prompt APIs, metadata, Bun packages, MCP clients, automation receipts, and script templates.
 - [MCP and Agent Context](./guides/mcp-and-agent-context.md) — use Script Kit as an MCP server and connect scripts/Agent Chat to external MCP servers.
 - [Dictation](./guides/dictation.md) — set up microphone/model readiness, dictate into Script Kit surfaces, and reuse dictation history.
@@ -16,4 +15,4 @@ Script Kit GPUI is a native command palette, scripting runtime, Agent Chat host,
 
 - [Codex MCP Setup](./codex-mcp-setup.md) — register the live app's MCP server with Codex.
 - [AI Cookbook](./ai/cookbook/README.md) — implementation patterns for contributors working on GPUI surfaces.
-- [Architecture knowledge graph](../lat.md/overview.md) — project design notes maintained with `lat.md`.
+- [Architecture knowledge graph](../removed-docs) — project design notes maintained with `removed-docs`.

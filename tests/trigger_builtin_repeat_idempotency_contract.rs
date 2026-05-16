@@ -100,7 +100,7 @@ fn trigger_builtin_arm_span<'a>(src: &'a str, path: &str) -> &'a str {
 fn no_dispatcher_arm_mutates_automation_window_registry() {
     // The TriggerBuiltin arm body must NOT directly call into the
     // automation registry's window-list mutation API. Window lifecycle
-    // is driven by view-state transitions (see lat.md/automation),
+    // is driven by view-state transitions (see removed-docs),
     // not per-trigger side effects. A direct call inside the arm would
     // duplicate/churn the registry on every repeat trigger, breaking
     // the repeat-idempotency guarantee Pass #55 live-verified.

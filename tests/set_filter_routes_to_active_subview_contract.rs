@@ -37,7 +37,7 @@
 
 const FILTER_INPUT_UPDATES: &str = include_str!("../src/app_impl/filter_input_updates.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn set_filter_text_immediate_delegates_to_subview_router_helper() {
     // The stdin-driven receiver MUST call `write_filter_to_current_subview`
@@ -95,7 +95,7 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
     // The router helper MUST have an arm for every shared-input builtin
@@ -193,7 +193,7 @@ fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {
     );
 }
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn write_filter_to_current_subview_returns_false_for_script_list_and_file_search() {
     // The fallthrough arm `_ => false` is load-bearing: it tells

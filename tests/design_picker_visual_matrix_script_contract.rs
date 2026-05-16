@@ -126,7 +126,7 @@ fn matrix_script_dry_run_lists_50_cells() {
 }
 
 #[test]
-// @lat: [[verification#Design Picker persistence]]
+// doc-anchor-removed: [[verification#Design Picker persistence]]
 fn matrix_script_asserts_persisted_active_id_after_restart() {
     let body = script();
     assert!(

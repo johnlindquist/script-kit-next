@@ -27,10 +27,7 @@ Do not flatten these layers into a single `DismissPolicy` edit. `DismissPolicy` 
 - `src/ai/acp/view.rs`: ACP local Escape handling, streaming cancellation, picker/model/attach popup dismissal.
 
 ## Stable Contracts
-
-- `lat.md/surfaces.md`: surface registry, popup-first key routing, `DismissPolicy`, and generated surface contracts.
-- `lat.md/automation.md`: `semanticSurface` re-keying, hide/RPC reset parity, actions dialog Escape filter-agnostic contract, popup close routing.
-- `lat.md/protocol.md`: `simulateKey` is fire-and-forget; use follow-up state inspection.
+: surface registry, popup-first key routing, `DismissPolicy`, and generated surface contracts.: `semanticSurface` re-keying, hide/RPC reset parity, actions dialog Escape filter-agnostic contract, popup close routing.: `simulateKey` is fire-and-forget; use follow-up state inspection.
 - `tests/app_view_policy_contract.rs`: no wildcard/default escape hatches in surface/dismiss policy.
 - `tests/hide_rpc_surface_reset_contract.rs`: reset before automation re-key for hide/RPC paths.
 - `tests/actions_dialog_escape_filter_agnostic_contract.rs`: actions Escape pops/closes without clearing search text.

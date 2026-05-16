@@ -14,7 +14,7 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn registry_accepts_current_app_commands_aliases() {
     for alias in [
@@ -31,7 +31,7 @@ fn registry_accepts_current_app_commands_aliases() {
     }
 }
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn current_app_commands_routes_through_named_planner_branch() {
     assert!(
@@ -44,7 +44,7 @@ fn current_app_commands_routes_through_named_planner_branch() {
     );
 }
 
-// @lat: [[lat.md/builtins#Built-ins]]
+// doc-anchor-removed: [[removed-docs]]
 #[test]
 fn current_app_commands_dispatch_uses_tray_capture_helper() {
     assert!(
@@ -57,7 +57,7 @@ fn current_app_commands_dispatch_uses_tray_capture_helper() {
     );
 }
 
-// @lat: [[lat.md/builtins#Built-ins#Main Window Sizing Modes]]
+// doc-anchor-removed: [[removed-docs Window Sizing Modes]]
 #[test]
 fn current_app_commands_trigger_builtin_deferred_resize_stays_mini() {
     let dispatch_compact = compact(DISPATCH);
@@ -101,7 +101,7 @@ fn current_app_commands_trigger_builtin_deferred_resize_stays_mini() {
     );
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn semantic_surface_map_has_current_app_commands() {
     assert!(

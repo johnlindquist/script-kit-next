@@ -1,93 +1,19 @@
 {
-  "id": "feature-xstate-terminal-plan",
-  "createdAt": "2026-05-15T15:33:55.924Z",
-  "status": "completed",
-  "promptPreview": "[feature-xstate-terminal-plan]\n\nProject: Script Kit GPUI. Goal: continue the exhaustive feature-map -> XState Feature Explorer loop. The attached bundles includ",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T15:33:55.925Z",
-      "completedAt": "2026-05-15T15:42:24.189Z",
-      "usage": {
-        "inputTokens": 199785,
-        "outputTokens": 8314,
-        "reasoningTokens": 0,
-        "totalTokens": 208099
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 80203
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[feature-xstate-terminal-plan]\n\nProject: Script Kit GPUI. Goal: continue the exhaustive feature-map -> XState Feature Explorer loop. The attached bundles include repo process rules, quick-terminal/protocol/testing/lat skills, lat.md Feature Explorer and surface contracts, Feature 014 chapter and raw Oracle answer, current authored feature machines/runtime, and focused source/test excerpts for Quick Terminal PTY behavior.\n\nTask: produce an implementation-ready authored XState runtime machine plan for Feature 014: Quick Terminal PTY / TermPrompt / Warm Pool / Apply-back.\n\nPlease identify the concrete states/events/guards/metadata the explorer machine should model so the wireframe covers every scenario in the chapter and source excerpts. Pay special attention to QuickTerminalView vs SDK TermPrompt vs ACP Chat boundaries, warm PTY pool lifecycle, cold spawn fallback, cwd handoff, terminal input ownership, Tab/Shift+Tab/Escape behavior, native footer Close vs Apply+Close, apply-back guard cleanup, terminal actions, zsh prompt suppression, theme adaptation, and protocol/state-first verification.\n\nConstraints:\n- This repo requires lat.md updates for behavior/architecture/test changes and `lat check` after edits.\n- Keep the plan compatible with the current `feature_explorer/src/state/authoredFeatureMachines.ts` style.\n- Prefer exhaustive state coverage over minimalism.\n- Return your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.\n\nReturn: (1) coverage checklist keyed to chapter claims, (2) proposed machine states/events/guards, (3) likely missed edge cases, (4) verification gates.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-quick-terminal-base.txt",
       "/Users/johnlindquist/.oracle/bundles/feature-xstate-quick-terminal-context.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "feature-xstate-terminal-plan",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T15:33:55.924Z",
-  "completedAt": "2026-05-15T15:42:24.190Z",
-  "usage": {
-    "inputTokens": 199785,
-    "outputTokens": 8314,
-    "reasoningTokens": 0,
-    "totalTokens": 208099
   },
-  "elapsedMs": 506775
 }

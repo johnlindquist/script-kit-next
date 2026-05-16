@@ -2,7 +2,7 @@
 //! `DesignVariant` maps to a stable kebab-case id and that unknown
 //! ids fall back to the canonical Script Kit Classic design.
 //!
-//! See `lat.md/designs.md#Legacy migration`.
+//! See `removed-docs migration`.
 
 use script_kit_gpui::designs::legacy_migration::{
     legacy_variant_def, map_legacy_variant_to_id, resolve_possibly_legacy_id,

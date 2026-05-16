@@ -77,7 +77,7 @@ fn dispatchers() -> [(&'static str, &'static str); 2] {
 const EMOJI_UNHANDLED: &str = "SimulateKey: Unhandled key '{}' in EmojiPicker";
 const CLIPBOARD_UNHANDLED: &str = "SimulateKey: Unhandled key '{}' in ClipboardHistoryView";
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn both_dispatchers_keep_emoji_picker_unhandled_log_shape() {
     // The `_ =>` arm in `AppView::EmojiPickerView` MUST continue to
@@ -98,7 +98,7 @@ fn both_dispatchers_keep_emoji_picker_unhandled_log_shape() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn both_dispatchers_keep_clipboard_history_unhandled_log_shape() {
     // The `else` branch inside `AppView::ClipboardHistoryView` MUST
@@ -117,7 +117,7 @@ fn both_dispatchers_keep_clipboard_history_unhandled_log_shape() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn dispatchers_do_not_route_simulatekey_chars_into_view_filter() {
     // The simulateKey dispatcher files MUST NOT call any of the
@@ -152,7 +152,7 @@ fn dispatchers_do_not_route_simulatekey_chars_into_view_filter() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn emoji_picker_unhandled_arm_returns_without_side_effect() {
     // Inside the `_ =>` arm that emits the EmojiPicker `Unhandled
@@ -179,7 +179,7 @@ fn emoji_picker_unhandled_arm_returns_without_side_effect() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn clipboard_history_else_branch_has_no_return_or_mutation() {
     // Inside the `else` branch that emits the ClipboardHistoryView

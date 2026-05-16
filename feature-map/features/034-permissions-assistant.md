@@ -2,16 +2,11 @@
 
 This chapter maps Script Kit GPUI's passive macOS permission setup assistant and the read-only permission status surfaces used by users and agents.
 
-Raw Oracle reference: [answer](../raw-oracle/034-permissions-assistant/answer.md), [prompt](../raw-oracle/034-permissions-assistant/prompt.md), [bundle map](../raw-oracle/034-permissions-assistant/bundle-map.md), [full log](../raw-oracle/034-permissions-assistant/output.log), [session metadata](../raw-oracle/034-permissions-assistant/session.json).
 
 ## Executive Summary
 
-Permissions and Permission Assistant has two jobs:
 
-- User setup: `builtin/allow-accessibility` and `builtin/allow-screen-recording` open the matching macOS Privacy & Security pane, then present a native AppKit overlay above System Settings with a Script Kit `.app` drag row.
-- Passive status: Accessibility, Screen Recording, Microphone, and MCP-facing Event Synthesizing checks read state without prompting, granting, writing TCC, clicking System Settings, activating Script Kit, or changing app activation policy.
 
-The core contract is strict: Script Kit may read status and guide the user through manual setup, but it must not silently request or mutate macOS privacy permissions.
 
 ## What Users Can Do
 
@@ -31,7 +26,6 @@ Users cannot use this feature to force-grant permissions, edit `TCC.db`, run `tc
 
 `src/platform/permiso/mod.rs#PermisoAssistant` is the public assistant entry point. `present(panel)` opens the settings URL, presents the overlay, and returns a `PermisoHandle`; `present_retained(panel)` stores that handle in a process-global slot so the native overlay stays alive after command execution; `dismiss_active()` clears the active handle.
 
-`src/platform/permiso/panel.rs#PermisoPanel` defines the assistant panels:
 
 | Panel | Display name | Receipt name | Settings pane |
 |---|---|---|---|
@@ -40,7 +34,6 @@ Users cannot use this feature to force-grant permissions, edit `TCC.db`, run `tc
 
 `src/platform/permiso_detect.rs#PermissionStatus` models passive permission status. Accessibility uses `AXIsProcessTrusted()`. Screen Recording uses `CGPreflightScreenCaptureAccess()`. Microphone uses `AVCaptureDevice.authorizationStatusForMediaType(...)`. Accessibility and Screen Recording currently map false to `Denied`; Microphone can report `Authorized`, `Denied`, `NotDetermined`, or `Unknown`.
 
-The overlay is native AppKit, not a GPUI popup. The durable contract describes a separate non-activating `NSPanel`-style overlay that cannot become key/main, does not use `WindowKind::PopUp`, does not mutate launcher panel invariants, and owns its own AppKit lifetime.
 
 The drag row is `src/platform/permiso/drag_source.rs#AppDragSourceView`. It resolves the host `.app` with `src/platform/permiso/host_app.rs#host_app_bundle_url`, writes a `.fileURL` pasteboard item, uses copy drag semantics, hides the row while dragging, and restores it when dragging ends. The payload must be the `.app` directory, not `Contents/MacOS/...`.
 
@@ -48,9 +41,6 @@ The drag row is `src/platform/permiso/drag_source.rs#AppDragSourceView`. It reso
 
 | Entry | Owner | Behavior |
 |---|---|---|
-| `builtin/allow-accessibility` | `src/builtins/mod.rs` | Registers **Allow Accessibility** as `PermissionCommandType::AllowAccessibility`. |
-| `builtin/allow-screen-recording` | `src/builtins/mod.rs` | Registers **Allow Screen Recording** as `PermissionCommandType::AllowScreenRecording`. |
-| Permission command execution | `src/app_execute/builtin_execution.rs` | Calls `PermisoAssistant::present_retained(...)`, shows HUD on success, and returns structured failure on open errors. |
 | Settings **Allow Accessibility** | `src/render_builtins/settings.rs` | Constructs the same builtin entry and executes it. |
 | Settings **Allow Screen Recording** | `src/render_builtins/settings.rs` | Constructs the same builtin entry and executes it. |
 | `computer/list_permissions` | `src/mcp_computer_use_tools.rs` | Returns read-only permission rows; no runtime bridge or settings side effects. |
@@ -65,8 +55,6 @@ The Settings surface also contains related legacy entries such as **Check Permis
 ### Allow Accessibility
 
 1. User selects **Allow Accessibility** from launcher search or Settings.
-2. The builtin routes to `PermissionCommandType::AllowAccessibility`.
-3. Execution calls `PermisoAssistant::present_retained(PermisoPanel::Accessibility)`.
 4. The assistant opens the Accessibility privacy pane.
 5. The overlay appears with the Script Kit drag row.
 6. Script Kit shows `Drag Script Kit into Accessibility`.
@@ -77,8 +65,6 @@ This path must not call `AXIsProcessTrustedWithOptions`, write TCC, use `tccutil
 ### Allow Screen Recording
 
 1. User selects **Allow Screen Recording** from launcher search or Settings.
-2. The builtin routes to `PermissionCommandType::AllowScreenRecording`.
-3. Execution calls `PermisoAssistant::present_retained(PermisoPanel::ScreenRecording)`.
 4. The assistant opens the Screen Recording privacy pane.
 5. The overlay appears with the Script Kit drag row.
 6. Script Kit shows `Drag Script Kit into Screen Recording`.
@@ -92,7 +78,6 @@ The overlay row resolves the real host `.app` bundle. On drag start, `AppDragSou
 
 ### Read Permission Status From MCP
 
-Agents use `computer/list_permissions` for all rows or `computer/get_permission` for a single row. Current MCP permission ids are:
 
 - `accessibility`
 - `screenRecording`
@@ -112,9 +97,6 @@ Screenshot capture checks Screen Recording access with `CGPreflightScreenCapture
 
 | User intent | Entry point | UI state | Key/click | Code path | Result | Proof |
 |---|---|---|---|---|---|---|
-| Open Accessibility assistant | **Allow Accessibility** builtin | Launcher row selected | Enter/click | `PermissionCommandType::AllowAccessibility -> present_retained(Accessibility)` | Accessibility pane opens; overlay appears; HUD names Accessibility. | `tests/source_audits/permiso_builtin_contract.rs` |
-| Open Screen Recording assistant | **Allow Screen Recording** builtin | Launcher row selected | Enter/click | `PermissionCommandType::AllowScreenRecording -> present_retained(ScreenRecording)` | Screen Recording pane opens; overlay appears; HUD names Screen Recording. | `tests/source_audits/permiso_builtin_contract.rs` |
-| Open from Settings | Settings permission item | Settings surface visible | Click/select | `SettingsAction::* -> BuiltInEntry -> execute_builtin` | Same retained assistant path as launcher. | `src/render_builtins/settings.rs` |
 | Drag app | Overlay row | Native overlay visible | Drag | `AppDragSourceView -> host_app_bundle_url` | `.app` bundle URL copy drag. | `src/platform/permiso/drag_source.rs` |
 | List permissions | MCP tool | Agent call | JSON request | `computer/list_permissions` | Read-only rows for Accessibility, Screen Recording, Event Synthesizing. | `tests/source_audits/computer_list_permissions_contract.rs` |
 | Get permission | MCP tool | Agent call | JSON request | `computer/get_permission` | One read-only row or not-found status. | `tests/source_audits/computer_get_permission_contract.rs` |
@@ -123,21 +105,18 @@ Screenshot capture checks Screen Recording access with `CGPreflightScreenCapture
 
 ## State Machines
 
-Assistant open:
 
 ```text
 User selects assistant builtin
   -> execute_builtin PermissionCommand
   -> present_retained(panel)
   -> present_settings_url(panel)
-  -> OverlayController::present(panel)
   -> store PermisoHandle in ACTIVE_PERMISO_HANDLE
   -> show HUD
   -> user drags app manually
   -> dismiss/replacement/drop releases overlay
 ```
 
-Permission read:
 
 ```text
 Caller asks for status
@@ -161,18 +140,14 @@ MCP permission tools return only schema/status fields. They do not return images
 
 ## Error And Disabled States
 
-`present_settings_url(panel)` can fail if native URL construction fails, `NSWorkspace` is unavailable, `openURL` returns false, or the platform is not macOS. Builtin execution shows `Failed to open Permission Assistant: ...` and returns `ERROR_LAUNCH_FAILED` with `allow_accessibility_failed` or `allow_screen_recording_failed`.
 
 `host_app_bundle_url()` can fail when running from an unbundled binary. That should stop the drag-source path instead of substituting a non-`.app` executable.
 
 If the System Settings window cannot be located, the documented assistant contract falls back to centered overlay placement and re-queries later. It must not cache stale frames across display changes, Spaces switches, or app activation.
 
-Non-macOS status checks return `Unknown`. MCP rows represent unavailable checks as `granted: null` and `status: "unknown"`.
 
 ## Invariants And Regression Risks
 
-- Permission detection stays passive: read status only; never request.
-- The assistant is manual: it may open Settings and show the overlay, but it must not click, type, press, focus, or grant.
 - The overlay is native, non-activating, and separate from GPUI popup/window contracts.
 - The drag payload is the `.app` bundle URL, never `Contents/MacOS`.
 - Only one retained assistant handle owns the current overlay; replacement or dismissal drops the prior handle.
@@ -181,11 +156,9 @@ Non-macOS status checks return `Unknown`. MCP rows represent unavailable checks 
 - Dictation microphone preflight must use authorization status, not a request API.
 - Screenshot proof must reject misleading blank or black captures.
 
-Main risks are subtle API substitutions: replacing preflight/status calls with prompting APIs, adding System Settings automation, caching stale window frames, removing the retained handle, adding action handles to MCP permission rows, or treating a screenshot file as proof without content audit.
 
 ## Verification Recipes
 
-Focused checks:
 
 ```bash
 cargo test --test source_audits permiso_builtin_contract -- --nocapture
@@ -211,7 +184,7 @@ Keep the legacy accessibility prompt/settings commands conceptually separate fro
 
 ## Open Questions And Gaps
 
-- The focused Oracle bundle showed simplified or stubbed locator/overlay source in places while `lat.md/permissions.md` documents the fuller native contract. Verify the current full local implementation before claiming runtime positioning, timers, display-link behavior, or observer teardown.
+- The focused Oracle bundle showed simplified or stubbed locator/overlay source in places while `removed-docs` documents the fuller native contract. Verify the current full local implementation before claiming runtime positioning, timers, display-link behavior, or observer teardown.
 - Microphone is covered by passive detection and dictation setup but is not currently an MCP permission row.
 - Accessibility and Screen Recording false states map to `Denied`; only Microphone currently exposes `NotDetermined`.
 - Overlay positioning does not yet have a receipt as strong as the source audits.

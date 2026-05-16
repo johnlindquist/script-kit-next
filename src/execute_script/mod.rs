@@ -1764,7 +1764,12 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetState - needs UI state, forward to UI thread
-                                    if let Message::GetState { request_id, target } = &msg {
+                                    if let Message::GetState {
+                                        request_id,
+                                        target,
+                                        summary_only,
+                                    } = &msg
+                                    {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1774,6 +1779,7 @@ impl ScriptListApp {
                                         let prompt_msg = PromptMessage::GetState {
                                             request_id: request_id.clone(),
                                             target: target.clone(),
+                                            summary_only: *summary_only,
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(

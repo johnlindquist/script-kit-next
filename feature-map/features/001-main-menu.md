@@ -4,16 +4,12 @@ The main menu is the launcher-owned ScriptList surface where users search comman
 
 ## Executive Summary
 
-ScriptList is the app's default command surface. It owns the main filter input, grouped launcher results, source-filter states such as `f:` and `notes:`, legacy trigger handoffs such as `@` and `~`, menu-syntax popups, MainList actions, shortcut assignment, fallback rows, and the selection identity that decides what Enter or Cmd+K will execute.
 
-The critical contract is stability: typing, async providers, popup routing, source filters, action menus, and shortcut recording must not move the selected target behind the user's back. State-first receipts such as `mainWindowPreflight`, `filterInputDecorations`, `actionsDialog`, `promptPopup`, and `mainListScroll` are the preferred proof surfaces.
 
 ## What Users Can Do
 
 - Type plain text to find scripts, scriptlets, built-ins, apps, skills, windows, and fallback commands.
 - Use root Files as a passive section for eligible filename queries, explicit directory paths, and recent-file rows.
-- Use source filters like `f:`, `notes:`, `c:`, `ai:`, `d:`, `t:`, `h:`, and `w:` to search one source intentionally.
-- Use `:` for filter discovery and advanced query insertion without confusing it with committed source heads.
 - Use `;` or `+` capture syntax to open capture target rows, filter targets, and compose structured capture payloads.
 - Use `@`, `~`, `/`, `>`, and `?` legacy triggers without letting menu syntax claim them incorrectly.
 - Press Enter to execute the visible selected row, including root files, passive rows, fallback continuation rows, and normal launcher rows.
@@ -28,22 +24,18 @@ The critical contract is stability: typing, async providers, popup routing, sour
 | ScriptList | Default launcher `AppView` with main filter input and grouped results. | `src/render_script_list/mod.rs` |
 | Main filter | The single-line input that drives launcher search, source filters, triggers, and handoffs. | `src/app_impl/filter_input_change.rs`, `src/app_impl/filter_input_updates.rs` |
 | Grouped results | Stable, role-aware projection of scripts, commands, files, passive sources, and fallback rows. | `src/scripts/grouping.rs`, `src/scripts/types.rs` |
-| Source filters | Valueless heads such as `files:` / `f:` that strip into source gates and query text. | `src/menu_syntax/query.rs`, `src/menu_syntax/mode.rs` |
 | Menu syntax popup | Attached prompt popup for capture, filter, and command discovery rows. | `src/app_impl/menu_syntax_trigger_popup.rs`, `src/app_impl/menu_syntax_trigger_popup_window.rs` |
 | Actions dialog | Attached Cmd+K popup whose host and subject come from the focused surface/row. | `src/app_impl/actions_dialog.rs`, `src/app_impl/actions_toggle.rs` |
 | Root action subject | Captured row identity for root files/passive rows so execution does not re-read changing selection. | `src/app_impl/root_unified_result_actions.rs` |
 | Shortcut recorder | Attached popup that records and writes command shortcuts to `config.ts`. | `src/app_impl/shortcut_recorder.rs` |
-| Command ID | Stable config/deeplink/hotkey identity such as `script/...`, `scriptlet/...`, `builtin/...`, or `app/...`. | `src/scripts/types.rs`, `lat.md/shortcuts.md` |
+| Command ID | Stable config/deeplink/hotkey identity such as `script/...`, `scriptlet/...`, `builtin/...`, or `app/...`. | `src/scripts/types.rs`, `removed-docs` |
 
 ## Entry Points
 
 | Entry point | User input | Result |
 |---|---|---|
-| Open launcher | App hotkey, tray, script return, reset | `AppView::ScriptList` with main filter focus. |
 | Type plain text | `deploy`, `calendar`, `raycast` | Grouped fuzzy results from primary launcher sources and eligible passive rows. |
 | Type path | `~`, `~/dev/`, `/tmp` | Mini File Search or root directory browse handoff; no source-chip decoration. |
-| Type source head | `f:`, `files:s`, `notes: plan`, `c:skip` | Source-filtered root search with stripped query and active source indicator. |
-| Type leading colon | `:`, `:has:sh` | Advanced query/filter discovery popup or committed advanced query. |
 | Type capture sigil | `;`, `;todo`, `+todo` | Capture target picker or capture composer. |
 | Type legacy trigger | `@`, `/`, `>`, `?`, `~` | Legacy special-entry route or literal launcher handling, not generic menu-syntax popup ownership. |
 | Press Cmd+K | Focused ScriptList row | MainList actions dialog for selected row. |
@@ -59,17 +51,13 @@ The user opens the launcher, types plain text, arrows to a row, and presses Ente
 
 For eligible filename queries, root Files appears below primary launcher rows and before fallbacks. Provider work may warm a cache and update loading receipts, but it must not stream new rows into the current query frame. Cached rows can appear when a future frame is built. Explicit directory paths intentionally switch to bounded direct-child browse and may replace the active direct-child batch.
 
-### Browse Files With `f:`
 
-Typing `f:` or `files:` source-filters the root menu to Files. With empty stripped query, Files shows recent-file browse rows even when ordinary root Files is disabled. With one alphanumeric character such as `f:s`, Files may search despite ordinary plain `s` staying below the normal root-files threshold. Source-chip status is informational and never executable.
 
 ### Search A Passive Source
 
-Typing `notes: meeting`, `c:skip`, `ai: refactor`, `d: invoice`, `tabs: docs`, `history: stripe`, or `w: terminal` strips the source head and enables only that source for the active frame. Positive explicit source heads opt into disabled passive sources for that query. Source-filter mode blocks launcher input-history recall so Up and Down remain list navigation.
 
 ### Use Advanced Filter Discovery
 
-Typing a bare `:` opens filter discovery. Selecting a qualifier can insert tokens such as `type:` or `has:`. Complete predicates like `:type:script deploy`, `shortcut:any review`, and `has:shortcut` become advanced queries over launcher rows. A leading `:` is discovery; it is not committed source syntax.
 
 ### Use Capture Syntax
 
@@ -95,18 +83,11 @@ The user opens actions for a command row, chooses Add/Edit Shortcut, records a k
 | Browse path | Main filter | Root directory browse | Type `~/dev/` | Directory browse branch | Direct children list | File rows + continuation |
 | Enter directory | Main list | Root directory row | Tab | Root Files directory owner | Query rewrites to folder | Directory-browse proof |
 | Move parent | Main list | Directory browse | Shift+Tab | Root Files directory owner | Query moves parent / clears fragment | Directory-browse proof |
-| Filter Files | Main filter | Source-filter mode | `f:s` | `parse_filter_query` | Files-only stripped search | `source_filters`, `computed_search_text` |
-| Browse Files source | Main filter | Source-only Files | `f: ` | Files source browse | Recent Files rows | Source-chip pagination proof |
-| Filter Notes | Main filter | Source-filter mode | `notes: plan` | Source-filter parser/grouping | Notes-only passive rows | Visible source Notes |
-| Filter Clipboard | Main filter | Source-filter mode | `c:skip` | Source-filter parser/grouping | Clipboard-only rows | No raw content in receipts |
 | Source status | Main list | Source-filter mode | Query source | Source status metadata | Non-selectable status row | `getElements` role `status` |
-| Open discovery | Main filter | Prompt popup | `:` | Menu syntax popup state machine | Filter picker opens | `promptPopup` elements |
-| Accept qualifier | Prompt popup | Menu syntax | Enter | `InlinePickerKeyIntent::Accept` | Token inserted or popup closed | Prompt popup receipt |
 | Capture target | Main filter | Prompt popup | `;` / `+` | Trigger picker snapshot | Capture rows | Menu syntax rows |
 | Legacy mention trigger | Main filter | Special route | `@` | Special entry detector | ACP mention route or literal handling | `script_list_special_entry_routed` |
 | Path handoff | Main filter | File Search mini | `~` / `/...` | File Search special entry | Mini File Search | No stale source chip |
 | Open actions | Main list | ScriptList | Cmd+K | `handle_cmd_k_actions_toggle` | Actions dialog opens | `actionsDialog.host=MainList` |
-| Search actions | Actions dialog | Popup | Type text | `ActionsDialog::refilter` | Visible actions filtered | `visibleActions` receipt |
 | Execute action | Actions dialog | Popup | Enter / shortcut | Actions activation callback | Captured action runs | Physical/simulated parity proof |
 | Add shortcut | Actions dialog | Shortcut action | Enter | `show_shortcut_recorder` | Recorder popup opens | `shortcut-recorder-popup` |
 | Save shortcut | Recorder | Popup | Save | `config-cli.ts set-command-shortcut` | `config.ts` updated, hotkey refresh | Shortcut config source tests |
@@ -121,7 +102,6 @@ The user opens actions for a command row, chooses Add/Edit Shortcut, records a k
 | Root Files loading | Eligible filename query | Warm future frame, query change, continuation | Provider completion cannot mutate same-query visible frame. |
 | Root directory browse | Explicit path query | Child fragment, Tab, Shift+Tab, File Search | Intentional direct-child browse may update active rows. |
 | Source-filter mode | Known source head | Delete source head, execute row, source-only browse | Disallowed sources suppressed; Up/Down stay list navigation. |
-| Menu-syntax popup | `;`, `+`, `:`, partial trigger | Accept, Escape, footer action, body composer | Footer rows are clickable but not default-selected. |
 | Capture body composer | Exact capture target plus body | Enter, Cmd+K, Escape, text edit | Body text is payload, not fuzzy target search. |
 | Actions closed | Normal main list | Cmd+K | Host and selected row decide action catalog. |
 | Actions open | Cmd+K | Escape, Cmd+K, action, blur/backdrop | Action execution uses captured subject before close clears context. |
@@ -130,13 +110,6 @@ The user opens actions for a command row, chooses Add/Edit Shortcut, records a k
 
 ## Visual And Focus States
 
-- ScriptList: compact launcher visual, main filter focus, grouped rows, optional info panel, and shared footer.
-- Root Files: Files header, loading label, rows, continuation handoff row, and root-file action footer hints.
-- Source-filter mode: source chips in the input, optional source status rows, and source-only results.
-- Menu-syntax popup: attached popup below the main filter with rows, highlights, badges, footer actions, and live `TriggerPickerSnapshot`.
-- Actions dialog: attached popup matching host chrome, searchable actions, grouped sections, shortcut glyphs, selected action, and content-light context metadata.
-- Shortcut recorder: centered attached popup around 360x196 with command name/id, recorded shortcut, Save/Cancel, and focus capture.
-- HUD/toast: success/failure feedback for config writes, Quick Look failures, and shortcut refresh outcomes.
 
 ## Keystrokes And Commands
 
@@ -161,26 +134,13 @@ The user opens actions for a command row, chooses Add/Edit Shortcut, records a k
 | Cmd+Shift+C | Selected root file | Copy full file path. |
 | Cmd+Y | Selected root file | Quick Look selected file. |
 | `;` / `+` | Main filter | Capture picker when configured. |
-| `:` | Main filter | Advanced query/filter discovery. |
 | `@` | Main filter | Legacy ACP mention/special-entry path, not generic source syntax. |
 | `~` / `/...` | Main filter | Path/file-search handoff. |
-| `f:` / `files:` | Main filter | Files source filter. |
 
 ## Source Filter And Trigger Reference
 
 | Input | Classification | Behavior |
 |---|---|---|
-| `files:` / `f:` | Source filter | Files-only root rows; source-only browse when stripped text is empty. |
-| `notes:` / `n:` | Source filter | Notes metadata rows and source-only pinned/recent browse. |
-| `clipboard:` / `c:` | Source filter | Clipboard metadata/recent rows; raw clipboard content stays out of receipts. |
-| `tabs:` / `t:` | Source filter | Browser tab metadata rows. |
-| `history:` / `h:` | Source filter | Browser history metadata rows. |
-| `commands:` / `cmd:` | Source filter | Base launcher command rows. |
-| `conversations:` / `ai:` | Source filter | Saved ACP conversation rows. |
-| `dictation:` / `d:` | Source filter | Dictation metadata rows; transcript content loaded only after explicit action. |
-| `windows:` / `w:` | Source filter | Window rows using main/window switcher search model. |
-| `processes:` / `p:` | Uncommitted | Literal input until root process rows exist. |
-| `:` | Discovery trigger | Opens filter picker; inserts committed heads or predicates. |
 | `;target` | Capture syntax | Registered capture target composer. |
 | `+target` | Legacy capture alias | Same target-gated behavior as `;target`. |
 | `@` | Legacy trigger | Closes menu-syntax popup and may route to ACP mention picker. |
@@ -198,7 +158,6 @@ MainList actions resolve from the selected visible row.
 - Passive rows expose typed root actions through `RootUnifiedActionSubject` with content-light metadata.
 - Unknown root action IDs no-op and must not fall through to generic script handling.
 
-Shortcut assignment is config-backed:
 
 | Operation | Path | Contract |
 |---|---|---|
@@ -252,7 +211,7 @@ State receipts should avoid raw local payloads. Root passive action receipts mus
 | Filter input change/update pipeline | `src/app_impl/filter_input_change.rs`, `src/app_impl/filter_input_updates.rs` |
 | Source-filter parsing/highlighting | `src/menu_syntax/query.rs`, `src/menu_syntax/mode.rs` |
 | Menu-syntax popup lifecycle | `src/app_impl/menu_syntax_trigger_popup.rs`, `src/app_impl/menu_syntax_trigger_popup_window.rs` |
-| Advanced query/filter grammar | `src/menu_syntax/filter.rs`, `lat.md/menu-syntax.md` |
+| Advanced query/filter grammar | `src/menu_syntax/filter.rs`, `removed-docs` |
 | Root Files | `src/app_impl/root_file_search.rs`, `src/file_search/mod.rs`, `src/scripts/grouping.rs` |
 | Grouped selection identity | `src/scripts/types.rs`, `src/scripts/grouping.rs`, `src/main_window_preflight/` |
 | Actions host/toggle/close | `src/app_impl/actions_dialog.rs`, `src/app_impl/actions_toggle.rs` |
@@ -266,10 +225,8 @@ State receipts should avoid raw local payloads. Root passive action receipts mus
 ## Invariants And Regression Risks
 
 - The main filter is single-line; newline input must not corrupt the root query.
-- Selection identity uses `SearchResult::stable_selection_key`, not input-history keys.
 - Async root file/passive providers must not mutate the current visible frame for the same query.
 - Source filters are transparent refinements, not separate app modes, and source heads can appear anywhere as standalone tokens.
-- A bare leading `:` is discovery, not committed source syntax.
 - Home/path input (`~`, `~/...`, `/tmp`) must not inherit stale source-chip decoration.
 - Source-chip status must not affect executable row count, selection, mini sizing, scroll height, or action subjects.
 - Source-filter mode blocks launcher input-history recall so arrows remain list navigation.
@@ -283,7 +240,6 @@ State receipts should avoid raw local payloads. Root passive action receipts mus
 
 ## Verification Recipes
 
-Source/static checks:
 
 ```bash
 cargo test --test menu_syntax_source_filters -- --nocapture
@@ -297,10 +253,9 @@ bun test scripts/config-cli.test.ts
 cargo check --lib
 cargo fmt --check
 git diff --check
-lat check
+source checks
 ```
 
-Runtime/state-first proofs:
 
 ```bash
 bun scripts/agentic/root-search-frame-stability.ts
@@ -314,10 +269,7 @@ bun scripts/agentic/root-source-filter-lazy-scroll.ts --query s --timeout 20000
 bun scripts/agentic/root-source-actions-matrix.ts
 ```
 
-Targeted state checks should assert:
 
-- `f:s` strips to `s`, activates Files, and allows one-character Files search.
-- `f: ` has empty stripped text but shows Files browse rows.
 - `@` routes as a legacy/special entry and does not leave menu-syntax popup state behind.
 - `~/...` clears stale source/power-syntax decorations before File Search paints.
 - Cmd+K on root file/passive rows exposes content-light actions and captures context.
@@ -328,8 +280,6 @@ Screenshots are only needed for visual acceptance of row chrome, popup placement
 
 ## Agent Notes
 
-- Do not assume `f:` is a command or a popup mode; it is a source-filter head that strips out of the query.
-- Do not assume `:` means source filter. A bare leading colon opens discovery, while committed source heads are tokens like `files:` or `f:`.
 - Do not collapse `@`, `~`, `/`, `>`, and `?` into menu-syntax popup ownership; they are legacy/special-entry boundaries unless a focused parser path says otherwise.
 - To verify selection stability, inspect `mainWindowPreflight.visibleResults` and stable keys instead of reading row labels from screenshots.
 - If Enter runs the wrong thing, inspect grouped selection projection, fallback execution order, and same-query provider frame mutation.

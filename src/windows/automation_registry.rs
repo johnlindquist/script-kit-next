@@ -355,7 +355,7 @@ pub fn set_automation_visibility(id: &str, visible: bool) {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 /// Update the `bounds` field for a single window in place.
 ///
 /// Used by live-resized attached popups (e.g., the actions-dialog

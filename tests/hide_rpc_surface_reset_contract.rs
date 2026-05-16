@@ -25,7 +25,7 @@ const STDIN_CORE_SOURCE: &str = include_str!("../src/main_entry/runtime_stdin_ma
 const STDIN_SOURCE: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../src/main_entry/app_run_setup.rs");
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_reset_to_script_list() {
     for (name, source) in [
@@ -61,7 +61,7 @@ fn hide_rpc_dispatchers_reset_to_script_list() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_rekey_semantic_surface_to_script_list() {
     let expected = "crate::windows::update_automation_semantic_surface(\n                                    \"main\",\n                                    Some(\"scriptList\".to_string()),\n                                );";
@@ -98,7 +98,7 @@ fn hide_rpc_dispatchers_rekey_semantic_surface_to_script_list() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_rpc_dispatchers_sequence_reset_then_rekey() {
     // Order matters: `reset_to_script_list` flips `view.current_view`
@@ -147,7 +147,7 @@ fn hide_rpc_dispatchers_sequence_reset_then_rekey() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn hide_main_window_helper_still_exists_with_same_pattern() {
     // Pass #19 added the re-key + reset to `hide_main_window_helper`

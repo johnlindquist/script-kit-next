@@ -8,20 +8,10 @@ Ground claims in the attached repo context. Prefer concrete file/function/test/s
 
 ## Feature Scope
 
-Feature id: `035-settings-theme-config-preferences`
 
-Feature name: Settings, Theme, Config, and Preferences
 
-Cover these Script Kit GPUI capabilities:
 
-- Settings Hub mini built-in list: operational settings rows, filtering, keyboard selection, row activation, actions popup routing, footer ownership, `getState`, and `getElements`.
-- Theme Chooser: preset list, preview, customizer controls, native footer ownership, actions dialog catalog, handled-key propagation, Enter ownership, Escape/Cmd+W exit, explicit blur-dismiss policy, and transient focus churn during theme changes.
-- Theme system: stock presets, user theme directory, `theme.json`, user-authored theme save/load behavior, row-state opacity guardrails, contrast audits, font/rem sizing, vibrancy/material/appearance effects, and preview/color token boundaries.
-- Config system: `~/.scriptkit/config.ts`, config defaults, loader/cache behavior, schema/SDK type surface, config CLI, command shortcut config, built-in enablement settings, theme/dictation/AI/window preferences, and validation/update/reset flows.
-- Runtime preference reads: selected theme preset, editor/font size or UI scale where implemented, last-selected AI model/provider preferences, dictation device preference, window-management/window-appearance preferences, and which fields are schema-only versus actually wired.
-- Automation/protocol proof surfaces for settings/theme/config: state/elements receipts, source audits, smoke tests, config fingerprint tests, theme contrast tests, theme chooser propagation tests, settings visible-row tests, and config schema tests.
 
-Explicitly distinguish:
 
 - Settings Hub versus Theme Chooser.
 - Theme preset selection in config versus color overrides in `theme.json` or user theme files.
@@ -79,4 +69,4 @@ Explicitly distinguish:
 
 ## Context Notes
 
-This repository requires `lat check` after atlas updates. The maintained atlas preserves the complete Oracle answer under `feature-map/raw-oracle/<feature-id>/answer.md` and distills a readable chapter under `feature-map/features/<feature-id>.md`.
+This repository requires `source checks` after atlas updates. The maintained atlas preserves the complete Oracle answer under `feature-map/raw-oracle/<feature-id>/answer.md` and distills a readable chapter under `feature-map/features/<feature-id>.md`.

@@ -2223,7 +2223,7 @@ impl ActionsDialog {
         self.mouse_armed_row = None;
     }
 
-    // @lat: [[automation#Actions dialog scrollbar visibility]]
+    // doc-anchor-removed: [[automation#Actions dialog scrollbar visibility]]
     fn trigger_scrollbar_activity(&mut self, cx: &mut Context<Self>) {
         let now = Instant::now();
         self.last_scroll_time = Some(now);

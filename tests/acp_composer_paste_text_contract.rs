@@ -20,7 +20,7 @@
 //! at `src/ai/acp/view.rs::paste_text_from_clipboard`, is the sole
 //! entry point from Cmd+V into the composer's text input, and
 //! implements the documented invariants in
-//! [[lat.md/acp-chat#ACP Chat#ACP composer]] — most notably the
+//! [[removed-docs Chat#ACP composer]] — most notably the
 //! "Large clipboard text pastes collapse into inline `@text:` tokens"
 //! contract that protects the composer from flooding.
 //!
@@ -28,14 +28,14 @@
 //! `arboard` for a different clipboard API without preserving the
 //! CRLF normalization, or inlines the `prepare_pasted_text` call
 //! without registering the typed-mention alias), the documented
-//! lat.md section becomes a lie and the eventual `clipboard-to-acp-paste`
+//! removed-docs section becomes a lie and the eventual `clipboard-to-acp-paste`
 //! live verification would land text in the composer that doesn't
 //! match the documented paste model. This contract catches those
 //! drifts at `cargo test` time instead of at pass-time.
 //!
 //! The thresholds (`PASTED_TEXT_LINE_THRESHOLD`, `PASTED_TEXT_CHAR_THRESHOLD`)
 //! and the `@text:"..."` token format are also pinned because
-//! lat.md/acp-chat explicitly documents the collapse behavior and
+//! removed-docs explicitly documents the collapse behavior and
 //! portal_contract.rs uses the same token format for preview
 //! descriptions — drifting one without the other would silently
 //! break preview rendering for newly-pasted text.
@@ -43,7 +43,7 @@
 const VIEW: &str = include_str!("../src/ai/acp/view.rs");
 const PASTED_TEXT: &str = include_str!("../src/pasted_text.rs");
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_uses_arboard_and_normalizes_line_endings() {
     // arboard is the single clipboard API the composer uses; swapping
@@ -85,7 +85,7 @@ fn paste_text_from_clipboard_uses_arboard_and_normalizes_line_endings() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_short_circuits_on_empty_text() {
     // An empty normalized string must return false without mutating
@@ -103,7 +103,7 @@ fn paste_text_from_clipboard_short_circuits_on_empty_text() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_routes_through_prepare_and_inserts_at_cursor() {
     // The `prepare_pasted_text` call is the single seam where small
@@ -142,7 +142,7 @@ fn paste_text_from_clipboard_routes_through_prepare_and_inserts_at_cursor() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_from_clipboard_registers_token_as_text_block_context_part() {
     // When `prepare_pasted_text` returns a token (large paste),
@@ -207,20 +207,20 @@ fn paste_text_from_clipboard_registers_token_as_text_block_context_part() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn paste_text_thresholds_and_token_format_match_lat_md_documentation() {
-    // lat.md/acp-chat#ACP composer documents "Large clipboard text
+    // removed-docs composer documents "Large clipboard text
     // pastes collapse into inline `@text:\"Pasted text #n +...\"`
     // tokens". The source-of-truth for "large" is the two constants
     // at the top of `src/pasted_text.rs`; pin them so a future
     // refactor that loosens or tightens the threshold requires a
-    // deliberate edit to both this contract and the lat.md section.
+    // deliberate edit to both this contract and the removed-docs section.
     assert!(
         PASTED_TEXT.contains("const PASTED_TEXT_LINE_THRESHOLD: usize = 8;"),
         "src/pasted_text.rs must keep `PASTED_TEXT_LINE_THRESHOLD: \
          usize = 8`. Adjusting this number changes the \"large paste\" \
-         definition documented in lat.md/acp-chat; both must move \
+         definition documented in removed-docs; both must move \
          together. 8 lines matches the composer's visible row count \
          before scroll — pasting a screen of text should tokenize, \
          pasting a short quote should not."
@@ -229,7 +229,7 @@ fn paste_text_thresholds_and_token_format_match_lat_md_documentation() {
         PASTED_TEXT.contains("const PASTED_TEXT_CHAR_THRESHOLD: usize = 600;"),
         "src/pasted_text.rs must keep `PASTED_TEXT_CHAR_THRESHOLD: \
          usize = 600`. This is the character threshold from \
-         lat.md/acp-chat's \"large clipboard text pastes\" contract; \
+         removed-docs \"large clipboard text pastes\" contract; \
          drifting this alone would make the tokenization behavior \
          differ from the documented model in ways that are hard to \
          notice by eye."
@@ -256,7 +256,7 @@ fn paste_text_thresholds_and_token_format_match_lat_md_documentation() {
     );
 }
 
-// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+// doc-anchor-removed: [[removed-docs Chat#ACP composer]]
 #[test]
 fn prepare_pasted_text_is_pure_and_respects_existing_tokens() {
     // `prepare_pasted_text` is the bridge between the paste handler

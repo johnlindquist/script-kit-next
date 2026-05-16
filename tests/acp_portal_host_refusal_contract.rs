@@ -5,7 +5,7 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-// @lat: [[lat.md/tests/acp-portal-contract#Host transitions#Host callback refusal after attempted open]]
+// doc-anchor-removed: [[removed-docs transitions#Host callback refusal after attempted open]]
 fn portal_open_result_models_host_refusal() {
     let source = read("src/ai/acp/view.rs");
     for needle in [

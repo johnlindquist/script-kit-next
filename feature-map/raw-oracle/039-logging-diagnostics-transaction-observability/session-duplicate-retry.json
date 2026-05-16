@@ -1,93 +1,18 @@
 {
-  "id": "logging-diagnostic-observabil-atlas-2",
-  "createdAt": "2026-05-15T13:49:41.761Z",
-  "status": "completed",
-  "promptPreview": "[logging-diagnostics-observability-atlas]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS desktop runtime with a TypeScript SDK, stdin JSON automation p",
-  "model": "gpt-5.5-pro",
-  "models": [
     {
-      "model": "gpt-5.5-pro",
-      "status": "completed",
-      "log": {
-        "path": "models/gpt-5.5-pro.log"
       },
-      "startedAt": "2026-05-15T13:49:41.763Z",
-      "completedAt": "2026-05-15T13:56:47.257Z",
-      "usage": {
-        "inputTokens": 20824,
-        "outputTokens": 12725,
-        "reasoningTokens": 0,
-        "totalTokens": 33549
       }
     }
   ],
-  "cwd": "/Users/johnlindquist/dev/script-kit-gpui",
-  "mode": "browser",
-  "browser": {
-    "config": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "runtime": {
-      "controllerPid": 55940
     }
   },
-  "notifications": {
-    "enabled": true,
-    "sound": false
   },
-  "options": {
-    "prompt": "[logging-diagnostics-observability-atlas]\n\nProject briefing: Script Kit GPUI is a Rust/GPUI macOS desktop runtime with a TypeScript SDK, stdin JSON automation protocol, dual-output structured logging, transaction trace persistence, MCP resources, agentic test scripts, lat.md architecture graph, and repo-local skills. This repository requires lat search/expand before work and lat check after atlas updates. The feature-map atlas preserves every complete Oracle answer under feature-map/raw-oracle/<feature-id>/ and distills a maintained feature chapter under feature-map/features/<feature-id>.md.\n\nGoal: Produce a complete operator-grade feature atlas chapter for feature 039, Logging, Diagnostics, and Transaction Observability, so humans and AI agents can fully understand logging capabilities, trace surfaces, operator workflows, privacy boundaries, failure modes, owner files, automation receipts, and verification paths.\n\nCurrent evidence: feature-map/raw-oracle/039-logging-diagnostics-transaction-observability already contains prompt.md and bundle-map.md, but answer/log/session are pending. The bundle includes AGENTS/CLAUDE, logging/protocol/automation/acp/verification lat pages, dev-loop/logging/protocol/testing skills, dev.sh, logging modules, protocol transaction trace/executor/stats, MCP transaction resources, AI preflight audit files, main-window preflight, source-audit tests, transaction trace tests, protocol stats tests, and the tx trace replay script.\n\nDeliverable: Return the requested markdown chapter only, using this exact shape:\n\n## 039 Logging, Diagnostics, and Transaction Observability\n\n### Executive Summary\n### What Users Can Do\n### Core Concepts\n### Entry Points\n### User Workflows\n### Interaction Matrix\n| User intent | Entry point | UI state | Key/click | Code path | Result | Proof |\n|---|---|---|---|---|---|---|\n### State Machine\n### Visual And Focus States\n### Keystrokes And Commands\n### Actions And Menus\n### Automation And Protocol Surface\n### Data, Storage, And Privacy Boundaries\n### Error, Empty, Loading, And Disabled States\n### Code Ownership\n### Invariants And Regression Risks\n### Verification Recipes\n### Agent Notes\n### Related Features\n### Open Questions And Gaps\n\nScope details to cover:\n- ./dev.sh, compact AI logs, JSONL logs, and log-driven iteration.\n- Safe user-value previews, byte caps, and rate-limited untrusted-value logging.\n- Stable debug trace markers such as DO_IN_TRACE, SCROLL_TRACE, and input-history trace targets.\n- Protocol transaction traces, transaction replay, bounded retention, malformed JSONL recovery, and MCP trace resources.\n- AI preflight audit logs, correlation-level dedupe, compaction, and schema drift handling.\n- Protocol stats/reporting and source-audit logging contracts.\n- Verification recipes for logging safety, trace propagation, transaction trace persistence, and runtime receipt proof.\n\nExplicitly distinguish operator/dev-loop observability from user-facing UI features; structured logs from transaction traces; compact AI logs from full JSONL logs; runtime receipts from screenshots; and privacy-safe value previews from raw user content dumps.\n\nReturn your answer as text in this response only. Do not create, attach, export, or offer any downloadable file. Do not create local project artifacts yourself. The local agent will write any needed files, plans, notes, goals, commits, or verification logs using local tools.",
-    "file": [
       "/Users/johnlindquist/.oracle/bundles/logging-diagnostics-observability-atlas.txt"
     ],
-    "model": "gpt-5.5-pro",
-    "models": [
       "gpt-5.5-pro"
     ],
-    "effectiveModelId": "gpt-5.5-pro",
-    "slug": "logging-diagnostic-observabil-atlas-2",
-    "mode": "browser",
-    "browserConfig": {
-      "remoteHost": "100.85.201.62:7333",
-      "remoteToken": "a8362c3bad93355ae906d53694bc3016",
-      "url": "https://chatgpt.com/",
-      "chatgptUrl": "https://chatgpt.com/",
-      "cookieSync": true,
-      "headless": false,
-      "hideWindow": false,
-      "keepBrowser": false,
-      "manualLogin": false,
-      "manualLoginProfileDir": null,
-      "manualLoginCookieSync": false,
-      "modelStrategy": "select",
-      "thinkingTime": "extended",
-      "desiredModel": "Use latest model"
     },
-    "heartbeatIntervalMs": 30000,
-    "browserAttachments": "never",
-    "search": true,
-    "waitPreference": true
   },
-  "startedAt": "2026-05-15T13:49:41.762Z",
-  "completedAt": "2026-05-15T13:56:47.261Z",
-  "usage": {
-    "inputTokens": 20824,
-    "outputTokens": 12725,
-    "reasoningTokens": 0,
-    "totalTokens": 33549
   },
-  "elapsedMs": 424062
 }

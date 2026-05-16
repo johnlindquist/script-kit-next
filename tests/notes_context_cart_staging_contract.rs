@@ -12,7 +12,7 @@ fn body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &rest[..end_idx]
 }
 
-// @lat: [[tests/notes-acp#Notes context cart consume and dedupe#Cart handoff stages replacement context and consumes items]]
+// doc-anchor-removed: [[tests/notes-acp#Notes context cart consume and dedupe#Cart handoff stages replacement context and consumes items]]
 #[test]
 fn note_cart_handoff_uses_deduped_replacement_staging_and_consumes_items() {
     let handoff = body(
@@ -29,7 +29,7 @@ fn note_cart_handoff_uses_deduped_replacement_staging_and_consumes_items() {
     assert!(handoff.contains("delete_note_cart_items(note_id, &cart_item_ids)"));
 }
 
-// @lat: [[tests/notes-acp#Notes context cart consume and dedupe#Note switch detaches previous note context]]
+// doc-anchor-removed: [[tests/notes-acp#Notes context cart consume and dedupe#Note switch detaches previous note context]]
 #[test]
 fn note_switch_clears_notes_hosted_acp_context_for_previous_note() {
     let select_note = body(

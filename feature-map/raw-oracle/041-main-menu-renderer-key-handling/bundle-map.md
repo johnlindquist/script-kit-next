@@ -4,22 +4,14 @@ Feature atlas pass for `041-main-menu-renderer-key-handling`, focused on the mai
 
 ## Oracle Session
 
-- Slug: `main-menu-renderer-keys`
-- Model: `gpt-5.5-pro`
-- Engine: browser
-- Thinking time: extended
-- Bundle: `/Users/johnlindquist/.oracle/bundles/main-menu-renderer-keys.txt`
-- Bundle size: 191,656 bytes
-- Packx estimate: 24 files, 40,560 exact tokens, 122 matches, 16 context windows
 
 ## Lat Context
 
 ```bash
-lat expand "041 Main Menu Renderer Key Handling: Cmd+Enter non-file Tab action shortcut execution popup-first ordering ScriptList render_script_list keyboard actions"
-lat search "Main Menu Renderer Key Handling Cmd+Enter non-file Tab action shortcut execution popup-first ordering ScriptList render_script_list keyboard actions"
+source search "Main Menu Renderer Key Handling Cmd+Enter non-file Tab action shortcut execution popup-first ordering ScriptList render_script_list keyboard actions"
 ```
 
-Top relevant results included `lat.md/builtins#Built-ins#Favorites Cmd+K opens a six-row actions menu`, `lat.md/menu-syntax#Menu Syntax`, and keyboard behavior sections for adjacent surfaces.
+Top relevant results included `removed-docs Cmd+K opens a six-row actions menu`, `removed-docs Syntax`, and keyboard behavior sections for adjacent surfaces.
 
 ## Owner Skills
 
@@ -31,7 +23,6 @@ Top relevant results included `lat.md/builtins#Built-ins#Favorites Cmd+K opens a
 
 ## Source And Test Context
 
-The bundle was generated with context windows around key-routing symbols and strings, including:
 
 - `src/render_script_list/mod.rs`
 - `src/app_impl/actions_dialog.rs`
@@ -44,4 +35,4 @@ The bundle was generated with context windows around key-routing symbols and str
 - `tests/source_audits/shortcut_config_source.rs`
 - `tests/file_search_tilde_entry.rs`
 
-The bundle also includes `AGENTS.md`, `CLAUDE.md`, relevant `lat.md` pages, and existing chapters `001`, `011`, `013`, and `022` so Oracle can distinguish already-covered behavior from the focused renderer-key gap.
+The bundle also includes `AGENTS.md`, `CLAUDE.md`, relevant `removed-docs` pages, and existing chapters `001`, `011`, `013`, and `022` so Oracle can distinguish already-covered behavior from the focused renderer-key gap.

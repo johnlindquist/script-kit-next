@@ -31,14 +31,18 @@ The loop is:
 - `$agentic-testing` when the task needs a regression recipe, screenshot proof, process/session cleanup, or an existing stress scenario.
 - `$platform-windowing-macos` when native windows, AppKit focus, AX, screen capture, or OS-level targeting owns the behavior.
 - `$testing-quality-gates` when choosing narrow checks for protocol, Rust, Bun, or runtime proof.
-- `$lat-md` whenever changing `lat.md/` sections, refs, or test specs.
 
 ## Current Primitive Families
 
 Prefer direct primitives over prewritten recipes:
 
+- Schema CLI: `bun scripts/devtools/schema.ts` reports the shared fail-closed receipt envelope, classifications, target identity fields, primitive schemas, and minimum acceptance bar for DevTools coverage.
+- Targets CLI: `bun scripts/devtools/targets.ts list|inspect` exposes target discovery and strict target identity receipts so later inspect, measure, act, and compare commands do not parse target identity out of broad reports.
+- Surface CLI: `bun scripts/devtools/surface.ts inspect --surface <SurfaceKind>` joins strict target identity to the generated surface contract, dismiss policy, runtime surface fields, capabilities, and missing primitive list.
 - Inspector CLI: `bun scripts/devtools/inspect.ts --session <name> --start --show --main` composes the protocol primitives below into one agent-readable target report with capabilities, missing fields, warnings, errors, and recommended next primitives.
 - Coverage CLI: `bun scripts/devtools/coverage.ts --surface notes|dictation|main|actions-dialog` reports Chrome-DevTools-inspired domain coverage, supported primitives, missing runtime primitives, required shortcuts, and next API work before an agent reaches for a recipe.
+- Surface Inventory CLI: `bun scripts/devtools/surfaces.ts` reads generated surface contracts, the feature-map index, and explicit coverage entries to produce the source-backed DevTools backlog before asking Oracle or building a new primitive.
+- Investigation CLI: `bun scripts/devtools/investigate.ts --surface <id> --bug <report>` turns a user-filed UX/UI bug into a fail-closed red/green proof plan with target identity, required receipts, scenario hints, missing primitives, and recipe boundaries.
 - Measure CLI: `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>` converts inspect and coverage receipts into target identity, screenshot, semantic, layout, text, scroll, focus, media, and missing-primitive measurements.
 - Media CLI: `bun scripts/devtools/media.ts --coverage <dictation-coverage.json>` is the fail-closed `devtools.media.inspect` slice for Dictation. It requires passive microphone, device, model, recording, transcript, target-delivery, hotkey, wrong-target, and cleanup receipts before live Dictation bugs can be called green.
 - Targeting: `listAutomationWindows`, `inspectAutomationWindow`, exact automation ids, kind/index promotion.
@@ -81,13 +85,15 @@ Read `references/devtools-coverage-audit.md` when planning new DevTools surface 
 
 Read `references/devtools-api-coverage-map.md` when the work needs Chrome-DevTools-level breadth, Notes coverage, Dictation coverage, or the next protocol/API primitive. The checked-in coverage command is the machine-readable companion to that map.
 
+Read `references/devtools-surface-inventory.md` when planning broad DevTools expansion, preparing Oracle prompts, or deciding which app surface families still lack direct primitives.
+
+Read `references/devtools-oracle-buildout-plan.md` for the Oracle-reviewed primitive sequence, shared receipt envelope, and surface-specific proof requirements.
+
 Use the audit as a living map, not a final verdict. Update it when new protocol/MCP primitives land or when a recipe reveals a missing primitive.
 
 ## Completion Gates
 
 For DevTools surface changes:
 
-- Update `lat.md/protocol.md`, `lat.md/automation.md`, or `lat.md/verification.md` as appropriate.
 - Add source-contract tests for protocol schema, routing, target identity, and fail-closed behavior.
-- Run the narrowest Rust/Bun checks plus `lat check`.
 - Produce at least one direct primitive receipt, not only a scripted recipe receipt, when behavior is runtime-observable.

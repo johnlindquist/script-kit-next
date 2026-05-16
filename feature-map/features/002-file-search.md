@@ -1,10 +1,8 @@
 # 002 File Search / Root Files / Directory Browse / File Actions
 
-File Search spans two related experiences: root launcher file rows and the dedicated file browser. Keep those contracts separate when debugging or implementing.
 
 ## Executive Summary
 
-File Search lets users open files, browse directories, search filesystem results, preview selected files, run file actions, drag files out to other apps, and attach files to ACP context. The root launcher also has a passive Files source, explicit directory browse mode, Recent Files, `files:` / `f:` source filtering, and root file actions. Dedicated File Search owns richer browsing and preview behavior; root Files owns fast launcher participation without destabilizing primary command selection.
 
 The main risks are active-frame instability, stale source-filter decorations, wrong host ownership for actions, file action target reuse, and portal return mistakes. Use state receipts and source audits before screenshots.
 
@@ -21,7 +19,6 @@ The main risks are active-frame instability, stale source-filter decorations, wr
 - Use direct root-file shortcuts such as Cmd+Y, Cmd+Shift+F, and Cmd+Shift+C.
 - Drag dedicated File Search rows to Finder or other native apps.
 - Attach a file to ACP or open ACP Explain/Plan flows from File Search context.
-- Use root Files as passive rows or explicitly with `f:` / `files:`.
 
 ## Core Concepts
 
@@ -33,7 +30,6 @@ The main risks are active-frame instability, stale source-filter decorations, wr
 | Root Files | Passive ScriptList section for eligible filename/path queries. | `src/app_impl/root_file_search.rs`, `src/file_search/mod.rs` |
 | Root Recent Files | Frecency-backed provider-free root rows seeded after successful opens. | `src/file_search/mod.rs`, `src/scripts/grouping.rs` |
 | Root directory browse | Direct-child root Files mode for explicit directory path queries. | `src/file_search/directory.rs`, `src/app_impl/root_file_search.rs` |
-| Files source filter | `files:` / `f:` root source-filter mode with stripped query and source-specific caps. | `src/menu_syntax/query.rs`, `src/file_search/mod.rs` |
 | File action subject | Captured selected file path for actions and direct shortcuts. | `src/app_actions/handle_action/files.rs`, `src/app_impl/root_unified_result_actions.rs` |
 | Attachment portal | ACP-owned return flow that asks File Search for a file/context target. | `src/app_impl/attachment_portal.rs` |
 
@@ -45,7 +41,6 @@ The main risks are active-frame instability, stale source-filter decorations, wr
 | File Search built-in | Built-in command / triggerBuiltin | Full dedicated File Search. |
 | Root continuation row | `Search Files for "<query>"` | Dedicated File Search for query. |
 | Root directory continuation | `Open File Search in "<folder>"` | Dedicated File Search scoped to folder. |
-| Source filter | `f:`, `files:s`, `png files:` | Files-only root search/browse mode. |
 | Root file row | Enter, Cmd+K, direct shortcut | OS open or root file action. |
 | Dedicated selected row | Enter, Tab, Shift+Tab, Cmd+K, drag | Open, browse, action, or native drag. |
 | ACP portal | File attachment request | File Search opens as attachment portal and returns selected file part. |
@@ -64,9 +59,7 @@ The user selects a directory and presses Tab or double-clicks. Dedicated File Se
 
 The user types an eligible root query. Root Files appears as a passive section below primary commands and before fallback rows. A loading header and continuation row are stable while the provider warms a cache. Provider completion must not mutate the active visible frame for the same filter text.
 
-### Use Explicit `f:` Files Source Filter
 
-The user types `f:`, `f:s`, or `png files:`. The source head is stripped, other sources are suppressed, and Files gets source-specific behavior: empty browse rows, a lower one-character query threshold, 12-row initial pages, source status receipts, and lazy pagination as selection nears the bottom.
 
 ### Run File Actions
 
@@ -95,8 +88,6 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 | Browse root directory inline | ScriptList | Root directory row | Tab | Root directory browse | Filter rewrites to folder | Root directory proof |
 | Move root parent | ScriptList | Root directory browse | Shift+Tab | Root directory navigation | Parent query | Source audit |
 | Open continuation | ScriptList | Continuation row | Enter | Stable fallback row | Dedicated File Search | Fallback stable key proof |
-| Files source browse | ScriptList | Source filter | `f: ` | Files source browse | Recent Files rows | Source-filter receipts |
-| Files one-char search | ScriptList | Source filter | `f:s` | Explicit files source intent | Files search allowed | Source-filter matrix |
 | Expand source page | ScriptList | Files source filter | Arrow near bottom | Source-chip pagination | More rows, selected visible | `mainListScroll` receipt |
 | Open root actions | ScriptList | Root file selected | Cmd+K | MainList root action owner | Captured actions dialog | `actionsDialog.contextStableKey` |
 | Root Quick Look | ScriptList | Root file selected | Cmd+Y | Root file action executor | Quick Look or controlled error | Quick Look tests |
@@ -120,28 +111,16 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 | Root global Files loading | Eligible uncached root query | Future frame/query change | Same-query provider completion cannot alter active rows. |
 | Root global cached | Frame built after warm cache | Query change/open/action | Cached rows eligible at frame build only. |
 | Root directory browse | Explicit directory path | Tab/Shift+Tab/continuation | Direct children only; no recursive/global search. |
-| Root source-filter Files | `f:` / `files:` | Delete head/open/continue typing | Other sources suppressed; source status non-selectable. |
 | Root actions | Cmd+K on root file | Execute/close | Captured subject survives selection/focus changes. |
 
 ## Visual And Focus States
 
-- Mini File Search: compact list-only browser from `~` or path handoff.
-- Full File Search: expanded split view with left result list and right preview/detail pane.
-- Loading: six skeleton rows in real row columns.
-- Empty: bounded info stack in the left pane; helper copy wraps inside that pane.
-- Directory transition: old rows remain visible until replacement.
-- Preview: thumbnail or metadata pane for the selected file, guarded by size/dimensions/format.
-- Root Files: ScriptList section with loading header, real rows, and continuation row.
-- Source-filter Files: input source chip, source status metadata, Files-only rows, lazy page expansion.
-- Actions popup: `ActionsDialog` attached to MainList or FileSearch host; host semantic surface must remain intact.
-- Drag-out: native drag leaves the app; GPUI hover/drag state is cleaned after handoff.
 
 ## Keystrokes And Commands
 
 | Key | Context | Behavior |
 |---|---|---|
 | `~` / path text | Main menu | File Search handoff or root directory browse. |
-| `files:` / `f:` | Main menu | Files source-filter mode. |
 | Character input | Dedicated File Search | Search, directory fragment, or hidden-file restream. |
 | Up/Down | Dedicated File Search | Move selected file row. |
 | Enter | Dedicated selected file/dir | OS open selected item; portal mode attaches instead. |
@@ -180,7 +159,6 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 | `surfaceContract` | Mini/full File Search surface and proof/visual policies. |
 | `semanticSurface=fileSearch` | Routed File Search identity after entry. |
 | `mainWindowPreflight.visibleResults` | Root file/passive roles, stable keys, action kinds, source names. |
-| `filterInputDecorations` | `f:` chips clear when input becomes a path like `~/...`. |
 | `getElements` source status | Source-filter status is metadata, not selectable row. |
 | `mainListScroll` | Source-chip lazy page selected row remains above footer. |
 | `actionsDialog` | Captured root or FileSearch action context. |
@@ -203,7 +181,6 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 - Spotlight no-results in dedicated search can fall back to bounded filesystem scan.
 - Root global uncached query keeps stable loading/continuation rows while providers warm cache.
 - Ineligible root queries, advanced queries, and noisy short queries do not start global root file search.
-- `f:` source-filter mode can search short stripped queries intentionally.
 - Source status rows for capped/loading/empty/exhausted states are not selectable.
 - Quick Look missing path returns controlled error/HUD.
 - File action failures log action/path/error and clear action targets appropriately.
@@ -231,9 +208,7 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 - Root Files is passive and must not displace primary command/script/app/window intent unless the explicit promotion policy allows it.
 - Root provider completion must not mutate visible rows for the same filter text.
 - Root directory browse is intentional direct-child browsing, not recursive global search.
-- `f:` source-filter mode must suppress other sources and avoid menu-syntax hint confusion.
 - Source status must never become an executable row or affect list count/sizing/scroll.
-- `~` and path handoff must clear stale `f:` or menu-syntax decorations.
 - Dedicated File Search owns Tab/Shift+Tab directory navigation; root files use separate inline directory browse rules.
 - Plain Enter in dedicated File Search OS-opens selected items except when in attachment portal mode.
 - Actions execute against captured file path/subject, not the current selection after popup drift.
@@ -244,7 +219,6 @@ The user drags a dedicated File Search row. The renderer starts a native AppKit 
 
 ## Verification Recipes
 
-Source/static checks:
 
 ```bash
 cargo test --test file_search_tilde_entry
@@ -257,10 +231,9 @@ cargo test --test source_audits shortcut_alias_file_actions -- --nocapture
 cargo check --lib
 cargo fmt --check
 git diff --check
-lat check
+source checks
 ```
 
-Runtime/state-first proofs:
 
 ```bash
 bun scripts/agentic/root-search-frame-stability.ts
@@ -271,11 +244,9 @@ bun tests/smoke/test-file-search-actions.ts
 bun tests/smoke/test-file-search-directory-nav.ts
 ```
 
-Targeted receipts should assert:
 
 - `~` enters File Search without stale source-chip decorations.
 - Dedicated File Search keeps rows visible during directory stream replacement.
-- `f: ` browses recent files and `f:s` can search Files despite plain `s` suppression.
 - Root provider warming does not change selected stable key for the active query.
 - Root file actions capture the file subject and direct shortcuts route through the same executor.
 - File Search actions preserve `semanticSurface=fileSearch`.
@@ -287,7 +258,6 @@ Screenshots are only needed for visual acceptance of mini/full layout, preview p
 ## Agent Notes
 
 - Do not merge root Files and dedicated File Search behavior. Root Files is a passive ScriptList section; dedicated File Search is a routed browser.
-- Do not treat `f:` as path syntax. `f:` is source filter; `~` and `/...` are path handoffs.
 - To verify root behavior, prefer `mainWindowPreflight`, `filterInputDecorations`, source status receipts, and `mainListScroll`.
 - To verify dedicated behavior, inspect File Search surface state, row elements, action host, and logs before screenshots.
 - If a file action hits the wrong path, inspect captured action target state before checking row labels.
@@ -312,7 +282,6 @@ Screenshots are only needed for visual acceptance of mini/full layout, preview p
 
 ## Open Questions And Gaps
 
-- Exact `AppView::FileSearchView` fields and mini/full `SurfaceKind` variant names need a focused source pass.
 - Exact dedicated File Search `getState` / `getElements` field names should be mapped from runtime receipts.
 - Dedicated file action catalog strings for reveal/copy/open-in-Finder/open-in-editor/open-in-Quick-Terminal/delete need a focused action-builder pass.
 - Mutation action IDs and refresh receipt fields need `tests/file_search_mutation_refresh.rs` or full action handler context.

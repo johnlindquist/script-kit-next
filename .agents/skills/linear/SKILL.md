@@ -70,8 +70,6 @@ When asked to track work in Linear:
 
 For Script Kit GPUI implementation tasks, include these expectations in Linear descriptions or comments when relevant:
 
-- Update `lat.md/` when behavior, architecture, tests, or contracts change.
-- Run `lat check` before marking work done.
 - Prefer state-first runtime proof for UI behavior.
 
 ## Status Updates

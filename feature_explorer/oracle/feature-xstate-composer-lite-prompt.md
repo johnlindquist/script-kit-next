@@ -1,20 +1,14 @@
 [feature-xstate-composer-lite]
 
-Project briefing:
-- Repo: Script Kit GPUI, a Rust/GPUI desktop app with TypeScript/Bun SDK surfaces and a standalone Vite/XState feature explorer under `feature_explorer/`.
 - The feature atlas lives in `feature-map/features/*.md`; the explorer turns those chapters into wireframe/runtime XState models.
 - Authored machine examples for Features 001 and 002 already exist in `feature_explorer/src/state/authoredFeatureMachines.ts`.
-- Any local implementation that changes behavior, architecture, tests, or contracts must update `lat.md/` and pass `lat check`.
+- Any local implementation that changes behavior, architecture, tests, or contracts must update `removed-docs/` and pass `source checks`.
 
-Goal:
 Design a paste-ready authored machine for Feature 003, `Agent Chat Context Composer`, using the existing `AuthoredFeatureMachineConfig` schema and local style.
 
-Context:
 - A larger raw-harvest bundle for the same feature may be too large for ChatGPT display. This smaller bundle intentionally uses the distilled Feature 003 chapter plus current explorer/runtime code and owner skills.
 - Do not require a broad schema rewrite. If the existing enums are too launcher/file-search-specific for ACP, propose only the smallest enum additions needed to make ACP wireframes honest.
 
-Deliverable:
-Return text only with:
 1. A state inventory for Feature 003.
 2. An event/transition inventory.
 3. A TypeScript object literal compatible with the current authored-machine file.
@@ -22,7 +16,6 @@ Return text only with:
 5. Static/build and later state-first verification guidance.
 6. Ambiguities that should remain visible instead of invented.
 
-Focus the machine on:
 - embedded, detached, and setup-required ACP entries;
 - composer idle/draft state;
 - slash and mention popup;

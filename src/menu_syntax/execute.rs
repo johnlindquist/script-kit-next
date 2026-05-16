@@ -184,7 +184,7 @@ mod tests {
         assert_eq!(payload.handler.command_id, "script/main:Capture Todo Inbox");
     }
 
-    // @lat: menu-syntax Execution Payload
+    // doc-anchor-removed: menu-syntax Execution Payload
     #[test]
     fn payload_env_contract_contains_version_family_target_and_path() {
         let invocation = resolved_capture(";todo Renew passport tomorrow 3pm #errands");

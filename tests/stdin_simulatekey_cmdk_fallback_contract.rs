@@ -50,7 +50,7 @@ fn actions_toggle_helper_body() -> &'static str {
     &section[..end]
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn both_dispatchers_contain_generic_cmdk_fallback_log_line() {
     // The distinguishing log string is structurally unique — it is the
@@ -71,7 +71,7 @@ fn both_dispatchers_contain_generic_cmdk_fallback_log_line() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn both_dispatchers_use_named_generic_cmdk_predicate() {
     for (name, source) in DISPATCHERS {
@@ -84,7 +84,7 @@ fn both_dispatchers_use_named_generic_cmdk_predicate() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn both_dispatchers_call_toggle_actions_after_fallback_log() {
     // The fallback MUST call `view.toggle_actions(ctx, window)` — the
@@ -117,7 +117,7 @@ fn both_dispatchers_call_toggle_actions_after_fallback_log() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn named_generic_cmdk_predicate_gates_on_modifiers_and_host() {
     // The modifier gate is load-bearing: relaxing it to just `has_cmd`
@@ -145,7 +145,7 @@ fn named_generic_cmdk_predicate_gates_on_modifiers_and_host() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn fallback_block_precedes_unhandled_view_warn() {
     // Ordering contract: the fallback `if` block must appear BEFORE the
@@ -181,7 +181,7 @@ fn fallback_block_precedes_unhandled_view_warn() {
     }
 }
 
-// @lat: [[lat.md/automation#Automation#Window metadata]]
+// doc-anchor-removed: [[removed-docs metadata]]
 #[test]
 fn current_actions_host_api_still_defined_on_app_impl_actions_dialog() {
     // The fallback predicate `view.current_actions_host().is_some()` is

@@ -13,7 +13,7 @@ fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
     &source[start_index..end_index]
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Mini AI sizing]]
+// doc-anchor-removed: [[removed-docs AI sizing]]
 #[test]
 fn inline_mini_ai_uses_mode_aware_resize_helper() {
     let body = source_between(
@@ -31,7 +31,7 @@ fn inline_mini_ai_uses_mode_aware_resize_helper() {
     );
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#MiniPrompt sizing]]
+// doc-anchor-removed: [[removed-docs sizing]]
 #[test]
 fn mini_prompt_has_its_own_compact_view_type() {
     let calculate = source_between(
@@ -56,7 +56,7 @@ fn mini_prompt_has_its_own_compact_view_type() {
     );
 }
 
-// @lat: [[lat.md/tests/mini-window-contract#Chat and ACP mode sizing]]
+// doc-anchor-removed: [[removed-docs and ACP mode sizing]]
 #[test]
 fn chat_and_acp_sizing_branch_on_main_window_mode() {
     let calculate = source_between(

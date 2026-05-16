@@ -26,7 +26,7 @@
 
 const COLLECT_ELEMENTS: &str = include_str!("../src/app_layout/collect_elements.rs");
 
-// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+// doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn clipboard_history_collect_elements_narrows_rows_by_variant_filter() {
     let arm_pos = COLLECT_ELEMENTS
