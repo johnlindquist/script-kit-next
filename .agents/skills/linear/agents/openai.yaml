@@ -1,0 +1,11 @@
+interface:
+  display_name: "Linear"
+  short_description: "Track Script Kit Linear issues"
+  default_prompt: "Use $linear to triage my Script Kit Linear tasks and update issue status."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "linear"
+      description: "Linear MCP server for Script Kit project issue tracking"
+      transport: "streamable_http"
+      url: "https://mcp.linear.app/mcp"
