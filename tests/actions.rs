@@ -243,8 +243,10 @@ fn clipboard_attach_to_ai_handler_uses_named_action_state() {
     assert!(
         content.contains("ClipboardAttachToAiHandlerAction::from_content_type(entry.content_type)")
             && content.contains("attach_action.deferred_action(content)")
-            && content.contains("ClipboardAttachToAiHandlerAction::prepare_image_base64(&content)"),
-        "clipboard attach-to-AI handler should derive deferred handoff behavior from the named action"
+            && content.contains("ClipboardAttachToAiHandlerAction::prepare_image_base64(&content)")
+            && content.contains("ClipboardAttachToAiHandlerAction::selection_required_message()")
+            && content.contains("ClipboardAttachToAiHandlerAction::content_unavailable_message()"),
+        "clipboard attach-to-AI handler should derive guard and deferred handoff behavior from the named action"
     );
     assert!(
         content.contains("DeferredAiWindowAction::SetInput")
