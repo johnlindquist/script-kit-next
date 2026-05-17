@@ -30,6 +30,12 @@ enum ClipboardEntryActionPlan {
     OtherUnpinned,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardPasteDestinationPlan {
+    FrontmostApp,
+    ActiveAppFallback,
+}
+
 impl ClipboardEntryActionPlan {
     fn from_entry(entry: &ClipboardEntryInfo) -> Self {
         match (entry.content_type, entry.pinned) {
@@ -78,6 +84,25 @@ impl ClipboardEntryActionPlan {
     }
 }
 
+impl ClipboardPasteDestinationPlan {
+    fn from_entry(entry: &ClipboardEntryInfo) -> Self {
+        match entry.frontmost_app_name.as_deref() {
+            Some(name) if !name.trim().is_empty() => Self::FrontmostApp,
+            _ => Self::ActiveAppFallback,
+        }
+    }
+
+    fn title(self, entry: &ClipboardEntryInfo) -> String {
+        match self {
+            Self::FrontmostApp => format!(
+                "Paste to {}",
+                entry.frontmost_app_name.as_deref().unwrap_or_default()
+            ),
+            Self::ActiveAppFallback => "Paste to Active App".to_string(),
+        }
+    }
+}
+
 /// Get actions specific to a clipboard history entry.
 #[allow(clippy::vec_init_then_push)]
 pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<Action> {
@@ -93,6 +118,7 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
 
     let mut actions = Vec::new();
     let entry_plan = ClipboardEntryActionPlan::from_entry(entry);
+    let paste_destination_plan = ClipboardPasteDestinationPlan::from_entry(entry);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -102,14 +128,10 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         "Building clipboard history actions"
     );
 
-    let paste_title = match &entry.frontmost_app_name {
-        Some(name) => format!("Paste to {}", name),
-        None => "Paste to Active App".to_string(),
-    };
     actions.push(
         Action::new(
             "clip:clipboard_paste",
-            paste_title,
+            paste_destination_plan.title(entry),
             Some("Copies to clipboard and pastes to the focused app".to_string()),
             ActionCategory::ScriptContext,
         )
