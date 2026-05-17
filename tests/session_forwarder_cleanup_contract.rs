@@ -78,6 +78,33 @@ fn cleanup_preserves_active_forwarder_process_tree() {
 }
 
 #[test]
+fn startup_forwarder_does_not_depend_on_process_substitution() {
+    let forwarder_start = SESSION_SH
+        .find("# Background forwarder: reads from input_fifo and writes to pipe.")
+        .expect("session.sh must contain the background forwarder block");
+    let launch_start = SESSION_SH
+        .find("# Launch the app reading from the pipe after the forwarder has opened the")
+        .expect("session.sh must launch the app after the forwarder block");
+    let forwarder_block = &SESSION_SH[forwarder_start..launch_start];
+
+    assert!(
+        forwarder_block.contains("while [ -p \"$input_fifo\" ]; do")
+            && forwarder_block.contains("cat \"$input_fifo\"")
+            && forwarder_block.contains("done > \"$pipe_path\""),
+        "session.sh's background forwarder must own the primary pipe writer \
+         while repeatedly reopening the input FIFO. A process-substitution \
+         reader can die as the start shell exits, closing the app stdin pipe \
+         immediately after startup."
+    );
+    assert!(
+        !forwarder_block.contains("done < <("),
+        "session.sh must not use process substitution for the persistent \
+         input forwarder. The forwarder itself owns the primary pipe writer \
+         and should not depend on a helper process that can vanish."
+    );
+}
+
+#[test]
 fn start_and_stop_call_forwarder_cleanup_at_ownership_boundaries() {
     let resume_marker =
         "cleanup_orphan_session_forwarders \"$primary_pipe\" \"$input_fifo\" \"$old_fwd_pid\"";

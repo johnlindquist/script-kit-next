@@ -282,21 +282,14 @@ cmd_start() {
     pipe_path="$1"
     input_fifo="$2"
 
-    exec 9>"$pipe_path"
-
-    # Continuously read from input_fifo, reopening after each writer disconnects.
-    # This keeps the primary pipe writer alive for the app process.
-    while IFS= read -r line; do
-      printf "%s\n" "$line" >&9
-    done < <(
-      while true; do
-        if [ -p "$input_fifo" ]; then
-          cat "$input_fifo" 2>/dev/null || true
-        else
-          break
-        fi
-      done
-    )
+    # One background process owns the primary pipe writer for the app, while
+    # repeatedly reopening input_fifo after each sender disconnects. Avoid
+    # process substitution here: its helper can die when the start shell exits,
+    # closing the app stdin pipe immediately after startup.
+    while [ -p "$input_fifo" ]; do
+      cat "$input_fifo" 2>/dev/null || true
+      sleep 0.05
+    done > "$pipe_path"
   ' _ "$pipe_path" "$input_fifo" </dev/null >/dev/null 2>&1 &
   local fwd_pid=$!
   echo "$fwd_pid" > "${sdir}/fwd_pid"
