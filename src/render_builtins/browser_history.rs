@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserHistoryEmptyState {
+    NoHistoryFound,
+    NoFilteredMatches,
+}
+
+impl BrowserHistoryEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoHistoryFound
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoHistoryFound => "No browser history found",
+            Self::NoFilteredMatches => "No browser history entries match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn browser_history_attachment_part(
         &self,
@@ -191,11 +214,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No browser history found"
-                } else {
-                    "No browser history entries match your filter"
-                })
+                .child(BrowserHistoryEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let selected = selected_index;
