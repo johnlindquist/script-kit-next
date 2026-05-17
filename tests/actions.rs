@@ -199,6 +199,27 @@ fn note_switcher_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn scriptlet_context_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
+        .expect("Failed to read scriptlet builder");
+
+    assert!(
+        content.contains("enum ScriptletContextActionPlan")
+            && content.contains("NoShortcutNoAlias")
+            && content.contains("ShortcutOnly")
+            && content.contains("AliasOnly")
+            && content.contains("ShortcutAndAlias"),
+        "scriptlet shortcut and alias action rows should be driven by named context plan states"
+    );
+    assert!(
+        content.contains("ScriptletContextActionPlan::from_script(script)")
+            && content.contains("fn has_shortcut")
+            && content.contains("fn has_alias"),
+        "scriptlet context actions should derive add/update/remove shortcut and alias rows from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
