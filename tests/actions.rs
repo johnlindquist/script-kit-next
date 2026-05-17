@@ -220,6 +220,28 @@ fn scriptlet_context_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn file_path_actions_use_named_item_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/file_path.rs")
+        .expect("Failed to read file path builder");
+
+    assert!(
+        content.contains("enum FileItemActionPlan")
+            && content.contains("File")
+            && content.contains("Directory"),
+        "file/path primary, trash, and attach actions should be driven by named item plan states"
+    );
+    assert!(
+        content.contains("FileItemActionPlan::from_is_dir(file_info.is_dir)")
+            && content.contains("FileItemActionPlan::from_is_dir(path_info.is_dir)")
+            && content.contains("fn file_context_primary_action")
+            && content.contains("fn path_context_primary_action")
+            && content.contains("fn supports_attach_to_ai")
+            && content.contains("fn item_noun"),
+        "file/path actions should derive file-vs-folder copy and availability from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
