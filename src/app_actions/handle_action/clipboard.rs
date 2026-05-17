@@ -80,6 +80,12 @@ enum ClipboardBulkDeleteOutcome {
     PartialFailure,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardUnpinnedDeleteAvailability {
+    Empty,
+    Available { unpinned_count: usize },
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -1074,10 +1080,13 @@ impl ScriptListApp {
                     .filter(|e| !e.pinned)
                     .count();
 
-                if unpinned_count == 0 {
+                let Some(unpinned_count) = bulk_delete_action
+                    .unpinned_availability(unpinned_count)
+                    .count()
+                else {
                     self.show_error_toast(bulk_delete_action.no_unpinned_message(), cx);
                     return DispatchOutcome::success();
-                }
+                };
 
                 let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
                     bulk_delete_action.confirm_title(),
@@ -1577,6 +1586,11 @@ impl ClipboardBulkDeleteHandlerAction {
             }
         }
     }
+
+    fn unpinned_availability(self, unpinned_count: usize) -> ClipboardUnpinnedDeleteAvailability {
+        let _ = self;
+        ClipboardUnpinnedDeleteAvailability::from_count(unpinned_count)
+    }
 }
 
 impl ClipboardBulkDeleteResult {
@@ -1598,8 +1612,27 @@ impl ClipboardBulkDeleteResult {
                 app.show_hud(action.success_hud(self.deleted), Some(HUD_2500_MS), cx);
             }
             ClipboardBulkDeleteOutcome::PartialFailure => {
-                app.show_error_toast(action.partial_failure_message(self.deleted, self.failed), cx);
+                app.show_error_toast(
+                    action.partial_failure_message(self.deleted, self.failed),
+                    cx,
+                );
             }
+        }
+    }
+}
+
+impl ClipboardUnpinnedDeleteAvailability {
+    fn from_count(unpinned_count: usize) -> Self {
+        match unpinned_count {
+            0 => Self::Empty,
+            unpinned_count => Self::Available { unpinned_count },
+        }
+    }
+
+    fn count(self) -> Option<usize> {
+        match self {
+            Self::Empty => None,
+            Self::Available { unpinned_count } => Some(unpinned_count),
         }
     }
 }
