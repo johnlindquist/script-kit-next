@@ -843,6 +843,30 @@ fn file_search_feedback_helpers_use_named_plan_states() {
 }
 
 #[test]
+fn shortcut_alias_edit_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/shortcuts.rs")
+        .expect("Failed to read shortcut/alias action handler");
+
+    assert!(
+        content.contains("enum ShortcutRecorderAction")
+            && content.contains("Configure")
+            && content.contains("Add")
+            && content.contains("Update")
+            && content.contains("enum AliasInputAction"),
+        "shortcut recorder and alias input handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ShortcutRecorderAction::from_action_id(action_id)")
+            && content.contains("shortcut_action.unsupported_message()")
+            && content.contains("shortcut_action.cannot_assign_message()")
+            && content.contains("AliasInputAction::from_action_id(action_id)")
+            && content.contains("alias_action.unsupported_message()")
+            && content.contains("alias_action.cannot_assign_message()"),
+        "shortcut and alias edit handlers should derive unsupported and cannot-assign text from named states"
+    );
+}
+
+#[test]
 fn clipboard_pin_feedback_helper_uses_named_plan_states() {
     let content =
         fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read action helpers");
