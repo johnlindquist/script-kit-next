@@ -65,6 +65,11 @@ enum FileSearchCurrentDirectoryAction {
     OpenQuickTerminal,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchEditorHandlerAction {
+    OpenInEditor,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -129,6 +134,33 @@ impl FileSearchCurrentDirectoryAction {
             Self::Reveal => "Failed to reveal current directory",
             Self::OpenQuickTerminal => "Failed to open current directory in Quick Terminal",
             Self::Refresh | Self::CopyPath => "Failed to use current directory",
+        }
+    }
+}
+
+impl FileSearchEditorHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "open_in_editor" => Some(Self::OpenInEditor),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::OpenInEditor => "No file selected",
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::OpenInEditor => "Opened in Editor",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::OpenInEditor => format!("Failed to open in editor: {error}"),
         }
     }
 }
@@ -611,24 +643,32 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "open_in_editor" => {
+                let Some(editor_action) = FileSearchEditorHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((path, _, _)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        editor_action.selection_required_message(),
                     );
                 };
                 let path_buf = std::path::PathBuf::from(&path);
                 match crate::script_creation::open_in_editor(&path_buf, &self.config) {
                     Ok(()) => {
                         self.clear_file_search_action_target();
-                        self.show_hud("Opened in Editor".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.show_hud(
+                            editor_action.success_hud().to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
                         self.clear_file_search_action_target();
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("Failed to open in editor: {}", e),
+                            editor_action.failure_message(e),
                         );
                     }
                 }
