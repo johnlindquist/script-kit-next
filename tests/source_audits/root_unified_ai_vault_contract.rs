@@ -33,7 +33,7 @@ fn root_unified_ai_vault_contract() {
     assert!(payload.contains("short: Some(\"v:\")"));
     assert!(payload.contains("Self::AiVault => \"vault\""));
 
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED: bool = false"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED: bool = true"));
     assert!(config.contains("pub ai_vault: UnifiedSearchAiVaultConfig"));
     assert!(config.contains("AiVaultProvider"));
     assert!(config.contains("Self::AiVault"));
@@ -42,6 +42,15 @@ fn root_unified_ai_vault_contract() {
     assert!(config.contains("cache_ttl_ms.clamp(5_000, 120_000)"));
 
     assert!(ai_vault.contains("SCRIPT_KIT_AI_VAULT_TEST_PROVIDER"));
+    assert!(ai_vault.contains("fn search_local_vault("));
+    assert!(ai_vault.contains("fn read_claude_vault_hits("));
+    assert!(ai_vault.contains("fn read_codex_vault_hits("));
+    assert_eq!(ai_vault.matches("search_cmux_vault(").count(), 1);
+    assert!(ai_vault.contains("fn resume_local_vault_session("));
+    assert!(ai_vault.contains("fn local_resume_command("));
+    assert!(ai_vault.contains(".arg(\"new-workspace\")"));
+    assert!(ai_vault.contains("claude --resume"));
+    assert!(ai_vault.contains("codex resume"));
     assert!(ai_vault.contains("\"type\": \"aiVault.search.v1\""));
     assert!(ai_vault.contains("\"includeContent\": false"));
     assert!(ai_vault.contains("\"type\": \"aiVault.resume.v1\""));
@@ -50,6 +59,7 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("ai_vault_cache_get"));
     assert!(ai_vault.contains("output_with_timeout"));
     assert!(ai_vault.contains("cmux_failure_message"));
+    assert!(ai_vault.contains("ai_vault_local_search_unavailable"));
     assert!(ai_vault.contains("ai_vault_cmux_response_parse_failed"));
     assert!(!ai_vault.contains("transcript:"));
     assert!(!ai_vault.contains("preview:"));
