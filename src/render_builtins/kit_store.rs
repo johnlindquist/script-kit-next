@@ -91,6 +91,80 @@ impl KitStorePluginMutation {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStoreOperationStep {
+    ReadGitHead,
+    SaveInstalledRegistry,
+    PullRepository,
+    SaveUpdatedRegistry,
+    RemoveDirectory,
+    RemoveRegistry,
+}
+
+impl KitStoreOperationStep {
+    fn git_command(self) -> Option<&'static str> {
+        match self {
+            Self::ReadGitHead => Some("git rev-parse"),
+            Self::PullRepository => Some("git pull"),
+            Self::SaveInstalledRegistry
+            | Self::SaveUpdatedRegistry
+            | Self::RemoveDirectory
+            | Self::RemoveRegistry => None,
+        }
+    }
+
+    fn git_spawn_failure(self, error: impl std::fmt::Display) -> String {
+        let command = self.git_command().unwrap_or("git");
+        format!("Failed to run {}: {}", command, error)
+    }
+
+    fn git_status_failure(
+        self,
+        status: std::process::ExitStatus,
+        stderr: &[u8],
+    ) -> String {
+        let operation = self.git_command().unwrap_or("git");
+        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+        format!(
+            "{} failed with status {}{}",
+            operation,
+            status,
+            if stderr.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", stderr)
+            }
+        )
+    }
+
+    fn storage_failure(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SaveInstalledRegistry => format!("Failed to update plugin registry: {}", error),
+            Self::SaveUpdatedRegistry => format!("Failed to save updated kit registry: {}", error),
+            Self::RemoveRegistry => format!("Failed to update kit registry: {}", error),
+            Self::ReadGitHead | Self::PullRepository | Self::RemoveDirectory => {
+                format!("Kit Store storage step failed: {}", error)
+            }
+        }
+    }
+
+    fn remove_directory_failure(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::RemoveDirectory => format!("Failed to remove kit directory: {}", error),
+            Self::ReadGitHead
+            | Self::SaveInstalledRegistry
+            | Self::PullRepository
+            | Self::SaveUpdatedRegistry
+            | Self::RemoveRegistry => format!("Kit Store remove step failed: {}", error),
+        }
+    }
+
+    fn empty_git_hash_message(self) -> String {
+        let command = self.git_command().unwrap_or("git");
+        format!("{} returned empty hash", command)
+    }
+}
+
 impl ScriptListApp {
     fn kit_store_search_results(query: &str) -> Vec<KitStoreSearchResult> {
         let agent = ureq::Agent::config_builder()
@@ -169,24 +243,6 @@ impl ScriptListApp {
         })
     }
 
-    fn kit_store_git_error(
-        operation: &str,
-        status: std::process::ExitStatus,
-        stderr: &[u8],
-    ) -> String {
-        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
-        format!(
-            "{} failed with status {}{}",
-            operation,
-            status,
-            if stderr.is_empty() {
-                String::new()
-            } else {
-                format!(": {}", stderr)
-            }
-        )
-    }
-
     fn kit_store_derive_name(repo_url: &str) -> Result<String, String> {
         let trimmed = repo_url.trim();
         if trimmed.is_empty() {
@@ -220,17 +276,15 @@ impl ScriptListApp {
             .arg("rev-parse")
             .arg("HEAD")
             .output()
-            .map_err(|error| format!("Failed to run git rev-parse: {}", error))?;
+            .map_err(|error| KitStoreOperationStep::ReadGitHead.git_spawn_failure(error))?;
         if !output.status.success() {
-            return Err(Self::kit_store_git_error(
-                "git rev-parse",
-                output.status,
-                &output.stderr,
-            ));
+            return Err(
+                KitStoreOperationStep::ReadGitHead.git_status_failure(output.status, &output.stderr)
+            );
         }
         let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if hash.is_empty() {
-            return Err("git rev-parse returned empty hash".to_string());
+            return Err(KitStoreOperationStep::ReadGitHead.empty_git_hash_message());
         }
         Ok(hash)
     }
@@ -265,7 +319,7 @@ impl ScriptListApp {
         kits.push(installed.clone());
 
         script_kit_gpui::kit_store::storage::save_kit_registry(&kits)
-            .map_err(|error| format!("Failed to update plugin registry: {}", error))?;
+            .map_err(|error| KitStoreOperationStep::SaveInstalledRegistry.storage_failure(error))?;
 
         Ok(installed)
     }
@@ -277,13 +331,10 @@ impl ScriptListApp {
             .arg("pull")
             .arg("--ff-only")
             .output()
-            .map_err(|error| format!("Failed to run git pull: {}", error))?;
+            .map_err(|error| KitStoreOperationStep::PullRepository.git_spawn_failure(error))?;
         if !pull_output.status.success() {
-            return Err(Self::kit_store_git_error(
-                "git pull",
-                pull_output.status,
-                &pull_output.stderr,
-            ));
+            return Err(KitStoreOperationStep::PullRepository
+                .git_status_failure(pull_output.status, &pull_output.stderr));
         }
 
         let latest_hash = Self::kit_store_git_hash(&kit.path)?;
@@ -293,16 +344,17 @@ impl ScriptListApp {
         }
 
         script_kit_gpui::kit_store::storage::save_kit_registry(&kits)
-            .map_err(|error| format!("Failed to save updated kit registry: {}", error))
+            .map_err(|error| KitStoreOperationStep::SaveUpdatedRegistry.storage_failure(error))
     }
 
     fn kit_store_remove(kit: &script_kit_gpui::kit_store::InstalledKit) -> Result<(), String> {
         if kit.path.exists() {
-            std::fs::remove_dir_all(&kit.path)
-                .map_err(|error| format!("Failed to remove kit directory: {}", error))?;
+            std::fs::remove_dir_all(&kit.path).map_err(|error| {
+                KitStoreOperationStep::RemoveDirectory.remove_directory_failure(error)
+            })?;
         }
         script_kit_gpui::kit_store::storage::remove_kit(&kit.name)
-            .map_err(|error| format!("Failed to update kit registry: {}", error))
+            .map_err(|error| KitStoreOperationStep::RemoveRegistry.storage_failure(error))
     }
 
     fn request_plugin_runtime_refresh(

@@ -62,3 +62,73 @@ fn kit_store_toasts_and_refresh_use_named_mutation_state() {
         );
     }
 }
+
+#[test]
+fn kit_store_operation_failures_are_named_steps() {
+    assert!(
+        KIT_STORE.contains("enum KitStoreOperationStep"),
+        "Kit Store git/storage/remove failures must be owned by named operation steps"
+    );
+
+    for variant in [
+        "ReadGitHead",
+        "SaveInstalledRegistry",
+        "PullRepository",
+        "SaveUpdatedRegistry",
+        "RemoveDirectory",
+        "RemoveRegistry",
+    ] {
+        assert!(
+            KIT_STORE.contains(&format!("Self::{variant}")),
+            "KitStoreOperationStep must keep the {variant} variant"
+        );
+    }
+
+    for method in [
+        "fn git_command(self) -> Option<&'static str>",
+        "fn git_spawn_failure(self, error: impl std::fmt::Display) -> String",
+        "fn git_status_failure(",
+        "fn storage_failure(self, error: impl std::fmt::Display) -> String",
+        "fn remove_directory_failure(self, error: impl std::fmt::Display) -> String",
+        "fn empty_git_hash_message(self) -> String",
+    ] {
+        assert!(
+            KIT_STORE.contains(method),
+            "KitStoreOperationStep must own {method}"
+        );
+    }
+
+    for scattered_call_site in [
+        ".map_err(|error| format!(\"Failed to run git rev-parse: {}\", error))",
+        ".map_err(|error| format!(\"Failed to update plugin registry: {}\", error))",
+        ".map_err(|error| format!(\"Failed to run git pull: {}\", error))",
+        ".map_err(|error| format!(\"Failed to save updated kit registry: {}\", error))",
+        ".map_err(|error| format!(\"Failed to remove kit directory: {}\", error))",
+        ".map_err(|error| format!(\"Failed to update kit registry: {}\", error))",
+    ] {
+        assert!(
+            !KIT_STORE.contains(scattered_call_site),
+            "Kit Store operation failures must not regress to scattered call-site formatting: {scattered_call_site}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_git_storage_and_remove_paths_use_operation_steps() {
+    for usage in [
+        "KitStoreOperationStep::ReadGitHead.git_spawn_failure(error)",
+        "KitStoreOperationStep::ReadGitHead.git_status_failure(output.status, &output.stderr)",
+        "KitStoreOperationStep::ReadGitHead.empty_git_hash_message()",
+        "KitStoreOperationStep::SaveInstalledRegistry.storage_failure(error)",
+        "KitStoreOperationStep::PullRepository.git_spawn_failure(error)",
+        "KitStoreOperationStep::PullRepository\n                .git_status_failure(pull_output.status, &pull_output.stderr)",
+        "KitStoreOperationStep::SaveUpdatedRegistry.storage_failure(error)",
+        "KitStoreOperationStep::RemoveDirectory.remove_directory_failure(error)",
+        "KitStoreOperationStep::RemoveRegistry.storage_failure(error)",
+    ] {
+        assert!(
+            KIT_STORE.contains(usage),
+            "Kit Store operation path should route through named step: {usage}"
+        );
+    }
+}
