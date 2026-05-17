@@ -1467,6 +1467,32 @@ fn browser_tabs_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn window_switcher_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum WindowSwitcherBuiltinAction")
+            && content.contains("WindowSwitcherBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_window_switcher_builtin("),
+        "Window Switcher should route through a named action state"
+    );
+    assert!(
+        content.contains("window_control::list_windows()")
+            && content.contains("self.cached_windows = windows")
+            && content.contains("AppView::WindowSwitcherView"),
+        "Window Switcher should preserve window loading, cache assignment, and view opening"
+    );
+    assert!(
+        content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()")
+            && content.contains("open_window_switcher")
+            && content.contains("open_window_switcher_failed"),
+        "Window Switcher success and failure details should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

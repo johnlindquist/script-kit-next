@@ -756,6 +756,32 @@ impl BrowserTabsBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowSwitcherBuiltinAction {
+    Open,
+}
+
+impl WindowSwitcherBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::WindowSwitcher => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_window_switcher",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_window_switcher_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3268,45 +3294,10 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::WindowSwitcher => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Window Switcher"
-                );
-                match window_control::list_windows() {
-                    Ok(windows) => {
-                        tracing::info!(
-                            category = "BUILTIN",
-                            trace_id = %dctx.trace_id,
-                            count = windows.len(),
-                            "Loaded windows"
-                        );
-                        self.cached_windows = windows;
-
-                        self.open_builtin_filterable_view(
-                            AppView::WindowSwitcherView {
-                                filter: String::new(),
-                                selected_index: 0,
-                            },
-                            "Search windows...",
-                            false,
-                            cx,
-                        );
-
-                        Self::builtin_success(dctx, "open_window_switcher")
-                    }
-                    Err(e) => {
-                        let message = format!("Failed to list windows: {}", e);
-                        self.show_error_toast(message.clone(), cx);
-                        cx.notify();
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
-                            "open_window_switcher_failed",
-                        )
-                    }
-                }
+                let window_switcher_action =
+                    WindowSwitcherBuiltinAction::from_feature(&entry.feature)
+                        .expect("window switcher arm should only receive WindowSwitcher");
+                self.execute_window_switcher_builtin(window_switcher_action, dctx, cx)
             }
             builtins::BuiltInFeature::BrowserTabs => {
                 let browser_tabs_action = BrowserTabsBuiltinAction::from_feature(&entry.feature)
@@ -4187,6 +4178,53 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let message = format!("Failed to list browser tabs: {}", error);
+                self.show_error_toast(message.clone(), cx);
+                cx.notify();
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_window_switcher_builtin(
+        &mut self,
+        action: WindowSwitcherBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            "Opening Window Switcher"
+        );
+        match window_control::list_windows() {
+            Ok(windows) => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = windows.len(),
+                    "Loaded windows"
+                );
+                self.cached_windows = windows;
+
+                self.open_builtin_filterable_view(
+                    AppView::WindowSwitcherView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search windows...",
+                    false,
+                    cx,
+                );
+
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(error) => {
+                let message = format!("Failed to list windows: {}", error);
                 self.show_error_toast(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
