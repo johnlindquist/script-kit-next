@@ -49,6 +49,12 @@ impl AppCopyHandlerAction {
             Self::Name | Self::BundleIdentifier => format!("Copied: {value}"),
         }
     }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Name | Self::BundleIdentifier => "No item selected",
+        }
+    }
 }
 
 impl AppOpenHandlerAction {
@@ -181,7 +187,7 @@ impl ScriptListApp {
                 let Some(result) = self.get_selected_result() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No item selected",
+                        copy_action.selection_required_message(),
                     );
                 };
 

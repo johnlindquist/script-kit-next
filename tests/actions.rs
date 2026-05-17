@@ -2068,8 +2068,9 @@ fn app_copy_handler_uses_named_action_states() {
     assert!(
         content.contains("AppCopyHandlerAction::from_action_id(action_id)")
             && content.contains("copy_action.copy_value(&result)")
-            && content.contains("copy_action.copied_hud(&value)"),
-        "application copy handlers should derive copied value and HUD copy from the named state"
+            && content.contains("copy_action.copied_hud(&value)")
+            && content.contains("copy_action.selection_required_message()"),
+        "application copy handlers should derive copied value, HUD copy, and empty-selection text from the named state"
     );
 }
 
