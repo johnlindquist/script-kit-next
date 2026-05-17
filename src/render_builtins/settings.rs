@@ -25,6 +25,29 @@ enum SettingsAction {
     ResetWindowPositions,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsEmptyState {
+    NoSettingsAvailable,
+    NoFilteredMatches,
+}
+
+impl SettingsEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoSettingsAvailable
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoSettingsAvailable => "No settings available",
+            Self::NoFilteredMatches => "No settings match your filter",
+        }
+    }
+}
+
 fn settings_item_matches_filter(item: &SettingsItem, filter: &str) -> bool {
     if filter.is_empty() {
         return true;
@@ -670,11 +693,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgba(chrome.text_muted_rgba))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No settings available"
-                } else {
-                    "No settings match your filter"
-                })
+                .child(SettingsEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             div()
