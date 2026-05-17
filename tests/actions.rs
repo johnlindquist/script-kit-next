@@ -1221,6 +1221,7 @@ fn dictation_history_handler_uses_named_action_states() {
             && content.contains("history_action.user_message()")
             && content.contains("history_action.success_hud()")
             && content.contains("error_prefix()")
+            && content.contains("history_action.failure_message(error)")
             && content.contains("\"Deleted dictation\"")
             && content.contains("\"Failed to delete dictation\""),
         "dictation history handlers should derive empty-selection, user message, HUD, and error copy from named states"
