@@ -2115,9 +2115,14 @@ fn menu_bar_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("action_state.success_detail()")
+            && content.contains("action_state.failure_message(&e)")
             && content.contains("action_state.failure_detail()")
             && content.contains("action_state.unsupported_detail()"),
-        "Menu bar built-in outcomes should use named state details"
+        "Menu bar built-in outcomes should use named state feedback and details"
+    );
+    assert!(
+        content.contains("format!(\"Menu action failed: {error}\")"),
+        "Menu bar state should preserve failure toast copy"
     );
     assert!(
         content.contains("script_kit_gpui::menu_executor::execute_menu_action")

@@ -868,6 +868,12 @@ impl MenuBarBuiltinAction {
         }
     }
 
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Execute => format!("Menu action failed: {error}"),
+        }
+    }
+
     fn unsupported_detail(self) -> &'static str {
         match self {
             Self::Execute => "menu_bar_action_unsupported",
@@ -3136,7 +3142,7 @@ impl ScriptListApp {
                     Self::builtin_success(dctx, action_state.success_detail())
                 }
                 Err(e) => {
-                    let message = format!("Menu action failed: {}", e);
+                    let message = action_state.failure_message(&e);
                     self.show_error_toast(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
