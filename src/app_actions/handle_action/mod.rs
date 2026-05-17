@@ -13,6 +13,11 @@ enum AcpLastResponseHandlerAction {
     PasteToFrontmost,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpCodeCopyHandlerAction {
+    CopyAllCode,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -26,6 +31,22 @@ impl AcpLastResponseHandlerAction {
         match self {
             Self::CopyToClipboard => "Copied last response to clipboard",
             Self::PasteToFrontmost => "Pasting to frontmost app\u{2026}",
+        }
+    }
+}
+
+impl AcpCodeCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_copy_all_code" => Some(Self::CopyAllCode),
+            _ => None,
+        }
+    }
+
+    fn result_message(self, copied_any_code: bool) -> &'static str {
+        match (self, copied_any_code) {
+            (Self::CopyAllCode, true) => "All code blocks copied",
+            (Self::CopyAllCode, false) => "No code blocks found",
         }
     }
 }
@@ -1164,6 +1185,10 @@ impl ScriptListApp {
                 }
             }
             "acp_copy_all_code" => {
+                let Some(code_copy_action) = AcpCodeCopyHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let messages = {
                     let view = entity.read(cx);
@@ -1206,12 +1231,12 @@ impl ScriptListApp {
                 }
                 if all_code.is_empty() {
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No code blocks found".to_string());
+                    o.user_message = Some(code_copy_action.result_message(false).to_string());
                     o
                 } else {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(all_code));
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("All code blocks copied".to_string());
+                    o.user_message = Some(code_copy_action.result_message(true).to_string());
                     o
                 }
             }
