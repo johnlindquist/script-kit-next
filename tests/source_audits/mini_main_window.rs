@@ -6,21 +6,16 @@ use super::read_source as read;
 fn mini_main_window_builtin_uses_shared_helper() {
     let content = read("src/app_execute/builtin_execution.rs");
 
-    let branch_start = content
-        .find("UtilityCommandType::MiniMainWindow => {")
-        .expect("Expected UtilityCommandType::MiniMainWindow builtin arm");
-    let branch = &content[branch_start..content.len().min(branch_start + 500)];
-
     for expected in [
-        "category = \"BUILTIN\"",
-        "trace_id = %dctx.trace_id",
-        "\"Opening Mini Main Window\"",
-        "self.open_mini_main_window(cx);",
-        "Self::builtin_success(dctx, \"open_mini_main_window\")",
+        "enum UtilityOpenBuiltinAction",
+        "UtilityOpenBuiltinAction::MiniMainWindow => self.open_mini_main_window(cx)",
+        "Self::MiniMainWindow => Some(\"Opening Mini Main Window\")",
+        "Self::MiniMainWindow => \"open_mini_main_window\"",
+        "Self::builtin_success(dctx, action.success_detail())",
     ] {
         assert!(
-            branch.contains(expected),
-            "Mini Main Window builtin branch missing required line: {expected}"
+            content.contains(expected),
+            "Mini Main Window builtin action state missing required line: {expected}"
         );
     }
 }

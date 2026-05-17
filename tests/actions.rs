@@ -779,6 +779,30 @@ fn permission_assistant_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_open_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityOpenBuiltinAction")
+            && content.contains("MiniMainWindow")
+            && content.contains("ScratchPad")
+            && content.contains("QuickTerminal")
+            && content.contains("ClaudeCode")
+            && content.contains("ProcessManager"),
+        "safe utility open built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("UtilityOpenBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_open_builtin(")
+            && content.contains("action.opening_message()")
+            && content.contains("action.opens_from_main_menu()")
+            && content.contains("action.success_detail()"),
+        "utility open logging, launcher-origin state, and success detail should derive from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
