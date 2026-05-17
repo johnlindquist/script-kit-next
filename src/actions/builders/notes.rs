@@ -97,6 +97,29 @@ fn has_invalid_new_chat_preset_info(preset: &NewChatPresetInfo) -> bool {
     is_blank(&preset.id) || is_blank(&preset.name)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesNewChatActionPlan {
+    LastUsedModel,
+    Preset,
+    Model,
+}
+
+impl NotesNewChatActionPlan {
+    fn model_description(self, model: &NewChatModelInfo) -> String {
+        match self {
+            Self::LastUsedModel | Self::Model => format!("Uses {}", model.provider_display_name),
+            Self::Preset => String::new(),
+        }
+    }
+
+    fn preset_description(self, preset: &NewChatPresetInfo) -> String {
+        match self {
+            Self::Preset => format!("Uses {} preset", preset.name),
+            Self::LastUsedModel | Self::Model => String::new(),
+        }
+    }
+}
+
 fn has_invalid_note_switcher_note_info(note: &NoteSwitcherNoteInfo) -> bool {
     is_blank(&note.id) || is_blank(&note.title)
 }
@@ -606,11 +629,12 @@ pub fn get_new_chat_actions(
     let mut actions = Vec::new();
 
     for setting in last_used {
+        let action_plan = NotesNewChatActionPlan::LastUsedModel;
         actions.push(
             Action::new(
                 format!("last_used_{}", new_chat_model_identifier(setting)),
                 &setting.display_name,
-                Some(format!("Uses {}", setting.provider_display_name)),
+                Some(action_plan.model_description(setting)),
                 ActionCategory::ScriptContext,
             )
             .with_section("Last Used Settings")
@@ -619,11 +643,12 @@ pub fn get_new_chat_actions(
     }
 
     for preset in presets {
+        let action_plan = NotesNewChatActionPlan::Preset;
         actions.push(
             Action::new(
                 format!("preset_{}", preset.id),
                 &preset.name,
-                Some(new_chat_preset_description(preset)),
+                Some(action_plan.preset_description(preset)),
                 ActionCategory::ScriptContext,
             )
             .with_section("Presets")
@@ -632,11 +657,12 @@ pub fn get_new_chat_actions(
     }
 
     for model in models {
+        let action_plan = NotesNewChatActionPlan::Model;
         actions.push(
             Action::new(
                 format!("model_{}", new_chat_model_identifier(model)),
                 &model.display_name,
-                Some(format!("Uses {}", model.provider_display_name)),
+                Some(action_plan.model_description(model)),
                 ActionCategory::ScriptContext,
             )
             .with_section("Models")
@@ -649,10 +675,6 @@ pub fn get_new_chat_actions(
 
 fn new_chat_model_identifier(model: &NewChatModelInfo) -> String {
     format!("{}::{}", model.provider, model.model_id)
-}
-
-fn new_chat_preset_description(preset: &NewChatPresetInfo) -> String {
-    format!("Uses {} preset", preset.name)
 }
 
 /// Information about a note for the note switcher dialog
