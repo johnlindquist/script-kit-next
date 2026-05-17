@@ -364,6 +364,32 @@ impl UtilityOpenBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityProcessBuiltinAction {
+    StopAllProcesses,
+}
+
+impl UtilityProcessBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::StopAllProcesses => Some(Self::StopAllProcesses),
+            _ => None,
+        }
+    }
+
+    fn empty_hud(self) -> &'static str {
+        match self {
+            Self::StopAllProcesses => "No running scripts to stop.",
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::StopAllProcesses => "stop_all_processes",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3446,29 +3472,9 @@ impl ScriptListApp {
                         self.execute_utility_open_builtin(open_action, dctx, cx)
                     }
                     UtilityCommandType::StopAllProcesses => {
-                        let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            requested_count = process_count,
-                            "process_manager.stop_all"
-                        );
-
-                        if process_count == 0 {
-                            self.show_hud(
-                                "No running scripts to stop.".to_string(),
-                                Some(HUD_2200_MS),
-                                cx,
-                            );
-                        } else {
-                            crate::process_manager::PROCESS_MANAGER.kill_all_processes();
-                            self.show_hud(
-                                format!("Stopped {} running script process(es).", process_count),
-                                Some(HUD_MEDIUM_MS),
-                                cx,
-                            );
-                            self.close_and_reset_window(cx);
-                        }
-                        Self::builtin_success(dctx, "stop_all_processes")
+                        let process_action = UtilityProcessBuiltinAction::from_command(*cmd_type)
+                            .expect("utility process arm should only receive process commands");
+                        self.execute_utility_process_builtin(process_action, dctx, cx)
                     }
                     UtilityCommandType::InspectCurrentContext => {
                         tracing::info!(
@@ -5156,6 +5162,33 @@ impl ScriptListApp {
             }
         }
 
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_utility_process_builtin(
+        &mut self,
+        action: UtilityProcessBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            requested_count = process_count,
+            "process_manager.stop_all"
+        );
+
+        if process_count == 0 {
+            self.show_hud(action.empty_hud().to_string(), Some(HUD_2200_MS), cx);
+        } else {
+            crate::process_manager::PROCESS_MANAGER.kill_all_processes();
+            self.show_hud(
+                format!("Stopped {} running script process(es).", process_count),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
+            self.close_and_reset_window(cx);
+        }
         Self::builtin_success(dctx, action.success_detail())
     }
 
