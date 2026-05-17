@@ -143,8 +143,11 @@ fn clipboard_entry_actions_use_named_plan_states() {
         content.contains("ClipboardEntryActionPlan::from_entry(entry)")
             && content.contains("fn pin_action")
             && content.contains("fn is_image")
-            && content.contains("fn is_text"),
-        "clipboard context actions should derive pin and content-specific rows from the named plan"
+            && content.contains("fn is_text")
+            && content.contains("Self::TextPinned | Self::ImagePinned | Self::OtherPinned")
+            && content.contains("Self::TextUnpinned | Self::ImageUnpinned | Self::OtherUnpinned")
+            && !content.contains("matches!(\n            self,\n            Self::TextPinned"),
+        "clipboard context actions should derive pin/unpin and content-specific rows from named plan arms"
     );
 }
 

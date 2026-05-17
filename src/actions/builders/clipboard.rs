@@ -57,29 +57,29 @@ impl ClipboardEntryActionPlan {
     }
 
     fn pin_action(self) -> Action {
-        if matches!(
-            self,
-            Self::TextPinned | Self::ImagePinned | Self::OtherPinned
-        ) {
-            Action::new(
-                "clip:clipboard_unpin",
-                "Unpin Entry",
-                Some("Removes the pin from this entry".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::StarFilled)
-            .with_section("Edit")
-        } else {
-            Action::new(
-                "clip:clipboard_pin",
-                "Pin Entry",
-                Some("Pins this entry to prevent auto-removal".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::Star)
-            .with_section("Edit")
+        match self {
+            Self::TextPinned | Self::ImagePinned | Self::OtherPinned => {
+                Action::new(
+                    "clip:clipboard_unpin",
+                    "Unpin Entry",
+                    Some("Removes the pin from this entry".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⇧⌘P")
+                .with_icon(IconName::StarFilled)
+                .with_section("Edit")
+            }
+            Self::TextUnpinned | Self::ImageUnpinned | Self::OtherUnpinned => {
+                Action::new(
+                    "clip:clipboard_pin",
+                    "Pin Entry",
+                    Some("Pins this entry to prevent auto-removal".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⇧⌘P")
+                .with_icon(IconName::Star)
+                .with_section("Edit")
+            }
         }
     }
 }
