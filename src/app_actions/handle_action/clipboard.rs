@@ -4,6 +4,29 @@
 // quick look, attach to AI, open with, CleanShot, OCR, delete, save file,
 // and save snippet.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardPinHandlerAction {
+    Pin,
+    Unpin,
+}
+
+impl ClipboardPinHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "clipboard_pin" => Some(Self::Pin),
+            "clipboard_unpin" => Some(Self::Unpin),
+            _ => None,
+        }
+    }
+
+    fn apply(self, entry_id: &str) -> anyhow::Result<()> {
+        match self {
+            Self::Pin => clipboard_history::pin_entry(entry_id),
+            Self::Unpin => clipboard_history::unpin_entry(entry_id),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Refresh clipboard selection after a delete operation, respecting the active filter.
     ///
@@ -72,16 +95,15 @@ impl ScriptListApp {
         let trace_id = &dctx.trace_id;
         match action_id {
             "clipboard_pin" | "clipboard_unpin" => {
+                let Some(pin_action) = ClipboardPinHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
                     return DispatchOutcome::success();
                 };
 
-                let result = if action_id == "clipboard_pin" {
-                    clipboard_history::pin_entry(&entry.id)
-                } else {
-                    clipboard_history::unpin_entry(&entry.id)
-                };
+                let result = pin_action.apply(&entry.id);
 
                 match result {
                     Ok(()) => {
