@@ -1132,16 +1132,42 @@ fn acp_model_display_name(entry: &crate::ai::acp::config::AcpModelEntry) -> Stri
         .unwrap_or_else(|| entry.id.clone())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AcpModelSelectionActionPlan {
+    CurrentModel,
+    AvailableModel,
+}
+
+impl AcpModelSelectionActionPlan {
+    fn from_is_selected(is_selected: bool) -> Self {
+        if is_selected {
+            Self::CurrentModel
+        } else {
+            Self::AvailableModel
+        }
+    }
+
+    fn picker_title(self, display_name: &str) -> String {
+        match self {
+            Self::CurrentModel => format!("{display_name} \u{2713}"),
+            Self::AvailableModel => display_name.to_string(),
+        }
+    }
+
+    fn description(self, display_name: &str) -> String {
+        match self {
+            Self::CurrentModel => format!("Currently selected model: {display_name}"),
+            Self::AvailableModel => format!("Switch Agent Chat to {display_name}"),
+        }
+    }
+}
+
 fn acp_model_switch_description(
     entry: &crate::ai::acp::config::AcpModelEntry,
     is_selected: bool,
 ) -> String {
     let display_name = acp_model_display_name(entry);
-    if is_selected {
-        format!("Currently selected model: {display_name}")
-    } else {
-        format!("Switch Agent Chat to {display_name}")
-    }
+    AcpModelSelectionActionPlan::from_is_selected(is_selected).description(&display_name)
 }
 
 /// Build the root-level ACP actions list. Includes a single "Change Agent"
@@ -1224,14 +1250,11 @@ pub(crate) fn get_acp_model_picker_actions(
         .iter()
         .map(|entry| {
             let is_selected = selected_model_id == Some(entry.id.as_str());
+            let selection_plan = AcpModelSelectionActionPlan::from_is_selected(is_selected);
             let display_name = acp_model_display_name(entry);
             Action::new(
                 acp_switch_model_action_id(&entry.id),
-                if is_selected {
-                    format!("{display_name} \u{2713}")
-                } else {
-                    display_name
-                },
+                selection_plan.picker_title(&display_name),
                 Some(acp_model_switch_description(entry, is_selected)),
                 ActionCategory::ScriptContext,
             )
