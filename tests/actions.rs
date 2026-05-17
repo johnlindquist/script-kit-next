@@ -1905,9 +1905,11 @@ fn utility_context_builtin_uses_named_action_states() {
         "Utility context built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityContextBuiltinAction::from_command(*cmd_type)")
+        content.contains("UtilityContextBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_context_builtin(")
             && content.contains("action.success_detail()")
+            && content.contains("action.copied_log_message()")
+            && content.contains("action.serialize_failure_message(&e)")
             && content.contains("action.failure_detail()"),
         "Utility context command routing should delegate through named state details"
     );
@@ -1917,6 +1919,11 @@ fn utility_context_builtin_uses_named_action_states() {
             && content.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(json))")
             && content.contains("inspect_current_context_failed"),
         "Inspect Current Context should preserve snapshot capture, clipboard copy, HUD, and failure detail"
+    );
+    assert!(
+        content.contains("\"Copied current context snapshot to clipboard\"")
+            && content.contains("format!(\"Failed to serialize context snapshot: {error}\")"),
+        "Inspect Current Context state should preserve copied log and serialize-failure copy"
     );
 }
 
