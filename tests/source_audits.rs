@@ -77,6 +77,9 @@ mod trigger_builtin_sdk_literals;
 #[path = "source_audits/trigger_builtin_registry_consistency.rs"]
 mod trigger_builtin_registry_consistency;
 
+#[path = "source_audits/script_kit_selfie.rs"]
+mod script_kit_selfie;
+
 #[path = "source_audits/emoji_picker.rs"]
 mod emoji_picker;
 
