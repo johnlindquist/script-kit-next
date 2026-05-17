@@ -802,6 +802,30 @@ impl BrowserTabsBuiltinAction {
             Self::Open => "open_browser_tabs_failed",
         }
     }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Open => "Opening Browser Tabs",
+        }
+    }
+
+    fn loaded_message(self) -> &'static str {
+        match self {
+            Self::Open => "Loaded browser tabs",
+        }
+    }
+
+    fn placeholder(self) -> &'static str {
+        match self {
+            Self::Open => "Search open browser tabs...",
+        }
+    }
+
+    fn failure_message(self, error: &anyhow::Error) -> String {
+        match self {
+            Self::Open => format!("Failed to list browser tabs: {error}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -826,6 +850,30 @@ impl WindowSwitcherBuiltinAction {
     fn failure_detail(self) -> &'static str {
         match self {
             Self::Open => "open_window_switcher_failed",
+        }
+    }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Open => "Opening Window Switcher",
+        }
+    }
+
+    fn loaded_message(self) -> &'static str {
+        match self {
+            Self::Open => "Loaded windows",
+        }
+    }
+
+    fn placeholder(self) -> &'static str {
+        match self {
+            Self::Open => "Search windows...",
+        }
+    }
+
+    fn failure_message(self, error: &anyhow::Error) -> String {
+        match self {
+            Self::Open => format!("Failed to list windows: {error}"),
         }
     }
 }
@@ -4046,7 +4094,8 @@ impl ScriptListApp {
         tracing::info!(
             category = "BUILTIN",
             trace_id = %dctx.trace_id,
-            "Opening Browser Tabs"
+            "{}",
+            action.opening_message()
         );
         match crate::browser_tabs::list_open_tabs() {
             Ok(tabs) => {
@@ -4054,7 +4103,8 @@ impl ScriptListApp {
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
                     count = tabs.len(),
-                    "Loaded browser tabs"
+                    "{}",
+                    action.loaded_message()
                 );
                 self.cached_browser_tabs = tabs;
 
@@ -4079,7 +4129,7 @@ impl ScriptListApp {
                         filter: String::new(),
                         selected_index: 0,
                     },
-                    "Search open browser tabs...",
+                    action.placeholder(),
                     false,
                     cx,
                 );
@@ -4087,7 +4137,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
-                let message = format!("Failed to list browser tabs: {}", error);
+                let message = action.failure_message(&error);
                 self.show_error_toast(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(
@@ -4310,7 +4360,8 @@ impl ScriptListApp {
         tracing::info!(
             category = "BUILTIN",
             trace_id = %dctx.trace_id,
-            "Opening Window Switcher"
+            "{}",
+            action.opening_message()
         );
         match window_control::list_windows() {
             Ok(windows) => {
@@ -4318,7 +4369,8 @@ impl ScriptListApp {
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
                     count = windows.len(),
-                    "Loaded windows"
+                    "{}",
+                    action.loaded_message()
                 );
                 self.cached_windows = windows;
 
@@ -4327,7 +4379,7 @@ impl ScriptListApp {
                         filter: String::new(),
                         selected_index: 0,
                     },
-                    "Search windows...",
+                    action.placeholder(),
                     false,
                     cx,
                 );
@@ -4335,7 +4387,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
-                let message = format!("Failed to list windows: {}", error);
+                let message = action.failure_message(&error);
                 self.show_error_toast(message.clone(), cx);
                 cx.notify();
                 Self::builtin_error(

@@ -1370,6 +1370,40 @@ fn utility_open_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn browser_window_filterable_builtins_use_named_copy_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum BrowserTabsBuiltinAction")
+            && content.contains("fn execute_browser_tabs_builtin(")
+            && content.contains("action.opening_message()")
+            && content.contains("action.loaded_message()")
+            && content.contains("action.placeholder()")
+            && content.contains("action.failure_message(&error)")
+            && content.contains("action.failure_detail()"),
+        "Browser Tabs built-in should derive logs, placeholder, failure copy, and failure detail from the named state"
+    );
+    assert!(
+        content.contains("enum WindowSwitcherBuiltinAction")
+            && content.contains("fn execute_window_switcher_builtin(")
+            && content.contains("action.opening_message()")
+            && content.contains("action.loaded_message()")
+            && content.contains("action.placeholder()")
+            && content.contains("action.failure_message(&error)")
+            && content.contains("action.failure_detail()"),
+        "Window Switcher built-in should derive logs, placeholder, failure copy, and failure detail from the named state"
+    );
+    assert!(
+        content.contains("\"Search open browser tabs...\"")
+            && content.contains("\"Search windows...\"")
+            && content.contains("format!(\"Failed to list browser tabs: {error}\")")
+            && content.contains("format!(\"Failed to list windows: {error}\")"),
+        "filterable built-in state methods should preserve current user-facing copy"
+    );
+}
+
+#[test]
 fn kit_store_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
