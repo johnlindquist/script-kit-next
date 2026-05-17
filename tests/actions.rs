@@ -196,6 +196,31 @@ fn clipboard_copy_paste_handler_uses_named_action_states() {
 }
 
 #[test]
+fn clipboard_history_paste_renderer_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/clipboard.rs")
+        .expect("Failed to read clipboard history renderer");
+
+    assert!(
+        content.contains("enum ClipboardHistoryPasteAction")
+            && content.contains("PasteSelectedEntry"),
+        "clipboard history renderer copy/paste logs should be driven by a named action state"
+    );
+    assert!(
+        content.contains("ClipboardHistoryPasteAction::PasteSelectedEntry")
+            && content.contains("paste_action.copy_attempt_log(&entry.id)")
+            && content.contains("paste_action.copy_failure_log(e)")
+            && content.contains("paste_action.paste_failure_log(e)"),
+        "clipboard history renderer should derive copy and paste failure logs from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Copying clipboard entry: {entry_id}\")")
+            && content.contains("format!(\"Failed to copy entry: {error}\")")
+            && content.contains("format!(\"Failed to simulate paste: {error}\")"),
+        "clipboard history paste feedback should preserve existing log copy"
+    );
+}
+
+#[test]
 fn clipboard_share_handler_uses_named_action_state() {
     let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
         .expect("Failed to read clipboard action handler");

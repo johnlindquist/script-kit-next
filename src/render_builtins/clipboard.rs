@@ -1,3 +1,28 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardHistoryPasteAction {
+    PasteSelectedEntry,
+}
+
+impl ClipboardHistoryPasteAction {
+    fn copy_attempt_log(self, entry_id: &str) -> String {
+        match self {
+            Self::PasteSelectedEntry => format!("Copying clipboard entry: {entry_id}"),
+        }
+    }
+
+    fn copy_failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::PasteSelectedEntry => format!("Failed to copy entry: {error}"),
+        }
+    }
+
+    fn paste_failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::PasteSelectedEntry => format!("Failed to simulate paste: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn clipboard_history_matches_filter(
         entry: &clipboard_history::ClipboardEntryMeta,
@@ -334,25 +359,26 @@ impl ScriptListApp {
 
                             // Copy selected entry to clipboard, hide window, then paste
                             if let Some((_, entry)) = filtered_entries.get(*selected_index) {
+                                let paste_action = ClipboardHistoryPasteAction::PasteSelectedEntry;
                                 logging::log(
                                     "EXEC",
-                                    &format!("Copying clipboard entry: {}", entry.id),
+                                    &paste_action.copy_attempt_log(&entry.id),
                                 );
                                 if let Err(e) =
                                     clipboard_history::copy_entry_to_clipboard(&entry.id)
                                 {
-                                    logging::log("ERROR", &format!("Failed to copy entry: {}", e));
+                                    logging::log("ERROR", &paste_action.copy_failure_log(e));
                                 } else {
                                     logging::log("EXEC", "Entry copied to clipboard");
                                     this.hide_main_and_reset(cx);
 
                                     // Simulate Cmd+V paste after a brief delay to let focus return
-                                    std::thread::spawn(|| {
+                                    std::thread::spawn(move || {
                                         std::thread::sleep(std::time::Duration::from_millis(100));
                                         if let Err(e) = selected_text::simulate_paste_with_cg() {
                                             logging::log(
                                                 "ERROR",
-                                                &format!("Failed to simulate paste: {}", e),
+                                                &paste_action.paste_failure_log(e),
                                             );
                                         } else {
                                             logging::log("EXEC", "Simulated Cmd+V paste");
