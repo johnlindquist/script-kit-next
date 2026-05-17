@@ -553,6 +553,20 @@ impl UtilityContextBuiltinAction {
             Self::InspectCurrentContext => "inspect_current_context_failed",
         }
     }
+
+    fn copied_log_message(self) -> &'static str {
+        match self {
+            Self::InspectCurrentContext => "Copied current context snapshot to clipboard",
+        }
+    }
+
+    fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::InspectCurrentContext => {
+                format!("Failed to serialize context snapshot: {error}")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5584,7 +5598,8 @@ impl ScriptListApp {
                     json_bytes = receipt.json_bytes,
                     status = %receipt.status,
                     duration_ms = started_at.elapsed().as_millis() as u64,
-                    "Copied current context snapshot to clipboard"
+                    "{}",
+                    action.copied_log_message()
                 );
 
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
@@ -5595,7 +5610,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(e) => {
-                let message = format!("Failed to serialize context snapshot: {}", e);
+                let message = action.serialize_failure_message(&e);
                 tracing::error!(
                     trace_id = %dctx.trace_id,
                     error = %e,
