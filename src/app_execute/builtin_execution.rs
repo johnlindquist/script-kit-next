@@ -635,6 +635,23 @@ impl MenuBarBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SystemBuiltinAction {
+    Dispatch,
+}
+
+impl SystemBuiltinAction {
+    fn from_action(_action_type: &builtins::SystemActionType) -> Self {
+        Self::Dispatch
+    }
+
+    fn handler_name(self) -> &'static str {
+        match self {
+            Self::Dispatch => "Executing system action via inner path",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -2311,6 +2328,24 @@ impl ScriptListApp {
         }
     }
 
+    fn execute_system_builtin(
+        &mut self,
+        action: SystemBuiltinAction,
+        action_type: &builtins::SystemActionType,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            action_type = ?action_type,
+            action = ?action,
+            action_name = %action.handler_name(),
+            "Executing system action via inner path"
+        );
+        self.dispatch_system_action(action_type, dctx, cx)
+    }
+
     fn dispatch_system_action(
         &mut self,
         action_type: &builtins::SystemActionType,
@@ -3480,13 +3515,8 @@ impl ScriptListApp {
             // System Actions
             // =========================================================================
             builtins::BuiltInFeature::SystemAction(action_type) => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    action_type = ?action_type,
-                    "Executing system action via inner path"
-                );
-                self.dispatch_system_action(action_type, dctx, cx)
+                let system_action = SystemBuiltinAction::from_action(action_type);
+                self.execute_system_builtin(system_action, action_type, dctx, cx)
             }
 
             // NOTE: Window Actions removed - now handled by window-management extension
