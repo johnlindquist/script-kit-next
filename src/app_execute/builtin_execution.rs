@@ -506,7 +506,8 @@ impl UtilityOpenBuiltinAction {
             | builtins::UtilityCommandType::InspectCurrentContext
             | builtins::UtilityCommandType::TraceCurrentAppIntent
             | builtins::UtilityCommandType::VerifyCurrentAppRecipe
-            | builtins::UtilityCommandType::ReplayCurrentAppRecipe => None,
+            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
+            | builtins::UtilityCommandType::ScriptKitSelfie => None,
         }
     }
 
@@ -893,6 +894,50 @@ impl UtilityCurrentAppCommandsBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilitySelfieBuiltinAction {
+    Capture,
+}
+
+impl UtilitySelfieBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::ScriptKitSelfie => Some(Self::Capture),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Capture => "script_kit_selfie_capture_scheduled",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Capture => "script_kit_selfie_capture_failed",
+        }
+    }
+
+    fn starting_hud(self, state: &str) -> String {
+        match self {
+            Self::Capture => format!("Capturing Script Kit Selfie: {state}"),
+        }
+    }
+
+    fn saved_hud(self, receipt: &crate::platform::ScriptKitSelfieReceipt) -> String {
+        match self {
+            Self::Capture => format!("Selfie saved: {}", receipt.png_path),
+        }
+    }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Capture => format!("Script Kit Selfie failed: {error}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityCommandBuiltinAction {
     Open(UtilityOpenBuiltinAction),
     Process(UtilityProcessBuiltinAction),
@@ -901,6 +946,7 @@ enum UtilityCommandBuiltinAction {
     Recipe(UtilityRecipeBuiltinAction),
     DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction),
     CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction),
+    Selfie(UtilitySelfieBuiltinAction),
 }
 
 impl UtilityCommandBuiltinAction {
@@ -939,6 +985,10 @@ impl UtilityCommandBuiltinAction {
             builtins::UtilityCommandType::CurrentAppCommands => Self::CurrentAppCommands(
                 UtilityCurrentAppCommandsBuiltinAction::from_command(command)
                     .expect("utility current-app command should map to current-app action"),
+            ),
+            builtins::UtilityCommandType::ScriptKitSelfie => Self::Selfie(
+                UtilitySelfieBuiltinAction::from_command(command)
+                    .expect("utility selfie command should map to selfie action"),
             ),
         }
     }
@@ -5708,7 +5758,55 @@ impl ScriptListApp {
             UtilityCommandBuiltinAction::CurrentAppCommands(current_app_action) => {
                 self.execute_utility_current_app_commands_builtin(current_app_action, dctx, cx)
             }
+            UtilityCommandBuiltinAction::Selfie(selfie_action) => {
+                self.execute_utility_selfie_builtin(selfie_action, dctx, cx)
+            }
         }
+    }
+
+    fn execute_utility_selfie_builtin(
+        &mut self,
+        action: UtilitySelfieBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let state = self.app_view_name();
+        let trace_id = dctx.trace_id.clone();
+        self.show_hud(action.starting_hud(&state), Some(HUD_SHORT_MS), cx);
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::platform::capture_script_kit_selfie(&state) })
+                .await;
+
+            let _ = this.update(cx, |this, cx| match result {
+                Ok(receipt) => {
+                    tracing::info!(
+                        trace_id = %trace_id,
+                        receipt_id = %receipt.receipt_id,
+                        state = %receipt.state,
+                        png_path = %receipt.png_path,
+                        receipt_path = %receipt.receipt_path,
+                        "script_kit_selfie.captured"
+                    );
+                    this.show_hud(action.saved_hud(&receipt), Some(HUD_MEDIUM_MS), cx);
+                }
+                Err(error) => {
+                    let message = action.failure_message(&error);
+                    tracing::error!(
+                        trace_id = %trace_id,
+                        detail = action.failure_detail(),
+                        %error,
+                        "script_kit_selfie.failed"
+                    );
+                    this.show_error_toast(message, cx);
+                }
+            });
+        })
+        .detach();
+
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_utility_process_builtin(
