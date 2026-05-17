@@ -393,6 +393,49 @@ impl PermissionCommandBuiltinAction {
             Self::CheckPermissions | Self::RequestAccessibility => "",
         }
     }
+
+    fn all_permissions_granted_hud(self) -> &'static str {
+        match self {
+            Self::CheckPermissions => "All permissions granted!",
+            Self::RequestAccessibility
+            | Self::OpenAccessibilitySettings
+            | Self::Assistant(_) => "",
+        }
+    }
+
+    fn missing_permissions_message(self, missing: &[&str]) -> String {
+        match self {
+            Self::CheckPermissions => format!("Missing permissions: {}", missing.join(", ")),
+            Self::RequestAccessibility
+            | Self::OpenAccessibilitySettings
+            | Self::Assistant(_) => String::new(),
+        }
+    }
+
+    fn accessibility_granted_hud(self) -> &'static str {
+        match self {
+            Self::RequestAccessibility => "Accessibility permission granted!",
+            Self::CheckPermissions | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
+        }
+    }
+
+    fn accessibility_not_granted_warning(self) -> &'static str {
+        match self {
+            Self::RequestAccessibility => {
+                "Accessibility permission not granted. Some features may not work."
+            }
+            Self::CheckPermissions | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
+        }
+    }
+
+    fn open_settings_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::OpenAccessibilitySettings => format!("Failed to open settings: {error}"),
+            Self::CheckPermissions | Self::RequestAccessibility | Self::Assistant(_) => {
+                String::new()
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6325,7 +6368,7 @@ impl ScriptListApp {
                 let status = permissions_wizard::check_all_permissions();
                 if status.all_granted() {
                     self.show_hud(
-                        "All permissions granted!".to_string(),
+                        action.all_permissions_granted_hud().to_string(),
                         Some(HUD_SHORT_MS),
                         cx,
                     );
@@ -6337,7 +6380,7 @@ impl ScriptListApp {
                         .collect();
                     self.toast_manager.push(
                         components::toast::Toast::warning(
-                            format!("Missing permissions: {}", missing.join(", ")),
+                            action.missing_permissions_message(&missing),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_WARNING_MS)),
@@ -6350,14 +6393,14 @@ impl ScriptListApp {
                 let granted = permissions_wizard::request_accessibility_permission();
                 if granted {
                     self.show_hud(
-                        "Accessibility permission granted!".to_string(),
+                        action.accessibility_granted_hud().to_string(),
                         Some(HUD_SHORT_MS),
                         cx,
                     );
                 } else {
                     self.toast_manager.push(
                         components::toast::Toast::warning(
-                            "Accessibility permission not granted. Some features may not work.",
+                            action.accessibility_not_granted_warning(),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_WARNING_MS)),
@@ -6368,7 +6411,7 @@ impl ScriptListApp {
             }
             PermissionCommandBuiltinAction::OpenAccessibilitySettings => {
                 if let Err(e) = permissions_wizard::open_accessibility_settings() {
-                    let message = format!("Failed to open settings: {}", e);
+                    let message = action.open_settings_failure_message(&e);
                     self.show_error_toast(message.clone(), cx);
                     Self::builtin_error(
                         dctx,
