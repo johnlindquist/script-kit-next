@@ -1,3 +1,34 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLauncherActivationAction {
+    LaunchSelectedApp,
+}
+
+impl AppLauncherActivationAction {
+    fn launch_log(self, app_name: &str) -> String {
+        match self {
+            Self::LaunchSelectedApp => format!("Launching app: {app_name}"),
+        }
+    }
+
+    fn double_click_launch_log(self, app_name: &str) -> String {
+        match self {
+            Self::LaunchSelectedApp => format!("Double-click launching app: {app_name}"),
+        }
+    }
+
+    fn success_log(self, app_name: &str) -> String {
+        match self {
+            Self::LaunchSelectedApp => format!("Launched: {app_name}"),
+        }
+    }
+
+    fn failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::LaunchSelectedApp => format!("Failed to launch app: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn app_launcher_filtered_entries<'a>(
         apps: &'a [app_launcher::AppInfo],
@@ -160,11 +191,13 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             // Launch selected app and hide window
                             if let Some((_, app)) = filtered_apps.get(*selected_index) {
-                                logging::log("EXEC", &format!("Launching app: {}", app.name));
+                                let activation_action =
+                                    AppLauncherActivationAction::LaunchSelectedApp;
+                                logging::log("EXEC", &activation_action.launch_log(&app.name));
                                 if let Err(e) = app_launcher::launch_application(app) {
-                                    logging::log("ERROR", &format!("Failed to launch app: {}", e));
+                                    logging::log("ERROR", &activation_action.failure_log(e));
                                 } else {
-                                    logging::log("EXEC", &format!("Launched: {}", app.name));
+                                    logging::log("EXEC", &activation_action.success_log(&app.name));
                                     this.hide_main_and_reset(cx);
                                 }
                             }
@@ -257,6 +290,8 @@ impl ScriptListApp {
                                 // Click handler: select on click, launch on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let app_info = app.clone();
+                                let activation_action =
+                                    AppLauncherActivationAction::LaunchSelectedApp;
                                 let click_handler =
                                     move |event: &gpui::ClickEvent,
                                           _window: &mut Window,
@@ -279,10 +314,10 @@ impl ScriptListApp {
                                                     if mouse_event.down.click_count == 2 {
                                                         logging::log(
                                                             "UI",
-                                                            &format!(
-                                                                "Double-click launching app: {}",
-                                                                app_info.name
-                                                            ),
+                                                            &activation_action
+                                                                .double_click_launch_log(
+                                                                    &app_info.name,
+                                                                ),
                                                         );
                                                         if app_launcher::launch_application(
                                                             &app_info,
