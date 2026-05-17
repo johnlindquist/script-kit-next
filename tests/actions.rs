@@ -390,6 +390,31 @@ fn clipboard_delete_entry_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_bulk_delete_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardBulkDeleteHandlerAction")
+            && content.contains("MatchingEntries")
+            && content.contains("AllUnpinned"),
+        "clipboard bulk delete handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ClipboardBulkDeleteHandlerAction::from_action_id(action_id)")
+            && content.contains("bulk_delete_action.confirm_title()")
+            && content.contains("bulk_delete_action.confirm_message(delete_count)")
+            && content.contains("bulk_delete_action.confirm_message(unpinned_count)")
+            && content.contains("bulk_delete_action.confirm_button()")
+            && content.contains("bulk_delete_action.success_hud(deleted)")
+            && content.contains("bulk_delete_action.success_hud(unpinned_count)")
+            && content.contains("bulk_delete_action.partial_failure_message(deleted, failed)")
+            && content.contains("bulk_delete_action.failure_message(e)"),
+        "clipboard bulk delete handlers should derive confirmation, success, and failure text from named states"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

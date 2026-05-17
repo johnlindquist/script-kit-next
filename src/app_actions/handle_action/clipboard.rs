@@ -62,6 +62,12 @@ enum ClipboardDeleteEntryHandlerAction {
     DeleteEntry,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardBulkDeleteHandlerAction {
+    MatchingEntries,
+    AllUnpinned,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -851,16 +857,18 @@ impl ScriptListApp {
             }
             // Clipboard delete actions
             "clipboard_delete_multiple" => {
+                let Some(bulk_delete_action) =
+                    ClipboardBulkDeleteHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let filter_text = match &self.current_view {
                     AppView::ClipboardHistoryView { filter, .. } => filter.trim().to_string(),
                     _ => String::new(),
                 };
 
                 if filter_text.is_empty() {
-                    self.show_error_toast(
-                        "Type in search first, then use Delete Entries...",
-                        cx,
-                    );
+                    self.show_error_toast(bulk_delete_action.search_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
@@ -873,18 +881,15 @@ impl ScriptListApp {
                     .collect();
 
                 if ids_to_delete.is_empty() {
-                    self.show_error_toast("No matching entries to delete", cx);
+                    self.show_error_toast(bulk_delete_action.no_matches_message(), cx);
                     return DispatchOutcome::success();
                 }
 
                 let delete_count = ids_to_delete.len();
                 let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
-                    "Delete Clipboard Entries",
-                    format!(
-                        "Are you sure you want to delete these {} matching clipboard entries?",
-                        delete_count
-                    ),
-                    "Delete",
+                    bulk_delete_action.confirm_title(),
+                    bulk_delete_action.confirm_message(delete_count),
+                    bulk_delete_action.confirm_button(),
                 );
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
@@ -911,7 +916,7 @@ impl ScriptListApp {
                                     "failed to open confirmation modal"
                                 );
                                 this.show_error_toast_with_code(
-                                    "Failed to open confirmation dialog",
+                                    bulk_delete_action.confirmation_failure_message(),
                                     Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
@@ -940,13 +945,13 @@ impl ScriptListApp {
 
                         if failed == 0 {
                             this.show_hud(
-                                format!("Deleted {} entries", deleted),
+                                bulk_delete_action.success_hud(deleted),
                                 Some(HUD_2500_MS),
                                 cx,
                             );
                         } else {
                             this.show_error_toast(
-                                format!("Deleted {}, failed {}", deleted, failed),
+                                bulk_delete_action.partial_failure_message(deleted, failed),
                                 cx,
                             );
                         }
@@ -987,6 +992,11 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "clipboard_delete_all" => {
+                let Some(bulk_delete_action) =
+                    ClipboardBulkDeleteHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 // Delete all unpinned entries
                 let unpinned_count = self
                     .cached_clipboard_entries
@@ -995,17 +1005,14 @@ impl ScriptListApp {
                     .count();
 
                 if unpinned_count == 0 {
-                    self.show_error_toast("No unpinned entries to delete", cx);
+                    self.show_error_toast(bulk_delete_action.no_unpinned_message(), cx);
                     return DispatchOutcome::success();
                 }
 
                 let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
-                    "Delete All Clipboard Entries",
-                    format!(
-                        "Are you sure you want to delete all {} unpinned clipboard entries?",
-                        unpinned_count
-                    ),
-                    "Delete All",
+                    bulk_delete_action.confirm_title(),
+                    bulk_delete_action.confirm_message(unpinned_count),
+                    bulk_delete_action.confirm_button(),
                 );
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
@@ -1032,7 +1039,7 @@ impl ScriptListApp {
                                     "failed to open confirmation modal"
                                 );
                                 this.show_error_toast_with_code(
-                                    "Failed to open confirmation dialog",
+                                    bulk_delete_action.confirmation_failure_message(),
                                     Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
@@ -1052,10 +1059,7 @@ impl ScriptListApp {
                                 this.refresh_clipboard_selection_after_delete();
 
                                 this.show_hud(
-                                    format!(
-                                        "Deleted {} entries (pinned preserved)",
-                                        unpinned_count
-                                    ),
+                                    bulk_delete_action.success_hud(unpinned_count),
                                     Some(HUD_2500_MS),
                                     cx,
                                 );
@@ -1063,7 +1067,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, "failed to clear unpinned history");
-                                this.show_error_toast(format!("Failed to delete: {}", e), cx);
+                                this.show_error_toast(bulk_delete_action.failure_message(e), cx);
                             }
                         }
                     });
@@ -1414,6 +1418,90 @@ impl ClipboardDeleteEntryHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::DeleteEntry => format!("Failed to delete: {error}"),
+        }
+    }
+}
+
+impl ClipboardBulkDeleteHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "clipboard_delete_multiple" => Some(Self::MatchingEntries),
+            "clipboard_delete_all" => Some(Self::AllUnpinned),
+            _ => None,
+        }
+    }
+
+    fn search_required_message(self) -> &'static str {
+        match self {
+            Self::MatchingEntries => "Type in search first, then use Delete Entries...",
+            Self::AllUnpinned => "Type in search first, then use Delete Entries...",
+        }
+    }
+
+    fn no_matches_message(self) -> &'static str {
+        match self {
+            Self::MatchingEntries => "No matching entries to delete",
+            Self::AllUnpinned => "No matching entries to delete",
+        }
+    }
+
+    fn no_unpinned_message(self) -> &'static str {
+        match self {
+            Self::MatchingEntries | Self::AllUnpinned => "No unpinned entries to delete",
+        }
+    }
+
+    fn confirm_title(self) -> &'static str {
+        match self {
+            Self::MatchingEntries => "Delete Clipboard Entries",
+            Self::AllUnpinned => "Delete All Clipboard Entries",
+        }
+    }
+
+    fn confirm_message(self, count: usize) -> String {
+        match self {
+            Self::MatchingEntries => {
+                format!("Are you sure you want to delete these {count} matching clipboard entries?")
+            }
+            Self::AllUnpinned => {
+                format!("Are you sure you want to delete all {count} unpinned clipboard entries?")
+            }
+        }
+    }
+
+    fn confirm_button(self) -> &'static str {
+        match self {
+            Self::MatchingEntries => "Delete",
+            Self::AllUnpinned => "Delete All",
+        }
+    }
+
+    fn confirmation_failure_message(self) -> &'static str {
+        match self {
+            Self::MatchingEntries | Self::AllUnpinned => "Failed to open confirmation dialog",
+        }
+    }
+
+    fn success_hud(self, deleted: usize) -> String {
+        match self {
+            Self::MatchingEntries => format!("Deleted {deleted} entries"),
+            Self::AllUnpinned => format!("Deleted {deleted} entries (pinned preserved)"),
+        }
+    }
+
+    fn partial_failure_message(self, deleted: usize, failed: usize) -> String {
+        match self {
+            Self::MatchingEntries | Self::AllUnpinned => {
+                format!("Deleted {deleted}, failed {failed}")
+            }
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MatchingEntries | Self::AllUnpinned => {
+                format!("Failed to delete: {error}")
+            }
         }
     }
 }
