@@ -41,6 +41,12 @@ enum ClipboardOcrHandlerAction {
     ExtractText,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardExternalFileHandlerAction {
+    QuickLook,
+    OpenWith,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -591,25 +597,35 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "clipboard_quick_look" => {
+                let Some(external_action) =
+                    ClipboardExternalFileHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(external_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if let Err(e) = clipboard_history::quick_look_entry(&entry) {
                     tracing::error!(error = %e, "failed to Quick Look");
-                    self.show_error_toast(format!("Failed to Quick Look: {}", e), cx);
+                    self.show_error_toast(external_action.quick_look_failure_message(e), cx);
                 }
                 DispatchOutcome::success()
             }
             "clipboard_open_with" => {
+                let Some(external_action) =
+                    ClipboardExternalFileHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(external_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast("Failed to load clipboard content", cx);
+                    self.show_error_toast(external_action.load_failure_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -628,7 +644,7 @@ impl ScriptListApp {
                     Ok(path) => path,
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save temp file");
-                        self.show_error_toast("Failed to save temp file", cx);
+                        self.show_error_toast(external_action.temp_save_failure_message(), cx);
                         return DispatchOutcome::success();
                     }
                 };
@@ -638,14 +654,14 @@ impl ScriptListApp {
                     let path_str = temp_path.to_string_lossy().to_string();
                     if let Err(e) = crate::file_search::open_with(&path_str) {
                         tracing::error!(error = %e, "failed to Open With");
-                        self.show_error_toast("Failed to Open With", cx);
+                        self.show_error_toast(external_action.open_with_failure_message(), cx);
                     }
                 }
 
                 #[cfg(not(target_os = "macos"))]
                 {
                     let _ = temp_path;
-                    self.show_unsupported_platform_toast("Open With", cx);
+                    self.show_unsupported_platform_toast(external_action.platform_name(), cx);
                 }
                 DispatchOutcome::success()
             }
@@ -1232,6 +1248,54 @@ impl ScriptListApp {
             }
 
             _ => DispatchOutcome::not_handled(),
+        }
+    }
+}
+
+impl ClipboardExternalFileHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "clipboard_quick_look" => Some(Self::QuickLook),
+            "clipboard_open_with" => Some(Self::OpenWith),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::QuickLook | Self::OpenWith => "No clipboard entry selected",
+        }
+    }
+
+    fn quick_look_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::QuickLook => format!("Failed to Quick Look: {error}"),
+            Self::OpenWith => format!("Failed to Open With: {error}"),
+        }
+    }
+
+    fn load_failure_message(self) -> &'static str {
+        match self {
+            Self::QuickLook | Self::OpenWith => "Failed to load clipboard content",
+        }
+    }
+
+    fn temp_save_failure_message(self) -> &'static str {
+        match self {
+            Self::QuickLook | Self::OpenWith => "Failed to save temp file",
+        }
+    }
+
+    fn open_with_failure_message(self) -> &'static str {
+        match self {
+            Self::QuickLook | Self::OpenWith => "Failed to Open With",
+        }
+    }
+
+    fn platform_name(self) -> &'static str {
+        match self {
+            Self::QuickLook => "Quick Look",
+            Self::OpenWith => "Open With",
         }
     }
 }

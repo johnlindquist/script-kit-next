@@ -478,8 +478,8 @@ fn clipboard_quick_look_shows_error_toast_on_failure() {
     let block = &content[ql_pos..content.len().min(ql_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast(format!(\"Failed to Quick Look: {}\", e), cx)"),
-        "clipboard_quick_look error should use show_error_toast"
+        block.contains("show_error_toast(external_action.quick_look_failure_message(e), cx)"),
+        "clipboard_quick_look error should use named action state feedback"
     );
 }
 
@@ -493,8 +493,8 @@ fn clipboard_quick_look_shows_error_when_no_entry() {
     let block = &content[ql_pos..content.len().min(ql_pos + 3000)];
 
     assert!(
-        block.contains("No clipboard entry selected"),
-        "clipboard_quick_look should show error when no entry is selected"
+        block.contains("external_action.selection_required_message()"),
+        "clipboard_quick_look should show named action state error when no entry is selected"
     );
 }
 
