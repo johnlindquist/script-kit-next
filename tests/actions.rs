@@ -2213,17 +2213,22 @@ fn sync_to_github_builtin_uses_named_action_states() {
         "Sync to GitHub should route through a named action state"
     );
     assert!(
-        content.contains("Syncing Script Kit to GitHub...")
+        content.contains("action.request_log_message()")
+            && content.contains("action.start_hud().to_string()")
+            && content.contains("action_for_task.completed_log_message()")
+            && content.contains("action_for_task.failed_log_message()")
+            && content.contains("action_for_task.failure_message(&error)")
             && content.contains("crate::sync::github::sync_to_github_workspace()")
             && content.contains("report.summary_message()")
-            && content.contains("this.close_and_reset_window(cx)")
-            && content.contains("GitHub sync failed: {error}"),
+            && content.contains("this.close_and_reset_window(cx)"),
         "Sync to GitHub should preserve async dispatch, HUD updates, close/reset, and error handling"
     );
     assert!(
         content.contains("action.success_detail()")
-            && content.contains("sync_to_github_dispatched"),
-        "Sync to GitHub dispatch detail should come from the named state"
+            && content.contains("sync_to_github_dispatched")
+            && content.contains("\"Syncing Script Kit to GitHub...\"")
+            && content.contains("format!(\"GitHub sync failed: {error}\")"),
+        "Sync to GitHub dispatch detail and user-facing copy should come from the named state"
     );
 }
 

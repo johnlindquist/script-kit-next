@@ -966,6 +966,36 @@ impl SyncToGithubBuiltinAction {
             Self::Dispatch => "sync_to_github_dispatched",
         }
     }
+
+    fn request_log_message(self) -> &'static str {
+        match self {
+            Self::Dispatch => "Sync to GitHub requested",
+        }
+    }
+
+    fn start_hud(self) -> &'static str {
+        match self {
+            Self::Dispatch => "Syncing Script Kit to GitHub...",
+        }
+    }
+
+    fn completed_log_message(self) -> &'static str {
+        match self {
+            Self::Dispatch => "Sync to GitHub completed",
+        }
+    }
+
+    fn failed_log_message(self) -> &'static str {
+        match self {
+            Self::Dispatch => "Sync to GitHub failed",
+        }
+    }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Dispatch => format!("GitHub sync failed: {error}"),
+        }
+    }
 }
 
 #[cfg(feature = "storybook")]
@@ -4264,15 +4294,17 @@ impl ScriptListApp {
         tracing::info!(
             category = "BUILTIN",
             trace_id = %dctx.trace_id,
-            "Sync to GitHub requested"
+            "{}",
+            action.request_log_message()
         );
         self.show_hud(
-            "Syncing Script Kit to GitHub...".to_string(),
+            action.start_hud().to_string(),
             Some(HUD_SHORT_MS),
             cx,
         );
 
         let dctx_owned = dctx.clone();
+        let action_for_task = action;
         cx.spawn(async move |this, cx| {
             let sync_result = cx
                 .background_executor()
@@ -4287,7 +4319,8 @@ impl ScriptListApp {
                         workspace = %report.workspace.display(),
                         dry_run = report.dry_run,
                         step_count = report.steps.len(),
-                        "Sync to GitHub completed"
+                        "{}",
+                        action_for_task.completed_log_message()
                     );
                     this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
                     this.close_and_reset_window(cx);
@@ -4297,9 +4330,10 @@ impl ScriptListApp {
                         category = "BUILTIN",
                         trace_id = %dctx_owned.trace_id,
                         error = %error,
-                        "Sync to GitHub failed"
+                        "{}",
+                        action_for_task.failed_log_message()
                     );
-                    this.show_error_toast(format!("GitHub sync failed: {error}"), cx);
+                    this.show_error_toast(action_for_task.failure_message(&error), cx);
                     cx.notify();
                 }
             });
