@@ -374,14 +374,14 @@ fn clipboard_image_exact_action_count() {
     #[cfg(target_os = "macos")]
     assert_eq!(
         actions.len(),
-        16,
-        "macOS image clipboard should have 16 actions"
+        15,
+        "macOS image clipboard should have 15 actions"
     );
     #[cfg(not(target_os = "macos"))]
     assert_eq!(
         actions.len(),
-        12,
-        "non-macOS image clipboard should have 12 actions"
+        11,
+        "non-macOS image clipboard should have 11 actions"
     );
 }
 

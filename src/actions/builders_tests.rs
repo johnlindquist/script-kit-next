@@ -353,6 +353,18 @@ fn clipboard_image_entry_has_ocr_action() {
 }
 
 #[test]
+fn clipboard_image_entry_hides_text_snippet_action() {
+    let entry = make_image_entry(false);
+    let actions = get_clipboard_history_context_actions(&entry);
+    let ids = action_ids(&actions);
+
+    assert!(
+        !ids.contains(&"clip:clipboard_save_snippet"),
+        "Image entries should not advertise text-only snippet creation"
+    );
+}
+
+#[test]
 fn clipboard_text_entry_lacks_image_specific_actions() {
     let entry = make_text_entry(false);
     let actions = get_clipboard_history_context_actions(&entry);

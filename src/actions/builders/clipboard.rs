@@ -201,17 +201,19 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         );
     }
 
-    actions.push(
-        Action::new(
-            "clip:clipboard_save_snippet",
-            "Save Text as Snippet",
-            Some("Creates a scriptlet from this text".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("⇧⌘S")
-        .with_icon(IconName::Code)
-        .with_section("Edit"),
-    );
+    if entry.content_type == ContentType::Text {
+        actions.push(
+            Action::new(
+                "clip:clipboard_save_snippet",
+                "Save Text as Snippet",
+                Some("Creates a scriptlet from this text".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘S")
+            .with_icon(IconName::Code)
+            .with_section("Edit"),
+        );
+    }
 
     actions.push(
         Action::new(
