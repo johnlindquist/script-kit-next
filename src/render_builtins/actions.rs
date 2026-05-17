@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuiltInActionsWindowFeedback {
+    FileSearch,
+    ClipboardHistory,
+}
+
+impl BuiltInActionsWindowFeedback {
+    fn opened_log(self) -> &'static str {
+        match self {
+            Self::FileSearch => "File search actions popup window opened",
+            Self::ClipboardHistory => "Clipboard actions popup window opened",
+        }
+    }
+
+    fn failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::FileSearch | Self::ClipboardHistory => {
+                format!("Failed to open actions window: {error}")
+            }
+        }
+    }
+}
+
 impl ScriptListApp {
     fn dictation_history_actions_dialog_config(
         placeholder: String,
@@ -613,6 +636,7 @@ impl ScriptListApp {
 
         // Open the actions window — centered like the mini main menu
         let parent_automation_id = crate::windows::focused_automation_window_id();
+        let actions_window_feedback = BuiltInActionsWindowFeedback::FileSearch;
         cx.spawn(async move |_this, cx| {
             cx.update(|cx| {
                 match open_actions_window(
@@ -625,10 +649,10 @@ impl ScriptListApp {
                     parent_automation_id.as_deref(),
                 ) {
                     Ok(_handle) => {
-                        logging::log("ACTIONS", "File search actions popup window opened");
+                        logging::log("ACTIONS", actions_window_feedback.opened_log());
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to open actions window: {}", e));
+                        logging::log("ERROR", &actions_window_feedback.failure_log(e));
                     }
                 }
             });
@@ -763,6 +787,7 @@ impl ScriptListApp {
 
             // Open the actions window
             let parent_automation_id = crate::windows::focused_automation_window_id();
+            let actions_window_feedback = BuiltInActionsWindowFeedback::ClipboardHistory;
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     match open_actions_window(
@@ -775,10 +800,10 @@ impl ScriptListApp {
                         parent_automation_id.as_deref(),
                     ) {
                         Ok(_handle) => {
-                            logging::log("ACTIONS", "Clipboard actions popup window opened");
+                            logging::log("ACTIONS", actions_window_feedback.opened_log());
                         }
                         Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open actions window: {}", e));
+                            logging::log("ERROR", &actions_window_feedback.failure_log(e));
                         }
                     }
                 });
