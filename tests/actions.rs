@@ -2060,6 +2060,26 @@ fn shortcut_alias_edit_handlers_use_named_action_states() {
 }
 
 #[test]
+fn shortcut_alias_remove_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/shortcuts.rs")
+        .expect("Failed to read shortcut/alias action handler");
+
+    assert!(
+        content.contains("enum ShortcutAliasRemoveAction")
+            && content.contains("Shortcut")
+            && content.contains("Alias"),
+        "shortcut and alias remove handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ShortcutAliasRemoveAction::from_action_id(action_id)")
+            && content.contains("remove_action.success_hud()")
+            && content.contains("remove_action.failure_message(e)")
+            && content.contains("remove_action.cannot_remove_message()"),
+        "shortcut and alias remove handlers should derive HUD and failure copy from named states"
+    );
+}
+
+#[test]
 fn clipboard_pin_feedback_uses_handler_action_state() {
     let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
         .expect("Failed to read clipboard action handler");

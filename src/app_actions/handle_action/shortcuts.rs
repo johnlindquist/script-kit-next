@@ -19,6 +19,12 @@ enum AliasInputAction {
     Update,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShortcutAliasRemoveAction {
+    Shortcut,
+    Alias,
+}
+
 impl ShortcutRecorderAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -64,6 +70,37 @@ impl AliasInputAction {
     fn cannot_assign_message(self) -> &'static str {
         match self {
             Self::Add | Self::Update => "Cannot assign alias for this item type",
+        }
+    }
+}
+
+impl ShortcutAliasRemoveAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "remove_shortcut" => Some(Self::Shortcut),
+            "remove_alias" => Some(Self::Alias),
+            _ => None,
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::Shortcut => "Shortcut removed",
+            Self::Alias => "Alias removed",
+        }
+    }
+
+    fn cannot_remove_message(self) -> &'static str {
+        match self {
+            Self::Shortcut => "Cannot remove shortcut for this item type",
+            Self::Alias => "Cannot remove alias for this item type",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Shortcut => format!("Failed to remove shortcut: {}", error),
+            Self::Alias => format!("Failed to remove alias: {}", error),
         }
     }
 }
@@ -135,6 +172,10 @@ impl ScriptListApp {
             }
             // "remove_shortcut" removes the existing shortcut from the registry
             "remove_shortcut" => {
+                let Some(remove_action) = ShortcutAliasRemoveAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "remove shortcut action");
                 if let Some(result) = self.get_selected_result() {
                     let command_id_opt = result.launcher_command_id();
@@ -171,7 +212,7 @@ impl ScriptListApp {
                                     "Removed config shortcut"
                                 );
                                 self.show_hud(
-                                    "Shortcut removed".to_string(),
+                                    remove_action.success_hud().to_string(),
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
@@ -183,7 +224,7 @@ impl ScriptListApp {
                                 self.hide_main_and_reset(cx);
                                 return DispatchOutcome::error(
                                     crate::action_helpers::ERROR_ACTION_FAILED,
-                                    format!("Failed to remove shortcut: {}", e),
+                                    remove_action.failure_message(e),
                                 );
                             }
                         }
@@ -191,7 +232,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot remove shortcut for this item type",
+                            remove_action.cannot_remove_message(),
                         );
                     }
                     self.hide_main_and_reset(cx);
@@ -252,6 +293,10 @@ impl ScriptListApp {
             }
             // "remove_alias" removes the existing alias from persistence
             "remove_alias" => {
+                let Some(remove_action) = ShortcutAliasRemoveAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "remove alias action");
                 if let Some(result) = self.get_selected_result() {
                     let command_id_opt = result.launcher_command_id();
@@ -271,7 +316,7 @@ impl ScriptListApp {
                                     "Removed alias override"
                                 );
                                 self.show_hud(
-                                    "Alias removed".to_string(),
+                                    remove_action.success_hud().to_string(),
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
@@ -283,7 +328,7 @@ impl ScriptListApp {
                                 self.hide_main_and_reset(cx);
                                 return DispatchOutcome::error(
                                     crate::action_helpers::ERROR_ACTION_FAILED,
-                                    format!("Failed to remove alias: {}", e),
+                                    remove_action.failure_message(e),
                                 );
                             }
                         }
@@ -291,7 +336,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot remove alias for this item type",
+                            remove_action.cannot_remove_message(),
                         );
                     }
                     self.hide_main_and_reset(cx);
