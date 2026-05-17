@@ -4,11 +4,16 @@
   "type": "module",
   "scripts": {
     "generate": "node scripts/build-feature-data.mjs",
-    "dev": "npm run generate && vite --host 127.0.0.1",
-    "build": "npm run generate && tsc --noEmit && vite build",
+    "dev": "npm run generate && vite dev --host 127.0.0.1",
+    "build": "npm run generate && svelte-kit sync && tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
+    "@sveltejs/adapter-static": "^3.0.10",
+    "@sveltejs/kit": "^2.59.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "mdsvex": "^0.12.7",
+    "svelte": "^5.55.5",
     "typescript": "^5.9.3",
     "vite": "^7.2.7",
     "xstate": "^5.25.0"
