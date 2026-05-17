@@ -1012,6 +1012,33 @@ fn ai_generate_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_preset_file_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiPresetFileBuiltinAction")
+            && content.contains("Import")
+            && content.contains("Export"),
+        "AI preset file built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("AiPresetFileBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_ai_preset_file_builtin(")
+            && content.contains("action.success_detail()"),
+        "AI preset file commands should dispatch through named state success details"
+    );
+    assert!(
+        content.contains("prompt_for_paths(gpui::PathPromptOptions")
+            && content
+                .contains("prompt_for_new_path(&default_dir, Some(\"ai-presets-export.json\"))")
+            && content.contains("validate_presets_json(&contents)")
+            && content.contains("export_presets_to_file(&path)"),
+        "AI preset file states should preserve import validation and export file picker behavior"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
