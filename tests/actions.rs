@@ -1181,6 +1181,7 @@ fn favorites_browse_handler_uses_named_action_states() {
 
     assert!(
         content.contains("enum FavoritesBrowseHandlerAction")
+            && content.contains("Run")
             && content.contains("EditScript")
             && content.contains("CopyScriptUrl")
             && content.contains("MoveUp")
@@ -1190,11 +1191,13 @@ fn favorites_browse_handler_uses_named_action_states() {
     );
     assert!(
         content.contains("FavoritesBrowseHandlerAction::from_action_id(action_id)")
+            && content.contains("favorites_action.run_selected(self, window, cx)")
+            && content.contains("favorites_action.run_outcome(run_result)")
             && content.contains("favorites_action.selection_required_message()")
             && content.contains("favorites_action.copied_url_hud(&deeplink_url)")
             && content.contains("favorites_action.apply_list_mutation(self, cx)")
             && content.contains("favorites_action.mutation_outcome(message_result)"),
-        "Favorites browse handlers should derive required-selection, copied URL, and list mutation feedback from the named state"
+        "Favorites browse handlers should derive run, required-selection, copied URL, and list mutation feedback from the named state"
     );
 }
 

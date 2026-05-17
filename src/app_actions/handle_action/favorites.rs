@@ -5,6 +5,7 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FavoritesBrowseHandlerAction {
+    Run,
     EditScript,
     CopyScriptUrl,
     MoveUp,
@@ -15,6 +16,7 @@ enum FavoritesBrowseHandlerAction {
 impl FavoritesBrowseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
+            "favorites_run" => Some(Self::Run),
             "favorites_edit_script" => Some(Self::EditScript),
             "favorites_copy_script_url" => Some(Self::CopyScriptUrl),
             "favorites_move_up" => Some(Self::MoveUp),
@@ -26,6 +28,7 @@ impl FavoritesBrowseHandlerAction {
 
     fn selection_required_message(self) -> &'static str {
         match self {
+            Self::Run => "Select a favorite to run.",
             Self::EditScript => "Select a favorite to edit.",
             Self::CopyScriptUrl => "Select a favorite to copy its URL.",
             Self::MoveUp | Self::MoveDown | Self::Remove => "Select a favorite.",
@@ -35,7 +38,34 @@ impl FavoritesBrowseHandlerAction {
     fn copied_url_hud(self, url: &str) -> String {
         match self {
             Self::CopyScriptUrl => format!("Copied: {url}"),
-            Self::EditScript | Self::MoveUp | Self::MoveDown | Self::Remove => url.to_string(),
+            Self::Run | Self::EditScript | Self::MoveUp | Self::MoveDown | Self::Remove => {
+                url.to_string()
+            }
+        }
+    }
+
+    fn run_selected(
+        self,
+        app: &mut ScriptListApp,
+        window: &mut Window,
+        cx: &mut Context<ScriptListApp>,
+    ) -> Option<Result<String, String>> {
+        match self {
+            Self::Run => Some(app.run_selected_favorite(window, cx)),
+            Self::EditScript
+            | Self::CopyScriptUrl
+            | Self::MoveUp
+            | Self::MoveDown
+            | Self::Remove => None,
+        }
+    }
+
+    fn run_outcome(self, result: Result<String, String>) -> DispatchOutcome {
+        match result {
+            Ok(_) => DispatchOutcome::success(),
+            Err(message) => {
+                DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
+            }
         }
     }
 
@@ -48,7 +78,7 @@ impl FavoritesBrowseHandlerAction {
             Self::MoveUp => Some(app.move_selected_favorite_up(cx)),
             Self::MoveDown => Some(app.move_selected_favorite_down(cx)),
             Self::Remove => Some(app.remove_selected_favorite(cx)),
-            Self::EditScript | Self::CopyScriptUrl => None,
+            Self::Run | Self::EditScript | Self::CopyScriptUrl => None,
         }
     }
 
@@ -75,14 +105,20 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         match action_id {
-            "favorites_run" => self
-                .run_selected_favorite(window, cx)
-                .map(|_| DispatchOutcome::success())
-                .unwrap_or_else(|message| {
-                    DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
-                }),
+            "favorites_run" => {
+                let Some(favorites_action) =
+                    FavoritesBrowseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                let Some(run_result) = favorites_action.run_selected(self, window, cx) else {
+                    return DispatchOutcome::not_handled();
+                };
+                favorites_action.run_outcome(run_result)
+            }
             "favorites_edit_script" => {
-                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                let Some(favorites_action) =
+                    FavoritesBrowseHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -134,7 +170,8 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "favorites_copy_script_url" => {
-                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                let Some(favorites_action) =
+                    FavoritesBrowseHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
@@ -155,7 +192,8 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "favorites_move_up" | "favorites_move_down" | "favorites_remove" => {
-                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                let Some(favorites_action) =
+                    FavoritesBrowseHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
