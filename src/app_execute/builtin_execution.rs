@@ -452,12 +452,14 @@ impl UtilityTraceBuiltinAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityRecipeBuiltinAction {
     VerifyCurrentApp,
+    ReplayCurrentApp,
 }
 
 impl UtilityRecipeBuiltinAction {
     fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
         match command {
             builtins::UtilityCommandType::VerifyCurrentAppRecipe => Some(Self::VerifyCurrentApp),
+            builtins::UtilityCommandType::ReplayCurrentAppRecipe => Some(Self::ReplayCurrentApp),
             _ => None,
         }
     }
@@ -465,24 +467,63 @@ impl UtilityRecipeBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe",
+            Self::ReplayCurrentApp => "replay_current_app_recipe",
         }
     }
 
     fn clipboard_failure_detail(self) -> &'static str {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_clipboard_failed",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_clipboard_failed",
         }
     }
 
     fn serialize_failure_detail(self) -> &'static str {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_serialize_failed",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_serialize_failed",
         }
     }
 
     fn capture_failure_detail(self) -> &'static str {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_capture_failed",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_capture_failed",
+        }
+    }
+
+    fn drift_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_drift",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_drift",
+        }
+    }
+
+    fn missing_entry_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_missing_entry_index",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_missing_entry_index",
+        }
+    }
+
+    fn open_palette_success_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_open_palette",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_open_palette",
+        }
+    }
+
+    fn generate_script_success_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_generate_script",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_generate_script",
+        }
+    }
+
+    fn unknown_action_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_unknown_action",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_unknown_action",
         }
     }
 }
@@ -3590,192 +3631,9 @@ impl ScriptListApp {
                         self.execute_utility_verify_recipe_builtin(recipe_action, dctx, cx)
                     }
                     UtilityCommandType::ReplayCurrentAppRecipe => {
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            "replay_current_app_recipe.requested"
-                        );
-
-                        let stored_recipe =
-                            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard()
-                            {
-                                Ok(recipe) => recipe,
-                                Err(error) => {
-                                    let message = format!("Replay Current App Recipe failed: {}", error);
-                                    self.show_error_toast(message.clone(), cx);
-                                    return Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "replay_current_app_recipe_clipboard_failed",
-                                    );
-                                }
-                            };
-
-                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot()
-                        {
-                            Ok(snapshot) => {
-                                let snapshot_pid = snapshot.pid;
-                                let (entries, snapshot_receipt) =
-                                    snapshot.clone().into_entries_with_receipt();
-
-                                let selected_text = crate::selected_text::get_selected_text()
-                                    .ok()
-                                    .filter(|text| !text.trim().is_empty());
-
-                                let browser_url = crate::platform::get_focused_browser_tab_url()
-                                    .ok()
-                                    .filter(|url| !url.trim().is_empty());
-
-                                let replay_receipt =
-                                    crate::menu_bar::current_app_commands::build_replay_current_app_recipe_receipt(
-                                        &stored_recipe,
-                                        &entries,
-                                        snapshot,
-                                        selected_text.as_deref(),
-                                        browser_url.as_deref(),
-                                    );
-
-                                tracing::info!(
-                                    category = "CURRENT_APP_RECIPE_REPLAY",
-                                    trace_id = %dctx.trace_id,
-                                    action = %replay_receipt.action,
-                                    status = %replay_receipt.verification.status,
-                                    warning_count = replay_receipt.verification.warning_count,
-                                    expected_bundle_id = %replay_receipt.verification.expected_bundle_id,
-                                    actual_bundle_id = %replay_receipt.verification.actual_bundle_id,
-                                    expected_route = %replay_receipt.verification.expected_route,
-                                    actual_route = %replay_receipt.verification.actual_route,
-                                    selected_entry_index = replay_receipt.selected_entry_index,
-                                    "replay_current_app_recipe.resolved"
-                                );
-
-                                if replay_receipt.verification.warning_count > 0 {
-                                    let json = match serde_json::to_string_pretty(&replay_receipt) {
-                                        Ok(json) => json,
-                                        Err(error) => {
-                                            let message = format!(
-                                                "Failed to serialize replay current app recipe receipt: {}",
-                                                error
-                                            );
-                                            self.show_error_toast(message.clone(), cx);
-                                            return Self::builtin_error(
-                                                dctx,
-                                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                                message,
-                                                "replay_current_app_recipe_serialize_failed",
-                                            );
-                                        }
-                                    };
-
-                                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-
-                                    let message =
-                                        crate::menu_bar::current_app_commands::build_replay_current_app_recipe_hud_message(
-                                            &replay_receipt,
-                                        );
-
-                                    self.show_error_toast(
-                                        format!("{}. Copied replay report to clipboard.", message),
-                                        cx,
-                                    );
-
-                                    return Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "replay_current_app_recipe_drift",
-                                    );
-                                }
-
-                                match replay_receipt.action.as_str() {
-                                    "execute_entry" => {
-                                        let Some(entry_index) = replay_receipt.selected_entry_index
-                                        else {
-                                            let message =
-                                                "Replay Current App Recipe resolved to execute_entry without an entry index"
-                                                    .to_string();
-                                            self.show_error_toast(message.clone(), cx);
-                                            return Self::builtin_error(
-                                                dctx,
-                                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                                message,
-                                                "replay_current_app_recipe_missing_entry_index",
-                                            );
-                                        };
-
-                                        let entry = entries[entry_index].clone();
-                                        self.execute_builtin_inner(
-                                            &entry,
-                                            Some(
-                                                replay_receipt
-                                                    .verification
-                                                    .live_recipe
-                                                    .effective_query
-                                                    .as_str(),
-                                            ),
-                                            dctx,
-                                            cx,
-                                        )
-                                    }
-                                    "open_command_palette" => {
-                                        let filter = replay_receipt
-                                            .verification
-                                            .live_recipe
-                                            .effective_query
-                                            .clone();
-                                        self.present_current_app_commands_entries(
-                                            entries,
-                                            &snapshot_receipt,
-                                            snapshot_pid,
-                                            &filter,
-                                            cx,
-                                        );
-
-                                        Self::builtin_success(
-                                            dctx,
-                                            "replay_current_app_recipe_open_palette",
-                                        )
-                                    }
-                                    "generate_script" => {
-                                        self.spawn_generate_script_from_recipe_after_hide(
-                                            dctx.trace_id.to_string(),
-                                            replay_receipt.verification.live_recipe.clone(),
-                                            cx,
-                                        );
-                                        Self::builtin_success(
-                                            dctx,
-                                            "replay_current_app_recipe_generate_script",
-                                        )
-                                    }
-                                    other => {
-                                        let message = format!(
-                                            "Replay Current App Recipe resolved to unsupported action: {}",
-                                            other
-                                        );
-                                        self.show_error_toast(message.clone(), cx);
-                                        Self::builtin_error(
-                                            dctx,
-                                            crate::action_helpers::ERROR_ACTION_FAILED,
-                                            message,
-                                            "replay_current_app_recipe_unknown_action",
-                                        )
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                let message = format!(
-                                    "Failed to replay current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
-                                    error
-                                );
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "replay_current_app_recipe_capture_failed",
-                                )
-                            }
-                        }
+                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
+                            .expect("utility recipe arm should only receive recipe commands");
+                        self.execute_utility_replay_recipe_builtin(recipe_action, dctx, cx)
                     }
                     UtilityCommandType::TurnThisIntoCommand => {
                         let raw_query_owned =
@@ -5298,6 +5156,191 @@ impl ScriptListApp {
             Err(error) => {
                 let message = format!(
                     "Failed to verify current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
+                    error
+                );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.capture_failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_utility_replay_recipe_builtin(
+        &mut self,
+        action: UtilityRecipeBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            "replay_current_app_recipe.requested"
+        );
+
+        let stored_recipe =
+            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard(
+            ) {
+                Ok(recipe) => recipe,
+                Err(error) => {
+                    let message = format!("Replay Current App Recipe failed: {}", error);
+                    self.show_error_toast(message.clone(), cx);
+                    return Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        action.clipboard_failure_detail(),
+                    );
+                }
+            };
+
+        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
+            Ok(snapshot) => {
+                let snapshot_pid = snapshot.pid;
+                let (entries, snapshot_receipt) = snapshot.clone().into_entries_with_receipt();
+
+                let selected_text = crate::selected_text::get_selected_text()
+                    .ok()
+                    .filter(|text| !text.trim().is_empty());
+
+                let browser_url = crate::platform::get_focused_browser_tab_url()
+                    .ok()
+                    .filter(|url| !url.trim().is_empty());
+
+                let replay_receipt =
+                    crate::menu_bar::current_app_commands::build_replay_current_app_recipe_receipt(
+                        &stored_recipe,
+                        &entries,
+                        snapshot,
+                        selected_text.as_deref(),
+                        browser_url.as_deref(),
+                    );
+
+                tracing::info!(
+                    category = "CURRENT_APP_RECIPE_REPLAY",
+                    trace_id = %dctx.trace_id,
+                    action = %replay_receipt.action,
+                    status = %replay_receipt.verification.status,
+                    warning_count = replay_receipt.verification.warning_count,
+                    expected_bundle_id = %replay_receipt.verification.expected_bundle_id,
+                    actual_bundle_id = %replay_receipt.verification.actual_bundle_id,
+                    expected_route = %replay_receipt.verification.expected_route,
+                    actual_route = %replay_receipt.verification.actual_route,
+                    selected_entry_index = replay_receipt.selected_entry_index,
+                    "replay_current_app_recipe.resolved"
+                );
+
+                if replay_receipt.verification.warning_count > 0 {
+                    let json = match serde_json::to_string_pretty(&replay_receipt) {
+                        Ok(json) => json,
+                        Err(error) => {
+                            let message = format!(
+                                "Failed to serialize replay current app recipe receipt: {}",
+                                error
+                            );
+                            self.show_error_toast(message.clone(), cx);
+                            return Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                message,
+                                action.serialize_failure_detail(),
+                            );
+                        }
+                    };
+
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+
+                    let message =
+                        crate::menu_bar::current_app_commands::build_replay_current_app_recipe_hud_message(
+                            &replay_receipt,
+                        );
+
+                    self.show_error_toast(
+                        format!("{}. Copied replay report to clipboard.", message),
+                        cx,
+                    );
+
+                    return Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        action.drift_failure_detail(),
+                    );
+                }
+
+                match replay_receipt.action.as_str() {
+                    "execute_entry" => {
+                        let Some(entry_index) = replay_receipt.selected_entry_index else {
+                            let message =
+                                "Replay Current App Recipe resolved to execute_entry without an entry index"
+                                    .to_string();
+                            self.show_error_toast(message.clone(), cx);
+                            return Self::builtin_error(
+                                dctx,
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                message,
+                                action.missing_entry_failure_detail(),
+                            );
+                        };
+
+                        let entry = entries[entry_index].clone();
+                        self.execute_builtin_inner(
+                            &entry,
+                            Some(
+                                replay_receipt
+                                    .verification
+                                    .live_recipe
+                                    .effective_query
+                                    .as_str(),
+                            ),
+                            dctx,
+                            cx,
+                        )
+                    }
+                    "open_command_palette" => {
+                        let filter = replay_receipt
+                            .verification
+                            .live_recipe
+                            .effective_query
+                            .clone();
+                        self.present_current_app_commands_entries(
+                            entries,
+                            &snapshot_receipt,
+                            snapshot_pid,
+                            &filter,
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, action.open_palette_success_detail())
+                    }
+                    "generate_script" => {
+                        self.spawn_generate_script_from_recipe_after_hide(
+                            dctx.trace_id.to_string(),
+                            replay_receipt.verification.live_recipe.clone(),
+                            cx,
+                        );
+                        Self::builtin_success(dctx, action.generate_script_success_detail())
+                    }
+                    other => {
+                        let message = format!(
+                            "Replay Current App Recipe resolved to unsupported action: {}",
+                            other
+                        );
+                        self.show_error_toast(message.clone(), cx);
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                            action.unknown_action_failure_detail(),
+                        )
+                    }
+                }
+            }
+            Err(error) => {
+                let message = format!(
+                    "Failed to replay current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
                     error
                 );
                 self.show_error_toast(message.clone(), cx);
