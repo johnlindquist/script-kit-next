@@ -1304,7 +1304,7 @@ fn agent_context_no_script_only_actions() {
 }
 
 #[test]
-fn agent_context_has_deeplink_and_shortcut() {
+fn agent_context_has_deeplink_without_unsupported_shortcut_or_alias() {
     let mut agent = ScriptInfo::new("Code Review Agent", "/path/to/agent.md");
     agent.is_agent = true;
     agent.is_script = false;
@@ -1318,11 +1318,19 @@ fn agent_context_has_deeplink_and_shortcut() {
         ids.contains(&"copy_deeplink"),
         "Agent should have copy_deeplink"
     );
-    assert!(
-        ids.contains(&"add_shortcut"),
-        "Agent should have add_shortcut"
-    );
-    assert!(ids.contains(&"add_alias"), "Agent should have add_alias");
+    for unsupported in [
+        "add_shortcut",
+        "update_shortcut",
+        "remove_shortcut",
+        "add_alias",
+        "update_alias",
+        "remove_alias",
+    ] {
+        assert!(
+            !ids.contains(&unsupported),
+            "Agent should not advertise unsupported {unsupported}"
+        );
+    }
 }
 
 #[test]

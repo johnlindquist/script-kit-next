@@ -534,11 +534,12 @@ fn agent_with_all_flags_combined() {
     let actions = get_script_context_actions(&agent);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    // Has update/remove (not add) for shortcut and alias
-    assert!(ids.contains(&"update_shortcut"));
-    assert!(ids.contains(&"remove_shortcut"));
-    assert!(ids.contains(&"update_alias"));
-    assert!(ids.contains(&"remove_alias"));
+    // Agent shortcut and alias handlers reject Agent results, so the builder
+    // must not advertise those actions even when stale metadata is present.
+    assert!(!ids.contains(&"update_shortcut"));
+    assert!(!ids.contains(&"remove_shortcut"));
+    assert!(!ids.contains(&"update_alias"));
+    assert!(!ids.contains(&"remove_alias"));
     assert!(!ids.contains(&"add_shortcut"));
     assert!(!ids.contains(&"add_alias"));
 
