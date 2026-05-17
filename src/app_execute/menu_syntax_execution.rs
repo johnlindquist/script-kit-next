@@ -9,6 +9,34 @@
 // `~/.scriptkit/menu-syntax/payloads` so they are debuggable on disk. Handlers
 // read `KIT_MENU_SYNTAX_PAYLOAD_PATH` from the environment.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MenuSyntaxCommandInvocationAction {
+    AmbiguousCommand,
+    MissingCommand,
+}
+
+impl MenuSyntaxCommandInvocationAction {
+    fn hud_message(self, head: &str) -> String {
+        match self {
+            Self::AmbiguousCommand => format!("Ambiguous command !{head}"),
+            Self::MissingCommand => format!("No command named !{head}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MenuSyntaxCaptureSpawnAction {
+    DetachedHandler,
+}
+
+impl MenuSyntaxCaptureSpawnAction {
+    fn failure_message(self, executable: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::DetachedHandler => format!("Failed to spawn '{executable}': {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn execute_menu_syntax_command_invocation(
         &mut self,
@@ -49,7 +77,7 @@ impl ScriptListApp {
                 "Script Kit command head matched multiple registered commands"
             );
             self.show_hud(
-                format!("Ambiguous command !{head}"),
+                MenuSyntaxCommandInvocationAction::AmbiguousCommand.hud_message(&head),
                 Some(HUD_MEDIUM_MS),
                 cx,
             );
@@ -108,7 +136,7 @@ impl ScriptListApp {
             "No Script Kit command matched ! invocation"
         );
         self.show_hud(
-            format!("No command named !{head}"),
+            MenuSyntaxCommandInvocationAction::MissingCommand.hud_message(&head),
             Some(HUD_MEDIUM_MS),
             cx,
         );
@@ -354,7 +382,9 @@ fn spawn_capture_handler_detached(
     command
         .spawn()
         .map(|child| child.id())
-        .map_err(|e| format!("Failed to spawn '{}': {}", executable, e))
+        .map_err(|e| {
+            MenuSyntaxCaptureSpawnAction::DetachedHandler.failure_message(&executable, e)
+        })
 }
 
 fn menu_syntax_payload_dir() -> std::path::PathBuf {

@@ -2308,6 +2308,28 @@ fn claude_code_enable_helper_uses_named_failure_state() {
 }
 
 #[test]
+fn menu_syntax_execution_uses_named_feedback_states() {
+    let content = fs::read_to_string("src/app_execute/menu_syntax_execution.rs")
+        .expect("Failed to read menu syntax execution handler");
+
+    assert!(
+        content.contains("enum MenuSyntaxCommandInvocationAction")
+            && content.contains("AmbiguousCommand")
+            && content.contains("MissingCommand")
+            && content.contains("MenuSyntaxCommandInvocationAction::AmbiguousCommand.hud_message(&head)")
+            && content.contains("MenuSyntaxCommandInvocationAction::MissingCommand.hud_message(&head)"),
+        "menu syntax command invocation HUDs should be derived from named states"
+    );
+    assert!(
+        content.contains("enum MenuSyntaxCaptureSpawnAction")
+            && content.contains("DetachedHandler")
+            && content.contains("MenuSyntaxCaptureSpawnAction::DetachedHandler.failure_message(&executable, e)")
+            && content.contains("format!(\"Failed to spawn '{executable}': {error}\")"),
+        "menu syntax capture spawn failures should be derived from the named detached-handler state"
+    );
+}
+
+#[test]
 fn browser_tabs_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
