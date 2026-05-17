@@ -11,7 +11,40 @@ impl ScriptTemplateCatalogAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptTemplateCatalogEmptyState {
+    NoTemplatesAvailable,
+    NoFilteredMatches,
+}
+
+impl ScriptTemplateCatalogEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.trim().is_empty() {
+            Self::NoTemplatesAvailable
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoTemplatesAvailable => "No starter templates available",
+            Self::NoFilteredMatches => "No templates match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
+    fn script_template_catalog_row_description(
+        template: &crate::mcp_resources::ScriptTemplateRef,
+    ) -> String {
+        if template.description.is_empty() {
+            template.category.clone()
+        } else {
+            format!("{}  ·  {}", template.category, template.description)
+        }
+    }
+
     /// Render the in-product starter-template catalog (list + preview).
     ///
     /// Data source is [`crate::mcp_resources::script_template_entries_for_ui`] —
@@ -173,11 +206,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(text_hint)
                 .font_family(design_typography.font_family)
-                .child(if filter.trim().is_empty() {
-                    "No starter templates available"
-                } else {
-                    "No templates match your filter"
-                })
+                .child(ScriptTemplateCatalogEmptyState::from_filter(filter).message())
                 .into_any_element()
         } else {
             let templates_for_list = templates.clone();
@@ -199,11 +228,7 @@ impl ScriptListApp {
                             .expect("visible index within bounds");
                         let is_selected = display_ix == selected;
 
-                        let description = if template.description.is_empty() {
-                            template.category.clone()
-                        } else {
-                            format!("{}  ·  {}", template.category, template.description)
-                        };
+                        let description = Self::script_template_catalog_row_description(template);
 
                         let item = ListItem::new(template.title.clone(), list_colors)
                             .description_opt(Some(description))
