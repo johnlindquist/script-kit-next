@@ -116,6 +116,57 @@ impl DictationStartPreflight {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum PasteSequentialBuiltinAction {
+    PasteEntry(String),
+    SequenceExhausted,
+    HistoryEmpty,
+}
+
+impl PasteSequentialBuiltinAction {
+    fn from_outcome(outcome: clipboard_history::PasteSequentialOutcome) -> Self {
+        match outcome {
+            clipboard_history::PasteSequentialOutcome::Pasted(entry_id) => {
+                Self::PasteEntry(entry_id)
+            }
+            clipboard_history::PasteSequentialOutcome::Exhausted => Self::SequenceExhausted,
+            clipboard_history::PasteSequentialOutcome::Empty => Self::HistoryEmpty,
+        }
+    }
+
+    fn telemetry_event(&self) -> &'static str {
+        match self {
+            Self::PasteEntry(_) => "paste_entry",
+            Self::SequenceExhausted => "sequence_exhausted",
+            Self::HistoryEmpty => "history_empty",
+        }
+    }
+
+    fn log_message(&self) -> &'static str {
+        match self {
+            Self::PasteEntry(_) => "Enqueuing sequential paste via serialized worker",
+            Self::SequenceExhausted => "Sequential paste exhausted all entries",
+            Self::HistoryEmpty => "No clipboard history available for sequential paste",
+        }
+    }
+
+    fn success_detail(&self) -> &'static str {
+        match self {
+            Self::PasteEntry(_) => "paste_sequential",
+            Self::SequenceExhausted => "paste_sequential_exhausted",
+            Self::HistoryEmpty => "paste_sequential_empty",
+        }
+    }
+
+    fn hud_message(&self) -> Option<&'static str> {
+        match self {
+            Self::PasteEntry(_) => None,
+            Self::SequenceExhausted => Some("Sequence complete"),
+            Self::HistoryEmpty => Some("No clipboard history"),
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -2178,75 +2229,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, "open_clipboard_history")
             }
             builtins::BuiltInFeature::PasteSequentially => {
-                tracing::info!(
-                    action = "paste_sequential",
-                    event = "trigger",
-                    trace_id = %dctx.trace_id,
-                    "Paste Sequentially triggered"
-                );
-                match clipboard_history::advance_paste_sequence(&mut self.paste_sequential_state) {
-                    clipboard_history::PasteSequentialOutcome::Pasted(entry_id) => {
-                        tracing::info!(
-                            action = "paste_sequential",
-                            event = "paste_entry",
-                            entry_id = %entry_id,
-                            trace_id = %dctx.trace_id,
-                            "Enqueuing sequential paste via serialized worker"
-                        );
-                        match clipboard_history::enqueue_sequential_paste(entry_id) {
-                            Ok(()) => {
-                                clipboard_history::commit_paste_sequence(
-                                    &mut self.paste_sequential_state,
-                                );
-                                self.hide_main_and_reset(cx);
-                                Self::builtin_success(dctx, "paste_sequential")
-                            }
-                            Err(clipboard_history::EnqueuePasteError::WorkerDisconnected) => {
-                                tracing::error!(
-                                    action = "paste_sequential",
-                                    event = "enqueue_failed",
-                                    error_code = "worker_disconnected",
-                                    trace_id = %dctx.trace_id,
-                                    "Paste worker is not running"
-                                );
-                                self.toast_manager.push(
-                                    components::toast::Toast::error(
-                                        "Paste worker crashed — restart Script Kit",
-                                        &self.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_CRITICAL_MS)),
-                                );
-                                cx.notify();
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    "Paste worker crashed",
-                                    "paste_sequential_worker_disconnected",
-                                )
-                            }
-                        }
-                    }
-                    clipboard_history::PasteSequentialOutcome::Exhausted => {
-                        tracing::info!(
-                            action = "paste_sequential",
-                            event = "sequence_exhausted",
-                            trace_id = %dctx.trace_id,
-                            "Sequential paste exhausted all entries"
-                        );
-                        self.show_hud("Sequence complete".to_string(), Some(HUD_SHORT_MS), cx);
-                        Self::builtin_success(dctx, "paste_sequential_exhausted")
-                    }
-                    clipboard_history::PasteSequentialOutcome::Empty => {
-                        tracing::info!(
-                            action = "paste_sequential",
-                            event = "history_empty",
-                            trace_id = %dctx.trace_id,
-                            "No clipboard history available for sequential paste"
-                        );
-                        self.show_hud("No clipboard history".to_string(), Some(HUD_SHORT_MS), cx);
-                        Self::builtin_success(dctx, "paste_sequential_empty")
-                    }
-                }
+                self.execute_paste_sequential_builtin(dctx, cx)
             }
             builtins::BuiltInFeature::Favorites => {
                 tracing::info!(
@@ -4664,6 +4647,78 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_paste_sequential_builtin(
+        &mut self,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            action = "paste_sequential",
+            event = "trigger",
+            trace_id = %dctx.trace_id,
+            "Paste Sequentially triggered"
+        );
+
+        let paste_action = PasteSequentialBuiltinAction::from_outcome(
+            clipboard_history::advance_paste_sequence(&mut self.paste_sequential_state),
+        );
+
+        match &paste_action {
+            PasteSequentialBuiltinAction::PasteEntry(entry_id) => {
+                tracing::info!(
+                    action = "paste_sequential",
+                    event = paste_action.telemetry_event(),
+                    entry_id = %entry_id,
+                    trace_id = %dctx.trace_id,
+                    "{}", paste_action.log_message()
+                );
+                match clipboard_history::enqueue_sequential_paste(entry_id.clone()) {
+                    Ok(()) => {
+                        clipboard_history::commit_paste_sequence(&mut self.paste_sequential_state);
+                        self.hide_main_and_reset(cx);
+                        Self::builtin_success(dctx, paste_action.success_detail())
+                    }
+                    Err(clipboard_history::EnqueuePasteError::WorkerDisconnected) => {
+                        tracing::error!(
+                            action = "paste_sequential",
+                            event = "enqueue_failed",
+                            error_code = "worker_disconnected",
+                            trace_id = %dctx.trace_id,
+                            "Paste worker is not running"
+                        );
+                        self.toast_manager.push(
+                            components::toast::Toast::error(
+                                "Paste worker crashed — restart Script Kit",
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_CRITICAL_MS)),
+                        );
+                        cx.notify();
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            "Paste worker crashed",
+                            "paste_sequential_worker_disconnected",
+                        )
+                    }
+                }
+            }
+            PasteSequentialBuiltinAction::SequenceExhausted
+            | PasteSequentialBuiltinAction::HistoryEmpty => {
+                tracing::info!(
+                    action = "paste_sequential",
+                    event = paste_action.telemetry_event(),
+                    trace_id = %dctx.trace_id,
+                    "{}", paste_action.log_message()
+                );
+                if let Some(message) = paste_action.hud_message() {
+                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
+                }
+                Self::builtin_success(dctx, paste_action.success_detail())
+            }
+        }
+    }
 
     fn execute_dictation_builtin_action(
         &mut self,
