@@ -2110,8 +2110,10 @@ fn utility_current_app_commands_builtin_uses_named_action_states() {
         content.contains("action.success_detail()")
             && content.contains("action.capture_failure_detail()")
             && content.contains("action.capture_failure_message(&e)")
+            && content.contains("UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error)")
             && content.contains("open_current_app_commands")
-            && content.contains("current_app_commands_capture_failed"),
+            && content.contains("current_app_commands_capture_failed")
+            && content.contains("format!(\"Failed to refresh current app commands: {error}\")"),
         "Current App Commands outcomes should use named state details"
     );
     assert!(
