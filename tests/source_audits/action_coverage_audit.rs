@@ -16,6 +16,21 @@ fn helpers_content() -> String {
     read("src/app_actions/helpers.rs")
 }
 
+fn handler_branch_block<'a>(content: &'a str, branch: &str, len: usize) -> &'a str {
+    let handler_pos = content
+        .find("fn handle_file_action")
+        .or_else(|| content.find("fn handle_script_action"))
+        .or_else(|| content.find("fn handle_clipboard_action"))
+        .or_else(|| content.find("fn handle_emoji_action"))
+        .unwrap_or(0);
+    let branch_pos = content[handler_pos..]
+        .find(branch)
+        .map(|pos| handler_pos + pos)
+        .unwrap_or_else(|| panic!("Expected {branch} handler"));
+
+    &content[branch_pos..content.len().min(branch_pos + len)]
+}
+
 // ===========================================================================
 // Source-scanning: no unwrap/expect in production action code
 // ===========================================================================
@@ -800,10 +815,7 @@ fn reveal_in_finder_shows_error_toast_for_unsupported_types() {
 fn copy_path_uses_clipboard_feedback_helper() {
     let content = handle_action_content();
 
-    let copy_pos = content
-        .find("\"copy_path\"")
-        .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_path\" =>", 3000);
 
     assert!(
         block.contains("copy_to_clipboard_with_feedback("),
@@ -815,10 +827,7 @@ fn copy_path_uses_clipboard_feedback_helper() {
 fn copy_path_shows_error_for_unsupported_types() {
     let content = handle_action_content();
 
-    let copy_pos = content
-        .find("\"copy_path\"")
-        .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_path\" =>", 3000);
 
     assert!(
         block.contains("extract_path_for_copy") || block.contains("resolve_file_action_path"),
@@ -830,10 +839,7 @@ fn copy_path_shows_error_for_unsupported_types() {
 fn copy_path_shows_selection_required_when_no_selection() {
     let content = handle_action_content();
 
-    let copy_pos = content
-        .find("\"copy_path\"")
-        .expect("Expected copy_path handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_path\" =>", 3000);
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),

@@ -11,6 +11,18 @@ fn files_content() -> String {
     read("src/app_actions/handle_action/files.rs")
 }
 
+fn file_handler_branch<'a>(content: &'a str, branch: &str) -> &'a str {
+    let handler_pos = content
+        .find("fn handle_file_action")
+        .expect("Expected file action handler");
+    let branch_pos = content[handler_pos..]
+        .find(branch)
+        .map(|pos| handler_pos + pos)
+        .unwrap_or_else(|| panic!("Expected {branch} action handler"));
+
+    &content[branch_pos..content.len().min(branch_pos + 1500)]
+}
+
 // ---------------------------------------------------------------------------
 // resolve_file_action_path — shared helper is used, not inline extraction
 // ---------------------------------------------------------------------------
@@ -27,10 +39,7 @@ fn files_handler_defines_resolve_file_action_path() {
 #[test]
 fn reveal_in_finder_uses_resolve_file_action_path() {
     let content = files_content();
-    let reveal_pos = content
-        .find("\"reveal_in_finder\"")
-        .expect("Expected reveal_in_finder action handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 1500)];
+    let block = file_handler_branch(&content, "\"reveal_in_finder\" =>");
 
     assert!(
         block.contains("self.resolve_file_action_path("),
@@ -45,10 +54,7 @@ fn reveal_in_finder_uses_resolve_file_action_path() {
 #[test]
 fn copy_path_uses_resolve_file_action_path() {
     let content = files_content();
-    let copy_pos = content
-        .find("\"copy_path\"")
-        .expect("Expected copy_path action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 1500)];
+    let block = file_handler_branch(&content, "\"copy_path\" =>");
 
     assert!(
         block.contains("self.resolve_file_action_path("),

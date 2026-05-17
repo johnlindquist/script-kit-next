@@ -95,6 +95,11 @@ enum FileSearchFilenameCopyHandlerAction {
     CopyFilename,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchPathCopyHandlerAction {
+    CopyPath,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -341,6 +346,21 @@ impl FileSearchFilenameCopyHandlerAction {
     fn copied_hud(self, name: &str) -> String {
         match self {
             Self::CopyFilename => format!("Copied filename: {name}"),
+        }
+    }
+}
+
+impl FileSearchPathCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "copy_path" => Some(Self::CopyPath),
+            _ => None,
+        }
+    }
+
+    fn copied_hud(self, path: &str) -> String {
+        match self {
+            Self::CopyPath => format!("Copied: {path}"),
         }
     }
 }
@@ -662,6 +682,11 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "copy_path" => {
+                let Some(copy_path_action) =
+                    FileSearchPathCopyHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "copy path action");
                 let path_result =
                     self.resolve_file_action_path(crate::action_helpers::extract_path_for_copy);
@@ -672,7 +697,7 @@ impl ScriptListApp {
                         tracing::info!(category = "UI", path = %path_str, "copying path to clipboard");
                         self.copy_to_clipboard_with_feedback(
                             &path_str,
-                            format!("Copied: {}", path_str),
+                            copy_path_action.copied_hud(&path_str),
                             true,
                             cx,
                         );
