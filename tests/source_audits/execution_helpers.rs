@@ -315,8 +315,9 @@ fn ai_clear_conversation_uses_deferred_helper() {
         "Expected ClearConversation to be classified as a legacy harness alias"
     );
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
-        "Expected legacy AI aliases to report a routed_to_harness success outcome"
+        content.contains("AiLegacyHarnessBuiltinAction")
+            && content.contains("ai_ClearConversation_routed_to_harness"),
+        "Expected legacy AI aliases to report named routed_to_harness success outcomes"
     );
 }
 
@@ -324,8 +325,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
 fn ai_clear_conversation_shows_hud_on_success() {
     let content = builtin_execution_content();
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
-        "Expected ClearConversation success to be reported through the routed_to_harness outcome"
+        content.contains("Self::ClearConversation => \"ai_ClearConversation_routed_to_harness\""),
+        "Expected ClearConversation success to be reported through the named routed_to_harness outcome"
     );
 }
 

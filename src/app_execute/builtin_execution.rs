@@ -650,6 +650,39 @@ impl AiUnavailableBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiLegacyHarnessBuiltinAction {
+    OpenAi,
+    MiniAi,
+    NewConversation,
+    ClearConversation,
+}
+
+impl AiLegacyHarnessBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        if !command.is_legacy_harness_alias() {
+            return None;
+        }
+
+        match command {
+            builtins::AiCommandType::OpenAi => Some(Self::OpenAi),
+            builtins::AiCommandType::MiniAi => Some(Self::MiniAi),
+            builtins::AiCommandType::NewConversation => Some(Self::NewConversation),
+            builtins::AiCommandType::ClearConversation => Some(Self::ClearConversation),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::OpenAi => "ai_OpenAi_routed_to_harness",
+            Self::MiniAi => "ai_MiniAi_routed_to_harness",
+            Self::NewConversation => "ai_NewConversation_routed_to_harness",
+            Self::ClearConversation => "ai_ClearConversation_routed_to_harness",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3277,12 +3310,9 @@ impl ScriptListApp {
                     // Legacy AI aliases — all route to the harness terminal.
                     // Classification is centralized in `AiCommandType::is_legacy_harness_alias()`.
                     cmd => {
-                        debug_assert!(
-                            cmd.is_legacy_harness_alias(),
-                            "unexpected AiCommandType variant {cmd:?} reached legacy alias arm"
-                        );
-                        self.open_tab_ai_acp_with_entry_intent(None, cx);
-                        Self::builtin_success(dctx, format!("ai_{cmd:?}_routed_to_harness"))
+                        let legacy_action = AiLegacyHarnessBuiltinAction::from_command(*cmd)
+                            .expect("AI legacy alias arm should only receive legacy commands");
+                        self.execute_ai_legacy_harness_builtin(legacy_action, dctx, cx)
                     }
                 }
             }
@@ -4718,6 +4748,16 @@ impl ScriptListApp {
             message.to_string(),
             action.failure_detail(),
         )
+    }
+
+    fn execute_ai_legacy_harness_builtin(
+        &mut self,
+        action: AiLegacyHarnessBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_ai_preset_view_builtin(
