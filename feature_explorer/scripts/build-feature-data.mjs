@@ -147,8 +147,26 @@ const indexedRows = indexMarkdown
   .filter((line) => /^\|\s*\d+\s*\|/.test(line))
   .map((line) => {
     const cells = splitRow(line);
-    return { id: cells[0], feature: cells[1], cluster: cells[2], owner: cells[4] };
+    return {
+      id: cells[0],
+      feature: cells[1],
+      cluster: cells[2],
+      summary: cells[3],
+      owner: cells[4]
+    };
   });
+const indexById = new Map(indexedRows.map((row) => [row.id, row]));
+features.forEach((feature) => {
+  const row = indexById.get(feature.id);
+  feature.indexTitle = row?.feature ?? feature.title;
+  feature.cluster = row?.cluster ?? "Unclustered";
+  feature.owner = row?.owner ?? "Unowned";
+  feature.indexSummary = row?.summary ?? feature.summary;
+  feature.owners = (row?.owner ?? "")
+    .split(",")
+    .map((owner) => owner.trim().replace(/^`|`$/g, ""))
+    .filter(Boolean);
+});
 const indexedIds = new Set(indexedRows.map((row) => row.id));
 const chapterIds = new Set(features.map((feature) => feature.id));
 const pendingIndexRows = indexedRows.filter((row) => !chapterIds.has(row.id));

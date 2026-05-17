@@ -16,7 +16,12 @@ export interface Feature {
   slug: string;
   file: string;
   title: string;
+  indexTitle?: string;
   summary: string;
+  indexSummary?: string;
+  cluster?: string;
+  owner?: string;
+  owners?: string[];
   capabilities: string[];
   concepts: Record<string, string>[];
   entryPoints: Record<string, string>[];
