@@ -712,6 +712,25 @@ fn clipboard_pin_feedback_helper_uses_named_plan_states() {
     );
 }
 
+#[test]
+fn app_copy_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/apps.rs")
+        .expect("Failed to read app action handler");
+
+    assert!(
+        content.contains("enum AppCopyHandlerAction")
+            && content.contains("Name")
+            && content.contains("BundleIdentifier"),
+        "application copy handlers should be driven by named copy action states"
+    );
+    assert!(
+        content.contains("AppCopyHandlerAction::from_action_id(action_id)")
+            && content.contains("copy_action.copy_value(&result)")
+            && content.contains("copy_action.copied_hud(&value)"),
+        "application copy handlers should derive copied value and HUD copy from the named state"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
