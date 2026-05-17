@@ -273,9 +273,11 @@ fn clipboard_cleanshot_handler_uses_named_action_state() {
     assert!(
         content.contains("ClipboardCleanShotHandlerAction::from_action_id(action_id)")
             && content.contains("cleanshot_action.image_required_message()")
+            && content.contains("cleanshot_action.selection_required_message()")
             && content.contains("cleanshot_action.success_hud()")
-            && content.contains("cleanshot_action.open_failure_message()"),
-        "clipboard CleanShot handlers should derive guard, HUD, and failure text from the named action"
+            && content.contains("cleanshot_action.open_failure_message()")
+            && content.contains("cleanshot_action.temp_save_failure_message()"),
+        "clipboard CleanShot handlers should derive guards, HUD, and failure text from the named action"
     );
     assert!(
         content.contains("cleanshot://open-from-clipboard")
