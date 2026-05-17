@@ -520,6 +520,14 @@ impl UtilityProcessBuiltinAction {
         }
     }
 
+    fn success_hud(self, process_count: usize) -> String {
+        match self {
+            Self::StopAllProcesses => {
+                format!("Stopped {process_count} running script process(es).")
+            }
+        }
+    }
+
     fn success_detail(self) -> &'static str {
         match self {
             Self::StopAllProcesses => "stop_all_processes",
@@ -5582,7 +5590,7 @@ impl ScriptListApp {
         } else {
             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
             self.show_hud(
-                format!("Stopped {} running script process(es).", process_count),
+                action.success_hud(process_count),
                 Some(HUD_MEDIUM_MS),
                 cx,
             );
