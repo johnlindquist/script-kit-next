@@ -3,6 +3,7 @@
 - Inspect the relevant source, tests, and repo-local skills before editing.
 - Prefer current code and generated artifacts over stale notes or memory.
 - Keep edits narrowly scoped and verify them with the smallest check that can fail for the changed behavior.
+- Keep tool-facing root docs in place: `README.md`, `CLAUDE.md`, `AGENTS.md`, and `.impeccable.md`.
 
 ## Oracle / Packx Bundle Context
 
