@@ -11,6 +11,15 @@ enum PasteCloseBehavior {
     KeepWindowOpen,
 }
 
+impl PasteCloseBehavior {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::HideWindow => "hide_window",
+            Self::KeepWindowOpen => "keep_window_open",
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Finalize a paste after the clipboard contents are already prepared.
     ///
@@ -27,7 +36,7 @@ impl ScriptListApp {
             action = "finalize_paste_after_clipboard_ready",
             source_kind,
             source_id,
-            close_behavior = %close_behavior,
+            close_behavior = close_behavior.as_str(),
             paste_strategy = "clipboard_then_simulated_cmd_v",
             status = "start",
             "starting paste finalization"
@@ -43,7 +52,7 @@ impl ScriptListApp {
             action = "finalize_paste_after_clipboard_ready",
             source_kind,
             source_id,
-            close_behavior = %close_behavior,
+            close_behavior = close_behavior.as_str(),
             paste_strategy = "clipboard_then_simulated_cmd_v",
             status = "queued",
             "paste queued"

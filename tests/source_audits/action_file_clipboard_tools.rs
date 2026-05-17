@@ -227,7 +227,8 @@ fn clipboard_paste_copies_entry_and_hides_window() {
         "clipboard_paste should copy entry to system clipboard before pasting"
     );
     assert!(
-        block.contains("hide_main_and_reset"),
+        block.contains("finalize_paste_after_clipboard_ready(")
+            && content.contains("Self::PasteAndClose => Some(PasteCloseBehavior::HideWindow)"),
         "clipboard_paste should hide the main window after paste"
     );
 }

@@ -124,26 +124,22 @@ fn emoji_paste_action_appears_before_copy_in_builder() {
 fn enter_key_dispatches_paste_not_copy_in_emoji_picker() {
     let source = read_source("src/render_builtins/emoji_picker.rs");
 
-    // The plain Enter arm (no modifiers) must dispatch emoji_paste
+    // The plain Enter arm (no modifiers) must route through the shared paste finalizer.
     let enter_check = source.find("is_key_enter(key)");
     assert!(enter_check.is_some(), "emoji picker must handle Enter key via is_key_enter");
 
     let enter_pos = enter_check.unwrap();
-    // After the Enter match arm, the first handle_emoji_action call should be for paste
     let after_enter = &source[enter_pos..];
-    let first_action = after_enter.find("handle_emoji_action(\"emoji_paste\"");
-    let copy_action = after_enter.find("handle_emoji_action(\"emoji_copy\"");
+    let finalizer = after_enter.find("finalize_paste_after_clipboard_ready(");
+    let close_behavior = after_enter.find("PasteCloseBehavior::HideWindow");
 
     assert!(
-        first_action.is_some(),
-        "Enter key handler must call handle_emoji_action(\"emoji_paste\")"
+        finalizer.is_some(),
+        "Enter key handler must call finalize_paste_after_clipboard_ready"
     );
-    // emoji_copy (Cmd+Enter) appears in the same block but the plain paste comes
-    // last in the if/else chain (the else arm), which is the no-modifier default.
-    // Both must exist.
     assert!(
-        copy_action.is_some(),
-        "Cmd+Enter handler must call handle_emoji_action(\"emoji_copy\")"
+        close_behavior.is_some(),
+        "Enter key handler must use PasteCloseBehavior::HideWindow"
     );
 }
 
@@ -152,11 +148,12 @@ fn emoji_picker_footer_primary_action_is_paste() {
     let source = read_source("src/render_builtins/emoji_picker.rs");
 
     assert!(
-        source.contains(".primary_label(paste_label)"),
-        "emoji picker footer primary label must be paste_label"
+        source.contains("render_simple_hint_strip(")
+            && source.contains("universal_prompt_hints()"),
+        "emoji picker footer should use the shared universal prompt hints"
     );
     assert!(
-        source.contains(".primary_shortcut(\"↵\")"),
-        "emoji picker footer primary shortcut must be Enter (↵)"
+        !source.contains("\"↵ Copy\"") && !source.contains("\"Esc Back\""),
+        "emoji picker footer must not keep stale custom copy/back labels"
     );
 }

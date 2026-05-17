@@ -1826,6 +1826,7 @@ fn log_dispatch_outcome(
 
 // Include semantic submodules — each adds `impl ScriptListApp` methods.
 include!("clipboard.rs");
+include!("paste.rs");
 include!("dictation_history.rs");
 include!("favorites.rs");
 include!("scripts.rs");
