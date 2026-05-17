@@ -49,6 +49,29 @@ impl FavoritesBrowseListAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FavoritesEmptyState {
+    NoFavoritesYet,
+    NoFilteredMatches,
+}
+
+impl FavoritesEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoFavoritesYet
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoFavoritesYet => "No favorites yet \u{00b7} Star scripts from the actions menu (Cmd+K)",
+            Self::NoFilteredMatches => "No favorites match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn favorite_filter_matches(&self, id: &str, filter: &str) -> bool {
         if filter.is_empty() {
@@ -256,11 +279,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No favorites yet \u{00b7} Star scripts from the actions menu (Cmd+K)"
-                } else {
-                    "No favorites match your filter"
-                })
+                .child(FavoritesEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             div()
