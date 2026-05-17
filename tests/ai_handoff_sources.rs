@@ -49,6 +49,39 @@ fn deferred_ai_handoff_supports_prefill_and_submit_variants() {
     );
 }
 
+#[test]
+fn deferred_ai_image_handoff_staging_uses_named_failure_states() {
+    let source = read_action_sources();
+    let image_branch = slice_from(&source, "enum DeferredAiImageAttachmentStage");
+
+    assert!(
+        image_branch.contains("enum DeferredAiImageAttachmentStage")
+            && image_branch.contains("DecodeClipboardImage")
+            && image_branch.contains("WriteClipboardImage"),
+        "deferred image handoff staging should use named failure states"
+    );
+    assert!(
+        image_branch.contains("fn failure_message(self, error: impl std::fmt::Display) -> String")
+            && image_branch.contains("Failed to decode image attachment: {error}")
+            && image_branch.contains("Failed to write image attachment: {error}"),
+        "image staging states should own user-facing decode/write failure copy"
+    );
+    assert!(
+        source.contains("DeferredAiImageAttachmentStage::DecodeClipboardImage")
+            && source.contains(".failure_message(error)")
+            && source.contains("DeferredAiImageAttachmentStage::WriteClipboardImage"),
+        "SetInputWithImage ACP path should route decode/write errors through named staging states"
+    );
+    assert!(
+        !source.contains(
+            ".map_err(|error| format!(\"Failed to decode image attachment: {error}\"))"
+        ) && !source.contains(
+            ".map_err(|error| format!(\"Failed to write image attachment: {error}\"))"
+        ),
+        "image staging must not regress to inline map_err formatting"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // open_ai_window_after_main_hide — origin metadata + deferred lifecycle
 // ---------------------------------------------------------------------------
