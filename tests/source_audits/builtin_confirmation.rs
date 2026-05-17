@@ -312,18 +312,18 @@ fn confirm_with_parent_dialog_error_path_logs_failure() {
 }
 
 // ---------------------------------------------------------------------------
-// Destructive builtins — every DEFAULT_CONFIRMATION_COMMANDS entry goes
-// through requires_confirmation → confirm_with_modal
+// Destructive or mutating builtins — every DEFAULT_CONFIRMATION_COMMANDS entry
+// goes through requires_confirmation → confirm_with_parent_dialog.
 // ---------------------------------------------------------------------------
 
 #[test]
-fn destructive_builtins_are_gated_by_confirmation_defaults() {
+fn destructive_and_mutating_builtins_are_gated_by_confirmation_defaults() {
     // Verify the default confirmation commands constant exists and contains
     // the expected destructive builtins. This ensures the list is not
     // accidentally truncated or cleared.
     let defaults = read("src/config/defaults.rs");
 
-    let expected_destructive = [
+    let expected_gated = [
         "builtin/shut-down",
         "builtin/restart",
         "builtin/log-out",
@@ -333,12 +333,13 @@ fn destructive_builtins_are_gated_by_confirmation_defaults() {
         "builtin/force-quit",
         "builtin/stop-all-processes",
         "builtin/clear-suggested",
+        "builtin/sync-to-github",
     ];
 
-    for cmd in &expected_destructive {
+    for cmd in &expected_gated {
         assert!(
             defaults.contains(cmd),
-            "DEFAULT_CONFIRMATION_COMMANDS must include destructive builtin: {cmd}"
+            "DEFAULT_CONFIRMATION_COMMANDS must include destructive or mutating builtin: {cmd}"
         );
     }
 }
