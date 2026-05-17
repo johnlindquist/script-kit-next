@@ -7,6 +7,29 @@ struct CodeBlock {
     language: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpLastResponseHandlerAction {
+    CopyToClipboard,
+    PasteToFrontmost,
+}
+
+impl AcpLastResponseHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_copy_last_response" => Some(Self::CopyToClipboard),
+            "acp_paste_to_frontmost" => Some(Self::PasteToFrontmost),
+            _ => None,
+        }
+    }
+
+    fn success_message(self) -> &'static str {
+        match self {
+            Self::CopyToClipboard => "Copied last response to clipboard",
+            Self::PasteToFrontmost => "Pasting to frontmost app\u{2026}",
+        }
+    }
+}
+
 /// Extract the last fenced code block (```lang\n...\n```) from markdown text.
 fn extract_last_code_block(text: &str) -> Option<String> {
     extract_last_code_block_with_lang(text).map(|b| b.code)
@@ -1043,6 +1066,11 @@ impl ScriptListApp {
 
         match action_id {
             "acp_copy_last_response" => {
+                let Some(last_response_action) =
+                    AcpLastResponseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let last_response = {
                     let view = entity.read(cx);
@@ -1065,7 +1093,7 @@ impl ScriptListApp {
                 if let Some(text) = last_response {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("Copied last response to clipboard".to_string());
+                    outcome.user_message = Some(last_response_action.success_message().to_string());
                     outcome
                 } else {
                     DispatchOutcome::not_handled()
@@ -1092,6 +1120,11 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_paste_to_frontmost" => {
+                let Some(last_response_action) =
+                    AcpLastResponseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let last_response = {
                     let view = entity.read(cx);
                     view.thread().and_then(|thread| {
@@ -1124,7 +1157,7 @@ impl ScriptListApp {
                         }
                     });
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("Pasting to frontmost app\u{2026}".to_string());
+                    outcome.user_message = Some(last_response_action.success_message().to_string());
                     outcome
                 } else {
                     DispatchOutcome::not_handled()
