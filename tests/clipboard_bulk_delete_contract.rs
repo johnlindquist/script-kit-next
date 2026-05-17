@@ -44,3 +44,34 @@ fn clipboard_bulk_delete_feedback_uses_named_result_outcome() {
         "clipboard bulk delete feedback must not regress to direct failed-count branching"
     );
 }
+
+#[test]
+fn clipboard_delete_all_uses_named_unpinned_availability() {
+    assert!(
+        CLIPBOARD_ACTIONS.contains("enum ClipboardUnpinnedDeleteAvailability")
+            && CLIPBOARD_ACTIONS.contains("Empty")
+            && CLIPBOARD_ACTIONS.contains("Available { unpinned_count: usize }"),
+        "clipboard delete-all should classify the unpinned-entry guard with a named state"
+    );
+    assert!(
+        CLIPBOARD_ACTIONS.contains("fn from_count(unpinned_count: usize) -> Self")
+            && CLIPBOARD_ACTIONS.contains("0 => Self::Empty")
+            && CLIPBOARD_ACTIONS.contains("unpinned_count => Self::Available { unpinned_count }")
+            && CLIPBOARD_ACTIONS.contains("fn count(self) -> Option<usize>")
+            && CLIPBOARD_ACTIONS.contains("Self::Empty => None")
+            && CLIPBOARD_ACTIONS
+                .contains("Self::Available { unpinned_count } => Some(unpinned_count)"),
+        "clipboard delete-all availability should own count classification and extraction"
+    );
+    assert!(
+        CLIPBOARD_ACTIONS.contains("fn unpinned_availability(self, unpinned_count: usize) -> ClipboardUnpinnedDeleteAvailability")
+            && CLIPBOARD_ACTIONS.contains(".unpinned_availability(unpinned_count)")
+            && CLIPBOARD_ACTIONS.contains(".count()")
+            && CLIPBOARD_ACTIONS.contains("bulk_delete_action.no_unpinned_message()"),
+        "clipboard delete-all should route its empty guard through the named availability state"
+    );
+    assert!(
+        !CLIPBOARD_ACTIONS.contains("if unpinned_count == 0"),
+        "clipboard delete-all must not regress to direct unpinned-count branching"
+    );
+}
