@@ -27,6 +27,61 @@ pub struct NotesInfo {
     pub auto_sizing_enabled: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesCommandBarActionPlan {
+    EmptyActiveAutoSized,
+    EmptyActiveNeedsAutoSizing,
+    SelectedActiveAutoSized,
+    SelectedActiveNeedsAutoSizing,
+    EmptyTrashAutoSized,
+    EmptyTrashNeedsAutoSizing,
+    SelectedTrashAutoSized,
+    SelectedTrashNeedsAutoSizing,
+}
+
+impl NotesCommandBarActionPlan {
+    fn from_info(info: &NotesInfo) -> Self {
+        match (
+            info.has_selection,
+            info.is_trash_view,
+            info.auto_sizing_enabled,
+        ) {
+            (false, false, true) => Self::EmptyActiveAutoSized,
+            (false, false, false) => Self::EmptyActiveNeedsAutoSizing,
+            (true, false, true) => Self::SelectedActiveAutoSized,
+            (true, false, false) => Self::SelectedActiveNeedsAutoSizing,
+            (false, true, true) => Self::EmptyTrashAutoSized,
+            (false, true, false) => Self::EmptyTrashNeedsAutoSizing,
+            (true, true, true) => Self::SelectedTrashAutoSized,
+            (true, true, false) => Self::SelectedTrashNeedsAutoSizing,
+        }
+    }
+
+    fn has_active_note_actions(self) -> bool {
+        matches!(
+            self,
+            Self::SelectedActiveAutoSized | Self::SelectedActiveNeedsAutoSizing
+        )
+    }
+
+    fn has_trash_note_actions(self) -> bool {
+        matches!(
+            self,
+            Self::SelectedTrashAutoSized | Self::SelectedTrashNeedsAutoSizing
+        )
+    }
+
+    fn needs_auto_sizing_action(self) -> bool {
+        matches!(
+            self,
+            Self::EmptyActiveNeedsAutoSizing
+                | Self::SelectedActiveNeedsAutoSizing
+                | Self::EmptyTrashNeedsAutoSizing
+                | Self::SelectedTrashNeedsAutoSizing
+        )
+    }
+}
+
 fn is_blank(value: &str) -> bool {
     value.trim().is_empty()
 }
@@ -49,6 +104,7 @@ fn has_invalid_note_switcher_note_info(note: &NoteSwitcherNoteInfo) -> bool {
 /// Get actions for the Notes window command bar (Cmd+K menu).
 pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+    let action_plan = NotesCommandBarActionPlan::from_info(info);
 
     actions.push(
         Action::new(
@@ -62,59 +118,57 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         .with_section("Notes"),
     );
 
-    if info.has_selection {
-        if info.is_trash_view {
-            actions.push(
-                Action::new(
-                    "restore_note",
-                    "Restore Note",
-                    Some("Restores the current note from Trash".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘Z")
-                .with_icon(IconName::Refresh)
-                .with_section("Trash"),
-            );
+    if action_plan.has_trash_note_actions() {
+        actions.push(
+            Action::new(
+                "restore_note",
+                "Restore Note",
+                Some("Restores the current note from Trash".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘Z")
+            .with_icon(IconName::Refresh)
+            .with_section("Trash"),
+        );
 
-            actions.push(
-                Action::new(
-                    "permanently_delete_note",
-                    "Delete Permanently",
-                    Some("Permanently deletes the current note".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_icon(IconName::Trash)
-                .with_section("Trash"),
-            );
-        } else {
-            actions.push(
-                Action::new(
-                    "duplicate_note",
-                    "Duplicate Note",
-                    Some("Creates a copy of the current note".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘D")
-                .with_icon(IconName::Copy)
-                .with_section("Notes"),
-            );
+        actions.push(
+            Action::new(
+                "permanently_delete_note",
+                "Delete Permanently",
+                Some("Permanently deletes the current note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Trash)
+            .with_section("Trash"),
+        );
+    } else if action_plan.has_active_note_actions() {
+        actions.push(
+            Action::new(
+                "duplicate_note",
+                "Duplicate Note",
+                Some("Creates a copy of the current note".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘D")
+            .with_icon(IconName::Copy)
+            .with_section("Notes"),
+        );
 
-            actions.push(
-                Action::new(
-                    "delete_note",
-                    "Delete Note",
-                    Some("Moves the current note to Trash".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut_opt(
-                    crate::notes::NotesAction::DeleteNote
-                        .shortcut_hint()
-                        .map(String::from),
-                )
-                .with_icon(IconName::Trash)
-                .with_section("Notes"),
-            );
-        }
+        actions.push(
+            Action::new(
+                "delete_note",
+                "Delete Note",
+                Some("Moves the current note to Trash".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut_opt(
+                crate::notes::NotesAction::DeleteNote
+                    .shortcut_hint()
+                    .map(String::from),
+            )
+            .with_icon(IconName::Trash)
+            .with_section("Notes"),
+        );
     }
 
     actions.push(
@@ -129,7 +183,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         .with_section("Notes"),
     );
 
-    if info.has_selection && !info.is_trash_view {
+    if action_plan.has_active_note_actions() {
         actions.push(
             Action::new(
                 "find_in_note",
@@ -155,7 +209,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
-    if info.has_selection && !info.is_trash_view {
+    if action_plan.has_active_note_actions() {
         actions.push(
             Action::new(
                 "copy_note_as",
@@ -209,7 +263,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
-    if info.has_selection && !info.is_trash_view {
+    if action_plan.has_active_note_actions() {
         actions.push(
             Action::new(
                 "send_to_ai",
@@ -226,7 +280,7 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
-    if !info.auto_sizing_enabled {
+    if action_plan.needs_auto_sizing_action() {
         actions.push(
             Action::new(
                 "enable_auto_sizing",
