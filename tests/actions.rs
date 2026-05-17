@@ -264,6 +264,26 @@ fn script_context_preference_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn script_context_share_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum ScriptContextShareActionPlan")
+            && content.contains("PortableShareLink")
+            && content.contains("DirectRunDeepLink")
+            && content.contains("struct ScriptContextShareActionCopy"),
+        "script context Share vs Copy Deep Link copy should be driven by named share plan states"
+    );
+    assert!(
+        content.contains("share_action_plan(script)")
+            && content.contains("fn share_action_copy")
+            && content.contains("let share_copy = share_action_copy(script)"),
+        "script context copy_deeplink row should derive title and description from the named share plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
