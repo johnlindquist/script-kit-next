@@ -826,6 +826,29 @@ fn kit_store_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn notes_command_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum NotesCommandBuiltinAction")
+            && content.contains("OpenNotes")
+            && content.contains("NewNote")
+            && content.contains("SearchNotes")
+            && content.contains("QuickCapture"),
+        "Notes command built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("NotesCommandBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_notes_command_builtin(")
+            && content.contains("action.opens_notes_window()")
+            && content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()"),
+        "Notes command routing and dispatch details should derive from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

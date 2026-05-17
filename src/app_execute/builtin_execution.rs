@@ -363,6 +363,47 @@ impl KitStoreUpdateAllResult {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesCommandBuiltinAction {
+    OpenNotes,
+    NewNote,
+    SearchNotes,
+    QuickCapture,
+}
+
+impl NotesCommandBuiltinAction {
+    fn from_command(command: builtins::NotesCommandType) -> Self {
+        match command {
+            builtins::NotesCommandType::OpenNotes => Self::OpenNotes,
+            builtins::NotesCommandType::NewNote => Self::NewNote,
+            builtins::NotesCommandType::SearchNotes => Self::SearchNotes,
+            builtins::NotesCommandType::QuickCapture => Self::QuickCapture,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::OpenNotes => "notes_command::OpenNotes",
+            Self::NewNote => "notes_command::NewNote",
+            Self::SearchNotes => "notes_command::SearchNotes",
+            Self::QuickCapture => "notes_command::QuickCapture",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::OpenNotes => "notes_command_failed::OpenNotes",
+            Self::NewNote => "notes_command_failed::NewNote",
+            Self::SearchNotes => "notes_command_failed::SearchNotes",
+            Self::QuickCapture => "notes_command_failed::QuickCapture",
+        }
+    }
+
+    fn opens_notes_window(self) -> bool {
+        matches!(self, Self::OpenNotes | Self::NewNote | Self::SearchNotes)
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -2860,46 +2901,8 @@ impl ScriptListApp {
                     "Executing notes command (preserving launcher context)"
                 );
 
-                use builtins::NotesCommandType;
-
-                // Close companion UI before hiding so it does not stay stale.
-                if crate::confirm::is_confirm_window_open() {
-                    crate::confirm::route_key_to_confirm_popup("escape", cx);
-                }
-                if crate::actions::is_actions_window_open() {
-                    crate::actions::close_actions_window(cx);
-                    self.mark_actions_popup_closed();
-                    self.mark_filter_resync_after_actions_if_needed();
-                    self.pop_focus_overlay(cx);
-                }
-
-                self.pending_focus = None;
-                script_kit_gpui::set_main_window_visible(false);
-                platform::defer_hide_main_window(cx);
-
-                let result = match cmd_type {
-                    NotesCommandType::OpenNotes
-                    | NotesCommandType::NewNote
-                    | NotesCommandType::SearchNotes => {
-                        notes::open_notes_window_without_launcher_restore(cx)
-                    }
-                    NotesCommandType::QuickCapture => notes::quick_capture(cx),
-                };
-
-                if let Err(e) = result {
-                    script_kit_gpui::set_main_window_visible(true);
-                    platform::show_main_window_without_activation();
-                    let message = format!("Notes command failed: {}", e);
-                    self.show_error_toast(message.clone(), cx);
-                    Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_LAUNCH_FAILED,
-                        message,
-                        format!("notes_command_failed::{cmd_type:?}"),
-                    )
-                } else {
-                    Self::builtin_success(dctx, format!("notes_command::{cmd_type:?}"))
-                }
+                let notes_action = NotesCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_notes_command_builtin(notes_action, dctx, cx)
             }
 
             // =========================================================================
@@ -4625,6 +4628,49 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_notes_command_builtin(
+        &mut self,
+        action: NotesCommandBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        // Close companion UI before hiding so it does not stay stale.
+        if crate::confirm::is_confirm_window_open() {
+            crate::confirm::route_key_to_confirm_popup("escape", cx);
+        }
+        if crate::actions::is_actions_window_open() {
+            crate::actions::close_actions_window(cx);
+            self.mark_actions_popup_closed();
+            self.mark_filter_resync_after_actions_if_needed();
+            self.pop_focus_overlay(cx);
+        }
+
+        self.pending_focus = None;
+        script_kit_gpui::set_main_window_visible(false);
+        platform::defer_hide_main_window(cx);
+
+        let result = if action.opens_notes_window() {
+            notes::open_notes_window_without_launcher_restore(cx)
+        } else {
+            notes::quick_capture(cx)
+        };
+
+        if let Err(e) = result {
+            script_kit_gpui::set_main_window_visible(true);
+            platform::show_main_window_without_activation();
+            let message = format!("Notes command failed: {}", e);
+            self.show_error_toast(message.clone(), cx);
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_LAUNCH_FAILED,
+                message,
+                action.failure_detail(),
+            )
+        } else {
+            Self::builtin_success(dctx, action.success_detail())
+        }
+    }
 
     fn execute_kit_store_builtin(
         &mut self,
