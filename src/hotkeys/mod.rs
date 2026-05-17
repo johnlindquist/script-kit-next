@@ -1396,6 +1396,25 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             }
         }
 
+        const SCRIPT_KIT_SELFIE_COMMAND_ID: &str = "builtin/script-kit-selfie";
+        const SCRIPT_KIT_SELFIE_SHORTCUT: &str = "cmd+alt+1";
+        if !registered_commands.contains(SCRIPT_KIT_SELFIE_COMMAND_ID) {
+            if register_script_hotkey_internal(
+                &manager_guard,
+                SCRIPT_KIT_SELFIE_COMMAND_ID,
+                SCRIPT_KIT_SELFIE_SHORTCUT,
+                "Script Kit Selfie",
+            )
+            .is_some()
+            {
+                registered_commands.insert(SCRIPT_KIT_SELFIE_COMMAND_ID.to_string());
+                logging::log(
+                    "HOTKEY",
+                    "Registered default Script Kit Selfie shortcut cmd+alt+1",
+                );
+            }
+        }
+
         // Priority 2: Register inline script/scriptlet metadata shortcuts only
         // when config.ts does not override the same launcher command.
         let mut script_count = 0;

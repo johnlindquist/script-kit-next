@@ -20,3 +20,5 @@
 {"input":{"name":"current-app"},"expected":"Resolved::CurrentAppCommands::NameAlias"}
 {"input":{"name":"current-app-commands"},"expected":"Resolved::CurrentAppCommands::NameAsCommandId"}
 {"input":{"builtinId":"builtin/current-app-commands"},"expected":"Resolved::CurrentAppCommands::BuiltinIdField"}
+{"input":{"name":"selfie"},"expected":"Resolved::ScriptKitSelfie::NameAlias"}
+{"input":{"builtinId":"builtin/script-kit-selfie"},"expected":"Resolved::ScriptKitSelfie::BuiltinIdField"}

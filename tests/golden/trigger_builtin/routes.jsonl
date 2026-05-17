@@ -17,4 +17,5 @@
 {"input":"builtin/choose-theme","expected":"ExecuteBuiltin::builtin/choose-theme"}
 {"input":"builtin/mini-main-window","expected":"ExecuteBuiltin::builtin/mini-main-window"}
 {"input":"builtin/quick-terminal","expected":"ExecuteBuiltin::builtin/quick-terminal"}
+{"input":"builtin/script-kit-selfie","expected":"ExecuteBuiltin::builtin/script-kit-selfie"}
 {"input":"builtin/webcam","expected":"ExecuteBuiltin::builtin/webcam"}

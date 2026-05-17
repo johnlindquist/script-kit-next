@@ -230,6 +230,8 @@ pub enum UtilityCommandType {
     VerifyCurrentAppRecipe,
     /// Replay a verified currentAppCommand recipe from the clipboard
     ReplayCurrentAppRecipe,
+    /// Capture Script Kit composited over the current desktop background
+    ScriptKitSelfie,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -558,6 +560,7 @@ impl BuiltInEntry {
                 UtilityCommandType::TraceCurrentAppIntent => "Copy App Intent Trace",
                 UtilityCommandType::VerifyCurrentAppRecipe => "Verify App Recipe",
                 UtilityCommandType::ReplayCurrentAppRecipe => "Replay App Recipe",
+                UtilityCommandType::ScriptKitSelfie => "Capture Selfie",
             },
             BuiltInFeature::KitStoreCommand(action) => match action {
                 KitStoreCommandType::BrowseKits => "Browse Kit Store",
@@ -688,6 +691,7 @@ impl BuiltInEntry {
                 UtilityCommandType::TraceCurrentAppIntent => "Trace Intent",
                 UtilityCommandType::VerifyCurrentAppRecipe => "Verify Recipe",
                 UtilityCommandType::ReplayCurrentAppRecipe => "Replay Recipe",
+                UtilityCommandType::ScriptKitSelfie => "Selfie",
             },
             BuiltInFeature::KitStoreCommand(action) => match action {
                 KitStoreCommandType::BrowseKits => "Browse Kits",
@@ -1789,6 +1793,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
             "square-terminal",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/script-kit-selfie",
+            "Script Kit Selfie",
+            "Capture Script Kit with the current desktop background and save a receipt",
+            vec![
+                "selfie",
+                "screenshot",
+                "screen",
+                "capture",
+                "background",
+                "desktop",
+                "transparency",
+                "receipt",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ScriptKitSelfie),
+            "camera",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
