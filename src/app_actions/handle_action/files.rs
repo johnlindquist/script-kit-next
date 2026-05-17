@@ -85,6 +85,11 @@ enum FileSearchDuplicateHandlerAction {
     DuplicatePath,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchTrashHandlerAction {
+    MoveToTrash,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -259,6 +264,57 @@ impl FileSearchDuplicateHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::DuplicatePath => format!("Failed to duplicate: {error}"),
+        }
+    }
+}
+
+impl FileSearchTrashHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "move_to_trash" => Some(Self::MoveToTrash),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::MoveToTrash => "No file selected",
+        }
+    }
+
+    fn confirm_title(self) -> &'static str {
+        match self {
+            Self::MoveToTrash => "Move to Trash",
+        }
+    }
+
+    fn confirm_message(self, name: &str) -> String {
+        match self {
+            Self::MoveToTrash => format!("Move \"{name}\" to Trash?"),
+        }
+    }
+
+    fn confirm_button(self) -> &'static str {
+        match self {
+            Self::MoveToTrash => "Move to Trash",
+        }
+    }
+
+    fn confirmation_failure_message(self) -> &'static str {
+        match self {
+            Self::MoveToTrash => "Failed to open confirmation dialog",
+        }
+    }
+
+    fn success_hud(self, name: &str) -> String {
+        match self {
+            Self::MoveToTrash => format!("Moved to Trash: {name}"),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MoveToTrash => format!("Failed to move to Trash: {error}"),
         }
     }
 }
@@ -904,10 +960,14 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "move_to_trash" => {
+                let Some(trash_action) = FileSearchTrashHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((path, _, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        trash_action.selection_required_message(),
                     );
                 };
                 let previous_display_index = match &self.current_view {
@@ -919,9 +979,9 @@ impl ScriptListApp {
 
                 cx.spawn(async move |this, cx| {
                     let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
-                        "Move to Trash",
-                        format!("Move \"{}\" to Trash?", name),
-                        "Move to Trash",
+                        trash_action.confirm_title(),
+                        trash_action.confirm_message(&name),
+                        trash_action.confirm_button(),
                     );
 
                     match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id)
@@ -952,7 +1012,7 @@ impl ScriptListApp {
                                 );
                                 this.clear_file_search_action_target();
                                 this.show_error_toast_with_code(
-                                    "Failed to open confirmation dialog",
+                                    trash_action.confirmation_failure_message(),
                                     Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
@@ -974,7 +1034,7 @@ impl ScriptListApp {
                                 );
                                 this.clear_file_search_action_target();
                                 this.show_hud(
-                                    format!("Moved to Trash: {}", name),
+                                    trash_action.success_hud(&name),
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
@@ -997,7 +1057,7 @@ impl ScriptListApp {
                                 );
                                 this.clear_file_search_action_target();
                                 this.show_error_toast(
-                                    format!("Failed to move to Trash: {}", e),
+                                    trash_action.failure_message(e),
                                     cx,
                                 );
                                 this.restore_file_search_input_focus(cx);
