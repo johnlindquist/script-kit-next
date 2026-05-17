@@ -390,6 +390,34 @@ impl UtilityProcessBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityContextBuiltinAction {
+    InspectCurrentContext,
+}
+
+impl UtilityContextBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::InspectCurrentContext => {
+                Some(Self::InspectCurrentContext)
+            }
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::InspectCurrentContext => "inspect_current_context",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::InspectCurrentContext => "inspect_current_context_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3477,66 +3505,9 @@ impl ScriptListApp {
                         self.execute_utility_process_builtin(process_action, dctx, cx)
                     }
                     UtilityCommandType::InspectCurrentContext => {
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            "context_snapshot.inspect_requested"
-                        );
-
-                        let started_at = std::time::Instant::now();
-
-                        let snapshot = crate::context_snapshot::capture_context_snapshot(
-                            &crate::context_snapshot::CaptureContextOptions::default(),
-                        );
-
-                        match serde_json::to_string_pretty(&snapshot) {
-                            Ok(json) => {
-                                let receipt = crate::context_snapshot::build_inspection_receipt(
-                                    &snapshot,
-                                    json.len(),
-                                );
-
-                                tracing::info!(
-                                    category = "CONTEXT",
-                                    event = "context_snapshot_copied",
-                                    trace_id = %dctx.trace_id,
-                                    schema_version = receipt.schema_version,
-                                    warning_count = receipt.warning_count,
-                                    has_selected_text = receipt.has_selected_text,
-                                    has_frontmost_app = receipt.has_frontmost_app,
-                                    top_level_menu_count = receipt.top_level_menu_count,
-                                    has_browser = receipt.has_browser,
-                                    has_focused_window = receipt.has_focused_window,
-                                    json_bytes = receipt.json_bytes,
-                                    status = %receipt.status,
-                                    duration_ms = started_at.elapsed().as_millis() as u64,
-                                    "Copied current context snapshot to clipboard"
-                                );
-
-                                cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
-                                let hud_message =
-                                    crate::context_snapshot::build_inspection_hud_message(&receipt);
-                                self.show_hud(hud_message, Some(HUD_MEDIUM_MS), cx);
-                                self.close_and_reset_window(cx);
-
-                                Self::builtin_success(dctx, "inspect_current_context")
-                            }
-                            Err(e) => {
-                                let message =
-                                    format!("Failed to serialize context snapshot: {}", e);
-                                tracing::error!(
-                                    trace_id = %dctx.trace_id,
-                                    error = %e,
-                                    "context_snapshot.serialize_failed"
-                                );
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "inspect_current_context_failed",
-                                )
-                            }
-                        }
+                        let context_action = UtilityContextBuiltinAction::from_command(*cmd_type)
+                            .expect("utility context arm should only receive context commands");
+                        self.execute_utility_context_builtin(context_action, dctx, cx)
                     }
                     UtilityCommandType::TraceCurrentAppIntent => {
                         let raw_query_owned =
@@ -5190,6 +5161,70 @@ impl ScriptListApp {
             self.close_and_reset_window(cx);
         }
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_utility_context_builtin(
+        &mut self,
+        action: UtilityContextBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            "context_snapshot.inspect_requested"
+        );
+
+        let started_at = std::time::Instant::now();
+
+        let snapshot = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::default(),
+        );
+
+        match serde_json::to_string_pretty(&snapshot) {
+            Ok(json) => {
+                let receipt =
+                    crate::context_snapshot::build_inspection_receipt(&snapshot, json.len());
+
+                tracing::info!(
+                    category = "CONTEXT",
+                    event = "context_snapshot_copied",
+                    trace_id = %dctx.trace_id,
+                    schema_version = receipt.schema_version,
+                    warning_count = receipt.warning_count,
+                    has_selected_text = receipt.has_selected_text,
+                    has_frontmost_app = receipt.has_frontmost_app,
+                    top_level_menu_count = receipt.top_level_menu_count,
+                    has_browser = receipt.has_browser,
+                    has_focused_window = receipt.has_focused_window,
+                    json_bytes = receipt.json_bytes,
+                    status = %receipt.status,
+                    duration_ms = started_at.elapsed().as_millis() as u64,
+                    "Copied current context snapshot to clipboard"
+                );
+
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                let hud_message = crate::context_snapshot::build_inspection_hud_message(&receipt);
+                self.show_hud(hud_message, Some(HUD_MEDIUM_MS), cx);
+                self.close_and_reset_window(cx);
+
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(e) => {
+                let message = format!("Failed to serialize context snapshot: {}", e);
+                tracing::error!(
+                    trace_id = %dctx.trace_id,
+                    error = %e,
+                    "context_snapshot.serialize_failed"
+                );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.failure_detail(),
+                )
+            }
+        }
     }
 
     fn execute_permission_command_builtin(

@@ -1149,6 +1149,32 @@ fn utility_process_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_context_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityContextBuiltinAction")
+            && content.contains("InspectCurrentContext"),
+        "Utility context built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("UtilityContextBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_context_builtin(")
+            && content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()"),
+        "Utility context command routing should delegate through named state details"
+    );
+    assert!(
+        content.contains("capture_context_snapshot(")
+            && content.contains("build_inspection_hud_message(&receipt)")
+            && content.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(json))")
+            && content.contains("inspect_current_context_failed"),
+        "Inspect Current Context should preserve snapshot capture, clipboard copy, HUD, and failure detail"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
