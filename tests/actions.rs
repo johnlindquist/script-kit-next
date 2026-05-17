@@ -380,6 +380,26 @@ fn scriptlet_defined_action_shortcuts_use_named_plan_states() {
 }
 
 #[test]
+fn scriptlet_source_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scriptlets.rs")
+        .expect("Failed to read scriptlet action handler");
+
+    assert!(
+        content.contains("enum ScriptletSourceHandlerAction")
+            && content.contains("Edit")
+            && content.contains("RevealInFinder")
+            && content.contains("CopyPath"),
+        "scriptlet edit/reveal/copy path handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ScriptletSourceHandlerAction::from_action_id(action_id)")
+            && content.contains("scriptlet_source_target(self.get_selected_result())")
+            && content.contains("source_action.copied_hud(&target.path_text)"),
+        "scriptlet source handlers should derive target resolution and copy feedback from the named state"
+    );
+}
+
+#[test]
 fn scriptlet_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
         .expect("Failed to read scriptlet builder");
