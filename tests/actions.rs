@@ -1987,7 +1987,7 @@ fn utility_verify_recipe_builtin_uses_named_action_states() {
         "Utility recipe built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+        content.contains("UtilityRecipeBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_verify_recipe_builtin(")
             && content.contains("action.success_detail()")
             && content.contains("action.clipboard_failure_detail()")
@@ -2011,7 +2011,7 @@ fn utility_replay_recipe_builtin_uses_named_action_states() {
 
     assert!(
         content.contains("ReplayCurrentApp")
-            && content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("UtilityRecipeBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_replay_recipe_builtin("),
         "Replay Current App Recipe should share named utility recipe action routing"
     );
@@ -2042,7 +2042,7 @@ fn utility_turn_this_into_command_builtin_uses_named_action_states() {
 
     assert!(
         content.contains("TurnThisIntoCommand")
-            && content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("UtilityRecipeBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_turn_this_into_command_builtin("),
         "Turn This Into a Command should share named utility recipe action routing"
     );
@@ -2050,13 +2050,16 @@ fn utility_turn_this_into_command_builtin_uses_named_action_states() {
         content.contains("normalize_turn_this_into_a_command_request")
             && content.contains("action.missing_query_failure_detail()")
             && content.contains("action.serialize_failure_detail()")
+            && content.contains("action.serialize_failure_message(&e)")
             && content.contains("action.capture_failure_detail()")
-            && content.contains("action.success_detail()"),
+            && content.contains("action.success_detail()")
+            && content.contains("action.copied_recipe_hud(&recipe.suggested_script_name)"),
         "Turn This Into a Command should use named state details for query, success, serialize, and capture outcomes"
     );
     assert!(
         content.contains("build_current_app_command_recipe")
-            && content.contains("Automation recipe copied:")
+            && content.contains("format!(\"Automation recipe copied: {suggested_script_name}\")")
+            && content.contains("format!(\"Failed to serialize current app command recipe: {error}\")")
             && content.contains("spawn_generate_script_from_recipe_after_hide")
             && content.contains("turn_this_into_command_capture_failed"),
         "Turn This Into a Command should preserve recipe copy, HUD, deferred generation, and capture failure copy"

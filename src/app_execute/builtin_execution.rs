@@ -715,6 +715,14 @@ impl UtilityRecipeBuiltinAction {
         }
     }
 
+    fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::VerifyCurrentApp | Self::ReplayCurrentApp | Self::TurnThisIntoCommand => {
+                format!("Failed to serialize current app command recipe: {error}")
+            }
+        }
+    }
+
     fn capture_failure_detail(self) -> &'static str {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_capture_failed",
@@ -760,6 +768,15 @@ impl UtilityRecipeBuiltinAction {
             Self::VerifyCurrentApp => "verify_current_app_recipe_generate_script",
             Self::ReplayCurrentApp => "replay_current_app_recipe_generate_script",
             Self::TurnThisIntoCommand => "turn_this_into_command_generate_script",
+        }
+    }
+
+    fn copied_recipe_hud(self, suggested_script_name: &str) -> String {
+        match self {
+            Self::TurnThisIntoCommand => {
+                format!("Automation recipe copied: {suggested_script_name}")
+            }
+            Self::VerifyCurrentApp | Self::ReplayCurrentApp => suggested_script_name.to_string(),
         }
     }
 
@@ -6200,7 +6217,7 @@ impl ScriptListApp {
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
 
                         self.show_hud(
-                            format!("Automation recipe copied: {}", recipe.suggested_script_name,),
+                            action.copied_recipe_hud(&recipe.suggested_script_name),
                             Some(HUD_MEDIUM_MS),
                             cx,
                         );
@@ -6214,8 +6231,7 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, action.success_detail())
                     }
                     Err(e) => {
-                        let message =
-                            format!("Failed to serialize current app command recipe: {}", e);
+                        let message = action.serialize_failure_message(&e);
                         tracing::error!(
                             trace_id = %dctx.trace_id,
                             error = %e,
