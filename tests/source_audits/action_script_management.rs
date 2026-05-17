@@ -141,12 +141,13 @@ fn settings_opens_config_in_editor() {
     );
     assert!(
         content.contains("SettingsEditorLaunchPlan::from_editor(&editor)")
-            && content.contains("launch_plan.spawn(&editor, &config_dir, &config_file)"),
+            && content.contains(".spawn(&editor, &config_dir, &config_file)"),
         "settings should use the named editor launch plan for editor-specific arguments"
     );
     assert!(
-        block.contains("Opening config.ts in"),
-        "settings should show HUD with editor name on success"
+        block.contains("launch_plan.success_hud(&editor_for_hud)")
+            && content.contains("Opening config.ts in {editor}"),
+        "settings should derive success HUD copy from the named editor launch plan"
     );
 }
 
@@ -164,8 +165,9 @@ fn settings_shows_error_when_editor_fails() {
     let block = &content[settings_pos..content.len().min(settings_pos + 4000)];
 
     assert!(
-        block.contains("Failed to open") && block.contains("for settings"),
-        "settings should show error toast when editor launch fails"
+        block.contains("launch_plan.failure_message(&editor_for_hud, e)")
+            && content.contains("Failed to open {editor} for settings: {error}"),
+        "settings should derive error toast copy from the named editor launch plan"
     );
     assert!(
         block.contains("show_error_toast("),

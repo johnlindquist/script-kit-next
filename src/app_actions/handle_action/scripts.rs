@@ -131,6 +131,26 @@ impl SettingsEditorLaunchPlan {
             Self::GenericFileOnly => Command::new(editor).arg(config_file).spawn(),
         }
     }
+
+    fn success_hud(self, editor: &str) -> String {
+        match self {
+            Self::ReuseWindowWithProject
+            | Self::FileOnlyZed
+            | Self::AddToSublimeProject
+            | Self::GenericFileOnly => format!("Opening config.ts in {editor}"),
+        }
+    }
+
+    fn failure_message(self, editor: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::ReuseWindowWithProject
+            | Self::FileOnlyZed
+            | Self::AddToSublimeProject
+            | Self::GenericFileOnly => {
+                format!("Failed to open {editor} for settings: {error}")
+            }
+        }
+    }
 }
 
 impl ScriptRankingHandlerAction {
@@ -444,11 +464,13 @@ impl ScriptListApp {
                         .background_executor()
                         .spawn(async move {
                             let launch_plan = SettingsEditorLaunchPlan::from_editor(&editor);
-                            launch_plan.spawn(&editor, &config_dir, &config_file)
+                            launch_plan
+                                .spawn(&editor, &config_dir, &config_file)
+                                .map(|child| (launch_plan, child))
                         })
                         .await;
                     let _ = this.update(cx, |this, cx| match result {
-                        Ok(_) => {
+                        Ok((launch_plan, _)) => {
                             tracing::info!(
                                 category = "UI",
                                 trace_id = %trace_id,
@@ -458,7 +480,7 @@ impl ScriptListApp {
                                 "Async action completed: settings"
                             );
                             this.show_hud(
-                                format!("Opening config.ts in {}", editor_for_hud),
+                                launch_plan.success_hud(&editor_for_hud),
                                 Some(HUD_SHORT_MS),
                                 cx,
                             );
@@ -473,8 +495,10 @@ impl ScriptListApp {
                                 error = %e,
                                 "Async action failed: settings"
                             );
+                            let launch_plan =
+                                SettingsEditorLaunchPlan::from_editor(&editor_for_hud);
                             this.show_error_toast(
-                                format!("Failed to open {} for settings: {}", editor_for_hud, e),
+                                launch_plan.failure_message(&editor_for_hud, e),
                                 cx,
                             );
                         }
