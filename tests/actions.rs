@@ -2463,6 +2463,27 @@ fn acp_last_response_handlers_use_named_action_states() {
 }
 
 #[test]
+fn acp_conversation_session_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpConversationSessionHandlerAction")
+            && content.contains("NewConversation")
+            && content.contains("ClearConversation"),
+        "ACP new/clear conversation handlers should be driven by named session action states"
+    );
+    assert!(
+        content.contains("AcpConversationSessionHandlerAction::from_action_id(action_id)")
+            && content.contains("session_action.preserves_session()")
+            && content.contains("thread.clear_messages(cx)")
+            && content.contains("self.close_tab_ai_harness_terminal(cx)")
+            && content.contains("self.open_tab_ai_acp_with_entry_intent(None, cx)"),
+        "ACP conversation session handlers should derive keep-session vs fresh-session behavior from the named state"
+    );
+}
+
+#[test]
 fn acp_code_copy_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");

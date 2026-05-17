@@ -14,6 +14,12 @@ enum AcpLastResponseHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpConversationSessionHandlerAction {
+    NewConversation,
+    ClearConversation,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AcpCodeCopyHandlerAction {
     CopyAllCode,
 }
@@ -70,6 +76,23 @@ impl AcpLastResponseHandlerAction {
         match self {
             Self::CopyToClipboard => "Copied last response to clipboard",
             Self::PasteToFrontmost => "Pasting to frontmost app\u{2026}",
+        }
+    }
+}
+
+impl AcpConversationSessionHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_new_conversation" => Some(Self::NewConversation),
+            "acp_clear_conversation" => Some(Self::ClearConversation),
+            _ => None,
+        }
+    }
+
+    fn preserves_session(self) -> bool {
+        match self {
+            Self::NewConversation => true,
+            Self::ClearConversation => false,
         }
     }
 }
@@ -1374,7 +1397,19 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
-            "acp_new_conversation" => {
+            "acp_new_conversation" | "acp_clear_conversation" => {
+                let Some(session_action) =
+                    AcpConversationSessionHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                if !session_action.preserves_session() {
+                    // Close and reopen the ACP chat for a fresh session
+                    self.close_tab_ai_harness_terminal(cx);
+                    self.open_tab_ai_acp_with_entry_intent(None, cx);
+                    return DispatchOutcome::success();
+                }
+
                 // Clear messages but keep the session alive
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
@@ -1386,12 +1421,6 @@ impl ScriptListApp {
                     chat.collapsed_ids.clear();
                     cx.notify();
                 });
-                DispatchOutcome::success()
-            }
-            "acp_clear_conversation" => {
-                // Close and reopen the ACP chat for a fresh session
-                self.close_tab_ai_harness_terminal(cx);
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
                 DispatchOutcome::success()
             }
             "acp_paste_to_frontmost" => {
