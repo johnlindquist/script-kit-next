@@ -52,6 +52,11 @@ enum ClipboardSaveSnippetHandlerAction {
     SaveSnippet,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardSaveFileHandlerAction {
+    SaveFile,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -1058,13 +1063,14 @@ impl ScriptListApp {
             }
 
             "clipboard_save_file" => {
+                let save_file_action = ClipboardSaveFileHandlerAction::SaveFile;
                 let Some(entry) = selected_clipboard_entry.clone() else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(save_file_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast("Clipboard content unavailable", cx);
+                    self.show_error_toast(save_file_action.content_unavailable_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -1078,7 +1084,7 @@ impl ScriptListApp {
                         let Some(png_bytes) =
                             clipboard_history::content_to_png_bytes(&content)
                         else {
-                            self.show_error_toast("Failed to decode image", cx);
+                            self.show_error_toast(save_file_action.decode_failure_message(), cx);
                             return DispatchOutcome::success();
                         };
                         (png_bytes, "png")
@@ -1120,7 +1126,7 @@ impl ScriptListApp {
                                         "Async action completed: clipboard_save_file"
                                     );
                                     this.show_hud(
-                                        format!("Saved to: {}", save_path.display()),
+                                        save_file_action.saved_hud(&save_path),
                                         Some(HUD_LONG_MS),
                                         cx,
                                     );
@@ -1137,7 +1143,7 @@ impl ScriptListApp {
                                         "Async action completed with warning: clipboard_save_file reveal failed"
                                     );
                                     this.show_hud(
-                                        format!("Saved to: {}", save_path.display()),
+                                        save_file_action.saved_hud(&save_path),
                                         Some(HUD_LONG_MS),
                                         cx,
                                     );
@@ -1149,7 +1155,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save file");
-                        self.show_error_toast(format!("Failed to save: {}", e), cx);
+                        self.show_error_toast(save_file_action.save_failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1346,6 +1352,38 @@ impl ClipboardSaveSnippetHandlerAction {
     fn save_failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::SaveSnippet => format!("Failed to save: {error}"),
+        }
+    }
+}
+
+impl ClipboardSaveFileHandlerAction {
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::SaveFile => "No clipboard entry selected",
+        }
+    }
+
+    fn content_unavailable_message(self) -> &'static str {
+        match self {
+            Self::SaveFile => "Clipboard content unavailable",
+        }
+    }
+
+    fn decode_failure_message(self) -> &'static str {
+        match self {
+            Self::SaveFile => "Failed to decode image",
+        }
+    }
+
+    fn saved_hud(self, save_path: &std::path::Path) -> String {
+        match self {
+            Self::SaveFile => format!("Saved to: {}", save_path.display()),
+        }
+    }
+
+    fn save_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SaveFile => format!("Failed to save: {error}"),
         }
     }
 }
