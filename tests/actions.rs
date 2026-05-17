@@ -2791,6 +2791,30 @@ fn deferred_ai_handoff_uses_named_failure_states() {
 }
 
 #[test]
+fn ai_image_capture_builtins_use_named_failure_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiImageCaptureBuiltinAction")
+            && content.contains("SendScreen")
+            && content.contains("SendFocusedWindow")
+            && content.contains("SendScreenArea"),
+        "AI image capture handoffs should be driven by named capture action states"
+    );
+    assert!(
+        content.contains("AiImageCaptureBuiltinAction::SendScreen")
+            && content.contains("AiImageCaptureBuiltinAction::SendFocusedWindow")
+            && content.contains("AiImageCaptureBuiltinAction::SendScreenArea")
+            && content.contains("capture_action.failure_message(&error)")
+            && content.contains("format!(\"Failed to capture screen: {error}\")")
+            && content.contains("format!(\"Failed to capture window: {error}\")")
+            && content.contains("format!(\"Failed to capture screen area: {error}\")"),
+        "AI image capture failure toasts should derive visible copy from the named action state"
+    );
+}
+
+#[test]
 fn acp_conversation_session_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
