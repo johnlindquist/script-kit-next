@@ -803,6 +803,29 @@ fn utility_open_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn kit_store_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum KitStoreBuiltinAction")
+            && content.contains("BrowseKits")
+            && content.contains("InstalledKits")
+            && content.contains("UpdateAllKits"),
+        "Kit Store built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("KitStoreBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_kit_store_builtin(")
+            && content.contains("action.success_detail()")
+            && content.contains("struct KitStoreUpdateAllResult")
+            && content.contains("result.message()")
+            && content.contains("result.is_failure()"),
+        "Kit Store view routing and update-all feedback should derive from named states"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

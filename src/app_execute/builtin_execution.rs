@@ -318,6 +318,51 @@ impl UtilityOpenBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStoreBuiltinAction {
+    BrowseKits,
+    InstalledKits,
+    UpdateAllKits,
+}
+
+impl KitStoreBuiltinAction {
+    fn from_command(command: builtins::KitStoreCommandType) -> Self {
+        match command {
+            builtins::KitStoreCommandType::BrowseKits => Self::BrowseKits,
+            builtins::KitStoreCommandType::InstalledKits => Self::InstalledKits,
+            builtins::KitStoreCommandType::UpdateAllKits => Self::UpdateAllKits,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::BrowseKits => "browse_kits_dispatched",
+            Self::InstalledKits => "installed_kits",
+            Self::UpdateAllKits => "update_all_kits_dispatched",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct KitStoreUpdateAllResult {
+    updated: usize,
+    failed: usize,
+}
+
+impl KitStoreUpdateAllResult {
+    fn message(self) -> String {
+        if self.failed == 0 {
+            format!("Updated {} kit(s) successfully", self.updated)
+        } else {
+            format!("Updated {} kit(s), {} failed", self.updated, self.failed)
+        }
+    }
+
+    fn is_failure(self) -> bool {
+        self.failed > 0
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -4400,7 +4445,6 @@ impl ScriptListApp {
             // Kit Store Commands
             // =========================================================================
             builtins::BuiltInFeature::KitStoreCommand(cmd_type) => {
-                use builtins::KitStoreCommandType;
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
@@ -4408,108 +4452,8 @@ impl ScriptListApp {
                     "Executing kit store command"
                 );
 
-                self.opened_from_main_menu = true;
-
-                match cmd_type {
-                    KitStoreCommandType::BrowseKits => {
-                        self.current_view = AppView::BrowseKitsView {
-                            query: String::new(),
-                            selected_index: 0,
-                            results: Vec::new(),
-                        };
-                        self.pending_focus = Some(FocusTarget::AppRoot);
-                        cx.notify();
-
-                        cx.spawn(async move |this, cx| {
-                            let results = cx
-                                .background_executor()
-                                .spawn(async { Self::kit_store_search_results("") })
-                                .await;
-                            let _ = this.update(cx, |this, cx| {
-                                if let AppView::BrowseKitsView {
-                                    results: view_results,
-                                    ..
-                                } = &mut this.current_view
-                                {
-                                    *view_results = results;
-                                    cx.notify();
-                                }
-                            });
-                        })
-                        .detach();
-                        Self::builtin_success(dctx, "browse_kits_dispatched")
-                    }
-                    KitStoreCommandType::InstalledKits => {
-                        let kits = Self::kit_store_list_installed();
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            installed_count = kits.len(),
-                            "Loaded installed kits"
-                        );
-                        self.current_view = AppView::InstalledKitsView {
-                            selected_index: 0,
-                            kits,
-                        };
-                        self.pending_focus = Some(FocusTarget::AppRoot);
-                        cx.notify();
-                        Self::builtin_success(dctx, "installed_kits")
-                    }
-                    KitStoreCommandType::UpdateAllKits => {
-                        cx.spawn(async move |this, cx| {
-                            let (updated, failed) = cx
-                                .background_executor()
-                                .spawn(async {
-                                    let kits =
-                                        script_kit_gpui::kit_store::storage::list_installed_kits()
-                                            .unwrap_or_default();
-                                    let mut updated = 0usize;
-                                    let mut failed = 0usize;
-                                    for kit in &kits {
-                                        let pull_output = std::process::Command::new("git")
-                                            .arg("-C")
-                                            .arg(&kit.path)
-                                            .arg("pull")
-                                            .arg("--ff-only")
-                                            .output();
-                                        match pull_output {
-                                            Ok(output) if output.status.success() => {
-                                                updated += 1;
-                                            }
-                                            _ => {
-                                                failed += 1;
-                                                tracing::warn!(
-                                                    kit_name = %kit.name,
-                                                    "Kit update-all failed for kit"
-                                                );
-                                            }
-                                        }
-                                    }
-                                    (updated, failed)
-                                })
-                                .await;
-
-                            let _ = this.update(cx, |this, cx| {
-                                let message = if failed == 0 {
-                                    format!("Updated {} kit(s) successfully", updated)
-                                } else {
-                                    format!("Updated {} kit(s), {} failed", updated, failed)
-                                };
-                                if failed > 0 {
-                                    this.toast_manager.push(
-                                        components::toast::Toast::error(message, &this.theme)
-                                            .duration_ms(Some(TOAST_ERROR_MS)),
-                                    );
-                                } else {
-                                    this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
-                                }
-                                cx.notify();
-                            });
-                        })
-                        .detach();
-                        // Async — outcome tracked in spawned task
-                        Self::builtin_success(dctx, "update_all_kits_dispatched")
-                    }
-                }
+                let kit_action = KitStoreBuiltinAction::from_command(*cmd_type);
+                self.execute_kit_store_builtin(kit_action, dctx, cx)
             }
 
             // =========================================================================
@@ -4681,6 +4625,109 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_kit_store_builtin(
+        &mut self,
+        action: KitStoreBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        self.opened_from_main_menu = true;
+
+        match action {
+            KitStoreBuiltinAction::BrowseKits => {
+                self.current_view = AppView::BrowseKitsView {
+                    query: String::new(),
+                    selected_index: 0,
+                    results: Vec::new(),
+                };
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                cx.notify();
+
+                cx.spawn(async move |this, cx| {
+                    let results = cx
+                        .background_executor()
+                        .spawn(async { Self::kit_store_search_results("") })
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if let AppView::BrowseKitsView {
+                            results: view_results,
+                            ..
+                        } = &mut this.current_view
+                        {
+                            *view_results = results;
+                            cx.notify();
+                        }
+                    });
+                })
+                .detach();
+            }
+            KitStoreBuiltinAction::InstalledKits => {
+                let kits = Self::kit_store_list_installed();
+                tracing::info!(
+                    trace_id = %dctx.trace_id,
+                    installed_count = kits.len(),
+                    "Loaded installed kits"
+                );
+                self.current_view = AppView::InstalledKitsView {
+                    selected_index: 0,
+                    kits,
+                };
+                self.pending_focus = Some(FocusTarget::AppRoot);
+                cx.notify();
+            }
+            KitStoreBuiltinAction::UpdateAllKits => {
+                cx.spawn(async move |this, cx| {
+                    let result = cx
+                        .background_executor()
+                        .spawn(async {
+                            let kits = script_kit_gpui::kit_store::storage::list_installed_kits()
+                                .unwrap_or_default();
+                            let mut updated = 0usize;
+                            let mut failed = 0usize;
+                            for kit in &kits {
+                                let pull_output = std::process::Command::new("git")
+                                    .arg("-C")
+                                    .arg(&kit.path)
+                                    .arg("pull")
+                                    .arg("--ff-only")
+                                    .output();
+                                match pull_output {
+                                    Ok(output) if output.status.success() => {
+                                        updated += 1;
+                                    }
+                                    _ => {
+                                        failed += 1;
+                                        tracing::warn!(
+                                            kit_name = %kit.name,
+                                            "Kit update-all failed for kit"
+                                        );
+                                    }
+                                }
+                            }
+                            KitStoreUpdateAllResult { updated, failed }
+                        })
+                        .await;
+
+                    let _ = this.update(cx, |this, cx| {
+                        let message = result.message();
+                        if result.is_failure() {
+                            this.toast_manager.push(
+                                components::toast::Toast::error(message, &this.theme)
+                                    .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                        } else {
+                            this.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                        }
+                        cx.notify();
+                    });
+                })
+                .detach();
+            }
+        }
+
+        Self::builtin_success(dctx, action.success_detail())
+    }
 
     fn execute_utility_open_builtin(
         &mut self,
