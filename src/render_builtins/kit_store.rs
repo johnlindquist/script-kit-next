@@ -505,10 +505,28 @@ impl ScriptListApp {
         }
     }
 
+    fn kit_store_browse_input_display(query: &str) -> SharedString {
+        if query.is_empty() {
+            SharedString::from("Search GitHub kits...")
+        } else {
+            SharedString::from(query.to_string())
+        }
+    }
+
+    fn kit_store_browse_count_label(total_results: usize) -> String {
+        let suffix = if total_results == 1 { "" } else { "s" };
+        format!("{} kit{}", total_results, suffix)
+    }
+
     fn kit_store_installed_row_commit_label(
         kit: &script_kit_gpui::kit_store::InstalledKit,
     ) -> String {
         format!("commit {}", kit.git_hash)
+    }
+
+    fn kit_store_installed_count_label(total_kits: usize) -> String {
+        let suffix = if total_kits == 1 { "" } else { "s" };
+        format!("{} installed kit{}", total_kits, suffix)
     }
 
     fn kit_store_install_selected_result(
@@ -860,11 +878,7 @@ impl ScriptListApp {
         let accent_badge_text = rgba((chrome.accent_badge_text_hex << 8) | 0xff);
 
         let query_owned = query.to_string();
-        let input_display = if query_owned.is_empty() {
-            SharedString::from("Search GitHub kits...")
-        } else {
-            SharedString::from(query_owned.clone())
-        };
+        let input_display = Self::kit_store_browse_input_display(&query_owned);
         let input_is_empty = query_owned.is_empty();
         let total_results = results.len();
 
@@ -1228,7 +1242,7 @@ impl ScriptListApp {
                             .text_color(text_hint)
                             .flex_none()
                             .whitespace_nowrap()
-                            .child(format!("{} kits", total_results)),
+                            .child(Self::kit_store_browse_count_label(total_results)),
                     ),
             )
             .child(
@@ -1656,7 +1670,7 @@ impl ScriptListApp {
                             .text_color(text_hint)
                             .flex_none()
                             .whitespace_nowrap()
-                            .child(format!("{} installed", total_kits)),
+                            .child(Self::kit_store_installed_count_label(total_kits)),
                     ),
             )
             .child(

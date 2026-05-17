@@ -47,7 +47,10 @@ fn kit_store_row_detail_copy_is_modeled() {
         "browse result description fallback should live in a named helper"
     );
     assert!(
-        KIT_STORE.contains("Self::kit_store_browse_row_description(result)"),
+        KIT_STORE
+            .matches("Self::kit_store_browse_row_description")
+            .count()
+            >= 1,
         "browse rows should render description copy through the helper"
     );
     assert!(
@@ -55,7 +58,40 @@ fn kit_store_row_detail_copy_is_modeled() {
         "installed row commit copy should live in a named helper"
     );
     assert!(
-        KIT_STORE.contains("Self::kit_store_installed_row_commit_label(kit)"),
+        KIT_STORE
+            .matches("Self::kit_store_installed_row_commit_label")
+            .count()
+            >= 1,
         "installed rows should render commit copy through the helper"
+    );
+}
+
+#[test]
+fn kit_store_input_and_count_copy_are_modeled() {
+    assert!(
+        KIT_STORE.contains("fn kit_store_browse_input_display("),
+        "browse input placeholder/value copy should live in a named helper"
+    );
+    assert!(
+        KIT_STORE.contains("Self::kit_store_browse_input_display(&query_owned)"),
+        "browse renderer should use the input display helper"
+    );
+    assert!(
+        KIT_STORE.contains("fn kit_store_browse_count_label(")
+            && KIT_STORE.contains("format!(\"{} kit{}\", total_results, suffix)"),
+        "browse count helper should avoid '1 kits'"
+    );
+    assert!(
+        KIT_STORE.contains("Self::kit_store_browse_count_label(total_results)"),
+        "browse renderer should use the count label helper"
+    );
+    assert!(
+        KIT_STORE.contains("fn kit_store_installed_count_label(")
+            && KIT_STORE.contains("format!(\"{} installed kit{}\", total_kits, suffix)"),
+        "installed count helper should avoid ambiguous or unpluralized installed counts"
+    );
+    assert!(
+        KIT_STORE.contains("Self::kit_store_installed_count_label(total_kits)"),
+        "installed renderer should use the installed count label helper"
     );
 }
