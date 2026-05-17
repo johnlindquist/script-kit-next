@@ -1,0 +1,477 @@
+{
+  "schemaVersion": 1,
+  "topic": "script-kit-gpui-devtools-truth-scenarios",
+  "brandNewDefinitionVersion": 1,
+  "oracle": {
+    "requiredBeforeExecution": true,
+    "slug": "new-devtools-scenarios-plan",
+    "sessionPath": "~/.oracle/sessions/new-devtools-scenarios-plan",
+    "outputLogPath": "~/.oracle/sessions/new-devtools-scenarios-plan/output.log",
+    "status": "accepted"
+  },
+  "executorPolicy": {
+    "hasRunner": false,
+    "forbiddenExecutors": [
+      "scripts/agentic/index.ts",
+      "scripts/agentic/user-story-audit.ts",
+      "scripts/agentic/surface-navigator.ts",
+      "tests/smoke/*",
+      "existing stress recipe names"
+    ],
+    "destructiveOperationsExcluded": true
+  },
+  "inventoryAvoidance": {
+    "source": "Oracle-reviewed Existing Automation Inventory To Avoid",
+    "checkedRecipeIds": [
+      "keyboard-hint-label-parity-stress",
+      "footer-status-persistence-stress",
+      "actions-command-discoverability-noop-stress",
+      "destructive-confirm-modal-safety-stress",
+      "file-search-preview-sanitization-stress",
+      "current-app-commands-frontmost-stress"
+    ],
+    "checkedAgenticScripts": [
+      "scripts/agentic/index.ts",
+      "scripts/agentic/user-story-audit.ts",
+      "scripts/agentic/surface-navigator.ts"
+    ],
+    "checkedDevtoolsScripts": [
+      "scripts/devtools/actions.ts",
+      "scripts/devtools/act.ts",
+      "scripts/devtools/text.ts",
+      "scripts/devtools/focus.ts",
+      "scripts/devtools/layout.ts"
+    ],
+    "checkedTests": [
+      "tests/agentic_user_story_audit_contract.rs",
+      "tests/devtools_oracle_iterations_contract.rs",
+      "tests/devtools_coverage_contract.rs"
+    ]
+  },
+  "requiredReceiptFields": [
+    "routeGeneration",
+    "focusOwner",
+    "selectedSemanticId",
+    "visibleLabel",
+    "footerIntent",
+    "actionId",
+    "handlerId",
+    "sideEffectClass",
+    "disabledReason",
+    "targetSurface",
+    "parentSubjectId",
+    "layoutGeneration"
+  ],
+  "commonNonDestructiveGuarantees": [
+    "fixture or dry-run only for mutable-looking labels",
+    "no real filesystem mutation",
+    "no system pasteboard mutation",
+    "no external app handoff",
+    "no shell execution",
+    "no microphone or camera capture",
+    "no OS settings mutation",
+    "no process control"
+  ],
+  "scenarios": [
+    {
+      "id": "dt-truth-001-root-enter-target-after-source-rekey",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "built-in", "actions-dialog"],
+      "userStory": "As a user, I type a broad root query, rekey it into a built-in source prefix, arrow to a different visible row, resize the window, then press the actions shortcut. The visible row label, footer Enter label, selected semantic ID, and opened action subject must all describe the same command.",
+      "requiredTransitions": ["set input", "source rekey", "selection move", "resize", "open actions"],
+      "truthAssertions": ["visible row label matches selected semantic id", "footer primary label matches resolved action", "actions parent subject matches selected command id"]
+    },
+    {
+      "id": "dt-truth-002-root-placeholder-after-clear-and-escape",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "actions-dialog", "input"],
+      "userStory": "As a user, I type a query that narrows to one built-in, open actions, press Escape back to root, clear the input, and resize from mini to narrow. The placeholder, empty-state text, footer labels, and selected row must not keep stale text from the prior built-in.",
+      "requiredTransitions": ["set input", "open actions", "escape", "clear input", "resize"],
+      "truthAssertions": ["placeholder reflects root state", "footer labels reflect current route", "selected row is current after clear"]
+    },
+    {
+      "id": "dt-truth-003-built-in-alias-selected-handler-truth",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "built-in", "actions-dialog"],
+      "userStory": "As a user, I search using an alias that matches multiple built-ins, move selection rapidly, open actions, and inspect the primary action. The displayed alias, canonical command title, route target, and handler ID must agree.",
+      "requiredTransitions": ["alias search", "selection move", "open actions", "inspect primary action"],
+      "truthAssertions": ["alias maps to canonical command", "route target matches handler id", "action subject matches selected semantic id"]
+    },
+    {
+      "id": "dt-truth-004-root-recents-versus-built-in-run-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "recents", "built-in", "actions-dialog"],
+      "userStory": "As a user, I filter root until a recent command and a built-in command with similar names appear adjacent, toggle selection between them, open actions, then close actions. The footer must say whether Enter will run the recent command or open the built-in surface, never a blended label.",
+      "requiredTransitions": ["filter", "selection toggle", "open actions", "close actions"],
+      "truthAssertions": ["footer intent distinguishes recent from built-in", "action subject follows selected row", "closed actions restore parent intent"]
+    },
+    {
+      "id": "dt-truth-005-root-filter-no-result-to-recovered-built-in",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "built-in", "actions-dialog"],
+      "userStory": "As a user, I type a no-result query, append text until a built-in appears, resize twice, and open actions. The no-result copy must disappear, the footer must use the recovered row's command text, and the action dialog must not preserve the no-result disabled state.",
+      "requiredTransitions": ["no-result filter", "append query", "resize", "resize", "open actions"],
+      "truthAssertions": ["empty state clears on recovery", "footer intent tracks recovered row", "actions dialog has current parent state"]
+    },
+    {
+      "id": "dt-truth-006-root-shortcut-label-after-focus-roundtrip",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "keyboard", "actions-dialog"],
+      "userStory": "As a user, I select a built-in row, move focus out and back to the root input, then use keyboard navigation and open actions. Shortcut glyphs shown in the row, footer, and action dialog must match the active focus owner and actual keyboard route.",
+      "requiredTransitions": ["select row", "focus out", "focus back", "keyboard navigation", "open actions"],
+      "truthAssertions": ["shortcut glyphs match focus owner", "footer route matches keyboard owner", "action shortcut matches handler"]
+    },
+    {
+      "id": "dt-truth-007-root-selected-row-preview-command-split",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "layout", "actions-dialog"],
+      "userStory": "As a user, I select a row with a long subtitle, resize so text truncates, then open actions. The visible title/subtitle truncation may shorten text, but the receipt must prove the selected command ID and action subject still match the untruncated row.",
+      "requiredTransitions": ["select long row", "resize to truncate", "open actions"],
+      "truthAssertions": ["truncated visible label keeps semantic id", "action parent subject matches selected command", "layout generation does not alter command identity"]
+    },
+    {
+      "id": "dt-truth-008-root-heading-count-after-filter-churn",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "filtering", "actions-dialog"],
+      "userStory": "As a user, I type, clear, and retype filters that move a built-in between headings, then open actions on the selected row. Heading counts, selected row metadata, footer action label, and action dialog parent heading must not contradict each other.",
+      "requiredTransitions": ["type filter", "clear filter", "retype filter", "open actions"],
+      "truthAssertions": ["heading count matches current rows", "selected row heading matches action parent", "footer label matches selected metadata"]
+    },
+    {
+      "id": "dt-truth-009-root-disabled-safe-command-reason",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "disabled-state", "actions-dialog"],
+      "userStory": "As a user, I select a safe but unavailable built-in, such as one requiring a missing passive fixture/provider, open actions, and try Enter. The row label, disabled reason, footer refusal text, and action dialog disabled state must all name the same blocker and refuse activation.",
+      "requiredTransitions": ["select unavailable row", "open actions", "press Enter"],
+      "truthAssertions": ["disabled reason is consistent", "footer refuses primary action", "action dialog disabled state matches row"]
+    },
+    {
+      "id": "dt-truth-010-root-literal-colon-query-not-source-command",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["main", "input", "actions-dialog"],
+      "userStory": "As a user, I type a literal query containing source-like punctuation, move selection, resize, and open actions. The UI must truthfully show whether the query is literal search text or source syntax, and must not route to a source command because the text merely resembles one.",
+      "requiredTransitions": ["type punctuation query", "selection move", "resize", "open actions"],
+      "truthAssertions": ["query classification is explicit", "route target follows parsed syntax only", "action set matches selected row"]
+    },
+    {
+      "id": "dt-truth-011-actions-parent-filter-mutates-while-open",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "main", "input"],
+      "userStory": "As a user, I open actions for a root row, then change the parent filter through a safe direct input path while the action dialog remains open. The action dialog must either keep a clearly captured parent subject or close/rebind; it must not display actions for one row while executing another.",
+      "requiredTransitions": ["open actions", "mutate parent filter", "inspect parent subject"],
+      "truthAssertions": ["parent subject is captured or rebound", "route generation prevents stale execution", "visible action subject matches handler subject"]
+    },
+    {
+      "id": "dt-truth-012-actions-search-result-footer-after-disabled-row",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "disabled-state", "footer"],
+      "userStory": "As a user, I open actions, filter to a disabled action, resize the dialog, arrow to an enabled action, then back to disabled. The action row text, disabled reason, footer Enter label, and keyboard refusal must update on every selection.",
+      "requiredTransitions": ["open actions", "filter action", "resize", "select enabled", "select disabled"],
+      "truthAssertions": ["footer updates on action selection", "disabled reason follows selected action", "keyboard refusal matches selected action state"]
+    },
+    {
+      "id": "dt-truth-013-actions-section-heading-not-action-target",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "keyboard", "semantics"],
+      "userStory": "As a user, I filter actions until section headings and actions interleave, use arrow keys across headings, and press Enter only when an action row is selected. The footer and selected semantic ID must never present a section heading as executable.",
+      "requiredTransitions": ["filter actions", "arrow across headings", "press Enter on action"],
+      "truthAssertions": ["section headings are non-executable", "selected semantic id excludes headings", "footer labels only executable rows"]
+    },
+    {
+      "id": "dt-truth-014-actions-subroute-breadcrumb-versus-handler",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "route-stack", "keyboard"],
+      "userStory": "As a user, I drill from a parent action into a nested safe sub-action list, resize, then navigate back using Escape and breadcrumb. Breadcrumb text, visible action title, route stack, and handler ID must remain aligned.",
+      "requiredTransitions": ["open nested action route", "resize", "escape back", "breadcrumb back"],
+      "truthAssertions": ["breadcrumb reflects route stack", "handler id matches visible action", "back navigation restores parent subject"]
+    },
+    {
+      "id": "dt-truth-015-actions-dialog-parent-focus-return-truth",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "focus", "main"],
+      "userStory": "As a user, I open actions, focus the actions search field, close actions, and continue typing in the parent filter. The parent input, footer, and selected row must prove focus returned to the parent and did not keep action-search ownership.",
+      "requiredTransitions": ["open actions", "focus actions search", "close actions", "type parent filter"],
+      "truthAssertions": ["focus owner returns to parent", "footer intent uses parent route", "selected row follows parent filter"]
+    },
+    {
+      "id": "dt-truth-016-actions-shortcut-glyph-after-dialog-resize",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "layout", "keyboard"],
+      "userStory": "As a user, I open actions, resize the popup enough to change row layout, then inspect shortcut glyphs and use one safe shortcut. The visible glyph, keyboard routing receipt, and executed action ID must match.",
+      "requiredTransitions": ["open actions", "resize popup", "inspect shortcut", "use shortcut"],
+      "truthAssertions": ["shortcut glyph survives resize", "keyboard route matches glyph", "action id matches shortcut"]
+    },
+    {
+      "id": "dt-truth-017-actions-safe-copy-label-with-fixture-pasteboard",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "safety", "fixture"],
+      "userStory": "As a user, I choose a fixture-scoped copy/preview action from actions, see a Copy or equivalent label, and activate it in isolated mode. The UI must truthfully mark it as fixture-scoped or non-system, and receipts must prove no system pasteboard mutation.",
+      "requiredTransitions": ["open actions", "select fixture copy-like action", "activate isolated action"],
+      "truthAssertions": ["copy-like label declares fixture scope", "sideEffectClass is fixtureWrite or preview", "system pasteboard remains unchanged"]
+    },
+    {
+      "id": "dt-truth-018-actions-open-versus-preview-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "side-effects", "built-in"],
+      "userStory": "As a user, I open actions on a built-in row that has both preview and open-like actions, filter to each, and inspect footer labels. The UI must distinguish preview, reveal, and open actions by actual side-effect class, not by similar row text.",
+      "requiredTransitions": ["open actions", "filter preview action", "filter open-like action", "inspect footer"],
+      "truthAssertions": ["footer intent names side-effect class", "action label matches side-effect class", "handler id differs for preview and open-like actions"]
+    },
+    {
+      "id": "dt-truth-019-actions-stale-enter-after-escape-reopen",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "route-stack", "main"],
+      "userStory": "As a user, I open actions, select an action, close with Escape, change selection in the parent, reopen actions, and press Enter. The second action dialog must show and execute only the new parent subject.",
+      "requiredTransitions": ["open actions", "select action", "escape close", "change parent selection", "reopen actions", "press Enter"],
+      "truthAssertions": ["reopened actions use new parent subject", "old selected action does not persist", "handler subject matches current parent"]
+    },
+    {
+      "id": "dt-truth-020-actions-dialog-empty-search-recovery",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["actions-dialog", "input", "footer"],
+      "userStory": "As a user, I open actions, type a search that yields no actions, resize, clear the search, and activate a recovered safe action. Empty text, footer disabled state, recovered row label, and action ID must update without stale no-action state.",
+      "requiredTransitions": ["open actions", "type no-action search", "resize", "clear search", "activate safe action"],
+      "truthAssertions": ["empty state clears on recovery", "footer disabled state clears on recovery", "recovered action id matches visible row"]
+    },
+    {
+      "id": "dt-truth-021-footer-topmost-popup-ownership-stack",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["footer", "popup", "actions-dialog"],
+      "userStory": "As a user, I open a safe popup from a prompt, then open actions above it, close actions, and continue using the popup. Footer labels must always describe the topmost interactive surface, not the buried parent.",
+      "requiredTransitions": ["open popup", "open actions above popup", "close actions", "use popup"],
+      "truthAssertions": ["footer owner follows topmost surface", "focus owner matches topmost route", "buried parent does not supply active footer intent"]
+    },
+    {
+      "id": "dt-truth-022-footer-enter-label-after-tab-focus",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["footer", "focus", "keyboard"],
+      "userStory": "As a user, I tab between the filter input, list row, and footer controls while resizing the window. The footer Enter label must describe the focused/selected target that will actually receive Enter at that moment.",
+      "requiredTransitions": ["tab focus", "tab focus", "resize", "inspect footer"],
+      "truthAssertions": ["footer intent follows focus owner", "selected semantic id matches Enter receiver", "layout change does not alter target identity"]
+    },
+    {
+      "id": "dt-truth-023-footer-escape-label-route-depth",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["footer", "route-stack", "keyboard"],
+      "userStory": "As a user, I move from root to a built-in surface to actions to a nested popup, then press Escape step by step. Escape/help text must truthfully describe whether it will close popup, close actions, return to parent surface, or hide the window.",
+      "requiredTransitions": ["root to built-in", "open actions", "open nested popup", "escape", "escape", "escape"],
+      "truthAssertions": ["escape label matches route depth", "focus owner changes each step", "route generation advances on each close"]
+    },
+    {
+      "id": "dt-truth-024-footer-clear-filter-visible-after-hidden-query",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["footer", "input", "actions-dialog"],
+      "userStory": "As a user, I type a filter, open actions, resize so the input decoration truncates, then return to the parent. The footer must truthfully expose clear-filter availability only when the parent still has a filter.",
+      "requiredTransitions": ["type filter", "open actions", "resize to truncate", "return parent"],
+      "truthAssertions": ["clear-filter availability follows parent input", "truncated decoration does not erase real query", "footer intent uses parent route"]
+    },
+    {
+      "id": "dt-truth-025-footer-disabled-primary-after-selection-loss",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["footer", "selection", "filtering"],
+      "userStory": "As a user, I filter a list so the selected row disappears, open actions or press Enter, then clear the filter. Footer labels must refuse primary activation while no executable row is selected and recover only when a valid selection exists.",
+      "requiredTransitions": ["filter selected row away", "open actions or press Enter", "clear filter"],
+      "truthAssertions": ["footer refuses when selected semantic id is absent", "action opening fails closed without valid subject", "footer recovers after valid selection returns"]
+    },
+    {
+      "id": "dt-truth-026-input-debounce-visible-text-versus-state",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["input", "main", "actions-dialog"],
+      "userStory": "As a user, I type quickly into the root filter, open actions immediately after the last character, and resize during debounce. The visible input text, filtered row set, selected row, footer, and action parent subject must reflect the same final query generation.",
+      "requiredTransitions": ["rapid type", "open actions", "resize during debounce"],
+      "truthAssertions": ["input text and route generation align", "filtered rows match final query", "action parent subject matches final selected row"]
+    },
+    {
+      "id": "dt-truth-027-input-composition-safe-label-before-commit",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["input", "composition", "actions-dialog"],
+      "userStory": "As a user using composition-like staged input, I open actions or inspect footer labels before the text is committed. The UI must distinguish staged text from committed filter text and must not run actions based on uncommitted input.",
+      "requiredTransitions": ["stage composition text", "inspect footer", "open actions before commit"],
+      "truthAssertions": ["staged text is distinct from committed query", "footer intent uses committed filter", "actions do not bind to uncommitted text"]
+    },
+    {
+      "id": "dt-truth-028-input-selection-range-after-action-close",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["input", "actions-dialog", "focus"],
+      "userStory": "As a user, I select part of the parent input text, open actions, close actions, and continue typing. The input selection/cursor range, filter text, and footer clear/submit labels must prove the action dialog did not corrupt the parent edit state.",
+      "requiredTransitions": ["select input range", "open actions", "close actions", "continue typing"],
+      "truthAssertions": ["selection range survives actions roundtrip", "filter text remains coherent", "footer labels follow updated input"]
+    },
+    {
+      "id": "dt-truth-029-input-long-query-resize-and-selected-command",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["input", "layout", "actions-dialog"],
+      "userStory": "As a user, I type a very long query, resize the window through multiple widths, then open actions on a selected result. Truncated input display must not change the real query, selected result, or action subject.",
+      "requiredTransitions": ["type long query", "resize", "resize", "open actions"],
+      "truthAssertions": ["input display truncation preserves query value", "selected result follows query", "action subject matches selected result"]
+    },
+    {
+      "id": "dt-truth-030-input-special-token-literal-versus-command",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["input", "parser", "actions-dialog"],
+      "userStory": "As a user, I type a query containing characters that also appear in menu/source syntax, open actions, clear part of the input, and re-open actions. The UI must truthfully classify each token as literal text or parsed command syntax and show the matching action set.",
+      "requiredTransitions": ["type special-token query", "open actions", "partial clear", "reopen actions"],
+      "truthAssertions": ["token classification is visible in receipts", "action set matches parsed state", "literal text does not become command syntax"]
+    },
+    {
+      "id": "dt-truth-031-built-in-clipboard-history-action-intent",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["clipboard-history", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Clipboard History in a fixture-only mode, filter, select a row, open actions, and inspect copy, paste, or insert labels. The labels must match the actual safe fixture side effect and prove no system pasteboard write.",
+      "requiredTransitions": ["open fixture clipboard history", "filter", "select row", "open actions", "inspect labels"],
+      "truthAssertions": ["copy/paste/insert labels match fixture side effect", "sideEffectClass declares fixture boundary", "system pasteboard remains unchanged"]
+    },
+    {
+      "id": "dt-truth-032-built-in-emoji-insert-versus-preview",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["emoji", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Emoji, filter to an emoji, inspect actions, resize, and cancel. The row text, footer, and actions must truthfully distinguish preview/category navigation from inserting an emoji into a target.",
+      "requiredTransitions": ["open emoji", "filter emoji", "inspect actions", "resize", "cancel"],
+      "truthAssertions": ["footer distinguishes preview from insert", "action sideEffectClass matches label", "cancel leaves no target insertion"]
+    },
+    {
+      "id": "dt-truth-033-built-in-file-search-open-reveal-preview",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["file-search", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open File Search in a local fixture, select a file-like row, open actions, filter between preview/reveal/open actions, and cancel. The UI must not label a preview or reveal as an actual open action, and receipts must prove no external app handoff.",
+      "requiredTransitions": ["open fixture file search", "select row", "open actions", "filter action kinds", "cancel"],
+      "truthAssertions": ["preview/reveal/open labels map to sideEffectClass", "handler id matches selected action", "no external app handoff occurs"]
+    },
+    {
+      "id": "dt-truth-034-built-in-browser-history-redacted-open-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["browser-history", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Browser History from fixture data, select redacted and non-redacted rows, open actions, and inspect action labels. If a URL is hidden/redacted or activation is disabled, the visible action labels and disabled reasons must say so.",
+      "requiredTransitions": ["open fixture browser history", "select redacted row", "open actions", "select non-redacted row", "inspect labels"],
+      "truthAssertions": ["redacted rows expose disabled reason", "action labels match redaction state", "handler id refuses hidden activation"]
+    },
+    {
+      "id": "dt-truth-035-built-in-window-switcher-activation-refusal-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["window-switcher", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open a fixture-backed window list, select focused/minimized/offscreen rows, and open actions. Action labels must truthfully describe activation refusal or preview-only behavior when no real window activation is allowed.",
+      "requiredTransitions": ["open fixture window list", "select focused row", "select minimized row", "select offscreen row", "open actions"],
+      "truthAssertions": ["activation-like labels declare refusal", "sideEffectClass is preview or blocked", "disabled reason matches fixture window state"]
+    },
+    {
+      "id": "dt-truth-036-built-in-app-launcher-no-launch-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["app-launcher", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open an app list in no-launch mode, filter to an app, resize the grid/list, and open actions. Row labels and footer must not promise an app launch when the scenario is preview-only or dry-run.",
+      "requiredTransitions": ["open no-launch app list", "filter app", "resize", "open actions"],
+      "truthAssertions": ["footer declares dry-run or preview", "action sideEffectClass is not external activation", "row label stays aligned with selected app id"]
+    },
+    {
+      "id": "dt-truth-037-built-in-process-readonly-action-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["process-manager", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open a read-only process list fixture, sort/filter/select, and open actions. Any inspect/details actions must be labeled read-only, and no process-control action can appear in this scenario.",
+      "requiredTransitions": ["open read-only process fixture", "sort", "filter", "select", "open actions"],
+      "truthAssertions": ["action labels declare read-only side effect", "forbidden process-control actions are absent", "handler id matches inspect/details only"]
+    },
+    {
+      "id": "dt-truth-038-built-in-notes-command-dirty-state-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["notes", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Notes with a sandbox note, edit text, open the command bar/actions, switch selection, then cancel. Action labels must truthfully distinguish save, discard, preview, attach, and open behavior against the dirty-state generation.",
+      "requiredTransitions": ["open sandbox note", "edit text", "open actions", "switch selection", "cancel"],
+      "truthAssertions": ["dirty-state generation flows into action labels", "sideEffectClass declares sandbox boundary", "cancel leaves note state uncommitted outside sandbox"]
+    },
+    {
+      "id": "dt-truth-039-built-in-dictation-history-insert-target-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["dictation-history", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Dictation History fixture rows, select transcripts, inspect actions, and cancel. The UI must truthfully label preview versus insert-to-target behavior, with no microphone/media capture.",
+      "requiredTransitions": ["open fixture dictation history", "select transcript", "inspect actions", "cancel"],
+      "truthAssertions": ["preview and insert labels map to sideEffectClass", "target surface is explicit", "media capture remains absent"]
+    },
+    {
+      "id": "dt-truth-040-built-in-settings-readonly-reset-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["settings", "built-in", "actions-dialog"],
+      "userStory": "As a user, I open Settings in sandbox/read-only mode, filter preferences, inspect reset-like actions, and cancel. The visible label must not imply a real config write unless the side-effect class is sandboxed and explicitly shown.",
+      "requiredTransitions": ["open sandbox settings", "filter preferences", "inspect reset-like action", "cancel"],
+      "truthAssertions": ["reset-like labels declare sandbox boundary", "sideEffectClass is sandboxWrite or preview", "real config write is absent"]
+    },
+    {
+      "id": "dt-truth-041-route-root-to-built-in-to-actions-back-truth",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["route-stack", "main", "built-in", "actions-dialog"],
+      "userStory": "As a user, I navigate root to built-in surface to actions to back to root while changing filters at each layer. Every title, breadcrumb, input, selected row, and footer label must reflect the current route generation.",
+      "requiredTransitions": ["root to built-in", "open actions", "back", "root", "change filters"],
+      "truthAssertions": ["route generation updates every layer", "breadcrumb/title match current route", "footer intent follows current route"]
+    },
+    {
+      "id": "dt-truth-042-route-hide-show-preserves-visible-intent",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["route-stack", "visibility", "actions-dialog"],
+      "userStory": "As a user, I select a row, hide/show the app, resize, then open actions. The visible command label, selected semantic ID, and footer intent after show must either restore correctly or clearly reset; no stale hidden-state action may remain.",
+      "requiredTransitions": ["select row", "hide app", "show app", "resize", "open actions"],
+      "truthAssertions": ["visible intent restores or resets explicitly", "selected semantic id is current", "hidden-state action binding is absent"]
+    },
+    {
+      "id": "dt-truth-043-route-popup-cancel-does-not-submit-parent",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["route-stack", "popup", "actions-dialog"],
+      "userStory": "As a user, I open a non-destructive confirmation/prompt popup from actions, cancel it, and press Enter in the parent. The parent footer and state must prove the canceled popup did not leave a pending submit/action behind.",
+      "requiredTransitions": ["open actions", "open safe popup", "cancel popup", "press Enter in parent"],
+      "truthAssertions": ["popup cancel clears pending action", "parent footer intent is current", "handler id is parent-selected action only"]
+    },
+    {
+      "id": "dt-truth-044-route-actions-on-row-after-list-refresh",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["route-stack", "list-refresh", "actions-dialog"],
+      "userStory": "As a user, I select a row, trigger a fixture list refresh that preserves similar visible text but changes IDs, then open actions. The action dialog must bind to the post-refresh selected ID or refuse stale binding.",
+      "requiredTransitions": ["select row", "fixture list refresh", "open actions"],
+      "truthAssertions": ["action dialog binds post-refresh id", "stale subject is refused", "visible label alone is not treated as identity"]
+    },
+    {
+      "id": "dt-truth-045-route-row-index-reuse-after-filter-clear",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["route-stack", "filtering", "actions-dialog"],
+      "userStory": "As a user, I select row index 2, filter so index 2 points to a different item, clear the filter, then open actions. The UI must prove action binding follows stable semantic ID, not recycled row index.",
+      "requiredTransitions": ["select row index", "filter", "clear filter", "open actions"],
+      "truthAssertions": ["selected semantic id, not row index, owns action binding", "footer intent tracks stable id", "action parent subject is current"]
+    },
+    {
+      "id": "dt-truth-046-state-loading-to-ready-primary-label",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["state-machine", "loading", "actions-dialog"],
+      "userStory": "As a user, I open a local delayed built-in fixture, see loading text, resize, wait for ready rows, and open actions. Loading copy, footer disabled state, ready row label, and action ID must transition consistently.",
+      "requiredTransitions": ["open delayed fixture", "observe loading", "resize", "wait ready", "open actions"],
+      "truthAssertions": ["loading footer is disabled", "ready row clears loading disabled reason", "action id matches ready selection"]
+    },
+    {
+      "id": "dt-truth-047-state-error-to-retry-to-ready-action-text",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["state-machine", "error", "actions-dialog"],
+      "userStory": "As a user, I open a fixture surface that starts in error, inspect retry labels, retry safely, then open actions on recovered content. Error text, retry button/action, recovered footer, and recovered action subject must not contradict each other.",
+      "requiredTransitions": ["open error fixture", "inspect retry", "retry safely", "open actions on recovered content"],
+      "truthAssertions": ["error text and retry action match", "recovered footer clears error state", "action subject matches recovered row"]
+    },
+    {
+      "id": "dt-truth-048-state-permission-passive-warning-action-text",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["state-machine", "permissions", "actions-dialog"],
+      "userStory": "As a user, I open a surface with passive permission warnings only, inspect actions, resize, and cancel. Warning text and action labels must not promise to open System Settings or mutate permissions in this non-destructive scenario.",
+      "requiredTransitions": ["open passive warning surface", "inspect actions", "resize", "cancel"],
+      "truthAssertions": ["warning text is passive", "action labels do not promise OS mutation", "sideEffectClass is preview or blocked"]
+    },
+    {
+      "id": "dt-truth-049-state-concurrent-surface-target-truth",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["state-machine", "multi-window", "actions-dialog"],
+      "userStory": "As a user with main window and a detached/sibling surface visible, I focus one, open actions, switch focus, and inspect labels. Action dialog target identity, footer focus owner, and visible parent title must agree about which surface owns the action.",
+      "requiredTransitions": ["show sibling surface", "focus one surface", "open actions", "switch focus", "inspect labels"],
+      "truthAssertions": ["action dialog target identity matches parent surface", "footer focus owner matches active surface", "visible parent title matches action subject"]
+    },
+    {
+      "id": "dt-truth-050-state-action-label-stale-after-theme-scale-churn",
+      "oracleStatus": "accepted",
+      "surfaceFamilies": ["state-machine", "theme", "layout", "actions-dialog"],
+      "userStory": "As a user, I change only visual scale/theme fixture state while a selected row and actions dialog are open. Text measurement and layout may change, but command labels, footer intent, disabled reasons, and handler IDs must remain truthful and unchanged.",
+      "requiredTransitions": ["select row", "open actions", "change scale/theme fixture", "measure text/layout"],
+      "truthAssertions": ["layout generation changes without command identity change", "footer intent stays tied to selected semantic id", "handler id and disabled reason remain truthful"]
+    }
+  ]
+}

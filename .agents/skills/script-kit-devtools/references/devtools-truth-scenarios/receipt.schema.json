@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-001-root-enter-target-after-source-rekey",
+  "oracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "<sha>",
+  "appBuild": "<build>",
+  "recordedAt": "<iso8601>",
+  "result": "pass | fail | blocked-by-missing-primitive | blocked-by-unsafe-operation | needs-oracle-review",
+  "executor": "none-recorded-user-path",
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "type root query",
+      "controlChannel": "manual-or-direct-primitive",
+      "targetSurface": "main",
+      "inputSummary": "redacted",
+      "visibleResult": "redacted semantic summary",
+      "receiptRef": "local receipt path or inline receipt id"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": 0,
+    "focusOwner": "main.filterInput",
+    "selectedSemanticId": "builtin.example",
+    "visibleLabel": "Example",
+    "footerIntent": "open-builtin",
+    "actionId": "open.example",
+    "handlerId": "builtin.example",
+    "sideEffectClass": "openSurface",
+    "disabledReason": null,
+    "targetSurface": "main",
+    "parentSubjectId": "builtin.example",
+    "layoutGeneration": 0
+  },
+  "truthChecks": [
+    {
+      "name": "footerMatchesResolvedAction",
+      "expected": "open.example",
+      "actual": "open.example",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false
+  }
+}
