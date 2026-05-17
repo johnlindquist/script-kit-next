@@ -1459,7 +1459,10 @@ impl ClipboardSaveFileHandlerAction {
 
     fn saved_hud(self, save_path: &std::path::Path) -> String {
         match self {
-            Self::SaveFile => format!("Saved to: {}", save_path.display()),
+            Self::SaveFile => {
+                let save_path = save_path.display();
+                format!("Saved to: {save_path}")
+            }
         }
     }
 

@@ -374,7 +374,8 @@ fn clipboard_save_file_handler_uses_named_action_state() {
             && content.contains("save_file_action.content_unavailable_message()")
             && content.contains("save_file_action.decode_failure_message()")
             && content.contains("save_file_action.saved_hud(&save_path)")
-            && content.contains("save_file_action.save_failure_message(e)"),
+            && content.contains("save_file_action.save_failure_message(e)")
+            && content.contains("format!(\"Saved to: {save_path}\")"),
         "clipboard save-file handler should derive guard, saved HUD, and failure text from the named action"
     );
 }
