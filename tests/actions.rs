@@ -1634,6 +1634,41 @@ fn ai_command_window_policy_uses_named_plan_states() {
 }
 
 #[test]
+fn ai_command_dispatch_uses_named_wrapper_state() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiCommandBuiltinAction")
+            && content.contains("Generate(AiGenerateBuiltinAction)")
+            && content.contains("Capture(AiCaptureBuiltinAction)")
+            && content.contains("Unavailable(AiUnavailableBuiltinAction)")
+            && content.contains("PresetView(AiPresetViewBuiltinAction)")
+            && content.contains("PresetFile(AiPresetFileBuiltinAction)")
+            && content.contains("LegacyHarness(AiLegacyHarnessBuiltinAction)"),
+        "AI command dispatch should use a named wrapper state over the existing leaf actions"
+    );
+    assert!(
+        content.contains("let ai_action = AiCommandBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_ai_command_builtin(")
+            && content.contains("self.execute_ai_generate_builtin(generate_action")
+            && content.contains("self.execute_ai_capture_builtin(capture_action")
+            && content.contains("self.execute_ai_unavailable_builtin(unavailable_action")
+            && content.contains("self.execute_ai_preset_view_builtin(preset_action")
+            && content.contains("self.execute_ai_preset_file_builtin(file_action")
+            && content.contains("self.execute_ai_legacy_harness_builtin(legacy_action"),
+        "AI command wrapper state should route to each existing leaf executor"
+    );
+    assert!(
+        content.contains("Opening create AI preset form")
+            && content.contains("Opening AI presets search")
+            && content.contains("Opening file picker for AI preset import")
+            && content.contains("Opening save dialog for AI preset export"),
+        "AI command wrapper state should preserve preset logging copy"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
