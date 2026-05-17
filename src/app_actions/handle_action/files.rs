@@ -80,6 +80,11 @@ enum FileSearchMoveHandlerAction {
     MovePath,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchDuplicateHandlerAction {
+    DuplicatePath,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -227,6 +232,33 @@ impl FileSearchMoveHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::MovePath => format!("Failed to move: {error}"),
+        }
+    }
+}
+
+impl FileSearchDuplicateHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "duplicate_path" => Some(Self::DuplicatePath),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::DuplicatePath => "No file selected",
+        }
+    }
+
+    fn success_hud(self, name: &str) -> String {
+        match self {
+            Self::DuplicatePath => format!("Duplicated {name}"),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::DuplicatePath => format!("Failed to duplicate: {error}"),
         }
     }
 }
@@ -978,10 +1010,15 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "duplicate_path" => {
+                let Some(duplicate_action) =
+                    FileSearchDuplicateHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((path, _, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        duplicate_action.selection_required_message(),
                     );
                 };
                 let previous_display_index = match &self.current_view {
@@ -991,7 +1028,11 @@ impl ScriptListApp {
                 match crate::file_search::duplicate_path(&path) {
                     Ok(new_path) => {
                         self.clear_file_search_action_target();
-                        self.show_hud(format!("Duplicated {}", name), Some(HUD_MEDIUM_MS), cx);
+                        self.show_hud(
+                            duplicate_action.success_hud(&name),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
                         self.refresh_file_search_after_insert(
                             &new_path,
                             previous_display_index,
@@ -1003,7 +1044,7 @@ impl ScriptListApp {
                         self.clear_file_search_action_target();
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("Failed to duplicate: {}", e),
+                            duplicate_action.failure_message(e),
                         );
                     }
                 }
