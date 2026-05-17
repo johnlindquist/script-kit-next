@@ -100,6 +100,30 @@ fn chat_transcript_actions_use_named_plan_states() {
 }
 
 #[test]
+fn chat_model_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/chat.rs")
+        .expect("Failed to read chat action builder");
+
+    assert!(
+        content.contains("enum ChatModelPickerRowPlan")
+            && content.contains("CurrentModel")
+            && content.contains("AvailableModel"),
+        "chat model picker checkmark copy should be driven by named row plan states"
+    );
+    assert!(
+        content.contains("enum ChatChangeModelActionPlan")
+            && content.contains("CurrentModelSelected")
+            && content.contains("NoCurrentModelSelected"),
+        "chat Change Model description should be driven by named action plan states"
+    );
+    assert!(
+        content.contains("ChatModelPickerRowPlan::from_model(info, model)")
+            && content.contains("ChatChangeModelActionPlan::from_info(info).description(info)"),
+        "chat model rows and root Change Model copy should derive from named plans"
+    );
+}
+
+#[test]
 fn clipboard_entry_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");
