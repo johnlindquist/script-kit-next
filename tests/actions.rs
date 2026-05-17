@@ -529,6 +529,25 @@ fn sdk_actions_uses_modern_logging() {
     );
 }
 
+#[test]
+fn sdk_action_lookup_uses_named_plan_states() {
+    let content = fs::read_to_string("src/app_actions/sdk_actions.rs")
+        .expect("Failed to read sdk_actions.rs");
+
+    assert!(
+        content.contains("enum SdkActionLookupPlan")
+            && content.contains("NoActionsDefined")
+            && content.contains("ActionFound")
+            && content.contains("ActionMissing"),
+        "SDK action lookup should be driven by named action-list states"
+    );
+    assert!(
+        content.contains("SdkActionLookupPlan::from_actions(self.sdk_actions.as_deref(), action_name)")
+            && content.contains("fn is_found"),
+        "SDK action dispatch and shortcut triggering should derive found/missing behavior from the named lookup plan"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
