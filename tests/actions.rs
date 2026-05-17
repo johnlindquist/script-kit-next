@@ -713,6 +713,28 @@ fn dictation_builtin_execution_uses_named_action_states() {
 }
 
 #[test]
+fn paste_sequential_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum PasteSequentialBuiltinAction")
+            && content.contains("PasteEntry(String)")
+            && content.contains("SequenceExhausted")
+            && content.contains("HistoryEmpty"),
+        "Paste Sequentially built-in feedback should be driven by named action states"
+    );
+    assert!(
+        content.contains("PasteSequentialBuiltinAction::from_outcome(")
+            && content.contains("paste_action.telemetry_event()")
+            && content.contains("paste_action.log_message()")
+            && content.contains("paste_action.hud_message()")
+            && content.contains("paste_action.success_detail()"),
+        "Paste Sequentially should derive telemetry, HUD text, and success detail from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
