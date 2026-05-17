@@ -1340,6 +1340,32 @@ fn utility_current_app_commands_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn menu_bar_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum MenuBarBuiltinAction")
+            && content.contains("MenuBarBuiltinAction::from_action(action)")
+            && content.contains("fn execute_menu_bar_builtin("),
+        "Menu bar built-ins should route through a named action state"
+    );
+    assert!(
+        content.contains("action_state.success_detail()")
+            && content.contains("action_state.failure_detail()")
+            && content.contains("action_state.unsupported_detail()"),
+        "Menu bar built-in outcomes should use named state details"
+    );
+    assert!(
+        content.contains("script_kit_gpui::menu_executor::execute_menu_action")
+            && content.contains("&action.bundle_id")
+            && content.contains("&action.menu_path")
+            && content.contains("self.show_unsupported_platform_toast(\"Menu bar actions\", cx)"),
+        "Menu bar built-ins should preserve platform execution and unsupported-platform behavior"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
