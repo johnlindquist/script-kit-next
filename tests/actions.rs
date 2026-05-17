@@ -144,6 +144,32 @@ fn emoji_entry_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn notes_command_bar_actions_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");
+
+    assert!(
+        content.contains("enum NotesCommandBarActionPlan")
+            && content.contains("EmptyActiveAutoSized")
+            && content.contains("EmptyActiveNeedsAutoSizing")
+            && content.contains("SelectedActiveAutoSized")
+            && content.contains("SelectedActiveNeedsAutoSizing")
+            && content.contains("EmptyTrashAutoSized")
+            && content.contains("EmptyTrashNeedsAutoSizing")
+            && content.contains("SelectedTrashAutoSized")
+            && content.contains("SelectedTrashNeedsAutoSizing"),
+        "notes command-bar selection/trash/auto-size actions should be driven by named plan states"
+    );
+    assert!(
+        content.contains("NotesCommandBarActionPlan::from_info(info)")
+            && content.contains("fn has_active_note_actions")
+            && content.contains("fn has_trash_note_actions")
+            && content.contains("fn needs_auto_sizing_action"),
+        "notes command-bar actions should derive visible action groups from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
