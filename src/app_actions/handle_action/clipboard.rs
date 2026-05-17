@@ -30,6 +30,12 @@ enum ClipboardAttachToAiHandlerAction {
     ImageInput,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardCleanShotHandlerAction {
+    Annotate,
+    Upload,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -185,6 +191,48 @@ impl ClipboardAttachToAiHandlerAction {
 
     fn image_decode_failure() -> &'static str {
         "Failed to decode clipboard image"
+    }
+}
+
+impl ClipboardCleanShotHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "clipboard_annotate_cleanshot" => Some(Self::Annotate),
+            "clipboard_upload_cleanshot" => Some(Self::Upload),
+            _ => None,
+        }
+    }
+
+    fn image_required_message(self) -> &'static str {
+        match self {
+            Self::Annotate | Self::Upload => "CleanShot actions are only available for images",
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::Annotate => "Opening CleanShot X…",
+            Self::Upload => "Opening CleanShot X upload…",
+        }
+    }
+
+    fn open_failure_message(self) -> &'static str {
+        match self {
+            Self::Annotate | Self::Upload => "Failed to open CleanShot X",
+        }
+    }
+
+    fn copy_failure_message(self) -> &'static str {
+        match self {
+            Self::Annotate => "Failed to copy image",
+            Self::Upload => "Failed to load image content",
+        }
+    }
+
+    fn decode_failure_message(self) -> &'static str {
+        match self {
+            Self::Annotate | Self::Upload => "Failed to decode image",
+        }
     }
 }
 
@@ -552,33 +600,75 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
-            "clipboard_annotate_cleanshot" => {
+            "clipboard_annotate_cleanshot" | "clipboard_upload_cleanshot" => {
+                let Some(cleanshot_action) =
+                    ClipboardCleanShotHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
                     return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
-                    self.show_error_toast(
-                        "CleanShot actions are only available for images",
-                        cx,
-                    );
+                    self.show_error_toast(cleanshot_action.image_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
                 #[cfg(target_os = "macos")]
                 {
-                    if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                        tracing::error!(error = %e, "failed to copy image");
-                        self.show_error_toast("Failed to copy image", cx);
-                        return DispatchOutcome::success();
-                    }
+                    let url = match cleanshot_action {
+                        ClipboardCleanShotHandlerAction::Annotate => {
+                            if let Err(e) = clipboard_history::copy_entry_to_clipboard(&entry.id) {
+                                tracing::error!(error = %e, "failed to copy image");
+                                self.show_error_toast(
+                                    cleanshot_action.copy_failure_message(),
+                                    cx,
+                                );
+                                return DispatchOutcome::success();
+                            }
+                            "cleanshot://open-from-clipboard".to_string()
+                        }
+                        ClipboardCleanShotHandlerAction::Upload => {
+                            let Some(content) = clipboard_history::get_entry_content(&entry.id)
+                            else {
+                                self.show_error_toast(
+                                    cleanshot_action.copy_failure_message(),
+                                    cx,
+                                );
+                                return DispatchOutcome::success();
+                            };
 
-                    let url = "cleanshot://open-from-clipboard";
+                            let Some(png_bytes) =
+                                clipboard_history::content_to_png_bytes(&content)
+                            else {
+                                self.show_error_toast(
+                                    cleanshot_action.decode_failure_message(),
+                                    cx,
+                                );
+                                return DispatchOutcome::success();
+                            };
+
+                            let temp_path = std::env::temp_dir()
+                                .join(format!("script-kit-clipboard-{}.png", uuid::Uuid::new_v4()));
+
+                            if let Err(e) = std::fs::write(&temp_path, png_bytes) {
+                                tracing::error!(error = %e, "failed to write temp image");
+                                self.show_error_toast("Failed to save image", cx);
+                                return DispatchOutcome::success();
+                            }
+
+                            let path_str = temp_path.to_string_lossy();
+                            let encoded_path = self.percent_encode_for_url(&path_str);
+                            format!("cleanshot://open-annotate?filepath={}&action=upload", encoded_path)
+                        }
+                    };
+
                     match std::process::Command::new("open").arg(url).spawn() {
                         Ok(_) => {
                             self.show_hud(
-                                "Opening CleanShot X…".to_string(),
+                                cleanshot_action.success_hud().to_string(),
                                 Some(HUD_SHORT_MS),
                                 cx,
                             );
@@ -586,72 +676,7 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "failed to open CleanShot X");
-                            self.show_error_toast("Failed to open CleanShot X", cx);
-                        }
-                    }
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    self.show_unsupported_platform_toast("CleanShot", cx);
-                }
-                DispatchOutcome::success()
-            }
-            "clipboard_upload_cleanshot" => {
-                let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                if entry.content_type != clipboard_history::ContentType::Image {
-                    self.show_error_toast(
-                        "CleanShot actions are only available for images",
-                        cx,
-                    );
-                    return DispatchOutcome::success();
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                        self.show_error_toast("Failed to load image content", cx);
-                        return DispatchOutcome::success();
-                    };
-
-                    let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content)
-                    else {
-                        self.show_error_toast("Failed to decode image", cx);
-                        return DispatchOutcome::success();
-                    };
-
-                    let temp_path = std::env::temp_dir()
-                        .join(format!("script-kit-clipboard-{}.png", uuid::Uuid::new_v4()));
-
-                    if let Err(e) = std::fs::write(&temp_path, png_bytes) {
-                        tracing::error!(error = %e, "failed to write temp image");
-                        self.show_error_toast("Failed to save image", cx);
-                        return DispatchOutcome::success();
-                    }
-
-                    let path_str = temp_path.to_string_lossy();
-                    let encoded_path = self.percent_encode_for_url(&path_str);
-                    let url = format!(
-                        "cleanshot://open-annotate?filepath={}&action=upload",
-                        encoded_path
-                    );
-
-                    match std::process::Command::new("open").arg(&url).spawn() {
-                        Ok(_) => {
-                            self.show_hud(
-                                "Opening CleanShot X upload…".to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
-                            self.hide_main_and_reset(cx);
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, "failed to open CleanShot X");
-                            self.show_error_toast("Failed to open CleanShot X", cx);
+                            self.show_error_toast(cleanshot_action.open_failure_message(), cx);
                         }
                     }
                 }
