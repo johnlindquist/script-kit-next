@@ -2377,6 +2377,27 @@ fn script_template_catalog_copy_uses_named_action_state() {
 }
 
 #[test]
+fn sdk_reference_catalog_copy_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/sdk_reference.rs")
+        .expect("Failed to read SDK reference renderer");
+
+    assert!(
+        content.contains("enum SdkReferenceCatalogAction")
+            && content.contains("CopyMarkdownCard"),
+        "SDK reference copy feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("SdkReferenceCatalogAction::CopyMarkdownCard")
+            && content.contains("catalog_action.copied_hud(&entry.name)"),
+        "SDK reference Cmd+C and Enter copy HUDs should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Copied {entry_name} reference\")"),
+        "SDK reference copy feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn terminal_utility_views_use_named_failure_states() {
     let content = fs::read_to_string("src/app_execute/utility_views.rs")
         .expect("Failed to read utility view handler");
