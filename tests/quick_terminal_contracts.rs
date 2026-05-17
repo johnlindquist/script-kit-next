@@ -93,6 +93,11 @@ fn quick_terminal_theme_respects_light_dark_contract() {
         "Quick Terminal warm PTYs must be prewarmed with the current theme"
     );
     assert!(
+        QUICK_TERMINAL_WARM_SOURCE.contains("SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY")
+            && QUICK_TERMINAL_WARM_SOURCE.contains("reason = \"disabled_by_env\""),
+        "Quick Terminal warm PTY startup must have an env opt-out before spawning a shell"
+    );
+    assert!(
         THEME_FOCUS_SOURCE.contains("pub(crate) fn sync_open_terminal_theme("),
         "theme changes must have a terminal propagation helper"
     );

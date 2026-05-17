@@ -4429,6 +4429,7 @@ impl ScriptListApp {
         match action {
             SettingsCommandBuiltinAction::ResetWindowPositions => {
                 self.reset_window_positions_to_default_main_menu(cx);
+                self.show_hud("Window positions reset".to_string(), Some(HUD_SHORT_MS), cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
             SettingsCommandBuiltinAction::ChooseTheme => {

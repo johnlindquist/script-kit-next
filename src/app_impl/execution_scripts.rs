@@ -18,6 +18,49 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
     !NO_MAIN_WINDOW_BUILTINS.contains(&identifier)
 }
 
+fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
+    match entry.feature {
+        builtins::BuiltInFeature::App(_) => false,
+        builtins::BuiltInFeature::MenuBarAction(_) => false,
+        builtins::BuiltInFeature::SystemAction(_) => false,
+        builtins::BuiltInFeature::FrecencyCommand(_) => false,
+        builtins::BuiltInFeature::SettingsCommand(command) => match command {
+            builtins::SettingsCommandType::ResetWindowPositions
+            | builtins::SettingsCommandType::DisableWindowSnapping
+            | builtins::SettingsCommandType::SnapModeSimple
+            | builtins::SettingsCommandType::SnapModeExpanded
+            | builtins::SettingsCommandType::SnapModePrecision => false,
+            builtins::SettingsCommandType::ChooseTheme
+            | builtins::SettingsCommandType::SelectMicrophone
+            | builtins::SettingsCommandType::DictationSetup => true,
+        },
+        builtins::BuiltInFeature::PermissionCommand(command) => match command {
+            builtins::PermissionCommandType::CheckPermissions
+            | builtins::PermissionCommandType::RequestAccessibility
+            | builtins::PermissionCommandType::OpenAccessibilitySettings
+            | builtins::PermissionCommandType::AllowAccessibility
+            | builtins::PermissionCommandType::AllowScreenRecording => false,
+        },
+        builtins::BuiltInFeature::UtilityCommand(command) => match command {
+            builtins::UtilityCommandType::ScriptKitSelfie
+            | builtins::UtilityCommandType::InspectCurrentContext
+            | builtins::UtilityCommandType::TraceCurrentAppIntent
+            | builtins::UtilityCommandType::VerifyCurrentAppRecipe
+            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
+            | builtins::UtilityCommandType::StopAllProcesses => false,
+            builtins::UtilityCommandType::MiniMainWindow
+            | builtins::UtilityCommandType::ScratchPad
+            | builtins::UtilityCommandType::QuickTerminal
+            | builtins::UtilityCommandType::ClaudeCode
+            | builtins::UtilityCommandType::ProcessManager
+            | builtins::UtilityCommandType::DoInCurrentApp
+            | builtins::UtilityCommandType::TurnThisIntoCommand
+            | builtins::UtilityCommandType::CurrentAppCommands => true,
+        },
+        _ => builtin_needs_main_window_for_command_id(&entry.id),
+    }
+}
+
 fn interactive_script_needs_main_window() -> bool {
     false
 }
@@ -640,7 +683,7 @@ impl ScriptListApp {
                     if let Some(entry) = builtins::resolve_builtin_entry(&canonical_id, &config) {
                         tracing::info!(command_id = %canonical_id, "builtin_command_resolved");
                         self.execute_builtin(&entry, cx);
-                        return builtin_needs_main_window_for_command_id(&canonical_id);
+                        return builtin_entry_needs_main_window(&entry);
                     }
                     tracing::warn!(command_id = %canonical_id, "builtin_command_not_found");
                     return false;
@@ -696,7 +739,7 @@ impl ScriptListApp {
                     "legacy_builtin_command_resolved"
                 );
                 self.execute_builtin(&entry, cx);
-                return builtin_needs_main_window_for_command_id(&canonical_id);
+                return builtin_entry_needs_main_window(&entry);
             }
         }
 
@@ -711,8 +754,8 @@ impl ScriptListApp {
 mod builtin_command_window_visibility_tests {
     use super::{
         InteractiveTempFileMode, build_terminal_command, build_terminal_command_with_env_and_args,
-        builtin_needs_main_window_for_command_id, create_interactive_temp_script,
-        interactive_script_needs_main_window,
+        builtin_entry_needs_main_window, builtin_needs_main_window_for_command_id,
+        create_interactive_temp_script, interactive_script_needs_main_window,
     };
     use std::path::Path;
 
@@ -729,6 +772,35 @@ mod builtin_command_window_visibility_tests {
         assert!(builtin_needs_main_window_for_command_id(
             "builtin/refresh-scripts"
         ));
+    }
+
+    #[test]
+    fn test_system_action_builtins_do_not_show_main_window_after_hotkey_execution() {
+        let config = crate::config::BuiltInConfig::default();
+        let volume = crate::builtins::resolve_builtin_entry("builtin/volume-0", &config)
+            .expect("volume builtin should resolve");
+        assert!(
+            !builtin_entry_needs_main_window(&volume),
+            "Volume shortcuts should execute headlessly and rely on their HUD, not open the main menu"
+        );
+    }
+
+    #[test]
+    fn test_headless_builtin_commands_do_not_show_main_window_after_hotkey_execution() {
+        let config = crate::config::BuiltInConfig::default();
+        for command_id in [
+            "builtin/reset-window-positions",
+            "builtin/snap-mode-simple",
+            "builtin/inspect-current-context",
+            "builtin/script-kit-selfie",
+        ] {
+            let entry = crate::builtins::resolve_builtin_entry(command_id, &config)
+                .unwrap_or_else(|| panic!("{command_id} should resolve"));
+            assert!(
+                !builtin_entry_needs_main_window(&entry),
+                "{command_id} should execute headlessly from a shortcut"
+            );
+        }
     }
 
     #[test]

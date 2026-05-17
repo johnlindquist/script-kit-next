@@ -30,7 +30,7 @@ pub(crate) struct AppChromeColors {
     pub text_hint_rgba: u32,
     pub text_icon_rgba: u32,
 
-    /// `text_primary` composited with `opacity.text_placeholder` (0.40 by default).
+    /// `text_primary` composited with `opacity.text_placeholder` (0.65 by default).
     /// The canonical semantic token for placeholder-tier chrome text: launcher
     /// microcopy hints, empty-state search placeholders, and quiet trailing hints.
     pub placeholder_text_rgba: u32,
@@ -143,11 +143,11 @@ impl AppChromeColors {
             ),
             dialog_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.dialog),
             popup_surface_rgba: {
-                // Match the actions dialog: use vibrancy_background (default 0.85)
+                // Match the actions dialog: use vibrancy_background.
                 // so all popup windows share the same apparent density.
                 // Opaque mode: near-full floor for readability.
                 let popup_opacity = if theme.is_vibrancy_enabled() {
-                    opacity.vibrancy_background.unwrap_or(0.75).clamp(0.0, 1.0)
+                    opacity.vibrancy_background.unwrap_or(0.50).clamp(0.0, 1.0)
                 } else {
                     opacity.dialog.max(0.95)
                 };

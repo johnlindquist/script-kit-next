@@ -320,8 +320,7 @@ fn clipboard_ocr_handler_uses_named_action_state() {
         .expect("Failed to read clipboard action handler");
 
     assert!(
-        content.contains("enum ClipboardOcrHandlerAction")
-            && content.contains("ExtractText"),
+        content.contains("enum ClipboardOcrHandlerAction") && content.contains("ExtractText"),
         "clipboard OCR handler should be driven by a named action state"
     );
     assert!(
@@ -389,8 +388,7 @@ fn clipboard_save_file_handler_uses_named_action_state() {
         .expect("Failed to read clipboard action handler");
 
     assert!(
-        content.contains("enum ClipboardSaveFileHandlerAction")
-            && content.contains("SaveFile"),
+        content.contains("enum ClipboardSaveFileHandlerAction") && content.contains("SaveFile"),
         "clipboard save-file handler should be driven by a named action state"
     );
     assert!(
@@ -601,8 +599,7 @@ fn command_bar_open_feedback_uses_named_action_state() {
         fs::read_to_string("src/actions/command_bar.rs").expect("Failed to read command bar");
 
     assert!(
-        content.contains("enum CommandBarOpenFeedbackAction")
-            && content.contains("OpenWindow"),
+        content.contains("enum CommandBarOpenFeedbackAction") && content.contains("OpenWindow"),
         "command-bar open logging should be driven by a named action state"
     );
     assert!(
@@ -702,7 +699,8 @@ fn scriptlet_defined_action_shortcuts_use_named_plan_states() {
         "scriptlet-defined H3 action shortcuts should be driven by named shortcut plan states"
     );
     assert!(
-        content.contains("ScriptletDefinedActionShortcutPlan::from_shortcut(sa.shortcut.as_deref())")
+        content
+            .contains("ScriptletDefinedActionShortcutPlan::from_shortcut(sa.shortcut.as_deref())")
             && content.contains("shortcut_plan.apply_to_action(Action::new"),
         "scriptlet-defined action rows should apply shortcut copy through the named plan"
     );
@@ -942,8 +940,7 @@ fn file_search_editor_handler_uses_named_action_state() {
         .expect("Failed to read file action handler");
 
     assert!(
-        content.contains("enum FileSearchEditorHandlerAction")
-            && content.contains("OpenInEditor"),
+        content.contains("enum FileSearchEditorHandlerAction") && content.contains("OpenInEditor"),
         "file-search open-in-editor handler should be driven by a named action state"
     );
     assert!(
@@ -961,8 +958,7 @@ fn file_search_rename_handler_uses_named_action_state() {
         .expect("Failed to read file action handler");
 
     assert!(
-        content.contains("enum FileSearchRenameHandlerAction")
-            && content.contains("RenamePath"),
+        content.contains("enum FileSearchRenameHandlerAction") && content.contains("RenamePath"),
         "file-search rename handler should be driven by a named action state"
     );
     assert!(
@@ -980,8 +976,7 @@ fn file_search_move_handler_uses_named_action_state() {
         .expect("Failed to read file action handler");
 
     assert!(
-        content.contains("enum FileSearchMoveHandlerAction")
-            && content.contains("MovePath"),
+        content.contains("enum FileSearchMoveHandlerAction") && content.contains("MovePath"),
         "file-search move handler should be driven by a named action state"
     );
     assert!(
@@ -1018,8 +1013,7 @@ fn file_search_trash_handler_uses_named_action_state() {
         .expect("Failed to read file action handler");
 
     assert!(
-        content.contains("enum FileSearchTrashHandlerAction")
-            && content.contains("MoveToTrash"),
+        content.contains("enum FileSearchTrashHandlerAction") && content.contains("MoveToTrash"),
         "file-search trash handler should be driven by a named action state"
     );
     assert!(
@@ -1059,8 +1053,7 @@ fn file_search_copy_path_handler_uses_named_action_state() {
         .expect("Failed to read file action handler");
 
     assert!(
-        content.contains("enum FileSearchPathCopyHandlerAction")
-            && content.contains("CopyPath"),
+        content.contains("enum FileSearchPathCopyHandlerAction") && content.contains("CopyPath"),
         "file-search copy-path handler should be driven by a named action state"
     );
     assert!(
@@ -1640,9 +1633,8 @@ fn settings_command_builtin_uses_named_action_states() {
                 .contains("expect(\"snap mode settings command should map to snap mode action\")")
             && content.contains("Self::builtin_success(dctx, action.success_detail())")
             && content.contains("SettingsMicrophoneBuiltinAction::from_command(command)")
-            && content.contains(
-                "expect(\"select microphone command should map to microphone action\")"
-            )
+            && content
+                .contains("expect(\"select microphone command should map to microphone action\")")
             && content.contains("self.execute_select_microphone_builtin(microphone_action"),
         "Settings command state should preserve snap-mode and microphone success details"
     );
@@ -1715,8 +1707,7 @@ fn create_ai_preset_form_uses_named_submit_state() {
         .expect("Failed to read AI presets renderer");
 
     assert!(
-        content.contains("enum CreateAiPresetFormAction")
-            && content.contains("Submit"),
+        content.contains("enum CreateAiPresetFormAction") && content.contains("Submit"),
         "create AI preset form submit feedback should be driven by a named action state"
     );
     assert!(
@@ -2098,8 +2089,11 @@ fn utility_trace_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("Copied app intent trace: {action_name}")
-            && content.contains("format!(\"Failed to serialize current app intent trace: {error}\")")
-            && content.contains("Failed to inspect current app intent: {error}. Check Accessibility permission"),
+            && content
+                .contains("format!(\"Failed to serialize current app intent trace: {error}\")")
+            && content.contains(
+                "Failed to inspect current app intent: {error}. Check Accessibility permission"
+            ),
         "Trace Current App Intent state should preserve copied HUD and failure copy"
     );
 }
@@ -2237,7 +2231,9 @@ fn utility_current_app_commands_builtin_uses_named_action_states() {
         content.contains("action.success_detail()")
             && content.contains("action.capture_failure_detail()")
             && content.contains("action.capture_failure_message(&e)")
-            && content.contains("UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error)")
+            && content.contains(
+                "UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error)"
+            )
             && content.contains("open_current_app_commands")
             && content.contains("current_app_commands_capture_failed")
             && content.contains("format!(\"Failed to refresh current app commands: {error}\")"),
@@ -2382,8 +2378,7 @@ fn sdk_reference_catalog_copy_uses_named_action_state() {
         .expect("Failed to read SDK reference renderer");
 
     assert!(
-        content.contains("enum SdkReferenceCatalogAction")
-            && content.contains("CopyMarkdownCard"),
+        content.contains("enum SdkReferenceCatalogAction") && content.contains("CopyMarkdownCard"),
         "SDK reference copy feedback should be driven by a named action state"
     );
     assert!(
@@ -2448,8 +2443,7 @@ fn webcam_utility_view_uses_named_failure_state() {
         .expect("Failed to read utility view handler");
 
     assert!(
-        content.contains("enum WebcamOpenUtilityAction")
-            && content.contains("OpenWebcamPrompt"),
+        content.contains("enum WebcamOpenUtilityAction") && content.contains("OpenWebcamPrompt"),
         "webcam utility view should route startup feedback through a named action state"
     );
     assert!(
@@ -2539,8 +2533,10 @@ fn menu_syntax_execution_uses_named_feedback_states() {
         content.contains("enum MenuSyntaxCommandInvocationAction")
             && content.contains("AmbiguousCommand")
             && content.contains("MissingCommand")
-            && content.contains("MenuSyntaxCommandInvocationAction::AmbiguousCommand.hud_message(&head)")
-            && content.contains("MenuSyntaxCommandInvocationAction::MissingCommand.hud_message(&head)"),
+            && content
+                .contains("MenuSyntaxCommandInvocationAction::AmbiguousCommand.hud_message(&head)")
+            && content
+                .contains("MenuSyntaxCommandInvocationAction::MissingCommand.hud_message(&head)"),
         "menu syntax command invocation HUDs should be derived from named states"
     );
     assert!(
@@ -2852,8 +2848,7 @@ fn script_ranking_handler_uses_named_action_states() {
         .expect("Failed to read script action handler");
 
     assert!(
-        content.contains("enum ScriptRankingHandlerAction")
-            && content.contains("ResetRanking"),
+        content.contains("enum ScriptRankingHandlerAction") && content.contains("ResetRanking"),
         "reset ranking handler should be driven by a named action state"
     );
     assert!(
@@ -2892,8 +2887,7 @@ fn acp_agent_switch_handler_uses_named_action_states() {
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpAgentSwitchHandlerAction")
-            && content.contains("SwitchAgent"),
+        content.contains("enum AcpAgentSwitchHandlerAction") && content.contains("SwitchAgent"),
         "ACP agent switch handler should be driven by named action states"
     );
     assert!(
@@ -2933,8 +2927,7 @@ fn acp_model_switch_handler_uses_named_action_states() {
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpModelSwitchHandlerAction")
-            && content.contains("SwitchModel"),
+        content.contains("enum AcpModelSwitchHandlerAction") && content.contains("SwitchModel"),
         "ACP model switch handler should be driven by named action states"
     );
     assert!(
@@ -2957,8 +2950,7 @@ fn acp_profile_switch_handler_uses_named_action_states() {
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpProfileSwitchHandlerAction")
-            && content.contains("SwitchProfile"),
+        content.contains("enum AcpProfileSwitchHandlerAction") && content.contains("SwitchProfile"),
         "ACP profile switch handler should be driven by named action states"
     );
     assert!(
@@ -3076,7 +3068,8 @@ fn ai_text_capture_builtins_use_named_failure_states() {
     );
     assert!(
         content.contains("AiTextCaptureBuiltinAction::AgentChatContent")
-            && content.contains("AiTextCaptureBuiltinAction::CurrentAppContext.failure_message(&error)")
+            && content
+                .contains("AiTextCaptureBuiltinAction::CurrentAppContext.failure_message(&error)")
             && content.contains("capture_action.failure_message(&error)")
             && content.contains("format!(\"Failed to capture content for Agent Chat: {error}\")")
             && content.contains("format!(\"Failed to capture current app context: {error}\")"),
@@ -3123,8 +3116,7 @@ fn acp_retry_last_handler_uses_named_action_states() {
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpRetryLastHandlerAction")
-            && content.contains("RetryLastMessage"),
+        content.contains("enum AcpRetryLastHandlerAction") && content.contains("RetryLastMessage"),
         "ACP retry-last handler should be driven by a named action state"
     );
     assert!(
@@ -3141,8 +3133,7 @@ fn acp_code_copy_handler_uses_named_action_states() {
         .expect("Failed to read action handler");
 
     assert!(
-        content.contains("enum AcpCodeCopyHandlerAction")
-            && content.contains("CopyAllCode"),
+        content.contains("enum AcpCodeCopyHandlerAction") && content.contains("CopyAllCode"),
         "ACP copy-all-code handler should be driven by named action states"
     );
     assert!(

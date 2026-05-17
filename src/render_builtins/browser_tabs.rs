@@ -72,6 +72,11 @@ impl ScriptListApp {
             .collect()
     }
 
+    fn browser_tabs_count_label(total_count: usize) -> String {
+        let suffix = if total_count == 1 { "" } else { "s" };
+        format!("{} tab{}", total_count, suffix)
+    }
+
     fn render_browser_tabs(
         &mut self,
         filter: String,
@@ -179,7 +184,8 @@ impl ScriptListApp {
                     } else if is_key_enter(key) {
                         if let Some(tab) = filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
                         {
-                            let activation_action = BrowserTabsActivationAction::ActivateSelectedTab;
+                            let activation_action =
+                                BrowserTabsActivationAction::ActivateSelectedTab;
                             match crate::browser_tabs::activate_tab(&tab) {
                                 Ok(()) => this.hide_main_and_reset(cx),
                                 Err(error) => {
@@ -384,11 +390,7 @@ impl ScriptListApp {
                         div()
                             .text_size(px(design_typography.font_size_sm))
                             .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} tab{}",
-                                total_count,
-                                if total_count == 1 { "" } else { "s" }
-                            )),
+                            .child(Self::browser_tabs_count_label(total_count)),
                     ),
             )
             // Divider

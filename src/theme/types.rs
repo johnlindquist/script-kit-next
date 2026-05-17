@@ -91,13 +91,13 @@ pub enum AppearanceMode {
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundOpacity {
-    /// Main background opacity (default: 0.75)
+    /// Main background opacity (default: 0.50)
     pub main: f32,
-    /// Title bar opacity (default: 0.75)
+    /// Title bar opacity (default: 0.50)
     pub title_bar: f32,
-    /// Search box/input opacity (default: 0.81)
+    /// Search box/input opacity (default: 0.50)
     pub search_box: f32,
-    /// Log panel opacity (default: 0.75)
+    /// Log panel opacity (default: 0.50)
     pub log_panel: f32,
     /// Selected list item background opacity.
     #[serde(default = "default_selected_opacity")]
@@ -108,19 +108,19 @@ pub struct BackgroundOpacity {
     /// Preview panel background opacity (default: 0.0)
     #[serde(default = "default_preview_opacity")]
     pub preview: f32,
-    /// Dialog/popup background opacity (default: 0.75)
+    /// Dialog/popup background opacity (default: 0.50)
     #[serde(default = "default_dialog_opacity")]
     pub dialog: f32,
-    /// Input field background opacity (default: 0.79)
+    /// Input field background opacity (default: 0.50)
     #[serde(default = "default_input_opacity")]
     pub input: f32,
-    /// Panel/container background opacity (default: 0.75)
+    /// Panel/container background opacity (default: 0.50)
     #[serde(default = "default_panel_opacity")]
     pub panel: f32,
-    /// Input field inactive/empty state background opacity (default: 0.77)
+    /// Input field inactive/empty state background opacity (default: 0.50)
     #[serde(default = "default_input_inactive_opacity")]
     pub input_inactive: f32,
-    /// Input field active/filled state background opacity (default: 0.83)
+    /// Input field active/filled state background opacity (default: 0.50)
     #[serde(default = "default_input_active_opacity")]
     pub input_active: f32,
     /// Border inactive/empty state opacity (default: 0.125)
@@ -131,7 +131,7 @@ pub struct BackgroundOpacity {
     pub border_active: f32,
     /// Opacity for main window vibrancy background (0.0-1.0)
     /// Lower = more blur visible, Higher = more solid color
-    /// Default: 0.85 for dark, 0.92 for light
+    /// Default: 0.50
     #[serde(default)]
     pub vibrancy_background: Option<f32>,
 
@@ -159,9 +159,9 @@ pub struct BackgroundOpacity {
     pub text_icon: f32,
 }
 
-pub const DARK_ROW_SELECTED_OPACITY: f32 = 0.23;
+pub const DARK_ROW_SELECTED_OPACITY: f32 = 0.20;
 pub const DARK_ROW_HOVER_OPACITY: f32 = 0.06;
-pub const LIGHT_ROW_SELECTED_OPACITY: f32 = 0.08;
+pub const LIGHT_ROW_SELECTED_OPACITY: f32 = 0.07;
 pub const LIGHT_ROW_HOVER_OPACITY: f32 = 0.04;
 
 fn default_selected_opacity() -> f32 {
@@ -177,23 +177,23 @@ fn default_preview_opacity() -> f32 {
 }
 
 fn default_dialog_opacity() -> f32 {
-    0.75
+    0.50
 }
 
 fn default_input_opacity() -> f32 {
-    0.79
+    0.50
 }
 
 fn default_panel_opacity() -> f32 {
-    0.75
+    0.50
 }
 
 fn default_input_inactive_opacity() -> f32 {
-    0.77
+    0.50
 }
 
 fn default_input_active_opacity() -> f32 {
-    0.83
+    0.50
 }
 
 fn default_border_inactive_opacity() -> f32 {
@@ -213,13 +213,13 @@ fn default_text_strong() -> f32 {
     0.80 // Badges, shortcuts, section headers (0xCC)
 }
 fn default_text_muted() -> f32 {
-    0.65 // Focused descriptions, source hints (0xA6)
+    0.80 // Focused descriptions, source hints (0xCC)
 }
 fn default_text_hint() -> f32 {
-    0.45 // Hovered descriptions, type labels (0x73)
+    0.70 // Hovered descriptions, type labels (0xB3)
 }
 fn default_text_placeholder() -> f32 {
-    0.40 // Placeholders, idle captions (0x66)
+    0.65 // Placeholders, idle captions (0xA6)
 }
 fn default_text_icon() -> f32 {
     0.50 // Idle icons (0x80)
@@ -239,26 +239,26 @@ impl Default for BackgroundOpacity {
 impl BackgroundOpacity {
     /// Dark mode opacity defaults.
     ///
-    /// Keep dark themes aligned with the theme designer's 75% surface-opacity
+    /// Keep dark themes aligned with the theme designer's 50% surface-opacity
     /// preset so new/default themes land on a concrete preset instead of the
-    /// old split 30% shell + 75% vibrancy background state.
+    /// old split shell + vibrancy background state.
     pub fn dark_default() -> Self {
         BackgroundOpacity {
-            main: 0.75,                          // 75% base
-            title_bar: 0.75,                     // Match main for consistency
-            search_box: 0.81,                    // +0.06
-            log_panel: 0.75,                     // Match main
+            main: 0.50,                          // 50% base
+            title_bar: 0.50,                     // Match main for consistency
+            search_box: 0.50,                    // Match main
+            log_panel: 0.50,                     // Match main
             selected: DARK_ROW_SELECTED_OPACITY, // Focused list item, strongest visible row highlight
             hover: DARK_ROW_HOVER_OPACITY, // Hovered list item, ghost-tier tint below focused state
             preview: 0.0,                  // Preview panel (0 = fully transparent)
-            dialog: 0.75,                  // Dialogs match main
-            input: 0.79,                   // +0.04
-            panel: 0.75,                   // Panels/containers
-            input_inactive: 0.77,          // +0.02
-            input_active: 0.83,            // +0.08
+            dialog: 0.50,                  // Dialogs match main
+            input: 0.50,                   // Match main
+            panel: 0.50,                   // Panels/containers
+            input_inactive: 0.50,          // Match main
+            input_active: 0.50,            // Match main
             border_inactive: 0.125,        // Borders when inactive
             border_active: 0.25,           // Borders when active
-            vibrancy_background: Some(0.75), // Main window vibrancy background
+            vibrancy_background: Some(0.50), // Main window vibrancy background
             // Text grading (all applied to text_primary)
             text_name: default_text_name(),
             text_strong: default_text_strong(),
@@ -274,25 +274,24 @@ impl BackgroundOpacity {
     /// Lower opacity allows more blur to show through while keeping text readable.
     /// Use Cmd+Shift+[ and Cmd+Shift+] to adjust opacity in real-time.
     ///
-    /// Base value is 75% — offsets match `apply_surface_opacity_preset()`:
-    /// search_box +0.06, input +0.04, input_inactive +0.02, input_active +0.08
+    /// Base value is 50% and all background surfaces match the base value.
     pub fn light_default() -> Self {
         BackgroundOpacity {
-            main: 0.75,                           // 75% base
-            title_bar: 0.75,                      // Match main for consistency
-            search_box: 0.81,                     // +0.06
-            log_panel: 0.75,                      // Match main
+            main: 0.50,                           // 50% base
+            title_bar: 0.50,                      // Match main for consistency
+            search_box: 0.50,                     // Match main
+            log_panel: 0.50,                      // Match main
             selected: LIGHT_ROW_SELECTED_OPACITY, // Light mode focus, down to the old hover strength
             hover: LIGHT_ROW_HOVER_OPACITY,       // Light mode hover, about half the focus strength
             preview: 0.0,                         // Preview panel (0 = fully transparent)
-            dialog: 0.75,                         // Dialogs match main
-            input: 0.79,                          // +0.04
-            panel: 0.75,                          // Panels match main
-            input_inactive: 0.77,                 // +0.02
-            input_active: 0.83,                   // +0.08
+            dialog: 0.50,                         // Dialogs match main
+            input: 0.50,                          // Match main
+            panel: 0.50,                          // Panels match main
+            input_inactive: 0.50,                 // Match main
+            input_active: 0.50,                   // Match main
             border_inactive: 0.30,                // Borders when inactive
             border_active: 0.45,                  // Borders when active
-            vibrancy_background: Some(0.75),      // Match main
+            vibrancy_background: Some(0.50),      // Match main
             // Text grading (same defaults for light mode)
             text_name: default_text_name(),
             text_strong: default_text_strong(),

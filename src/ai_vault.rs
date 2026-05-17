@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
@@ -84,6 +85,31 @@ pub(crate) struct AiVaultHit {
     pub stable_key: String,
     #[serde(default)]
     pub score: i32,
+    #[serde(skip, default)]
+    search_terms: Vec<String>,
+    #[serde(skip, default)]
+    rollout_path: Option<PathBuf>,
+}
+
+impl AiVaultHit {
+    fn metadata_search_terms(&self) -> Vec<String> {
+        let mut terms = vec![
+            self.safe_title.clone(),
+            self.provider.clone(),
+            self.provider_display_name.clone(),
+            self.session_id.clone(),
+        ];
+        if let Some(source_kind) = self.source_kind.as_ref() {
+            terms.push(source_kind.clone());
+        }
+        if let Some(model) = self.model.as_ref() {
+            terms.push(model.clone());
+        }
+        if let Some(workspace) = self.workspace_path.as_ref() {
+            terms.push(workspace.clone());
+        }
+        terms
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -403,26 +429,48 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
 }
 
 fn search_local_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
-    let cache_key = ai_vault_cache_key(query, &options);
+    let normalized_query = query.trim().to_ascii_lowercase();
+    let mut hits = local_vault_index(options.clone())?;
+    if !normalized_query.is_empty() {
+        hits = hits
+            .into_iter()
+            .filter_map(|mut hit| {
+                apply_local_vault_query_match(&mut hit, &normalized_query, options.search_content)
+                    .then_some(hit)
+            })
+            .collect();
+    } else {
+        for hit in &mut hits {
+            hit.matched_field = AiVaultMatchedField::Recent;
+        }
+    }
+    hits.truncate(options.max_results);
+    Ok(hits)
+}
+
+fn local_vault_index(options: RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
+    let cache_key = ai_vault_index_cache_key(&options);
     if let Some(hits) = ai_vault_cache_get(&cache_key, options.cache_ttl_ms) {
         return Ok(hits);
     }
 
-    let normalized_query = query.trim().to_ascii_lowercase();
     let mut hits = Vec::new();
-    hits.extend(read_claude_vault_hits(&normalized_query)?);
-    hits.extend(read_codex_vault_hits(&normalized_query)?);
+    if provider_enabled(&options, "claude") {
+        hits.extend(read_claude_vault_hits()?);
+    }
+    if provider_enabled(&options, "codex") {
+        hits.extend(read_codex_vault_hits(&options)?);
+    }
     hits.sort_by(|a, b| {
         b.modified_at
             .cmp(&a.modified_at)
             .then_with(|| a.stable_key.cmp(&b.stable_key))
     });
-    hits.truncate(options.max_results);
     ai_vault_cache_put(cache_key, hits.clone());
     Ok(hits)
 }
 
-fn read_claude_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
+fn read_claude_vault_hits() -> Result<Vec<AiVaultHit>> {
     let root = home_dir().join(".claude").join("projects");
     let mut files = Vec::new();
     collect_jsonl_files(&root, &mut files);
@@ -431,14 +479,14 @@ fn read_claude_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
 
     let mut hits = Vec::new();
     for (path, mtime) in files {
-        if let Some(hit) = read_claude_vault_hit(&path, mtime, query) {
+        if let Some(hit) = read_claude_vault_hit(&path, mtime) {
             hits.push(hit);
         }
     }
     Ok(hits)
 }
 
-fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<AiVaultHit> {
+fn read_claude_vault_hit(path: &Path, mtime: SystemTime) -> Option<AiVaultHit> {
     let file = File::open(path).ok()?;
     let reader = BufReader::new(file);
     let session_id = path.file_stem()?.to_string_lossy().to_string();
@@ -446,6 +494,7 @@ fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<
     let mut cwd = None;
     let mut model = None;
     let mut newest = mtime;
+    let mut search_terms = Vec::new();
 
     for line in reader.lines().map_while(Result::ok).take(1000) {
         let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) else {
@@ -483,21 +532,24 @@ fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<
         let content = event
             .pointer("/message/content")
             .or_else(|| event.get("content"));
+        if let Some(content) = content {
+            let mut fragments = Vec::new();
+            collect_text_fragments(content, &mut fragments);
+            if !fragments.is_empty() {
+                search_terms.push(fragments.join("\n"));
+            }
+        }
         title = content.and_then(text_from_content_for_title);
     }
 
     let safe_title =
         title.unwrap_or_else(|| format!("Claude Code session {}", short_id(&session_id)));
-    let matched_field = matched_field(
-        query,
-        &safe_title,
-        cwd.as_deref(),
-        Some("Claude Code"),
-        &session_id,
-    );
-    if !query.is_empty() && matched_field.is_none() {
-        return None;
-    }
+    search_terms.extend([
+        safe_title.clone(),
+        session_id.clone(),
+        cwd.clone().unwrap_or_default(),
+        model.clone().unwrap_or_default(),
+    ]);
 
     Some(AiVaultHit {
         provider: "claude".to_string(),
@@ -508,13 +560,102 @@ fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<
         workspace_path: cwd,
         model,
         modified_at: Some(system_time_to_rfc3339(newest)),
-        matched_field: matched_field.unwrap_or(AiVaultMatchedField::Recent),
+        matched_field: AiVaultMatchedField::Recent,
         stable_key: format!("ai-vault/claude/cli/{session_id}"),
         score: 0,
+        search_terms,
+        rollout_path: Some(path.to_path_buf()),
     })
 }
 
-fn read_codex_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
+fn read_codex_vault_hits(options: &RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
+    let codex_dir = home_dir().join(".codex");
+    let db_path = codex_dir.join("state_5.sqlite");
+    let sessions_root = codex_dir.join("sessions");
+    match read_codex_vault_hits_via_state_db(&db_path, &sessions_root, options) {
+        Ok(hits) => return Ok(hits),
+        Err(error) => {
+            let event = if db_path.exists() {
+                "ai_vault_codex_state_db_unsupported"
+            } else {
+                "ai_vault_codex_state_db_unavailable"
+            };
+            tracing::warn!(
+                target: "script_kit::ai_vault",
+                event,
+                db_path = %db_path.display(),
+                error = %error,
+                "Codex AI Vault state DB unavailable; falling back to session_index.jsonl"
+            );
+        }
+    }
+    read_codex_vault_hits_from_session_index()
+}
+
+fn read_codex_vault_hits_via_state_db(
+    db_path: &Path,
+    _sessions_root: &Path,
+    options: &RootAiVaultSectionOptions,
+) -> Result<Vec<AiVaultHit>> {
+    if !db_path.exists() {
+        return Err(anyhow!("state_5.sqlite missing"));
+    }
+    let temp_dir = tempfile::tempdir().context("create temp dir for codex state snapshot")?;
+    let copied_db = copy_sqlite_db_snapshot(db_path, temp_dir.path())?;
+    let conn = Connection::open_with_flags(
+        &copied_db,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
+    )
+    .with_context(|| format!("open_codex_state_db_failed: {}", copied_db.display()))?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, rollout_path, cwd, title, model, git_branch,
+                   approval_mode, sandbox_policy, reasoning_effort,
+                   first_user_message, updated_at_ms
+            FROM threads
+            WHERE COALESCE(archived, 0) = 0
+            ORDER BY updated_at_ms DESC
+            LIMIT 10000
+            "#,
+        )
+        .context("codex_state_schema_unsupported")?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(CodexThreadRow {
+                session_id: row.get::<_, String>(0)?,
+                rollout_path: row.get::<_, Option<String>>(1)?,
+                cwd: row.get::<_, Option<String>>(2)?,
+                title: row.get::<_, Option<String>>(3)?,
+                model: row.get::<_, Option<String>>(4)?,
+                git_branch: row.get::<_, Option<String>>(5)?,
+                approval_mode: row.get::<_, Option<String>>(6)?,
+                sandbox_policy: row.get::<_, Option<String>>(7)?,
+                reasoning_effort: row.get::<_, Option<String>>(8)?,
+                first_user_message: row.get::<_, Option<String>>(9)?,
+                updated_at_ms: row.get::<_, Option<i64>>(10)?.unwrap_or(0),
+            })
+        })
+        .context("query_codex_state_threads")?;
+
+    let mut hits = Vec::new();
+    for row in rows {
+        let row = row.context("read_codex_state_thread")?;
+        if row.session_id.trim().is_empty() {
+            continue;
+        }
+        let mut hit = codex_hit_from_thread_row(row);
+        if options.search_content {
+            hydrate_rollout_search_terms(&mut hit);
+        }
+        hits.push(hit);
+    }
+    Ok(hits)
+}
+
+fn read_codex_vault_hits_from_session_index() -> Result<Vec<AiVaultHit>> {
     let index_path = home_dir().join(".codex").join("session_index.jsonl");
     let Ok(file) = File::open(index_path) else {
         return Ok(Vec::new());
@@ -542,16 +683,6 @@ fn read_codex_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
             .and_then(|value| value.as_str())
             .filter(|value| !value.trim().is_empty())
             .map(ToString::to_string);
-        let matched_field = matched_field(
-            query,
-            &safe_title,
-            cwd.as_deref(),
-            Some("Codex"),
-            session_id,
-        );
-        if !query.is_empty() && matched_field.is_none() {
-            continue;
-        }
         let modified = row
             .get("updated_at")
             .and_then(|value| value.as_str())
@@ -569,13 +700,144 @@ fn read_codex_vault_hits(query: &str) -> Result<Vec<AiVaultHit>> {
                 .and_then(|value| value.as_str())
                 .map(ToString::to_string),
             modified_at: Some(system_time_to_rfc3339(modified)),
-            matched_field: matched_field.unwrap_or(AiVaultMatchedField::Recent),
+            matched_field: AiVaultMatchedField::Recent,
             stable_key: format!("ai-vault/codex/cli/{session_id}"),
             score: 0,
+            search_terms: Vec::new(),
+            rollout_path: None,
         });
     }
     hits.truncate(300);
     Ok(hits)
+}
+
+#[derive(Debug)]
+struct CodexThreadRow {
+    session_id: String,
+    rollout_path: Option<String>,
+    cwd: Option<String>,
+    title: Option<String>,
+    model: Option<String>,
+    git_branch: Option<String>,
+    approval_mode: Option<String>,
+    sandbox_policy: Option<String>,
+    reasoning_effort: Option<String>,
+    first_user_message: Option<String>,
+    updated_at_ms: i64,
+}
+
+fn codex_hit_from_thread_row(row: CodexThreadRow) -> AiVaultHit {
+    let title = row
+        .title
+        .as_deref()
+        .and_then(normalize_title)
+        .or_else(|| {
+            row.first_user_message
+                .as_deref()
+                .and_then(real_codex_user_message)
+        })
+        .unwrap_or_else(|| format!("Codex session {}", short_id(&row.session_id)));
+    let modified = if row.updated_at_ms > 0 {
+        UNIX_EPOCH + Duration::from_millis(row.updated_at_ms as u64)
+    } else {
+        UNIX_EPOCH
+    };
+    let rollout_path = row
+        .rollout_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(expand_tilde_path);
+    let mut search_terms = vec![
+        title.clone(),
+        row.session_id.clone(),
+        row.rollout_path.clone().unwrap_or_default(),
+        row.first_user_message.clone().unwrap_or_default(),
+        row.git_branch.clone().unwrap_or_default(),
+        row.approval_mode.clone().unwrap_or_default(),
+        row.sandbox_policy.clone().unwrap_or_default(),
+        row.reasoning_effort.clone().unwrap_or_default(),
+    ];
+    if let Some(cwd) = row.cwd.as_ref() {
+        search_terms.push(cwd.clone());
+    }
+    if let Some(model) = row.model.as_ref() {
+        search_terms.push(model.clone());
+    }
+
+    AiVaultHit {
+        provider: "codex".to_string(),
+        provider_display_name: "Codex".to_string(),
+        session_id: row.session_id.clone(),
+        source_kind: Some("cli".to_string()),
+        safe_title: title,
+        workspace_path: row.cwd.filter(|value| !value.trim().is_empty()),
+        model: row.model.filter(|value| !value.trim().is_empty()),
+        modified_at: Some(system_time_to_rfc3339(modified)),
+        matched_field: AiVaultMatchedField::Recent,
+        stable_key: format!("ai-vault/codex/cli/{}", row.session_id),
+        score: 0,
+        search_terms,
+        rollout_path,
+    }
+}
+
+fn real_codex_user_message(raw: &str) -> Option<String> {
+    let value = raw.trim();
+    if value.is_empty() || value.starts_with('<') {
+        return None;
+    }
+    normalize_title(value)
+}
+
+fn hydrate_rollout_search_terms(hit: &mut AiVaultHit) {
+    let Some(path) = hit.rollout_path.as_ref() else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let mut indexed = String::new();
+    for line in text.lines().take(400) {
+        if indexed.len() > 128 * 1024 {
+            break;
+        }
+        indexed.push_str(line);
+        indexed.push('\n');
+    }
+    if !indexed.is_empty() {
+        hit.search_terms.push(indexed);
+    }
+}
+
+fn copy_sqlite_db_snapshot(db_path: &Path, dest_root: &Path) -> Result<PathBuf> {
+    let db_name = db_path
+        .file_name()
+        .ok_or_else(|| anyhow!("missing database filename"))?;
+    let dest_db = dest_root.join(db_name);
+    std::fs::copy(db_path, &dest_db)
+        .with_context(|| format!("copy_codex_state_db_failed: {}", db_path.display()))?;
+
+    for suffix in ["-wal", "-shm"] {
+        let candidate = PathBuf::from(format!("{}{}", db_path.display(), suffix));
+        if candidate.exists() {
+            if let Some(candidate_name) = candidate.file_name() {
+                let _ = std::fs::copy(&candidate, dest_root.join(candidate_name));
+            }
+        }
+    }
+
+    Ok(dest_db)
+}
+
+fn expand_tilde_path(value: &str) -> PathBuf {
+    if value == "~" {
+        return home_dir();
+    }
+    if let Some(rest) = value.strip_prefix("~/") {
+        return home_dir().join(rest);
+    }
+    PathBuf::from(value)
 }
 
 fn collect_jsonl_files(root: &Path, files: &mut Vec<(PathBuf, SystemTime)>) {
@@ -701,6 +963,64 @@ fn matched_field(
     None
 }
 
+fn apply_local_vault_query_match(hit: &mut AiVaultHit, query: &str, search_content: bool) -> bool {
+    if query.is_empty() {
+        hit.matched_field = AiVaultMatchedField::Recent;
+        return true;
+    }
+    if title_matches_query(&hit.safe_title, query) {
+        hit.matched_field = AiVaultMatchedField::Title;
+        return true;
+    }
+    if hit
+        .model
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .contains(query)
+    {
+        hit.matched_field = AiVaultMatchedField::Model;
+        return true;
+    }
+    if hit
+        .workspace_path
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .contains(query)
+    {
+        hit.matched_field = AiVaultMatchedField::Workspace;
+        return true;
+    }
+    if hit
+        .provider_display_name
+        .to_ascii_lowercase()
+        .contains(query)
+        || hit.provider.to_ascii_lowercase().contains(query)
+    {
+        hit.matched_field = AiVaultMatchedField::Provider;
+        return true;
+    }
+    if hit.session_id.to_ascii_lowercase().contains(query) {
+        hit.matched_field = AiVaultMatchedField::Recent;
+        return true;
+    }
+    if search_content
+        && hit
+            .search_terms
+            .iter()
+            .any(|term| term.to_ascii_lowercase().contains(query))
+    {
+        hit.matched_field = AiVaultMatchedField::Transcript;
+        return true;
+    }
+    false
+}
+
+fn title_matches_query(title: &str, query: &str) -> bool {
+    title.to_ascii_lowercase().contains(query)
+}
+
 fn parse_timestamp(timestamp: &str) -> Option<SystemTime> {
     chrono::DateTime::parse_from_rfc3339(timestamp)
         .ok()
@@ -782,20 +1102,9 @@ fn load_fixture_hits() -> Result<Option<Vec<AiVaultHit>>> {
 }
 
 fn hit_matches_query(hit: &AiVaultHit, query: &str, search_content: bool) -> bool {
-    let mut fields = vec![
-        hit.safe_title.as_str(),
-        hit.provider.as_str(),
-        hit.provider_display_name.as_str(),
-        hit.session_id.as_str(),
-    ];
-    if let Some(model) = hit.model.as_deref() {
-        fields.push(model);
-    }
-    if let Some(workspace) = hit.workspace_path.as_deref() {
-        fields.push(workspace);
-    }
-    if search_content && matches!(hit.matched_field, AiVaultMatchedField::Transcript) {
-        fields.push(hit.matched_field.label());
+    let mut fields = hit.metadata_search_terms();
+    if search_content {
+        fields.extend(hit.search_terms.clone());
     }
     fields
         .into_iter()
@@ -883,6 +1192,64 @@ fn ai_vault_cache_key(query: &str, options: &RootAiVaultSectionOptions) -> Strin
     )
 }
 
+fn ai_vault_index_cache_key(options: &RootAiVaultSectionOptions) -> String {
+    let providers = options
+        .providers
+        .iter()
+        .map(crate::config::AiVaultProvider::cmux_id)
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "local-index\u{1f}{providers}\u{1f}content={}\u{1f}{}",
+        options.search_content,
+        local_vault_fingerprint(&providers)
+    )
+}
+
+fn local_vault_fingerprint(providers: &str) -> String {
+    let mut parts = Vec::new();
+    if providers.split(',').any(|provider| provider == "codex") {
+        for path in codex_state_paths() {
+            parts.push(path_fingerprint(&path));
+        }
+    }
+    if providers.split(',').any(|provider| provider == "claude") {
+        parts.push(path_fingerprint(
+            &home_dir().join(".claude").join("projects"),
+        ));
+    }
+    parts.join("|")
+}
+
+fn codex_state_paths() -> Vec<PathBuf> {
+    let db = home_dir().join(".codex").join("state_5.sqlite");
+    vec![
+        db.clone(),
+        PathBuf::from(format!("{}-wal", db.display())),
+        PathBuf::from(format!("{}-shm", db.display())),
+    ]
+}
+
+fn path_fingerprint(path: &Path) -> String {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return format!("{}:missing", path.display());
+    };
+    let modified = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_millis())
+        .unwrap_or(0);
+    format!("{}:{}:{}", path.display(), metadata.len(), modified)
+}
+
+fn provider_enabled(options: &RootAiVaultSectionOptions, provider: &str) -> bool {
+    options
+        .providers
+        .iter()
+        .any(|candidate| candidate.cmux_id() == provider)
+}
+
 fn ai_vault_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>> {
     static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
@@ -920,5 +1287,156 @@ fn launched_receipt(
         terminal_routing: terminal_routing_value(terminal_routing).to_string(),
         terminal_target_id: None,
         error: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_hit() -> AiVaultHit {
+        AiVaultHit {
+            provider: "codex".to_string(),
+            provider_display_name: "Codex".to_string(),
+            session_id: "session-123".to_string(),
+            source_kind: Some("cli".to_string()),
+            safe_title: "Investigate launcher filtering".to_string(),
+            workspace_path: Some("/Users/me/dev/script-kit-gpui".to_string()),
+            model: Some("gpt-5.5".to_string()),
+            modified_at: Some("2026-05-16T00:00:00Z".to_string()),
+            matched_field: AiVaultMatchedField::Recent,
+            stable_key: "ai-vault/codex/cli/session-123".to_string(),
+            score: 0,
+            search_terms: Vec::new(),
+            rollout_path: None,
+        }
+    }
+
+    #[test]
+    fn local_query_match_updates_matched_field_without_rescanning() {
+        let mut hit = test_hit();
+        assert!(apply_local_vault_query_match(&mut hit, "launcher", false));
+        assert_eq!(hit.matched_field, AiVaultMatchedField::Title);
+
+        let mut hit = test_hit();
+        assert!(apply_local_vault_query_match(&mut hit, "gpt-5.5", false));
+        assert_eq!(hit.matched_field, AiVaultMatchedField::Model);
+
+        let mut hit = test_hit();
+        assert!(!apply_local_vault_query_match(
+            &mut hit,
+            "definitely-absent",
+            false
+        ));
+    }
+
+    #[test]
+    fn local_index_cache_key_ignores_query_specific_limits() {
+        let mut options = RootAiVaultSectionOptions::default();
+        options.max_results = 1;
+        options.search_content = false;
+        let baseline = ai_vault_index_cache_key(&options);
+
+        options.max_results = 5;
+        assert_eq!(baseline, ai_vault_index_cache_key(&options));
+    }
+
+    #[test]
+    fn local_index_cache_key_includes_content_mode() {
+        let mut options = RootAiVaultSectionOptions::default();
+        options.search_content = false;
+        let metadata_only = ai_vault_index_cache_key(&options);
+        options.search_content = true;
+        assert_ne!(metadata_only, ai_vault_index_cache_key(&options));
+    }
+
+    #[test]
+    fn codex_state_db_loads_metadata_and_rollout_terms_without_serializing_body() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("state_5.sqlite");
+        let rollout_path = temp_dir.path().join("rollout.jsonl");
+        std::fs::write(
+            &rollout_path,
+            r#"{"type":"response_item","payload":{"content":"rollout-only-needle POISON_TRANSCRIPT"}}"#,
+        )
+        .unwrap();
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            r#"
+            CREATE TABLE threads (
+                id TEXT PRIMARY KEY,
+                rollout_path TEXT,
+                cwd TEXT,
+                title TEXT,
+                model TEXT,
+                git_branch TEXT,
+                approval_mode TEXT,
+                sandbox_policy TEXT,
+                reasoning_effort TEXT,
+                first_user_message TEXT,
+                updated_at_ms INTEGER,
+                archived INTEGER NOT NULL DEFAULT 0
+            );
+            INSERT INTO threads (
+                id, rollout_path, cwd, title, model, git_branch, approval_mode,
+                sandbox_policy, reasoning_effort, first_user_message, updated_at_ms, archived
+            ) VALUES (
+                'codex-sql-title-match', '#ROLLOUT#', '/tmp/ai-vault-codex-project',
+                'Codex SQL title match', 'gpt-5.1-codex', 'main', 'on-request',
+                '{"type":"workspace-write"}', 'high', 'first message fallback',
+                1770000000000, 0
+            );
+            INSERT INTO threads (
+                id, rollout_path, cwd, title, model, git_branch, approval_mode,
+                sandbox_policy, reasoning_effort, first_user_message, updated_at_ms, archived
+            ) VALUES (
+                'archived-session', NULL, '/tmp/archived', 'Archived Codex', 'gpt-5.1-codex',
+                NULL, NULL, NULL, NULL, NULL, 1770000001000, 1
+            );
+            "#
+            .replace(
+                "#ROLLOUT#",
+                &rollout_path.to_string_lossy().replace('\'', "''"),
+            )
+            .as_str(),
+        )
+        .unwrap();
+        drop(conn);
+
+        let mut options = RootAiVaultSectionOptions::default();
+        options.search_content = true;
+        let hits = read_codex_vault_hits_via_state_db(&db_path, temp_dir.path(), &options).unwrap();
+        assert_eq!(hits.len(), 1);
+        let hit = hits.first().unwrap();
+        assert_eq!(hit.provider, "codex");
+        assert_eq!(hit.safe_title, "Codex SQL title match");
+        assert_eq!(
+            hit.workspace_path.as_deref(),
+            Some("/tmp/ai-vault-codex-project")
+        );
+        assert_eq!(hit.model.as_deref(), Some("gpt-5.1-codex"));
+
+        let mut content_hit = hit.clone();
+        assert!(apply_local_vault_query_match(
+            &mut content_hit,
+            "rollout-only-needle",
+            true
+        ));
+        assert_eq!(content_hit.matched_field, AiVaultMatchedField::Transcript);
+
+        let serialized = serde_json::to_string(hit).unwrap();
+        assert!(!serialized.contains("rollout-only-needle"));
+        assert!(!serialized.contains("POISON_TRANSCRIPT"));
+        assert!(!serialized.contains("rollout_path"));
+    }
+
+    #[test]
+    fn codex_state_db_missing_falls_back_to_session_index_contract() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let missing = temp_dir.path().join("state_5.sqlite");
+        let options = RootAiVaultSectionOptions::default();
+        let error =
+            read_codex_vault_hits_via_state_db(&missing, temp_dir.path(), &options).unwrap_err();
+        assert!(error.to_string().contains("state_5.sqlite missing"));
     }
 }

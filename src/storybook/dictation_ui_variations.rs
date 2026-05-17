@@ -6,7 +6,7 @@ use crate::list_item::FONT_MONO;
 use crate::storybook::{story_container, story_section, StoryVariant};
 use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
 use crate::theme::{get_cached_theme, AppChromeColors, Theme};
-use crate::ui_foundation::{hex_to_rgba_with_opacity, HexColorExt};
+use crate::ui_foundation::HexColorExt;
 
 const GLASS_BG_OPACITY: f32 = 0.24;
 const GLASS_BORDER_OPACITY: f32 = 0.18;
@@ -58,12 +58,54 @@ fn uses_native_rim(spec: DictationUiVariationSpec) -> bool {
     spec.id == "compact-capsule"
 }
 
+fn overlay_radius_for_spec(spec: DictationUiVariationSpec, height: f32, scale: f32) -> f32 {
+    let radius = match spec.id {
+        "compact-capsule" | "timer-forward" | "micro-dots" => height / 2.0,
+        "badge-dock" | "timer-sidecar" | "launcher-command-strip" => 7.0,
+        "notes-shelf" | "symmetric-core" | "transcribe-thread" => 14.0,
+        "signal-ribbon" | "red-means-problem" | "center-quiet" => 5.0,
+        "tall-signal" | "dual-rail" => 11.0,
+        "flat-accent" | "gold-needle" => 3.0,
+        _ => (spec.height / OVERLAY_HEIGHT_PX) * OVERLAY_RADIUS_PX,
+    };
+    radius * scale
+}
+
+fn min_overlay_height_for_spec(spec: DictationUiVariationSpec) -> f32 {
+    match spec.layout {
+        PreviewLayout::Standard | PreviewLayout::DockedBadge => spec.height.max(72.0),
+        PreviewLayout::DualRail | PreviewLayout::Sidecar => spec.height.max(76.0),
+        PreviewLayout::Centered | PreviewLayout::TopRail | PreviewLayout::BottomRail => {
+            spec.height.max(88.0)
+        }
+    }
+}
+
+fn overlay_vertical_padding_for_spec(spec: DictationUiVariationSpec) -> f32 {
+    match spec.layout {
+        PreviewLayout::Standard | PreviewLayout::DockedBadge => 8.0,
+        PreviewLayout::DualRail | PreviewLayout::Sidecar => 9.0,
+        PreviewLayout::Centered | PreviewLayout::TopRail | PreviewLayout::BottomRail => 10.0,
+    }
+}
+
+fn storybook_dictation_stop_keycap() -> String {
+    crate::config::load_config()
+        .get_dictation_hotkey()
+        .map(|hotkey| hotkey.to_display_string().replace("Semicolon", ";"))
+        .filter(|key| !key.trim().is_empty())
+        .unwrap_or_else(|| "⇧⌘;".to_string())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PreviewLayout {
     Standard,
     DualRail,
     Centered,
     DockedBadge,
+    TopRail,
+    BottomRail,
+    Sidecar,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +114,7 @@ enum WaveformKind {
     ThinBars,
     Ribbon,
     Thread,
+    Dots,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -129,7 +172,7 @@ const NEEDLE_BARS: [f32; WAVEFORM_BAR_COUNT] =
 const RIBBON_BARS: [f32; WAVEFORM_BAR_COUNT] =
     [0.18, 0.28, 0.38, 0.52, 0.60, 0.52, 0.38, 0.28, 0.18];
 
-const SPECS: [DictationUiVariationSpec; 21] = [
+const SPECS: [DictationUiVariationSpec; 25] = [
     DictationUiVariationSpec {
         id: "compact-capsule",
         name: "Compact Capsule",
@@ -616,6 +659,98 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         content_opacity: 0.92,
         show_badge: true,
     },
+    DictationUiVariationSpec {
+        id: "notes-shelf",
+        name: "Notes Shelf",
+        family: "Window Alignment",
+        description: "Borrows the Notes window rhythm: metadata rides above a calm meter shelf.",
+        target: DictationTarget::NotesEditor,
+        elapsed_secs: 73,
+        bars: ACTIVE_BARS,
+        layout: PreviewLayout::TopRail,
+        waveform: WaveformKind::Ribbon,
+        badge_tone: BadgeTone::Minimal,
+        silence_tone: SilenceTone::Neutral,
+        accent_mode: AccentMode::GoldNeedle,
+        width: 386.0,
+        height: 62.0,
+        horizontal_padding: 16.0,
+        content_gap: 7.0,
+        surface_opacity: 0.20,
+        border_opacity: 0.12,
+        timer_opacity: 0.78,
+        content_opacity: 0.96,
+        show_badge: true,
+    },
+    DictationUiVariationSpec {
+        id: "launcher-command-strip",
+        name: "Command Strip",
+        family: "Window Alignment",
+        description: "Feels closer to the main launcher footer: signal first, destination below.",
+        target: DictationTarget::MainWindowFilter,
+        elapsed_secs: 35,
+        bars: WIDE_BARS,
+        layout: PreviewLayout::BottomRail,
+        waveform: WaveformKind::ThinBars,
+        badge_tone: BadgeTone::Whisper,
+        silence_tone: SilenceTone::Neutral,
+        accent_mode: AccentMode::None,
+        width: 420.0,
+        height: 58.0,
+        horizontal_padding: 18.0,
+        content_gap: 8.0,
+        surface_opacity: 0.18,
+        border_opacity: 0.10,
+        timer_opacity: 0.70,
+        content_opacity: 0.98,
+        show_badge: true,
+    },
+    DictationUiVariationSpec {
+        id: "timer-sidecar",
+        name: "Timer Sidecar",
+        family: "Window Alignment",
+        description: "Makes the elapsed time a fixed utility rail while the signal owns the span.",
+        target: DictationTarget::AiChatComposer,
+        elapsed_secs: 112,
+        bars: NEEDLE_BARS,
+        layout: PreviewLayout::Sidecar,
+        waveform: WaveformKind::Bars,
+        badge_tone: BadgeTone::Minimal,
+        silence_tone: SilenceTone::Neutral,
+        accent_mode: AccentMode::GoldNeedle,
+        width: 398.0,
+        height: 50.0,
+        horizontal_padding: 12.0,
+        content_gap: 12.0,
+        surface_opacity: 0.22,
+        border_opacity: 0.14,
+        timer_opacity: 0.92,
+        content_opacity: 1.0,
+        show_badge: true,
+    },
+    DictationUiVariationSpec {
+        id: "micro-dots",
+        name: "Micro Dots",
+        family: "Window Alignment",
+        description: "Tests the quietest possible status object: a compact timer plus live dots.",
+        target: DictationTarget::ExternalApp,
+        elapsed_secs: 12,
+        bars: RIBBON_BARS,
+        layout: PreviewLayout::Centered,
+        waveform: WaveformKind::Dots,
+        badge_tone: BadgeTone::Whisper,
+        silence_tone: SilenceTone::Dim,
+        accent_mode: AccentMode::None,
+        width: 242.0,
+        height: 58.0,
+        horizontal_padding: 18.0,
+        content_gap: 6.0,
+        surface_opacity: 0.18,
+        border_opacity: 0.08,
+        timer_opacity: 0.74,
+        content_opacity: 0.90,
+        show_badge: false,
+    },
 ];
 
 pub fn dictation_ui_story_variants() -> Vec<StoryVariant> {
@@ -664,12 +799,17 @@ pub fn render_dictation_ui_gallery() -> AnyElement {
                         .max_w(px(720.0))
                         .text_color(semantic_text(&theme, opacity.text_muted_alpha))
                         .child(
-                            "Twenty-one storybook-only standalone dictation overlay concepts using launcher-aligned density, contrast, text hierarchy, and quiet chrome.",
+                            "Twenty-five storybook-only standalone dictation overlay concepts using launcher-aligned density, contrast, text hierarchy, quiet chrome, and the current Stop/Cancel hotkey rail.",
                         ),
                 ),
         );
 
-    for family in ["Default Surface", "Shape Rhythm", "Signal Language"] {
+    for family in [
+        "Default Surface",
+        "Shape Rhythm",
+        "Signal Language",
+        "Window Alignment",
+    ] {
         let mut section = story_section(family).gap(px(10.0));
         for spec in SPECS.iter().copied().filter(|spec| spec.family == family) {
             section = section.child(render_gallery_item(spec));
@@ -729,7 +869,7 @@ fn render_gallery_item(spec: DictationUiVariationSpec) -> AnyElement {
 fn render_spec_stage(spec: DictationUiVariationSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
     let chrome = AppChromeColors::from_theme(&theme);
-    let stage_height = if compact { 104.0 } else { 132.0 };
+    let stage_height = if compact { 138.0 } else { 178.0 };
     let scale = if compact { 0.78 } else { 1.0 };
 
     div()
@@ -739,7 +879,7 @@ fn render_spec_stage(spec: DictationUiVariationSpec, compact: bool) -> AnyElemen
         .justify_center()
         .items_center()
         .p(px(if compact { 6.0 } else { 8.0 }))
-        .bg(rgba(chrome.preview_surface_rgba))
+        .bg(rgb(theme.colors.background.main))
         .border_1()
         .border_color(rgba(chrome.divider_rgba))
         .rounded(px(8.0))
@@ -752,8 +892,8 @@ fn render_spec_stage(spec: DictationUiVariationSpec, compact: bool) -> AnyElemen
                 .items_center()
                 .rounded(px(7.0))
                 .border_1()
-                .border_color(rgba(chrome.border_rgba))
-                .bg(rgba(chrome.selection_rgba))
+                .border_color(rgba(chrome.divider_rgba))
+                .bg(rgb(theme.colors.background.main))
                 .child(
                     div()
                         .shadow(vec![BoxShadow {
@@ -770,27 +910,25 @@ fn render_spec_stage(spec: DictationUiVariationSpec, compact: bool) -> AnyElemen
 
 fn render_overlay(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     let theme = get_cached_theme();
+    let chrome = AppChromeColors::from_theme(&theme);
     let native_rim = uses_native_rim(spec);
-    let surface_opacity = if theme.is_dark_mode() {
-        let lift = if native_rim { 0.12 } else { 0.18 };
-        (spec.surface_opacity + lift).min(0.58)
-    } else {
-        spec.surface_opacity
-    };
-    let surface_bg = rgba(hex_to_rgba_with_opacity(
-        theme.colors.background.title_bar,
-        surface_opacity,
-    ));
+    let surface_bg = rgba(chrome.window_surface_rgba);
     let border_color = if native_rim {
         semantic_text(&theme, if theme.is_dark_mode() { 0.34 } else { 0.28 })
     } else {
-        theme.colors.ui.border.with_opacity(spec.border_opacity)
+        theme
+            .colors
+            .ui
+            .border
+            .with_opacity(spec.border_opacity.max(0.16))
     };
 
     let width = spec.width * scale;
-    let height = spec.height * scale;
-    let radius = (spec.height / OVERLAY_HEIGHT_PX) * OVERLAY_RADIUS_PX * scale;
+    let raw_height = min_overlay_height_for_spec(spec);
+    let height = raw_height * scale;
+    let radius = overlay_radius_for_spec(spec, raw_height, scale);
     let padding_x = spec.horizontal_padding * scale;
+    let padding_y = overlay_vertical_padding_for_spec(spec) * scale;
     let gap = spec.content_gap * scale;
 
     div()
@@ -802,6 +940,7 @@ fn render_overlay(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         .justify_center()
         .overflow_hidden()
         .px(px(padding_x))
+        .py(px(padding_y))
         .gap(px(gap))
         .bg(surface_bg)
         .rounded(px(radius))
@@ -824,7 +963,7 @@ fn render_overlay_inner(spec: DictationUiVariationSpec, scale: f32) -> AnyElemen
     let content = render_waveform(spec, scale);
     let badge = render_target_badge(spec, scale);
 
-    match spec.layout {
+    let body = match spec.layout {
         PreviewLayout::Standard => div()
             .w_full()
             .flex()
@@ -909,7 +1048,201 @@ fn render_overlay_inner(spec: DictationUiVariationSpec, scale: f32) -> AnyElemen
                 )
             })
             .into_any_element(),
-    }
+        PreviewLayout::TopRail => div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .justify_center()
+            .gap(px(6.0 * scale))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(timer)
+                    .when(spec.show_badge, |d| {
+                        d.child(render_target_badge(spec, scale))
+                    }),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .items_center()
+                    .child(content),
+            )
+            .into_any_element(),
+        PreviewLayout::BottomRail => div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .justify_center()
+            .gap(px(5.0 * scale))
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_center()
+                    .items_center()
+                    .child(content),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(timer)
+                    .when(spec.show_badge, |d| {
+                        d.child(render_dual_rail_badge(spec, scale))
+                    }),
+            )
+            .into_any_element(),
+        PreviewLayout::Sidecar => div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(10.0 * scale))
+            .child(
+                div()
+                    .h_full()
+                    .min_w(px(58.0 * scale))
+                    .px(px(8.0 * scale))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .bg(theme_badge_dock_bg())
+                    .border_r_1()
+                    .border_color(get_cached_theme().colors.ui.border.with_opacity(0.18))
+                    .child(timer),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(4.0 * scale))
+                    .child(content)
+                    .when(spec.show_badge, |d| {
+                        d.child(render_dual_rail_badge(spec, scale))
+                    }),
+            )
+            .into_any_element(),
+    };
+
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .justify_center()
+        .items_center()
+        .gap(px(5.0 * scale))
+        .child(render_signal_band(body, spec, scale))
+        .child(render_action_rail(scale))
+        .into_any_element()
+}
+
+fn render_signal_band(body: AnyElement, spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
+    let theme = get_cached_theme();
+    let chrome = AppChromeColors::from_theme(&theme);
+    let radius = match spec.id {
+        "flat-accent" | "gold-needle" | "signal-ribbon" => 3.0,
+        "badge-dock" | "timer-sidecar" | "launcher-command-strip" => 6.0,
+        "compact-capsule" | "timer-forward" | "split-pill" | "wide-meter" | "tall-signal" => 999.0,
+        _ => 9.0,
+    } * scale;
+
+    div()
+        .w_full()
+        .flex()
+        .items_center()
+        .justify_center()
+        .px(px(10.0 * scale))
+        .py(px(6.0 * scale))
+        .bg(rgba(chrome.selection_rgba))
+        .border_1()
+        .border_color(theme.colors.ui.border.with_opacity(0.10))
+        .rounded(px(radius))
+        .child(body)
+        .into_any_element()
+}
+
+fn render_action_rail(scale: f32) -> AnyElement {
+    let theme = get_cached_theme();
+    let chrome = AppChromeColors::from_theme(&theme);
+
+    div()
+        .id("dictation-action-rail")
+        .w_full()
+        .min_h(px(24.0))
+        .border_t_1()
+        .border_color(rgba(chrome.divider_rgba))
+        .pt(px((4.0 * scale).max(3.0)))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(4.0))
+        .child(render_action_chip(
+            "Stop",
+            storybook_dictation_stop_keycap(),
+            96.0,
+        ))
+        .child(render_action_chip("Cancel", "esc".to_string(), 96.0))
+        .into_any_element()
+}
+
+fn render_action_chip(label: &'static str, key: String, width: f32) -> AnyElement {
+    let theme = get_cached_theme();
+    let footer_text = theme
+        .colors
+        .text
+        .primary
+        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
+        .to_rgb();
+    let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
+        footer_text.into(),
+        theme.colors.text.primary.to_rgb(),
+        false,
+    );
+    let shortcut_tokens = crate::components::hint_strip::shortcut_tokens_from_hint(&key);
+
+    div()
+        .w(px(width))
+        .h_full()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .child(
+            div()
+                .px(px(4.0))
+                .py(px(2.0))
+                .rounded(px(4.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(3.0))
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .text_color(footer_text)
+                        .child(label),
+                )
+                .child(crate::components::hint_strip::render_inline_shortcut_keys(
+                    shortcut_tokens.iter().map(|token| token.as_str()),
+                    shortcut_colors,
+                )),
+        )
+        .into_any_element()
 }
 
 fn render_timer(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
@@ -944,6 +1277,7 @@ fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         WaveformKind::ThinBars => (3.0 * scale, 3.0 * scale),
         WaveformKind::Ribbon => (6.0 * scale, 1.5 * scale),
         WaveformKind::Thread => (2.5 * scale, 3.0 * scale),
+        WaveformKind::Dots => (7.0 * scale, 4.0 * scale),
     };
 
     let mut waveform = div()
@@ -963,6 +1297,7 @@ fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         let height = match spec.waveform {
             WaveformKind::Thread => (WAVEFORM_BAR_MIN_HEIGHT_PX + level * 6.0) * scale,
             WaveformKind::Ribbon => (6.0 + level * 8.0) * scale,
+            WaveformKind::Dots => (5.0 + level * 5.0) * scale,
             _ => waveform_bar_height(level) * scale,
         };
 
@@ -972,7 +1307,11 @@ fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
                 .h(px(height))
                 .min_h(px(WAVEFORM_BAR_MIN_HEIGHT_PX * scale))
                 .bg(color)
-                .rounded(px(bar_width.max(2.0))),
+                .rounded(px(if matches!(spec.waveform, WaveformKind::Dots) {
+                    999.0
+                } else {
+                    bar_width.max(2.0)
+                })),
         );
 
         if matches!(spec.accent_mode, AccentMode::GoldNeedle) && index == (WAVEFORM_BAR_COUNT / 2) {
@@ -1077,9 +1416,9 @@ mod tests {
     use super::{dictation_ui_story_variants, render_dictation_ui_story_preview, SPECS};
 
     #[test]
-    fn dictation_ui_story_exposes_twenty_one_variants() {
-        assert_eq!(dictation_ui_story_variants().len(), 21);
-        assert_eq!(SPECS.len(), 21);
+    fn dictation_ui_story_exposes_twenty_five_variants() {
+        assert_eq!(dictation_ui_story_variants().len(), 25);
+        assert_eq!(SPECS.len(), 25);
     }
 
     #[test]
@@ -1090,7 +1429,7 @@ mod tests {
             .collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 21);
+        assert_eq!(ids.len(), 25);
     }
 
     #[test]

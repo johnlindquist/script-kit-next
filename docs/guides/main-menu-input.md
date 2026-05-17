@@ -105,6 +105,8 @@ files: report -notes:
 
 Source-only inputs with a trailing space browse that source's default recent/current set. For example, `c: ` browses recent clipboard entries, `n: ` browses pinned/recent notes, `t: ` browses current tabs, and `d: ` browses recent dictations.
 
+`vault:` and `v:` explicitly search AI Vault sessions even when passive AI Vault rows are disabled in unified search settings. Codex Vault rows come from the local `~/.codex/state_5.sqlite` thread metadata first, falling back to `~/.codex/session_index.jsonl` only when the state DB is unavailable or unsupported. The launcher, action requests, and protocol receipts stay metadata-only; rollout-content matching is cached internally and does not expose raw transcript, prompt, assistant, body, message, or resume-command fields.
+
 `processes:` / `p:` is not a committed root source head yet. Use the **Process Manager** built-in for process search.
 
 Source-filter mode disables launcher input-history recall, so Up/Down stay focused on navigating the visible result list.

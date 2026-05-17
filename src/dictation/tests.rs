@@ -1685,9 +1685,9 @@ fn overlay_waveform_opacity_stays_clamped() {
 fn overlay_dot_and_window_constants_match_target_contract() {
     use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
 
-    assert_eq!(super::window::OVERLAY_WIDTH_PX, 312.0);
-    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 32.0);
-    assert_eq!(super::window::OVERLAY_RADIUS_PX, 16.0);
+    assert_eq!(super::window::OVERLAY_WIDTH_PX, 520.0);
+    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 72.0);
+    assert_eq!(super::window::OVERLAY_RADIUS_PX, 22.0);
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
@@ -1790,12 +1790,20 @@ fn dictation_overlay_derives_colors_from_theme_and_compact_capsule_chrome() {
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
 
     assert!(
-        source.contains("CAPSULE_BG_OPACITY"),
-        "overlay surface must use compact capsule background opacity"
+        source.contains("AppChromeColors::from_theme"),
+        "overlay surface must use app chrome color tokens"
     );
     assert!(
-        source.contains("CAPSULE_NATIVE_RIM_OPACITY"),
-        "overlay border must use neutral native rim opacity"
+        source.contains("GLASS_BAR_RIM_OPACITY"),
+        "overlay border must use glass bar rim opacity"
+    );
+    assert!(
+        source.contains("render_glass_signal_band"),
+        "overlay must render the launcher-style selected signal band"
+    );
+    assert!(
+        source.contains("render_inline_shortcut_keys"),
+        "overlay action rail shortcuts must use the main-menu footer shortcut renderer"
     );
     // Theme tokens still used for content colors.
     assert!(
@@ -2974,51 +2982,51 @@ fn overlay_confirming_phase_renders_stop_continue() {
 }
 
 // ---------------------------------------------------------------------------
-// Overlay: compact capsule styling
+// Overlay: glass bar styling
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_uses_compact_capsule_styling() {
+fn overlay_uses_glass_bar_styling() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     assert!(
-        window_src.contains("CAPSULE_BG_OPACITY"),
-        "overlay must define compact capsule background opacity"
+        window_src.contains("AppChromeColors::from_theme"),
+        "overlay must derive glass surface from app chrome"
     );
     assert!(
-        window_src.contains("CAPSULE_NATIVE_RIM_OPACITY"),
-        "overlay must define native rim opacity"
+        window_src.contains("GLASS_BAR_RIM_OPACITY"),
+        "overlay must define glass bar rim opacity"
     );
     assert!(
-        window_src.contains("theme.colors.background.title_bar"),
-        "capsule surface must derive from the theme title-bar surface"
+        window_src.contains("chrome.window_surface_rgba"),
+        "glass bar surface must match main menu window surface chrome"
     );
     assert!(
-        window_src.contains("theme.colors.text.primary"),
-        "native rim must derive from neutral theme text"
+        window_src.contains("row_selected_background_rgba"),
+        "glass bar signal band must match main menu selected-row background opacity"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Overlay: compact capsule dimension contract
+// Overlay: glass bar dimension contract
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_dimensions_match_compact_capsule_contract() {
+fn overlay_dimensions_match_glass_bar_contract() {
     assert_eq!(
         super::window::OVERLAY_WIDTH_PX,
-        312.0,
-        "overlay width must match the compact capsule direction"
+        520.0,
+        "overlay width must match the glass bar direction"
     );
     assert_eq!(
         super::window::OVERLAY_HEIGHT_PX,
-        32.0,
-        "overlay height must match the compact capsule direction"
+        72.0,
+        "overlay height must match the glass bar direction"
     );
     assert_eq!(
         super::window::OVERLAY_RADIUS_PX,
-        16.0,
-        "overlay radius must be half of height for capsule shape"
+        22.0,
+        "overlay radius must match the adopted glass bar shape"
     );
 }
 

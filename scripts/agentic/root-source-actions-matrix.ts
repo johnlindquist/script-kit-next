@@ -36,6 +36,8 @@ const aiVaultSensitiveRequestFields = [
   "assistantText",
   "resumeCommand",
 ];
+// AI Vault Codex/Claude local-provider actions are covered by
+// root-ai-vault-codex-perf.ts: codex-sql-title-match, claude-source-actions.
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;

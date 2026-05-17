@@ -701,9 +701,9 @@ mod tests {
                 "hover": 0.06,
                 "text_name": 1.0,
                 "text_strong": 0.8,
-                "text_muted_alpha": 0.65,
-                "text_hint": 0.45,
-                "text_placeholder": 0.4,
+                "text_muted_alpha": 0.80,
+                "text_hint": 0.70,
+                "text_placeholder": 0.65,
                 "text_icon": 0.5
             }
         });

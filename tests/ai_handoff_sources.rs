@@ -73,11 +73,11 @@ fn deferred_ai_image_handoff_staging_uses_named_failure_states() {
         "SetInputWithImage ACP path should route decode/write errors through named staging states"
     );
     assert!(
-        !source.contains(
-            ".map_err(|error| format!(\"Failed to decode image attachment: {error}\"))"
-        ) && !source.contains(
-            ".map_err(|error| format!(\"Failed to write image attachment: {error}\"))"
-        ),
+        !source
+            .contains(".map_err(|error| format!(\"Failed to decode image attachment: {error}\"))")
+            && !source.contains(
+                ".map_err(|error| format!(\"Failed to write image attachment: {error}\"))"
+            ),
         "image staging must not regress to inline map_err formatting"
     );
 }

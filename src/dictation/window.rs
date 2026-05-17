@@ -8,21 +8,19 @@ use crate::dictation::visualizer::silent_bars;
 // Overlay geometry & waveform contract constants
 // ---------------------------------------------------------------------------
 
-/// Compact capsule width in pixels.
+/// Glass bar width in pixels.
 pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
-/// Compact capsule height in pixels.
-pub(crate) const OVERLAY_HEIGHT_PX: f32 = 58.0;
-/// Confirming phase uses the same capsule height so content swaps inline.
-/// Fully-rounded corner radius for the expanded capsule shape.
+/// Glass bar height in pixels.
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;
+/// Confirming phase uses the same bar height so content swaps inline.
+/// Rounded corner radius for the standalone glass bar.
 pub(crate) const OVERLAY_RADIUS_PX: f32 = 22.0;
-/// Horizontal padding inside the capsule.
+/// Horizontal padding inside the glass bar.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 /// Gap between inner content columns.
 pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 8.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
-/// Font size for the visible shortcut/action rail.
-pub(crate) const SHORTCUT_TEXT_SIZE_PX: f32 = 10.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
@@ -53,13 +51,15 @@ const SOUND_THRESHOLD: f32 = 0.10;
 const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0;
 
 // ---------------------------------------------------------------------------
-// Compact capsule surface constants
+// Glass bar surface constants
 // ---------------------------------------------------------------------------
 
-/// Overlay background opacity layered over the theme title-bar surface.
-const CAPSULE_BG_OPACITY: f32 = 0.32;
-/// Native neutral rim opacity, similar to the main menu window edge.
-const CAPSULE_NATIVE_RIM_OPACITY: f32 = 0.34;
+/// Subtle inner border opacity for the selected signal band.
+const GLASS_SIGNAL_BORDER_OPACITY: f32 = 0.10;
+/// Neutral rim opacity, similar to the main menu window edge.
+const GLASS_BAR_RIM_OPACITY: f32 = 0.16;
+/// Glass bar shadow opacity.
+const GLASS_BAR_SHADOW_OPACITY: f32 = 0.22;
 
 // ---------------------------------------------------------------------------
 // Overlay helper functions
@@ -171,14 +171,14 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, prelude::*, px, rgb, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
+    div, prelude::*, px, rgba, AnyElement, App, Context, FocusHandle, Focusable, IntoElement,
     KeyDownEvent, MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement,
     Styled, Task, Window, WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
-use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OPACITY_TEXT_MUTED};
+use crate::theme::{get_cached_theme, AppChromeColors};
 use crate::ui_foundation::HexColorExt;
 
 use parking_lot::Mutex;
@@ -778,63 +778,55 @@ impl DictationOverlay {
 
     /// Render the runtime recording action rail.
     fn render_recording_actions(&self, cx: &mut Context<Self>) -> AnyElement {
-        div()
-            .id("dictation-action-rail")
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_center()
-            .gap(px(12.))
-            .child(render_clickable_action_chip(
+        render_clickable_action_rail([
+            render_clickable_action_chip(
                 "dictation-stop-button",
                 ACTION_STOP_LABEL,
                 dictation_stop_keycap(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.submit_overlay_session(window, cx);
                 }),
-            ))
-            .child(render_clickable_action_chip(
+            )
+            .into_any_element(),
+            render_clickable_action_chip(
                 "dictation-cancel-button",
                 ACTION_CANCEL_LABEL,
                 ESC_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.abort_overlay_session(window, cx);
                 }),
-            ))
-            .into_any_element()
+            )
+            .into_any_element(),
+        ])
     }
 
     /// Render the runtime confirmation action rail.
     fn render_confirming_actions(&self, cx: &mut Context<Self>) -> AnyElement {
-        div()
-            .id("dictation-action-rail")
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_center()
-            .gap(px(12.))
-            .child(render_clickable_action_chip(
+        render_clickable_action_rail([
+            render_clickable_action_chip(
                 "dictation-stop-button",
                 ACTION_STOP_LABEL,
                 ENTER_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.abort_overlay_session(window, cx);
                 }),
-            ))
-            .child(render_clickable_action_chip(
+            )
+            .into_any_element(),
+            render_clickable_action_chip(
                 "dictation-continue-button",
                 ACTION_CONTINUE_LABEL,
                 ESC_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.resume_recording(window, cx);
                 }),
-            ))
-            .into_any_element()
+            )
+            .into_any_element(),
+        ])
     }
 
     /// Render a compact Close action for terminal phases.
     fn render_close_action(&self, cx: &mut Context<Self>) -> AnyElement {
-        render_clickable_action_chip(
+        render_clickable_action_rail([render_clickable_action_chip(
             "dictation-close-button",
             ACTION_CLOSE_LABEL,
             ESC_KEYCAP.into(),
@@ -842,7 +834,7 @@ impl DictationOverlay {
                 this.close_overlay_from_within(window);
             }),
         )
-        .into_any_element()
+        .into_any_element()])
     }
 
     /// Handle key-down events for the overlay.
@@ -951,15 +943,12 @@ impl Focusable for DictationOverlay {
 impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
+        let chrome = AppChromeColors::from_theme(&theme);
 
-        // Compact capsule surface: quiet theme surface plus a neutral native rim.
-        let mut surface_bg = rgb(theme.colors.background.title_bar);
-        surface_bg.a = CAPSULE_BG_OPACITY;
-        let border_color = theme
-            .colors
-            .text
-            .primary
-            .with_opacity(CAPSULE_NATIVE_RIM_OPACITY);
+        // Glass bar surface: same theme-backed window surface and neutral rim
+        // language as the launcher/main menu chrome.
+        let surface_bg = rgba(chrome.window_surface_rgba);
+        let border_color = theme.colors.ui.border.with_opacity(GLASS_BAR_RIM_OPACITY);
 
         let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
         let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
@@ -971,7 +960,7 @@ impl Render for DictationOverlay {
 
         // Primary controls plus a visible shortcut rail. The rail is part of
         // the runtime overlay, not hidden copy, so dictation affordances stay
-        // discoverable while the capsule remains compact.
+        // discoverable while the glass bar stays visually aligned to the launcher.
         let inner = match phase {
             DictationSessionPhase::Recording => {
                 let timer_text = format_elapsed(*elapsed);
@@ -985,7 +974,7 @@ impl Render for DictationOverlay {
                     .justify_center()
                     .gap(px(3.))
                     .w_full()
-                    .child(
+                    .child(render_glass_signal_band(
                         div()
                             .flex()
                             .flex_row()
@@ -1018,12 +1007,14 @@ impl Render for DictationOverlay {
                                     .child(render_waveform_bars(bars, active)),
                             )
                             // Right: destination badge
-                            .child(self.render_target_badge_slot(target_badge_interactive, cx)),
-                    )
+                            .child(self.render_target_badge_slot(target_badge_interactive, cx))
+                            .into_any_element(),
+                    ))
                     .child(self.render_recording_actions(cx))
             }
             DictationSessionPhase::Confirming => {
                 let timer_text = format_elapsed(*elapsed);
+                let (headline, _) = overlay_phase_copy(phase);
 
                 div()
                     .flex()
@@ -1032,7 +1023,7 @@ impl Render for DictationOverlay {
                     .justify_center()
                     .gap(px(3.))
                     .w_full()
-                    .child(
+                    .child(render_glass_signal_band(
                         div()
                             .flex()
                             .flex_row()
@@ -1054,7 +1045,7 @@ impl Render for DictationOverlay {
                                             .child(timer_text),
                                     ),
                             )
-                            // Center: Stop / Continue buttons (replaces waveform)
+                            // Center: confirmation headline
                             .child(
                                 div()
                                     .flex_1()
@@ -1062,11 +1053,16 @@ impl Render for DictationOverlay {
                                     .flex_row()
                                     .items_center()
                                     .justify_center()
-                                    .child(self.render_confirming_actions(cx)),
+                                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                                    .font_family(FONT_MONO)
+                                    .text_color(text_color)
+                                    .child(headline),
                             )
                             // Right: destination badge
-                            .child(self.render_target_badge_slot(false, cx)),
-                    )
+                            .child(self.render_target_badge_slot(false, cx))
+                            .into_any_element(),
+                    ))
+                    .child(self.render_confirming_actions(cx))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -1084,7 +1080,14 @@ impl Render for DictationOverlay {
                     .justify_center()
                     .gap(px(4.))
                     .w_full()
-                    .child(render_transcribing_dots(&dot_opacities))
+                    .child(render_glass_signal_band(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(render_transcribing_dots(&dot_opacities))
+                            .into_any_element(),
+                    ))
                     .child(self.render_close_action(cx))
             }
             DictationSessionPhase::Delivering => div()
@@ -1094,14 +1097,15 @@ impl Render for DictationOverlay {
                 .justify_center()
                 .gap(px(3.))
                 .w_full()
-                .child(
+                .child(render_glass_signal_band(
                     div()
                         .text_size(px(STATUS_TEXT_SIZE_PX))
                         .font_family(FONT_MONO)
                         .text_color(text_color)
                         .overflow_hidden()
-                        .child("Delivering\u{2026}"),
-                )
+                        .child("Delivering\u{2026}")
+                        .into_any_element(),
+                ))
                 .child(self.render_close_action(cx)),
             DictationSessionPhase::Finished => div()
                 .flex()
@@ -1110,14 +1114,15 @@ impl Render for DictationOverlay {
                 .justify_center()
                 .gap(px(3.))
                 .w_full()
-                .child(
+                .child(render_glass_signal_band(
                     div()
                         .text_size(px(STATUS_TEXT_SIZE_PX))
                         .font_family(FONT_MONO)
                         .text_color(text_color)
                         .overflow_hidden()
-                        .child(finished_label()),
-                )
+                        .child(finished_label())
+                        .into_any_element(),
+                ))
                 .child(self.render_close_action(cx)),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
@@ -1128,14 +1133,15 @@ impl Render for DictationOverlay {
                     .justify_center()
                     .gap(px(3.))
                     .w_full()
-                    .child(
+                    .child(render_glass_signal_band(
                         div()
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
                             .text_color(muted_text)
                             .overflow_hidden()
-                            .child(err_text),
-                    )
+                            .child(err_text)
+                            .into_any_element(),
+                    ))
                     .child(self.render_close_action(cx))
             }
             DictationSessionPhase::Idle => div(),
@@ -1160,7 +1166,11 @@ impl Render for DictationOverlay {
             .border_1()
             .border_color(border_color)
             .shadow(vec![gpui::BoxShadow {
-                color: theme.colors.ui.border.with_opacity(0.22),
+                color: theme
+                    .colors
+                    .ui
+                    .border
+                    .with_opacity(GLASS_BAR_SHADOW_OPACITY),
                 offset: gpui::point(px(0.0), px(8.0)),
                 blur_radius: px(20.0),
                 spread_radius: px(0.0),
@@ -1184,7 +1194,7 @@ pub(crate) fn finished_label() -> SharedString {
     "Done".into()
 }
 
-/// Render waveform bars for the compact capsule.
+/// Render waveform bars for the glass bar.
 ///
 /// Uses theme success color when sound is detected, muted text when silent.
 fn render_waveform_bars(bars: &[f32; WAVEFORM_BAR_COUNT], active: bool) -> impl IntoElement {
@@ -1254,48 +1264,103 @@ fn render_transcribing_dots(opacities: &[f32; TRANSCRIBING_DOT_COUNT]) -> impl I
 fn dictation_stop_keycap() -> SharedString {
     crate::config::load_config()
         .get_dictation_hotkey()
-        .map(|hotkey| hotkey.to_display_string())
+        .map(|hotkey| dictation_hotkey_keycap(&hotkey))
         .filter(|key| !key.trim().is_empty())
-        .unwrap_or_else(|| "again".to_string())
+        .unwrap_or_else(default_dictation_stop_keycap)
         .into()
 }
 
-fn render_action_keycap(key: SharedString) -> impl IntoElement {
+fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
+    hotkey.to_display_string().replace("Semicolon", ";")
+}
+
+fn default_dictation_stop_keycap() -> String {
+    crate::config::HotkeyConfig {
+        modifiers: vec!["meta".to_string(), "shift".to_string()],
+        key: "Semicolon".to_string(),
+    }
+    .to_display_string()
+    .replace("Semicolon", ";")
+}
+
+fn action_chip_width(label: &str) -> f32 {
+    match label {
+        ACTION_CONTINUE_LABEL => 112.0,
+        ACTION_CLOSE_LABEL => 72.0,
+        _ => 96.0,
+    }
+}
+
+fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
     let theme = get_cached_theme();
+    let list_item_colors = crate::list_item::ListItemColors::from_theme(&theme);
+    let selected_row_bg = crate::list_item::row_selected_background_rgba(&list_item_colors);
 
     div()
-        .px(px(6.))
-        .py(px(2.))
-        .min_w(px(24.))
+        .w_full()
         .flex()
         .items_center()
         .justify_center()
-        .rounded(px(7.))
-        .bg(theme.colors.background.main.with_opacity(OPACITY_SELECTED))
+        .px(px(10.0))
+        .py(px(6.0))
+        .bg(rgba(selected_row_bg))
         .border_1()
-        .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
-        .text_size(px(SHORTCUT_TEXT_SIZE_PX + 0.5))
-        .font_family(FONT_MONO)
-        .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
-        .whitespace_nowrap()
-        .child(key)
+        .border_color(
+            theme
+                .colors
+                .ui
+                .border
+                .with_opacity(GLASS_SIGNAL_BORDER_OPACITY),
+        )
+        .rounded(px(9.0))
+        .child(body)
 }
 
-fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
+fn render_action_chip_content(label: &'static str, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
+    let footer_text = theme
+        .colors
+        .text
+        .primary
+        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
+        .to_rgb();
+    let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
+        footer_text.into(),
+        theme.colors.text.primary.to_rgb(),
+        false,
+    );
+    let key = key.to_string();
+    let shortcut_tokens = crate::components::hint_strip::shortcut_tokens_from_hint(&key);
 
     div()
+        .px(px(4.0))
+        .py(px(2.0))
+        .rounded(px(4.0))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(6.))
-        .text_size(px(SHORTCUT_TEXT_SIZE_PX + 1.0))
-        .font_family(FONT_MONO)
-        .text_color(theme.colors.text.primary.with_opacity(OPACITY_TEXT_MUTED))
-        .overflow_hidden()
-        .whitespace_nowrap()
-        .child(label)
-        .child(render_action_keycap(key))
+        .gap(px(3.0))
+        .child(
+            div()
+                .text_size(px(12.5))
+                .text_color(footer_text)
+                .child(label),
+        )
+        .child(crate::components::hint_strip::render_inline_shortcut_keys(
+            shortcut_tokens.iter().map(|token| token.as_str()),
+            shortcut_colors,
+        ))
+}
+
+fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElement {
+    div()
+        .w(px(action_chip_width(label)))
+        .h_full()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .child(render_action_chip_content(label, key))
 }
 
 fn render_clickable_action_chip(
@@ -1310,26 +1375,62 @@ fn render_clickable_action_chip(
 
     div()
         .id(id)
-        .px(px(5.))
-        .py(px(2.))
-        .rounded(px(8.))
+        .w(px(action_chip_width(label)))
+        .h_full()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
         .cursor_pointer()
         .hover(move |style| style.bg(hover_bg))
         .active(move |style| style.bg(active_bg))
         .on_mouse_down(MouseButton::Left, listener)
-        .child(render_action_chip(label, key))
+        .child(render_action_chip_content(label, key))
+}
+
+fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
+    let theme = get_cached_theme();
+    let chrome = AppChromeColors::from_theme(&theme);
+
+    let mut rail = div()
+        .id("dictation-action-rail")
+        .w_full()
+        .min_h(px(24.0))
+        .border_t_1()
+        .border_color(rgba(chrome.divider_rgba))
+        .pt(px(4.0))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(4.0));
+
+    for action in actions {
+        rail = rail.child(action);
+    }
+
+    rail.into_any_element()
 }
 
 fn render_static_action_rail(
     actions: impl IntoIterator<Item = (&'static str, SharedString)>,
 ) -> impl IntoElement {
+    let theme = get_cached_theme();
+    let chrome = AppChromeColors::from_theme(&theme);
+
     let mut rail = div()
         .id("dictation-action-rail")
+        .w_full()
+        .min_h(px(24.0))
+        .border_t_1()
+        .border_color(rgba(chrome.divider_rgba))
+        .pt(px(4.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(12.));
+        .gap(px(4.0));
 
     for (label, key) in actions {
         rail = rail.child(render_action_chip(label, key));
@@ -1338,7 +1439,7 @@ fn render_static_action_rail(
     rail
 }
 
-/// Render the live compact capsule from a fixed state for Storybook previews.
+/// Render the live glass bar from a fixed state for Storybook previews.
 ///
 /// This keeps canonical Dictation stories on the same constants, waveform
 /// math, phase copy, and target-badge styling as the runtime overlay without
@@ -1347,13 +1448,9 @@ pub(crate) fn render_dictation_overlay_state_preview(
     state: &DictationOverlayState,
 ) -> gpui::AnyElement {
     let theme = get_cached_theme();
-    let mut surface_bg = rgb(theme.colors.background.title_bar);
-    surface_bg.a = CAPSULE_BG_OPACITY;
-    let border_color = theme
-        .colors
-        .text
-        .primary
-        .with_opacity(CAPSULE_NATIVE_RIM_OPACITY);
+    let chrome = AppChromeColors::from_theme(&theme);
+    let surface_bg = rgba(chrome.window_surface_rgba);
+    let border_color = theme.colors.ui.border.with_opacity(GLASS_BAR_RIM_OPACITY);
     let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
     let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
     let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
@@ -1376,7 +1473,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .justify_center()
                 .gap(px(3.))
                 .w_full()
-                .child(
+                .child(render_glass_signal_band(
                     div()
                         .flex()
                         .flex_row()
@@ -1406,8 +1503,9 @@ pub(crate) fn render_dictation_overlay_state_preview(
                                 .justify_center()
                                 .child(render_waveform_bars(&state.bars, active)),
                         )
-                        .child(render_static_target_badge_slot(state.target)),
-                )
+                        .child(render_static_target_badge_slot(state.target))
+                        .into_any_element(),
+                ))
                 .child(render_static_action_rail([
                     (ACTION_STOP_LABEL, dictation_stop_keycap()),
                     (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
@@ -1415,6 +1513,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
         }
         DictationSessionPhase::Confirming => {
             let timer_text = format_elapsed(state.elapsed);
+            let (headline, _) = overlay_phase_copy(&state.phase);
             div()
                 .flex()
                 .flex_col()
@@ -1422,7 +1521,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .justify_center()
                 .gap(px(3.))
                 .w_full()
-                .child(
+                .child(render_glass_signal_band(
                     div()
                         .flex()
                         .flex_row()
@@ -1450,13 +1549,18 @@ pub(crate) fn render_dictation_overlay_state_preview(
                                 .flex_row()
                                 .items_center()
                                 .justify_center()
-                                .child(render_static_action_rail([
-                                    (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
-                                    (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
-                                ])),
+                                .text_size(px(STATUS_TEXT_SIZE_PX))
+                                .font_family(FONT_MONO)
+                                .text_color(text_color)
+                                .child(headline),
                         )
-                        .child(render_static_target_badge_slot(state.target)),
-                )
+                        .child(render_static_target_badge_slot(state.target))
+                        .into_any_element(),
+                ))
+                .child(render_static_action_rail([
+                    (ACTION_STOP_LABEL, ENTER_KEYCAP.into()),
+                    (ACTION_CONTINUE_LABEL, ESC_KEYCAP.into()),
+                ]))
         }
         DictationSessionPhase::Transcribing => div()
             .flex()
@@ -1465,8 +1569,15 @@ pub(crate) fn render_dictation_overlay_state_preview(
             .justify_center()
             .gap(px(4.))
             .w_full()
-            .child(render_transcribing_dots(
-                &transcribing_dot_opacities_static(),
+            .child(render_glass_signal_band(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(render_transcribing_dots(
+                        &transcribing_dot_opacities_static(),
+                    ))
+                    .into_any_element(),
             ))
             .child(render_static_action_rail([(
                 ACTION_CLOSE_LABEL,
@@ -1479,14 +1590,15 @@ pub(crate) fn render_dictation_overlay_state_preview(
             .justify_center()
             .gap(px(3.))
             .w_full()
-            .child(
+            .child(render_glass_signal_band(
                 div()
                     .text_size(px(STATUS_TEXT_SIZE_PX))
                     .font_family(FONT_MONO)
                     .text_color(text_color)
                     .overflow_hidden()
-                    .child("Delivering\u{2026}"),
-            )
+                    .child("Delivering\u{2026}")
+                    .into_any_element(),
+            ))
             .child(render_static_action_rail([(
                 ACTION_CLOSE_LABEL,
                 ESC_KEYCAP.into(),
@@ -1498,14 +1610,15 @@ pub(crate) fn render_dictation_overlay_state_preview(
             .justify_center()
             .gap(px(3.))
             .w_full()
-            .child(
+            .child(render_glass_signal_band(
                 div()
                     .text_size(px(STATUS_TEXT_SIZE_PX))
                     .font_family(FONT_MONO)
                     .text_color(text_color)
                     .overflow_hidden()
-                    .child(finished_label()),
-            )
+                    .child(finished_label())
+                    .into_any_element(),
+            ))
             .child(render_static_action_rail([(
                 ACTION_CLOSE_LABEL,
                 ESC_KEYCAP.into(),
@@ -1519,14 +1632,15 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 .justify_center()
                 .gap(px(3.))
                 .w_full()
-                .child(
+                .child(render_glass_signal_band(
                     div()
                         .text_size(px(STATUS_TEXT_SIZE_PX))
                         .font_family(FONT_MONO)
                         .text_color(muted_text)
                         .overflow_hidden()
-                        .child(err_text),
-                )
+                        .child(err_text)
+                        .into_any_element(),
+                ))
                 .child(render_static_action_rail([(
                     ACTION_CLOSE_LABEL,
                     ESC_KEYCAP.into(),
@@ -1550,7 +1664,11 @@ pub(crate) fn render_dictation_overlay_state_preview(
         .border_1()
         .border_color(border_color)
         .shadow(vec![gpui::BoxShadow {
-            color: theme.colors.ui.border.with_opacity(0.22),
+            color: theme
+                .colors
+                .ui
+                .border
+                .with_opacity(GLASS_BAR_SHADOW_OPACITY),
             offset: gpui::point(px(0.0), px(8.0)),
             blur_radius: px(20.0),
             spread_radius: px(0.0),

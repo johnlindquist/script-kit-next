@@ -126,7 +126,10 @@ fn enter_key_dispatches_paste_not_copy_in_emoji_picker() {
 
     // The plain Enter arm (no modifiers) must route through the shared paste finalizer.
     let enter_check = source.find("is_key_enter(key)");
-    assert!(enter_check.is_some(), "emoji picker must handle Enter key via is_key_enter");
+    assert!(
+        enter_check.is_some(),
+        "emoji picker must handle Enter key via is_key_enter"
+    );
 
     let enter_pos = enter_check.unwrap();
     let after_enter = &source[enter_pos..];
@@ -148,8 +151,7 @@ fn emoji_picker_footer_primary_action_is_paste() {
     let source = read_source("src/render_builtins/emoji_picker.rs");
 
     assert!(
-        source.contains("render_simple_hint_strip(")
-            && source.contains("universal_prompt_hints()"),
+        source.contains("render_simple_hint_strip(") && source.contains("universal_prompt_hints()"),
         "emoji picker footer should use the shared universal prompt hints"
     );
     assert!(

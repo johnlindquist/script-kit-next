@@ -28,7 +28,10 @@ fn acp_markdown_handlers_route_blocked_reason_through_action_state() {
         "ACP markdown action should expose the blocked-reason transition"
     );
     assert!(
-        ACTION_HANDLER.matches("markdown_action.blocked_reason(message_count)").count() >= 2
+        ACTION_HANDLER
+            .matches("markdown_action.blocked_reason(message_count)")
+            .count()
+            >= 2
             && ACTION_HANDLER.contains("reason = %reason.trace_value()"),
         "ACP markdown export and save-as-note should log named blocked reasons"
     );

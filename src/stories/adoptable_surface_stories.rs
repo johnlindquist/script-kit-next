@@ -2,11 +2,12 @@ use gpui::*;
 
 use crate::storybook::{
     actions_dialog_story_variants, footer_story_variants, input_story_variants,
-    mini_ai_chat_story_variants, render_actions_dialog_presentation, render_footer_story_preview,
-    render_input_story_preview, render_mini_ai_chat_compare_thumbnail,
-    render_mini_ai_chat_story_preview, resolve_actions_dialog_style,
-    ActionsDialogPresentationAction, ActionsDialogPresentationItem, ActionsDialogPresentationModel,
-    Story, StoryCatalogRole, StorySurface, StoryVariant,
+    mini_ai_chat_story_variants, render_actions_dialog_presentation,
+    render_dictation_ui_compare_thumbnail, render_dictation_ui_gallery,
+    render_dictation_ui_story_preview, render_footer_story_preview, render_input_story_preview,
+    render_mini_ai_chat_compare_thumbnail, render_mini_ai_chat_story_preview,
+    resolve_actions_dialog_style, ActionsDialogPresentationAction, ActionsDialogPresentationItem,
+    ActionsDialogPresentationModel, Story, StoryCatalogRole, StorySurface, StoryVariant,
 };
 use crate::theme::get_cached_theme;
 
@@ -158,6 +159,46 @@ impl Story for MiniAiChatVariationsStory {
     }
 }
 
+pub struct DictationUiVariationsStory;
+
+impl Story for DictationUiVariationsStory {
+    fn id(&self) -> &'static str {
+        "dictation-ui-variations"
+    }
+
+    fn name(&self) -> &'static str {
+        "Dictation UI Variations"
+    }
+
+    fn category(&self) -> &'static str {
+        "Voice Experiments"
+    }
+
+    fn catalog_role(&self) -> StoryCatalogRole {
+        StoryCatalogRole::DesignExperiment
+    }
+
+    fn surface(&self) -> StorySurface {
+        StorySurface::DictationOverlay
+    }
+
+    fn render(&self) -> AnyElement {
+        render_dictation_ui_gallery()
+    }
+
+    fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
+        render_dictation_ui_story_preview(&variant.stable_id())
+    }
+
+    fn render_compare_variant(&self, variant: &StoryVariant) -> AnyElement {
+        render_dictation_ui_compare_thumbnail(&variant.stable_id())
+    }
+
+    fn variants(&self) -> Vec<StoryVariant> {
+        crate::storybook::dictation_ui_story_variants()
+    }
+}
+
 fn render_actions_dialog_story_preview(stable_id: &str) -> AnyElement {
     let (style, _) = resolve_actions_dialog_style(Some(stable_id));
     let theme = get_cached_theme();
@@ -230,5 +271,13 @@ mod tests {
                 story.id()
             );
         }
+    }
+
+    #[test]
+    fn dictation_ui_variations_is_active_design_experiment() {
+        let story = DictationUiVariationsStory;
+        assert_eq!(story.catalog_role(), StoryCatalogRole::DesignExperiment);
+        assert_eq!(story.surface(), StorySurface::DictationOverlay);
+        assert_eq!(story.variants().len(), 25);
     }
 }

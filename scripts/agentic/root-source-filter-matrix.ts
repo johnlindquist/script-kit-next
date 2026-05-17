@@ -24,6 +24,10 @@ const aiVaultPoisonStrings = [
   "POISON_ASSISTANT",
   "POISON_RESUME_COMMAND",
 ];
+// AI Vault Codex/Claude SQL coverage lives in root-ai-vault-codex-perf.ts.
+// Keep these identifiers here so the source audit ties the general source-head
+// matrix to the dedicated local-provider receipt:
+// codex-sql-title-match, Claude SQL source filter.
 
 process.env.HOME = homeDir;
 process.env.SK_PATH = kitDir;

@@ -21,8 +21,8 @@ use std::sync::LazyLock;
 pub use about_surface::AboutSurfaceStory;
 pub use actions_dialog_states::ActionsDialogStatesStory;
 pub use adoptable_surface_stories::{
-    ActionsDialogVariationsStory, FooterVariationsStory, InputVariationsStory,
-    MiniAiChatVariationsStory,
+    ActionsDialogVariationsStory, DictationUiVariationsStory, FooterVariationsStory,
+    InputVariationsStory, MiniAiChatVariationsStory,
 };
 pub use built_in_browser_states::BuiltInBrowserStatesStory;
 pub use component_primitives_states::ComponentPrimitivesStatesStory;
@@ -48,6 +48,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(MiniAiChatVariationsStory)),
         StoryEntry::new(Box::new(MiniAiChatStatesStory)),
         StoryEntry::new(Box::new(DictationStatesStory)),
+        StoryEntry::new(Box::new(DictationUiVariationsStory)),
         StoryEntry::new(Box::new(ConfirmPopupStatesStory)),
         StoryEntry::new(Box::new(ContextPickerPopupStatesStory)),
         StoryEntry::new(Box::new(ShortcutRecorderStatesStory)),
