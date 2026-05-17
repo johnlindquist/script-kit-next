@@ -2568,6 +2568,31 @@ fn sync_to_github_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn window_switcher_focus_feedback_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/window_switcher.rs")
+        .expect("Failed to read window switcher renderer");
+
+    assert!(
+        content.contains("enum WindowSwitcherFocusAction")
+            && content.contains("FocusSelectedWindow"),
+        "Window Switcher selected-window focus feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("WindowSwitcherFocusAction::FocusSelectedWindow")
+            && content.contains("focus_action.attempt_log(&window_info.title)")
+            && content.contains("focus_action.success_log(&window_info.title)")
+            && content.contains("focus_action.failure_message(e)"),
+        "Window Switcher focus logs and error toast should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Focusing window: {window_title}\")")
+            && content.contains("format!(\"Focused window: {window_title}\")")
+            && content.contains("format!(\"Failed to focus window: {error}\")"),
+        "Window Switcher focus feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn design_explorer_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
