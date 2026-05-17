@@ -694,6 +694,24 @@ fn file_search_feedback_helpers_use_named_plan_states() {
     );
 }
 
+#[test]
+fn clipboard_pin_feedback_helper_uses_named_plan_states() {
+    let content =
+        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read action helpers");
+
+    assert!(
+        content.contains("enum ClipboardPinFeedbackPlan")
+            && content.contains("Pin")
+            && content.contains("Unpin")
+            && content.contains("Unsupported"),
+        "clipboard pin/unpin success feedback should be driven by named action states"
+    );
+    assert!(
+        content.contains("ClipboardPinFeedbackPlan::from_action_id(action_id).success_hud()"),
+        "clipboard pin/unpin feedback helper should derive visible HUD text from the named plan"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
