@@ -123,6 +123,27 @@ fn clipboard_entry_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn emoji_entry_actions_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
+
+    assert!(
+        content.contains("enum EmojiEntryActionPlan")
+            && content.contains("PinnedWithCategory")
+            && content.contains("PinnedWithoutCategory")
+            && content.contains("UnpinnedWithCategory")
+            && content.contains("UnpinnedWithoutCategory"),
+        "emoji pin/unpin and section-copy actions should be driven by named entry action plan states"
+    );
+    assert!(
+        content.contains("EmojiEntryActionPlan::from_info(emoji)")
+            && content.contains("fn pin_action")
+            && content.contains("fn has_category"),
+        "emoji context actions should derive pin and category rows from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

@@ -16,10 +16,58 @@ pub struct EmojiActionInfo {
     pub category: Option<crate::emoji::EmojiCategory>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiEntryActionPlan {
+    PinnedWithCategory,
+    PinnedWithoutCategory,
+    UnpinnedWithCategory,
+    UnpinnedWithoutCategory,
+}
+
+impl EmojiEntryActionPlan {
+    fn from_info(emoji: &EmojiActionInfo) -> Self {
+        match (emoji.pinned, emoji.category.is_some()) {
+            (true, true) => Self::PinnedWithCategory,
+            (true, false) => Self::PinnedWithoutCategory,
+            (false, true) => Self::UnpinnedWithCategory,
+            (false, false) => Self::UnpinnedWithoutCategory,
+        }
+    }
+
+    fn has_category(self) -> bool {
+        matches!(self, Self::PinnedWithCategory | Self::UnpinnedWithCategory)
+    }
+
+    fn pin_action(self) -> Action {
+        if matches!(self, Self::PinnedWithCategory | Self::PinnedWithoutCategory) {
+            Action::new(
+                "emoji:emoji_unpin",
+                "Unpin Emoji",
+                Some("Removes pin from this emoji".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P")
+            .with_icon(IconName::StarFilled)
+            .with_section("Edit")
+        } else {
+            Action::new(
+                "emoji:emoji_pin",
+                "Pin Emoji",
+                Some("Pins this emoji for quick access".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P")
+            .with_icon(IconName::Star)
+            .with_section("Edit")
+        }
+    }
+}
+
 /// Get actions specific to an emoji picker entry.
 #[allow(clippy::vec_init_then_push)]
 pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
     let mut actions = Vec::new();
+    let entry_plan = EmojiEntryActionPlan::from_info(emoji);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -72,31 +120,7 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
         .with_section("Actions"),
     );
 
-    if emoji.pinned {
-        actions.push(
-            Action::new(
-                "emoji:emoji_unpin",
-                "Unpin Emoji",
-                Some("Removes pin from this emoji".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::StarFilled)
-            .with_section("Edit"),
-        );
-    } else {
-        actions.push(
-            Action::new(
-                "emoji:emoji_pin",
-                "Pin Emoji",
-                Some("Pins this emoji for quick access".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::Star)
-            .with_section("Edit"),
-        );
-    }
+    actions.push(entry_plan.pin_action());
 
     actions.push(
         Action::new(
@@ -110,7 +134,7 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
         .with_section("Share"),
     );
 
-    if emoji.category.is_some() {
+    if entry_plan.has_category() {
         actions.push(
             Action::new(
                 "emoji:emoji_copy_section",
