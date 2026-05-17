@@ -90,6 +90,18 @@ impl ClipboardPinHandlerAction {
             Self::Unpin => "Unpinned",
         }
     }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Pin | Self::Unpin => "No clipboard entry selected",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Pin | Self::Unpin => format!("Failed to update pin: {error}"),
+        }
+    }
 }
 
 impl ClipboardCopyPasteHandlerAction {
@@ -384,7 +396,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(pin_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -444,7 +456,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to toggle clipboard pin");
-                        self.show_error_toast(format!("Failed to update pin: {}", e), cx);
+                        self.show_error_toast(pin_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()

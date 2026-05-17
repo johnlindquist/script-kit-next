@@ -165,8 +165,10 @@ fn clipboard_pin_handler_uses_named_action_states() {
     assert!(
         content.contains("ClipboardPinHandlerAction::from_action_id(action_id)")
             && content.contains("pin_action.apply(&entry.id)")
-            && content.contains("pin_action.success_hud()"),
-        "clipboard pin/unpin handler should derive storage operation and HUD text from the named action state"
+            && content.contains("pin_action.success_hud()")
+            && content.contains("pin_action.selection_required_message()")
+            && content.contains("pin_action.failure_message(e)"),
+        "clipboard pin/unpin handler should derive storage operation, HUD text, and error text from the named action state"
     );
 }
 
