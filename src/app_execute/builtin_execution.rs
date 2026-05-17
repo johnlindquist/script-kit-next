@@ -808,6 +808,32 @@ impl AppLaunchBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesBuiltinAction {
+    Open,
+}
+
+impl NotesBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::Notes => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_notes",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_notes_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3343,44 +3369,9 @@ impl ScriptListApp {
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::Notes => {
-                tracing::info!(
-                    target: "script_kit::keyboard",
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    event = "notes_handoff_preserving_launcher_context",
-                    filter_text_len = self.filter_text.len(),
-                    show_actions_popup = self.show_actions_popup,
-                    "Opening Notes window (preserving launcher context)"
-                );
-
-                // Close companion UI before hiding so it does not stay stale.
-                if crate::confirm::is_confirm_window_open() {
-                    crate::confirm::route_key_to_confirm_popup("escape", cx);
-                }
-                if crate::actions::is_actions_window_open() {
-                    crate::actions::close_actions_window(cx);
-                    self.mark_actions_popup_closed();
-                    self.mark_filter_resync_after_actions_if_needed();
-                    self.pop_focus_overlay(cx);
-                }
-
-                self.pending_focus = None;
-                script_kit_gpui::set_main_window_visible(false);
-                platform::defer_hide_main_window(cx);
-                if let Err(e) = notes::open_notes_window_without_launcher_restore(cx) {
-                    script_kit_gpui::set_main_window_visible(true);
-                    platform::show_main_window_without_activation();
-                    let message = format!("Failed to open Notes: {}", e);
-                    self.show_error_toast(message.clone(), cx);
-                    Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_LAUNCH_FAILED,
-                        message,
-                        "open_notes_failed",
-                    )
-                } else {
-                    Self::builtin_success(dctx, "open_notes")
-                }
+                let notes_action = NotesBuiltinAction::from_feature(&entry.feature)
+                    .expect("notes arm should only receive Notes");
+                self.execute_notes_builtin(notes_action, dctx, cx)
             }
             builtins::BuiltInFeature::EmojiPicker => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
@@ -4225,6 +4216,52 @@ impl ScriptListApp {
                 message,
                 action.not_found_detail(app_name),
             )
+        }
+    }
+
+    fn execute_notes_builtin(
+        &mut self,
+        action: NotesBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            target: "script_kit::keyboard",
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            event = "notes_handoff_preserving_launcher_context",
+            filter_text_len = self.filter_text.len(),
+            show_actions_popup = self.show_actions_popup,
+            "Opening Notes window (preserving launcher context)"
+        );
+
+        // Close companion UI before hiding so it does not stay stale.
+        if crate::confirm::is_confirm_window_open() {
+            crate::confirm::route_key_to_confirm_popup("escape", cx);
+        }
+        if crate::actions::is_actions_window_open() {
+            crate::actions::close_actions_window(cx);
+            self.mark_actions_popup_closed();
+            self.mark_filter_resync_after_actions_if_needed();
+            self.pop_focus_overlay(cx);
+        }
+
+        self.pending_focus = None;
+        script_kit_gpui::set_main_window_visible(false);
+        platform::defer_hide_main_window(cx);
+        if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
+            script_kit_gpui::set_main_window_visible(true);
+            platform::show_main_window_without_activation();
+            let message = format!("Failed to open Notes: {}", error);
+            self.show_error_toast(message.clone(), cx);
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_LAUNCH_FAILED,
+                message,
+                action.failure_detail(),
+            )
+        } else {
+            Self::builtin_success(dctx, action.success_detail())
         }
     }
 

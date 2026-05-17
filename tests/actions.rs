@@ -1519,6 +1519,42 @@ fn app_launch_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn notes_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum NotesBuiltinAction")
+            && content.contains("NotesBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_notes_builtin("),
+        "Notes should route through a named action state"
+    );
+    assert!(
+        content.contains("notes_handoff_preserving_launcher_context")
+            && content.contains("crate::confirm::route_key_to_confirm_popup(\"escape\", cx)")
+            && content.contains("crate::actions::close_actions_window(cx)")
+            && content.contains("self.mark_filter_resync_after_actions_if_needed()")
+            && content.contains("self.pending_focus = None")
+            && content.contains("notes::open_notes_window_without_launcher_restore(cx)"),
+        "Notes should preserve launcher-context handoff, popup cleanup, and focus reset behavior"
+    );
+    assert!(
+        content.contains("script_kit_gpui::set_main_window_visible(false)")
+            && content.contains("platform::defer_hide_main_window(cx)")
+            && content.contains("script_kit_gpui::set_main_window_visible(true)")
+            && content.contains("platform::show_main_window_without_activation()"),
+        "Notes should preserve main-window hide and failure restore behavior"
+    );
+    assert!(
+        content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()")
+            && content.contains("open_notes")
+            && content.contains("open_notes_failed"),
+        "Notes success and failure details should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
