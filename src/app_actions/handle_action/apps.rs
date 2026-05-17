@@ -3,6 +3,48 @@
 // Contains: show_info_in_finder, show_package_contents, copy_name,
 // copy_bundle_id, quit_app, force_quit_app, restart_app.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppCopyHandlerAction {
+    Name,
+    BundleIdentifier,
+}
+
+impl AppCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "copy_name" => Some(Self::Name),
+            "copy_bundle_id" => Some(Self::BundleIdentifier),
+            _ => None,
+        }
+    }
+
+    fn copy_value(self, result: &scripts::SearchResult) -> Result<String, &'static str> {
+        let scripts::SearchResult::App(m) = result else {
+            return Err(match self {
+                Self::Name => "Copy Name is only available for applications",
+                Self::BundleIdentifier => {
+                    "Copy Bundle Identifier is only available for applications"
+                }
+            });
+        };
+
+        match self {
+            Self::Name => Ok(m.app.name.clone()),
+            Self::BundleIdentifier => m
+                .app
+                .bundle_id
+                .clone()
+                .ok_or("No bundle identifier available for this application"),
+        }
+    }
+
+    fn copied_hud(self, value: &str) -> String {
+        match self {
+            Self::Name | Self::BundleIdentifier => format!("Copied: {value}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Handle app-specific actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_app_action(
@@ -115,62 +157,32 @@ impl ScriptListApp {
                     }
                 }
             }
-            "copy_name" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "copy name action");
-                if let Some(result) = self.get_selected_result() {
-                    let name = match &result {
-                        scripts::SearchResult::App(m) => m.app.name.clone(),
-                        _ => {
-                            return DispatchOutcome::error(
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Copy Name is only available for applications",
-                            );
-                        }
-                    };
-                    self.copy_to_clipboard_with_feedback(
-                        &name,
-                        format!("Copied: {}", name),
-                        true,
-                        cx,
+            "copy_name" | "copy_bundle_id" => {
+                let Some(copy_action) = AppCopyHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(category = "UI", trace_id = %trace_id, action = %action_id, "copy app field action");
+                let Some(result) = self.get_selected_result() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No item selected",
                     );
-                    DispatchOutcome::success()
-                } else {
-                    DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No item selected",
-                    )
-                }
-            }
-            "copy_bundle_id" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "copy bundle identifier action");
-                if let Some(result) = self.get_selected_result() {
-                    match &result {
-                        scripts::SearchResult::App(m) => {
-                            if let Some(ref bundle_id) = m.app.bundle_id {
-                                self.copy_to_clipboard_with_feedback(
-                                    bundle_id,
-                                    format!("Copied: {}", bundle_id),
-                                    true,
-                                    cx,
-                                );
-                                DispatchOutcome::success()
-                            } else {
-                                DispatchOutcome::error(
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    "No bundle identifier available for this application",
-                                )
-                            }
-                        }
-                        _ => DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Copy Bundle Identifier is only available for applications",
-                        ),
+                };
+
+                match copy_action.copy_value(&result) {
+                    Ok(value) => {
+                        self.copy_to_clipboard_with_feedback(
+                            &value,
+                            copy_action.copied_hud(&value),
+                            true,
+                            cx,
+                        );
+                        DispatchOutcome::success()
                     }
-                } else {
-                    DispatchOutcome::error(
+                    Err(message) => DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No item selected",
-                    )
+                        message,
+                    ),
                 }
             }
             "quit_app" => {
