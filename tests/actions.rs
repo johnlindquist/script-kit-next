@@ -1507,8 +1507,13 @@ fn frecency_command_builtin_uses_named_action_states() {
             && content.contains("fn execute_frecency_command_builtin(")
             && content.contains("action.hud_text()")
             && content.contains("action.success_detail()")
+            && content.contains("action.failure_message(&e)")
             && content.contains("action.failure_detail()"),
         "Frecency command routing and dispatch details should derive from the named state"
+    );
+    assert!(
+        content.contains("format!(\"Failed to clear suggested: {error}\")"),
+        "Clear Suggested failure copy should derive from the named state"
     );
     assert!(
         content.contains("self.frecency_store.clear()")
