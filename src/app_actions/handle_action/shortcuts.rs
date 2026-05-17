@@ -6,6 +6,68 @@
 // All branches resolve command IDs through `SearchResult::launcher_command_id()`
 // so that plugin-qualified IDs are consistent across read and write paths.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShortcutRecorderAction {
+    Configure,
+    Add,
+    Update,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AliasInputAction {
+    Add,
+    Update,
+}
+
+impl ShortcutRecorderAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "configure_shortcut" => Some(Self::Configure),
+            "add_shortcut" => Some(Self::Add),
+            "update_shortcut" => Some(Self::Update),
+            _ => None,
+        }
+    }
+
+    fn unsupported_message(self) -> &'static str {
+        match self {
+            Self::Configure | Self::Add | Self::Update => {
+                "Shortcuts not supported for this item type"
+            }
+        }
+    }
+
+    fn cannot_assign_message(self) -> &'static str {
+        match self {
+            Self::Configure | Self::Add | Self::Update => {
+                "Cannot assign shortcut for this item type"
+            }
+        }
+    }
+}
+
+impl AliasInputAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "add_alias" => Some(Self::Add),
+            "update_alias" => Some(Self::Update),
+            _ => None,
+        }
+    }
+
+    fn unsupported_message(self) -> &'static str {
+        match self {
+            Self::Add | Self::Update => "Aliases not supported for this item type",
+        }
+    }
+
+    fn cannot_assign_message(self) -> &'static str {
+        match self {
+            Self::Add | Self::Update => "Cannot assign alias for this item type",
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Handle shortcut and alias actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_shortcut_alias_action(
@@ -20,6 +82,10 @@ impl ScriptListApp {
             // Handle both legacy "configure_shortcut" and new dynamic actions
             // "add_shortcut" and "update_shortcut" open the shortcut recorder
             "configure_shortcut" | "add_shortcut" | "update_shortcut" => {
+                let Some(shortcut_action) = ShortcutRecorderAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", action = action_id, "action triggered");
                 if let Some(result) = self.get_selected_result() {
                     // Skills and windows are non-bindable
@@ -31,13 +97,13 @@ impl ScriptListApp {
                         | scripts::SearchResult::BrowserHistory(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Shortcuts not supported for this item type",
+                                shortcut_action.unsupported_message(),
                             );
                         }
                         scripts::SearchResult::Agent(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Shortcuts not supported for this item type",
+                                shortcut_action.unsupported_message(),
                             );
                         }
                         _ => {}
@@ -47,7 +113,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot assign shortcut for this item type",
+                            shortcut_action.cannot_assign_message(),
                         );
                     };
                     let command_name = result.launcher_command_name();
@@ -139,6 +205,9 @@ impl ScriptListApp {
             }
             // Alias actions: add_alias, update_alias open the alias input
             "add_alias" | "update_alias" => {
+                let Some(alias_action) = AliasInputAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", action = action_id, "action triggered");
                 if let Some(result) = self.get_selected_result() {
                     // Skills, windows, and legacy agents are non-bindable
@@ -151,7 +220,7 @@ impl ScriptListApp {
                         | scripts::SearchResult::Agent(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Aliases not supported for this item type",
+                                alias_action.unsupported_message(),
                             );
                         }
                         _ => {}
@@ -161,7 +230,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot assign alias for this item type",
+                            alias_action.cannot_assign_message(),
                         );
                     };
                     let command_name = result.launcher_command_name();
