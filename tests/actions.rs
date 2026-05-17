@@ -304,6 +304,29 @@ fn clipboard_ocr_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_external_file_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardExternalFileHandlerAction")
+            && content.contains("QuickLook")
+            && content.contains("OpenWith"),
+        "clipboard external file handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ClipboardExternalFileHandlerAction::from_action_id(action_id)")
+            && content.contains("external_action.selection_required_message()")
+            && content.contains("external_action.quick_look_failure_message(e)")
+            && content.contains("external_action.load_failure_message()")
+            && content.contains("external_action.temp_save_failure_message()")
+            && content.contains("external_action.open_with_failure_message()")
+            && content.contains("external_action.platform_name()"),
+        "clipboard quick-look/open-with handlers should derive guard, failure, and platform text from named states"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");
