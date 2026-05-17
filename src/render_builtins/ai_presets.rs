@@ -17,6 +17,52 @@ impl CreateAiPresetFormAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiPresetSearchEmptyState {
+    NoPresetsAvailable,
+    NoFilteredMatches,
+}
+
+impl AiPresetSearchEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoPresetsAvailable
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoPresetsAvailable => "No presets available",
+            Self::NoFilteredMatches => "No presets match your filter",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiPresetModelSelection<'a> {
+    ProviderDefault,
+    Explicit(&'a str),
+}
+
+impl<'a> AiPresetModelSelection<'a> {
+    fn from_input(model: &'a str) -> Self {
+        if model.trim().is_empty() {
+            Self::ProviderDefault
+        } else {
+            Self::Explicit(model)
+        }
+    }
+
+    fn as_create_arg(self) -> Option<&'a str> {
+        match self {
+            Self::ProviderDefault => None,
+            Self::Explicit(model) => Some(model),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render the searchable AI presets list view.
     fn render_search_ai_presets(
@@ -137,11 +183,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No presets available"
-                } else {
-                    "No presets match your filter"
-                })
+                .child(AiPresetSearchEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             div()
@@ -389,11 +431,7 @@ impl ScriptListApp {
                 let form_action = CreateAiPresetFormAction::Submit;
                 let name_val = name.clone();
                 let prompt_val = system_prompt.clone();
-                let model_val = if model.trim().is_empty() {
-                    None
-                } else {
-                    Some(model.as_str())
-                };
+                let model_val = AiPresetModelSelection::from_input(model.as_str()).as_create_arg();
                 match crate::ai::presets::create_preset(&name_val, &prompt_val, model_val) {
                     Ok(preset) => {
                         tracing::info!(id = %preset.id, name = %preset.name, action = "create_preset_success", "AI preset created");
