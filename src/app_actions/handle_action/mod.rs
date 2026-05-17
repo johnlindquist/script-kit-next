@@ -54,6 +54,12 @@ enum AcpHistoryMutationHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AsyncExternalToolFeedbackAction {
+    RevealInFileManager,
+    LaunchEditor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AcpModelSwitchHandlerAction {
     SwitchModel,
 }
@@ -81,6 +87,15 @@ impl AcpLastResponseHandlerAction {
         match self {
             Self::CopyToClipboard => "Copied last response to clipboard",
             Self::PasteToFrontmost => "Pasting to frontmost app\u{2026}",
+        }
+    }
+}
+
+impl AsyncExternalToolFeedbackAction {
+    fn failure_message(self, tool_name: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::RevealInFileManager => format!("Failed to reveal in {tool_name}: {error}"),
+            Self::LaunchEditor => format!("Failed to open in {tool_name}: {error}"),
         }
     }
 }
@@ -861,6 +876,7 @@ impl ScriptListApp {
             } else {
                 "File Manager"
             };
+            let feedback_action = AsyncExternalToolFeedbackAction::RevealInFileManager;
 
             tracing::info!(
                 category = "UI",
@@ -893,7 +909,7 @@ impl ScriptListApp {
                         error = %error,
                         "Reveal in file manager failed"
                     );
-                    Err(format!("Failed to reveal in {}: {}", file_manager, error))
+                    Err(feedback_action.failure_message(file_manager, error))
                 }
             };
 
@@ -912,6 +928,7 @@ impl ScriptListApp {
         let editor = self.config.get_editor();
         let path_str = path.to_string_lossy().to_string();
         let trace_id = trace_id.to_string();
+        let feedback_action = AsyncExternalToolFeedbackAction::LaunchEditor;
         let (result_tx, result_rx) = async_channel::bounded::<Result<(), String>>(1);
 
         std::thread::spawn(move || {
@@ -948,7 +965,7 @@ impl ScriptListApp {
                         error = %error,
                         "Editor launch failed"
                     );
-                    Err(format!("Failed to open in {}: {}", editor, error))
+                    Err(feedback_action.failure_message(&editor, error))
                 }
             };
 

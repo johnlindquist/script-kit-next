@@ -3097,6 +3097,31 @@ fn file_search_feedback_helpers_use_named_plan_states() {
 }
 
 #[test]
+fn async_external_tool_feedback_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read shared action handler");
+
+    assert!(
+        content.contains("enum AsyncExternalToolFeedbackAction")
+            && content.contains("RevealInFileManager")
+            && content.contains("LaunchEditor"),
+        "shared async external-tool feedback should be driven by named action states"
+    );
+    assert!(
+        content.contains("AsyncExternalToolFeedbackAction::RevealInFileManager")
+            && content.contains("AsyncExternalToolFeedbackAction::LaunchEditor")
+            && content.contains("feedback_action.failure_message(file_manager, error)")
+            && content.contains("feedback_action.failure_message(&editor, error)"),
+        "file-manager and editor failure feedback should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Failed to reveal in {tool_name}: {error}\")")
+            && content.contains("format!(\"Failed to open in {tool_name}: {error}\")"),
+        "external-tool failure copy should preserve the visible file-manager and editor error text"
+    );
+}
+
+#[test]
 fn shortcut_alias_edit_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/shortcuts.rs")
         .expect("Failed to read shortcut/alias action handler");
