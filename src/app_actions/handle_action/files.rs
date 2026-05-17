@@ -4,6 +4,50 @@
 // (open_file, open_directory, quick_look, open_with, show_info, attach_to_ai),
 // copy_filename, __cancel__.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchHandlerAction {
+    Open,
+    QuickLook,
+    OpenWith,
+    ShowInfo,
+    AttachToAi,
+}
+
+impl FileSearchHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "open_file" | "open_directory" => Some(Self::Open),
+            "quick_look" => Some(Self::QuickLook),
+            "open_with" => Some(Self::OpenWith),
+            "show_info" => Some(Self::ShowInfo),
+            "attach_to_ai" => Some(Self::AttachToAi),
+            _ => None,
+        }
+    }
+
+    fn success_hud(self, action_id: &str) -> Option<&'static str> {
+        match self {
+            Self::Open | Self::QuickLook | Self::OpenWith | Self::ShowInfo => {
+                file_search_action_success_hud(action_id)
+            }
+            Self::AttachToAi => None,
+        }
+    }
+
+    fn error_prefix(self, action_id: &str) -> &'static str {
+        match self {
+            Self::Open | Self::QuickLook | Self::OpenWith | Self::ShowInfo => {
+                file_search_action_error_hud_prefix(action_id).unwrap_or("Failed to complete action")
+            }
+            Self::AttachToAi => "Failed to attach",
+        }
+    }
+
+    fn hides_main_after_success(self) -> bool {
+        matches!(self, Self::Open)
+    }
+}
+
 impl ScriptListApp {
     fn deeplink_for_result(result: &scripts::SearchResult) -> String {
         result
@@ -435,15 +479,18 @@ impl ScriptListApp {
             // File search specific actions
             "open_file" | "open_directory" | "quick_look" | "open_with" | "show_info"
             | "attach_to_ai" => {
+                let Some(file_action) = FileSearchHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 if let Some(path) = self.file_search_actions_path.clone() {
                     tracing::info!(category = "UI", action = action_id, path = %path, "file action");
 
-                    let result: Result<(), String> = match action_id {
-                        "open_file" | "open_directory" => crate::file_search::open_file(&path),
-                        "quick_look" => crate::file_search::quick_look(&path),
-                        "open_with" => crate::file_search::open_with(&path),
-                        "show_info" => crate::file_search::show_info(&path),
-                        "attach_to_ai" => {
+                    let result: Result<(), String> = match file_action {
+                        FileSearchHandlerAction::Open => crate::file_search::open_file(&path),
+                        FileSearchHandlerAction::QuickLook => crate::file_search::quick_look(&path),
+                        FileSearchHandlerAction::OpenWith => crate::file_search::open_with(&path),
+                        FileSearchHandlerAction::ShowInfo => crate::file_search::show_info(&path),
+                        FileSearchHandlerAction::AttachToAi => {
                             self.open_ai_window_after_main_hide(
                                 action_id,
                                 &dctx.trace_id,
@@ -453,29 +500,21 @@ impl ScriptListApp {
 
                             Ok(())
                         }
-                        _ => Ok(()),
                     };
 
                     match result {
                         Ok(()) => {
-                            if action_id != "attach_to_ai" {
-                                if let Some(message) = file_search_action_success_hud(action_id) {
-                                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
-                                }
+                            if let Some(message) = file_action.success_hud(action_id) {
+                                self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                             }
                             self.clear_file_search_action_target();
-                            if action_id == "open_file" || action_id == "open_directory" {
+                            if file_action.hides_main_after_success() {
                                 self.hide_main_and_reset(cx);
                             }
                         }
                         Err(e) => {
                             tracing::error!(action = action_id, path = %path, error = %e, "file search action failed");
-                            let prefix = if action_id == "attach_to_ai" {
-                                "Failed to attach"
-                            } else {
-                                file_search_action_error_hud_prefix(action_id)
-                                    .unwrap_or("Failed to complete action")
-                            };
+                            let prefix = file_action.error_prefix(action_id);
                             self.clear_file_search_action_target();
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,

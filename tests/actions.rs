@@ -395,6 +395,29 @@ fn file_search_secondary_descriptions_use_named_plan_states() {
 }
 
 #[test]
+fn file_search_handler_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchHandlerAction")
+            && content.contains("Open")
+            && content.contains("QuickLook")
+            && content.contains("OpenWith")
+            && content.contains("ShowInfo")
+            && content.contains("AttachToAi"),
+        "safe file-search handler actions should be driven by named action states"
+    );
+    assert!(
+        content.contains("FileSearchHandlerAction::from_action_id(action_id)")
+            && content.contains("file_action.success_hud(action_id)")
+            && content.contains("file_action.error_prefix(action_id)")
+            && content.contains("file_action.hides_main_after_success()"),
+        "file-search handler should derive HUD, error, and hide behavior from the named action state"
+    );
+}
+
+#[test]
 fn file_search_sort_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/file_path.rs")
         .expect("Failed to read file path builder");
