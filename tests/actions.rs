@@ -1228,6 +1228,37 @@ fn utility_verify_recipe_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_replay_recipe_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("ReplayCurrentApp")
+            && content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_replay_recipe_builtin("),
+        "Replay Current App Recipe should share named utility recipe action routing"
+    );
+    assert!(
+        content.contains("action.clipboard_failure_detail()")
+            && content.contains("action.serialize_failure_detail()")
+            && content.contains("action.drift_failure_detail()")
+            && content.contains("action.missing_entry_failure_detail()")
+            && content.contains("action.open_palette_success_detail()")
+            && content.contains("action.generate_script_success_detail()")
+            && content.contains("action.unknown_action_failure_detail()")
+            && content.contains("action.capture_failure_detail()"),
+        "Replay Current App Recipe outcomes should use named state details"
+    );
+    assert!(
+        content.contains("build_replay_current_app_recipe_receipt")
+            && content.contains("present_current_app_commands_entries")
+            && content.contains("spawn_generate_script_from_recipe_after_hide")
+            && content.contains("execute_builtin_inner("),
+        "Replay Current App Recipe should preserve drift reporting, palette replay, script generation, and entry execution"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
