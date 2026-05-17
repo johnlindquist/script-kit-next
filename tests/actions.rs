@@ -954,6 +954,37 @@ fn ai_preset_view_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_capture_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiCaptureBuiltinAction")
+            && content.contains("FullScreen")
+            && content.contains("FocusedWindow")
+            && content.contains("SelectedText")
+            && content.contains("BrowserTab"),
+        "AI capture built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("AiCaptureBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_ai_capture_builtin(")
+            && content.contains("action.capture_kind()")
+            && content.contains("action.prompt()")
+            && content.contains("action.success_detail()"),
+        "AI capture commands should delegate through their named state"
+    );
+    assert!(
+        content.contains("Self::FullScreen => crate::ai::TabAiCaptureKind::FullScreen")
+            && content
+                .contains("Self::FocusedWindow => crate::ai::TabAiCaptureKind::FocusedWindow")
+            && content.contains("Self::SelectedText => crate::ai::TabAiCaptureKind::SelectedText")
+            && content.contains("Self::BrowserTab => crate::ai::TabAiCaptureKind::BrowserTab"),
+        "AI capture states should own their capture kind mapping"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
