@@ -90,6 +90,11 @@ enum FileSearchTrashHandlerAction {
     MoveToTrash,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchFilenameCopyHandlerAction {
+    CopyFilename,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -315,6 +320,27 @@ impl FileSearchTrashHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::MoveToTrash => format!("Failed to move to Trash: {error}"),
+        }
+    }
+}
+
+impl FileSearchFilenameCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "copy_filename" => Some(Self::CopyFilename),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::CopyFilename => "No file selected",
+        }
+    }
+
+    fn copied_hud(self, name: &str) -> String {
+        match self {
+            Self::CopyFilename => format!("Copied filename: {name}"),
         }
     }
 }
@@ -1111,17 +1137,22 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "copy_filename" => {
+                let Some(copy_filename_action) =
+                    FileSearchFilenameCopyHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((_path, _is_dir, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        copy_filename_action.selection_required_message(),
                     );
                 };
                 tracing::info!(category = "UI", filename = %name, "copy filename");
                 self.clear_file_search_action_target();
                 self.copy_to_clipboard_with_feedback(
                     &name,
-                    format!("Copied filename: {}", name),
+                    copy_filename_action.copied_hud(&name),
                     true,
                     cx,
                 );
