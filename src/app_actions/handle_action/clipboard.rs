@@ -10,6 +10,13 @@ enum ClipboardPinHandlerAction {
     Unpin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardCopyPasteHandlerAction {
+    PasteAndClose,
+    CopyOnly,
+    PasteKeepOpen,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -23,6 +30,54 @@ impl ClipboardPinHandlerAction {
         match self {
             Self::Pin => clipboard_history::pin_entry(entry_id),
             Self::Unpin => clipboard_history::unpin_entry(entry_id),
+        }
+    }
+}
+
+impl ClipboardCopyPasteHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "clipboard_paste" => Some(Self::PasteAndClose),
+            "clipboard_copy" => Some(Self::CopyOnly),
+            "clipboard_paste_keep_open" => Some(Self::PasteKeepOpen),
+            _ => None,
+        }
+    }
+
+    fn action_id(self) -> &'static str {
+        match self {
+            Self::PasteAndClose => "clipboard_paste",
+            Self::CopyOnly => "clipboard_copy",
+            Self::PasteKeepOpen => "clipboard_paste_keep_open",
+        }
+    }
+
+    fn should_hide_window(self) -> bool {
+        matches!(self, Self::PasteAndClose)
+    }
+
+    fn should_simulate_paste(self) -> bool {
+        matches!(self, Self::PasteAndClose | Self::PasteKeepOpen)
+    }
+
+    fn success_event(self) -> &'static str {
+        match self {
+            Self::PasteAndClose | Self::PasteKeepOpen => "clipboard_paste_start",
+            Self::CopyOnly => "clipboard_copy_success",
+        }
+    }
+
+    fn success_hud(self) -> Option<&'static str> {
+        match self {
+            Self::CopyOnly => Some("Copied to clipboard"),
+            Self::PasteAndClose | Self::PasteKeepOpen => None,
+        }
+    }
+
+    fn failure_prefix(self) -> &'static str {
+        match self {
+            Self::PasteAndClose | Self::PasteKeepOpen => "Failed to paste",
+            Self::CopyOnly => "Failed to copy",
         }
     }
 }
@@ -211,27 +266,45 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
-            // Paste to active app and close window (Enter)
-            "clipboard_paste" => {
+            "clipboard_paste" | "clipboard_copy" | "clipboard_paste_keep_open" => {
+                let Some(copy_paste_action) =
+                    ClipboardCopyPasteHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_clipboard_entry else {
                     self.show_error_toast("No clipboard entry selected", cx);
                     return DispatchOutcome::success();
                 };
 
-                tracing::info!(entry_id = %entry.id, "paste entry");
+                tracing::info!(
+                    entry_id = %entry.id,
+                    action = copy_paste_action.action_id(),
+                    "clipboard copy/paste action"
+                );
                 match clipboard_history::copy_entry_to_clipboard(&entry.id) {
                     Ok(()) => {
                         tracing::info!(
                             category = "UI",
-                            event = "clipboard_paste_start",
-                            "entry copied, hiding window before simulated paste"
+                            event = copy_paste_action.success_event(),
+                            "entry copied to clipboard"
                         );
-                        self.hide_main_and_reset(cx);
-                        self.spawn_clipboard_paste_simulation();
+                        if copy_paste_action.should_hide_window() {
+                            self.hide_main_and_reset(cx);
+                        }
+                        if copy_paste_action.should_simulate_paste() {
+                            self.spawn_clipboard_paste_simulation();
+                        }
+                        if let Some(hud) = copy_paste_action.success_hud() {
+                            self.show_hud(hud.to_string(), Some(HUD_SHORT_MS), cx);
+                        }
                     }
                     Err(e) => {
-                        tracing::error!(error = %e, "failed to paste entry");
-                        self.show_error_toast(format!("Failed to paste: {}", e), cx);
+                        tracing::error!(error = %e, action = copy_paste_action.action_id(), "clipboard copy/paste failed");
+                        self.show_error_toast(
+                            format!("{}: {}", copy_paste_action.failure_prefix(), e),
+                            cx,
+                        );
                     }
                 }
                 DispatchOutcome::success()
@@ -345,56 +418,6 @@ impl ScriptListApp {
                     deferred_action,
                     cx,
                 );
-                DispatchOutcome::success()
-            }
-            // Copy to clipboard without pasting (Cmd+Enter)
-            "clipboard_copy" => {
-                let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                tracing::info!(entry_id = %entry.id, "copying entry to clipboard");
-                match clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                    Ok(()) => {
-                        tracing::info!(category = "UI", event = "clipboard_copy_success", "entry copied to clipboard");
-                        self.show_hud(
-                            "Copied to clipboard".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
-                        // Keep the window open - do NOT call hide_main_and_reset
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to copy entry");
-                        self.show_error_toast(format!("Failed to copy: {}", e), cx);
-                    }
-                }
-                DispatchOutcome::success()
-            }
-            // Paste and keep window open (Opt+Enter)
-            "clipboard_paste_keep_open" => {
-                let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                tracing::info!(entry_id = %entry.id, "paste and keep open");
-                match clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                    Ok(()) => {
-                        tracing::info!(
-                            category = "UI",
-                            event = "clipboard_paste_start",
-                            "entry copied, simulating paste"
-                        );
-                        self.spawn_clipboard_paste_simulation();
-                        // Keep the window open - do NOT call hide_main_and_reset
-                    }
-                    Err(e) => {
-                        tracing::error!(error = %e, "failed to copy entry");
-                        self.show_error_toast(format!("Failed to paste: {}", e), cx);
-                    }
-                }
                 DispatchOutcome::success()
             }
             "clipboard_quick_look" => {

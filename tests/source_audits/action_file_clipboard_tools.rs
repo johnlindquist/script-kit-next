@@ -218,7 +218,7 @@ fn clipboard_paste_copies_entry_and_hides_window() {
     let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
-        .find("\"clipboard_paste\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste action handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
@@ -241,7 +241,7 @@ fn clipboard_paste_shows_error_when_no_entry_selected() {
     let content = super::read_all_handle_action_sources();
 
     let paste_pos = content
-        .find("\"clipboard_paste\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste action handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
