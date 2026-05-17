@@ -1977,6 +1977,26 @@ fn acp_root_change_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn acp_last_response_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpLastResponseHandlerAction")
+            && content.contains("CopyToClipboard")
+            && content.contains("PasteToFrontmost"),
+        "ACP last-response copy/paste handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpLastResponseHandlerAction::from_action_id(action_id)")
+            && content.contains("last_response_action.success_message()")
+            && content.contains("Copied last response to clipboard")
+            && content.contains("Pasting to frontmost app"),
+        "ACP last-response handlers should derive user-facing copy/paste feedback from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
