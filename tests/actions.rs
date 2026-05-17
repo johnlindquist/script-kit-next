@@ -1115,6 +1115,28 @@ fn script_context_preference_actions_use_named_plan_states() {
 }
 
 #[test]
+fn shortcut_alias_handler_uses_named_target_error_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/shortcuts.rs")
+        .expect("Failed to read shortcut alias action handler");
+
+    assert!(
+        content.contains("enum ShortcutAliasTargetError")
+            && content.contains("NoSelection")
+            && content.contains("UnsupportedItemType")
+            && content.contains("MissingCommandId"),
+        "shortcut and alias handlers should model target-resolution failures as named states"
+    );
+    assert!(
+        content.contains("shortcut_action.target_error_message(")
+            && content.contains("alias_action.target_error_message(")
+            && content.contains("remove_action.target_error_message(")
+            && content.contains("ShortcutAliasTargetError::MissingCommandId")
+            && content.contains("selection_required_message_for_action(action_id)"),
+        "shortcut and alias handlers should derive missing-target and no-selection copy from named action states"
+    );
+}
+
+#[test]
 fn script_context_share_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
