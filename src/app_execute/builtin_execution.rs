@@ -653,6 +653,12 @@ impl SystemBuiltinAction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SurfaceOpenBuiltinAction {
+    ClipboardHistory,
+    Favorites,
+    AppLauncher,
+    DesignGallery,
+    AiChat,
+    EmojiPicker,
     Webcam,
     FileSearch,
     Settings,
@@ -666,6 +672,12 @@ enum SurfaceOpenBuiltinAction {
 impl SurfaceOpenBuiltinAction {
     fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
         match feature {
+            builtins::BuiltInFeature::ClipboardHistory => Some(Self::ClipboardHistory),
+            builtins::BuiltInFeature::Favorites => Some(Self::Favorites),
+            builtins::BuiltInFeature::AppLauncher => Some(Self::AppLauncher),
+            builtins::BuiltInFeature::DesignGallery => Some(Self::DesignGallery),
+            builtins::BuiltInFeature::AiChat => Some(Self::AiChat),
+            builtins::BuiltInFeature::EmojiPicker => Some(Self::EmojiPicker),
             builtins::BuiltInFeature::Webcam => Some(Self::Webcam),
             builtins::BuiltInFeature::FileSearch => Some(Self::FileSearch),
             builtins::BuiltInFeature::Settings => Some(Self::Settings),
@@ -680,6 +692,12 @@ impl SurfaceOpenBuiltinAction {
 
     fn success_detail(self) -> &'static str {
         match self {
+            Self::ClipboardHistory => "open_clipboard_history",
+            Self::Favorites => "open_favorites_view",
+            Self::AppLauncher => "open_app_launcher",
+            Self::DesignGallery => "open_design_gallery",
+            Self::AiChat => "open_ai_harness_dispatched",
+            Self::EmojiPicker => "open_emoji_picker",
             Self::Webcam => "open_webcam",
             Self::FileSearch => "open_file_search",
             Self::Settings => "open_settings",
@@ -693,6 +711,12 @@ impl SurfaceOpenBuiltinAction {
 
     fn log_message(self) -> &'static str {
         match self {
+            Self::ClipboardHistory => "Opening Clipboard History",
+            Self::Favorites => "Opening Favorites browse view",
+            Self::AppLauncher => "Opening App Launcher",
+            Self::DesignGallery => "Opening Design Gallery",
+            Self::AiChat => "Opening Agent Chat",
+            Self::EmojiPicker => "Opening Emoji Picker",
             Self::Webcam => "Opening Webcam",
             Self::FileSearch => "Opening File Search",
             Self::Settings => "Opening Settings",
@@ -3167,86 +3191,22 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         match &entry.feature {
             builtins::BuiltInFeature::ClipboardHistory => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Clipboard History"
-                );
-                self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
-                self.focused_clipboard_entry_id = self
-                    .cached_clipboard_entries
-                    .first()
-                    .map(|entry| entry.id.clone());
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    count = self.cached_clipboard_entries.len(),
-                    "Loaded clipboard entries"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::ClipboardHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search clipboard history...",
-                    true,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_clipboard_history")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive ClipboardHistory");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::PasteSequentially => {
                 self.execute_paste_sequential_builtin(dctx, cx)
             }
             builtins::BuiltInFeature::Favorites => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    action = "open_favorites_view",
-                    trace_id = %dctx.trace_id,
-                    "Opening Favorites browse view"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::FavoritesBrowseView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search favorites...",
-                    false,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_favorites_view")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive Favorites");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::AppLauncher => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening App Launcher"
-                );
-                self.apps = app_launcher::scan_applications().clone();
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    count = self.apps.len(),
-                    "Loaded applications"
-                );
-                self.invalidate_filter_cache();
-                self.invalidate_grouped_cache();
-                self.sync_list_state();
-
-                self.open_builtin_filterable_view(
-                    AppView::AppLauncherView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search applications...",
-                    false,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_app_launcher")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive AppLauncher");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::App(app_name) => {
                 tracing::info!(
@@ -3386,23 +3346,9 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::DesignGallery => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Design Gallery"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::DesignGalleryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search designs...",
-                    false,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_design_gallery")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive DesignGallery");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             #[cfg(feature = "storybook")]
             builtins::BuiltInFeature::DesignExplorer => {
@@ -3435,14 +3381,9 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, "open_design_explorer")
             }
             builtins::BuiltInFeature::AiChat => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Agent Chat"
-                );
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
-
-                Self::builtin_success(dctx, "open_ai_harness_dispatched")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive AiChat");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::Notes => {
                 tracing::info!(
@@ -3485,32 +3426,9 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::EmojiPicker => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Emoji Picker"
-                );
-                // Freeze the Frequently Used snapshot at view-open time so
-                // selection indices stay stable while the view is open, even
-                // if the user commits an emoji and reopens the picker in the
-                // same session. The new order appears on the NEXT open.
-                self.emoji_frequent_snapshot = crate::emoji_usage::load_frequent_snapshot(
-                    crate::emoji_usage::EMOJI_FREQUENT_LIMIT,
-                );
-                // EmojiPicker has an extra selected_category field, so use the
-                // shared helper for the common state and then set the view.
-                self.open_builtin_filterable_view(
-                    AppView::EmojiPickerView {
-                        filter: String::new(),
-                        selected_index: 0,
-                        selected_category: None,
-                    },
-                    "Search Emoji & Symbols...",
-                    false,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_emoji_picker")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive EmojiPicker");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::SyncToGithub => {
                 tracing::info!(
@@ -4001,6 +3919,130 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         match action {
+            SurfaceOpenBuiltinAction::ClipboardHistory => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.cached_clipboard_entries = clipboard_history::get_cached_entries(100);
+                self.focused_clipboard_entry_id = self
+                    .cached_clipboard_entries
+                    .first()
+                    .map(|entry| entry.id.clone());
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = self.cached_clipboard_entries.len(),
+                    "Loaded clipboard entries"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::ClipboardHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search clipboard history...",
+                    true,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::Favorites => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    action = "open_favorites_view",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::FavoritesBrowseView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search favorites...",
+                    false,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::AppLauncher => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.apps = app_launcher::scan_applications().clone();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = self.apps.len(),
+                    "Loaded applications"
+                );
+                self.invalidate_filter_cache();
+                self.invalidate_grouped_cache();
+                self.sync_list_state();
+
+                self.open_builtin_filterable_view(
+                    AppView::AppLauncherView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search applications...",
+                    false,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::DesignGallery => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::DesignGalleryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search designs...",
+                    false,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::AiChat => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
+            }
+            SurfaceOpenBuiltinAction::EmojiPicker => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.emoji_frequent_snapshot = crate::emoji_usage::load_frequent_snapshot(
+                    crate::emoji_usage::EMOJI_FREQUENT_LIMIT,
+                );
+                self.open_builtin_filterable_view(
+                    AppView::EmojiPickerView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        selected_category: None,
+                    },
+                    "Search Emoji & Symbols...",
+                    false,
+                    cx,
+                );
+            }
             SurfaceOpenBuiltinAction::Webcam => {
                 tracing::info!(
                     category = "BUILTIN",
