@@ -224,6 +224,35 @@ fn clipboard_share_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_attach_to_ai_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardAttachToAiHandlerAction")
+            && content.contains("TextInput")
+            && content.contains("FileAttachment")
+            && content.contains("ImageInput"),
+        "clipboard attach-to-AI handler should classify content handoff with named action states"
+    );
+    assert!(
+        content.contains("ClipboardAttachToAiHandlerAction::from_content_type(entry.content_type)")
+            && content.contains("attach_action.deferred_action(content)")
+            && content.contains("ClipboardAttachToAiHandlerAction::prepare_image_base64(&content)"),
+        "clipboard attach-to-AI handler should derive deferred handoff behavior from the named action"
+    );
+    assert!(
+        content.contains("DeferredAiWindowAction::SetInput")
+            && content.contains("DeferredAiWindowAction::AddAttachment")
+            && content.contains("DeferredAiWindowAction::SetInputWithImage")
+            && content.contains("Clipboard file path is empty")
+            && content.contains("Failed to decode clipboard image")
+            && content.contains("submit: false"),
+        "clipboard attach-to-AI state should preserve text, file, image, and non-submitting handoff behavior"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

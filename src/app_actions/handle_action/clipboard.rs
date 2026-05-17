@@ -23,6 +23,13 @@ enum ClipboardShareHandlerAction {
     Image,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardAttachToAiHandlerAction {
+    TextInput,
+    FileAttachment,
+    ImageInput,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -128,6 +135,52 @@ impl ClipboardShareHandlerAction {
         match self {
             Self::TextLike | Self::Image => "Share sheet opened",
         }
+    }
+
+    fn image_decode_failure() -> &'static str {
+        "Failed to decode clipboard image"
+    }
+}
+
+impl ClipboardAttachToAiHandlerAction {
+    fn from_content_type(content_type: clipboard_history::ContentType) -> Self {
+        match content_type {
+            clipboard_history::ContentType::Text
+            | clipboard_history::ContentType::Link
+            | clipboard_history::ContentType::Color => Self::TextInput,
+            clipboard_history::ContentType::File => Self::FileAttachment,
+            clipboard_history::ContentType::Image => Self::ImageInput,
+        }
+    }
+
+    fn deferred_action(self, content: String) -> Result<Option<DeferredAiWindowAction>, String> {
+        match self {
+            Self::TextInput => Ok(Some(DeferredAiWindowAction::SetInput {
+                text: content,
+                submit: false,
+            })),
+            Self::FileAttachment => {
+                let attachment_path = shellexpand::tilde(content.trim()).into_owned();
+                if attachment_path.is_empty() {
+                    return Err(Self::empty_file_path_message().to_string());
+                }
+                Ok(Some(DeferredAiWindowAction::AddAttachment {
+                    path: attachment_path,
+                }))
+            }
+            Self::ImageInput => Ok(None),
+        }
+    }
+
+    fn prepare_image_base64(content: &str) -> Result<String, String> {
+        let png_bytes = clipboard_history::content_to_png_bytes(content)
+            .ok_or_else(|| Self::image_decode_failure().to_string())?;
+        use base64::Engine;
+        Ok(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
+    }
+
+    fn empty_file_path_message() -> &'static str {
+        "Clipboard file path is empty"
     }
 
     fn image_decode_failure() -> &'static str {
@@ -364,25 +417,10 @@ impl ScriptListApp {
                     "Attaching clipboard entry to Agent Chat"
                 );
 
-                let deferred_action = match entry.content_type {
-                    clipboard_history::ContentType::Text
-                    | clipboard_history::ContentType::Link
-                    | clipboard_history::ContentType::Color => {
-                        DeferredAiWindowAction::SetInput { text: content, submit: false }
-                    }
-                    clipboard_history::ContentType::File => {
-                        let attachment_path =
-                            shellexpand::tilde(content.trim()).into_owned();
-                        if attachment_path.is_empty() {
-                            self.show_error_toast("Clipboard file path is empty", cx);
-                            return DispatchOutcome::success();
-                        }
-
-                        DeferredAiWindowAction::AddAttachment {
-                            path: attachment_path,
-                        }
-                    }
-                    clipboard_history::ContentType::Image => {
+                let attach_action =
+                    ClipboardAttachToAiHandlerAction::from_content_type(entry.content_type);
+                match attach_action {
+                    ClipboardAttachToAiHandlerAction::ImageInput => {
                         // Offload PNG decode + base64 encode to a background thread
                         // to avoid blocking the UI during large image processing.
                         let (result_tx, result_rx) =
@@ -392,16 +430,8 @@ impl ScriptListApp {
 
                         std::thread::spawn(move || {
                             let started_at = std::time::Instant::now();
-                            let result = (|| {
-                                let png_bytes =
-                                    clipboard_history::content_to_png_bytes(&content)
-                                        .ok_or_else(|| {
-                                            "Failed to decode clipboard image".to_string()
-                                        })?;
-                                use base64::Engine;
-                                Ok(base64::engine::general_purpose::STANDARD
-                                    .encode(&png_bytes))
-                            })();
+                            let result =
+                                ClipboardAttachToAiHandlerAction::prepare_image_base64(&content);
                             tracing::info!(
                                 category = "AI",
                                 event = "clipboard_image_prep_done",
@@ -447,14 +477,20 @@ impl ScriptListApp {
 
                         return DispatchOutcome::success();
                     }
+                    ClipboardAttachToAiHandlerAction::TextInput
+                    | ClipboardAttachToAiHandlerAction::FileAttachment => {}
+                }
+
+                let deferred_action = match attach_action.deferred_action(content) {
+                    Ok(Some(deferred_action)) => deferred_action,
+                    Ok(None) => return DispatchOutcome::success(),
+                    Err(message) => {
+                        self.show_error_toast(message, cx);
+                        return DispatchOutcome::success();
+                    }
                 };
 
-                self.open_ai_window_after_main_hide(
-                    action_id,
-                    &dctx.trace_id,
-                    deferred_action,
-                    cx,
-                );
+                self.open_ai_window_after_main_hide(action_id, &dctx.trace_id, deferred_action, cx);
                 DispatchOutcome::success()
             }
             "clipboard_quick_look" => {
