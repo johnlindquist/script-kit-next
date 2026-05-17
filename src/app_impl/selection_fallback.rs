@@ -823,7 +823,7 @@ impl ScriptListApp {
             crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID => {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(file.path.clone()));
                 self.show_hud(
-                    format!("Copied path: {}", file.name),
+                    format!("Copied path: {}", file.path),
                     Some(HUD_MEDIUM_MS),
                     cx,
                 );

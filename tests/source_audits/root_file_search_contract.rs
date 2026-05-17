@@ -1681,6 +1681,27 @@ mod tests {
     }
 
     #[test]
+    fn root_file_copy_path_action_feedback_uses_full_path() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let branch = source
+            .split("ROOT_FILE_COPY_PATH_ACTION_ID =>")
+            .nth(1)
+            .and_then(|section| section.split("ROOT_FILE_COPY_NAME_ACTION_ID =>").next())
+            .expect("root-file Copy Path branch should be present");
+
+        assert!(
+            branch.contains("gpui::ClipboardItem::new_string(file.path.clone())")
+                && branch.contains("format!(\"Copied path: {}\", file.path)"),
+            "Copy Path should copy the full FileResult.path and show matching full-path HUD feedback"
+        );
+        assert!(
+            !branch.contains("format!(\"Copied path: {}\", file.name)"),
+            "Copy Path HUD feedback must not show only the basename while the clipboard receives the full path"
+        );
+    }
+
+    #[test]
     fn root_recent_files_keep_grouping_search_pure() {
         for path in [
             "src/scripts/grouping.rs",
