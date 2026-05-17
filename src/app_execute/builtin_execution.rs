@@ -1311,6 +1311,14 @@ impl NotesCommandBuiltinAction {
         }
     }
 
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::OpenNotes | Self::NewNote | Self::SearchNotes | Self::QuickCapture => {
+                format!("Notes command failed: {error}")
+            }
+        }
+    }
+
     fn opens_notes_window(self) -> bool {
         matches!(self, Self::OpenNotes | Self::NewNote | Self::SearchNotes)
     }
@@ -5376,7 +5384,7 @@ impl ScriptListApp {
         if let Err(e) = result {
             script_kit_gpui::set_main_window_visible(true);
             platform::show_main_window_without_activation();
-            let message = format!("Notes command failed: {}", e);
+            let message = action.failure_message(&e);
             self.show_error_toast(message.clone(), cx);
             Self::builtin_error(
                 dctx,
