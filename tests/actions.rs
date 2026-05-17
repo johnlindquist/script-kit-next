@@ -1555,6 +1555,32 @@ fn notes_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn sync_to_github_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum SyncToGithubBuiltinAction")
+            && content.contains("SyncToGithubBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_sync_to_github_builtin("),
+        "Sync to GitHub should route through a named action state"
+    );
+    assert!(
+        content.contains("Syncing Script Kit to GitHub...")
+            && content.contains("crate::sync::github::sync_to_github_workspace()")
+            && content.contains("report.summary_message()")
+            && content.contains("this.close_and_reset_window(cx)")
+            && content.contains("GitHub sync failed: {error}"),
+        "Sync to GitHub should preserve async dispatch, HUD updates, close/reset, and error handling"
+    );
+    assert!(
+        content.contains("action.success_detail()")
+            && content.contains("sync_to_github_dispatched"),
+        "Sync to GitHub dispatch detail should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
