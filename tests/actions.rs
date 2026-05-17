@@ -2731,7 +2731,8 @@ fn app_open_handler_uses_named_action_states() {
         content.contains("AppOpenHandlerAction::from_action_id(action_id)")
             && content.contains("open_action.success_hud()")
             && content.contains("open_action.error_prefix()")
-            && content.contains("open_action.missing_target_message()")
+            && content.contains("self.missing_target_message()")
+            && content.contains("open_action.target_error_message(msg)")
             && content.contains("open_action.run(path)"),
         "application open/show handler should derive execution and feedback copy from the named state"
     );

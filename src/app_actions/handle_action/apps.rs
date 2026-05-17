@@ -94,6 +94,12 @@ impl AppOpenHandlerAction {
         }
     }
 
+    fn target_error_message(self, message: Option<gpui::SharedString>) -> String {
+        message
+            .map(|message| message.to_string())
+            .unwrap_or_else(|| self.missing_target_message().to_string())
+    }
+
     fn success_hud(self) -> &'static str {
         match self {
             Self::ShowInfoInFinder => "Opened Info in Finder",
@@ -233,12 +239,9 @@ impl ScriptListApp {
                         DispatchOutcome::success()
                     }
                     Err(msg) => {
-                        let msg = msg.unwrap_or_else(|| {
-                            gpui::SharedString::from(open_action.missing_target_message())
-                        });
                         DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            msg.to_string(),
+                            open_action.target_error_message(msg),
                         )
                     }
                 }
