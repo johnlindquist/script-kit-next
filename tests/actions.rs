@@ -1254,6 +1254,39 @@ fn favorites_browse_handler_uses_named_action_states() {
 }
 
 #[test]
+fn favorites_browse_renderer_uses_named_list_action_states() {
+    let content = fs::read_to_string("src/render_builtins/favorites.rs")
+        .expect("Failed to read favorites renderer");
+
+    assert!(
+        content.contains("enum FavoritesBrowseListAction")
+            && content.contains("Run")
+            && content.contains("Remove")
+            && content.contains("MoveUp")
+            && content.contains("MoveDown"),
+        "Favorites browse renderer result feedback should be driven by named list action states"
+    );
+    assert!(
+        content.contains("action.selection_required_message()")
+            && content.contains("action.success_message(&id)")
+            && content.contains("action.missing_favorite_message(&id)")
+            && content.contains("action.boundary_message(&id)")
+            && content.contains("action.failure_message(e)"),
+        "Favorites run/remove/reorder results should derive selection, success, boundary, and failure copy from the named state"
+    );
+    assert!(
+        content.contains("format!(\"Running '{id}'\")")
+            && content.contains("format!(\"Removed '{id}'\")")
+            && content.contains("format!(\"Moved '{id}' up\")")
+            && content.contains("format!(\"Moved '{id}' down\")")
+            && content.contains("format!(\"Failed to remove favorite: {error}\")")
+            && content.contains("format!(\"Failed to move favorite up: {error}\")")
+            && content.contains("format!(\"Failed to move favorite down: {error}\")"),
+        "Favorites renderer feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn dictation_history_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/dictation_history.rs")
         .expect("Failed to read dictation history action handler");

@@ -1,3 +1,54 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FavoritesBrowseListAction {
+    Run,
+    Remove,
+    MoveUp,
+    MoveDown,
+}
+
+impl FavoritesBrowseListAction {
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Run => "Select a favorite to run.",
+            Self::Remove => "Select a favorite to remove.",
+            Self::MoveUp | Self::MoveDown => "Select a favorite to move.",
+        }
+    }
+
+    fn success_message(self, id: &str) -> String {
+        match self {
+            Self::Run => format!("Running '{id}'"),
+            Self::Remove => format!("Removed '{id}'"),
+            Self::MoveUp => format!("Moved '{id}' up"),
+            Self::MoveDown => format!("Moved '{id}' down"),
+        }
+    }
+
+    fn missing_favorite_message(self, id: &str) -> String {
+        match self {
+            Self::MoveUp | Self::MoveDown => format!("Favorite '{id}' was not found."),
+            Self::Run | Self::Remove => format!("Favorite '{id}' was not found."),
+        }
+    }
+
+    fn boundary_message(self, id: &str) -> Option<String> {
+        match self {
+            Self::MoveUp => Some(format!("'{id}' is already first")),
+            Self::MoveDown => Some(format!("'{id}' is already last")),
+            Self::Run | Self::Remove => None,
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Remove => format!("Failed to remove favorite: {error}"),
+            Self::MoveUp => format!("Failed to move favorite up: {error}"),
+            Self::MoveDown => format!("Failed to move favorite down: {error}"),
+            Self::Run => format!("Failed to run favorite: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn favorite_filter_matches(&self, id: &str, filter: &str) -> bool {
         if filter.is_empty() {
@@ -324,20 +375,22 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Result<String, String> {
+        let action = FavoritesBrowseListAction::Run;
         let id = self
             .selected_favorite_id()
-            .ok_or_else(|| "Select a favorite to run.".to_string())?;
+            .ok_or_else(|| action.selection_required_message().to_string())?;
         self.run_favorite(&id, window, cx);
-        Ok(format!("Running '{}'", id))
+        Ok(action.success_message(&id))
     }
 
     pub(crate) fn remove_selected_favorite(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<String, String> {
+        let action = FavoritesBrowseListAction::Remove;
         let id = self
             .selected_favorite_id()
-            .ok_or_else(|| "Select a favorite to remove.".to_string())?;
+            .ok_or_else(|| action.selection_required_message().to_string())?;
 
         tracing::info!(
             favorite_id = %id,
@@ -347,9 +400,10 @@ impl ScriptListApp {
         match script_kit_gpui::favorites::remove_favorite(&id) {
             Ok(_) => {
                 self.clamp_favorites_selection();
-                self.show_hud(format!("Removed '{}'", id), Some(HUD_SHORT_MS), cx);
+                let success_message = action.success_message(&id);
+                self.show_hud(success_message.clone(), Some(HUD_SHORT_MS), cx);
                 cx.notify();
-                Ok(format!("Removed '{}'", id))
+                Ok(success_message)
             }
             Err(e) => {
                 tracing::error!(
@@ -357,7 +411,7 @@ impl ScriptListApp {
                     action = "favorite_remove_failed",
                     "Failed to remove favorite"
                 );
-                Err(format!("Failed to remove favorite: {}", e))
+                Err(action.failure_message(e))
             }
         }
     }
@@ -366,15 +420,16 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<String, String> {
+        let action = FavoritesBrowseListAction::MoveUp;
         let id = self
             .selected_favorite_id()
-            .ok_or_else(|| "Select a favorite to move.".to_string())?;
+            .ok_or_else(|| action.selection_required_message().to_string())?;
         let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
         let Some(original_index) = favorites.script_ids.iter().position(|item| item == &id) else {
-            return Err(format!("Favorite '{}' was not found.", id));
+            return Err(action.missing_favorite_message(&id));
         };
         if original_index == 0 {
-            return Ok(format!("'{}' is already first", id));
+            return Ok(action.boundary_message(&id).expect("MoveUp has a boundary message"));
         }
 
         tracing::info!(
@@ -383,27 +438,28 @@ impl ScriptListApp {
             "Moving favorite up"
         );
         script_kit_gpui::favorites::move_favorite_up(&id)
-            .map_err(|e| format!("Failed to move favorite up: {}", e))?;
+            .map_err(|e| action.failure_message(e))?;
         if let AppView::FavoritesBrowseView { selected_index, .. } = &mut self.current_view {
             *selected_index = selected_index.saturating_sub(1);
         }
         cx.notify();
-        Ok(format!("Moved '{}' up", id))
+        Ok(action.success_message(&id))
     }
 
     pub(crate) fn move_selected_favorite_down(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Result<String, String> {
+        let action = FavoritesBrowseListAction::MoveDown;
         let id = self
             .selected_favorite_id()
-            .ok_or_else(|| "Select a favorite to move.".to_string())?;
+            .ok_or_else(|| action.selection_required_message().to_string())?;
         let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
         let Some(original_index) = favorites.script_ids.iter().position(|item| item == &id) else {
-            return Err(format!("Favorite '{}' was not found.", id));
+            return Err(action.missing_favorite_message(&id));
         };
         if original_index + 1 >= favorites.script_ids.len() {
-            return Ok(format!("'{}' is already last", id));
+            return Ok(action.boundary_message(&id).expect("MoveDown has a boundary message"));
         }
 
         tracing::info!(
@@ -412,13 +468,13 @@ impl ScriptListApp {
             "Moving favorite down"
         );
         script_kit_gpui::favorites::move_favorite_down(&id)
-            .map_err(|e| format!("Failed to move favorite down: {}", e))?;
+            .map_err(|e| action.failure_message(e))?;
         if let AppView::FavoritesBrowseView { selected_index, .. } = &mut self.current_view {
             *selected_index += 1;
         }
         self.clamp_favorites_selection();
         cx.notify();
-        Ok(format!("Moved '{}' down", id))
+        Ok(action.success_message(&id))
     }
 
     /// Handle keyboard input for the favorites browse view.
