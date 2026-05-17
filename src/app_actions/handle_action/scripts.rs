@@ -105,7 +105,7 @@ impl ScriptManagementHandlerAction {
 
     fn open_failure_message(self, error: impl std::fmt::Display) -> Option<String> {
         match self {
-            Self::CreateScript => Some(format!("Failed to open scripts folder: {}", error)),
+            Self::CreateScript => Some(format!("Failed to open scripts folder: {error}")),
             Self::ReloadScripts => None,
         }
     }
