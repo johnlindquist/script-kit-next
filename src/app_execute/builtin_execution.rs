@@ -1374,6 +1374,12 @@ impl FrecencyCommandBuiltinAction {
             Self::ClearSuggested => "clear_suggested_failed",
         }
     }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::ClearSuggested => format!("Failed to clear suggested: {error}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5317,7 +5323,7 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         self.frecency_store.clear();
         if let Err(e) = self.frecency_store.save() {
-            let message = format!("Failed to clear suggested: {}", e);
+            let message = action.failure_message(&e);
             self.show_error_toast(message.clone(), cx);
             cx.notify();
             Self::builtin_error(
