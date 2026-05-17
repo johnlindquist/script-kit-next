@@ -22,6 +22,12 @@ enum AppLifecycleHandlerAction {
     Restart,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLifecycleAppleScriptAction {
+    Quit,
+    ForceQuit,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct AppLifecycleTarget {
     app_name: String,
@@ -196,6 +202,14 @@ impl AppLifecycleHandlerAction {
             bundle_id: app_result.app.bundle_id,
             app_path: app_result.app.path,
         })
+    }
+}
+
+impl AppLifecycleAppleScriptAction {
+    fn osascript_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Quit | Self::ForceQuit => format!("Failed to run osascript: {error}"),
+        }
     }
 }
 
@@ -386,11 +400,12 @@ impl ScriptListApp {
 
 /// Gracefully quit an application by name using AppleScript.
 fn quit_app_by_name(name: &str) -> Result<(), String> {
+    let lifecycle_script = AppLifecycleAppleScriptAction::Quit;
     let escaped_name = crate::utils::escape_applescript_string(name);
     std::process::Command::new("osascript")
         .args(["-e", &format!(r#"tell application "{}" to quit"#, escaped_name)])
         .output()
-        .map_err(|e| format!("Failed to run osascript: {}", e))
+        .map_err(|e| lifecycle_script.osascript_failure_message(e))
         .and_then(|output| {
             if output.status.success() {
                 Ok(())
@@ -403,6 +418,7 @@ fn quit_app_by_name(name: &str) -> Result<(), String> {
 
 /// Force quit an application using its bundle identifier or name.
 fn force_quit_app(name: &str, bundle_id: Option<&str>) -> Result<(), String> {
+    let lifecycle_script = AppLifecycleAppleScriptAction::ForceQuit;
     // Try by bundle_id first (more reliable), fall back to name
     let escaped_name = crate::utils::escape_applescript_string(name);
     let script = if let Some(bid) = bundle_id {
@@ -431,7 +447,7 @@ end tell"#
     std::process::Command::new("osascript")
         .args(["-e", &script])
         .output()
-        .map_err(|e| format!("Failed to run osascript: {}", e))
+        .map_err(|e| lifecycle_script.osascript_failure_message(e))
         .and_then(|output| {
             if output.status.success() {
                 Ok(())
