@@ -10,6 +10,14 @@ enum ScriptSourceHandlerAction {
     CopyContent,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsEditorLaunchPlan {
+    ReuseWindowWithProject,
+    FileOnlyZed,
+    AddToSublimeProject,
+    GenericFileOnly,
+}
+
 impl ScriptSourceHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -52,6 +60,40 @@ impl ScriptSourceHandlerAction {
                 .as_ref()
                 .map(|p| std::path::PathBuf::from(p.split('#').next().unwrap_or(p))),
             _ => None,
+        }
+    }
+}
+
+impl SettingsEditorLaunchPlan {
+    fn from_editor(editor: &str) -> Self {
+        match editor {
+            "code" | "cursor" => Self::ReuseWindowWithProject,
+            "zed" => Self::FileOnlyZed,
+            "subl" => Self::AddToSublimeProject,
+            _ => Self::GenericFileOnly,
+        }
+    }
+
+    fn spawn(
+        self,
+        editor: &str,
+        config_dir: &str,
+        config_file: &str,
+    ) -> std::io::Result<std::process::Child> {
+        use std::process::Command;
+        match self {
+            Self::ReuseWindowWithProject => Command::new(editor)
+                .arg("-r")
+                .arg(config_dir)
+                .arg(config_file)
+                .spawn(),
+            Self::FileOnlyZed => Command::new("zed").arg(config_file).spawn(),
+            Self::AddToSublimeProject => Command::new("subl")
+                .arg("-a")
+                .arg(config_dir)
+                .arg(config_file)
+                .spawn(),
+            Self::GenericFileOnly => Command::new(editor).arg(config_file).spawn(),
         }
     }
 }
@@ -332,27 +374,8 @@ impl ScriptListApp {
                     let result = cx
                         .background_executor()
                         .spawn(async move {
-                            use std::process::Command;
-
-                            // Editor-specific arguments for opening folder with file focused
-                            match editor.as_str() {
-                                // VS Code and Cursor: -r (reuse window) + folder + file
-                                "code" | "cursor" => Command::new(&editor)
-                                    .arg("-r")
-                                    .arg(&config_dir)
-                                    .arg(&config_file)
-                                    .spawn(),
-                                // Zed: just the file (doesn't support folder context the same way)
-                                "zed" => Command::new("zed").arg(&config_file).spawn(),
-                                // Sublime: -a (add to current window) + folder + file
-                                "subl" => Command::new("subl")
-                                    .arg("-a")
-                                    .arg(&config_dir)
-                                    .arg(&config_file)
-                                    .spawn(),
-                                // Generic fallback: just open the file
-                                _ => Command::new(&editor).arg(&config_file).spawn(),
-                            }
+                            let launch_plan = SettingsEditorLaunchPlan::from_editor(&editor);
+                            launch_plan.spawn(&editor, &config_dir, &config_file)
                         })
                         .await;
                     let _ = this.update(cx, |this, cx| match result {
