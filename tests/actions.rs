@@ -2151,9 +2151,17 @@ fn app_launch_builtin_uses_named_action_states() {
     assert!(
         content.contains("action.success_detail(app_name)")
             && content.contains("action.not_found_detail(app_name)")
+            && content.contains("action.opening_message()")
+            && content.contains("action.launch_failure_message(app_name, &error)")
+            && content.contains("action.not_found_message(app_name)")
             && content.contains("launch_app::{app_name}")
             && content.contains("launch_app_not_found::{app_name}"),
-        "App launch success and missing-app details should come from the named state"
+        "App launch copy, success detail, and missing-app details should come from the named state"
+    );
+    assert!(
+        content.contains("format!(\"Failed to launch {app_name}: {error}\")")
+            && content.contains("format!(\"App not found: {app_name}\")"),
+        "App launch named state should preserve launch-failure and missing-app user-facing copy"
     );
 }
 
