@@ -1710,6 +1710,29 @@ fn ai_preset_view_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn create_ai_preset_form_uses_named_submit_state() {
+    let content = fs::read_to_string("src/render_builtins/ai_presets.rs")
+        .expect("Failed to read AI presets renderer");
+
+    assert!(
+        content.contains("enum CreateAiPresetFormAction")
+            && content.contains("Submit"),
+        "create AI preset form submit feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("CreateAiPresetFormAction::Submit")
+            && content.contains("form_action.success_hud(&preset.name)")
+            && content.contains("form_action.failure_message(e)"),
+        "create AI preset success HUD and failure toast should derive from the named submit state"
+    );
+    assert!(
+        content.contains("format!(\"Preset '{preset_name}' created\")")
+            && content.contains("format!(\"Failed to create preset: {error}\")"),
+        "create AI preset form feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn ai_capture_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
