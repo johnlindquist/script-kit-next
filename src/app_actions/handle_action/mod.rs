@@ -503,6 +503,21 @@ impl DeferredAiWindowActionKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferredAiImageAttachmentStage {
+    DecodeClipboardImage,
+    WriteClipboardImage,
+}
+
+impl DeferredAiImageAttachmentStage {
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::DecodeClipboardImage => format!("Failed to decode image attachment: {error}"),
+            Self::WriteClipboardImage => format!("Failed to write image attachment: {error}"),
+        }
+    }
+}
+
 impl DeferredAiWindowAction {
     fn kind(&self) -> DeferredAiWindowActionKind {
         match self {
@@ -585,13 +600,17 @@ impl DeferredAiWindowAction {
 
                 let png_bytes = base64::engine::general_purpose::STANDARD
                     .decode(image_base64)
-                    .map_err(|error| format!("Failed to decode image attachment: {error}"))?;
+                    .map_err(|error| {
+                        DeferredAiImageAttachmentStage::DecodeClipboardImage
+                            .failure_message(error)
+                    })?;
                 let temp_path = std::env::temp_dir().join(format!(
                     "script-kit-acp-clipboard-{}.png",
                     uuid::Uuid::new_v4()
                 ));
-                std::fs::write(&temp_path, png_bytes)
-                    .map_err(|error| format!("Failed to write image attachment: {error}"))?;
+                std::fs::write(&temp_path, png_bytes).map_err(|error| {
+                    DeferredAiImageAttachmentStage::WriteClipboardImage.failure_message(error)
+                })?;
                 let path = temp_path.to_string_lossy().into_owned();
 
                 chat.live_thread()
