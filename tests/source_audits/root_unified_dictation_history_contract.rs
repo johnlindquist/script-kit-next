@@ -67,7 +67,7 @@ fn root_unified_dictation_history_uses_passive_grouping_contract() {
     assert!(
         grouping.find("append_root_dictation_history_section(")
             < grouping.find("append_root_acp_history_section("),
-        "Dictation History rows should be appended before AI Conversations"
+        "Dictation History rows should be appended before Agent Chat Conversations"
     );
 }
 

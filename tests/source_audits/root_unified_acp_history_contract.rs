@@ -19,7 +19,7 @@ fn root_unified_acp_history_uses_passive_grouping_contract() {
 
     assert!(grouping.contains("fn append_root_acp_history_section("));
     assert!(grouping.contains("append_root_passive_section("));
-    assert!(grouping.contains("\"AI Conversations\""));
+    assert!(grouping.contains("\"Agent Chat Conversations\""));
     assert!(grouping.contains("root_acp_history_query_is_eligible("));
     assert!(
         grouping.contains("label.starts_with(\"Use \\\"\") && label.ends_with(\"\\\" with...\")"),

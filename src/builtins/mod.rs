@@ -801,7 +801,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/acp-history",
             "Conversation History",
-            "Browse and manage past AI conversations",
+            "Browse and manage past Agent Chat conversations",
             vec!["history", "conversations", "chat", "ai", "past", "previous"],
             BuiltInFeature::AcpHistory,
             "history",

@@ -285,7 +285,7 @@ impl RootUnifiedActionSubject {
             Self::Clipboard(_) => "Clipboard History",
             Self::BrowserTab(_) => "Browser Tabs",
             Self::BrowserHistory(_) => "Browser History",
-            Self::AcpHistory(_) => "AI Conversations",
+            Self::AcpHistory(_) => "Agent Chat Conversations",
             Self::AiVault(_) => "AI Vault",
             Self::Dictation { .. } => "Dictation History",
             Self::App(_) => "Apps",

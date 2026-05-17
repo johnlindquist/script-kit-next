@@ -43,13 +43,13 @@ fn root_unified_clipboard_history_uses_passive_grouping_contract() {
 
     assert!(grouping.contains("fn append_root_clipboard_history_section("));
     assert!(grouping.contains(
-        "append_root_passive_section(grouped, flat_results, \"Clipboard History\", rows)"
+        "append_root_passive_section(grouped, flat_results, \"Clipboard History\", rows"
     ));
     assert!(grouping.contains("root_clipboard_history_query_is_eligible("));
     assert!(
         grouping.find("append_root_clipboard_history_section(")
             < grouping.find("append_root_acp_history_section("),
-        "clipboard rows should be appended before AI Conversations"
+        "clipboard rows should be appended before Agent Chat Conversations"
     );
     assert!(
         grouping.contains("label.starts_with(\"Use \\\"\") && label.ends_with(\"\\\" with...\")"),

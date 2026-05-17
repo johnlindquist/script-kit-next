@@ -867,7 +867,13 @@ fn append_root_acp_history_section(
             false,
         )
     });
-    append_root_passive_section(grouped, flat_results, "AI Conversations", rows, status);
+    append_root_passive_section(
+        grouped,
+        flat_results,
+        "Agent Chat Conversations",
+        rows,
+        status,
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2078,7 +2084,7 @@ mod advanced_query_tests {
         for result in flat {
             let source = match result {
                 SearchResult::Note(_) => "Notes",
-                SearchResult::AcpHistory(_) => "AI Conversations",
+                SearchResult::AcpHistory(_) => "Agent Chat Conversations",
                 SearchResult::AiVault(_) => "AI Vault",
                 SearchResult::ClipboardHistory(_) => "Clipboard History",
                 SearchResult::DictationHistory(_) => "Dictation History",
@@ -2269,7 +2275,7 @@ mod advanced_query_tests {
                 "Notes",
                 "Clipboard History",
                 "Dictation History",
-                "AI Conversations",
+                "Agent Chat Conversations",
                 "Browser History",
                 "Use \"design\" with...",
             ]
@@ -2404,7 +2410,7 @@ mod advanced_query_tests {
             section_labels,
             vec![
                 "Files",
-                "AI Conversations",
+                "Agent Chat Conversations",
                 "Browser History",
                 "Notes",
                 "Browser Tabs",
@@ -2463,8 +2469,8 @@ mod advanced_query_tests {
             ),
             (
                 crate::menu_syntax::RootUnifiedSourceFilter::Conversations,
-                "AI Conversations",
-                "AI Conversations",
+                "Agent Chat Conversations",
+                "Agent Chat Conversations",
             ),
             (
                 crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory,
@@ -2887,7 +2893,7 @@ mod advanced_query_tests {
         );
 
         assert!(
-            matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations")
+            matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "Agent Chat Conversations")
         );
         assert!(matches!(
             flat.get(2),
@@ -3001,7 +3007,7 @@ mod advanced_query_tests {
             matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "Clipboard History")
         );
         assert!(
-            matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations")
+            matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label == "Agent Chat Conversations")
         );
         assert!(matches!(
             flat.get(2),
@@ -3081,7 +3087,7 @@ mod advanced_query_tests {
             matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label == "Clipboard History")
         );
         assert!(
-            matches!(&grouped[5], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations")
+            matches!(&grouped[5], GroupedListItem::SectionHeader(label, None) if label == "Agent Chat Conversations")
         );
         assert!(matches!(
             flat.get(2),
@@ -3268,8 +3274,8 @@ mod advanced_query_tests {
         assert!(matches!(&grouped[2], GroupedListItem::Item(1)));
         assert!(matches!(&grouped[3], GroupedListItem::Item(2)));
         assert!(
-            matches!(&grouped[4], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations"),
-            "AI Conversations should insert after the Files handoff, not between file rows"
+            matches!(&grouped[4], GroupedListItem::SectionHeader(label, None) if label == "Agent Chat Conversations"),
+            "Agent Chat Conversations should insert after the Files handoff, not between file rows"
         );
     }
 
