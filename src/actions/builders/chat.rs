@@ -115,6 +115,12 @@ impl ChatModelPickerRowPlan {
             Self::AvailableModel => model.display_name.clone(),
         }
     }
+
+    fn description(self, model: &ChatModelInfo) -> String {
+        match self {
+            Self::CurrentModel | Self::AvailableModel => format!("Uses {}", model.provider),
+        }
+    }
 }
 
 impl ChatChangeModelActionPlan {
@@ -226,7 +232,7 @@ pub fn get_chat_model_picker_actions(info: &ChatPromptInfo) -> Vec<Action> {
         let action = Action::new(
             format!("chat:select_model_{}", model.id),
             row_plan.title(model),
-            Some(format!("Uses {}", model.provider)),
+            Some(row_plan.description(model)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::Settings);

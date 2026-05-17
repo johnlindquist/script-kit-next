@@ -118,6 +118,7 @@ fn chat_model_actions_use_named_plan_states() {
     );
     assert!(
         content.contains("ChatModelPickerRowPlan::from_model(info, model)")
+            && content.contains("row_plan.description(model)")
             && content.contains("ChatChangeModelActionPlan::from_info(info).description(info)"),
         "chat model rows and root Change Model copy should derive from named plans"
     );
