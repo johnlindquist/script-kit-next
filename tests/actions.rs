@@ -586,6 +586,25 @@ fn script_source_handler_uses_named_action_states() {
 }
 
 #[test]
+fn script_management_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+        .expect("Failed to read script action handler");
+
+    assert!(
+        content.contains("enum ScriptManagementHandlerAction")
+            && content.contains("CreateScript")
+            && content.contains("ReloadScripts"),
+        "script create/reload handlers should be driven by named management action states"
+    );
+    assert!(
+        content.contains("ScriptManagementHandlerAction::from_action_id(action_id)")
+            && content.contains("management_action.success_hud()")
+            && content.contains("management_action.open_failure_message(e)"),
+        "script create/reload handlers should derive HUD and open-failure copy from named states"
+    );
+}
+
+#[test]
 fn settings_editor_launch_uses_named_plan_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
         .expect("Failed to read script action handler");
