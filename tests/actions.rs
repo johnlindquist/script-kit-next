@@ -672,6 +672,28 @@ fn selection_required_messages_use_named_plan_states() {
     );
 }
 
+#[test]
+fn file_search_feedback_helpers_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read action helpers");
+
+    assert!(
+        content.contains("enum FileSearchActionFeedbackPlan")
+            && content.contains("Open")
+            && content.contains("QuickLook")
+            && content.contains("OpenWith")
+            && content.contains("ShowInfo")
+            && content.contains("Unsupported"),
+        "file-search success and error feedback should be driven by named action states"
+    );
+    assert!(
+        content.contains("FileSearchActionFeedbackPlan::from_action_id(action_id).success_hud()")
+            && content
+                .contains("FileSearchActionFeedbackPlan::from_action_id(action_id).error_prefix()"),
+        "file-search feedback helpers should derive visible text from the named plan"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
