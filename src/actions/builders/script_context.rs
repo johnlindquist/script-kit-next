@@ -70,6 +70,18 @@ enum ScriptContextPreferenceActionPlan {
     ShortcutAndAlias,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScriptContextShareActionPlan {
+    PortableShareLink,
+    DirectRunDeepLink,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ScriptContextShareActionCopy {
+    title: &'static str,
+    description: String,
+}
+
 fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
     if script.is_app {
         ScriptContextKind::App
@@ -88,6 +100,18 @@ fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
     }
 }
 
+fn share_action_plan(script: &ScriptInfo) -> ScriptContextShareActionPlan {
+    match script_context_kind(script) {
+        ScriptContextKind::Script
+        | ScriptContextKind::Scriptlet
+        | ScriptContextKind::Agent
+        | ScriptContextKind::Skill => ScriptContextShareActionPlan::PortableShareLink,
+        ScriptContextKind::App | ScriptContextKind::BuiltIn | ScriptContextKind::Generic => {
+            ScriptContextShareActionPlan::DirectRunDeepLink
+        }
+    }
+}
+
 fn preference_action_plan(script: &ScriptInfo) -> ScriptContextPreferenceActionPlan {
     if script.is_agent {
         return ScriptContextPreferenceActionPlan::AgentNoPreferenceActions;
@@ -98,6 +122,22 @@ fn preference_action_plan(script: &ScriptInfo) -> ScriptContextPreferenceActionP
         (true, false) => ScriptContextPreferenceActionPlan::ShortcutOnly,
         (false, true) => ScriptContextPreferenceActionPlan::AliasOnly,
         (true, true) => ScriptContextPreferenceActionPlan::ShortcutAndAlias,
+    }
+}
+
+fn share_action_copy(script: &ScriptInfo) -> ScriptContextShareActionCopy {
+    match share_action_plan(script) {
+        ScriptContextShareActionPlan::PortableShareLink => ScriptContextShareActionCopy {
+            title: "Share",
+            description: "Copy a portable Script Kit share link to clipboard".to_string(),
+        },
+        ScriptContextShareActionPlan::DirectRunDeepLink => {
+            let deeplink_name = to_deeplink_name(&script.name);
+            ScriptContextShareActionCopy {
+                title: "Copy Deep Link",
+                description: format!("Copy scriptkit://run/{} URL to clipboard", deeplink_name),
+            }
+        }
     }
 }
 
@@ -597,24 +637,12 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
-    let deeplink_name = to_deeplink_name(&script.name);
-    let supports_clipboard_share = script.is_script
-        || script.is_scriptlet
-        || script.is_agent
-        || script.path.starts_with("skill:");
+    let share_copy = share_action_copy(script);
     actions.push(
         Action::new(
             "copy_deeplink",
-            if supports_clipboard_share {
-                "Share"
-            } else {
-                "Copy Deep Link"
-            },
-            Some(if supports_clipboard_share {
-                "Copy a portable Script Kit share link to clipboard".to_string()
-            } else {
-                format!("Copy scriptkit://run/{} URL to clipboard", deeplink_name)
-            }),
+            share_copy.title,
+            Some(share_copy.description),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘⇧D")
