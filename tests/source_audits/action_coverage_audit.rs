@@ -376,7 +376,8 @@ fn clipboard_pin_unpin_shows_error_toast_on_failure() {
     let block = &content[pin_pos..content.len().min(pin_pos + 4000)];
 
     assert!(
-        block.contains("show_error_toast(format!(\"Failed to update pin: {}\", e), cx)"),
+        block.contains("pin_action.failure_message(e)")
+            && block.contains("self.show_error_toast(pin_action.failure_message(e), cx)"),
         "clipboard_pin/unpin error should use show_error_toast"
     );
 }
@@ -391,7 +392,8 @@ fn clipboard_pin_unpin_shows_error_when_no_entry() {
     let block = &content[pin_pos..content.len().min(pin_pos + 4000)];
 
     assert!(
-        block.contains("No clipboard entry selected"),
+        block.contains("pin_action.selection_required_message()")
+            && content.contains("Self::Pin | Self::Unpin => \"No clipboard entry selected\""),
         "clipboard_pin/unpin should show error when no entry is selected"
     );
 }
@@ -430,7 +432,7 @@ fn clipboard_copy_shows_error_toast_on_failure() {
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
     assert!(
-        block.contains("copy_paste_action.failure_prefix()")
+        block.contains("copy_paste_action.failure_message(e)")
             && content.contains("Self::CopyOnly => \"Failed to copy\""),
         "clipboard_copy error should use show_error_toast"
     );
@@ -605,12 +607,14 @@ fn clipboard_cleanshot_actions_show_error_when_no_entry() {
     let cleanshot_block = &content[cleanshot_pos..content.len().min(cleanshot_pos + 5000)];
 
     assert!(
-        cleanshot_block.contains("No clipboard entry selected"),
+        cleanshot_block.contains("cleanshot_action.selection_required_message()")
+            && content.contains("Self::Annotate | Self::Upload => \"No clipboard entry selected\""),
         "clipboard_annotate_cleanshot should error when no entry selected"
     );
 
     assert!(
-        cleanshot_block.contains("No clipboard entry selected"),
+        cleanshot_block.contains("cleanshot_action.selection_required_message()")
+            && content.contains("Self::Annotate | Self::Upload => \"No clipboard entry selected\""),
         "clipboard_upload_cleanshot should error when no entry selected"
     );
 }
