@@ -2259,6 +2259,33 @@ fn search_result_execution_helpers_use_named_failure_states() {
 }
 
 #[test]
+fn scratch_pad_execution_helpers_use_named_failure_states() {
+    let content = fs::read_to_string("src/app_execute/execution_helpers.rs")
+        .expect("Failed to read execution helper handler");
+
+    assert!(
+        content.contains("enum ScratchPadExecutionAction")
+            && content.contains("CreateDirectory")
+            && content.contains("CreateFile")
+            && content.contains("ReadFile")
+            && content.contains("SubmitSave")
+            && content.contains("AutoSave"),
+        "scratch pad file-operation failures should be driven by named action states"
+    );
+    assert!(
+        content.contains("action.log_message(&e)")
+            && content.contains("action.toast_message(&e)")
+            && content.contains("action.log_message(&write_err)")
+            && content.contains("action.toast_message(&write_err)")
+            && content.contains("format!(\"Failed to create scratch pad directory: {error}\")")
+            && content.contains("format!(\"Failed to create directory: {error}\")")
+            && content.contains("format!(\"Failed to save scratch pad: {error}\")")
+            && content.contains("format!(\"Auto-save failed: {error}\")"),
+        "scratch pad logs and toasts should derive visible copy from the named action state"
+    );
+}
+
+#[test]
 fn browser_tabs_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
