@@ -652,8 +652,8 @@ fn clipboard_save_file_shows_hud_on_success() {
     let block = &content[save_pos..content.len().min(save_pos + 4000)];
 
     assert!(
-        block.contains("Saved to"),
-        "clipboard_save_file should show 'Saved to' HUD on success"
+        block.contains("save_file_action.saved_hud(&save_path)"),
+        "clipboard_save_file should show saved-path HUD through named action state"
     );
     assert!(
         block.contains("HUD_LONG_MS"),
