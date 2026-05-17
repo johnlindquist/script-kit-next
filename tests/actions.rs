@@ -1154,6 +1154,39 @@ fn utility_process_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_command_dispatch_uses_named_wrapper_state() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityCommandBuiltinAction")
+            && content.contains("Open(UtilityOpenBuiltinAction)")
+            && content.contains("Process(UtilityProcessBuiltinAction)")
+            && content.contains("Context(UtilityContextBuiltinAction)")
+            && content.contains("Trace(UtilityTraceBuiltinAction)")
+            && content.contains("Recipe(UtilityRecipeBuiltinAction)")
+            && content.contains("DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction)")
+            && content.contains("CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction)"),
+        "Utility command dispatch should use a named wrapper state over existing leaf actions"
+    );
+    assert!(
+        content
+            .contains("let utility_action = UtilityCommandBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_command_builtin(")
+            && content.contains("self.execute_utility_open_builtin(open_action")
+            && content.contains("self.execute_utility_process_builtin(process_action")
+            && content.contains("self.execute_utility_context_builtin(context_action")
+            && content.contains("self.execute_utility_trace_builtin(trace_action")
+            && content.contains("self.execute_utility_verify_recipe_builtin(recipe_action")
+            && content.contains("self.execute_utility_replay_recipe_builtin(recipe_action")
+            && content.contains("execute_utility_turn_this_into_command_builtin")
+            && content.contains(".execute_utility_do_in_current_app_builtin(do_in_action")
+            && content.contains("self.execute_utility_current_app_commands_builtin("),
+        "Utility command wrapper should route to every existing leaf executor"
+    );
+}
+
+#[test]
 fn utility_context_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
