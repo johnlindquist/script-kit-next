@@ -263,6 +263,61 @@ impl PermissionAssistantBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityOpenBuiltinAction {
+    MiniMainWindow,
+    ScratchPad,
+    QuickTerminal,
+    ClaudeCode,
+    ProcessManager,
+}
+
+impl UtilityOpenBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::MiniMainWindow => Some(Self::MiniMainWindow),
+            builtins::UtilityCommandType::ScratchPad => Some(Self::ScratchPad),
+            builtins::UtilityCommandType::QuickTerminal => Some(Self::QuickTerminal),
+            builtins::UtilityCommandType::ClaudeCode => Some(Self::ClaudeCode),
+            builtins::UtilityCommandType::ProcessManager => Some(Self::ProcessManager),
+            builtins::UtilityCommandType::StopAllProcesses
+            | builtins::UtilityCommandType::DoInCurrentApp
+            | builtins::UtilityCommandType::TurnThisIntoCommand
+            | builtins::UtilityCommandType::CurrentAppCommands
+            | builtins::UtilityCommandType::InspectCurrentContext
+            | builtins::UtilityCommandType::TraceCurrentAppIntent
+            | builtins::UtilityCommandType::VerifyCurrentAppRecipe
+            | builtins::UtilityCommandType::ReplayCurrentAppRecipe => None,
+        }
+    }
+
+    fn opening_message(self) -> Option<&'static str> {
+        match self {
+            Self::MiniMainWindow => Some("Opening Mini Main Window"),
+            Self::ScratchPad | Self::QuickTerminal | Self::ClaudeCode | Self::ProcessManager => {
+                None
+            }
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::MiniMainWindow => "open_mini_main_window",
+            Self::ScratchPad => "open_scratch_pad",
+            Self::QuickTerminal => "open_quick_terminal",
+            Self::ClaudeCode => "open_claude_code_terminal",
+            Self::ProcessManager => "open_process_manager",
+        }
+    }
+
+    fn opens_from_main_menu(self) -> bool {
+        matches!(
+            self,
+            Self::ScratchPad | Self::QuickTerminal | Self::ClaudeCode
+        )
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3496,53 +3551,14 @@ impl ScriptListApp {
                 use builtins::UtilityCommandType;
 
                 match cmd_type {
-                    UtilityCommandType::MiniMainWindow => {
-                        tracing::info!(
-                            category = "BUILTIN",
-                            trace_id = %dctx.trace_id,
-                            "Opening Mini Main Window"
-                        );
-                        self.open_mini_main_window(cx);
-                        Self::builtin_success(dctx, "open_mini_main_window")
-                    }
-                    UtilityCommandType::ScratchPad => {
-                        self.opened_from_main_menu = true;
-                        self.open_scratch_pad(cx);
-                        Self::builtin_success(dctx, "open_scratch_pad")
-                    }
-                    UtilityCommandType::QuickTerminal => {
-                        self.opened_from_main_menu = true;
-                        self.open_quick_terminal(None, cx);
-                        Self::builtin_success(dctx, "open_quick_terminal")
-                    }
-                    UtilityCommandType::ClaudeCode => {
-                        self.opened_from_main_menu = true;
-                        self.open_claude_code_terminal(cx);
-                        Self::builtin_success(dctx, "open_claude_code_terminal")
-                    }
-                    UtilityCommandType::ProcessManager => {
-                        let processes =
-                            crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            active_process_count = processes.len(),
-                            "process_manager.open_view"
-                        );
-
-                        self.cached_processes = processes;
-
-                        self.open_builtin_filterable_view(
-                            AppView::ProcessManagerView {
-                                filter: String::new(),
-                                selected_index: 0,
-                            },
-                            "Search running scripts...",
-                            false,
-                            cx,
-                        );
-
-                        self.start_process_manager_refresh(cx);
-                        Self::builtin_success(dctx, "open_process_manager")
+                    UtilityCommandType::MiniMainWindow
+                    | UtilityCommandType::ScratchPad
+                    | UtilityCommandType::QuickTerminal
+                    | UtilityCommandType::ClaudeCode
+                    | UtilityCommandType::ProcessManager => {
+                        let open_action = UtilityOpenBuiltinAction::from_command(*cmd_type)
+                            .expect("utility open arm should only receive open commands");
+                        self.execute_utility_open_builtin(open_action, dctx, cx)
                     }
                     UtilityCommandType::StopAllProcesses => {
                         let process_count = crate::process_manager::PROCESS_MANAGER.active_count();
@@ -4665,6 +4681,55 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_utility_open_builtin(
+        &mut self,
+        action: UtilityOpenBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        if let Some(message) = action.opening_message() {
+            tracing::info!(
+                category = "BUILTIN",
+                trace_id = %dctx.trace_id,
+                "{}", message
+            );
+        }
+
+        if action.opens_from_main_menu() {
+            self.opened_from_main_menu = true;
+        }
+
+        match action {
+            UtilityOpenBuiltinAction::MiniMainWindow => self.open_mini_main_window(cx),
+            UtilityOpenBuiltinAction::ScratchPad => self.open_scratch_pad(cx),
+            UtilityOpenBuiltinAction::QuickTerminal => self.open_quick_terminal(None, cx),
+            UtilityOpenBuiltinAction::ClaudeCode => self.open_claude_code_terminal(cx),
+            UtilityOpenBuiltinAction::ProcessManager => {
+                let processes =
+                    crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
+                tracing::info!(
+                    trace_id = %dctx.trace_id,
+                    active_process_count = processes.len(),
+                    "process_manager.open_view"
+                );
+
+                self.cached_processes = processes;
+                self.open_builtin_filterable_view(
+                    AppView::ProcessManagerView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search running scripts...",
+                    false,
+                    cx,
+                );
+                self.start_process_manager_refresh(cx);
+            }
+        }
+
+        Self::builtin_success(dctx, action.success_detail())
+    }
 
     fn execute_permission_assistant_builtin(
         &mut self,
