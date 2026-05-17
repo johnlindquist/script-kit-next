@@ -40,19 +40,33 @@ impl FileSearchDirectoryInfo {
     }
 }
 
-fn sort_title(base: &str, active: bool) -> String {
-    if active {
-        format!("{base} \u{2713}")
-    } else {
-        base.to_string()
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchSortActionPlan {
+    ActiveSort,
+    AvailableSort,
 }
 
-fn sort_description(base: &str, active: bool) -> String {
-    if active {
-        format!("{base}. Current sort")
-    } else {
-        base.to_string()
+impl FileSearchSortActionPlan {
+    fn from_active(active: bool) -> Self {
+        if active {
+            Self::ActiveSort
+        } else {
+            Self::AvailableSort
+        }
+    }
+
+    fn title(self, base: &str) -> String {
+        match self {
+            Self::ActiveSort => format!("{base} \u{2713}"),
+            Self::AvailableSort => base.to_string(),
+        }
+    }
+
+    fn description(self, base: &str) -> String {
+        match self {
+            Self::ActiveSort => format!("{base}. Current sort"),
+            Self::AvailableSort => base.to_string(),
+        }
     }
 }
 
@@ -77,6 +91,10 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
     let name_desc_active = dir_info.sort_mode == FileSearchSortMode::NameDesc;
     let modified_desc_active = dir_info.sort_mode == FileSearchSortMode::ModifiedDesc;
     let modified_asc_active = dir_info.sort_mode == FileSearchSortMode::ModifiedAsc;
+    let name_asc_plan = FileSearchSortActionPlan::from_active(name_asc_active);
+    let name_desc_plan = FileSearchSortActionPlan::from_active(name_desc_active);
+    let modified_desc_plan = FileSearchSortActionPlan::from_active(modified_desc_active);
+    let modified_asc_plan = FileSearchSortActionPlan::from_active(modified_asc_active);
 
     let actions = vec![
         Action::new(
@@ -116,41 +134,32 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         .with_section("Directory"),
         Action::new(
             "file:sort_name_asc",
-            sort_title("Sort by Name (A\u{2192}Z)", name_asc_active),
-            Some(sort_description("Sorts alphabetically", name_asc_active)),
+            name_asc_plan.title("Sort by Name (A\u{2192}Z)"),
+            Some(name_asc_plan.description("Sorts alphabetically")),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
         .with_section("Sort"),
         Action::new(
             "file:sort_name_desc",
-            sort_title("Sort by Name (Z\u{2192}A)", name_desc_active),
-            Some(sort_description(
-                "Sorts reverse alphabetically",
-                name_desc_active,
-            )),
+            name_desc_plan.title("Sort by Name (Z\u{2192}A)"),
+            Some(name_desc_plan.description("Sorts reverse alphabetically")),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
         .with_section("Sort"),
         Action::new(
             "file:sort_modified_desc",
-            sort_title("Sort by Modified (Newest)", modified_desc_active),
-            Some(sort_description(
-                "Sorts by most recently modified",
-                modified_desc_active,
-            )),
+            modified_desc_plan.title("Sort by Modified (Newest)"),
+            Some(modified_desc_plan.description("Sorts by most recently modified")),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
         .with_section("Sort"),
         Action::new(
             "file:sort_modified_asc",
-            sort_title("Sort by Modified (Oldest)", modified_asc_active),
-            Some(sort_description(
-                "Sorts by least recently modified",
-                modified_asc_active,
-            )),
+            modified_asc_plan.title("Sort by Modified (Oldest)"),
+            Some(modified_asc_plan.description("Sorts by least recently modified")),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
