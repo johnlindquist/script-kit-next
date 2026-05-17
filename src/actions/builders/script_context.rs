@@ -1109,14 +1109,37 @@ pub(crate) enum AcpActionsDialogHost {
     Detached,
 }
 
-fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> bool {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpHostActionPlan {
+    IncludeWithShortcut,
+    IncludeWithoutShortcut,
+    Exclude,
+}
+
+impl AcpHostActionPlan {
+    fn is_included(self) -> bool {
+        !matches!(self, Self::Exclude)
+    }
+
+    fn keeps_shortcut(self) -> bool {
+        matches!(self, Self::IncludeWithShortcut)
+    }
+}
+
+fn acp_host_action_plan(host: AcpActionsDialogHost, action_id: &str) -> AcpHostActionPlan {
     match host {
-        AcpActionsDialogHost::Shared => true,
+        AcpActionsDialogHost::Shared => {
+            if action_id == "acp_close" {
+                AcpHostActionPlan::IncludeWithoutShortcut
+            } else {
+                AcpHostActionPlan::IncludeWithShortcut
+            }
+        }
         AcpActionsDialogHost::Notes => {
             // Notes-hosted: same as Detached but without `acp_save_as_note`
             // (already in Notes), keeping `acp_close` (returns to editor),
             // and opening `acp_show_history` as a Notes-anchored popup.
-            matches!(
+            if matches!(
                 action_id,
                 "acp:change_agent"
                     | "acp:change_model"
@@ -1133,9 +1156,18 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
                     | "acp_close"
             ) || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
                 || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+            {
+                if action_id == "acp_close" {
+                    AcpHostActionPlan::IncludeWithoutShortcut
+                } else {
+                    AcpHostActionPlan::IncludeWithShortcut
+                }
+            } else {
+                AcpHostActionPlan::Exclude
+            }
         }
         AcpActionsDialogHost::Detached => {
-            matches!(
+            if matches!(
                 action_id,
                 "acp:change_agent"
                     | "acp:change_model"
@@ -1152,14 +1184,12 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
                     | "acp_close"
             ) || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
                 || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+            {
+                AcpHostActionPlan::IncludeWithShortcut
+            } else {
+                AcpHostActionPlan::Exclude
+            }
         }
-    }
-}
-
-fn acp_action_shortcut_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> bool {
-    match host {
-        AcpActionsDialogHost::Detached => true,
-        AcpActionsDialogHost::Shared | AcpActionsDialogHost::Notes => action_id != "acp_close",
     }
 }
 
@@ -1171,9 +1201,9 @@ fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>)
     };
     actions
         .into_iter()
-        .filter(|action| {
-            let supported = acp_action_supported_in_host(host, &action.id);
-            if !supported {
+        .filter_map(|mut action| {
+            let plan = acp_host_action_plan(host, &action.id);
+            if !plan.is_included() {
                 tracing::warn!(
                     event = "acp_actions_menu_filtered",
                     host = host_label,
@@ -1181,16 +1211,14 @@ fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>)
                     reason = "unsupported_in_host",
                     "Filtered unsupported ACP Actions Menu item"
                 );
+                return None;
             }
-            supported
-        })
-        .map(|mut action| {
-            if !acp_action_shortcut_supported_in_host(host, &action.id) {
+            if !plan.keeps_shortcut() {
                 action.shortcut = None;
                 action.shortcut_tokens = None;
                 action.shortcut_lower = None;
             }
-            action
+            Some(action)
         })
         .collect()
 }
@@ -1827,6 +1855,45 @@ mod tests {
         assert!(shared_close.shortcut.is_none());
         assert!(notes_close.shortcut.is_none());
         assert_eq!(detached_close.shortcut.as_deref(), Some("⌘W"));
+    }
+
+    #[test]
+    fn test_acp_host_action_plan_matrix() {
+        for host in [AcpActionsDialogHost::Shared, AcpActionsDialogHost::Notes] {
+            assert_eq!(
+                acp_host_action_plan(host, "acp_close"),
+                AcpHostActionPlan::IncludeWithoutShortcut,
+                "{host:?} should keep close available without advertising Cmd-W"
+            );
+        }
+
+        assert_eq!(
+            acp_host_action_plan(AcpActionsDialogHost::Detached, "acp_close"),
+            AcpHostActionPlan::IncludeWithShortcut
+        );
+        assert_eq!(
+            acp_host_action_plan(AcpActionsDialogHost::Notes, "acp_save_as_note"),
+            AcpHostActionPlan::Exclude
+        );
+        assert_eq!(
+            acp_host_action_plan(AcpActionsDialogHost::Detached, "acp_show_history"),
+            AcpHostActionPlan::Exclude
+        );
+
+        for host in [
+            AcpActionsDialogHost::Shared,
+            AcpActionsDialogHost::Notes,
+            AcpActionsDialogHost::Detached,
+        ] {
+            assert_eq!(
+                acp_host_action_plan(host, "acp_switch_agent:codex"),
+                AcpHostActionPlan::IncludeWithShortcut
+            );
+            assert_eq!(
+                acp_host_action_plan(host, "acp_switch_model:gpt"),
+                AcpHostActionPlan::IncludeWithShortcut
+            );
+        }
     }
 
     #[test]
