@@ -72,6 +72,18 @@ enum ChatTranscriptActionPlan {
     CopyLastResponseAndClearConversation,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChatModelPickerRowPlan {
+    CurrentModel,
+    AvailableModel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChatChangeModelActionPlan {
+    CurrentModelSelected,
+    NoCurrentModelSelected,
+}
+
 impl ChatTranscriptActionPlan {
     fn from_info(info: &ChatPromptInfo) -> Self {
         match (info.has_response, info.has_messages) {
@@ -79,6 +91,48 @@ impl ChatTranscriptActionPlan {
             (true, false) => Self::CopyLastResponse,
             (false, true) => Self::ClearConversation,
             (true, true) => Self::CopyLastResponseAndClearConversation,
+        }
+    }
+}
+
+impl ChatModelPickerRowPlan {
+    fn from_model(info: &ChatPromptInfo, model: &ChatModelInfo) -> Self {
+        if info
+            .current_model
+            .as_ref()
+            .map(|current| current == &model.display_name)
+            .unwrap_or(false)
+        {
+            Self::CurrentModel
+        } else {
+            Self::AvailableModel
+        }
+    }
+
+    fn title(self, model: &ChatModelInfo) -> String {
+        match self {
+            Self::CurrentModel => format!("{} ✓", model.display_name),
+            Self::AvailableModel => model.display_name.clone(),
+        }
+    }
+}
+
+impl ChatChangeModelActionPlan {
+    fn from_info(info: &ChatPromptInfo) -> Self {
+        if info.current_model.is_some() {
+            Self::CurrentModelSelected
+        } else {
+            Self::NoCurrentModelSelected
+        }
+    }
+
+    fn description(self, info: &ChatPromptInfo) -> String {
+        match self {
+            Self::CurrentModelSelected => format!(
+                "Current: {}",
+                info.current_model.as_deref().unwrap_or_default()
+            ),
+            Self::NoCurrentModelSelected => "Select a model".to_string(),
         }
     }
 }
@@ -167,19 +221,11 @@ pub fn get_chat_model_picker_actions(info: &ChatPromptInfo) -> Vec<Action> {
 
     let mut actions = Vec::new();
     for model in &info.available_models {
-        let is_current = info
-            .current_model
-            .as_ref()
-            .map(|m| m == &model.display_name)
-            .unwrap_or(false);
+        let row_plan = ChatModelPickerRowPlan::from_model(info, model);
 
         let action = Action::new(
             format!("chat:select_model_{}", model.id),
-            if is_current {
-                format!("{} ✓", model.display_name)
-            } else {
-                model.display_name.clone()
-            },
+            row_plan.title(model),
             Some(format!("Uses {}", model.provider)),
             ActionCategory::ScriptContext,
         )
@@ -202,12 +248,7 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
     let mut actions = vec![Action::new(
         "chat:change_model",
         "Change Model",
-        Some(
-            info.current_model
-                .as_ref()
-                .map(|model| format!("Current: {model}"))
-                .unwrap_or_else(|| "Select a model".to_string()),
-        ),
+        Some(ChatChangeModelActionPlan::from_info(info).description(info)),
         ActionCategory::ScriptContext,
     )
     .with_icon(IconName::Settings)];
