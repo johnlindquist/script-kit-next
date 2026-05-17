@@ -1442,7 +1442,9 @@ fn kit_store_builtin_uses_named_action_states() {
             && content.contains("action.success_detail()")
             && content.contains("struct KitStoreUpdateAllResult")
             && content.contains("result.message()")
-            && content.contains("result.is_failure()"),
+            && content.contains("result.is_failure()")
+            && content.contains("format!(\"Updated {updated} kit(s) successfully\")")
+            && content.contains("format!(\"Updated {updated} kit(s), {failed} failed\")"),
         "Kit Store view routing and update-all feedback should derive from named states"
     );
 }

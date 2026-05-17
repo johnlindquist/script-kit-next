@@ -1300,9 +1300,12 @@ struct KitStoreUpdateAllResult {
 impl KitStoreUpdateAllResult {
     fn message(self) -> String {
         if self.failed == 0 {
-            format!("Updated {} kit(s) successfully", self.updated)
+            let updated = self.updated;
+            format!("Updated {updated} kit(s) successfully")
         } else {
-            format!("Updated {} kit(s), {} failed", self.updated, self.failed)
+            let updated = self.updated;
+            let failed = self.failed;
+            format!("Updated {updated} kit(s), {failed} failed")
         }
     }
 
