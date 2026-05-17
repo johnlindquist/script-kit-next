@@ -1940,6 +1940,28 @@ fn acp_agent_selection_actions_use_named_plan_states() {
 }
 
 #[test]
+fn acp_agent_switch_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpAgentSwitchHandlerAction")
+            && content.contains("SwitchAgent"),
+        "ACP agent switch handler should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpAgentSwitchHandlerAction::from_action_id(action_id)")
+            && content.contains("agent_action.already_selected_message(&agent_display_name)")
+            && content.contains("agent_action.persist_failure_message(&agent_display_name, error)")
+            && content.contains("agent_action.relaunch_message(&agent_display_name)")
+            && content.contains("Already using {display_name}")
+            && content.contains("Failed to persist agent selection for {display_name}: {error}")
+            && content.contains("Switching agent to {display_name}"),
+        "ACP agent switch handler should derive current, persistence, and relaunch feedback from named state"
+    );
+}
+
+#[test]
 fn acp_model_selection_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

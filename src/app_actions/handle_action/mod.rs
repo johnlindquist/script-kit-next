@@ -47,6 +47,11 @@ enum AcpProfileSwitchHandlerAction {
     SwitchProfile,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpAgentSwitchHandlerAction {
+    SwitchAgent,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -232,6 +237,32 @@ impl AcpProfileSwitchHandlerAction {
     fn selected_message(self, profile_name: &str) -> String {
         match self {
             Self::SwitchProfile => format!("Profile: {profile_name}"),
+        }
+    }
+}
+
+impl AcpAgentSwitchHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        crate::actions::acp_switch_agent_id_from_action(action_id).map(|_| Self::SwitchAgent)
+    }
+
+    fn already_selected_message(self, display_name: &str) -> String {
+        match self {
+            Self::SwitchAgent => format!("Already using {display_name}"),
+        }
+    }
+
+    fn persist_failure_message(self, display_name: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SwitchAgent => {
+                format!("Failed to persist agent selection for {display_name}: {error}")
+            }
+        }
+    }
+
+    fn relaunch_message(self, display_name: &str) -> String {
+        match self {
+            Self::SwitchAgent => format!("Switching agent to {display_name}\u{2026}"),
         }
     }
 }
@@ -1191,6 +1222,9 @@ impl ScriptListApp {
         }
 
         if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
+            let Some(agent_action) = AcpAgentSwitchHandlerAction::from_action_id(action_id) else {
+                return DispatchOutcome::not_handled();
+            };
             let (current_selected_agent_id, available_agents) = {
                 let view = entity.read(cx);
                 match &view.session {
@@ -1219,7 +1253,8 @@ impl ScriptListApp {
 
             if current_selected_agent_id.as_deref() == Some(agent_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("Already using {agent_display_name}"));
+                outcome.user_message =
+                    Some(agent_action.already_selected_message(&agent_display_name));
                 return outcome;
             }
 
@@ -1247,9 +1282,7 @@ impl ScriptListApp {
             if let Err(error) = persist_result {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    format!(
-                        "Failed to persist agent selection for {agent_display_name}: {error}"
-                    ),
+                    agent_action.persist_failure_message(&agent_display_name, error),
                 );
             }
 
@@ -1270,9 +1303,7 @@ impl ScriptListApp {
             self.open_tab_ai_acp_with_entry_intent(None, cx);
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!(
-                "Switching agent to {agent_display_name}\u{2026}"
-            ));
+            outcome.user_message = Some(agent_action.relaunch_message(&agent_display_name));
             return outcome;
         }
 
