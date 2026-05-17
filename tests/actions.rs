@@ -652,6 +652,26 @@ fn sdk_action_lookup_uses_named_plan_states() {
     );
 }
 
+#[test]
+fn selection_required_messages_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read action helpers");
+
+    assert!(
+        content.contains("enum SelectionRequiredMessagePlan")
+            && content.contains("CopyPath")
+            && content.contains("ConfigureShortcut")
+            && content.contains("RunScriptletAction")
+            && content.contains("Default"),
+        "selection-required guidance should be driven by named message plan states"
+    );
+    assert!(
+        content.contains("SelectionRequiredMessagePlan::from_action_id(action_id).message()")
+            && content.contains("fn message(self) -> &'static str"),
+        "selection-required guidance should derive user-facing text from the named plan"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
