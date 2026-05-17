@@ -75,6 +75,11 @@ enum FileSearchRenameHandlerAction {
     RenamePath,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchMoveHandlerAction {
+    MovePath,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -193,6 +198,35 @@ impl FileSearchRenameHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::RenamePath => format!("Failed to rename: {error}"),
+        }
+    }
+}
+
+impl FileSearchMoveHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "move_path" => Some(Self::MovePath),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::MovePath => "No file selected",
+        }
+    }
+
+    fn success_hud(self, destination_dir: &str) -> String {
+        match self {
+            Self::MovePath => {
+                format!("Moved to {}", crate::file_search::shorten_path(destination_dir))
+            }
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MovePath => format!("Failed to move: {error}"),
         }
     }
 }
@@ -772,10 +806,14 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "move_path" => {
+                let Some(move_action) = FileSearchMoveHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((path, is_dir, _name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        move_action.selection_required_message(),
                     );
                 };
                 let previous_display_index = match &self.current_view {
@@ -797,7 +835,7 @@ impl ScriptListApp {
                             Err(e) => {
                                 let _ = this.update(cx, |this, cx| {
                                     this.clear_file_search_action_target();
-                                    this.show_error_toast(format!("Failed to move: {}", e), cx);
+                                    this.show_error_toast(move_action.failure_message(e), cx);
                                     this.restore_file_search_input_focus(cx);
                                 });
                                 return;
@@ -809,10 +847,7 @@ impl ScriptListApp {
                             Ok(new_path) => {
                                 this.clear_file_search_action_target();
                                 this.show_hud(
-                                    format!(
-                                        "Moved to {}",
-                                        crate::file_search::shorten_path(&destination_dir)
-                                    ),
+                                    move_action.success_hud(&destination_dir),
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
@@ -826,7 +861,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(format!("Failed to move: {}", e), cx);
+                                this.show_error_toast(move_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }

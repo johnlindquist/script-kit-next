@@ -895,6 +895,25 @@ fn file_search_rename_handler_uses_named_action_state() {
 }
 
 #[test]
+fn file_search_move_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchMoveHandlerAction")
+            && content.contains("MovePath"),
+        "file-search move handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("FileSearchMoveHandlerAction::from_action_id(action_id)")
+            && content.contains("move_action.selection_required_message()")
+            && content.contains("move_action.success_hud(&destination_dir)")
+            && content.contains("move_action.failure_message(e)"),
+        "file-search move handler should derive selection, HUD, and failure copy from the named state"
+    );
+}
+
+#[test]
 fn file_search_sort_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
         .expect("Failed to read file action handler");
