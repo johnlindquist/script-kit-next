@@ -419,6 +419,26 @@ fn script_context_ranking_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn acp_agent_selection_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum AcpAgentSelectionActionPlan")
+            && content.contains("CurrentAgent")
+            && content.contains("AvailableAgent"),
+        "ACP agent current/use labels and descriptions should be driven by named selection plan states"
+    );
+    assert!(
+        content.contains("AcpAgentSelectionActionPlan::from_is_selected(is_selected)")
+            && content.contains("fn action_title")
+            && content.contains("fn picker_title")
+            && content.contains("fn description"),
+        "ACP agent action and picker rows should derive visible copy from the named selection plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

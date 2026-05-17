@@ -796,19 +796,54 @@ fn acp_agent_state_label(entry: &crate::ai::acp::AcpAgentCatalogEntry) -> &'stat
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AcpAgentSelectionActionPlan {
+    CurrentAgent,
+    AvailableAgent,
+}
+
+impl AcpAgentSelectionActionPlan {
+    fn from_is_selected(is_selected: bool) -> Self {
+        if is_selected {
+            Self::CurrentAgent
+        } else {
+            Self::AvailableAgent
+        }
+    }
+
+    fn action_title(self, display_name: &str) -> String {
+        match self {
+            Self::CurrentAgent => format!("Current Agent: {display_name}"),
+            Self::AvailableAgent => format!("Use {display_name}"),
+        }
+    }
+
+    fn picker_title(self, display_name: &str) -> String {
+        match self {
+            Self::CurrentAgent => format!("{display_name} \u{2713}"),
+            Self::AvailableAgent => display_name.to_string(),
+        }
+    }
+
+    fn description(self, entry: &crate::ai::acp::AcpAgentCatalogEntry) -> String {
+        let source = acp_agent_source_label(entry.source);
+        let state = acp_agent_state_label(entry);
+
+        match self {
+            Self::CurrentAgent => format!("Currently selected agent. {source} · {state}"),
+            Self::AvailableAgent => {
+                format!("Reconnect Agent Chat using this agent. {source} · {state}")
+            }
+        }
+    }
+}
+
 #[allow(dead_code)] // Used by the binary ACP actions surface.
 fn acp_agent_switch_description(
     entry: &crate::ai::acp::AcpAgentCatalogEntry,
     is_selected: bool,
 ) -> String {
-    let source = acp_agent_source_label(entry.source);
-    let state = acp_agent_state_label(entry);
-
-    if is_selected {
-        format!("Currently selected agent. {source} · {state}")
-    } else {
-        format!("Reconnect Agent Chat using this agent. {source} · {state}")
-    }
+    AcpAgentSelectionActionPlan::from_is_selected(is_selected).description(entry)
 }
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
@@ -1056,16 +1091,12 @@ pub(crate) fn get_acp_chat_actions_with_agents(
     let selected_agent_id = selected_agent_id.filter(|id| !id.is_empty());
     actions.extend(catalog_entries.iter().map(|entry| {
         let is_selected = selected_agent_id == Some(entry.id.as_ref());
-        let title = if is_selected {
-            format!("Current Agent: {}", entry.display_name)
-        } else {
-            format!("Use {}", entry.display_name)
-        };
+        let selection_plan = AcpAgentSelectionActionPlan::from_is_selected(is_selected);
 
         Action::new(
             acp_switch_agent_action_id(entry.id.as_ref()),
-            title,
-            Some(acp_agent_switch_description(entry, is_selected)),
+            selection_plan.action_title(&entry.display_name),
+            Some(selection_plan.description(entry)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::Terminal)
@@ -1171,14 +1202,11 @@ pub(crate) fn get_acp_agent_picker_actions(
         .iter()
         .map(|entry| {
             let is_selected = selected_agent_id == Some(entry.id.as_ref());
+            let selection_plan = AcpAgentSelectionActionPlan::from_is_selected(is_selected);
             Action::new(
                 acp_switch_agent_action_id(entry.id.as_ref()),
-                if is_selected {
-                    format!("{} \u{2713}", entry.display_name)
-                } else {
-                    entry.display_name.to_string()
-                },
-                Some(acp_agent_switch_description(entry, is_selected)),
+                selection_plan.picker_title(&entry.display_name),
+                Some(selection_plan.description(entry)),
                 ActionCategory::ScriptContext,
             )
             .with_icon(IconName::Terminal)
