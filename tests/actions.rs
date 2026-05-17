@@ -3219,6 +3219,7 @@ fn app_lifecycle_handler_uses_named_action_states() {
 
     assert!(
         content.contains("enum AppLifecycleHandlerAction")
+            && content.contains("enum AppLifecycleAppleScriptAction")
             && content.contains("struct AppLifecycleTarget")
             && content.contains("Quit")
             && content.contains("ForceQuit")
@@ -3232,6 +3233,7 @@ fn app_lifecycle_handler_uses_named_action_states() {
             && content.contains("lifecycle_action.hud_message(&app_name)")
             && content.contains("lifecycle_action.async_failure_log()")
             && content.contains("lifecycle_action.restart_quit_failure_log()")
+            && content.contains("lifecycle_script.osascript_failure_message(e)")
             && content.contains("self.unsupported_message()")
             && content.contains("Quitting {app_name}")
             && content.contains("Force quitting {app_name}")
@@ -3245,8 +3247,9 @@ fn app_lifecycle_handler_uses_named_action_states() {
         content.contains("\"quit_app failed\"")
             && content.contains("\"force_quit_app failed\"")
             && content.contains("\"restart relaunch failed\"")
-            && content.contains("\"quit before restart failed, attempting launch anyway\""),
-        "application lifecycle state should preserve async failure log copy"
+            && content.contains("\"quit before restart failed, attempting launch anyway\"")
+            && content.contains("format!(\"Failed to run osascript: {error}\")"),
+        "application lifecycle state should preserve async failure log and AppleScript subprocess copy"
     );
 }
 
