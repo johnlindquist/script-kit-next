@@ -41,6 +41,25 @@ impl AiImageCaptureBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiTextCaptureBuiltinAction {
+    AgentChatContent,
+    CurrentAppContext,
+}
+
+impl AiTextCaptureBuiltinAction {
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::AgentChatContent => {
+                format!("Failed to capture content for Agent Chat: {error}")
+            }
+            Self::CurrentAppContext => {
+                format!("Failed to capture current app context: {error}")
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DictationBuiltinAction {
     CurrentSurface,
     AgentChat,
@@ -2532,6 +2551,7 @@ impl ScriptListApp {
         C: FnOnce() -> Result<DeferredAiCapturedText, String> + Send + 'static,
         F: FnOnce(String) -> String + Send + 'static,
     {
+        let capture_action = AiTextCaptureBuiltinAction::AgentChatContent;
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -2613,7 +2633,7 @@ impl ScriptListApp {
                         error = %error,
                         "Deferred AI text capture failed"
                     );
-                    let message = format!("Failed to capture content for Agent Chat: {}", error);
+                    let message = capture_action.failure_message(&error);
                     this.toast_manager.push(
                         components::toast::Toast::error(message, &this.theme)
                             .duration_ms(Some(TOAST_CRITICAL_MS)),
@@ -2793,7 +2813,8 @@ impl ScriptListApp {
                 }
                 Err(error) => {
                     let _ = this.update(cx, |app, cx| {
-                        let message = format!("Failed to capture current app context: {}", error);
+                        let message =
+                            AiTextCaptureBuiltinAction::CurrentAppContext.failure_message(&error);
                         app.show_error_toast(message.clone(), cx);
                         tracing::error!(
                             trace_id = %trace_id,
