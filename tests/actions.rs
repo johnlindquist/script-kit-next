@@ -2066,6 +2066,30 @@ fn acp_last_code_block_handlers_use_named_action_states() {
     );
 }
 
+#[test]
+fn acp_panel_window_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpPanelWindowHandlerAction")
+            && content.contains("ShowHistory")
+            && content.contains("DetachWindow")
+            && content.contains("ReattachPanel"),
+        "ACP history/detach/reattach handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpPanelWindowHandlerAction::from_action_id(action_id)")
+            && content.contains("panel_action.success_message()")
+            && content.contains("panel_action.history_search_placeholder()")
+            && content.contains("Opened conversation history")
+            && content.contains("Search conversation history...")
+            && content.contains("Chat kept open in window")
+            && content.contains("Chat returned to panel"),
+        "ACP panel/window handlers should derive success messages and history placeholder from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
