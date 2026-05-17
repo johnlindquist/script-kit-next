@@ -748,7 +748,8 @@ fn script_management_handler_uses_named_action_states() {
     assert!(
         content.contains("ScriptManagementHandlerAction::from_action_id(action_id)")
             && content.contains("management_action.success_hud()")
-            && content.contains("management_action.open_failure_message(e)"),
+            && content.contains("management_action.open_failure_message(e)")
+            && content.contains("format!(\"Failed to open scripts folder: {error}\")"),
         "script create/reload handlers should derive HUD and open-failure copy from named states"
     );
 }
