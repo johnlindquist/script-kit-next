@@ -49,8 +49,9 @@ fn shortcut_actions_show_error_when_no_selection() {
     let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
-        block.contains("selection_required_message_for_action(action_id)"),
-        "Shortcut actions should use selection_required_message when nothing is selected"
+        block.contains("shortcut_action")
+            && block.contains("target_error_message(ShortcutAliasTargetError::NoSelection"),
+        "Shortcut actions should derive no-selection copy from the named action state"
     );
 }
 
@@ -64,9 +65,10 @@ fn shortcut_actions_reject_window_items() {
     let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
-        block.contains("shortcut_action.unsupported_message()")
+        block.contains("shortcut_action.target_error_message(")
+            && block.contains("ShortcutAliasTargetError::UnsupportedItemType")
             && content.contains("Shortcuts not supported for this item type"),
-        "Shortcut actions should reject Window items with clear error message"
+        "Shortcut actions should derive unsupported-item copy from the named action state"
     );
 }
 
@@ -183,9 +185,10 @@ fn remove_shortcut_rejects_unsupported_item_types() {
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("remove_action.cannot_remove_message()")
+        block.contains("remove_action.target_error_message(")
+            && block.contains("ShortcutAliasTargetError::MissingCommandId")
             && content.contains("Cannot remove shortcut for this item type"),
-        "remove_shortcut should show error for unsupported item types (e.g. Window)"
+        "remove_shortcut should derive missing-target copy from the named action state"
     );
 }
 
@@ -222,8 +225,9 @@ fn alias_actions_show_error_when_no_selection() {
     let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
-        block.contains("selection_required_message_for_action(action_id)"),
-        "Alias actions should use selection_required_message when nothing is selected"
+        block.contains("alias_action")
+            && block.contains("target_error_message(ShortcutAliasTargetError::NoSelection"),
+        "Alias actions should derive no-selection copy from the named action state"
     );
 }
 
@@ -237,28 +241,34 @@ fn alias_actions_reject_window_items() {
     let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
-        block.contains("alias_action.unsupported_message()")
+        block.contains("alias_action.target_error_message(")
+            && block.contains("ShortcutAliasTargetError::UnsupportedItemType")
             && content.contains("Aliases not supported for this item type"),
-        "Alias actions should reject Window items with clear error message"
+        "Alias actions should derive unsupported-item copy from the named action state"
     );
 }
 
 #[test]
 fn agent_script_context_does_not_advertise_unsupported_shortcut_or_alias_actions() {
     let builder = super::read_source("src/actions/builders/script_context.rs");
-    let shortcut_start = builder
-        .find("if !script.is_agent")
-        .expect("script context builder should guard shortcut/alias actions for agents");
-    let agent_actions_start = builder
-        .find("if script.is_agent {")
-        .expect("script context builder should still define agent-specific actions");
-    let agent_actions_end = builder[agent_actions_start..]
-        .find("let deeplink_name = to_deeplink_name")
-        .map(|offset| agent_actions_start + offset)
-        .expect(
-            "script context builder should leave the agent-specific block before deeplink actions",
-        );
-    let guarded_block = &builder[shortcut_start..agent_actions_start];
+    let plan_start = builder
+        .find("fn preference_action_plan")
+        .expect("script context builder should derive shortcut/alias actions from a plan");
+    let shortcut_append_start = builder
+        .find("fn append_shortcut_preference_actions")
+        .expect("script context builder should append shortcut rows from the plan");
+    let alias_append_start = builder
+        .find("fn append_alias_preference_actions")
+        .expect("script context builder should append alias rows from the plan");
+    let plan_block = &builder[plan_start..shortcut_append_start];
+    let guarded_block =
+        &builder[shortcut_append_start..builder.len().min(alias_append_start + 2500)];
+
+    assert!(
+        plan_block.contains("if script.is_agent")
+            && plan_block.contains("ScriptContextPreferenceActionPlan::AgentNoPreferenceActions"),
+        "script context builder should map agents to the no-preference-action plan"
+    );
 
     for action_id in [
         "\"update_shortcut\"",
@@ -274,20 +284,10 @@ fn agent_script_context_does_not_advertise_unsupported_shortcut_or_alias_actions
         );
     }
 
-    let agent_block = &builder[agent_actions_start..agent_actions_end];
-    for action_id in [
-        "\"update_shortcut\"",
-        "\"remove_shortcut\"",
-        "\"add_shortcut\"",
-        "\"update_alias\"",
-        "\"remove_alias\"",
-        "\"add_alias\"",
-    ] {
-        assert!(
-            !agent_block.contains(action_id),
-            "{action_id} must not be advertised by the agent-specific action block"
-        );
-    }
+    assert!(
+        guarded_block.contains("ScriptContextPreferenceActionPlan::AgentNoPreferenceActions => {}"),
+        "agent preference plans must not append shortcut or alias action rows"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -353,8 +353,9 @@ fn remove_alias_rejects_unsupported_item_types() {
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("remove_action.cannot_remove_message()")
+        block.contains("remove_action.target_error_message(")
+            && block.contains("ShortcutAliasTargetError::MissingCommandId")
             && content.contains("Cannot remove alias for this item type"),
-        "remove_alias should show error for unsupported item types (e.g. Window)"
+        "remove_alias should derive missing-target copy from the named action state"
     );
 }

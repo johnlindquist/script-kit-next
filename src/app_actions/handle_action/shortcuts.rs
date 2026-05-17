@@ -25,6 +25,13 @@ enum ShortcutAliasRemoveAction {
     Alias,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShortcutAliasTargetError {
+    NoSelection,
+    UnsupportedItemType,
+    MissingCommandId,
+}
+
 impl ShortcutRecorderAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -50,6 +57,16 @@ impl ShortcutRecorderAction {
             }
         }
     }
+
+    fn target_error_message(self, error: ShortcutAliasTargetError, action_id: &str) -> String {
+        match error {
+            ShortcutAliasTargetError::NoSelection => {
+                selection_required_message_for_action(action_id).to_string()
+            }
+            ShortcutAliasTargetError::UnsupportedItemType => self.unsupported_message().to_string(),
+            ShortcutAliasTargetError::MissingCommandId => self.cannot_assign_message().to_string(),
+        }
+    }
 }
 
 impl AliasInputAction {
@@ -70,6 +87,16 @@ impl AliasInputAction {
     fn cannot_assign_message(self) -> &'static str {
         match self {
             Self::Add | Self::Update => "Cannot assign alias for this item type",
+        }
+    }
+
+    fn target_error_message(self, error: ShortcutAliasTargetError, action_id: &str) -> String {
+        match error {
+            ShortcutAliasTargetError::NoSelection => {
+                selection_required_message_for_action(action_id).to_string()
+            }
+            ShortcutAliasTargetError::UnsupportedItemType => self.unsupported_message().to_string(),
+            ShortcutAliasTargetError::MissingCommandId => self.cannot_assign_message().to_string(),
         }
     }
 }
@@ -94,6 +121,18 @@ impl ShortcutAliasRemoveAction {
         match self {
             Self::Shortcut => "Cannot remove shortcut for this item type",
             Self::Alias => "Cannot remove alias for this item type",
+        }
+    }
+
+    fn target_error_message(self, error: ShortcutAliasTargetError, action_id: &str) -> String {
+        match error {
+            ShortcutAliasTargetError::NoSelection => {
+                selection_required_message_for_action(action_id).to_string()
+            }
+            ShortcutAliasTargetError::UnsupportedItemType
+            | ShortcutAliasTargetError::MissingCommandId => {
+                self.cannot_remove_message().to_string()
+            }
         }
     }
 
@@ -134,13 +173,19 @@ impl ScriptListApp {
                         | scripts::SearchResult::BrowserHistory(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                shortcut_action.unsupported_message(),
+                                shortcut_action.target_error_message(
+                                    ShortcutAliasTargetError::UnsupportedItemType,
+                                    action_id,
+                                ),
                             );
                         }
                         scripts::SearchResult::Agent(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                shortcut_action.unsupported_message(),
+                                shortcut_action.target_error_message(
+                                    ShortcutAliasTargetError::UnsupportedItemType,
+                                    action_id,
+                                ),
                             );
                         }
                         _ => {}
@@ -150,7 +195,10 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            shortcut_action.cannot_assign_message(),
+                            shortcut_action.target_error_message(
+                                ShortcutAliasTargetError::MissingCommandId,
+                                action_id,
+                            ),
                         );
                     };
                     let command_name = result.launcher_command_name();
@@ -165,7 +213,8 @@ impl ScriptListApp {
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        selection_required_message_for_action(action_id),
+                        shortcut_action
+                            .target_error_message(ShortcutAliasTargetError::NoSelection, action_id),
                     );
                 }
                 DispatchOutcome::success()
@@ -232,14 +281,18 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            remove_action.cannot_remove_message(),
+                            remove_action.target_error_message(
+                                ShortcutAliasTargetError::MissingCommandId,
+                                action_id,
+                            ),
                         );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        selection_required_message_for_action(action_id),
+                        remove_action
+                            .target_error_message(ShortcutAliasTargetError::NoSelection, action_id),
                     );
                 }
                 DispatchOutcome::success()
@@ -261,7 +314,10 @@ impl ScriptListApp {
                         | scripts::SearchResult::Agent(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                alias_action.unsupported_message(),
+                                alias_action.target_error_message(
+                                    ShortcutAliasTargetError::UnsupportedItemType,
+                                    action_id,
+                                ),
                             );
                         }
                         _ => {}
@@ -271,7 +327,10 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            alias_action.cannot_assign_message(),
+                            alias_action.target_error_message(
+                                ShortcutAliasTargetError::MissingCommandId,
+                                action_id,
+                            ),
                         );
                     };
                     let command_name = result.launcher_command_name();
@@ -286,7 +345,8 @@ impl ScriptListApp {
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        selection_required_message_for_action(action_id),
+                        alias_action
+                            .target_error_message(ShortcutAliasTargetError::NoSelection, action_id),
                     );
                 }
                 DispatchOutcome::success()
@@ -336,14 +396,18 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            remove_action.cannot_remove_message(),
+                            remove_action.target_error_message(
+                                ShortcutAliasTargetError::MissingCommandId,
+                                action_id,
+                            ),
                         );
                     }
                     self.hide_main_and_reset(cx);
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        selection_required_message_for_action(action_id),
+                        remove_action
+                            .target_error_message(ShortcutAliasTargetError::NoSelection, action_id),
                     );
                 }
                 DispatchOutcome::success()
