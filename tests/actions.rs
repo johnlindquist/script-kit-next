@@ -1080,11 +1080,11 @@ fn ai_legacy_harness_builtin_uses_named_action_states() {
         "Legacy AI aliases should be routed through named action states"
     );
     assert!(
-        content.contains("AiLegacyHarnessBuiltinAction::from_command(*cmd)")
+        content.contains("AiLegacyHarnessBuiltinAction::from_command(command)")
             && content.contains("fn execute_ai_legacy_harness_builtin(")
-            && content.contains("command.is_legacy_harness_alias()")
+            && !content.contains("if !command.is_legacy_harness_alias()")
             && content.contains("action.success_detail()"),
-        "Legacy AI aliases should keep centralized classification and named success details"
+        "Legacy AI aliases should keep centralized table classification and named success details"
     );
     assert!(
         content.contains("open_tab_ai_acp_with_entry_intent(None, cx)")
