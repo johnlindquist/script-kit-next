@@ -48,6 +48,14 @@ fn acp_actions_menu_has_host_aware_filtering() {
         source.contains("filter_acp_actions_for_host"),
         "ACP builder must use filter_acp_actions_for_host for host-aware filtering"
     );
+    assert!(
+        source.contains("enum AcpHostActionPlan")
+            && source.contains("IncludeWithShortcut")
+            && source.contains("IncludeWithoutShortcut")
+            && source.contains("Exclude")
+            && source.contains("fn acp_host_action_plan"),
+        "ACP host filtering should use a named host-action state plan instead of split conditionals"
+    );
 }
 
 #[test]

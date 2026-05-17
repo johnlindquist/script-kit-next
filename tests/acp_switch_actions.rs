@@ -563,8 +563,9 @@ fn dialog_exposes_host_aware_constructor() {
 fn detached_host_excludes_unsupported_actions() {
     // The detached host filter must reject panel-only actions
     assert!(
-        ACTION_BUILDER_SOURCE.contains("acp_action_supported_in_host"),
-        "ACP builder must have a host action filter function"
+        ACTION_BUILDER_SOURCE.contains("acp_host_action_plan")
+            && ACTION_BUILDER_SOURCE.contains("AcpHostActionPlan::Exclude"),
+        "ACP builder must have a named host action plan that can exclude unsupported actions"
     );
     assert!(
         ACTION_BUILDER_SOURCE.contains("filter_acp_actions_for_host"),
