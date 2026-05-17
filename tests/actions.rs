@@ -2398,6 +2398,30 @@ fn sdk_reference_catalog_copy_uses_named_action_state() {
 }
 
 #[test]
+fn browser_tabs_activation_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/browser_tabs.rs")
+        .expect("Failed to read browser tabs renderer");
+
+    assert!(
+        content.contains("enum BrowserTabsActivationAction")
+            && content.contains("ActivateSelectedTab"),
+        "Browser Tabs activation feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("BrowserTabsActivationAction::ActivateSelectedTab")
+            && content.contains("activation_action.failure_message(error)")
+            && content.contains("activation_action")
+            && content.contains(".generic_failure_message()"),
+        "Browser Tabs Enter and double-click activation failures should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Failed to activate tab: {error}\")")
+            && content.contains("\"Failed to activate tab\""),
+        "Browser Tabs activation feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn terminal_utility_views_use_named_failure_states() {
     let content = fs::read_to_string("src/app_execute/utility_views.rs")
         .expect("Failed to read utility view handler");

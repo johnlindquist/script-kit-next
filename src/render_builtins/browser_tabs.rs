@@ -1,3 +1,22 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserTabsActivationAction {
+    ActivateSelectedTab,
+}
+
+impl BrowserTabsActivationAction {
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::ActivateSelectedTab => format!("Failed to activate tab: {error}"),
+        }
+    }
+
+    fn generic_failure_message(self) -> &'static str {
+        match self {
+            Self::ActivateSelectedTab => "Failed to activate tab",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn browser_tabs_visible_rows(&self, filter: &str) -> Vec<crate::browser_tabs::BrowserTabInfo> {
         crate::browser_tabs::fuzzy_search_browser_tabs(&self.cached_browser_tabs, filter)
@@ -137,12 +156,13 @@ impl ScriptListApp {
                     } else if is_key_enter(key) {
                         if let Some(tab) = filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
                         {
+                            let activation_action = BrowserTabsActivationAction::ActivateSelectedTab;
                             match crate::browser_tabs::activate_tab(&tab) {
                                 Ok(()) => this.hide_main_and_reset(cx),
                                 Err(error) => {
                                     this.toast_manager.push(
                                         components::toast::Toast::error(
-                                            format!("Failed to activate tab: {}", error),
+                                            activation_action.failure_message(error),
                                             &this.theme,
                                         )
                                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -218,6 +238,8 @@ impl ScriptListApp {
                                 let click_entity = click_entity_handle.clone();
                                 let hover_entity = hover_entity_handle.clone();
                                 let tab_for_click = tab.clone();
+                                let activation_action =
+                                    BrowserTabsActivationAction::ActivateSelectedTab;
                                 let click_handler =
                                     move |event: &gpui::ClickEvent,
                                           _window: &mut Window,
@@ -244,7 +266,8 @@ impl ScriptListApp {
                                                         } else {
                                                             this.toast_manager.push(
                                                                 components::toast::Toast::error(
-                                                                    "Failed to activate tab",
+                                                                    activation_action
+                                                                        .generic_failure_message(),
                                                                     &this.theme,
                                                                 )
                                                                 .duration_ms(Some(TOAST_ERROR_MS)),
