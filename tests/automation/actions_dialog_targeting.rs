@@ -242,6 +242,32 @@ fn get_layout_info_actions_dialog_target_round_trip() {
 }
 
 #[test]
+fn get_layout_info_actions_dialog_routes_to_runtime_layout_model() {
+    let prompt_handler = include_str!("../../src/prompt_handler/mod.rs");
+    let actions_dialog = include_str!("../../src/actions/dialog.rs");
+
+    assert!(
+        prompt_handler.contains("AutomationWindowKind::ActionsDialog")
+            && prompt_handler.contains("automation_layout_info(&resolved)"),
+        "getLayoutInfo must route ActionsDialog targets to the live runtime layout model"
+    );
+    for needle in [
+        "pub(crate) fn automation_layout_info",
+        "ActionsDialog",
+        "ActionsSearchInput",
+        "ActionsList",
+        "ActionsRow[",
+        "ActionsShortcut[",
+        "runtime ActionsDialog row geometry",
+    ] {
+        assert!(
+            actions_dialog.contains(needle),
+            "ActionsDialog layout model must expose {needle}"
+        );
+    }
+}
+
+#[test]
 fn get_elements_with_actions_dialog_target_round_trip() {
     // getElements with an ActionsDialog target should parse correctly.
     let json = serde_json::json!({

@@ -146,6 +146,9 @@ impl NotesApp {
             initial_height,
             auto_sizing_enabled: true,          // Auto-sizing ON by default
             last_window_height: initial_height, // Track for manual resize detection
+            autosize_generation: 0,
+            last_autosize_transition: None,
+            preview_scroll_handle: ScrollHandle::new(),
             focus_handle,
             _subscriptions: vec![editor_sub, search_sub],
             show_actions_panel: false,
@@ -379,11 +382,6 @@ impl NotesApp {
         line_count: usize,
         _cx: &mut Context<Self>,
     ) {
-        // Skip if auto-sizing is disabled (user manually resized)
-        if !self.auto_sizing_enabled {
-            return;
-        }
-
         // Use initial_height as minimum - never shrink below starting size
         let min_height = self.initial_height;
 
@@ -396,10 +394,18 @@ impl NotesApp {
         // Get current bounds and update height
         let current_bounds = window.bounds();
         let old_height: f32 = current_bounds.size.height.into();
+        let old_width: f32 = current_bounds.size.width.into();
+        let mut applied = false;
+        let mut skipped_reason = None;
 
-        // Resize if height needs to change (both grow AND shrink)
-        // Use a small threshold to avoid constant tiny adjustments
-        if (clamped_height - old_height).abs() > AUTO_RESIZE_THRESHOLD {
+        self.autosize_generation = self.autosize_generation.wrapping_add(1);
+
+        // Skip if auto-sizing is disabled (user manually resized)
+        if !self.auto_sizing_enabled {
+            skipped_reason = Some("disabled");
+        } else if (clamped_height - old_height).abs() <= AUTO_RESIZE_THRESHOLD {
+            skipped_reason = Some("below-threshold");
+        } else {
             let new_size = size(current_bounds.size.width, px(clamped_height));
 
             debug!(
@@ -429,7 +435,23 @@ impl NotesApp {
                 parent_kind: None,
             });
             self.last_window_height = clamped_height;
+            applied = true;
         }
+
+        self.last_autosize_transition = Some(NotesAutosizeTransition {
+            generation: self.autosize_generation,
+            cause: "editor-input",
+            before_height: old_height,
+            after_height: if applied { clamped_height } else { old_height },
+            before_width: old_width,
+            after_width: old_width,
+            line_count,
+            desired_height: total_height,
+            clamped_height,
+            applied,
+            skipped_reason,
+            recorded_at: Instant::now(),
+        });
     }
 
     /// Enable auto-sizing (called from actions panel)

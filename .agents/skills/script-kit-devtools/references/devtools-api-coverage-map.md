@@ -46,7 +46,7 @@ Notes must be treated as a first-class target, not as a launcher proxy. DevTools
 
 Required Notes shortcuts and ownership paths include `Cmd+K`, `Cmd+P`, `Cmd+Shift+P`, `Cmd+F`, `Cmd+Shift+F`, `Cmd+N`, `Cmd+Shift+N`, `Cmd+Shift+T`, `Cmd+W`, `Cmd+.`, `Cmd+Shift+.`, `Cmd+Shift+S`, `Cmd+Z`, `Cmd+D`, `Cmd+Shift+D`, `Cmd+Shift+X`, `Cmd+Shift+L`, `Cmd+L`, `Cmd+Shift+-`, `Cmd+Shift+H`, `Cmd+V`, `Cmd+Shift+C`, `Cmd+E`, `Cmd+/`, `Cmd+J`, `Cmd+Shift+U`, `Cmd+B`, `Cmd+I`, `Cmd+Shift+I`, `Cmd+Enter`, `Cmd+Shift+A`, `Cmd+Shift+O`, `Cmd+Up`, `Cmd+Down`, `Cmd+Shift+Up`, `Cmd+Shift+Down`, `Cmd+[`, `Cmd+]`, `Cmd+Shift+Backspace`, `Cmd+Shift+Delete`, `Cmd+Shift+7`, `Cmd+Shift+8`, `Cmd+1..Cmd+9`, `Tab`, `Shift+Tab`, `Alt+Up`, `Alt+Down`, `Alt+Shift+Up`, `Alt+Shift+Down`, `Ctrl+Shift+K`, `Escape`, `Enter`, arrows, paging, Home/End, Backspace, and Delete.
 
-Runtime primitives now expose target-scoped layout info, cursor and selection ranges, note store generation and sandbox identity, active note id and dirty state, command bar route stack, shortcut registry snapshots, focus owner transitions, and redacted draft snapshot fingerprints. Missing runtime primitives that block full Notes proof include editor and preview scroll anchors with real scroll offsets, ACP embedded generation and origin receipts, portal session provenance, native shortcut activation parity, and auto-resize before/after comparison.
+Runtime primitives now expose target-scoped layout info, cursor and selection ranges, note store generation and sandbox identity, active note id and dirty state, command bar route stack, shortcut registry snapshots, focus owner transitions, redacted draft snapshot fingerprints, real editor scroll metrics, target-scoped `batch.togglePreview`, target-scoped `simulateKey` for the Notes `Cmd+Shift+P` preview shortcut, and sandboxed auto-resize before/after comparison through `bun scripts/devtools/notes.ts resize-compare --start --sandbox`. Missing runtime primitives that block full Notes proof include populated markdown preview scroll content bounds, ACP embedded generation and origin receipts, portal session provenance, and remaining Notes shortcut activation parity receipts beyond `Cmd+Shift+P`.
 
 ## Dictation Coverage Requirements
 
@@ -54,13 +54,17 @@ Dictation needs media-aware DevTools instead of generic screenshots or scripts. 
 
 Required Dictation shortcut and input paths include the configured dictation hotkey, `Escape`, `Enter`, `Space`, and `Cmd+W`.
 
-Runtime primitives now support passive Dictation readiness without opening the microphone: `getState` publishes redacted model readiness, passive microphone permission and device snapshots, hotkey state, recording generation, idle audio-level availability, and cleanup state, and `devtools.media.inspect` consumes that receipt. Missing runtime primitives that still block full Dictation proof include target delivery generation, transcript fingerprints, cursor insertion range, and wrong-target refusal receipts.
+Runtime primitives now support passive Dictation readiness without opening the microphone: `getState` publishes redacted model readiness, passive microphone permission and device snapshots, hotkey state, recording generation, idle audio-level availability, cleanup state, and the last redacted delivery receipt. `devtools.media.inspect` consumes passive readiness, and `dictation.deliver-fixture` uses `pushDictationResult` to prove delivery generation, transcript length/fingerprint, and main-filter insertion range without raw transcript output. Missing runtime primitives that still block full Dictation proof include insertion ranges for Notes/ACP/frontmost destinations and wrong-target refusal receipts.
 
 Dictation History coverage must also expose fixture store identity, transcript row generation, preview generation, redacted transcript fingerprints, audio path redaction proof, scroll and selection anchor metrics, and portal attachment receipts.
 
+## Actions Popup Layout Coverage
+
+ActionsDialog and attached action menus must expose runtime-owned layout, not TypeScript-inferred boxes. `getLayoutInfo(target actionsDialog)` returns the ActionsDialog root, search input, optional context header, list viewport, visible grouped rows, and shortcut hint bounds from the same runtime row-geometry model used by `devtools.actions.inspect`. Disabled reason text bounds remain the explicit missing primitive only for routes that render visible disabled explanations.
+
 ## Build Order
 
-1. Keep `devtools.inspect` as the first-orientation primitive.
+1. Keep `devtools.inspect --bug "<report>" --surface <SurfaceKind>` as the first-orientation primitive. Its `inspect.orchestrate` receipt should preserve the bug text, visible target proof, primitive stack, capability details, missing primitive details, likely owners, cleanup commands, and the recipe boundary.
 2. Use `devtools.coverage` to classify the target and missing primitive before using a recipe.
 3. Use `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>` to turn inspect and coverage receipts into fail-closed layout, text fit, scroll, overlap, contrast, focus, media, and missing-primitive measurements.
 4. Build `devtools.act` for safe protocol-first input, shortcut, and click receipts.

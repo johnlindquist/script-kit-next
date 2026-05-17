@@ -5182,6 +5182,7 @@ impl ScriptListApp {
                 let history_entry_id = history_entry.id.clone();
                 // Route delivery based on the target that was captured at
                 // session start, not the current UI state.
+                let mut delivery_insertion_range: Option<serde_json::Value> = None;
                 let delivered_internally = match target {
                     crate::dictation::DictationTarget::MainWindowFilter => {
                         if !self.can_accept_dictation_into_main_filter() {
@@ -5194,7 +5195,10 @@ impl ScriptListApp {
                     }
                     crate::dictation::DictationTarget::NotesEditor => {
                         match notes::inject_text_into_notes(&mut **cx, &transcript) {
-                            Ok(()) => true,
+                            Ok(insertion_range) => {
+                                delivery_insertion_range = Some(insertion_range);
+                                true
+                            }
                             Err(error) => {
                                 tracing::warn!(
                                     category = "DICTATION",
@@ -5265,6 +5269,27 @@ impl ScriptListApp {
                             crate::dictation::DictationDestination::FrontmostApp
                         }
                     };
+                    let insertion_range = match destination {
+                        crate::dictation::DictationDestination::MainWindowFilter
+                        | crate::dictation::DictationDestination::ActivePrompt
+                        | crate::dictation::DictationDestination::AiChatComposer
+                        | crate::dictation::DictationDestination::TabAiHarness => {
+                            Some(serde_json::json!({
+                                "available": true,
+                                "unit": "utf8Bytes",
+                                "start": 0,
+                                "end": transcript.len(),
+                                "insertedLength": transcript.len(),
+                                "operation": "replaceInput",
+                                "source": "deliveryPipeline",
+                                "redacted": true,
+                            }))
+                        }
+                        crate::dictation::DictationDestination::NotesEditor => {
+                            delivery_insertion_range
+                        }
+                        crate::dictation::DictationDestination::FrontmostApp => None,
+                    };
                     tracing::info!(
                         category = "DICTATION",
                         ?target,
@@ -5279,6 +5304,7 @@ impl ScriptListApp {
                         destination,
                         true,
                         &history_entry_id,
+                        insertion_range,
                     );
 
                     let _ = crate::dictation::close_dictation_overlay(cx);
@@ -5439,6 +5465,7 @@ impl ScriptListApp {
                                         crate::dictation::DictationDestination::FrontmostApp,
                                         false,
                                         &history_entry_id,
+                                        None,
                                     );
                                     tracing::info!(
                                         category = "DICTATION",

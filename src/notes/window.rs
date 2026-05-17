@@ -6,8 +6,8 @@
 use anyhow::Result;
 use gpui::{
     div, prelude::*, px, rgba, size, AnyElement, App, Context, CursorStyle, Entity, FocusHandle,
-    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, Styled,
-    Subscription, Window, WindowBounds, WindowOptions,
+    Focusable, IntoElement, KeyDownEvent, MouseMoveEvent, ParentElement, Render, ScrollHandle,
+    Styled, Subscription, Window, WindowBounds, WindowOptions,
 };
 
 #[cfg(target_os = "macos")]
@@ -203,6 +203,22 @@ struct NotesFocusTransition {
 }
 
 #[derive(Debug, Clone)]
+struct NotesAutosizeTransition {
+    generation: u64,
+    cause: &'static str,
+    before_height: f32,
+    after_height: f32,
+    before_width: f32,
+    after_width: f32,
+    line_count: usize,
+    desired_height: f32,
+    clamped_height: f32,
+    applied: bool,
+    skipped_reason: Option<&'static str>,
+    recorded_at: Instant,
+}
+
+#[derive(Debug, Clone)]
 struct NotesMentionPortalEditSession {
     mention_range: Range<usize>,
     original_token: String,
@@ -284,6 +300,12 @@ pub struct NotesApp {
 
     /// Last known window height - used to detect manual resize
     last_window_height: f32,
+    /// Monotonic generation for DevTools auto-resize transition receipts.
+    autosize_generation: u64,
+    /// Last auto-resize decision for before/after resize comparison proof.
+    last_autosize_transition: Option<NotesAutosizeTransition>,
+    /// Scroll handle for the markdown preview, used by DevTools scroll anchors.
+    preview_scroll_handle: ScrollHandle,
 
     /// Focus handle for keyboard navigation
     focus_handle: FocusHandle,

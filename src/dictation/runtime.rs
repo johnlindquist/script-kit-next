@@ -139,6 +139,7 @@ pub fn record_delivery_receipt(
     destination: crate::dictation::DictationDestination,
     delivered_internally: bool,
     history_entry_id: &str,
+    insertion_range: Option<serde_json::Value>,
 ) -> serde_json::Value {
     let generation = DELIVERY_RECEIPT_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
     let receipt = serde_json::json!({
@@ -151,6 +152,10 @@ pub fn record_delivery_receipt(
         "transcriptLen": transcript.len(),
         "transcriptFingerprint": redacted_transcript_fingerprint(transcript),
         "audioDurationMs": audio_duration.as_millis() as u64,
+        "insertionRange": insertion_range.unwrap_or_else(|| serde_json::json!({
+            "available": false,
+            "reason": "destination did not expose an insertion range receipt",
+        })),
         "source": "deliveryPipeline",
         "redacted": true,
     });

@@ -14,6 +14,7 @@ const DEVTOOLS_NOTES: &str = include_str!("../scripts/devtools/notes.ts");
 const DEVTOOLS_COVERAGE: &str = include_str!("../scripts/devtools/coverage.ts");
 const DEVTOOLS_LAYOUT: &str = include_str!("../scripts/devtools/layout.ts");
 const DEVTOOLS_SCHEMA: &str = include_str!("../scripts/devtools/schema.ts");
+const DEVTOOLS_ACT: &str = include_str!("../scripts/devtools/act.ts");
 const NOTES_STORAGE: &str = include_str!("../src/notes/storage.rs");
 const ACTIONS_DIALOG: &str = include_str!("../src/actions/dialog.rs");
 const COMMAND_BAR: &str = include_str!("../src/actions/command_bar.rs");
@@ -21,6 +22,8 @@ const NOTES_FOCUS: &str = include_str!("../src/notes/window/focus.rs");
 const NOTES_WINDOW: &str = include_str!("../src/notes/window.rs");
 const NOTES_PANELS: &str = include_str!("../src/notes/window/panels.rs");
 const BATCH_WAIT: &str = include_str!("../src/protocol/types/batch_wait.rs");
+const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
+const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 
 #[test]
 fn state_result_exposes_redacted_notes_envelope() {
@@ -119,7 +122,7 @@ fn notes_state_exposes_focus_owner_transition_timeline() {
         "notesState.focusTransitions.entries",
         "shortcutActivation.channel",
         "getState(target notes) focus owner transition timeline",
-        "Notes native shortcut activation parity receipt",
+        "target-scoped simulateKey Cmd+Shift+P Notes preview activation receipt",
     ] {
         assert!(
             DEVTOOLS_SCHEMA.contains(needle)
@@ -155,7 +158,7 @@ fn notes_state_exposes_shortcut_registry_and_focus_owner_scope() {
         "notesState.shortcutRegistry.activeScope",
         "notesState.shortcutRegistry.scopes",
         "getState(target notes) shortcut registry scopes",
-        "Notes native shortcut activation parity receipt",
+        "target-scoped simulateKey Cmd+Shift+P Notes preview activation receipt",
     ] {
         assert!(
             DEVTOOLS_SCHEMA.contains(needle)
@@ -176,7 +179,7 @@ fn notes_batch_supports_target_scoped_open_actions() {
     }
 
     for needle in [
-        "supported_commands: &[\"setInput\", \"openActions\", \"waitFor\"]",
+        "supported_commands: &[\"setInput\", \"openActions\", \"togglePreview\", \"waitFor\"]",
         "protocol::BatchCommand::OpenActions",
         "transaction_notes_open_actions",
         "window.defer(cx, move |window, cx|",
@@ -203,6 +206,37 @@ fn notes_batch_supports_target_scoped_open_actions() {
             "Notes DevTools CLI/coverage must prefer target-scoped openActions receipts: {needle}"
         );
     }
+}
+
+#[test]
+fn simulate_key_supports_target_scoped_notes_shortcuts() {
+    for needle in [
+        "target: Option<protocol::AutomationWindowTarget>",
+        r#""target":{"type":"kind","kind":"notes"}"#,
+    ] {
+        assert!(
+            STDIN_COMMANDS.contains(needle),
+            "simulateKey command schema/tests must preserve target-scoped routing: {needle}"
+        );
+    }
+
+    for needle in [
+        "ref target",
+        "resolve_automation_window(Some(target))",
+        "AutomationWindowKind::Notes",
+        "SimulateKey: Cmd+Shift+P - toggle Notes preview",
+        "app.toggle_preview(notes_window, cx)",
+    ] {
+        assert!(
+            RUNTIME_STDIN.contains(needle),
+            "simulateKey dispatcher must route Notes shortcuts through the requested automation target: {needle}"
+        );
+    }
+
+    assert!(
+        DEVTOOLS_ACT.contains("target: selector") && DEVTOOLS_ACT.contains("type: \"simulateKey\""),
+        "DevTools act.key must send the resolved automation target in simulateKey payloads"
+    );
 }
 
 #[test]
@@ -279,6 +313,121 @@ fn notes_state_exposes_redacted_storage_generation() {
                 || DEVTOOLS_NOTES.contains(needle)
                 || DEVTOOLS_COVERAGE.contains(needle),
             "Notes DevTools must report storage/layout receipt field: {needle}"
+        );
+    }
+}
+
+#[test]
+fn notes_state_exposes_autosize_generation_and_resize_transition() {
+    for needle in [
+        "struct NotesAutosizeTransition",
+        "autosize_generation",
+        "last_autosize_transition",
+    ] {
+        assert!(
+            NOTES_WINDOW.contains(needle),
+            "NotesApp must store autosize transition state for DevTools: {needle}"
+        );
+    }
+
+    for needle in [
+        "self.autosize_generation = self.autosize_generation.wrapping_add(1)",
+        "cause: \"editor-input\"",
+        "desired_height",
+        "clamped_height",
+        "skipped_reason",
+    ] {
+        assert!(
+            include_str!("../src/notes/window/init.rs").contains(needle),
+            "Notes auto-resize path must record transition detail: {needle}"
+        );
+    }
+
+    for needle in [
+        "\"autosize\"",
+        "\"generation\"",
+        "\"lastAutosizeTransition\"",
+        "\"desiredHeight\"",
+        "\"clampedHeight\"",
+        "\"lineCount\"",
+        "\"threshold\"",
+    ] {
+        assert!(
+            NOTES_NAVIGATION.contains(needle),
+            "Notes state must expose autosize DevTools receipt field: {needle}"
+        );
+    }
+
+    for needle in [
+        "devtools.notes.resizeCompare",
+        "SCRIPT_KIT_TEST_NOTES_DB_PATH",
+        "blocked-by-real-data-risk",
+        "blocked-by-unsafe-operation",
+        "height grew after tall content",
+        "height shrank after short content",
+        "autosize generation advanced",
+        "raw note content redacted",
+    ] {
+        assert!(
+            DEVTOOLS_NOTES.contains(needle) || DEVTOOLS_SCHEMA.contains(needle),
+            "Notes resize compare CLI/schema must pin autosize proof behavior: {needle}"
+        );
+    }
+}
+
+#[test]
+fn notes_state_exposes_editor_scroll_metrics_and_preview_mount_command() {
+    for needle in [
+        "pub fn automation_scroll_metrics(&self)",
+        "\"scrollTop\"",
+        "\"scrollHeight\"",
+        "\"clientHeight\"",
+        "\"hasDeferredScrollOffset\"",
+        "\"canScrollY\"",
+    ] {
+        assert!(
+            include_str!("../vendor/gpui-component/crates/ui/src/input/state.rs").contains(needle),
+            "InputState must expose real scroll metrics for Notes DevTools: {needle}"
+        );
+    }
+
+    for needle in [
+        "preview_scroll_handle: ScrollHandle",
+        "preview_scroll_handle: ScrollHandle::new()",
+        ".track_scroll(&self.preview_scroll_handle)",
+    ] {
+        assert!(
+            NOTES_WINDOW.contains(needle)
+                || include_str!("../src/notes/window/init.rs").contains(needle)
+                || include_str!("../src/notes/window/render_editor_body.rs").contains(needle),
+            "Notes preview must own a runtime scroll handle for DevTools: {needle}"
+        );
+    }
+
+    for needle in [
+        "editor.automation_scroll_metrics()",
+        "automation_scroll_handle_metrics",
+        "\"editorAnchor\"",
+        "\"previewAnchor\"",
+        "\"scrollMetricsAvailable\"",
+        "\"scrollTopAvailable\"",
+        "\"scrollHeightAvailable\"",
+        "\"clientHeightAvailable\"",
+    ] {
+        assert!(
+            NOTES_NAVIGATION.contains(needle),
+            "Notes automation state must expose scroll anchor fields: {needle}"
+        );
+    }
+
+    for needle in [
+        "TogglePreview",
+        "togglePreview",
+        "transaction_notes_toggle_preview",
+    ] {
+        assert!(
+            BATCH_WAIT.contains(needle) || PROMPT_HANDLER.contains(needle),
+            "Notes batch protocol must mount preview for DevTools measurement: {needle}"
         );
     }
 }

@@ -124,9 +124,12 @@ fn coverage_pins_notes_features_shortcuts_and_missing_primitives() {
         "Tab",
         "Enter",
         "getLayoutInfo(target notes) NotesWindow/titlebar/editor/footer/panel bounds",
-        "editor and preview scroll anchors",
+        "getState(target notes) editor scroll metrics and mounted preview anchor availability",
+        "target-scoped batch togglePreview",
+        "preview scroll handle populated content bounds",
         "getState(target notes) redacted active note",
         "getState(target notes) redacted draft snapshot fingerprint",
+        "notes.resize-compare sandboxed auto-resize before/after receipt",
         "ACP embedded origin receipts",
     ] {
         assert!(
@@ -176,6 +179,7 @@ fn coverage_pins_dictation_states_media_and_privacy_boundaries() {
         "dictation hotkey",
         "target badge click",
         "devtools.media.inspect",
+        "dictation.deliver-fixture pushDictationResult target delivery generation, transcript fingerprint, and main-filter insertion range receipt",
         "passive microphone permission status",
         "hotkey binding snapshot",
         "src/dictation/window.rs",

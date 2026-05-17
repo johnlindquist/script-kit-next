@@ -332,6 +332,7 @@ async function main() {
   const runtimeShortcutLayout = (rowGeometry?.shortcutLayout as JsonObject | undefined) ?? null;
   const destructiveRows = rows.filter((row) => row.destructive);
   const disabledRows = rows.filter((row) => row.enabled === false || row.disabledReason);
+  const disabledReasonBoundsRequired = disabledRows.length > 0;
   const sectionBoundsAvailable = rowGeometry?.sectionBoundsAvailable === true;
   const hoverRowAvailable = rowGeometry?.hoverRowAvailable === true;
   const shortcutBoundsAvailable = rowGeometry?.shortcutBoundsAvailable === true;
@@ -345,7 +346,7 @@ async function main() {
     sectionBoundsAvailable ? "" : "section bounds",
     hoverRowAvailable ? "" : "hover row",
     shortcutBoundsAvailable ? "" : "shortcut layout bounds",
-    disabledReasonBoundsAvailable ? "" : "disabled reason bounds",
+    disabledReasonBoundsRequired && !disabledReasonBoundsAvailable ? "disabled reason bounds" : "",
   ].filter(Boolean);
   const classification = classify(targetReceipt, stateEnvelope, missing);
 
@@ -374,6 +375,7 @@ async function main() {
     routeId: target.routeId ?? dialogRoute.currentRouteId ?? null,
     rowGeometry,
     geometry: {
+      layoutPrimitive: "getLayoutInfo(actionsDialog)",
       popupRect,
       parentRect,
       anchorRect,
@@ -427,9 +429,11 @@ async function main() {
     },
     missingPrimitives: missing,
     recommendedNext: [
-      "Expose disabled reason text bounds when a visible ActionsDialog route renders disabled explanations.",
+      disabledReasonBoundsRequired && !disabledReasonBoundsAvailable
+        ? "Expose disabled reason text bounds when a visible ActionsDialog route renders disabled explanations."
+        : "",
       "Add safe click/hover receipts for action rows before native pointer escalation.",
-    ],
+    ].filter(Boolean),
     proofMode: {
       keepOpen: args.keepOpen,
       keepOpenEnv: args.keepOpen ? "SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN=1" : null,

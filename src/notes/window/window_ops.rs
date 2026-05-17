@@ -542,7 +542,7 @@ pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
 /// If the notes window is open, inserts the text at the cursor. Otherwise
 /// returns an error. Used by the dictation delivery pipeline when the user
 /// started dictation from the notes surface.
-pub fn inject_text_into_notes(cx: &mut App, text: &str) -> Result<(), String> {
+pub fn inject_text_into_notes(cx: &mut App, text: &str) -> Result<serde_json::Value, String> {
     let handle = {
         let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|g| *g)
@@ -558,9 +558,7 @@ pub fn inject_text_into_notes(cx: &mut App, text: &str) -> Result<(), String> {
 
     handle
         .update(cx, |_root, window, cx| {
-            notes_app.update(cx, |app, cx| {
-                app.inject_dictation_text(text, window, cx);
-            });
+            notes_app.update(cx, |app, cx| app.inject_dictation_text(text, window, cx))
         })
         .map_err(|e| format!("Failed to update notes window: {e}"))
 }

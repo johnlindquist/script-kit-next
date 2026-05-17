@@ -406,6 +406,10 @@ pub enum ExternalCommand {
         key: String,
         #[serde(default)]
         modifiers: Vec<KeyModifier>,
+        /// Optional automation target for agent-driven DevTools actions.
+        /// When omitted, dispatch keeps the legacy focused-window behavior.
+        #[serde(default)]
+        target: Option<protocol::AutomationWindowTarget>,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -1155,6 +1159,7 @@ mod tests {
             ExternalCommand::SimulateKey {
                 key: String::new(),
                 modifiers: Vec::new(),
+                target: None,
                 request_id: None,
             },
             ExternalCommand::OpenNotes,
@@ -1517,9 +1522,41 @@ mod tests {
         let json = r#"{"type": "simulateKey", "key": "enter", "modifiers": ["cmd", "shift"]}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
-            ExternalCommand::SimulateKey { key, modifiers, .. } => {
+            ExternalCommand::SimulateKey {
+                key,
+                modifiers,
+                target,
+                ..
+            } => {
                 assert_eq!(key, "enter");
                 assert_eq!(modifiers, vec![KeyModifier::Cmd, KeyModifier::Shift]);
+                assert!(target.is_none());
+            }
+            _ => panic!("Expected SimulateKey command"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_simulate_key_target_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type":"simulateKey","target":{"type":"kind","kind":"notes"},"key":"p","modifiers":["cmd","shift"]}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        match cmd {
+            ExternalCommand::SimulateKey {
+                key,
+                modifiers,
+                target,
+                ..
+            } => {
+                assert_eq!(key, "p");
+                assert_eq!(modifiers, vec![KeyModifier::Cmd, KeyModifier::Shift]);
+                match target {
+                    Some(protocol::AutomationWindowTarget::Kind { kind, index }) => {
+                        assert_eq!(kind, protocol::AutomationWindowKind::Notes);
+                        assert_eq!(index, None);
+                    }
+                    other => panic!("Expected targeted Notes simulateKey, got {other:?}"),
+                }
             }
             _ => panic!("Expected SimulateKey command"),
         }

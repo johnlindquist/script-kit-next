@@ -10,6 +10,7 @@ type Args = {
   start: boolean;
   sandbox: boolean;
   sandboxPath: string;
+  confirmRealNotesMutation: boolean;
   cleanup: boolean;
   timeoutMs: number;
   limit: number;
@@ -21,7 +22,7 @@ function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/notes.ts inspect [--session <name>] [--open] [--open-actions] [--start] [--limit <n>]",
-    "  bun scripts/devtools/notes.ts resize-compare --session <name> --start --sandbox [--short-lines <n>] [--tall-lines <n>]",
+    "  bun scripts/devtools/notes.ts resize-compare --session <name> --start --sandbox [--short-line-count <n>] [--tall-line-count <n>]",
   ].join("\n");
 }
 
@@ -42,6 +43,7 @@ function parseArgs(argv: string[]): Args {
     start: false,
     sandbox: false,
     sandboxPath: "",
+    confirmRealNotesMutation: false,
     cleanup: true,
     timeoutMs: 8000,
     limit: 80,
@@ -60,26 +62,28 @@ function parseArgs(argv: string[]): Args {
       args.start = true;
     } else if (arg === "--sandbox") {
       args.sandbox = true;
-    } else if (arg === "--sandbox-path") {
+    } else if (arg === "--sandbox-path" || arg === "--sandbox-db") {
       args.sandboxPath = argv[++index] ?? "";
       args.sandbox = true;
+    } else if (arg === "--confirm-real-notes-mutation") {
+      args.confirmRealNotesMutation = true;
     } else if (arg === "--no-cleanup") {
       args.cleanup = false;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
     } else if (arg === "--limit") {
       args.limit = Number(argv[++index] ?? args.limit);
-    } else if (arg === "--short-lines") {
+    } else if (arg === "--short-lines" || arg === "--short-line-count") {
       args.shortLineCount = Number(argv[++index] ?? args.shortLineCount);
-    } else if (arg === "--tall-lines") {
+    } else if (arg === "--tall-lines" || arg === "--tall-line-count") {
       args.tallLineCount = Number(argv[++index] ?? args.tallLineCount);
     }
   }
   return args;
 }
 
-async function run(command: string[], label: string): Promise<JsonObject> {
-  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
+async function run(command: string[], label: string, env: Record<string, string> = {}): Promise<JsonObject> {
+  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe", env: { ...process.env, ...env } });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
@@ -95,9 +99,9 @@ async function run(command: string[], label: string): Promise<JsonObject> {
   }
 }
 
-async function maybeOpenNotes(args: Args) {
+async function maybeOpenNotes(args: Args, env: Record<string, string> = {}) {
   if (args.start) {
-    await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
+    await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start", env);
   }
   if (!args.open) {
     return null;
@@ -309,6 +313,29 @@ function textFingerprint(value: string) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
+function redactNestedReceipt(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redactNestedReceipt);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+  const next: JsonObject = {};
+  for (const [key, entry] of Object.entries(value as JsonObject)) {
+    if ((key === "value" || key === "text" || key === "label" || key === "commandFingerprint") && typeof entry === "string") {
+      next[key] = {
+        redacted: true,
+        length: entry.length,
+        fingerprint: textFingerprint(entry),
+        contentReturned: false,
+      };
+    } else {
+      next[key] = redactNestedReceipt(entry);
+    }
+  }
+  return next;
+}
+
 function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, runtimeState: JsonObject, layout: JsonObject) {
   const nodes = asArray(elements.nodes);
   const editor = nodes.find((node) => node.semanticId === "input:notes-editor") ?? null;
@@ -338,6 +365,9 @@ function notesState(elements: JsonObject, focus: JsonObject, text: JsonObject, r
     commandBars: runtimeNotes.commandBars ?? null,
     shortcutRegistry: runtimeNotes.shortcutRegistry ?? null,
     focusTransitions: runtimeNotes.focusTransitions ?? null,
+    autosize: runtimeNotes.autosize ?? null,
+    generations: runtimeNotes.generations ?? null,
+    lastAutosizeTransition: runtimeNotes.lastAutosizeTransition ?? null,
     layout: {
       classification: layout.classification ?? null,
       componentCount: layout.componentCount ?? null,
@@ -368,17 +398,18 @@ function classify(target: JsonObject, elements: JsonObject, coverage: ReturnType
   return "ok";
 }
 
-function unsafeResizeReceipt(args: Args, reason: string, extra: JsonObject = {}) {
+function unsafeResizeReceipt(args: Args, classification: string, reason: string, extra: JsonObject = {}) {
   return {
     schemaVersion: 1,
     tool: "script-kit-devtools.notes",
     command: "notes.resize-compare",
-    classification: "blocked-by-unsafe-operation",
+    classification,
     session: args.session,
     safety: {
       mutatesNotesEditor: true,
       requiresSandbox: true,
       sandboxRequested: args.sandbox,
+      confirmRealNotesMutation: args.confirmRealNotesMutation,
       startedByTool: args.start,
     },
     reason,
@@ -439,30 +470,35 @@ async function setNotesInput(args: Args, text: string, label: string) {
 }
 
 async function runResizeCompare(args: Args) {
-  if (!args.sandbox) {
-    console.log(JSON.stringify(unsafeResizeReceipt(args, "notes.resize-compare mutates the Notes editor and requires --sandbox."), null, 2));
+  if (!args.sandbox && !args.confirmRealNotesMutation) {
+    console.log(JSON.stringify(unsafeResizeReceipt(args, "blocked-by-real-data-risk", "notes.resize-compare mutates the Notes editor and requires --sandbox or --confirm-real-notes-mutation."), null, 2));
+    return;
+  }
+  if (args.confirmRealNotesMutation) {
+    console.log(JSON.stringify(unsafeResizeReceipt(args, "blocked-by-real-data-risk", "Real Notes mutation is intentionally not implemented for this DevTools primitive yet. Use --sandbox."), null, 2));
     return;
   }
   if (!args.start) {
-    console.log(JSON.stringify(unsafeResizeReceipt(args, "notes.resize-compare requires --start so the app can be launched with SCRIPT_KIT_TEST_NOTES_DB_PATH."), null, 2));
+    console.log(JSON.stringify(unsafeResizeReceipt(args, "blocked-by-unsafe-operation", "notes.resize-compare requires --start so the app can be launched with SCRIPT_KIT_TEST_NOTES_DB_PATH."), null, 2));
     return;
   }
 
   const beforeStatus = await sessionStatus(args.session);
   if (beforeStatus.alive === true) {
-    console.log(JSON.stringify(unsafeResizeReceipt(args, "Refusing to reuse a running session for sandboxed Notes mutation. Use a fresh session name or stop it first.", { beforeStatus }), null, 2));
+    console.log(JSON.stringify(unsafeResizeReceipt(args, "blocked-by-unsafe-operation", "Refusing to reuse a running session for sandboxed Notes mutation. Use a fresh session name or stop it first.", { beforeStatus }), null, 2));
     return;
   }
 
   const sandboxPath = args.sandboxPath || `/tmp/sk-devtools-notes-${args.session}-${Date.now()}/notes.sqlite`;
-  process.env.SCRIPT_KIT_TEST_NOTES_DB_PATH = sandboxPath;
+  const sandboxEnv = { SCRIPT_KIT_TEST_NOTES_DB_PATH: sandboxPath };
 
   const startedByTool = true;
   let cleanupReceipt: JsonObject | null = null;
   const receipts: JsonObject = { beforeStatus };
+  let result: JsonObject | null = null;
 
   try {
-    const openReceipt = await maybeOpenNotes({ ...args, open: true });
+    const openReceipt = await maybeOpenNotes({ ...args, open: true }, sandboxEnv);
     receipts.open = openReceipt;
     const target = await waitForNotesTarget(args);
     receipts.target = target;
@@ -472,11 +508,11 @@ async function runResizeCompare(args: Args) {
     const beforeRuntime = notesRuntimeState(beforeStateEnvelope);
     const storage = asObject(beforeRuntime.storage);
     if (storage.testSandbox !== true) {
-      console.log(JSON.stringify(unsafeResizeReceipt(args, "Resolved Notes runtime is not using the sandbox notes store; refusing setInput mutation.", {
+      result = unsafeResizeReceipt(args, "blocked-by-real-data-risk", "Resolved Notes runtime is not using the sandbox notes store; refusing setInput mutation.", {
         sandboxPath,
         storage,
-        receipts,
-      }), null, 2));
+        receipts: redactNestedReceipt(receipts),
+      });
       return;
     }
 
@@ -518,19 +554,32 @@ async function runResizeCompare(args: Args) {
     const beforeView = asObject(beforeRuntime.view);
     const afterGrowView = asObject(notesRuntimeState(afterGrowState).view);
     const afterShrinkView = asObject(notesRuntimeState(afterShrinkState).view);
+    const beforeAutosize = asObject(beforeRuntime.autosize);
+    const afterGrowAutosize = asObject(notesRuntimeState(afterGrowState).autosize);
+    const afterShrinkAutosize = asObject(notesRuntimeState(afterShrinkState).autosize);
+    const beforeAutosizeGeneration = asNumber(beforeAutosize.generation);
+    const afterGrowAutosizeGeneration = asNumber(afterGrowAutosize.generation);
+    const afterShrinkAutosizeGeneration = asNumber(afterShrinkAutosize.generation);
+    const generationOrderValid =
+      beforeAutosizeGeneration != null &&
+      afterGrowAutosizeGeneration != null &&
+      afterShrinkAutosizeGeneration != null &&
+      afterGrowAutosizeGeneration > beforeAutosizeGeneration &&
+      afterShrinkAutosizeGeneration > afterGrowAutosizeGeneration;
     const autoSizingStayedEnabled =
-      beforeView.autoSizingEnabled === true &&
-      afterGrowView.autoSizingEnabled === true &&
-      afterShrinkView.autoSizingEnabled === true;
+      (beforeAutosize.enabled === true || beforeView.autoSizingEnabled === true) &&
+      (afterGrowAutosize.enabled === true || afterGrowView.autoSizingEnabled === true) &&
+      (afterShrinkAutosize.enabled === true || afterShrinkView.autoSizingEnabled === true);
     const fixed =
       growBatchSucceeded &&
       shrinkBatchSucceeded &&
       heightGrewForTallContent &&
       heightShrankForShortContent &&
       widthStable &&
+      generationOrderValid &&
       autoSizingStayedEnabled;
 
-    console.log(JSON.stringify({
+    result = {
       schemaVersion: 1,
       tool: "script-kit-devtools.notes",
       command: "notes.resize-compare",
@@ -541,6 +590,8 @@ async function runResizeCompare(args: Args) {
         mutatesNotesEditor: true,
         sandboxRequired: true,
         sandboxConfirmed: true,
+        mutationMode: "sandbox-db",
+        envName: "SCRIPT_KIT_TEST_NOTES_DB_PATH",
         sandboxNotesDbPath: sandboxPath,
         usedNativeInput: false,
         usedNativePointer: false,
@@ -549,8 +600,11 @@ async function runResizeCompare(args: Args) {
         mutatedTcc: false,
       },
       resizeCompare: {
+        commandId: "devtools.notes.resizeCompare",
         shortLineCount: args.shortLineCount,
         tallLineCount: args.tallLineCount,
+        shortTextFingerprint: textFingerprint(shortText),
+        tallTextFingerprint: textFingerprint(tallText),
         beforeHeight,
         afterGrowHeight,
         afterShrinkHeight,
@@ -565,32 +619,43 @@ async function runResizeCompare(args: Args) {
         growBatchSucceeded,
         shrinkBatchSucceeded,
         autoSizingStayedEnabled,
+        generationOrderValid,
+        autosize: {
+          before: beforeAutosize,
+          afterGrow: afterGrowAutosize,
+          afterShrink: afterShrinkAutosize,
+        },
         beforeView,
         afterGrowView,
         afterShrinkView,
       },
-      assertions: {
-        sandboxConfirmed: true,
-        growBatchSucceeded,
-        shrinkBatchSucceeded,
-        heightGrewForTallContent,
-        heightShrankForShortContent,
-        widthStable,
-        autoSizingStayedEnabled,
-      },
+      assertions: [
+        { name: "sandbox db active", pass: true },
+        { name: "grow batch succeeded", pass: growBatchSucceeded },
+        { name: "shrink batch succeeded", pass: shrinkBatchSucceeded },
+        { name: "height grew after tall content", pass: heightGrewForTallContent, expected: "> 0", actual: growDeltaPx },
+        { name: "height shrank after short content", pass: heightShrankForShortContent, expected: "> 0", actual: shrinkDeltaPx },
+        { name: "width stayed stable", pass: widthStable, expected: "delta <= 1px", actual: { beforeWidth, afterGrowWidth, afterShrinkWidth } },
+        { name: "autosize generation advanced", pass: generationOrderValid, expected: "before < grow < shrink", actual: { beforeAutosizeGeneration, afterGrowAutosizeGeneration, afterShrinkAutosizeGeneration } },
+        { name: "auto sizing stayed enabled", pass: autoSizingStayedEnabled },
+        { name: "raw note content redacted", pass: true },
+      ],
       missingPrimitives: fixed ? [
-        "editor and preview scroll anchors",
+        "preview scroll handle populated content bounds under mounted markdown preview",
         "ACP embedded origin receipts",
         "portal session provenance",
-        "Notes native shortcut activation parity receipt",
+        "remaining Notes shortcut activation parity receipts beyond Cmd+Shift+P",
       ] : ["auto-resize before/after compare"],
-      receipts,
+      receipts: redactNestedReceipt(receipts),
       cleanup: null,
-    }, null, 2));
+    };
   } finally {
     if (args.cleanup && startedByTool) {
       cleanupReceipt = await stopSession(args.session);
-      void cleanupReceipt;
+    }
+    if (result) {
+      result.cleanup = cleanupReceipt;
+      console.log(JSON.stringify(result, null, 2));
     }
   }
 }
@@ -630,6 +695,9 @@ async function runInspect(args: Args) {
   const coverage = notesCoverage(coverageRaw);
   const state = notesState(elements, focus, text, runtimeState, layout);
   const runtimeNotes = (runtimeState.notes as JsonObject | undefined) ?? {};
+  const editorAnchor = asObject(state.editorAnchor);
+  const editorScroll = asObject(editorAnchor.scroll);
+  const previewAnchor = asObject(state.previewAnchor);
   const missing = [
     ...new Set([
       ...(Array.isArray(elements.missingPrimitives) ? elements.missingPrimitives.map(String) : []),
@@ -639,6 +707,16 @@ async function runInspect(args: Args) {
       state.dirtyState == null ? "dirty state" : "",
       state.selectionRange == null ? "cursor and selection ranges" : "",
       state.draftSnapshot == null ? "draft snapshot fingerprint" : "",
+      editorAnchor.scrollMetricsAvailable !== true ? "editor scroll metrics" : "",
+      editorAnchor.scrollTopAvailable !== true ? "editor scrollTopAvailable" : "",
+      editorAnchor.scrollHeightAvailable !== true ? "editor scrollHeightAvailable" : "",
+      editorAnchor.clientHeightAvailable !== true ? "editor clientHeightAvailable" : "",
+      editorScroll.scrollTop == null ? "editor scrollTop" : "",
+      editorScroll.scrollHeight == null ? "editor scrollHeight" : "",
+      editorScroll.clientHeight == null ? "editor clientHeight" : "",
+      previewAnchor.previewEnabled === true && previewAnchor.scrollMetricsAvailable !== true
+        ? "preview scroll metrics"
+        : "",
       state.layout.editorRegion == null ? "notes editor layout region" : "",
       state.storage == null ? "note store generation and sandbox identity" : "",
       state.commandBars == null ? "notes command bar runtime state" : "",
@@ -656,6 +734,13 @@ async function runInspect(args: Args) {
     openReceipt,
     openActionsReceipt,
     shortcutActivation,
+    availableActions: {
+      togglePreview: {
+        channel: "protocol.batch.togglePreview",
+        command: "togglePreview",
+        target: { type: "kind", kind: "notes" },
+      },
+    },
     target: target.resolvedTarget ?? null,
     requestedTarget: target.requestedTarget ?? { selector: { type: "kind", kind: "notes" } },
     notesState: state,

@@ -127,6 +127,7 @@ fn dictation_delivery_records_redacted_receipt_for_devtools() {
     assert!(
         DICTATION_RUNTIME.contains("\"transcriptLen\"")
             && DICTATION_RUNTIME.contains("\"transcriptFingerprint\"")
+            && DICTATION_RUNTIME.contains("\"insertionRange\"")
             && DICTATION_RUNTIME.contains("\"redacted\": true")
             && !DICTATION_RUNTIME.contains("\"transcript\": transcript")
             && !DICTATION_RUNTIME.contains("\"transcriptText\""),
@@ -134,7 +135,9 @@ fn dictation_delivery_records_redacted_receipt_for_devtools() {
     );
     assert!(
         BUILTIN_EXECUTION.contains("crate::dictation::record_delivery_receipt(")
-            && BUILTIN_EXECUTION.contains("DictationDestination::FrontmostApp"),
+            && BUILTIN_EXECUTION.contains("DictationDestination::FrontmostApp")
+            && BUILTIN_EXECUTION.contains("\"operation\": \"replaceInput\"")
+            && BUILTIN_EXECUTION.contains("\"unit\": \"utf8Bytes\""),
         "both internal and frontmost-app delivery paths must write the receipt at the delivery boundary"
     );
 }
