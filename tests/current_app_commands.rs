@@ -189,14 +189,14 @@ fn do_in_current_app_execution_uses_effective_query_for_list_switching() {
     // doc-anchor-removed: [[removed-docs and introspection]]
     let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("must read builtin execution source");
-    let arm_start = source
-        .find("UtilityCommandType::DoInCurrentApp => {")
-        .expect("DoInCurrentApp execution arm must exist");
-    let arm_body = &source[arm_start..];
-    let arm_end = arm_body
-        .find("UtilityCommandType::CurrentAppCommands => {")
-        .expect("next utility command arm must exist");
-    let arm_body = &arm_body[..arm_end];
+    let helper_start = source
+        .find("fn execute_utility_do_in_current_app_builtin(")
+        .expect("DoInCurrentApp execution helper must exist");
+    let helper_body = &source[helper_start..];
+    let helper_end = helper_body
+        .find("fn execute_permission_command_builtin(")
+        .expect("next builtin helper must exist");
+    let arm_body = &helper_body[..helper_end];
     let compacted_arm: String = arm_body.chars().filter(|ch| !ch.is_whitespace()).collect();
 
     assert!(

@@ -548,6 +548,38 @@ impl UtilityRecipeBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityDoInCurrentAppBuiltinAction {
+    Submit,
+}
+
+impl UtilityDoInCurrentAppBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::DoInCurrentApp => Some(Self::Submit),
+            _ => None,
+        }
+    }
+
+    fn open_palette_success_detail(self) -> &'static str {
+        match self {
+            Self::Submit => "do_in_current_app_open_palette",
+        }
+    }
+
+    fn generate_script_success_detail(self) -> &'static str {
+        match self {
+            Self::Submit => "do_in_current_app_generate_script_scheduled",
+        }
+    }
+
+    fn capture_failure_detail(self) -> &'static str {
+        match self {
+            Self::Submit => "do_in_current_app_capture_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3665,186 +3697,15 @@ impl ScriptListApp {
                         )
                     }
                     UtilityCommandType::DoInCurrentApp => {
-                        let raw_query_owned =
-                            query_override.unwrap_or(&self.filter_text).to_string();
-                        let raw_query_safe = crate::logging::log_user_value(&raw_query_owned);
-                        let filter_text_safe = crate::logging::log_user_value(&self.filter_text);
-                        tracing::info!(
-                            target: "script_kit::do_in_trace",
-                            event = "DO_IN_TRACE execution.entry",
-                            trace_id = %dctx.trace_id,
-                            raw_query_preview = %raw_query_safe,
-                            raw_query_bytes = raw_query_safe.raw_bytes,
-                            raw_query_safe_bytes = raw_query_safe.safe_bytes,
-                            raw_query_truncated = raw_query_safe.truncated,
-                            filter_text_preview = %filter_text_safe,
-                            filter_text_bytes = filter_text_safe.raw_bytes,
-                            filter_text_safe_bytes = filter_text_safe.safe_bytes,
-                            filter_text_truncated = filter_text_safe.truncated,
-                            query_override = ?query_override,
-                            current_view = ?self.current_view,
-                            "DO_IN_TRACE execution.entry"
-                        );
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            raw_query = %raw_query_owned,
-                            filter_text = %self.filter_text,
-                            query_override = ?query_override,
-                            "do_in_current_app.execution_entry — raw inputs"
-                        );
-                        let effective_query =
-                            crate::menu_bar::current_app_commands::effective_do_in_current_app_query_for_submission(
-                                &raw_query_owned,
-                                query_override,
-                            );
-                        let effective_query_for_router =
-                            (!effective_query.is_empty()).then_some(effective_query.as_str());
-                        let effective_query_safe = crate::logging::log_user_value(&effective_query);
-
-                        tracing::info!(
-                            target: "script_kit::do_in_trace",
-                            event = "DO_IN_TRACE execution.normalized",
-                            trace_id = %dctx.trace_id,
-                            query_preview = %effective_query_safe,
-                            query_bytes = effective_query_safe.raw_bytes,
-                            query_safe_bytes = effective_query_safe.safe_bytes,
-                            query_truncated = effective_query_safe.truncated,
-                            raw_query_preview = %raw_query_safe,
-                            "DO_IN_TRACE execution.normalized"
-                        );
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            query = %effective_query,
-                            "do_in_current_app.requested"
-                        );
-
-                        match crate::menu_bar::load_frontmost_menu_snapshot() {
-                            Ok(snapshot) => {
-                                let snapshot_for_recipe = snapshot.clone();
-                                let snapshot_pid = snapshot.pid;
-                                let (entries, snapshot_receipt) =
-                                    snapshot.into_entries_with_receipt();
-
-                                let (action, intent_receipt) =
-                                        crate::menu_bar::current_app_commands::resolve_do_in_current_app_intent(
-                                            &entries,
-                                            effective_query_for_router,
-                                        );
-
-                                tracing::info!(
-                                    target: "script_kit::do_in_trace",
-                                    event = "DO_IN_TRACE execution.resolved",
-                                    trace_id = %dctx.trace_id,
-                                    app_name = %snapshot_receipt.app_name,
-                                    bundle_id = %snapshot_receipt.bundle_id,
-                                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
-                                    query_preview = %effective_query_safe,
-                                    raw_query_preview = %raw_query_safe,
-                                    filtered_entries = intent_receipt.filtered_entries,
-                                    exact_matches = intent_receipt.exact_matches,
-                                    resolved_action = intent_receipt.action,
-                                    "DO_IN_TRACE execution.resolved"
-                                );
-                                tracing::info!(
-                                    trace_id = %dctx.trace_id,
-                                    app_name = %snapshot_receipt.app_name,
-                                    bundle_id = %snapshot_receipt.bundle_id,
-                                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
-                                    query = %effective_query,
-                                    filtered_entries = intent_receipt.filtered_entries,
-                                    exact_matches = intent_receipt.exact_matches,
-                                    resolved_action = intent_receipt.action,
-                                    "do_in_current_app.resolved"
-                                );
-
-                                match action {
-                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
-                                            tracing::info!(
-                                                target: "script_kit::do_in_trace",
-                                                event = "DO_IN_TRACE execution.open_palette",
-                                                trace_id = %dctx.trace_id,
-                                                cached_entries = entries.len(),
-                                                filter_preview = %effective_query_safe,
-                                                placeholder = %snapshot_receipt.placeholder,
-                                                "DO_IN_TRACE execution.open_palette"
-                                            );
-                                            tracing::info!(
-                                                trace_id = %dctx.trace_id,
-                                                cached_entries = entries.len(),
-                                                filter = %effective_query,
-                                                placeholder = %snapshot_receipt.placeholder,
-                                                "do_in_current_app.action → OpenCommandPalette — switching to CurrentAppCommandsView"
-                                            );
-                                            self.present_current_app_commands_entries(
-                                                entries,
-                                                &snapshot_receipt,
-                                                snapshot_pid,
-                                                &effective_query,
-                                                cx,
-                                            );
-                                            Self::builtin_success(dctx, "do_in_current_app_open_palette")
-                                        }
-                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(entry_index) => {
-                                            tracing::info!(
-                                                target: "script_kit::do_in_trace",
-                                                event = "DO_IN_TRACE execution.execute_entry",
-                                                trace_id = %dctx.trace_id,
-                                                entry_index = entry_index,
-                                                entry_name = %entries[entry_index].name,
-                                                query_preview = %effective_query_safe,
-                                                raw_query_preview = %raw_query_safe,
-                                                "DO_IN_TRACE execution.execute_entry"
-                                            );
-                                            tracing::info!(
-                                                trace_id = %dctx.trace_id,
-                                                entry_index = entry_index,
-                                                entry_name = %entries[entry_index].name,
-                                                "do_in_current_app.action → ExecuteEntry — running menu command directly"
-                                            );
-                                            let entry = entries[entry_index].clone();
-                                            self.execute_builtin_inner(&entry, effective_query_for_router, dctx, cx)
-                                        }
-                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
-                                            tracing::info!(
-                                                target: "script_kit::do_in_trace",
-                                                event = "DO_IN_TRACE execution.generate_script",
-                                                trace_id = %dctx.trace_id,
-                                                query_preview = %effective_query_safe,
-                                                raw_query_preview = %raw_query_safe,
-                                                "DO_IN_TRACE execution.generate_script"
-                                            );
-                                            tracing::info!(
-                                                trace_id = %dctx.trace_id,
-                                                query = %effective_query,
-                                                "do_in_current_app.action → GenerateScript — scheduling async context capture before recipe flow"
-                                            );
-
-                                            self.spawn_generate_script_from_current_app_with_capture(
-                                                dctx.trace_id.to_string(),
-                                                effective_query.clone(),
-                                                snapshot_for_recipe,
-                                                entries,
-                                                snapshot_receipt.clone(),
-                                                snapshot_pid,
-                                                cx,
-                                            );
-
-                                            Self::builtin_success(dctx, "do_in_current_app_generate_script_scheduled")
-                                        }
-                                    }
-                            }
-                            Err(e) => {
-                                let message =
-                                    format!("Failed to load frontmost app menu bar: {}", e);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "do_in_current_app_capture_failed",
-                                )
-                            }
-                        }
+                        let do_in_action =
+                            UtilityDoInCurrentAppBuiltinAction::from_command(*cmd_type)
+                                .expect("utility do-in arm should only receive DoInCurrentApp");
+                        self.execute_utility_do_in_current_app_builtin(
+                            do_in_action,
+                            query_override,
+                            dctx,
+                            cx,
+                        )
                     }
                     UtilityCommandType::CurrentAppCommands => {
                         tracing::info!(
@@ -5369,6 +5230,194 @@ impl ScriptListApp {
                     error = %e,
                     "turn_this_into_command.capture_failed"
                 );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.capture_failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_utility_do_in_current_app_builtin(
+        &mut self,
+        action: UtilityDoInCurrentAppBuiltinAction,
+        query_override: Option<&str>,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let raw_query_owned = query_override.unwrap_or(&self.filter_text).to_string();
+        let raw_query_safe = crate::logging::log_user_value(&raw_query_owned);
+        let filter_text_safe = crate::logging::log_user_value(&self.filter_text);
+        tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE execution.entry",
+            trace_id = %dctx.trace_id,
+            raw_query_preview = %raw_query_safe,
+            raw_query_bytes = raw_query_safe.raw_bytes,
+            raw_query_safe_bytes = raw_query_safe.safe_bytes,
+            raw_query_truncated = raw_query_safe.truncated,
+            filter_text_preview = %filter_text_safe,
+            filter_text_bytes = filter_text_safe.raw_bytes,
+            filter_text_safe_bytes = filter_text_safe.safe_bytes,
+            filter_text_truncated = filter_text_safe.truncated,
+            query_override = ?query_override,
+            current_view = ?self.current_view,
+            "DO_IN_TRACE execution.entry"
+        );
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            raw_query = %raw_query_owned,
+            filter_text = %self.filter_text,
+            query_override = ?query_override,
+            "do_in_current_app.execution_entry — raw inputs"
+        );
+        let effective_query =
+            crate::menu_bar::current_app_commands::effective_do_in_current_app_query_for_submission(
+                &raw_query_owned,
+                query_override,
+            );
+        let effective_query_for_router =
+            (!effective_query.is_empty()).then_some(effective_query.as_str());
+        let effective_query_safe = crate::logging::log_user_value(&effective_query);
+
+        tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE execution.normalized",
+            trace_id = %dctx.trace_id,
+            query_preview = %effective_query_safe,
+            query_bytes = effective_query_safe.raw_bytes,
+            query_safe_bytes = effective_query_safe.safe_bytes,
+            query_truncated = effective_query_safe.truncated,
+            raw_query_preview = %raw_query_safe,
+            "DO_IN_TRACE execution.normalized"
+        );
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            query = %effective_query,
+            "do_in_current_app.requested"
+        );
+
+        match crate::menu_bar::load_frontmost_menu_snapshot() {
+            Ok(snapshot) => {
+                let snapshot_for_recipe = snapshot.clone();
+                let snapshot_pid = snapshot.pid;
+                let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
+
+                let (resolved_action, intent_receipt) =
+                    crate::menu_bar::current_app_commands::resolve_do_in_current_app_intent(
+                        &entries,
+                        effective_query_for_router,
+                    );
+
+                tracing::info!(
+                    target: "script_kit::do_in_trace",
+                    event = "DO_IN_TRACE execution.resolved",
+                    trace_id = %dctx.trace_id,
+                    app_name = %snapshot_receipt.app_name,
+                    bundle_id = %snapshot_receipt.bundle_id,
+                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                    query_preview = %effective_query_safe,
+                    raw_query_preview = %raw_query_safe,
+                    filtered_entries = intent_receipt.filtered_entries,
+                    exact_matches = intent_receipt.exact_matches,
+                    resolved_action = intent_receipt.action,
+                    "DO_IN_TRACE execution.resolved"
+                );
+                tracing::info!(
+                    trace_id = %dctx.trace_id,
+                    app_name = %snapshot_receipt.app_name,
+                    bundle_id = %snapshot_receipt.bundle_id,
+                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                    query = %effective_query,
+                    filtered_entries = intent_receipt.filtered_entries,
+                    exact_matches = intent_receipt.exact_matches,
+                    resolved_action = intent_receipt.action,
+                    "do_in_current_app.resolved"
+                );
+
+                match resolved_action {
+                    crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
+                        tracing::info!(
+                            target: "script_kit::do_in_trace",
+                            event = "DO_IN_TRACE execution.open_palette",
+                            trace_id = %dctx.trace_id,
+                            cached_entries = entries.len(),
+                            filter_preview = %effective_query_safe,
+                            placeholder = %snapshot_receipt.placeholder,
+                            "DO_IN_TRACE execution.open_palette"
+                        );
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            cached_entries = entries.len(),
+                            filter = %effective_query,
+                            placeholder = %snapshot_receipt.placeholder,
+                            "do_in_current_app.action → OpenCommandPalette — switching to CurrentAppCommandsView"
+                        );
+                        self.present_current_app_commands_entries(
+                            entries,
+                            &snapshot_receipt,
+                            snapshot_pid,
+                            &effective_query,
+                            cx,
+                        );
+                        Self::builtin_success(dctx, action.open_palette_success_detail())
+                    }
+                    crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(
+                        entry_index,
+                    ) => {
+                        tracing::info!(
+                            target: "script_kit::do_in_trace",
+                            event = "DO_IN_TRACE execution.execute_entry",
+                            trace_id = %dctx.trace_id,
+                            entry_index = entry_index,
+                            entry_name = %entries[entry_index].name,
+                            query_preview = %effective_query_safe,
+                            raw_query_preview = %raw_query_safe,
+                            "DO_IN_TRACE execution.execute_entry"
+                        );
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            entry_index = entry_index,
+                            entry_name = %entries[entry_index].name,
+                            "do_in_current_app.action → ExecuteEntry — running menu command directly"
+                        );
+                        let entry = entries[entry_index].clone();
+                        self.execute_builtin_inner(&entry, effective_query_for_router, dctx, cx)
+                    }
+                    crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
+                        tracing::info!(
+                            target: "script_kit::do_in_trace",
+                            event = "DO_IN_TRACE execution.generate_script",
+                            trace_id = %dctx.trace_id,
+                            query_preview = %effective_query_safe,
+                            raw_query_preview = %raw_query_safe,
+                            "DO_IN_TRACE execution.generate_script"
+                        );
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            query = %effective_query,
+                            "do_in_current_app.action → GenerateScript — scheduling async context capture before recipe flow"
+                        );
+
+                        self.spawn_generate_script_from_current_app_with_capture(
+                            dctx.trace_id.to_string(),
+                            effective_query.clone(),
+                            snapshot_for_recipe,
+                            entries,
+                            snapshot_receipt.clone(),
+                            snapshot_pid,
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, action.generate_script_success_detail())
+                    }
+                }
+            }
+            Err(e) => {
+                let message = format!("Failed to load frontmost app menu bar: {}", e);
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
                     dctx,

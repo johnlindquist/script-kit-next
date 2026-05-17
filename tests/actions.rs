@@ -1287,6 +1287,33 @@ fn utility_turn_this_into_command_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_do_in_current_app_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityDoInCurrentAppBuiltinAction")
+            && content.contains("UtilityDoInCurrentAppBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_do_in_current_app_builtin("),
+        "Do in Current App should route through a named utility action state"
+    );
+    assert!(
+        content.contains("action.open_palette_success_detail()")
+            && content.contains("action.generate_script_success_detail()")
+            && content.contains("action.capture_failure_detail()"),
+        "Do in Current App branch outcomes should use named state details"
+    );
+    assert!(
+        content.contains("effective_do_in_current_app_query_for_submission")
+            && content.contains("resolve_do_in_current_app_intent")
+            && content.contains("present_current_app_commands_entries")
+            && content.contains("spawn_generate_script_from_current_app_with_capture")
+            && content.contains("execute_builtin_inner("),
+        "Do in Current App should preserve query normalization, intent routing, palette, generation, and direct execution paths"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
