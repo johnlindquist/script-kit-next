@@ -239,6 +239,53 @@ fn alias_actions_reject_window_items() {
     );
 }
 
+#[test]
+fn agent_script_context_does_not_advertise_unsupported_shortcut_or_alias_actions() {
+    let builder = super::read_source("src/actions/builders/script_context.rs");
+    let shortcut_start = builder
+        .find("if !script.is_agent")
+        .expect("script context builder should guard shortcut/alias actions for agents");
+    let agent_actions_start = builder
+        .find("if script.is_agent {")
+        .expect("script context builder should still define agent-specific actions");
+    let agent_actions_end = builder[agent_actions_start..]
+        .find("let deeplink_name = to_deeplink_name")
+        .map(|offset| agent_actions_start + offset)
+        .expect(
+            "script context builder should leave the agent-specific block before deeplink actions",
+        );
+    let guarded_block = &builder[shortcut_start..agent_actions_start];
+
+    for action_id in [
+        "\"update_shortcut\"",
+        "\"remove_shortcut\"",
+        "\"add_shortcut\"",
+        "\"update_alias\"",
+        "\"remove_alias\"",
+        "\"add_alias\"",
+    ] {
+        assert!(
+            guarded_block.contains(action_id),
+            "{action_id} should only be built inside the non-agent shortcut/alias guard"
+        );
+    }
+
+    let agent_block = &builder[agent_actions_start..agent_actions_end];
+    for action_id in [
+        "\"update_shortcut\"",
+        "\"remove_shortcut\"",
+        "\"add_shortcut\"",
+        "\"update_alias\"",
+        "\"remove_alias\"",
+        "\"add_alias\"",
+    ] {
+        assert!(
+            !agent_block.contains(action_id),
+            "{action_id} must not be advertised by the agent-specific action block"
+        );
+    }
+}
+
 // ---------------------------------------------------------------------------
 // remove_alias — success path
 // ---------------------------------------------------------------------------

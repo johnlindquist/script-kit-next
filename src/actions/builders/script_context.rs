@@ -90,78 +90,83 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_section("Actions"),
     );
 
-    if script.shortcut.is_some() {
-        actions.push(
-            Action::new(
-                "update_shortcut",
-                "Edit Keyboard Shortcut",
-                Some("Change the keyboard shortcut for this item".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧K")
-            .with_icon(IconName::Settings)
-            .with_section("Edit"),
-        );
-        destructive_actions.push(
-            Action::new(
-                "remove_shortcut",
-                "Delete Keyboard Shortcut",
-                Some("Remove the keyboard shortcut from this item".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⌥K")
-            .with_icon(IconName::Trash)
-            .with_section("Destructive"),
-        );
-    } else {
-        actions.push(
-            Action::new(
-                "add_shortcut",
-                "Add Keyboard Shortcut",
-                Some("Set a keyboard shortcut for this item".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧K")
-            .with_icon(IconName::Settings)
-            .with_section("Edit"),
-        );
-    }
+    if !script.is_agent {
+        if script.shortcut.is_some() {
+            actions.push(
+                Action::new(
+                    "update_shortcut",
+                    "Edit Keyboard Shortcut",
+                    Some("Change the keyboard shortcut for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧K")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+            destructive_actions.push(
+                Action::new(
+                    "remove_shortcut",
+                    "Delete Keyboard Shortcut",
+                    Some("Remove the keyboard shortcut from this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⌥K")
+                .with_icon(IconName::Trash)
+                .with_section("Destructive"),
+            );
+        } else {
+            actions.push(
+                Action::new(
+                    "add_shortcut",
+                    "Add Keyboard Shortcut",
+                    Some("Set a keyboard shortcut for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧K")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+        }
 
-    if script.alias.is_some() {
-        actions.push(
-            Action::new(
-                "update_alias",
-                "Edit Alias",
-                Some("Change the alias trigger for this item".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧A")
-            .with_icon(IconName::Settings)
-            .with_section("Edit"),
-        );
-        destructive_actions.push(
-            Action::new(
-                "remove_alias",
-                "Delete Alias",
-                Some("Remove the alias trigger from this item".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⌥A")
-            .with_icon(IconName::Trash)
-            .with_section("Destructive"),
-        );
-    } else {
-        actions.push(
-            Action::new(
-                "add_alias",
-                "Add Alias",
-                Some("Set an alias trigger for this item (type alias + space to run)".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⇧A")
-            .with_icon(IconName::Settings)
-            .with_section("Edit"),
-        );
+        if script.alias.is_some() {
+            actions.push(
+                Action::new(
+                    "update_alias",
+                    "Edit Alias",
+                    Some("Change the alias trigger for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧A")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+            destructive_actions.push(
+                Action::new(
+                    "remove_alias",
+                    "Delete Alias",
+                    Some("Remove the alias trigger from this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⌥A")
+                .with_icon(IconName::Trash)
+                .with_section("Destructive"),
+            );
+        } else {
+            actions.push(
+                Action::new(
+                    "add_alias",
+                    "Add Alias",
+                    Some(
+                        "Set an alias trigger for this item (type alias + space to run)"
+                            .to_string(),
+                    ),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧A")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+        }
     }
 
     if (script.is_script || script.is_scriptlet || script.is_agent || script.is_app)
