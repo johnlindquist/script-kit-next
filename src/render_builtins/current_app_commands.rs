@@ -1,3 +1,41 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CurrentAppCommandsEmptyState {
+    NoCommandsReady,
+    NoFilteredMatches,
+}
+
+impl CurrentAppCommandsEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.trim().is_empty() {
+            Self::NoCommandsReady
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::NoCommandsReady => "No commands ready yet",
+            Self::NoFilteredMatches => "No matching commands",
+        }
+    }
+
+    fn detail(self, filter: &str) -> String {
+        match self {
+            Self::NoCommandsReady => {
+                "Switch back to the app you want to control, then open Current App Commands again."
+                    .to_string()
+            }
+            Self::NoFilteredMatches => {
+                format!(
+                    "Nothing matched \"{}\". Press Esc to clear the filter.",
+                    filter.trim()
+                )
+            }
+        }
+    }
+}
+
 impl ScriptListApp {
     // doc-anchor-removed: [[removed-docs and introspection]]
     fn current_app_commands_filtered_entries<'a>(
@@ -195,20 +233,9 @@ impl ScriptListApp {
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
-            let empty_title = if filter.trim().is_empty() {
-                "No commands ready yet"
-            } else {
-                "No matching commands"
-            };
-            let empty_detail = if filter.trim().is_empty() {
-                "Switch back to the app you want to control, then open Current App Commands again."
-                    .to_string()
-            } else {
-                format!(
-                    "Nothing matched \"{}\". Press Esc to clear the filter.",
-                    filter.trim()
-                )
-            };
+            let empty_state = CurrentAppCommandsEmptyState::from_filter(&filter);
+            let empty_title = empty_state.title();
+            let empty_detail = empty_state.detail(&filter);
 
             tracing::info!(
                 filter = %filter,
