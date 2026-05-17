@@ -991,6 +991,25 @@ fn file_search_copy_path_handler_uses_named_action_state() {
 }
 
 #[test]
+fn file_search_copy_deeplink_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchDeeplinkCopyHandlerAction")
+            && content.contains("CopyDeeplink"),
+        "file-search copy-deeplink handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("FileSearchDeeplinkCopyHandlerAction::from_action_id(action_id)")
+            && content.contains("deeplink_action.share_hud(&bundle.title)")
+            && content.contains("deeplink_action.deeplink_hud(&deeplink_url)")
+            && content.contains("deeplink_action.share_failure_message(error)"),
+        "file-search copy-deeplink handler should derive share, fallback, and failure copy from the named state"
+    );
+}
+
+#[test]
 fn file_search_sort_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
         .expect("Failed to read file action handler");
