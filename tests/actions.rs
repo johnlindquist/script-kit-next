@@ -2070,14 +2070,16 @@ fn utility_do_in_current_app_builtin_uses_named_action_states() {
 
     assert!(
         content.contains("enum UtilityDoInCurrentAppBuiltinAction")
-            && content.contains("UtilityDoInCurrentAppBuiltinAction::from_command(*cmd_type)")
+            && content.contains("UtilityDoInCurrentAppBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_do_in_current_app_builtin("),
         "Do in Current App should route through a named utility action state"
     );
     assert!(
         content.contains("action.open_palette_success_detail()")
             && content.contains("action.generate_script_success_detail()")
-            && content.contains("action.capture_failure_detail()"),
+            && content.contains("action.capture_failure_detail()")
+            && content.contains("action.capture_failure_message(&e)")
+            && content.contains("format!(\"Failed to load frontmost app menu bar: {error}\")"),
         "Do in Current App branch outcomes should use named state details"
     );
     assert!(
@@ -2097,13 +2099,14 @@ fn utility_current_app_commands_builtin_uses_named_action_states() {
 
     assert!(
         content.contains("enum UtilityCurrentAppCommandsBuiltinAction")
-            && content.contains("UtilityCurrentAppCommandsBuiltinAction::from_command(*cmd_type)")
+            && content.contains("UtilityCurrentAppCommandsBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_current_app_commands_builtin("),
         "Current App Commands should route through a named utility action state"
     );
     assert!(
         content.contains("action.success_detail()")
             && content.contains("action.capture_failure_detail()")
+            && content.contains("action.capture_failure_message(&e)")
             && content.contains("open_current_app_commands")
             && content.contains("current_app_commands_capture_failed"),
         "Current App Commands outcomes should use named state details"

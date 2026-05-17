@@ -802,6 +802,12 @@ impl UtilityDoInCurrentAppBuiltinAction {
             Self::Submit => "do_in_current_app_capture_failed",
         }
     }
+
+    fn capture_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Submit => format!("Failed to load frontmost app menu bar: {error}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -826,6 +832,12 @@ impl UtilityCurrentAppCommandsBuiltinAction {
     fn capture_failure_detail(self) -> &'static str {
         match self {
             Self::Open => "current_app_commands_capture_failed",
+        }
+    }
+
+    fn capture_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Open => format!("Failed to load frontmost app menu bar: {error}"),
         }
     }
 }
@@ -6416,7 +6428,7 @@ impl ScriptListApp {
                 }
             }
             Err(e) => {
-                let message = format!("Failed to load frontmost app menu bar: {}", e);
+                let message = action.capture_failure_message(&e);
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
@@ -6459,7 +6471,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(e) => {
-                let message = format!("Failed to load frontmost app menu bar: {}", e);
+                let message = action.capture_failure_message(&e);
                 tracing::warn!(
                     trace_id = %dctx.trace_id,
                     error = %e,
