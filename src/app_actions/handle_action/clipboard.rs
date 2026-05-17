@@ -150,6 +150,22 @@ impl ClipboardCopyPasteHandlerAction {
             Self::CopyOnly => "Failed to copy",
         }
     }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::PasteAndClose | Self::CopyOnly | Self::PasteKeepOpen => {
+                "No clipboard entry selected"
+            }
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::PasteAndClose | Self::PasteKeepOpen | Self::CopyOnly => {
+                format!("{}: {error}", self.failure_prefix())
+            }
+        }
+    }
 }
 
 impl ClipboardShareHandlerAction {
@@ -511,7 +527,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(copy_paste_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -541,10 +557,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, action = copy_paste_action.action_id(), "clipboard copy/paste failed");
-                        self.show_error_toast(
-                            format!("{}: {}", copy_paste_action.failure_prefix(), e),
-                            cx,
-                        );
+                        self.show_error_toast(copy_paste_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
