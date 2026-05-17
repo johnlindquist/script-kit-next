@@ -638,7 +638,7 @@ fn render_focused_info_for_result(
 
             content = content
                 .child(focused_info_divider(style))
-                .child(focused_info_type_indicator("AI Conversation", style));
+                .child(focused_info_type_indicator("Agent Chat Conversation", style));
         }
 
         scripts::SearchResult::AiVault(ai_vault_match) => {

@@ -3,6 +3,7 @@ use script_kit_gpui::{builtins::get_builtin_entries, config::BuiltInConfig};
 #[test]
 fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
+    let builtins_source = super::read_source("src/builtins/mod.rs");
     let agent_chat = entries
         .iter()
         .find(|entry| entry.id == "builtin/ai-chat")
@@ -10,6 +11,12 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
     assert_eq!(agent_chat.name, "Agent Chat");
     assert_eq!(agent_chat.default_action_text(), "Open Agent Chat");
     assert_eq!(agent_chat.footer_action_text(), "Agent Chat");
+    assert!(
+        builtins_source
+            .contains("AiCommandType::SendScreenAreaToAi => \"Select Area for Agent Chat\"")
+            && !builtins_source.contains("Select Area for AI"),
+        "screen-area Agent Chat label should not regress to generic AI wording"
+    );
 
     for (id, expected_name, expected_action) in [
         (
@@ -71,6 +78,7 @@ fn acp_history_text_names_agent_chat_conversations() {
     let source_heads = super::read_source("src/menu_syntax/source_heads.rs");
     let payload = super::read_source("src/menu_syntax/payload.rs");
     let action_helpers = super::read_source("src/action_helpers.rs");
+    let focused_info = super::read_source("src/app_render/focused_info.rs");
 
     assert_eq!(acp_history.name, "Agent Chat History");
     assert_eq!(acp_history.default_action_text(), "Open Agent Chat History");
@@ -97,6 +105,10 @@ fn acp_history_text_names_agent_chat_conversations() {
             && payload.contains("Self::Conversations => \"Agent Chat Conversations\"")
             && action_helpers.contains("Cannot edit Agent Chat conversations"),
         "source filters and disabled action text should name Agent Chat conversations"
+    );
+    assert!(
+        focused_info.contains("focused_info_type_indicator(\"Agent Chat Conversation\""),
+        "ACP history info panel type indicator should name Agent Chat"
     );
     assert!(
         !acp_history.description.contains("AI conversations")
