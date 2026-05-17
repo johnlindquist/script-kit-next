@@ -100,6 +100,11 @@ enum FileSearchPathCopyHandlerAction {
     CopyPath,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchDeeplinkCopyHandlerAction {
+    CopyDeeplink,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -361,6 +366,33 @@ impl FileSearchPathCopyHandlerAction {
     fn copied_hud(self, path: &str) -> String {
         match self {
             Self::CopyPath => format!("Copied: {path}"),
+        }
+    }
+}
+
+impl FileSearchDeeplinkCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "copy_deeplink" => Some(Self::CopyDeeplink),
+            _ => None,
+        }
+    }
+
+    fn share_hud(self, title: &str) -> String {
+        match self {
+            Self::CopyDeeplink => format!("Copied share link for {title}"),
+        }
+    }
+
+    fn deeplink_hud(self, deeplink_url: &str) -> String {
+        match self {
+            Self::CopyDeeplink => format!("Copied: {deeplink_url}"),
+        }
+    }
+
+    fn share_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::CopyDeeplink => format!("Failed to build share link: {error}"),
         }
     }
 }
@@ -743,6 +775,11 @@ impl ScriptListApp {
                 }
             }
             "copy_deeplink" => {
+                let Some(deeplink_action) =
+                    FileSearchDeeplinkCopyHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "copy deeplink action");
                 if let Some(result) = self.get_selected_result() {
                     if crate::script_sharing::is_shareable_result(&result) {
@@ -762,7 +799,7 @@ impl ScriptListApp {
                                 );
                                 self.copy_to_clipboard_with_feedback(
                                     &share_uri,
-                                    format!("Copied share link for {}", bundle.title),
+                                    deeplink_action.share_hud(&bundle.title),
                                     true,
                                     cx,
                                 );
@@ -770,7 +807,7 @@ impl ScriptListApp {
                             Err(error) => {
                                 return DispatchOutcome::error(
                                     crate::action_helpers::ERROR_ACTION_FAILED,
-                                    format!("Failed to build share link: {}", error),
+                                    deeplink_action.share_failure_message(error),
                                 );
                             }
                         }
@@ -780,7 +817,7 @@ impl ScriptListApp {
                         tracing::info!(category = "UI", deeplink = %deeplink_url, "copying deeplink to clipboard");
                         self.copy_to_clipboard_with_feedback(
                             &deeplink_url,
-                            format!("Copied: {}", deeplink_url),
+                            deeplink_action.deeplink_hud(&deeplink_url),
                             true,
                             cx,
                         );

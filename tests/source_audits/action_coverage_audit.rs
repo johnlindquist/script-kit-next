@@ -855,10 +855,7 @@ fn copy_path_shows_selection_required_when_no_selection() {
 fn copy_deeplink_uses_clipboard_feedback_helper() {
     let content = handle_action_content();
 
-    let dl_pos = content
-        .find("\"copy_deeplink\"")
-        .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_deeplink\" =>", 3000);
 
     assert!(
         block.contains("copy_to_clipboard_with_feedback("),
@@ -870,14 +867,12 @@ fn copy_deeplink_uses_clipboard_feedback_helper() {
 fn copy_deeplink_formats_scriptkit_url() {
     let content = handle_action_content();
 
-    let dl_pos = content
-        .find("\"copy_deeplink\"")
-        .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_deeplink\" =>", 3000);
 
     assert!(
-        block.contains("scriptkit://run/"),
-        "copy_deeplink should generate scriptkit:// URL"
+        block.contains("Self::deeplink_for_result(&result)")
+            && content.contains("scriptkit://run/"),
+        "copy_deeplink should route URL generation through deeplink_for_result with a scriptkit:// fallback"
     );
 }
 
@@ -885,10 +880,7 @@ fn copy_deeplink_formats_scriptkit_url() {
 fn copy_deeplink_shows_selection_required_when_no_selection() {
     let content = handle_action_content();
 
-    let dl_pos = content
-        .find("\"copy_deeplink\"")
-        .expect("Expected copy_deeplink handler");
-    let block = &content[dl_pos..content.len().min(dl_pos + 3000)];
+    let block = handler_branch_block(&content, "\"copy_deeplink\" =>", 3000);
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
