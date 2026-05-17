@@ -1997,6 +1997,26 @@ fn acp_last_response_handlers_use_named_action_states() {
     );
 }
 
+#[test]
+fn acp_code_copy_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpCodeCopyHandlerAction")
+            && content.contains("CopyAllCode"),
+        "ACP copy-all-code handler should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpCodeCopyHandlerAction::from_action_id(action_id)")
+            && content.contains("code_copy_action.result_message(false)")
+            && content.contains("code_copy_action.result_message(true)")
+            && content.contains("No code blocks found")
+            && content.contains("All code blocks copied"),
+        "ACP copy-all-code handler should derive found/missing feedback from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
