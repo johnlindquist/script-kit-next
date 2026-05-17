@@ -857,6 +857,12 @@ impl UtilityCurrentAppCommandsBuiltinAction {
             Self::Open => format!("Failed to load frontmost app menu bar: {error}"),
         }
     }
+
+    fn refresh_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Open => format!("Failed to refresh current app commands: {error}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3993,7 +3999,7 @@ impl ScriptListApp {
                     "current_app_commands.refresh_failed_before_execute"
                 );
                 self.show_error_toast(
-                    format!("Failed to refresh current app commands: {error}"),
+                    UtilityCurrentAppCommandsBuiltinAction::Open.refresh_failure_message(&error),
                     cx,
                 );
                 return;
