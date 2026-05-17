@@ -834,6 +834,26 @@ impl NotesBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SyncToGithubBuiltinAction {
+    Dispatch,
+}
+
+impl SyncToGithubBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::SyncToGithub => Some(Self::Dispatch),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Dispatch => "sync_to_github_dispatched",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3379,52 +3399,9 @@ impl ScriptListApp {
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::SyncToGithub => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Sync to GitHub requested"
-                );
-                self.show_hud(
-                    "Syncing Script Kit to GitHub...".to_string(),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
-
-                let dctx_owned = dctx.clone();
-                cx.spawn(async move |this, cx| {
-                    let sync_result = cx
-                        .background_executor()
-                        .spawn(async { crate::sync::github::sync_to_github_workspace() })
-                        .await;
-
-                    let _ = this.update(cx, |this, cx| match sync_result {
-                        Ok(report) => {
-                            tracing::info!(
-                                category = "BUILTIN",
-                                trace_id = %dctx_owned.trace_id,
-                                workspace = %report.workspace.display(),
-                                dry_run = report.dry_run,
-                                step_count = report.steps.len(),
-                                "Sync to GitHub completed"
-                            );
-                            this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
-                            this.close_and_reset_window(cx);
-                        }
-                        Err(error) => {
-                            tracing::error!(
-                                category = "BUILTIN",
-                                trace_id = %dctx_owned.trace_id,
-                                error = %error,
-                                "Sync to GitHub failed"
-                            );
-                            this.show_error_toast(format!("GitHub sync failed: {error}"), cx);
-                            cx.notify();
-                        }
-                    });
-                })
-                .detach();
-
-                Self::builtin_success(dctx, "sync_to_github_dispatched")
+                let sync_action = SyncToGithubBuiltinAction::from_feature(&entry.feature)
+                    .expect("sync-to-github arm should only receive SyncToGithub");
+                self.execute_sync_to_github_builtin(sync_action, dctx, cx)
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 let menu_action = MenuBarBuiltinAction::from_action(action);
@@ -4263,6 +4240,60 @@ impl ScriptListApp {
         } else {
             Self::builtin_success(dctx, action.success_detail())
         }
+    }
+
+    fn execute_sync_to_github_builtin(
+        &mut self,
+        action: SyncToGithubBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            "Sync to GitHub requested"
+        );
+        self.show_hud(
+            "Syncing Script Kit to GitHub...".to_string(),
+            Some(HUD_SHORT_MS),
+            cx,
+        );
+
+        let dctx_owned = dctx.clone();
+        cx.spawn(async move |this, cx| {
+            let sync_result = cx
+                .background_executor()
+                .spawn(async { crate::sync::github::sync_to_github_workspace() })
+                .await;
+
+            let _ = this.update(cx, |this, cx| match sync_result {
+                Ok(report) => {
+                    tracing::info!(
+                        category = "BUILTIN",
+                        trace_id = %dctx_owned.trace_id,
+                        workspace = %report.workspace.display(),
+                        dry_run = report.dry_run,
+                        step_count = report.steps.len(),
+                        "Sync to GitHub completed"
+                    );
+                    this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
+                    this.close_and_reset_window(cx);
+                }
+                Err(error) => {
+                    tracing::error!(
+                        category = "BUILTIN",
+                        trace_id = %dctx_owned.trace_id,
+                        error = %error,
+                        "Sync to GitHub failed"
+                    );
+                    this.show_error_toast(format!("GitHub sync failed: {error}"), cx);
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_window_switcher_builtin(
