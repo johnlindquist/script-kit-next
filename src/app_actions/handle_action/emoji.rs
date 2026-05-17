@@ -2,6 +2,47 @@
 //
 // Contains all `emoji_*` action handling: paste, copy, paste-keep-open, pin, unpin.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiPinHandlerAction {
+    Pin,
+    Unpin,
+}
+
+impl EmojiPinHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "emoji_pin" => Some(Self::Pin),
+            "emoji_unpin" => Some(Self::Unpin),
+            _ => None,
+        }
+    }
+
+    fn apply(self, pinned_emojis: &mut std::collections::HashSet<String>, emoji_value: &str) {
+        match self {
+            Self::Pin => {
+                pinned_emojis.insert(emoji_value.to_string());
+            }
+            Self::Unpin => {
+                pinned_emojis.remove(emoji_value);
+            }
+        }
+    }
+
+    fn error_prefix(self) -> &'static str {
+        match self {
+            Self::Pin => "Failed to pin emoji",
+            Self::Unpin => "Failed to unpin emoji",
+        }
+    }
+
+    fn success_hud(self, emoji_value: &str) -> String {
+        match self {
+            Self::Pin => format!("Pinned {emoji_value}"),
+            Self::Unpin => format!("Unpinned {emoji_value}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Build an EmojiActionInfo for the currently selected emoji in the picker view.
     fn selected_emoji_action_info(&self) -> Option<crate::actions::EmojiActionInfo> {
@@ -89,36 +130,22 @@ impl ScriptListApp {
                     cx,
                 )
             }
-            "emoji_pin" => {
+            "emoji_pin" | "emoji_unpin" => {
+                let Some(pin_action) = EmojiPinHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(emoji) = selected_emoji else {
                     self.show_error_toast("No emoji selected", cx);
                     return DispatchOutcome::success();
                 };
 
-                tracing::info!(action = "emoji_pin", emoji = %emoji.value, "emoji action");
-                self.pinned_emojis.insert(emoji.value.clone());
+                tracing::info!(action = %action_id, emoji = %emoji.value, "emoji action");
+                pin_action.apply(&mut self.pinned_emojis, &emoji.value);
                 if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.pinned_emojis) {
-                    tracing::error!(error = %error, emoji = %emoji.value, "failed to pin emoji");
-                    self.show_error_toast(format!("Failed to pin emoji: {}", error), cx);
+                    tracing::error!(error = %error, emoji = %emoji.value, action = %action_id, "failed to update pinned emoji");
+                    self.show_error_toast(format!("{}: {}", pin_action.error_prefix(), error), cx);
                 } else {
-                    self.show_hud(format!("Pinned {}", emoji.value), Some(HUD_SHORT_MS), cx);
-                    cx.notify();
-                }
-                DispatchOutcome::success()
-            }
-            "emoji_unpin" => {
-                let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                tracing::info!(action = "emoji_unpin", emoji = %emoji.value, "emoji action");
-                self.pinned_emojis.remove(&emoji.value);
-                if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.pinned_emojis) {
-                    tracing::error!(error = %error, emoji = %emoji.value, "failed to unpin emoji");
-                    self.show_error_toast(format!("Failed to unpin emoji: {}", error), cx);
-                } else {
-                    self.show_hud(format!("Unpinned {}", emoji.value), Some(HUD_SHORT_MS), cx);
+                    self.show_hud(pin_action.success_hud(&emoji.value), Some(HUD_SHORT_MS), cx);
                     cx.notify();
                 }
                 DispatchOutcome::success()

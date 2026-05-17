@@ -205,6 +205,25 @@ fn emoji_entry_actions_use_named_plan_states() {
 }
 
 #[test]
+fn emoji_pin_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
+        .expect("Failed to read emoji action handler");
+
+    assert!(
+        content.contains("enum EmojiPinHandlerAction")
+            && content.contains("Pin")
+            && content.contains("Unpin"),
+        "emoji pin/unpin handler should be driven by named action states"
+    );
+    assert!(
+        content.contains("EmojiPinHandlerAction::from_action_id(action_id)")
+            && content.contains("pin_action.apply(&mut self.pinned_emojis, &emoji.value)")
+            && content.contains("pin_action.success_hud(&emoji.value)"),
+        "emoji pin/unpin handler should derive mutation and HUD copy from the named action state"
+    );
+}
+
+#[test]
 fn emoji_paste_destination_uses_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
