@@ -36,6 +36,12 @@ enum AcpConversationMarkdownHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpConversationMarkdownBlockedReason {
+    NoMessages,
+    EmptyRenderableMessages,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AcpLastCodeBlockHandlerAction {
     SaveAsScript,
     RunLastCode,
@@ -175,6 +181,27 @@ impl AcpConversationMarkdownHandlerAction {
         match self {
             Self::CopyToClipboard => None,
             Self::SaveAsNote => Some(format!("Failed to save note: {error}")),
+        }
+    }
+
+    fn blocked_reason(self, message_count: usize) -> AcpConversationMarkdownBlockedReason {
+        let _ = self;
+        AcpConversationMarkdownBlockedReason::from_message_count(message_count)
+    }
+}
+
+impl AcpConversationMarkdownBlockedReason {
+    fn from_message_count(message_count: usize) -> Self {
+        match message_count {
+            0 => Self::NoMessages,
+            _ => Self::EmptyRenderableMessages,
+        }
+    }
+
+    fn trace_value(self) -> &'static str {
+        match self {
+            Self::NoMessages => "no_messages",
+            Self::EmptyRenderableMessages => "empty_renderable_messages",
         }
     }
 }
@@ -1934,15 +1961,11 @@ impl ScriptListApp {
                 );
 
                 let Some(markdown) = markdown else {
-                    let reason = if message_count == 0 {
-                        "no_messages"
-                    } else {
-                        "empty_renderable_messages"
-                    };
+                    let reason = markdown_action.blocked_reason(message_count);
                     tracing::warn!(
                         target: "script_kit::tab_ai",
                         event = "acp_export_markdown_blocked",
-                        reason = %reason,
+                        reason = %reason.trace_value(),
                         message_count,
                         "ACP export-as-markdown blocked"
                     );
@@ -1994,15 +2017,11 @@ impl ScriptListApp {
                 );
 
                 let Some(markdown) = markdown else {
-                    let reason = if message_count == 0 {
-                        "no_messages"
-                    } else {
-                        "empty_renderable_messages"
-                    };
+                    let reason = markdown_action.blocked_reason(message_count);
                     tracing::warn!(
                         target: "script_kit::tab_ai",
                         event = "acp_save_as_note_blocked",
-                        reason = %reason,
+                        reason = %reason.trace_value(),
                         message_count,
                         "ACP save-as-note blocked"
                     );
