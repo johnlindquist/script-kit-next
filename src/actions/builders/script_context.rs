@@ -27,17 +27,6 @@ fn title_case_words(value: &str) -> String {
         .join(" ")
 }
 
-fn favorite_action_copy(is_favorite: bool) -> (&'static str, &'static str) {
-    if is_favorite {
-        (
-            "Remove from Favorites",
-            "Remove this item from your favorites list",
-        )
-    } else {
-        ("Add to Favorites", "Save this item to your favorites list")
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ScriptContextKind {
     App,
@@ -76,10 +65,40 @@ enum ScriptContextShareActionPlan {
     DirectRunDeepLink,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum FavoriteActionPlan {
+    AddToFavorites,
+    RemoveFromFavorites,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ScriptContextShareActionCopy {
     title: &'static str,
     description: String,
+}
+
+impl FavoriteActionPlan {
+    fn from_is_favorite(is_favorite: bool) -> Self {
+        if is_favorite {
+            Self::RemoveFromFavorites
+        } else {
+            Self::AddToFavorites
+        }
+    }
+
+    fn copy(self) -> (&'static str, &'static str) {
+        match self {
+            Self::AddToFavorites => ("Add to Favorites", "Save this item to your favorites list"),
+            Self::RemoveFromFavorites => (
+                "Remove from Favorites",
+                "Remove this item from your favorites list",
+            ),
+        }
+    }
+}
+
+fn favorite_action_copy(is_favorite: bool) -> (&'static str, &'static str) {
+    FavoriteActionPlan::from_is_favorite(is_favorite).copy()
 }
 
 fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {

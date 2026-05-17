@@ -284,6 +284,24 @@ fn script_context_share_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn script_context_favorite_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum FavoriteActionPlan")
+            && content.contains("AddToFavorites")
+            && content.contains("RemoveFromFavorites"),
+        "script context favorite action copy should be driven by named favorite plan states"
+    );
+    assert!(
+        content.contains("FavoriteActionPlan::from_is_favorite(is_favorite).copy()")
+            && content.contains("fn favorite_action_copy"),
+        "favorite action copy should derive title and description from the named favorite plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
