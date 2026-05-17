@@ -439,9 +439,9 @@ fn clipboard_bulk_delete_handlers_use_named_action_states() {
             && content.contains("bulk_delete_action.confirm_message(delete_count)")
             && content.contains("bulk_delete_action.confirm_message(unpinned_count)")
             && content.contains("bulk_delete_action.confirm_button()")
-            && content.contains("bulk_delete_action.success_hud(deleted)")
+            && content.contains("action.success_hud(self.deleted)")
             && content.contains("bulk_delete_action.success_hud(unpinned_count)")
-            && content.contains("bulk_delete_action.partial_failure_message(deleted, failed)")
+            && content.contains("action.partial_failure_message(self.deleted, self.failed)")
             && content.contains("bulk_delete_action.failure_message(e)"),
         "clipboard bulk delete handlers should derive confirmation, success, and failure text from named states"
     );
@@ -1455,7 +1455,7 @@ fn utility_open_builtin_uses_named_action_states() {
         "safe utility open built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityOpenBuiltinAction::from_command(*cmd_type)")
+        content.contains("UtilityCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_utility_open_builtin(")
             && content.contains("action.opening_message()")
             && content.contains("action.opens_from_main_menu()")
@@ -1737,7 +1737,7 @@ fn ai_capture_builtin_uses_named_action_states() {
         "AI capture built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("AiCaptureBuiltinAction::from_command(*cmd_type)")
+        content.contains("AiCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_ai_capture_builtin(")
             && content.contains("action.capture_kind()")
             && content.contains("action.prompt()")
@@ -1955,10 +1955,10 @@ fn utility_process_builtin_uses_named_action_states() {
         "Utility process built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityProcessBuiltinAction::from_command(command)")
+        content.contains("UtilityCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_utility_process_builtin(")
             && content.contains("action.empty_hud()")
-            && content.contains("action.success_hud(process_count)")
+            && content.contains("action.success_hud(outcome.process_count())")
             && content.contains("action.success_detail()"),
         "Utility process command routing should delegate through named state details"
     );
@@ -3364,11 +3364,11 @@ fn shortcut_alias_edit_handlers_use_named_action_states() {
     );
     assert!(
         content.contains("ShortcutRecorderAction::from_action_id(action_id)")
-            && content.contains("shortcut_action.unsupported_message()")
-            && content.contains("shortcut_action.cannot_assign_message()")
+            && content.contains("shortcut_action.target_error_message(")
+            && content.contains("ShortcutAliasTargetError::UnsupportedItemType")
+            && content.contains("ShortcutAliasTargetError::MissingCommandId")
             && content.contains("AliasInputAction::from_action_id(action_id)")
-            && content.contains("alias_action.unsupported_message()")
-            && content.contains("alias_action.cannot_assign_message()"),
+            && content.contains("alias_action.target_error_message("),
         "shortcut and alias edit handlers should derive unsupported and cannot-assign text from named states"
     );
 }
