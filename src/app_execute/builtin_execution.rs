@@ -167,6 +167,56 @@ impl PasteSequentialBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsSnapModeBuiltinAction {
+    Disable,
+    Simple,
+    Expanded,
+    Precision,
+}
+
+impl SettingsSnapModeBuiltinAction {
+    fn from_command(command: builtins::SettingsCommandType) -> Option<Self> {
+        match command {
+            builtins::SettingsCommandType::DisableWindowSnapping => Some(Self::Disable),
+            builtins::SettingsCommandType::SnapModeSimple => Some(Self::Simple),
+            builtins::SettingsCommandType::SnapModeExpanded => Some(Self::Expanded),
+            builtins::SettingsCommandType::SnapModePrecision => Some(Self::Precision),
+            builtins::SettingsCommandType::ResetWindowPositions
+            | builtins::SettingsCommandType::ChooseTheme
+            | builtins::SettingsCommandType::SelectMicrophone
+            | builtins::SettingsCommandType::DictationSetup => None,
+        }
+    }
+
+    fn target_mode(self) -> window_control::SnapMode {
+        match self {
+            Self::Disable => window_control::SnapMode::Off,
+            Self::Simple => window_control::SnapMode::Simple,
+            Self::Expanded => window_control::SnapMode::Expanded,
+            Self::Precision => window_control::SnapMode::Precision,
+        }
+    }
+
+    fn hud_text(self) -> &'static str {
+        match self {
+            Self::Disable => "Window snapping disabled",
+            Self::Simple => "Snap mode: Simple",
+            Self::Expanded => "Snap mode: Expanded",
+            Self::Precision => "Snap mode: Precision",
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Disable => "set_snap_mode::off",
+            Self::Simple => "set_snap_mode::simple",
+            Self::Expanded => "set_snap_mode::expanded",
+            Self::Precision => "set_snap_mode::precision",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3273,30 +3323,9 @@ impl ScriptListApp {
                     | SettingsCommandType::SnapModeSimple
                     | SettingsCommandType::SnapModeExpanded
                     | SettingsCommandType::SnapModePrecision => {
-                        let target_mode = match cmd_type {
-                            SettingsCommandType::DisableWindowSnapping => {
-                                window_control::SnapMode::Off
-                            }
-                            SettingsCommandType::SnapModeSimple => window_control::SnapMode::Simple,
-                            SettingsCommandType::SnapModeExpanded => {
-                                window_control::SnapMode::Expanded
-                            }
-                            SettingsCommandType::SnapModePrecision => {
-                                window_control::SnapMode::Precision
-                            }
-                            SettingsCommandType::DictationSetup => {
-                                unreachable!("dictation setup handled before snap mode arm")
-                            }
-                            SettingsCommandType::SelectMicrophone => {
-                                unreachable!("select microphone handled outside snap mode arm")
-                            }
-                            SettingsCommandType::ChooseTheme => {
-                                unreachable!("choose theme handled outside snap mode arm")
-                            }
-                            SettingsCommandType::ResetWindowPositions => {
-                                unreachable!("reset windows handled outside snap mode arm")
-                            }
-                        };
+                        let snap_action = SettingsSnapModeBuiltinAction::from_command(*cmd_type)
+                            .expect("snap mode arm should only receive snap mode commands");
+                        let target_mode = snap_action.target_mode();
 
                         let previous = window_control::current_snap_mode();
                         let runtime_active = window_control::is_snap_runtime_active();
@@ -3352,23 +3381,8 @@ impl ScriptListApp {
                             "Updated snap mode from built-in command"
                         );
 
-                        let hud_text = match mode {
-                            window_control::SnapMode::Off => "Window snapping disabled".to_string(),
-                            window_control::SnapMode::Simple => "Snap mode: Simple".to_string(),
-                            window_control::SnapMode::Expanded => "Snap mode: Expanded".to_string(),
-                            window_control::SnapMode::Precision => {
-                                "Snap mode: Precision".to_string()
-                            }
-                        };
-                        let success_id = match mode {
-                            window_control::SnapMode::Off => "set_snap_mode::off",
-                            window_control::SnapMode::Simple => "set_snap_mode::simple",
-                            window_control::SnapMode::Expanded => "set_snap_mode::expanded",
-                            window_control::SnapMode::Precision => "set_snap_mode::precision",
-                        };
-
-                        self.show_hud(hud_text, Some(HUD_SHORT_MS), cx);
-                        Self::builtin_success(dctx, success_id)
+                        self.show_hud(snap_action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+                        Self::builtin_success(dctx, snap_action.success_detail())
                     }
                     SettingsCommandType::SelectMicrophone => {
                         let prefs = crate::config::load_user_preferences();
