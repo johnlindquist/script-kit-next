@@ -3023,10 +3023,11 @@ fn deferred_ai_handoff_uses_named_failure_states() {
 
     assert!(
         content.contains("enum DeferredAiWindowAction")
-            && content.contains("fn name(&self) -> &'static str")
-            && content.contains("fn failure_message(action_name: &str")
-            && content.contains("DeferredAiWindowAction::failure_message(")
-            && content.contains("deferred_action_name"),
+            && content.contains("enum DeferredAiWindowActionKind")
+            && content.contains("fn name(self) -> &'static str")
+            && content.contains("fn failure_message(self, error: impl std::fmt::Display)")
+            && content.contains("let deferred_action_kind = deferred_action.kind();")
+            && content.contains("deferred_action_kind.failure_message(&error)"),
         "deferred AI handoff failure feedback should derive from the named deferred action state"
     );
     assert!(

@@ -88,7 +88,7 @@ fn deferred_ai_handoff_emits_failure_log_on_open_error() {
         "helper should emit a failure log event when AI window open fails"
     );
     assert!(
-        helper.contains("Failed to send to Agent Chat: {}"),
+        helper.contains("deferred_action_kind.failure_message(&error)"),
         "helper should show an error toast with the underlying reason on failure"
     );
 }
@@ -365,7 +365,7 @@ fn deferred_handoff_failure_toast_includes_real_reason() {
     let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
 
     assert!(
-        helper.contains("Failed to send to Agent Chat: {}"),
+        helper.contains("deferred_action_kind.failure_message(&error)"),
         "handoff failure toast should include the underlying reason"
     );
 }
@@ -403,7 +403,7 @@ fn deferred_ai_handoff_emits_actionable_failure_toast_on_open_error() {
         "helper should emit a failure log event when AI handoff fails"
     );
     assert!(
-        helper.contains("format!(\"Failed to send to Agent Chat: {}\", error)"),
+        helper.contains("deferred_action_kind.failure_message(&error)"),
         "helper should surface the propagated handoff error in the toast"
     );
     // Ensure we do NOT use a hardcoded open-window message

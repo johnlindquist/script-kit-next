@@ -466,25 +466,57 @@ enum DeferredAiWindowAction {
     },
 }
 
-impl DeferredAiWindowAction {
-    fn name(&self) -> &'static str {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeferredAiWindowActionKind {
+    OpenOnly,
+    SetInput,
+    SetInputSubmit,
+    SetInputWithImage,
+    SetInputWithImageSubmit,
+    AddAttachment,
+    ApplyPreset,
+}
+
+impl DeferredAiWindowActionKind {
+    fn name(self) -> &'static str {
         match self {
             Self::OpenOnly => "open_only",
-            Self::SetInput { submit: true, .. } => "set_input_submit",
-            Self::SetInput { submit: false, .. } => "set_input",
-            Self::SetInputWithImage { submit: true, .. } => "set_input_with_image_submit",
-            Self::SetInputWithImage { submit: false, .. } => "set_input_with_image",
-            Self::AddAttachment { .. } => "add_attachment",
-            Self::ApplyPreset { .. } => "apply_preset",
+            Self::SetInputSubmit => "set_input_submit",
+            Self::SetInput => "set_input",
+            Self::SetInputWithImageSubmit => "set_input_with_image_submit",
+            Self::SetInputWithImage => "set_input_with_image",
+            Self::AddAttachment => "add_attachment",
+            Self::ApplyPreset => "apply_preset",
         }
     }
 
-    fn failure_message(action_name: &str, error: impl std::fmt::Display) -> String {
-        match action_name {
-            "open_only" => format!("Failed to open Agent Chat: {error}"),
-            "add_attachment" => format!("Failed to attach file to Agent Chat: {error}"),
-            "apply_preset" => format!("Failed to apply AI preset: {error}"),
-            _ => format!("Failed to send to Agent Chat: {error}"),
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::OpenOnly => format!("Failed to open Agent Chat: {error}"),
+            Self::AddAttachment => format!("Failed to attach file to Agent Chat: {error}"),
+            Self::ApplyPreset => format!("Failed to apply AI preset: {error}"),
+            Self::SetInput
+            | Self::SetInputSubmit
+            | Self::SetInputWithImage
+            | Self::SetInputWithImageSubmit => format!("Failed to send to Agent Chat: {error}"),
+        }
+    }
+}
+
+impl DeferredAiWindowAction {
+    fn kind(&self) -> DeferredAiWindowActionKind {
+        match self {
+            Self::OpenOnly => DeferredAiWindowActionKind::OpenOnly,
+            Self::SetInput { submit: true, .. } => DeferredAiWindowActionKind::SetInputSubmit,
+            Self::SetInput { submit: false, .. } => DeferredAiWindowActionKind::SetInput,
+            Self::SetInputWithImage { submit: true, .. } => {
+                DeferredAiWindowActionKind::SetInputWithImageSubmit
+            }
+            Self::SetInputWithImage { submit: false, .. } => {
+                DeferredAiWindowActionKind::SetInputWithImage
+            }
+            Self::AddAttachment { .. } => DeferredAiWindowActionKind::AddAttachment,
+            Self::ApplyPreset { .. } => DeferredAiWindowActionKind::ApplyPreset,
         }
     }
 
@@ -735,7 +767,8 @@ impl ScriptListApp {
     ) {
         let source_action = source_action.to_string();
         let trace_id = trace_id.to_string();
-        let deferred_action_name = deferred_action.name();
+        let deferred_action_kind = deferred_action.kind();
+        let deferred_action_name = deferred_action_kind.name();
         let requires_legacy_ai_window = deferred_action.requires_legacy_ai_window();
 
         tracing::info!(
@@ -836,10 +869,7 @@ impl ScriptListApp {
                             "Failed to complete deferred chat handoff after hiding main window"
                         );
                         this.show_error_toast(
-                            DeferredAiWindowAction::failure_message(
-                                deferred_action_name,
-                                &error,
-                            ),
+                            deferred_action_kind.failure_message(&error),
                             cx,
                         );
                     });
