@@ -985,6 +985,33 @@ fn ai_capture_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_generate_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiGenerateBuiltinAction")
+            && content.contains("NewScript")
+            && content.contains("CurrentAppScript"),
+        "AI generation built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("AiGenerateBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_ai_generate_builtin(")
+            && content.contains("query_override.unwrap_or(&self.filter_text)")
+            && content.contains("action.success_detail()"),
+        "AI generation commands should delegate query handling and success details through their state"
+    );
+    assert!(
+        content.contains("normalize_generate_script_request(Some(")
+            && content.contains("normalize_generate_script_from_current_app_request(Some(query))")
+            && content.contains("open_tab_ai_chat_with_entry_intent")
+            && content.contains("open_tab_ai_acp_with_entry_intent"),
+        "AI generation state should preserve direct script and current-app intent routing"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
