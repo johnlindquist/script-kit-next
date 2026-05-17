@@ -527,6 +527,55 @@ impl AiPresetViewBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiCaptureBuiltinAction {
+    FullScreen,
+    FocusedWindow,
+    SelectedText,
+    BrowserTab,
+}
+
+impl AiCaptureBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        match command {
+            builtins::AiCommandType::SendScreenToAi => Some(Self::FullScreen),
+            builtins::AiCommandType::SendFocusedWindowToAi => Some(Self::FocusedWindow),
+            builtins::AiCommandType::SendSelectedTextToAi => Some(Self::SelectedText),
+            builtins::AiCommandType::SendBrowserTabToAi => Some(Self::BrowserTab),
+            _ => None,
+        }
+    }
+
+    fn capture_kind(self) -> crate::ai::TabAiCaptureKind {
+        match self {
+            Self::FullScreen => crate::ai::TabAiCaptureKind::FullScreen,
+            Self::FocusedWindow => crate::ai::TabAiCaptureKind::FocusedWindow,
+            Self::SelectedText => crate::ai::TabAiCaptureKind::SelectedText,
+            Self::BrowserTab => crate::ai::TabAiCaptureKind::BrowserTab,
+        }
+    }
+
+    fn prompt(self) -> &'static str {
+        match self {
+            Self::FullScreen => "Capture and analyze the full screen.",
+            Self::FocusedWindow => "Capture and analyze the focused window.",
+            Self::SelectedText => "Use the current selected text as the primary subject.",
+            Self::BrowserTab => {
+                "Use the current browser tab URL and page context as the primary subject."
+            }
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::FullScreen => "ai_send_screen_routed_to_harness",
+            Self::FocusedWindow => "ai_send_focused_window_routed_to_harness",
+            Self::SelectedText => "ai_send_selected_text_routed_to_harness",
+            Self::BrowserTab => "ai_send_browser_tab_routed_to_harness",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3099,21 +3148,15 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenToAi => {
-                        self.open_tab_ai_chat_with_capture_kind(
-                            Some("Capture and analyze the full screen.".to_string()),
-                            crate::ai::TabAiCaptureKind::FullScreen,
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "ai_send_screen_routed_to_harness")
+                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
+                            .expect("AI capture arm should only receive screen capture command");
+                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
                     }
 
                     AiCommandType::SendFocusedWindowToAi => {
-                        self.open_tab_ai_chat_with_capture_kind(
-                            Some("Capture and analyze the focused window.".to_string()),
-                            crate::ai::TabAiCaptureKind::FocusedWindow,
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "ai_send_focused_window_routed_to_harness")
+                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
+                            .expect("AI capture arm should only receive focused window command");
+                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
@@ -3133,27 +3176,15 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
-                        self.open_tab_ai_chat_with_capture_kind(
-                            Some(
-                                "Use the current selected text as the primary subject.".to_string(),
-                            ),
-                            crate::ai::TabAiCaptureKind::SelectedText,
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "ai_send_selected_text_routed_to_harness")
+                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
+                            .expect("AI capture arm should only receive selected text command");
+                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
                     }
 
                     AiCommandType::SendBrowserTabToAi => {
-                        self.open_tab_ai_chat_with_capture_kind(
-                            Some(
-                                "Use the current browser tab URL and page context \
-                                 as the primary subject."
-                                    .to_string(),
-                            ),
-                            crate::ai::TabAiCaptureKind::BrowserTab,
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "ai_send_browser_tab_routed_to_harness")
+                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
+                            .expect("AI capture arm should only receive browser tab command");
+                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
                     }
 
                     AiCommandType::CreateAiPreset => {
@@ -4562,6 +4593,20 @@ impl ScriptListApp {
                 self.execute_settings_snap_mode_builtin(snap_action, dctx, cx)
             }
         }
+    }
+
+    fn execute_ai_capture_builtin(
+        &mut self,
+        action: AiCaptureBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        self.open_tab_ai_chat_with_capture_kind(
+            Some(action.prompt().to_string()),
+            action.capture_kind(),
+            cx,
+        );
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_ai_preset_view_builtin(
