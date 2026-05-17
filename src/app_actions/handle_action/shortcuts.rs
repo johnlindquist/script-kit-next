@@ -138,8 +138,8 @@ impl ShortcutAliasRemoveAction {
 
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
-            Self::Shortcut => format!("Failed to remove shortcut: {}", error),
-            Self::Alias => format!("Failed to remove alias: {}", error),
+            Self::Shortcut => format!("Failed to remove shortcut: {error}"),
+            Self::Alias => format!("Failed to remove alias: {error}"),
         }
     }
 }
