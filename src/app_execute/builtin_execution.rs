@@ -606,6 +606,35 @@ impl UtilityCurrentAppCommandsBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MenuBarBuiltinAction {
+    Execute,
+}
+
+impl MenuBarBuiltinAction {
+    fn from_action(_action: &builtins::MenuBarActionInfo) -> Self {
+        Self::Execute
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Execute => "menu_bar_action",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Execute => "menu_bar_action_failed",
+        }
+    }
+
+    fn unsupported_detail(self) -> &'static str {
+        match self {
+            Self::Execute => "menu_bar_action_unsupported",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -2235,6 +2264,53 @@ impl ScriptListApp {
             .with_detail(detail)
     }
 
+    fn execute_menu_bar_builtin(
+        &mut self,
+        action_state: MenuBarBuiltinAction,
+        action: &builtins::MenuBarActionInfo,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            bundle_id = %action.bundle_id,
+            "Executing menu bar action"
+        );
+        #[cfg(target_os = "macos")]
+        {
+            match script_kit_gpui::menu_executor::execute_menu_action(
+                &action.bundle_id,
+                &action.menu_path,
+            ) {
+                Ok(()) => {
+                    self.close_and_reset_window(cx);
+                    Self::builtin_success(dctx, action_state.success_detail())
+                }
+                Err(e) => {
+                    let message = format!("Menu action failed: {}", e);
+                    self.show_error_toast(message.clone(), cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        action_state.failure_detail(),
+                    )
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            self.show_unsupported_platform_toast("Menu bar actions", cx);
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
+                "Menu bar actions only supported on macOS",
+                action_state.unsupported_detail(),
+            )
+        }
+    }
+
     fn dispatch_system_action(
         &mut self,
         action_type: &builtins::SystemActionType,
@@ -3396,44 +3472,8 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, "sync_to_github_dispatched")
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    bundle_id = %action.bundle_id,
-                    "Executing menu bar action"
-                );
-                #[cfg(target_os = "macos")]
-                {
-                    match script_kit_gpui::menu_executor::execute_menu_action(
-                        &action.bundle_id,
-                        &action.menu_path,
-                    ) {
-                        Ok(()) => {
-                            self.close_and_reset_window(cx);
-                            Self::builtin_success(dctx, "menu_bar_action")
-                        }
-                        Err(e) => {
-                            let message = format!("Menu action failed: {}", e);
-                            self.show_error_toast(message.clone(), cx);
-                            Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                message,
-                                "menu_bar_action_failed",
-                            )
-                        }
-                    }
-                }
-                #[cfg(not(target_os = "macos"))]
-                {
-                    self.show_unsupported_platform_toast("Menu bar actions", cx);
-                    Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
-                        "Menu bar actions only supported on macOS",
-                        "menu_bar_action_unsupported",
-                    )
-                }
+                let menu_action = MenuBarBuiltinAction::from_action(action);
+                self.execute_menu_bar_builtin(menu_action, action, dctx, cx)
             }
 
             // =========================================================================
