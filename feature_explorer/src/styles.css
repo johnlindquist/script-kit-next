@@ -115,6 +115,31 @@ h3 {
   align-items: end;
 }
 
+.viz-switcher {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.viz-switcher button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid oklch(0.94 0.008 260 / 0.1);
+  border-radius: 6px;
+  background: oklch(0.08 0.014 255 / 0.55);
+  color: oklch(0.84 0.012 260 / 0.78);
+}
+
+.viz-switcher button.active,
+.viz-switcher button:hover {
+  border-color: oklch(0.86 0.15 82 / 0.36);
+  background: oklch(0.86 0.15 82 / 0.13);
+  color: oklch(0.98 0.008 260);
+}
+
 label {
   display: grid;
   gap: 5px;
@@ -167,6 +192,16 @@ button:focus-visible,
   padding: 6px 9px;
 }
 
+.segmented.compact {
+  min-height: 30px;
+}
+
+.segmented.compact button {
+  min-width: 68px;
+  padding: 4px 7px;
+  font-size: 12px;
+}
+
 .segmented button.active,
 .segmented button:hover,
 .owner-list button:hover,
@@ -187,14 +222,37 @@ button:focus-visible,
 
 .graph-wrap {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   border-right: 1px solid oklch(0.94 0.008 260 / 0.1);
+}
+
+.mode-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-bottom: 1px solid oklch(0.94 0.008 260 / 0.08);
+  background: oklch(0.1 0.014 255 / 0.42);
+}
+
+.mode-toolbar > span {
+  color: oklch(0.9 0.145 86);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
 }
 
 svg {
   width: 100%;
   height: 100%;
+}
+
+.viz-svg {
+  display: block;
+  min-height: 0;
 }
 
 line {
@@ -318,6 +376,314 @@ li {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag-row span {
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: oklch(0.94 0.008 260 / 0.07);
+  color: oklch(0.84 0.012 260 / 0.84);
+  font-size: 12px;
+}
+
+.viz-board {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.matrix-board,
+.command-board,
+.fault-board,
+.rail-board,
+.braid-board {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.matrix-head,
+.matrix-row,
+.command-head,
+.command-row,
+.fault-head,
+.fault-row,
+.phase-head,
+.braid-row,
+.rail-row {
+  display: grid;
+  gap: 5px;
+  align-items: center;
+  min-width: 760px;
+}
+
+.matrix-head,
+.matrix-row {
+  grid-template-columns: minmax(210px, 1.4fr) repeat(8, minmax(58px, 0.5fr));
+}
+
+.command-head,
+.command-row {
+  grid-template-columns: minmax(210px, 1.35fr) repeat(14, minmax(36px, 0.25fr));
+}
+
+.fault-head,
+.fault-row {
+  grid-template-columns: 120px repeat(12, minmax(54px, 1fr));
+}
+
+.phase-head,
+.braid-row {
+  grid-template-columns: minmax(210px, 0.8fr) minmax(620px, 1fr);
+}
+
+.rail-row {
+  grid-template-columns: minmax(210px, 0.8fr) minmax(620px, 1fr);
+}
+
+.matrix-head,
+.command-head,
+.fault-head,
+.phase-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 30px;
+  padding: 0 8px;
+  background: oklch(0.125 0.013 255);
+  color: oklch(0.78 0.016 260 / 0.76);
+  font-size: 11px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.matrix-row,
+.command-row,
+.fault-row,
+.rail-row,
+.braid-row {
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 1px solid oklch(0.94 0.008 260 / 0.07);
+  border-radius: 6px;
+  background: oklch(0.94 0.008 260 / 0.035);
+  color: oklch(0.86 0.012 260 / 0.82);
+  text-align: left;
+}
+
+.matrix-row.is-selected,
+.command-row.is-selected,
+.rail-row.is-selected,
+.braid-row.is-selected,
+.fault-row button.is-selected,
+.morph-glyph.is-selected rect,
+.sonar-hit.is-selected,
+.delta-ribbon.is-selected,
+.moat-bead.is-selected {
+  border-color: oklch(0.86 0.15 82 / 0.55);
+  color: oklch(0.98 0.008 260);
+  stroke: oklch(0.86 0.15 82);
+}
+
+.matrix-row > span,
+.command-row > span,
+.rail-row > span,
+.braid-row > span {
+  display: flex;
+  gap: 7px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.matrix-row strong,
+.command-row strong,
+.rail-row strong,
+.braid-row strong {
+  color: oklch(0.9 0.145 86);
+}
+
+.matrix-row i {
+  position: relative;
+  display: block;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: oklch(0.94 0.008 260 / 0.06);
+}
+
+.matrix-row i::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill);
+  border-radius: inherit;
+  background: oklch(0.58 0.086 190 / 0.75);
+  content: "";
+}
+
+.matrix-row b {
+  position: relative;
+  display: block;
+  padding-right: 5px;
+  color: oklch(0.96 0.008 260);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
+  text-align: right;
+}
+
+.rail-row svg,
+.braid-row svg {
+  width: 100%;
+  min-height: 46px;
+}
+
+.rail-row line,
+.braid-row line {
+  stroke: oklch(0.72 0.025 250 / 0.13);
+}
+
+.rail-row rect {
+  fill: oklch(0.55 0.09 190 / 0.68);
+}
+
+.rail-row path {
+  fill: oklch(0.78 0.12 30 / 0.74);
+}
+
+.rail-row circle {
+  fill: oklch(0.46 0.055 250);
+  stroke: oklch(0.94 0.008 260 / 0.24);
+}
+
+.rail-row circle.state-loading {
+  fill: oklch(0.62 0.105 210);
+}
+
+.rail-row circle.state-warning {
+  fill: oklch(0.65 0.125 36);
+}
+
+.rail-row circle.state-active {
+  fill: oklch(0.7 0.13 145);
+}
+
+.command-row i {
+  display: block;
+  width: 14px;
+  height: 14px;
+  margin: 0 auto;
+  border: 1px solid oklch(0.94 0.008 260 / 0.13);
+  border-radius: 50%;
+  background: oklch(0.94 0.008 260 / 0.04);
+}
+
+.command-row i.filled {
+  border-color: oklch(0.86 0.15 82 / 0.68);
+  background: oklch(0.86 0.15 82 / 0.8);
+}
+
+.braid-row polyline {
+  fill: none;
+  stroke: oklch(0.63 0.085 190 / 0.72);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.fault-row > span {
+  color: oklch(0.9 0.145 86);
+  font-weight: 700;
+}
+
+.fault-row div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-height: 20px;
+}
+
+.fault-row button {
+  min-width: 30px;
+  padding: 2px 4px;
+  border: 1px solid oklch(0.94 0.008 260 / 0.1);
+  border-radius: 4px;
+  background: oklch(0.62 0.11 25 / 0.18);
+  color: oklch(0.9 0.012 260);
+  font-size: 10px;
+}
+
+.morph-lane rect,
+.moat-band rect {
+  fill: oklch(0.94 0.008 260 / 0.035);
+  stroke: oklch(0.94 0.008 260 / 0.08);
+}
+
+.morph-lane text,
+.moat-band text,
+.delta-label,
+.sonar-ring + text {
+  fill: oklch(0.78 0.016 260 / 0.76);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.morph-glyph {
+  outline: none;
+}
+
+.morph-glyph rect {
+  fill: oklch(0.42 0.075 205 / 0.78);
+  stroke: oklch(0.94 0.008 260 / 0.2);
+}
+
+.morph-glyph text {
+  fill: oklch(0.97 0.008 260);
+  font-size: 9px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.sonar-ring {
+  fill: none;
+  stroke: oklch(0.94 0.008 260 / 0.1);
+}
+
+.sonar-spoke {
+  stroke: oklch(0.72 0.025 250 / 0.06);
+}
+
+.sonar-hit {
+  fill: oklch(0.6 0.105 185 / 0.74);
+  stroke: oklch(0.94 0.008 260 / 0.14);
+  cursor: pointer;
+}
+
+.delta-label.left {
+  text-anchor: start;
+}
+
+.delta-ribbon {
+  fill: none;
+  stroke: oklch(0.58 0.105 200 / 0.28);
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+.delta-ribbon:hover,
+.delta-ribbon.is-selected {
+  stroke-opacity: 0.92;
+}
+
+.moat-bead {
+  fill: oklch(0.64 0.115 190 / 0.82);
+  stroke: oklch(0.94 0.008 260 / 0.18);
+  cursor: pointer;
 }
 
 .owner-list button {
