@@ -153,6 +153,14 @@ impl ClipboardCopyPasteHandlerAction {
 }
 
 impl ClipboardShareHandlerAction {
+    fn selection_required_message() -> &'static str {
+        "No clipboard entry selected"
+    }
+
+    fn content_unavailable_message() -> &'static str {
+        "Clipboard entry content unavailable"
+    }
+
     fn from_content_type(content_type: clipboard_history::ContentType) -> Self {
         match content_type {
             clipboard_history::ContentType::Text
@@ -463,12 +471,18 @@ impl ScriptListApp {
             }
             "clipboard_share" => {
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(
+                        ClipboardShareHandlerAction::selection_required_message(),
+                        cx,
+                    );
                     return DispatchOutcome::success();
                 };
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast("Clipboard entry content unavailable", cx);
+                    self.show_error_toast(
+                        ClipboardShareHandlerAction::content_unavailable_message(),
+                        cx,
+                    );
                     return DispatchOutcome::success();
                 };
 

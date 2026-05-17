@@ -208,8 +208,10 @@ fn clipboard_share_handler_uses_named_action_state() {
     assert!(
         content.contains("ClipboardShareHandlerAction::from_content_type(entry.content_type)")
             && content.contains("let share_result = share_action.share(content)")
-            && content.contains("share_action.success_hud().to_string()"),
-        "clipboard share handler should derive share item and HUD text from the named action"
+            && content.contains("share_action.success_hud().to_string()")
+            && content.contains("ClipboardShareHandlerAction::selection_required_message()")
+            && content.contains("ClipboardShareHandlerAction::content_unavailable_message()"),
+        "clipboard share handler should derive share item, HUD text, and guard text from the named action"
     );
     assert!(
         content.contains("ContentType::Text")
