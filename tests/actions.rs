@@ -514,6 +514,37 @@ fn scriptlet_source_handler_uses_named_action_states() {
 }
 
 #[test]
+fn scriptlet_dynamic_action_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scriptlets.rs")
+        .expect("Failed to read scriptlet action handler");
+
+    assert!(
+        content.contains("struct ScriptletDynamicHandlerAction")
+            && content.contains("enum ScriptletDynamicExecutionResult")
+            && content.contains("Success")
+            && content.contains("Failed(String)")
+            && content.contains("LaunchFailed(String)"),
+        "scriptlet dynamic actions should be driven by named action and execution-result states"
+    );
+    assert!(
+        content.contains("ScriptletDynamicHandlerAction::from_action_id(action_id)")
+            && content.contains("action_id.strip_prefix(\"scriptlet_action:\")")
+            && content.contains("dynamic_action.command()")
+            && content.contains("ScriptletDynamicExecutionResult::from_exec_result")
+            && content.contains("execution_result.success_hud(&action.name)")
+            && content.contains("execution_result.error_toast()"),
+        "scriptlet dynamic action parsing and feedback should derive from named states"
+    );
+    assert!(
+        content.contains("Executed: {action_name}")
+            && content.contains("Failed to execute action: {message}")
+            && content.contains("Unknown error")
+            && content.contains("Scriptlet action not found"),
+        "scriptlet dynamic action states should preserve user-facing success and failure copy"
+    );
+}
+
+#[test]
 fn script_source_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
         .expect("Failed to read script action handler");
