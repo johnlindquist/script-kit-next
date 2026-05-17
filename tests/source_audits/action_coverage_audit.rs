@@ -1372,6 +1372,7 @@ fn is_destructive_action_catches_all_known_patterns() {
         "delete_",
         "_delete",
         "_trash",
+        "force_quit_app",
         "reset_ranking",
         "clear_conversation",
     ];
@@ -1383,4 +1384,20 @@ fn is_destructive_action_catches_all_known_patterns() {
             pattern
         );
     }
+}
+
+#[test]
+fn actions_dialog_state_uses_shared_destructive_detection() {
+    let prompt_handler = read("src/prompt_handler/mod.rs");
+    let actions_mod = read("src/actions/mod.rs");
+
+    assert!(
+        prompt_handler.contains("\"visibleActions\"")
+            && prompt_handler.contains("\"destructive\": crate::actions::is_destructive_action(action)"),
+        "getState actionsDialog.visibleActions must report the same destructive status used by the renderer"
+    );
+    assert!(
+        actions_mod.contains("pub(crate) use dialog::is_destructive_action;"),
+        "shared destructive detection should be available to state receipts"
+    );
 }

@@ -45,6 +45,9 @@ pub use builders::{
     FileSearchSortMode, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
 };
 pub use command_bar::{CommandBar, CommandBarConfig};
+#[allow(unused_imports)]
+// Used by the binary target through include!()-ed prompt_handler code.
+pub(crate) use dialog::is_destructive_action;
 pub(crate) use dialog::matching_action_id_for_keystroke;
 #[allow(unused_imports)] // Used by the binary target through include!()-ed app_impl code.
 pub(crate) use dialog::matching_filtered_action_id_for_keystroke;
