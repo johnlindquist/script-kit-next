@@ -6,6 +6,7 @@
 
 const STDIN_COMMANDS: &str = include_str!("../src/stdin_commands/mod.rs");
 const BUILTIN_EXECUTION: &str = include_str!("../src/app_execute/builtin_execution.rs");
+const DICTATION_RUNTIME: &str = include_str!("../src/dictation/runtime.rs");
 const APP_RUN_SETUP: &str = include_str!("../src/main_entry/app_run_setup.rs");
 const RUNTIME_STDIN: &str = include_str!("../src/main_entry/runtime_stdin.rs");
 const RUNTIME_STDIN_MATCH_TAIL: &str =
@@ -112,4 +113,28 @@ fn push_dictation_result_does_not_log_transcript_contents() {
             "{name} must not log transcript content; cloning for helper calls should stay outside tracing fields"
         );
     }
+}
+
+#[test]
+fn dictation_delivery_records_redacted_receipt_for_devtools() {
+    assert!(
+        DICTATION_RUNTIME.contains("static LAST_DELIVERY_RECEIPT")
+            && DICTATION_RUNTIME.contains("pub fn record_delivery_receipt(")
+            && DICTATION_RUNTIME.contains("pub fn last_delivery_receipt()")
+            && DICTATION_RUNTIME.contains("pub fn redacted_transcript_fingerprint("),
+        "dictation runtime must expose a redacted last-delivery receipt for agent-facing DevTools"
+    );
+    assert!(
+        DICTATION_RUNTIME.contains("\"transcriptLen\"")
+            && DICTATION_RUNTIME.contains("\"transcriptFingerprint\"")
+            && DICTATION_RUNTIME.contains("\"redacted\": true")
+            && !DICTATION_RUNTIME.contains("\"transcript\": transcript")
+            && !DICTATION_RUNTIME.contains("\"transcriptText\""),
+        "delivery receipt must expose only length/fingerprint metadata, never raw transcript text"
+    );
+    assert!(
+        BUILTIN_EXECUTION.contains("crate::dictation::record_delivery_receipt(")
+            && BUILTIN_EXECUTION.contains("DictationDestination::FrontmostApp"),
+        "both internal and frontmost-app delivery paths must write the receipt at the delivery boundary"
+    );
 }

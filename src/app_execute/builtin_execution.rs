@@ -1535,7 +1535,11 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn execute_builtin(&mut self, entry: &builtins::BuiltInEntry, cx: &mut Context<Self>) {
+    pub(crate) fn execute_builtin(
+        &mut self,
+        entry: &builtins::BuiltInEntry,
+        cx: &mut Context<Self>,
+    ) {
         self.execute_builtin_with_query(entry, None, cx);
     }
 
@@ -1680,10 +1684,18 @@ impl ScriptListApp {
         self.hovered_index = None;
         self.opened_from_main_menu = true;
         if expanded {
-            self.set_main_window_mode_state_only(MainWindowMode::Full, cx, "open_builtin_filterable_view");
+            self.set_main_window_mode_state_only(
+                MainWindowMode::Full,
+                cx,
+                "open_builtin_filterable_view",
+            );
             resize_to_view_sync(ViewType::ScriptList, 0);
         } else {
-            self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_builtin_filterable_view");
+            self.set_main_window_mode_state_only(
+                MainWindowMode::Mini,
+                cx,
+                "open_builtin_filterable_view",
+            );
             resize_to_view_sync(ViewType::MiniMainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
@@ -1808,10 +1820,18 @@ impl ScriptListApp {
         self.hovered_index = None;
         self.opened_from_main_menu = true;
         if expanded {
-            self.set_main_window_mode_state_only(MainWindowMode::Full, cx, "open_builtin_filterable_view_with_filter");
+            self.set_main_window_mode_state_only(
+                MainWindowMode::Full,
+                cx,
+                "open_builtin_filterable_view_with_filter",
+            );
             resize_to_view_sync(ViewType::ScriptList, 0);
         } else {
-            self.set_main_window_mode_state_only(MainWindowMode::Mini, cx, "open_builtin_filterable_view_with_filter");
+            self.set_main_window_mode_state_only(
+                MainWindowMode::Mini,
+                cx,
+                "open_builtin_filterable_view_with_filter",
+            );
             resize_to_view_sync(ViewType::MiniMainWindow, 0);
         }
         self.pending_focus = Some(FocusTarget::MainFilter);
@@ -3060,10 +3080,8 @@ impl ScriptListApp {
                                 Self::builtin_success(dctx, "allow_accessibility")
                             }
                             Err(error) => {
-                                let message = format!(
-                                    "Failed to open Permission Assistant: {}",
-                                    error
-                                );
+                                let message =
+                                    format!("Failed to open Permission Assistant: {}", error);
                                 self.show_error_toast(message.clone(), cx);
                                 Self::builtin_error(
                                     dctx,
@@ -3087,10 +3105,8 @@ impl ScriptListApp {
                                 Self::builtin_success(dctx, "allow_screen_recording")
                             }
                             Err(error) => {
-                                let message = format!(
-                                    "Failed to open Permission Assistant: {}",
-                                    error
-                                );
+                                let message =
+                                    format!("Failed to open Permission Assistant: {}", error);
                                 self.show_error_toast(message.clone(), cx);
                                 Self::builtin_error(
                                     dctx,
@@ -4073,10 +4089,9 @@ impl ScriptListApp {
                                 &raw_query_owned,
                                 query_override,
                             );
-                        let effective_query_for_router = (!effective_query.is_empty())
-                            .then_some(effective_query.as_str());
-                        let effective_query_safe =
-                            crate::logging::log_user_value(&effective_query);
+                        let effective_query_for_router =
+                            (!effective_query.is_empty()).then_some(effective_query.as_str());
+                        let effective_query_safe = crate::logging::log_user_value(&effective_query);
 
                         tracing::info!(
                             target: "script_kit::do_in_trace",
@@ -4102,39 +4117,39 @@ impl ScriptListApp {
                                 let (entries, snapshot_receipt) =
                                     snapshot.into_entries_with_receipt();
 
-                                    let (action, intent_receipt) =
+                                let (action, intent_receipt) =
                                         crate::menu_bar::current_app_commands::resolve_do_in_current_app_intent(
                                             &entries,
                                             effective_query_for_router,
                                         );
 
-                                    tracing::info!(
-                                        target: "script_kit::do_in_trace",
-                                        event = "DO_IN_TRACE execution.resolved",
-                                        trace_id = %dctx.trace_id,
-                                        app_name = %snapshot_receipt.app_name,
-                                        bundle_id = %snapshot_receipt.bundle_id,
-                                        leaf_entry_count = snapshot_receipt.leaf_entry_count,
-                                        query_preview = %effective_query_safe,
-                                        raw_query_preview = %raw_query_safe,
-                                        filtered_entries = intent_receipt.filtered_entries,
-                                        exact_matches = intent_receipt.exact_matches,
-                                        resolved_action = intent_receipt.action,
-                                        "DO_IN_TRACE execution.resolved"
-                                    );
-                                    tracing::info!(
-                                        trace_id = %dctx.trace_id,
-                                        app_name = %snapshot_receipt.app_name,
-                                        bundle_id = %snapshot_receipt.bundle_id,
-                                        leaf_entry_count = snapshot_receipt.leaf_entry_count,
-                                        query = %effective_query,
-                                        filtered_entries = intent_receipt.filtered_entries,
-                                        exact_matches = intent_receipt.exact_matches,
-                                        resolved_action = intent_receipt.action,
-                                        "do_in_current_app.resolved"
-                                    );
+                                tracing::info!(
+                                    target: "script_kit::do_in_trace",
+                                    event = "DO_IN_TRACE execution.resolved",
+                                    trace_id = %dctx.trace_id,
+                                    app_name = %snapshot_receipt.app_name,
+                                    bundle_id = %snapshot_receipt.bundle_id,
+                                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                                    query_preview = %effective_query_safe,
+                                    raw_query_preview = %raw_query_safe,
+                                    filtered_entries = intent_receipt.filtered_entries,
+                                    exact_matches = intent_receipt.exact_matches,
+                                    resolved_action = intent_receipt.action,
+                                    "DO_IN_TRACE execution.resolved"
+                                );
+                                tracing::info!(
+                                    trace_id = %dctx.trace_id,
+                                    app_name = %snapshot_receipt.app_name,
+                                    bundle_id = %snapshot_receipt.bundle_id,
+                                    leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                                    query = %effective_query,
+                                    filtered_entries = intent_receipt.filtered_entries,
+                                    exact_matches = intent_receipt.exact_matches,
+                                    resolved_action = intent_receipt.action,
+                                    "do_in_current_app.resolved"
+                                );
 
-                                    match action {
+                                match action {
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
                                             tracing::info!(
                                                 target: "script_kit::do_in_trace",
@@ -5068,10 +5083,7 @@ impl ScriptListApp {
                     },
                     cx,
                 );
-                self.schedule_dictation_overlay_close(
-                    cx,
-                    std::time::Duration::from_millis(800),
-                );
+                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
                 self.dispatch_window_event(
                     crate::window_orchestrator::WindowEvent::AbortDictation,
                     cx,
@@ -5167,6 +5179,7 @@ impl ScriptListApp {
                     entry_id = %history_entry.id,
                     target = %history_entry.target,
                 );
+                let history_entry_id = history_entry.id.clone();
                 // Route delivery based on the target that was captured at
                 // session start, not the current UI state.
                 let delivered_internally = match target {
@@ -5258,6 +5271,14 @@ impl ScriptListApp {
                         ?destination,
                         transcript_len = transcript.len(),
                         "Internal dictation delivery complete"
+                    );
+                    let _ = crate::dictation::record_delivery_receipt(
+                        &transcript,
+                        audio_duration,
+                        target,
+                        destination,
+                        true,
+                        &history_entry_id,
                     );
 
                     let _ = crate::dictation::close_dictation_overlay(cx);
@@ -5411,6 +5432,14 @@ impl ScriptListApp {
                         if this.update(cx, |this, cx| {
                             match paste_result {
                                 Ok(()) => {
+                                    let _ = crate::dictation::record_delivery_receipt(
+                                        &transcript,
+                                        audio_duration,
+                                        target,
+                                        crate::dictation::DictationDestination::FrontmostApp,
+                                        false,
+                                        &history_entry_id,
+                                    );
                                     tracing::info!(
                                         category = "DICTATION",
                                         destination = ?crate::dictation::DictationDestination::FrontmostApp,

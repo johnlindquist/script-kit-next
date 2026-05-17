@@ -28,10 +28,11 @@ pub use history::{
     DictationHistorySearchHit, RootDictationHistorySearchHit, RootDictationHistorySectionOptions,
 };
 pub use runtime::{
-    abort_dictation, can_cycle_dictation_target, current_dictation_phase, cycle_dictation_target,
-    dictation_elapsed, get_dictation_target, is_dictation_recording, maybe_unload_transcriber,
-    set_dictation_target_cycle, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
-    transcribe_captured_audio,
+    abort_dictation, automation_state, can_cycle_dictation_target, current_dictation_phase,
+    cycle_dictation_target, dictation_elapsed, get_dictation_target, is_dictation_recording,
+    last_delivery_receipt, maybe_unload_transcriber, record_delivery_receipt,
+    redacted_transcript_fingerprint, set_dictation_target_cycle, set_overlay_phase,
+    snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
 };
 pub use setup::{
     build_dictation_setup_state, DictationHotkeyStatus, DictationMicrophonePermissionStatus,
