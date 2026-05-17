@@ -7,6 +7,9 @@
 enum FavoritesBrowseHandlerAction {
     EditScript,
     CopyScriptUrl,
+    MoveUp,
+    MoveDown,
+    Remove,
 }
 
 impl FavoritesBrowseHandlerAction {
@@ -14,6 +17,9 @@ impl FavoritesBrowseHandlerAction {
         match action_id {
             "favorites_edit_script" => Some(Self::EditScript),
             "favorites_copy_script_url" => Some(Self::CopyScriptUrl),
+            "favorites_move_up" => Some(Self::MoveUp),
+            "favorites_move_down" => Some(Self::MoveDown),
+            "favorites_remove" => Some(Self::Remove),
             _ => None,
         }
     }
@@ -22,13 +28,40 @@ impl FavoritesBrowseHandlerAction {
         match self {
             Self::EditScript => "Select a favorite to edit.",
             Self::CopyScriptUrl => "Select a favorite to copy its URL.",
+            Self::MoveUp | Self::MoveDown | Self::Remove => "Select a favorite.",
         }
     }
 
     fn copied_url_hud(self, url: &str) -> String {
         match self {
             Self::CopyScriptUrl => format!("Copied: {url}"),
-            Self::EditScript => url.to_string(),
+            Self::EditScript | Self::MoveUp | Self::MoveDown | Self::Remove => url.to_string(),
+        }
+    }
+
+    fn apply_list_mutation(
+        self,
+        app: &mut ScriptListApp,
+        cx: &mut Context<ScriptListApp>,
+    ) -> Option<Result<String, String>> {
+        match self {
+            Self::MoveUp => Some(app.move_selected_favorite_up(cx)),
+            Self::MoveDown => Some(app.move_selected_favorite_down(cx)),
+            Self::Remove => Some(app.remove_selected_favorite(cx)),
+            Self::EditScript | Self::CopyScriptUrl => None,
+        }
+    }
+
+    fn mutation_outcome(self, message_result: Result<String, String>) -> DispatchOutcome {
+        match message_result {
+            Ok(message) => {
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message = Some(message);
+                outcome
+            }
+            Err(message) => {
+                DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
+            }
         }
     }
 }
@@ -121,36 +154,16 @@ impl ScriptListApp {
                 );
                 DispatchOutcome::success()
             }
-            "favorites_move_up" => self
-                .move_selected_favorite_up(cx)
-                .map(|message| {
-                    let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some(message);
-                    outcome
-                })
-                .unwrap_or_else(|message| {
-                    DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
-                }),
-            "favorites_move_down" => self
-                .move_selected_favorite_down(cx)
-                .map(|message| {
-                    let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some(message);
-                    outcome
-                })
-                .unwrap_or_else(|message| {
-                    DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
-                }),
-            "favorites_remove" => self
-                .remove_selected_favorite(cx)
-                .map(|message| {
-                    let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some(message);
-                    outcome
-                })
-                .unwrap_or_else(|message| {
-                    DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
-                }),
+            "favorites_move_up" | "favorites_move_down" | "favorites_remove" => {
+                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                let Some(message_result) = favorites_action.apply_list_mutation(self, cx) else {
+                    return DispatchOutcome::not_handled();
+                };
+                favorites_action.mutation_outcome(message_result)
+            }
             _ => DispatchOutcome::not_handled(),
         }
     }
