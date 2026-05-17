@@ -167,6 +167,28 @@ fn clipboard_pin_handler_uses_named_action_states() {
 }
 
 #[test]
+fn clipboard_copy_paste_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardCopyPasteHandlerAction")
+            && content.contains("PasteAndClose")
+            && content.contains("CopyOnly")
+            && content.contains("PasteKeepOpen"),
+        "clipboard paste/copy handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("ClipboardCopyPasteHandlerAction::from_action_id(action_id)")
+            && content.contains("copy_paste_action.should_hide_window()")
+            && content.contains("copy_paste_action.should_simulate_paste()")
+            && content.contains("copy_paste_action.success_hud()")
+            && content.contains("copy_paste_action.failure_prefix()"),
+        "clipboard paste/copy handler should derive close, paste, hud, and error behavior from named states"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

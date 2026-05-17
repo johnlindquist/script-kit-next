@@ -390,12 +390,13 @@ fn clipboard_copy_shows_hud_on_success() {
     let content = handle_action_content();
 
     let copy_pos = content
-        .find("\"clipboard_copy\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_copy handler");
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
     assert!(
-        block.contains("Copied to clipboard"),
+        block.contains("copy_paste_action.success_hud()")
+            && content.contains("Copied to clipboard"),
         "clipboard_copy should show 'Copied to clipboard' HUD"
     );
     assert!(
@@ -409,12 +410,13 @@ fn clipboard_copy_shows_error_toast_on_failure() {
     let content = handle_action_content();
 
     let copy_pos = content
-        .find("\"clipboard_copy\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_copy handler");
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast(format!(\"Failed to copy: {}\", e), cx)"),
+        block.contains("copy_paste_action.failure_prefix()")
+            && content.contains("Self::CopyOnly => \"Failed to copy\""),
         "clipboard_copy error should use show_error_toast"
     );
 }
@@ -428,12 +430,13 @@ fn clipboard_paste_keep_open_spawns_paste_simulation_on_success() {
     let content = handle_action_content();
 
     let paste_pos = content
-        .find("\"clipboard_paste_keep_open\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste_keep_open handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
     assert!(
-        block.contains("spawn_clipboard_paste_simulation()"),
+        block.contains("copy_paste_action.should_simulate_paste()")
+            && block.contains("spawn_clipboard_paste_simulation()"),
         "clipboard_paste_keep_open should call spawn_clipboard_paste_simulation on success"
     );
 }
@@ -443,23 +446,19 @@ fn clipboard_paste_keep_open_does_not_hide_window() {
     let content = handle_action_content();
 
     let paste_pos = content
-        .find("\"clipboard_paste_keep_open\"")
+        .find("fn should_hide_window")
         .expect("Expected clipboard_paste_keep_open handler");
     // Use a tight window (just this handler) to avoid bleeding
     // into subsequent handlers that do call hide_main_and_reset.
     let end = content[paste_pos..]
-        .find("\"clipboard_quick_look\"")
+        .find("fn should_simulate_paste")
         .map(|offset| paste_pos + offset)
         .unwrap_or_else(|| content.len().min(paste_pos + 1000));
     let block = &content[paste_pos..end];
 
-    // Check that no non-comment line calls hide_main_and_reset
-    let has_call = block.lines().any(|line| {
-        let trimmed = line.trim();
-        !trimmed.starts_with("//") && trimmed.contains("hide_main_and_reset")
-    });
     assert!(
-        !has_call,
+        block.contains("matches!(self, Self::PasteAndClose)")
+            && !block.contains("Self::PasteKeepOpen"),
         "clipboard_paste_keep_open should NOT hide the main window"
     );
 }
@@ -915,12 +914,13 @@ fn clipboard_paste_hides_window_and_spawns_paste_simulation() {
     let content = handle_action_content();
 
     let paste_pos = content
-        .find("\"clipboard_paste\"")
+        .find("\"clipboard_paste\" | \"clipboard_copy\" | \"clipboard_paste_keep_open\"")
         .expect("Expected clipboard_paste handler");
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
     assert!(
-        block.contains("hide_main_and_reset"),
+        block.contains("copy_paste_action.should_hide_window()")
+            && block.contains("hide_main_and_reset"),
         "clipboard_paste should hide the main window before pasting"
     );
     assert!(
