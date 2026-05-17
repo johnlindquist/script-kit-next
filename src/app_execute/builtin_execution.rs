@@ -1332,20 +1332,33 @@ struct KitStoreUpdateAllResult {
     failed: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStoreUpdateAllOutcome {
+    Complete,
+    PartialFailure,
+}
+
 impl KitStoreUpdateAllResult {
+    fn outcome(self) -> KitStoreUpdateAllOutcome {
+        match self.failed {
+            0 => KitStoreUpdateAllOutcome::Complete,
+            _ => KitStoreUpdateAllOutcome::PartialFailure,
+        }
+    }
+
     fn message(self) -> String {
-        if self.failed == 0 {
-            let updated = self.updated;
-            format!("Updated {updated} kit(s) successfully")
-        } else {
-            let updated = self.updated;
-            let failed = self.failed;
-            format!("Updated {updated} kit(s), {failed} failed")
+        let updated = self.updated;
+        match self.outcome() {
+            KitStoreUpdateAllOutcome::Complete => format!("Updated {updated} kit(s) successfully"),
+            KitStoreUpdateAllOutcome::PartialFailure => {
+                let failed = self.failed;
+                format!("Updated {updated} kit(s), {failed} failed")
+            }
         }
     }
 
     fn is_failure(self) -> bool {
-        self.failed > 0
+        matches!(self.outcome(), KitStoreUpdateAllOutcome::PartialFailure)
     }
 }
 
