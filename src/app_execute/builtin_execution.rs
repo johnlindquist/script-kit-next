@@ -433,6 +433,37 @@ impl ScriptCommandBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FrecencyCommandBuiltinAction {
+    ClearSuggested,
+}
+
+impl FrecencyCommandBuiltinAction {
+    fn from_command(command: builtins::FrecencyCommandType) -> Self {
+        match command {
+            builtins::FrecencyCommandType::ClearSuggested => Self::ClearSuggested,
+        }
+    }
+
+    fn hud_text(self) -> &'static str {
+        match self {
+            Self::ClearSuggested => "Suggested items cleared",
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::ClearSuggested => "clear_suggested",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::ClearSuggested => "clear_suggested_failed",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3387,39 +3418,8 @@ impl ScriptListApp {
                     "Executing frecency command"
                 );
 
-                use builtins::FrecencyCommandType;
-
-                match cmd_type {
-                    FrecencyCommandType::ClearSuggested => {
-                        self.frecency_store.clear();
-                        if let Err(e) = self.frecency_store.save() {
-                            let message = format!("Failed to clear suggested: {}", e);
-                            self.show_error_toast(message.clone(), cx);
-                            cx.notify();
-                            Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                message,
-                                "clear_suggested_failed",
-                            )
-                        } else {
-                            tracing::info!(
-                                trace_id = %dctx.trace_id,
-                                "Cleared all suggested items"
-                            );
-                            self.invalidate_grouped_cache();
-                            self.reset_to_script_list(cx);
-                            resize_to_view_sync(ViewType::ScriptList, 0);
-                            self.show_hud(
-                                "Suggested items cleared".to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
-                            cx.notify();
-                            Self::builtin_success(dctx, "clear_suggested")
-                        }
-                    }
-                }
+                let frecency_action = FrecencyCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_frecency_command_builtin(frecency_action, dctx, cx)
             }
 
             // =========================================================================
@@ -4660,6 +4660,37 @@ impl ScriptListApp {
     ) -> crate::action_helpers::DispatchOutcome {
         self.show_naming_dialog(action.naming_target(), cx);
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_frecency_command_builtin(
+        &mut self,
+        action: FrecencyCommandBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        self.frecency_store.clear();
+        if let Err(e) = self.frecency_store.save() {
+            let message = format!("Failed to clear suggested: {}", e);
+            self.show_error_toast(message.clone(), cx);
+            cx.notify();
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_ACTION_FAILED,
+                message,
+                action.failure_detail(),
+            )
+        } else {
+            tracing::info!(
+                trace_id = %dctx.trace_id,
+                "Cleared all suggested items"
+            );
+            self.invalidate_grouped_cache();
+            self.reset_to_script_list(cx);
+            resize_to_view_sync(ViewType::ScriptList, 0);
+            self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+            cx.notify();
+            Self::builtin_success(dctx, action.success_detail())
+        }
     }
 
     fn execute_notes_command_builtin(

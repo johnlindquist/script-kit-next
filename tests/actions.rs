@@ -874,6 +874,31 @@ fn script_command_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn frecency_command_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum FrecencyCommandBuiltinAction") && content.contains("ClearSuggested"),
+        "Frecency built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("FrecencyCommandBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_frecency_command_builtin(")
+            && content.contains("action.hud_text()")
+            && content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()"),
+        "Frecency command routing and dispatch details should derive from the named state"
+    );
+    assert!(
+        content.contains("self.frecency_store.clear()")
+            && content.contains("self.invalidate_grouped_cache()")
+            && content.contains("resize_to_view_sync(ViewType::ScriptList, 0)"),
+        "Clear Suggested should keep clearing frecency, invalidating grouped cache, and resizing the script list"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
