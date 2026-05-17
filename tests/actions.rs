@@ -1920,6 +1920,26 @@ fn script_context_ranking_actions_use_named_plan_states() {
 }
 
 #[test]
+fn script_ranking_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+        .expect("Failed to read script action handler");
+
+    assert!(
+        content.contains("enum ScriptRankingHandlerAction")
+            && content.contains("ResetRanking"),
+        "reset ranking handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("ScriptRankingHandlerAction::from_action_id(action_id)")
+            && content.contains("ranking_action.reset_hud(&script_info.name)")
+            && content.contains("ranking_action.no_ranking_message()")
+            && content.contains("Ranking reset for \\\"{script_name}\\\"")
+            && content.contains("Item has no ranking to reset"),
+        "reset ranking handler should derive success and no-ranking feedback from the named state"
+    );
+}
+
+#[test]
 fn acp_agent_selection_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

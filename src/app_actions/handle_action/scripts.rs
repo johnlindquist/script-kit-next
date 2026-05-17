@@ -24,6 +24,11 @@ enum ScriptManagementHandlerAction {
     ReloadScripts,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptRankingHandlerAction {
+    ResetRanking,
+}
+
 impl ScriptSourceHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -124,6 +129,27 @@ impl SettingsEditorLaunchPlan {
                 .arg(config_file)
                 .spawn(),
             Self::GenericFileOnly => Command::new(editor).arg(config_file).spawn(),
+        }
+    }
+}
+
+impl ScriptRankingHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "reset_ranking" => Some(Self::ResetRanking),
+            _ => None,
+        }
+    }
+
+    fn reset_hud(self, script_name: &str) -> String {
+        match self {
+            Self::ResetRanking => format!("Ranking reset for \"{script_name}\""),
+        }
+    }
+
+    fn no_ranking_message(self) -> &'static str {
+        match self {
+            Self::ResetRanking => "Item has no ranking to reset",
         }
     }
 }
@@ -521,6 +547,10 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "reset_ranking" => {
+                let Some(ranking_action) = ScriptRankingHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "reset ranking action");
                 // Get the frecency path from the focused script info
                 if let Some(script_info) = self.get_focused_script_info() {
@@ -539,14 +569,14 @@ impl ScriptListApp {
                             self.refresh_scripts(cx);
                             tracing::info!(category = "UI", name = %script_info.name, "reset ranking");
                             self.show_hud(
-                                format!("Ranking reset for \"{}\"", script_info.name),
+                                ranking_action.reset_hud(&script_info.name),
                                 Some(HUD_MEDIUM_MS),
                                 cx,
                             );
                         } else {
                             tracing::info!(category = "UI", frecency_path = %frecency_path, "no frecency entry found");
                             self.show_hud(
-                                "Item has no ranking to reset".to_string(),
+                                ranking_action.no_ranking_message().to_string(),
                                 Some(HUD_MEDIUM_MS),
                                 cx,
                             );
@@ -554,7 +584,7 @@ impl ScriptListApp {
                     } else {
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Item has no ranking to reset",
+                            ranking_action.no_ranking_message(),
                         );
                     }
                 } else {

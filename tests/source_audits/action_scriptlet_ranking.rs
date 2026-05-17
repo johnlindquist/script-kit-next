@@ -1,6 +1,18 @@
 // Regression tests for scriptlet ranking and scriptlet action handlers:
 // reset_ranking, scriptlet_action:* prefix.
 
+fn reset_ranking_handler_block(content: &str) -> &str {
+    let handler_pos = content
+        .find("fn handle_script_action")
+        .expect("Expected script action handler");
+    let reset_pos = content[handler_pos..]
+        .find("\"reset_ranking\" =>")
+        .map(|pos| handler_pos + pos)
+        .expect("Expected reset_ranking action handler");
+
+    &content[reset_pos..content.len().min(reset_pos + 3000)]
+}
+
 // ---------------------------------------------------------------------------
 // reset_ranking — success path
 // ---------------------------------------------------------------------------
@@ -9,10 +21,7 @@
 fn reset_ranking_removes_frecency_entry_and_refreshes() {
     let content = super::read_all_handle_action_sources();
 
-    let reset_pos = content
-        .find("\"reset_ranking\"")
-        .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
+    let block = reset_ranking_handler_block(&content);
 
     assert!(
         block.contains("frecency_store.remove("),
@@ -36,14 +45,11 @@ fn reset_ranking_removes_frecency_entry_and_refreshes() {
 fn reset_ranking_shows_hud_with_item_name() {
     let content = super::read_all_handle_action_sources();
 
-    let reset_pos = content
-        .find("\"reset_ranking\"")
-        .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
+    let block = reset_ranking_handler_block(&content);
 
     assert!(
-        block.contains("Ranking reset for"),
-        "reset_ranking should show HUD with item name on success"
+        block.contains("ranking_action.reset_hud(&script_info.name)"),
+        "reset_ranking should show HUD with item name through named action state"
     );
     assert!(
         block.contains("HUD_MEDIUM_MS"),
@@ -59,14 +65,11 @@ fn reset_ranking_shows_hud_with_item_name() {
 fn reset_ranking_shows_feedback_when_no_frecency_entry() {
     let content = super::read_all_handle_action_sources();
 
-    let reset_pos = content
-        .find("\"reset_ranking\"")
-        .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
+    let block = reset_ranking_handler_block(&content);
 
     assert!(
-        block.contains("Item has no ranking to reset"),
-        "reset_ranking should show feedback when item has no frecency entry"
+        block.contains("ranking_action.no_ranking_message().to_string()"),
+        "reset_ranking should show feedback through named action state when item has no frecency entry"
     );
 }
 
@@ -74,10 +77,7 @@ fn reset_ranking_shows_feedback_when_no_frecency_entry() {
 fn reset_ranking_shows_error_when_no_selection() {
     let content = super::read_all_handle_action_sources();
 
-    let reset_pos = content
-        .find("\"reset_ranking\"")
-        .expect("Expected reset_ranking action handler");
-    let block = &content[reset_pos..content.len().min(reset_pos + 3000)];
+    let block = reset_ranking_handler_block(&content);
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
