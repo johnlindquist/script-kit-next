@@ -183,7 +183,7 @@ pub fn normalize_builtin_labeled_request<'a>(
 }
 
 /// The human-readable label used in the main command list.
-pub const GENERATE_SCRIPT_WITH_AI_LABEL: &str = "Generate Script with AI";
+pub const GENERATE_SCRIPT_WITH_AI_LABEL: &str = "Generate Script with Agent Chat";
 
 /// Returns `None` when the raw input is empty, whitespace-only, or matches the
 /// built-in label (case-insensitive). Otherwise returns the trimmed input.
@@ -1821,7 +1821,7 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // normalize_generate_script_request (Generate Script with AI)
+    // normalize_generate_script_request (Generate Script with Agent Chat)
     // -----------------------------------------------------------------------
 
     #[test]
