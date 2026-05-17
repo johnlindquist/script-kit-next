@@ -1329,6 +1329,20 @@ impl AiPresetViewBuiltinAction {
             Self::Search => "ai_search_presets",
         }
     }
+
+    fn log_action(self) -> &'static str {
+        match self {
+            Self::Create => "create_ai_preset",
+            Self::Search => "search_ai_presets",
+        }
+    }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Create => "Opening create AI preset form",
+            Self::Search => "Opening AI presets search",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4710,22 +4724,12 @@ impl ScriptListApp {
                 self.execute_ai_unavailable_builtin(unavailable_action, dctx, cx)
             }
             AiCommandBuiltinAction::PresetView(preset_action) => {
-                match preset_action {
-                    AiPresetViewBuiltinAction::Create => {
-                        tracing::info!(
-                            action = "create_ai_preset",
-                            trace_id = %dctx.trace_id,
-                            "Opening create AI preset form"
-                        );
-                    }
-                    AiPresetViewBuiltinAction::Search => {
-                        tracing::info!(
-                            action = "search_ai_presets",
-                            trace_id = %dctx.trace_id,
-                            "Opening AI presets search"
-                        );
-                    }
-                }
+                tracing::info!(
+                    action = preset_action.log_action(),
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    preset_action.opening_message()
+                );
                 self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
             }
             AiCommandBuiltinAction::PresetFile(file_action) => {

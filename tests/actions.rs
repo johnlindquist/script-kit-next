@@ -1586,17 +1586,26 @@ fn ai_preset_view_builtin_uses_named_action_states() {
         "AI preset view built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("AiPresetViewBuiltinAction::from_command(*cmd_type)")
+        content.contains("AiPresetViewBuiltinAction::from_command(command)")
             && content.contains("fn execute_ai_preset_view_builtin(")
             && content.contains("AiPresetViewBuiltinAction::Create")
-            && content.contains("AiPresetViewBuiltinAction::Search"),
-        "AI preset view command routing should delegate through the named state"
+            && content.contains("AiPresetViewBuiltinAction::Search")
+            && content.contains("preset_action.log_action()")
+            && content.contains("preset_action.opening_message()"),
+        "AI preset view command routing and opening copy should delegate through the named state"
     );
     assert!(
         content.contains("AppView::CreateAiPresetView")
             && content.contains("AppView::SearchAiPresetsView")
             && content.contains("Self::builtin_success(dctx, action.success_detail())"),
         "AI preset view state should own the target views and success details"
+    );
+    assert!(
+        content.contains("\"create_ai_preset\"")
+            && content.contains("\"search_ai_presets\"")
+            && content.contains("\"Opening create AI preset form\"")
+            && content.contains("\"Opening AI presets search\""),
+        "AI preset view state should preserve current opening log action and message copy"
     );
 }
 
