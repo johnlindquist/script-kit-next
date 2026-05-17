@@ -254,53 +254,61 @@ fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
 fn system_settings_builtins_name_the_settings_pane_they_open() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
 
-    for (id, expected_name, expected_action, expected_description) in [
+    for (id, expected_name, expected_action, expected_footer, expected_description) in [
         (
             "builtin/system-preferences",
             "macOS System Settings",
             "Open macOS System Settings",
+            "macOS Settings",
             "Open macOS System Settings",
         ),
         (
             "builtin/privacy-settings",
             "Privacy & Security Settings",
-            "Open Privacy Settings",
+            "Open Privacy & Security Settings",
+            "Privacy & Security",
             "Open Privacy & Security settings",
         ),
         (
             "builtin/display-settings",
-            "Display Settings",
-            "Open Display Settings",
-            "Open Display settings",
+            "Displays Settings",
+            "Open Displays Settings",
+            "Displays",
+            "Open Displays settings",
         ),
         (
             "builtin/sound-settings",
             "Sound Settings",
             "Open Sound Settings",
+            "Sound",
             "Open Sound settings",
         ),
         (
             "builtin/network-settings",
             "Network Settings",
             "Open Network Settings",
+            "Network",
             "Open Network settings",
         ),
         (
             "builtin/keyboard-settings",
             "Keyboard Settings",
             "Open Keyboard Settings",
+            "Keyboard",
             "Open Keyboard settings",
         ),
         (
             "builtin/bluetooth-settings",
             "Bluetooth Settings",
             "Open Bluetooth Settings",
+            "Bluetooth",
             "Open Bluetooth settings",
         ),
         (
             "builtin/notifications-settings",
             "Notifications Settings",
             "Open Notifications Settings",
+            "Notifications",
             "Open Notifications settings",
         ),
     ] {
@@ -311,6 +319,7 @@ fn system_settings_builtins_name_the_settings_pane_they_open() {
 
         assert_eq!(entry.name, expected_name, "{id} name");
         assert_eq!(entry.default_action_text(), expected_action, "{id} action");
+        assert_eq!(entry.footer_action_text(), expected_footer, "{id} footer");
         assert_eq!(entry.description, expected_description, "{id} description");
         assert!(
             !entry.name.contains("System Preferences")
