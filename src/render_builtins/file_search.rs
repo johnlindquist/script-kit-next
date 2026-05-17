@@ -5,6 +5,43 @@ const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX: f32 = 280.0;
 static FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchEmptyState {
+    TypeToSearch,
+    NoFilesFound,
+}
+
+impl FileSearchEmptyState {
+    fn from_query(query: &str) -> Self {
+        if query.is_empty() {
+            Self::TypeToSearch
+        } else {
+            Self::NoFilesFound
+        }
+    }
+
+    fn audit_state(self) -> &'static str {
+        match self {
+            Self::TypeToSearch => "type_to_search",
+            Self::NoFilesFound => "no_files_found",
+        }
+    }
+
+    fn render_state(self) -> &'static str {
+        match self {
+            Self::TypeToSearch => "empty_idle",
+            Self::NoFilesFound => "empty_no_results",
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::TypeToSearch => "Type to search files",
+            Self::NoFilesFound => "No files found",
+        }
+    }
+}
+
 fn mark_file_search_native_drag_awaiting_app_reactivate() {
     FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE
         .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -808,7 +845,7 @@ impl ScriptListApp {
             surface = "file_search",
             loading_state = if is_loading && filtered_len == 0 { "skeleton" } else { "content" },
             empty_state = if !is_loading && filtered_len == 0 {
-                if query.is_empty() { "type_to_search" } else { "no_files_found" }
+                FileSearchEmptyState::from_query(query).audit_state()
             } else { "" },
             "file_search_state_audit"
         );
@@ -823,11 +860,7 @@ impl ScriptListApp {
                 .py(px(design_spacing.padding_xl))
                 .text_center()
                 .text_color(rgb(text_dimmed))
-                .child(if query.is_empty() {
-                    "Type to search files"
-                } else {
-                    "No files found"
-                })
+                .child(FileSearchEmptyState::from_query(query).title())
                 .into_any_element()
         } else {
             uniform_list(
@@ -1281,9 +1314,13 @@ impl ScriptListApp {
             "Search"
         };
 
-        let (empty_title, empty_subtitle) = if query.is_empty() {
+        let empty_state = FileSearchEmptyState::from_query(query);
+        let (empty_title, empty_subtitle) = if matches!(
+            empty_state,
+            FileSearchEmptyState::TypeToSearch
+        ) {
             (
-                "Type to search files",
+                empty_state.title(),
                 "Use ~/ to browse a folder inline, or press \u{2318}\u{21b5} to ask AI how to search",
             )
         } else if is_directory_query && query.ends_with('/') {
@@ -1513,7 +1550,7 @@ impl ScriptListApp {
             tracing::info!(
                 target: "script_kit::prompt_chrome",
                 surface = "file_search",
-                state = if query.is_empty() { "empty_idle" } else { "empty_no_results" },
+                state = empty_state.render_state(),
                 filtered_len,
                 "file_search_state_rendered"
             );
