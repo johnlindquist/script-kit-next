@@ -141,6 +141,11 @@ impl ScriptListApp {
             .collect()
     }
 
+    fn process_manager_count_label(total_count: usize) -> String {
+        let suffix = if total_count == 1 { "" } else { "es" };
+        format!("{} process{}", total_count, suffix)
+    }
+
     /// Start the periodic refresh task for the ProcessManagerView.
     ///
     /// Spawns a background timer that polls the process manager every 2 seconds
@@ -595,11 +600,12 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    .child(div().text_sm().text_color(text_hint).child(format!(
-                        "{} process{}",
-                        total_count,
-                        if total_count == 1 { "" } else { "es" }
-                    )))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(text_hint)
+                            .child(Self::process_manager_count_label(total_count)),
+                    )
                     .when(total_count > 0, |d| {
                         let stop_all_button_entity = stop_all_button_entity.clone();
                         d.child(
