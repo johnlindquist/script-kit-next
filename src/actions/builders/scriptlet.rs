@@ -26,6 +26,33 @@ fn count_invalid_scriptlet_actions(scriptlet: &Scriptlet) -> usize {
         .count()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptletContextActionPlan {
+    NoShortcutNoAlias,
+    ShortcutOnly,
+    AliasOnly,
+    ShortcutAndAlias,
+}
+
+impl ScriptletContextActionPlan {
+    fn from_script(script: &ScriptInfo) -> Self {
+        match (script.shortcut.is_some(), script.alias.is_some()) {
+            (false, false) => Self::NoShortcutNoAlias,
+            (true, false) => Self::ShortcutOnly,
+            (false, true) => Self::AliasOnly,
+            (true, true) => Self::ShortcutAndAlias,
+        }
+    }
+
+    fn has_shortcut(self) -> bool {
+        matches!(self, Self::ShortcutOnly | Self::ShortcutAndAlias)
+    }
+
+    fn has_alias(self) -> bool {
+        matches!(self, Self::AliasOnly | Self::ShortcutAndAlias)
+    }
+}
+
 fn parse_scriptlet_action_command(action_id: &str) -> Option<&str> {
     action_id
         .strip_prefix(SCRIPTLET_ACTION_ID_PREFIX)
@@ -165,6 +192,7 @@ pub fn get_scriptlet_context_actions_with_custom(
 
     let mut actions = Vec::new();
     let mut destructive_actions = Vec::new();
+    let action_plan = ScriptletContextActionPlan::from_script(script);
 
     actions.push(
         Action::new(
@@ -182,7 +210,7 @@ pub fn get_scriptlet_context_actions_with_custom(
         actions.extend(get_scriptlet_defined_actions(scriptlet));
     }
 
-    if script.shortcut.is_some() {
+    if action_plan.has_shortcut() {
         actions.push(
             Action::new(
                 "update_shortcut",
@@ -219,7 +247,7 @@ pub fn get_scriptlet_context_actions_with_custom(
         );
     }
 
-    if script.alias.is_some() {
+    if action_plan.has_alias() {
         actions.push(
             Action::new(
                 "update_alias",
