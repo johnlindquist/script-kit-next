@@ -495,7 +495,7 @@ impl NotesApp {
     }
 
     /// Toggle markdown preview mode (Cmd+Shift+P)
-    pub(super) fn toggle_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn toggle_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.preview_enabled = !self.preview_enabled;
 
         if self.preview_enabled {

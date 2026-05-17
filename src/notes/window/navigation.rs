@@ -185,8 +185,13 @@ impl NotesApp {
         &self,
         editor_text: &str,
         selection: &std::ops::Range<usize>,
+        editor_scroll_metrics: serde_json::Value,
     ) -> serde_json::Value {
         let anchor = Self::automation_line_anchor(editor_text, selection);
+        let scroll_metrics_available = editor_scroll_metrics
+            .get("available")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false);
 
         serde_json::json!({
             "schemaVersion": 1,
@@ -194,11 +199,50 @@ impl NotesApp {
             "redacted": true,
             "available": true,
             "anchor": anchor,
-            "scrollMetricsAvailable": false,
-            "scrollTopAvailable": false,
-            "scrollHeightAvailable": false,
-            "clientHeightAvailable": false,
-            "stopReason": "Notes editor InputState does not expose runtime scroll offsets yet",
+            "scrollMetricsAvailable": scroll_metrics_available,
+            "scrollTopAvailable": scroll_metrics_available,
+            "scrollHeightAvailable": scroll_metrics_available,
+            "clientHeightAvailable": scroll_metrics_available,
+            "scroll": editor_scroll_metrics,
+            "stopReason": if scroll_metrics_available {
+                serde_json::Value::Null
+            } else {
+                serde_json::Value::String(
+                    "Notes editor InputState did not expose runtime scroll offsets".to_string(),
+                )
+            },
+        })
+    }
+
+    fn automation_scroll_handle_metrics(
+        handle: &ScrollHandle,
+        source: &'static str,
+    ) -> serde_json::Value {
+        let offset = handle.offset();
+        let max_offset = handle.max_offset();
+        let viewport = handle.bounds().size;
+        let max_scroll_top = max_offset.y.as_f32().max(0.0);
+        let max_scroll_left = max_offset.x.as_f32().max(0.0);
+        let scroll_top = (-offset.y.as_f32()).clamp(0.0, max_scroll_top);
+        let scroll_left = (-offset.x.as_f32()).clamp(0.0, max_scroll_left);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": source,
+            "available": true,
+            "offsetUnit": "logicalPx",
+            "scrollTop": scroll_top,
+            "scrollLeft": scroll_left,
+            "rawOffsetX": offset.x.as_f32(),
+            "rawOffsetY": offset.y.as_f32(),
+            "scrollHeight": viewport.height.as_f32() + max_scroll_top,
+            "scrollWidth": viewport.width.as_f32() + max_scroll_left,
+            "clientHeight": viewport.height.as_f32(),
+            "clientWidth": viewport.width.as_f32(),
+            "maxScrollTop": max_scroll_top,
+            "maxScrollLeft": max_scroll_left,
+            "canScrollY": max_scroll_top > 0.0,
+            "canScrollX": max_scroll_left > 0.0,
         })
     }
 
@@ -208,22 +252,28 @@ impl NotesApp {
         selection: &std::ops::Range<usize>,
     ) -> serde_json::Value {
         let anchor = Self::automation_line_anchor(editor_text, selection);
+        let scroll_metrics = Self::automation_scroll_handle_metrics(
+            &self.preview_scroll_handle,
+            "runtime.notes.preview.ScrollHandle",
+        );
+        let preview_available = self.preview_enabled;
 
         serde_json::json!({
             "schemaVersion": 1,
             "source": "runtime.notes.automationState",
             "redacted": true,
-            "available": self.preview_enabled,
+            "available": preview_available,
             "previewEnabled": self.preview_enabled,
-            "anchor": if self.preview_enabled { anchor } else { serde_json::Value::Null },
-            "scrollMetricsAvailable": false,
-            "scrollTopAvailable": false,
-            "scrollHeightAvailable": false,
-            "clientHeightAvailable": false,
-            "stopReason": if self.preview_enabled {
-                "Notes markdown preview does not expose runtime scroll offsets yet"
+            "anchor": if preview_available { anchor } else { serde_json::Value::Null },
+            "scrollMetricsAvailable": preview_available,
+            "scrollTopAvailable": preview_available,
+            "scrollHeightAvailable": preview_available,
+            "clientHeightAvailable": preview_available,
+            "scroll": if preview_available { scroll_metrics } else { serde_json::Value::Null },
+            "stopReason": if preview_available {
+                serde_json::Value::Null
             } else {
-                "Notes markdown preview is not mounted"
+                serde_json::Value::String("Notes markdown preview is not mounted".to_string())
             },
         })
     }
@@ -245,6 +295,29 @@ impl NotesApp {
             )
         });
         let search_text = self.search_state.read(cx).value().to_string();
+        let content_height = (self.last_line_count as f32) * AUTO_RESIZE_LINE_HEIGHT;
+        let desired_height = TITLEBAR_HEIGHT + content_height + FOOTER_HEIGHT + AUTO_RESIZE_PADDING;
+        let clamped_height = Self::resolve_auto_resize_height(
+            desired_height,
+            self.initial_height,
+            AUTO_RESIZE_MAX_HEIGHT,
+        );
+        let last_autosize_transition = self.last_autosize_transition.as_ref().map(|entry| {
+            serde_json::json!({
+                "generation": entry.generation,
+                "cause": entry.cause,
+                "beforeHeight": entry.before_height,
+                "afterHeight": entry.after_height,
+                "beforeWidth": entry.before_width,
+                "afterWidth": entry.after_width,
+                "lineCount": entry.line_count,
+                "desiredHeight": entry.desired_height,
+                "clampedHeight": entry.clamped_height,
+                "applied": entry.applied,
+                "skippedReason": entry.skipped_reason,
+                "ageMs": entry.recorded_at.elapsed().as_millis() as u64,
+            })
+        });
 
         serde_json::json!({
             "schemaVersion": 1,
@@ -288,7 +361,11 @@ impl NotesApp {
                 selected_note,
                 &storage_identity,
             ),
-            "editorAnchor": self.automation_editor_anchor(&editor_text, &selection),
+            "editorAnchor": self.automation_editor_anchor(
+                &editor_text,
+                &selection,
+                editor.automation_scroll_metrics(),
+            ),
             "previewAnchor": self.automation_preview_anchor(&editor_text, &selection),
             "view": {
                 "viewMode": format!("{:?}", self.view_mode),
@@ -306,6 +383,46 @@ impl NotesApp {
                 "lastWindowHeight": self.last_window_height,
                 "notesAcpGeneration": self.notes_acp_generation,
             },
+            "autosize": {
+                "schemaVersion": 1,
+                "redacted": true,
+                "generation": self.autosize_generation,
+                "enabled": self.auto_sizing_enabled,
+                "lastWindowHeight": self.last_window_height,
+                "initialHeight": self.initial_height,
+                "minHeight": self.initial_height,
+                "maxHeight": AUTO_RESIZE_MAX_HEIGHT,
+                "lineCount": self.last_line_count,
+                "desiredHeight": desired_height,
+                "clampedHeight": clamped_height,
+                "threshold": AUTO_RESIZE_THRESHOLD,
+                "lastCause": last_autosize_transition
+                    .as_ref()
+                    .and_then(|entry| entry.get("cause"))
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("unknown"),
+                "lastAppliedHeight": last_autosize_transition
+                    .as_ref()
+                    .and_then(|entry| entry.get("afterHeight"))
+                    .and_then(serde_json::Value::as_f64),
+                "lastAppliedAt": last_autosize_transition
+                    .as_ref()
+                    .map(|_| "runtime-relative"),
+            },
+            "generations": {
+                "schemaVersion": 1,
+                "state": storage_identity
+                    .get("generation")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
+                "editorText": Self::devtools_text_fingerprint(&editor_text),
+                "autosize": self.autosize_generation,
+                "storage": storage_identity.get("generation").and_then(serde_json::Value::as_u64),
+                "focus": self.focus_transition_generation,
+                "target": serde_json::Value::Null,
+                "surface": serde_json::Value::Null,
+            },
+            "lastAutosizeTransition": last_autosize_transition,
             "commandBars": {
                 "actions": self.command_bar.automation_state("notes.actions", cx),
                 "noteSwitcher": self.note_switcher.automation_state("notes.switcher", cx),

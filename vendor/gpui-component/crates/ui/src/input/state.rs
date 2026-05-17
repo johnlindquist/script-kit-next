@@ -367,6 +367,41 @@ pub struct InputState {
 impl EventEmitter<InputEvent> for InputState {}
 
 impl InputState {
+    /// Runtime scroll metrics for automation/devtools receipts.
+    ///
+    /// Offsets are reported in CSS-like positive scrollTop/scrollLeft units
+    /// even though GPUI stores scroll offsets as negative content translations.
+    pub fn automation_scroll_metrics(&self) -> serde_json::Value {
+        let live_offset = self.scroll_handle.offset();
+        let effective_offset = self.deferred_scroll_offset.unwrap_or(live_offset);
+        let viewport = self.input_bounds.size;
+        let content = self.scroll_size;
+        let max_scroll_top = (content.height - viewport.height).max(px(0.)).as_f32();
+        let max_scroll_left = (content.width - viewport.width).max(px(0.)).as_f32();
+        let scroll_top = (-effective_offset.y.as_f32()).clamp(0.0, max_scroll_top);
+        let scroll_left = (-effective_offset.x.as_f32()).clamp(0.0, max_scroll_left);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "gpui_component.input.InputState",
+            "available": true,
+            "offsetUnit": "logicalPx",
+            "scrollTop": scroll_top,
+            "scrollLeft": scroll_left,
+            "liveScrollTop": (-live_offset.y.as_f32()).clamp(0.0, max_scroll_top),
+            "liveScrollLeft": (-live_offset.x.as_f32()).clamp(0.0, max_scroll_left),
+            "hasDeferredScrollOffset": self.deferred_scroll_offset.is_some(),
+            "scrollHeight": content.height.as_f32(),
+            "scrollWidth": content.width.as_f32(),
+            "clientHeight": viewport.height.as_f32(),
+            "clientWidth": viewport.width.as_f32(),
+            "maxScrollTop": max_scroll_top,
+            "maxScrollLeft": max_scroll_left,
+            "canScrollY": max_scroll_top > 0.0,
+            "canScrollX": max_scroll_left > 0.0,
+        })
+    }
+
     /// Create a Input state with default [`InputMode::SingleLine`] mode.
     ///
     /// See also: [`Self::multi_line`], [`Self::auto_grow`] to set other mode.

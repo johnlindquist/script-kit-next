@@ -3,17 +3,21 @@
 type JsonObject = Record<string, unknown>;
 
 type Args = {
+  command: "inspect" | "deliver-fixture";
   session: string;
   includeEnvPayload: boolean;
   start: boolean;
   show: boolean;
   timeoutMs: number;
+  target: string;
+  fixtureId: string;
 };
 
 function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/dictation.ts inspect [--session <name>] [--start] [--show] [--include-env-payload]",
+    "  bun scripts/devtools/dictation.ts deliver-fixture [--session <name>] [--start] [--show] [--target <label>] [--fixture-id <id>]",
   ].join("\n");
 }
 
@@ -22,11 +26,20 @@ function parseArgs(argv: string[]): Args {
     console.log(usage());
     process.exit(0);
   }
-  if (argv[0] !== "inspect") {
+  if (argv[0] !== "inspect" && argv[0] !== "deliver-fixture") {
     console.error(usage());
     process.exit(2);
   }
-  const args: Args = { session: "default", includeEnvPayload: false, start: false, show: false, timeoutMs: 8000 };
+  const args: Args = {
+    command: argv[0],
+    session: "default",
+    includeEnvPayload: false,
+    start: false,
+    show: false,
+    timeoutMs: 8000,
+    target: "mainWindowFilter",
+    fixtureId: "short-phrase",
+  };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--session") {
@@ -39,6 +52,10 @@ function parseArgs(argv: string[]): Args {
       args.show = true;
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
+    } else if (arg === "--target") {
+      args.target = argv[++index] ?? args.target;
+    } else if (arg === "--fixture-id") {
+      args.fixtureId = argv[++index] ?? args.fixtureId;
     }
   }
   return args;
@@ -160,6 +177,19 @@ function stdinEvidence(stdinSource: string) {
   };
 }
 
+function fixtureTranscript(id: string) {
+  if (id === "short-phrase") {
+    return "DevTools fixture transcript";
+  }
+  if (id === "punctuation") {
+    return "DevTools fixture transcript, with punctuation.";
+  }
+  if (id === "multiline") {
+    return "DevTools fixture transcript\nwith a second line";
+  }
+  throw new Error(`Unknown dictation fixture id: ${id}`);
+}
+
 function classify(media: JsonObject, sourceEvidence: JsonObject, provider: JsonObject, runtimeState: JsonObject | null) {
   if (media.status === "ok") {
     return "ok";
@@ -194,8 +224,123 @@ function hasDeliveryReceipt(runtimeState: JsonObject | null) {
   );
 }
 
+function deliveryGeneration(runtimeState: JsonObject | null) {
+  const receipt = runtimeState?.dictation && typeof runtimeState.dictation === "object"
+    ? (runtimeState.dictation as JsonObject).lastDelivery
+    : null;
+  if (!receipt || typeof receipt !== "object") {
+    return 0;
+  }
+  const generation = (receipt as JsonObject).generation;
+  return typeof generation === "number" ? generation : 0;
+}
+
+function deliveryReceipt(runtimeState: JsonObject | null) {
+  const receipt = runtimeState?.dictation && typeof runtimeState.dictation === "object"
+    ? (runtimeState.dictation as JsonObject).lastDelivery
+    : null;
+  return receipt && typeof receipt === "object" ? receipt as JsonObject : null;
+}
+
+async function state(session: string, timeoutMs: number) {
+  const envelope = await rpc(session, {
+    type: "getState",
+    requestId: `devtools-dictation-state-${Date.now()}`,
+    target: { type: "main" },
+    summaryOnly: true,
+  }, "stateResult", timeoutMs);
+  return (envelope.response as JsonObject | undefined) ?? null;
+}
+
+async function deliverFixture(args: Args) {
+  await maybeStartAndShow(args);
+  const before = await state(args.session, args.timeoutMs);
+  const beforeGeneration = deliveryGeneration(before);
+  const transcript = fixtureTranscript(args.fixtureId);
+  const requestId = `devtools-dictation-deliver-${Date.now()}`;
+  const sendReceipt = await run([
+    "bash",
+    "scripts/agentic/session.sh",
+    "send",
+    args.session,
+    JSON.stringify({
+      type: "pushDictationResult",
+      requestId,
+      transcript,
+      target: args.target,
+    }),
+    "--await-parse",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "pushDictationResult");
+  const after = await state(args.session, args.timeoutMs);
+  const afterReceipt = deliveryReceipt(after);
+  const afterGeneration = deliveryGeneration(after);
+  const deliveryAdvanced = afterGeneration > beforeGeneration;
+  const requestedTargetMatches = String(afterReceipt?.target ?? "").toLowerCase() === args.target.toLowerCase()
+    || String(afterReceipt?.targetLabel ?? "").toLowerCase() === args.target.toLowerCase();
+  const redacted = afterReceipt?.redacted === true && afterReceipt?.transcriptFingerprint && afterReceipt?.transcriptLen === transcript.length;
+  const insertionRange = afterReceipt?.insertionRange && typeof afterReceipt.insertionRange === "object"
+    ? afterReceipt.insertionRange as JsonObject
+    : null;
+  const insertionRangeAvailable = insertionRange?.available === true;
+  const classification = sendReceipt.status === "error"
+    ? "blocked-by-timeout"
+    : deliveryAdvanced && redacted && insertionRangeAvailable
+      ? "ok"
+      : "blocked-by-missing-primitive";
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    tool: "script-kit-devtools.dictation",
+    command: "dictation.deliverFixture",
+    classification,
+    session: args.session,
+    safety: {
+      noMicrophoneCaptureRequired: true,
+      syntheticTranscriptInjected: true,
+      transcriptContentReturned: false,
+      fixtureId: args.fixtureId,
+    },
+    target: {
+      requested: args.target,
+      receiptTarget: afterReceipt?.target ?? null,
+      receiptTargetLabel: afterReceipt?.targetLabel ?? null,
+      requestedTargetMatches,
+    },
+    delivery: {
+      requestId,
+      beforeGeneration,
+      afterGeneration,
+      advanced: deliveryAdvanced,
+      receipt: afterReceipt,
+      insertionRange,
+      insertionRangeAvailable,
+      transcriptLenMatchesFixture: afterReceipt?.transcriptLen === transcript.length,
+      transcriptFingerprintAvailable: typeof afterReceipt?.transcriptFingerprint === "string",
+      rawTranscriptReturned: false,
+    },
+    missingPrimitives: [
+      deliveryAdvanced ? "" : "target delivery generation",
+      afterReceipt?.transcriptFingerprint ? "" : "transcript fingerprint",
+      requestedTargetMatches ? "" : "requested target match",
+      insertionRangeAvailable ? "" : "cursor insertion range",
+      "wrong-target refusal receipt",
+    ].filter(Boolean),
+    recommendedNext: [
+      "Add cursor insertion range for Notes/ACP/frontmost destinations.",
+      "Add wrong-target refusal receipts for stale or incompatible dictation targets.",
+    ],
+    errors: [sendReceipt].filter((receipt) => receipt.status === "error"),
+  }, null, 2));
+}
+
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
+  if (args.command === "deliver-fixture") {
+    await deliverFixture(args);
+    return;
+  }
   await maybeStartAndShow(args);
   const [coverage, typesSource, runtimeSource, stdinSource] = await Promise.all([
     run(["bun", "scripts/devtools/coverage.ts", "--surface", "dictation"], "coverage.dictation"),

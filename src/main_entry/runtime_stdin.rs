@@ -291,7 +291,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     .rekey_main_automation_surface_after_trigger_builtin_dispatch();
                             }
 
-                            ExternalCommand::SimulateKey { ref key, ref modifiers } => {
+                            ExternalCommand::SimulateKey { ref key, ref modifiers, ref target, .. } => {
                                 logging::log("STDIN", &format!("Simulating key: '{}' with modifiers: {:?}", key, modifiers));
 
                                 // Parse modifiers
@@ -302,6 +302,49 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 // Handle key based on current view
                                 let key_lower = key.to_lowercase();
+
+                                let simulate_key_target_is_notes = target.as_ref().map_or_else(
+                                    || {
+                                        crate::windows::focused_automation_window().is_some_and(
+                                            |info| {
+                                                matches!(
+                                                    info.kind,
+                                                    crate::protocol::AutomationWindowKind::Notes
+                                                )
+                                            },
+                                        )
+                                    },
+                                    |target| {
+                                        crate::windows::resolve_automation_window(Some(target))
+                                            .is_ok_and(|info| {
+                                                matches!(
+                                                    info.kind,
+                                                    crate::protocol::AutomationWindowKind::Notes
+                                                )
+                                            })
+                                    },
+                                );
+
+                                if has_cmd
+                                    && has_shift
+                                    && key_lower == "p"
+                                    && simulate_key_target_is_notes
+                                {
+                                    if let Some((notes_entity, notes_handle)) =
+                                        notes::get_notes_app_entity_and_handle()
+                                    {
+                                        let _ = notes_handle.update(ctx, |_root, notes_window, cx| {
+                                            notes_entity.update(cx, |app, cx| {
+                                                app.toggle_preview(notes_window, cx);
+                                            });
+                                        });
+                                        logging::log(
+                                            "STDIN",
+                                            "SimulateKey: Cmd+Shift+P - toggle Notes preview",
+                                        );
+                                        return;
+                                    }
+                                }
 
                                 match &view.current_view {
                                     AppView::ScriptList => {

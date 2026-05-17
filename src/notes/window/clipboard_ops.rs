@@ -11,8 +11,8 @@ impl NotesApp {
         text: &str,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) {
-        self.editor_state.update(cx, |state, cx| {
+    ) -> serde_json::Value {
+        let insertion_range = self.editor_state.update(cx, |state, cx| {
             let selection = state.selection();
             let value = state.value().to_string();
             let start = selection.start.min(value.len());
@@ -21,6 +21,18 @@ impl NotesApp {
             let new_cursor = start + text.len();
             state.set_value(&new_value, window, cx);
             state.set_selection(new_cursor, new_cursor, window, cx);
+            serde_json::json!({
+                "available": true,
+                "unit": "utf8Bytes",
+                "start": start,
+                "end": new_cursor,
+                "replacedStart": start,
+                "replacedEnd": end,
+                "insertedLength": text.len(),
+                "operation": if start == end { "insertAtCursor" } else { "replaceSelection" },
+                "source": "notes.inject_dictation_text",
+                "redacted": true,
+            })
         });
         self.has_unsaved_changes = true;
         tracing::info!(
@@ -29,6 +41,7 @@ impl NotesApp {
             "Dictated text injected into notes editor"
         );
         cx.notify();
+        insertion_range
     }
 
     /// Insert current date/time at cursor position (Cmd+Shift+D)

@@ -429,6 +429,8 @@ fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
         "section bounds",
         "hover row",
         "runtime shortcut layout bounds",
+        "getLayoutInfo(actionsDialog)",
+        "disabledReasonBoundsRequired",
         "disabled reason bounds",
         "proofMode",
         "blocked-by-missing-primitive",
@@ -461,6 +463,21 @@ fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
         ACTIONS_DIALOG.contains("actions_popup_automation_snapshot()"),
         "ActionsDialog state must include the runtime-owned attached popup snapshot"
     );
+    for needle in [
+        "pub(crate) fn automation_layout_info",
+        "ActionsDialog",
+        "ActionsSearchInput",
+        "ActionsContextHeader",
+        "ActionsList",
+        "ActionsRow[",
+        "ActionsShortcut[",
+        "LayoutComponentType::ListItem",
+    ] {
+        assert!(
+            ACTIONS_DIALOG.contains(needle),
+            "ActionsDialog must expose target-scoped layout info field: {needle}"
+        );
+    }
     for needle in [
         "ACTIONS_POPUP_AUTOMATION_SNAPSHOT",
         "record_actions_popup_automation_snapshot",
@@ -627,6 +644,14 @@ fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
         "draftSnapshot",
         "editorAnchor",
         "previewAnchor",
+        "scrollMetricsAvailable",
+        "scrollTopAvailable",
+        "scrollHeightAvailable",
+        "clientHeightAvailable",
+        "scrollTop",
+        "scrollHeight",
+        "clientHeight",
+        "togglePreview",
         "bodyFingerprint",
         "bodyByteLength",
         "selectionUnit",
@@ -637,6 +662,8 @@ fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
         "commandBars",
         "shortcutRegistry",
         "focusTransitions",
+        "autosize",
+        "lastAutosizeTransition",
         "shortcutActivation",
         "runtimeState",
         "stateResult",
@@ -645,6 +672,16 @@ fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
         "editorFingerprint",
         "missingRuntimePrimitives",
         "blocked-by-missing-primitive",
+        "resize-compare",
+        "SCRIPT_KIT_TEST_NOTES_DB_PATH",
+        "--sandbox-db",
+        "--confirm-real-notes-mutation",
+        "blocked-by-real-data-risk",
+        "devtools.notes.resizeCompare",
+        "height grew after tall content",
+        "height shrank after short content",
+        "autosize generation advanced",
+        "raw note content redacted",
     ] {
         assert!(
             NOTES.contains(needle),
@@ -660,6 +697,11 @@ fn notes_cli_exposes_notes_window_state_and_missing_runtime_primitives() {
         SCHEMA.contains("bun scripts/devtools/notes.ts inspect"),
         "schema should name the concrete notes implementation"
     );
+    assert!(
+        SCHEMA.contains("devtools.notes.resizeCompare")
+            && SCHEMA.contains("bun scripts/devtools/notes.ts resize-compare"),
+        "schema should name the concrete Notes resize-compare primitive"
+    );
 }
 
 #[test]
@@ -667,6 +709,8 @@ fn dictation_cli_passively_reports_media_state_targets_and_delivery_gaps() {
     for needle in [
         "script-kit-devtools.dictation",
         "dictation.inspect",
+        "deliver-fixture",
+        "dictation.deliverFixture",
         "scripts/devtools/coverage.ts",
         "scripts/devtools/media.ts",
         "SCRIPT_KIT_DICTATION_JSON",
@@ -676,13 +720,20 @@ fn dictation_cli_passively_reports_media_state_targets_and_delivery_gaps() {
         "noMicrophoneCaptureRequired",
         "noTccMutationRequired",
         "noSyntheticTranscriptInjected",
+        "syntheticTranscriptInjected",
+        "transcriptContentReturned",
         "runtimeState",
         "stateResult",
         "lastDelivery",
         "deliveryReceiptAvailable",
+        "deliveryAdvanced",
+        "insertionRangeAvailable",
         "redactedFingerprint",
         "passive current phase RPC",
         "target delivery generation receipt",
+        "cursor insertion range",
+        "cursor insertion range for Notes/ACP/frontmost destinations",
+        "wrong-target refusal receipt",
         "blocked-by-missing-primitive",
     ] {
         assert!(
@@ -699,6 +750,11 @@ fn dictation_cli_passively_reports_media_state_targets_and_delivery_gaps() {
         SCHEMA.contains("bun scripts/devtools/dictation.ts inspect"),
         "schema should name the concrete dictation implementation"
     );
+    assert!(
+        SCHEMA.contains("devtools.dictation.deliverFixture")
+            && SCHEMA.contains("bun scripts/devtools/dictation.ts deliver-fixture"),
+        "schema should name the concrete dictation delivery fixture primitive"
+    );
 }
 
 #[test]
@@ -707,10 +763,25 @@ fn inspect_reports_capabilities_gaps_and_next_steps() {
         "script-kit-devtools.inspect",
         "schemaVersion",
         "capabilities",
+        "capabilityDetails",
+        "command: \"inspect.orchestrate\"",
+        "bug: {",
+        "visibleWindowProof",
+        "primitiveStack",
+        "summaryOnly",
+        "getState(summaryOnly)",
         "missingFields",
+        "missingFieldDetails",
         "recommendedNext",
+        "recommendedNextPrimitives",
+        "likelyOwners",
+        "doNotUseRecipeReason",
+        "cleanup",
+        "blocked-by-missing-primitive",
         "errors",
-        "status: errors.length === 0 ? \"ok\" : \"degraded\"",
+        "status: errors.length === 0 ? (missing.length === 0 ? \"ok\" : \"partial\") : \"blocked\"",
+        "target-scoped layout missing",
+        "inspect is read-only; use act/batch for mutation proof",
     ] {
         assert!(
             INSPECT.contains(needle),
@@ -741,6 +812,8 @@ fn inspect_supports_agent_target_selection() {
         "--target-title",
         "--focused",
         "--main",
+        "--bug",
+        "--surface",
         "--hi-dpi",
         "--start",
         "--show",

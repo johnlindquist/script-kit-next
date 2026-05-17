@@ -272,6 +272,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
     match command {
         BatchCommand::SetInput { .. } => "setInput",
         BatchCommand::OpenActions => "openActions",
+        BatchCommand::TogglePreview => "togglePreview",
         BatchCommand::ForceSubmit { .. } => "forceSubmit",
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
@@ -818,6 +819,7 @@ pub fn execute_batch<P: TransactionStateProvider>(
 
             BatchCommand::ForceSubmit { .. }
             | BatchCommand::OpenActions
+            | BatchCommand::TogglePreview
             | BatchCommand::FilterAndSelect { .. }
             | BatchCommand::TypeAndSubmit { .. } => {
                 // These compound commands are not yet wired to the executor.

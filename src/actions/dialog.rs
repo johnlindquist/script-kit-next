@@ -1932,6 +1932,169 @@ impl ActionsDialog {
         })
     }
 
+    fn devtools_rect_field(rect: &serde_json::Value, field: &str) -> f32 {
+        rect.get(field)
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0) as f32
+    }
+
+    fn devtools_layout_component_from_rect(
+        name: impl Into<String>,
+        component_type: crate::protocol::LayoutComponentType,
+        rect: &serde_json::Value,
+    ) -> crate::protocol::LayoutComponentInfo {
+        crate::protocol::LayoutComponentInfo::new(name, component_type).with_bounds(
+            Self::devtools_rect_field(rect, "x"),
+            Self::devtools_rect_field(rect, "y"),
+            Self::devtools_rect_field(rect, "width"),
+            Self::devtools_rect_field(rect, "height"),
+        )
+    }
+
+    pub(crate) fn automation_layout_info(
+        &self,
+        target: &crate::protocol::AutomationWindowInfo,
+    ) -> crate::protocol::LayoutInfo {
+        use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+
+        let row_geometry = self.devtools_row_geometry();
+        let viewport = row_geometry
+            .get("viewport")
+            .and_then(serde_json::Value::as_object);
+        let container_bounds = viewport
+            .and_then(|viewport| viewport.get("containerBounds"))
+            .cloned()
+            .unwrap_or_else(|| Self::devtools_rect(0.0, 0.0, POPUP_WIDTH, 0.0));
+        let target_bounds = target.bounds.as_ref();
+        let window_width = target_bounds
+            .map(|bounds| bounds.width as f32)
+            .unwrap_or_else(|| Self::devtools_rect_field(&container_bounds, "width"));
+        let window_height = target_bounds
+            .map(|bounds| bounds.height as f32)
+            .unwrap_or_else(|| Self::devtools_rect_field(&container_bounds, "height"));
+        let mut components = Vec::new();
+
+        components.push(
+            LayoutComponentInfo::new("ActionsDialog", LayoutComponentType::Container)
+                .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_flex_column()
+                .with_depth(0)
+                .with_explanation(
+                    "Actions dialog popup root measured from the registered automation target bounds.",
+                ),
+        );
+
+        if let Some(search_bounds) = viewport
+            .and_then(|viewport| viewport.get("searchBounds"))
+            .filter(|value| !value.is_null())
+        {
+            components.push(
+                Self::devtools_layout_component_from_rect(
+                    "ActionsSearchInput",
+                    LayoutComponentType::Input,
+                    search_bounds,
+                )
+                .with_depth(1)
+                .with_parent("ActionsDialog")
+                .with_explanation("Search/filter input owned by the ActionsDialog route."),
+            );
+        }
+
+        if let Some(header_bounds) = viewport
+            .and_then(|viewport| viewport.get("contextHeaderBounds"))
+            .filter(|value| !value.is_null())
+        {
+            components.push(
+                Self::devtools_layout_component_from_rect(
+                    "ActionsContextHeader",
+                    LayoutComponentType::Header,
+                    header_bounds,
+                )
+                .with_depth(1)
+                .with_parent("ActionsDialog")
+                .with_explanation("Optional contextual header shown above the actions list."),
+            );
+        }
+
+        if let Some(list_bounds) = viewport.and_then(|viewport| viewport.get("listBounds")) {
+            components.push(
+                Self::devtools_layout_component_from_rect(
+                    "ActionsList",
+                    LayoutComponentType::List,
+                    list_bounds,
+                )
+                .with_depth(1)
+                .with_parent("ActionsDialog")
+                .with_explanation("Scrollable grouped actions list viewport."),
+            );
+        }
+
+        if let Some(rows) = row_geometry
+            .get("rows")
+            .and_then(serde_json::Value::as_array)
+        {
+            for row in rows.iter().filter(|row| {
+                row.get("visible")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false)
+            }) {
+                let visual_index = row
+                    .get("visualIndex")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                let kind = row
+                    .get("kind")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("row");
+                let rect = row.get("bounds").or_else(|| row.get("rect"));
+                if let Some(rect) = rect {
+                    let component_type = if kind == "section" {
+                        LayoutComponentType::Header
+                    } else {
+                        LayoutComponentType::ListItem
+                    };
+                    components.push(
+                        Self::devtools_layout_component_from_rect(
+                            format!("ActionsRow[{visual_index}]"),
+                            component_type,
+                            rect,
+                        )
+                        .with_depth(2)
+                        .with_parent("ActionsList")
+                        .with_explanation(
+                            "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+                        ),
+                    );
+                }
+
+                if let Some(shortcut_bounds) =
+                    row.get("shortcutBounds").filter(|value| !value.is_null())
+                {
+                    components.push(
+                        Self::devtools_layout_component_from_rect(
+                            format!("ActionsShortcut[{visual_index}]"),
+                            LayoutComponentType::Other,
+                            shortcut_bounds,
+                        )
+                        .with_depth(3)
+                        .with_parent(format!("ActionsRow[{visual_index}]"))
+                        .with_explanation(
+                            "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+                        ),
+                    );
+                }
+            }
+        }
+
+        LayoutInfo {
+            window_width,
+            window_height,
+            prompt_type: "actionsDialog".to_string(),
+            components,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
     pub(crate) fn automation_state(&self, surface: &str) -> serde_json::Value {
         let selected_action = self.get_selected_action();
         let visible_actions: Vec<serde_json::Value> = self

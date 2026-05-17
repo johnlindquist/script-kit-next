@@ -266,6 +266,7 @@ function actionPayload(args: Args, selector: JsonObject) {
   return {
     type: "simulateKey",
     requestId: requestId("key"),
+    target: selector,
     key: args.key,
     modifiers: args.modifiers,
   };

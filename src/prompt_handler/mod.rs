@@ -417,7 +417,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
                 unsupported_target_name: "Notes",
-                supported_commands: &["setInput", "openActions", "waitFor"],
+                    supported_commands: &["setInput", "openActions", "togglePreview", "waitFor"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::ActionsDialog => Self {
@@ -4463,6 +4463,27 @@ impl ScriptListApp {
                             return;
                         }
                         Ok(resolved)
+                            if resolved.kind
+                                == crate::protocol::AutomationWindowKind::ActionsDialog =>
+                        {
+                            if let Some(entity) = crate::actions::get_actions_dialog_entity(cx) {
+                                let layout_info =
+                                    entity.read(cx).automation_layout_info(&resolved);
+                                let response =
+                                    Message::layout_info_result(request_id.clone(), layout_info);
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(response);
+                                }
+                            } else if let Some(ref sender) = self.response_sender {
+                                let empty_info = crate::protocol::LayoutInfo::default();
+                                let _ = sender.try_send(Message::layout_info_result(
+                                    request_id.clone(),
+                                    empty_info,
+                                ));
+                            }
+                            return;
+                        }
+                        Ok(resolved)
                             if resolved.kind == crate::protocol::AutomationWindowKind::Main =>
                         { /* main window — proceed */ }
                         Ok(resolved) => {
@@ -5623,6 +5644,48 @@ impl ScriptListApp {
                                         }
                                     }
                                 }
+                                protocol::BatchCommand::TogglePreview => {
+                                    let ne = notes_entity.clone();
+                                    let nh = notes_handle;
+                                    let result = nh.update(cx, |_root, window, cx| {
+                                        window.defer(cx, move |window, cx| {
+                                            ne.update(cx, |app, cx| {
+                                                app.toggle_preview(window, cx);
+                                            });
+                                        });
+                                        tracing::info!(
+                                            target: "script_kit::transaction",
+                                            event = "transaction_notes_toggle_preview",
+                                            request_id = %rid,
+                                            "Notes toggle_preview scheduled"
+                                        );
+                                    });
+                                    match result {
+                                        Ok(()) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "togglePreview", "batch.notes.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: true,
+                                                command: "togglePreview".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: None,
+                                            });
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "togglePreview".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
                                 protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
                                     let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
                                     let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
@@ -6572,7 +6635,7 @@ impl ScriptListApp {
                                     }
                                 }
                             }
-                            protocol::BatchCommand::OpenActions => {
+                            protocol::BatchCommand::OpenActions | protocol::BatchCommand::TogglePreview => {
                                 let command = batch_command_name(cmd);
                                 results.push(protocol::BatchResultEntry {
                                     index,
@@ -8720,6 +8783,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
     match cmd {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
         protocol::BatchCommand::OpenActions => "openActions".to_string(),
+        protocol::BatchCommand::TogglePreview => "togglePreview".to_string(),
         protocol::BatchCommand::ForceSubmit { .. } => "forceSubmit".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
