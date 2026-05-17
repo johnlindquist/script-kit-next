@@ -114,6 +114,14 @@ impl AppOpenHandlerAction {
         }
     }
 
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::ShowInfoInFinder | Self::ShowPackageContents => {
+                format!("{}: {error}", self.error_prefix())
+            }
+        }
+    }
+
     fn run(self, path: std::path::PathBuf) -> Result<(), String> {
         match self {
             Self::ShowInfoInFinder => crate::file_search::show_info(&path.to_string_lossy()),
@@ -228,10 +236,7 @@ impl ScriptListApp {
                                         action = open_action.trace_name(),
                                         "app open item action failed"
                                     );
-                                    this.show_error_toast(
-                                        format!("{}: {}", open_action.error_prefix(), e),
-                                        cx,
-                                    );
+                                    this.show_error_toast(open_action.failure_message(e), cx);
                                 }
                             });
                         })
