@@ -281,6 +281,29 @@ fn clipboard_cleanshot_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_ocr_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardOcrHandlerAction")
+            && content.contains("ExtractText"),
+        "clipboard OCR handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("let ocr_action = ClipboardOcrHandlerAction::ExtractText")
+            && content.contains("ocr_action.selection_required_message()")
+            && content.contains("ocr_action.image_required_message()")
+            && content.contains("ocr_action.copied_hud()")
+            && content.contains("ocr_action.load_failure_message()")
+            && content.contains("ocr_action.decode_failure_message()")
+            && content.contains("ocr_action.empty_text_message()")
+            && content.contains("ocr_action.extract_failure_message(e)"),
+        "clipboard OCR handler should derive guard, copy, and failure text from the named action"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

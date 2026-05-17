@@ -36,6 +36,11 @@ enum ClipboardCleanShotHandlerAction {
     Upload,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardOcrHandlerAction {
+    ExtractText,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -232,6 +237,50 @@ impl ClipboardCleanShotHandlerAction {
     fn decode_failure_message(self) -> &'static str {
         match self {
             Self::Annotate | Self::Upload => "Failed to decode image",
+        }
+    }
+}
+
+impl ClipboardOcrHandlerAction {
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::ExtractText => "No clipboard entry selected",
+        }
+    }
+
+    fn image_required_message(self) -> &'static str {
+        match self {
+            Self::ExtractText => "OCR is only available for images",
+        }
+    }
+
+    fn copied_hud(self) -> &'static str {
+        match self {
+            Self::ExtractText => "Copied text from image",
+        }
+    }
+
+    fn load_failure_message(self) -> &'static str {
+        match self {
+            Self::ExtractText => "Failed to load image content",
+        }
+    }
+
+    fn decode_failure_message(self) -> &'static str {
+        match self {
+            Self::ExtractText => "Failed to decode image",
+        }
+    }
+
+    fn empty_text_message(self) -> &'static str {
+        match self {
+            Self::ExtractText => "No text found in image",
+        }
+    }
+
+    fn extract_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::ExtractText => format!("Failed to extract text: {error}"),
         }
     }
 }
@@ -688,13 +737,14 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "clipboard_ocr" => {
+                let ocr_action = ClipboardOcrHandlerAction::ExtractText;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(ocr_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Image {
-                    self.show_error_toast("OCR is only available for images", cx);
+                    self.show_error_toast(ocr_action.image_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
@@ -704,7 +754,7 @@ impl ScriptListApp {
                         tracing::debug!(category = "UI", event = "clipboard_ocr_cached", "using cached OCR text");
                         self.copy_to_clipboard_with_feedback(
                             cached_text,
-                            "Copied text from image".to_string(),
+                            ocr_action.copied_hud().to_string(),
                             true,
                             cx,
                         );
@@ -716,7 +766,7 @@ impl ScriptListApp {
                 {
                     // Get image content
                     let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                        self.show_error_toast("Failed to load image content", cx);
+                        self.show_error_toast(ocr_action.load_failure_message(), cx);
                         return DispatchOutcome::success();
                     };
 
@@ -724,7 +774,7 @@ impl ScriptListApp {
                     let Some((width, height, rgba_bytes)) =
                         clipboard_history::decode_to_rgba_bytes(&content)
                     else {
-                        self.show_error_toast("Failed to decode image", cx);
+                        self.show_error_toast(ocr_action.decode_failure_message(), cx);
                         return DispatchOutcome::success();
                     };
 
@@ -739,7 +789,7 @@ impl ScriptListApp {
                         Ok(text) => {
                             if text.trim().is_empty() {
                                 tracing::debug!(category = "UI", event = "clipboard_ocr_empty", "no text found in image");
-                                self.show_error_toast("No text found in image", cx);
+                                self.show_error_toast(ocr_action.empty_text_message(), cx);
                             } else {
                                 tracing::debug!(chars = text.len(), "extracted OCR text");
 
@@ -749,7 +799,7 @@ impl ScriptListApp {
                                 // Copy to clipboard
                                 self.copy_to_clipboard_with_feedback(
                                     &text,
-                                    "Copied text from image".to_string(),
+                                    ocr_action.copied_hud().to_string(),
                                     true,
                                     cx,
                                 );
@@ -757,7 +807,7 @@ impl ScriptListApp {
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "OCR failed");
-                            self.show_error_toast(format!("Failed to extract text: {}", e), cx);
+                            self.show_error_toast(ocr_action.extract_failure_message(e), cx);
                         }
                     }
                 }
