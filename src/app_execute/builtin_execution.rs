@@ -902,6 +902,24 @@ impl AppLaunchBuiltinAction {
             Self::Launch => format!("launch_app_not_found::{app_name}"),
         }
     }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Launch => "Launching app",
+        }
+    }
+
+    fn launch_failure_message(self, app_name: &str, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Launch => format!("Failed to launch {app_name}: {error}"),
+        }
+    }
+
+    fn not_found_message(self, app_name: &str) -> String {
+        match self {
+            Self::Launch => format!("App not found: {app_name}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4161,12 +4179,13 @@ impl ScriptListApp {
             category = "BUILTIN",
             trace_id = %dctx.trace_id,
             app = %app_name,
-            "Launching app"
+            "{}",
+            action.opening_message()
         );
         let apps = app_launcher::scan_applications();
         if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
             if let Err(error) = app_launcher::launch_application(app) {
-                let message = format!("Failed to launch {}: {}", app_name, error);
+                let message = action.launch_failure_message(app_name, &error);
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
@@ -4179,7 +4198,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail(app_name))
             }
         } else {
-            let message = format!("App not found: {}", app_name);
+            let message = action.not_found_message(app_name);
             self.show_error_toast(message.clone(), cx);
             Self::builtin_error(
                 dctx,
