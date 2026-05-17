@@ -5,10 +5,18 @@ import { join } from "node:path";
 
 type StoryResultStatus = "pass" | "fail_closed" | "blocked_precondition" | "runtime_failure" | "timeout";
 
+type StoryStep = {
+  intent: string;
+  action: string;
+  receipt: string;
+  observed: string;
+};
+
 type StoryResult = {
   id: string;
   recipe: string;
   story: string;
+  steps: StoryStep[];
   command: string[];
   status: StoryResultStatus;
   exitCode: number | null;
@@ -137,6 +145,83 @@ function failureCode(parsed: any | null) {
   return parsed?.failure?.code ?? parsed?.proofBundle?.failure?.code ?? null;
 }
 
+function stringifyValue(value: unknown, fallback: string) {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return fallback;
+  try {
+    return JSON.stringify(value).slice(0, 500);
+  } catch {
+    return fallback;
+  }
+}
+
+function compactOutputPreview(output: string) {
+  return output.replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+function normalizeHarnessStep(step: any, index: number, recipe: string): StoryStep {
+  const failure = step?.failure ?? step?.proofBundle?.failure;
+  return {
+    intent: stringifyValue(
+      step?.intent ?? step?.name ?? step?.stepName ?? step?.label,
+      `Exercise ${recipe} step ${index + 1}`,
+    ),
+    action: stringifyValue(step?.action ?? step?.command ?? step?.type ?? step?.event, "record harness step"),
+    receipt: stringifyValue(
+      step?.receipt ?? step?.receiptType ?? step?.status ?? failure?.code ?? step?.code,
+      `step-${index + 1}`,
+    ),
+    observed: stringifyValue(
+      step?.observed ?? step?.summary ?? step?.message ?? failure?.message ?? step?.actual,
+      "No structured observation emitted",
+    ),
+  };
+}
+
+function extractStorySteps(
+  recipe: string,
+  command: string[],
+  parsed: any | null,
+  status: StoryResultStatus,
+  exitCode: number | null,
+  output: string,
+): StoryStep[] {
+  const harnessSteps = parsed?.steps ?? parsed?.proofBundle?.steps;
+  const steps: StoryStep[] = Array.isArray(harnessSteps)
+    ? harnessSteps.map((step, index) => normalizeHarnessStep(step, index, recipe))
+    : [];
+  const code = failureCode(parsed);
+  const missingReceipt = parsed?.missingReceipt ?? parsed?.proofBundle?.missingReceipt ?? code;
+  const summary = stringifyValue(parsed?.summary ?? parsed?.proofBundle?.summary, compactOutputPreview(output) || "No output");
+
+  if (steps.length === 0) {
+    steps.push(
+      {
+        intent: `Run ${recipe} through the real agentic stress harness`,
+        action: command.join(" "),
+        receipt: exitCode === null ? "process-timeout-or-killed" : `exitCode:${exitCode}`,
+        observed: compactOutputPreview(output) || "Harness produced no stdout/stderr",
+      },
+      {
+        intent: "Collect structured proof output from the harness",
+        action: "parse stdout/stderr JSON into recipe, status, proofBundle, failure, and warnings",
+        receipt: missingReceipt ? `missingReceipt:${missingReceipt}` : `parsedStatus:${parsed?.status ?? "none"}`,
+        observed: summary,
+      },
+    );
+  }
+
+  steps.push({
+    intent: "Classify the user-story outcome without treating missing receipts as green",
+    action: "classify(parsed, exitCode, timedOut, outputPreview)",
+    receipt: `status:${status}`,
+    observed: `failClosed=${isFailClosed(parsed, output)} warnings=${(parsed?.proofBundle?.warnings ?? parsed?.warnings ?? []).length}`,
+  });
+
+  return steps;
+}
+
 function isFailClosed(parsed: any | null, outputPreview = "") {
   const summary = String(parsed?.summary ?? outputPreview);
   const code = failureCode(parsed) ?? "";
@@ -195,6 +280,7 @@ async function runStory(recipe: string, index: number, maxMs: number): Promise<S
     id: `ux-story-${String(index + 1).padStart(3, "0")}`,
     recipe,
     story: storyForRecipe(recipe),
+    steps: extractStorySteps(recipe, command, parsed, status, exitCode, output),
     command,
     status,
     exitCode,
@@ -218,6 +304,9 @@ async function main() {
       const status = classify(parsed, story.exitCode, story.status === "timeout", story.outputPreview);
       return {
         ...story,
+        steps: story.steps?.length
+          ? story.steps
+          : extractStorySteps(story.recipe, story.command, parsed, status, story.exitCode, story.outputPreview),
         status,
         summary: story.summary ?? parsed?.summary ?? null,
         missingReceipt: story.missingReceipt ?? parsed?.missingReceipt ?? parsed?.proofBundle?.missingReceipt ?? failureCode(parsed),
@@ -282,6 +371,20 @@ async function main() {
           id: `ux-story-${String(index + 1).padStart(3, "0")}`,
           recipe,
           story: storyForRecipe(recipe),
+          steps: [
+            {
+              intent: `Run ${recipe} through the real agentic stress harness`,
+              action: `bun scripts/agentic/index.ts ${recipe} --session <generated> --json`,
+              receipt: "dry-run",
+              observed: "Dry run selected this recipe without executing it",
+            },
+            {
+              intent: "Collect structured proof output from the harness",
+              action: "parse stdout/stderr JSON into recipe, status, proofBundle, failure, and warnings",
+              receipt: "dry-run",
+              observed: "No runtime receipt in dry-run mode",
+            },
+          ],
         }))
       : results,
   };

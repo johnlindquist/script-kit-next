@@ -43,12 +43,35 @@ fn user_story_audit_writes_replayable_test_output_artifact() {
         "agentic-100-user-story-audit-",
         "command",
         "outputPreview",
+        "steps: StoryStep[]",
+        "extractStorySteps",
         "\"--reclassify\"",
         "reclassifiedAt",
     ] {
         assert!(
             USER_STORY_AUDIT.contains(token),
             "100-story audit runner must leave replayable artifacts with {token}"
+        );
+    }
+}
+
+#[test]
+fn user_story_audit_requires_multistep_transcripts() {
+    for token in [
+        "type StoryStep =",
+        "intent: string",
+        "action: string",
+        "receipt: string",
+        "observed: string",
+        "normalizeHarnessStep",
+        "parsed?.steps ?? parsed?.proofBundle?.steps",
+        "Classify the user-story outcome without treating missing receipts as green",
+        "Run ${recipe} through the real agentic stress harness",
+        "Collect structured proof output from the harness",
+    ] {
+        assert!(
+            USER_STORY_AUDIT.contains(token),
+            "100-story audit runner must record multi-step transcripts with {token}"
         );
     }
 }
