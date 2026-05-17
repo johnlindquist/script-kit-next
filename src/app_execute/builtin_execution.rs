@@ -1032,10 +1032,6 @@ enum SettingsCommandBuiltinAction {
 
 impl SettingsCommandBuiltinAction {
     fn from_command(command: builtins::SettingsCommandType) -> Self {
-        if let Some(snap_action) = SettingsSnapModeBuiltinAction::from_command(command) {
-            return Self::SnapMode(snap_action);
-        }
-
         match command {
             builtins::SettingsCommandType::ResetWindowPositions => Self::ResetWindowPositions,
             builtins::SettingsCommandType::ChooseTheme => Self::ChooseTheme,
@@ -1044,8 +1040,9 @@ impl SettingsCommandBuiltinAction {
             builtins::SettingsCommandType::DisableWindowSnapping
             | builtins::SettingsCommandType::SnapModeSimple
             | builtins::SettingsCommandType::SnapModeExpanded
-            | builtins::SettingsCommandType::SnapModePrecision => unreachable!(
-                "snap mode commands should be converted before non-snap settings dispatch"
+            | builtins::SettingsCommandType::SnapModePrecision => Self::SnapMode(
+                SettingsSnapModeBuiltinAction::from_command(command)
+                    .expect("snap mode settings command should map to snap mode action"),
             ),
         }
     }

@@ -921,6 +921,8 @@ fn settings_command_builtin_uses_named_action_states() {
     );
     assert!(
         content.contains("SettingsSnapModeBuiltinAction::from_command(command)")
+            && content
+                .contains("expect(\"snap mode settings command should map to snap mode action\")")
             && content.contains("Self::builtin_success(dctx, action.success_detail())")
             && content.contains("Self::builtin_success(dctx, \"select_microphone\")"),
         "Settings command state should preserve snap-mode and microphone success details"
