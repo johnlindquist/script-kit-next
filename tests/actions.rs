@@ -400,6 +400,27 @@ fn scriptlet_source_handler_uses_named_action_states() {
 }
 
 #[test]
+fn script_source_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+        .expect("Failed to read script action handler");
+
+    assert!(
+        content.contains("enum ScriptSourceHandlerAction")
+            && content.contains("Edit")
+            && content.contains("CopyContent"),
+        "script edit/copy-content handlers should be driven by named source action states"
+    );
+    assert!(
+        content.contains("ScriptSourceHandlerAction::from_action_id(action_id)")
+            && content.contains("source_action.path_from_result(&result)")
+            && content.contains("source_action.unsupported_message()")
+            && content.contains("source_action.copied_hud()")
+            && content.contains("source_action.read_error(e)"),
+        "script source handlers should derive source paths, unsupported text, copied HUD, and read errors from named states"
+    );
+}
+
+#[test]
 fn scriptlet_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
         .expect("Failed to read scriptlet builder");

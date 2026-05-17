@@ -155,7 +155,7 @@ fn copy_content_reads_file_and_copies_to_clipboard() {
     let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
-        .find("\"copy_content\"")
+        .find("\"copy_content\" => {")
         .expect("Expected copy_content action handler");
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
@@ -168,7 +168,8 @@ fn copy_content_reads_file_and_copies_to_clipboard() {
         "copy_content should use copy_to_clipboard_with_feedback for consistent UX"
     );
     assert!(
-        block.contains("Content copied to clipboard"),
+        block.contains("source_action.copied_hud()")
+            && content.contains("Content copied to clipboard"),
         "copy_content should show success feedback after copying"
     );
 }
@@ -182,12 +183,13 @@ fn copy_content_shows_error_for_unsupported_item_types() {
     let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
-        .find("\"copy_content\"")
+        .find("\"copy_content\" => {")
         .expect("Expected copy_content action handler");
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 
     assert!(
-        block.contains("Cannot copy content for this item type"),
+        block.contains("source_action.unsupported_message()")
+            && content.contains("Cannot copy content for this item type"),
         "copy_content should show error for unsupported item types"
     );
 }
@@ -197,7 +199,7 @@ fn copy_content_shows_error_when_no_selection() {
     let content = super::read_all_handle_action_sources();
 
     let copy_pos = content
-        .find("\"copy_content\"")
+        .find("\"copy_content\" => {")
         .expect("Expected copy_content action handler");
     let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
 

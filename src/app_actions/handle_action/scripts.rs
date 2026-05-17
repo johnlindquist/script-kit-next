@@ -4,6 +4,58 @@
 // remove_script/delete_script, reload_scripts, copy_content,
 // reset_ranking, settings, quit.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptSourceHandlerAction {
+    Edit,
+    CopyContent,
+}
+
+impl ScriptSourceHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "edit_script" => Some(Self::Edit),
+            "copy_content" => Some(Self::CopyContent),
+            _ => None,
+        }
+    }
+
+    fn unsupported_message(self) -> &'static str {
+        match self {
+            Self::Edit => "Cannot edit this item type",
+            Self::CopyContent => "Cannot copy content for this item type",
+        }
+    }
+
+    fn copied_hud(self) -> &'static str {
+        match self {
+            Self::CopyContent => "Content copied to clipboard",
+            Self::Edit => "Opened in editor",
+        }
+    }
+
+    fn read_error(self, error: std::io::Error) -> String {
+        match self {
+            Self::CopyContent => format!("Failed to read file: {error}"),
+            Self::Edit => format!("Failed to open file: {error}"),
+        }
+    }
+
+    fn path_from_result(self, result: &scripts::SearchResult) -> Option<std::path::PathBuf> {
+        match (self, result) {
+            (Self::Edit, scripts::SearchResult::Script(m)) => Some(m.script.path.clone()),
+            (Self::Edit, scripts::SearchResult::Agent(m)) => Some(m.agent.path.clone()),
+            (Self::CopyContent, scripts::SearchResult::Script(m)) => Some(m.script.path.clone()),
+            (Self::CopyContent, scripts::SearchResult::Agent(m)) => Some(m.agent.path.clone()),
+            (Self::CopyContent, scripts::SearchResult::Scriptlet(m)) => m
+                .scriptlet
+                .file_path
+                .as_ref()
+                .map(|p| std::path::PathBuf::from(p.split('#').next().unwrap_or(p))),
+            _ => None,
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Handle script management actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_script_action(
@@ -85,29 +137,13 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "edit_script" => {
+                let Some(source_action) = ScriptSourceHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "edit script action");
                 if let Some(result) = self.get_selected_result() {
-                    let path_opt = match result {
-                        scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
-                        scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
-                        scripts::SearchResult::Scriptlet(_) => None,
-                        scripts::SearchResult::BuiltIn(_) => None,
-                        scripts::SearchResult::Skill(_) => None,
-                        scripts::SearchResult::App(_) => None,
-                        scripts::SearchResult::Window(_) => None,
-                        scripts::SearchResult::File(_) => None,
-                        scripts::SearchResult::Note(_) => None,
-                        scripts::SearchResult::AcpHistory(_) => None,
-                        scripts::SearchResult::AiVault(_) => None,
-                        scripts::SearchResult::ClipboardHistory(_) => None,
-                        scripts::SearchResult::DictationHistory(_) => None,
-                        scripts::SearchResult::BrowserTab(_) => None,
-                        scripts::SearchResult::BrowserHistory(_) => None,
-                        scripts::SearchResult::Fallback(_) => None,
-                        scripts::SearchResult::ScriptIssue(_) => None,
-                    };
-
-                    if let Some(path) = path_opt {
+                    if let Some(path) = source_action.path_from_result(&result) {
                         let editor_launch_rx =
                             self.launch_editor_with_feedback_async(&path, trace_id);
                         let trace_id = trace_id.to_string();
@@ -147,7 +183,7 @@ impl ScriptListApp {
                     } else {
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot edit this item type",
+                            source_action.unsupported_message(),
                         );
                     }
                 } else {
@@ -378,50 +414,36 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "copy_content" => {
+                let Some(source_action) = ScriptSourceHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "copy content action");
                 if let Some(result) = self.get_selected_result() {
-                    // Get the file path based on the result type
-                    let file_path_opt: Option<String> = match result {
-                        scripts::SearchResult::Script(m) => {
-                            Some(m.script.path.to_string_lossy().to_string())
-                        }
-                        scripts::SearchResult::Agent(m) => {
-                            Some(m.agent.path.to_string_lossy().to_string())
-                        }
-                        scripts::SearchResult::Scriptlet(m) => {
-                            // Extract just the path without the anchor
-                            m.scriptlet
-                                .file_path
-                                .as_ref()
-                                .map(|p| p.split('#').next().unwrap_or(p).to_string())
-                        }
-                        _ => None,
-                    };
-
-                    if let Some(file_path) = file_path_opt {
+                    if let Some(file_path) = source_action.path_from_result(&result) {
                         // Read the file content
                         match std::fs::read_to_string(&file_path) {
                             Ok(content) => {
-                                tracing::info!(category = "UI", path = %file_path, "copying content to clipboard");
+                                tracing::info!(category = "UI", path = %file_path.display(), "copying content to clipboard");
                                 self.copy_to_clipboard_with_feedback(
                                     &content,
-                                    "Content copied to clipboard".to_string(),
+                                    source_action.copied_hud().to_string(),
                                     true,
                                     cx,
                                 );
                             }
                             Err(e) => {
-                                tracing::error!(path = %file_path, error = %e, "failed to read file");
+                                tracing::error!(path = %file_path.display(), error = %e, "failed to read file");
                                 return DispatchOutcome::error(
                                     crate::action_helpers::ERROR_ACTION_FAILED,
-                                    format!("Failed to read file: {}", e),
+                                    source_action.read_error(e),
                                 );
                             }
                         }
                     } else {
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Cannot copy content for this item type",
+                            source_action.unsupported_message(),
                         );
                     }
                 } else {
