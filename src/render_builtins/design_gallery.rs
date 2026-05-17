@@ -79,6 +79,29 @@ pub(crate) fn design_gallery_filtered_len(filter: &str) -> usize {
         .count()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DesignGalleryEmptyState {
+    EmptyCatalog,
+    NoFilterMatches,
+}
+
+impl DesignGalleryEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.trim().is_empty() {
+            Self::EmptyCatalog
+        } else {
+            Self::NoFilterMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::EmptyCatalog => "No design variations available",
+            Self::NoFilterMatches => "No designs match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn design_gallery_visible_rows(filter: &str) -> Vec<GalleryItem> {
         let items = build_gallery_items();
@@ -114,6 +137,19 @@ impl ScriptListApp {
             .iter()
             .map(design_gallery_item_label)
             .collect()
+    }
+
+    fn design_gallery_input_display(filter: &str) -> SharedString {
+        if filter.is_empty() {
+            SharedString::from("Search design variations...")
+        } else {
+            SharedString::from(filter.to_string())
+        }
+    }
+
+    fn design_gallery_count_label(filtered_len: usize) -> String {
+        let suffix = if filtered_len == 1 { "" } else { "s" };
+        format!("{} item{}", filtered_len, suffix)
     }
 
     /// Render design gallery view with group header and icon variations
@@ -248,11 +284,7 @@ impl ScriptListApp {
             },
         );
 
-        let input_display = if filter.is_empty() {
-            SharedString::from("Search design variations...")
-        } else {
-            SharedString::from(filter.clone())
-        };
+        let input_display = Self::design_gallery_input_display(&filter);
         let input_is_empty = filter.is_empty();
 
         // Pre-compute colors - use theme for consistency with main menu
@@ -265,13 +297,14 @@ impl ScriptListApp {
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
+            let empty_state = DesignGalleryEmptyState::from_filter(&filter);
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
                 .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
-                .child("No items match your filter")
+                .child(empty_state.message())
                 .into_any_element()
         } else {
             // Clone data for the closure
@@ -552,7 +585,7 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} items", filtered_len)),
+                            .child(Self::design_gallery_count_label(filtered_len)),
                     ),
             )
             // Divider
