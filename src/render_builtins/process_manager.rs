@@ -17,6 +17,29 @@ impl ProcessManagerTerminateAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProcessManagerEmptyState {
+    NoRunningScripts,
+    NoFilteredMatches,
+}
+
+impl ProcessManagerEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoRunningScripts
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoRunningScripts => "No running scripts",
+            Self::NoFilteredMatches => "No processes match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Refresh interval for the process manager list (2 seconds).
     const PROCESS_MANAGER_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
@@ -421,11 +444,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(text_hint)
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No running scripts"
-                } else {
-                    "No processes match your filter"
-                })
+                .child(ProcessManagerEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let processes_for_closure: Vec<_> = filtered_processes
