@@ -328,7 +328,7 @@ const cases = [
     heads: ["ai:", "conversations:"],
     expectedFilters: ["conversations"],
     role: "rootPassive",
-    sourceName: "AI Conversations",
+    sourceName: "Agent Chat Conversations",
     stableKey: "acp-history/acp-source-filter",
     emptyStableKey: "acp-history/acp-source-filter",
   },

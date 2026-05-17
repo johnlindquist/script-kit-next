@@ -29,8 +29,8 @@ fn dictation_to_ai_harness_entry_registered() {
         "A built-in entry with id 'builtin-dictation-to-ai' must be registered"
     );
     assert!(
-        BUILTINS_SOURCE.contains("Dictate to AI"),
-        "The entry must have a user-facing name 'Dictate to AI'"
+        BUILTINS_SOURCE.contains("Dictate to Agent Chat"),
+        "The entry must have a user-facing name 'Dictate to Agent Chat'"
     );
 }
 
