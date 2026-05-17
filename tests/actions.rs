@@ -1039,6 +1039,32 @@ fn ai_preset_file_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_unavailable_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiUnavailableBuiltinAction")
+            && content.contains("ScreenAreaCapture"),
+        "Unavailable AI built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("AiUnavailableBuiltinAction::from_command(")
+            && content.contains("*cmd_type")
+            && content.contains("fn execute_ai_unavailable_builtin(")
+            && content.contains("action.message()")
+            && content.contains("action.failure_detail()"),
+        "Unavailable AI command copy and error details should derive from the named state"
+    );
+    assert!(
+        content.contains("Send Screen Area to Agent Chat is unavailable")
+            && content.contains("ai_send_screen_area_unavailable")
+            && content.contains("Toast::error(message, &self.theme)"),
+        "Send Screen Area should keep its unavailable toast and error detail"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
