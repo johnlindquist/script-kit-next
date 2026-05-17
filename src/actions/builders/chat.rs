@@ -386,8 +386,8 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         .with_section("Attachments"),
         Action::new(
             "chat:export_markdown",
-            "Export as Markdown",
-            Some("Exports chat as Markdown to the clipboard".to_string()),
+            "Copy Chat as Markdown",
+            Some("Copy chat as Markdown to the clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘E")

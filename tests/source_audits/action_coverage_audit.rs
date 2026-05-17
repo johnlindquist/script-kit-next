@@ -245,6 +245,35 @@ fn visible_attach_actions_use_agent_chat_label() {
 }
 
 #[test]
+fn markdown_copy_actions_do_not_advertise_file_export() {
+    let acp_builder = read("src/actions/builders/script_context.rs");
+    let acp_handler = read("src/app_actions/handle_action/mod.rs");
+    let chat_builder = read("src/actions/builders/chat.rs");
+
+    assert!(
+        acp_builder.contains("\"acp_export_markdown\"")
+            && acp_builder.contains("\"Copy Conversation as Markdown\""),
+        "ACP markdown action should advertise clipboard copy behavior"
+    );
+    assert!(
+        acp_handler.contains("cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown))")
+            && acp_handler.contains("Copied Agent Chat conversation as markdown"),
+        "ACP markdown handler should still prove clipboard copy behavior"
+    );
+    assert!(
+        chat_builder.contains("\"chat:export_markdown\"")
+            && chat_builder.contains("\"Copy Chat as Markdown\"")
+            && chat_builder.contains("Copy chat as Markdown to the clipboard"),
+        "Legacy chat markdown action should advertise clipboard copy behavior"
+    );
+    assert!(
+        !acp_builder.contains("\"Export as Markdown\"")
+            && !chat_builder.contains("\"Export as Markdown\""),
+        "Markdown copy actions must not use export wording unless they create a file"
+    );
+}
+
+#[test]
 fn handle_action_uses_only_named_toast_duration_constants() {
     let content = handle_action_content();
 
