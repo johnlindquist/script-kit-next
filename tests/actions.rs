@@ -187,6 +187,24 @@ fn emoji_entry_actions_use_named_plan_states() {
 }
 
 #[test]
+fn emoji_paste_destination_uses_named_plan_states() {
+    let content =
+        fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
+
+    assert!(
+        content.contains("enum EmojiPasteDestinationPlan")
+            && content.contains("FrontmostApp")
+            && content.contains("ActiveAppFallback"),
+        "emoji paste title should be driven by named destination plan states"
+    );
+    assert!(
+        content.contains("EmojiPasteDestinationPlan::from_info(emoji)")
+            && content.contains("paste_destination_plan.title(emoji)"),
+        "emoji paste action title should derive from the named destination plan"
+    );
+}
+
+#[test]
 fn notes_command_bar_actions_use_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");

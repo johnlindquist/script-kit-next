@@ -24,6 +24,12 @@ enum EmojiEntryActionPlan {
     UnpinnedWithoutCategory,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiPasteDestinationPlan {
+    FrontmostApp,
+    ActiveAppFallback,
+}
+
 impl EmojiEntryActionPlan {
     fn from_info(emoji: &EmojiActionInfo) -> Self {
         match (emoji.pinned, emoji.category.is_some()) {
@@ -63,11 +69,31 @@ impl EmojiEntryActionPlan {
     }
 }
 
+impl EmojiPasteDestinationPlan {
+    fn from_info(emoji: &EmojiActionInfo) -> Self {
+        match emoji.frontmost_app_name.as_deref() {
+            Some(name) if !name.trim().is_empty() => Self::FrontmostApp,
+            _ => Self::ActiveAppFallback,
+        }
+    }
+
+    fn title(self, emoji: &EmojiActionInfo) -> String {
+        match self {
+            Self::FrontmostApp => format!(
+                "Paste to {}",
+                emoji.frontmost_app_name.as_deref().unwrap_or_default()
+            ),
+            Self::ActiveAppFallback => "Paste to Active App".to_string(),
+        }
+    }
+}
+
 /// Get actions specific to an emoji picker entry.
 #[allow(clippy::vec_init_then_push)]
 pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
     let mut actions = Vec::new();
     let entry_plan = EmojiEntryActionPlan::from_info(emoji);
+    let paste_destination_plan = EmojiPasteDestinationPlan::from_info(emoji);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -77,15 +103,10 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
         "Building emoji picker actions"
     );
 
-    let paste_title = match &emoji.frontmost_app_name {
-        Some(name) => format!("Paste to {}", name),
-        None => "Paste to Active App".to_string(),
-    };
-
     actions.push(
         Action::new(
             "emoji:emoji_paste",
-            paste_title,
+            paste_destination_plan.title(emoji),
             Some(
                 "Copies the emoji to the clipboard and pastes it into the focused app".to_string(),
             ),
