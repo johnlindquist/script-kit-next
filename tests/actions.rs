@@ -360,6 +360,26 @@ fn emoji_copy_handler_uses_named_action_states() {
 }
 
 #[test]
+fn emoji_paste_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
+        .expect("Failed to read emoji action handler");
+
+    assert!(
+        content.contains("enum EmojiPasteHandlerAction")
+            && content.contains("Paste")
+            && content.contains("PasteKeepOpen"),
+        "emoji paste/paste-keep-open handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("EmojiPasteHandlerAction::from_action_id(action_id)")
+            && content.contains("paste_action.selection_required_message()")
+            && content.contains("paste_action.trace_action()")
+            && content.contains("paste_action.close_behavior()"),
+        "emoji paste handler should derive empty-selection copy, tracing action, and close behavior from the named state"
+    );
+}
+
+#[test]
 fn emoji_paste_destination_uses_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");

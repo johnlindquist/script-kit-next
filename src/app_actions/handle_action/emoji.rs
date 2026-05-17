@@ -15,9 +15,45 @@ enum EmojiCopyHandlerAction {
     Section,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiPasteHandlerAction {
+    Paste,
+    PasteKeepOpen,
+}
+
 struct EmojiCopyPayload {
     clipboard_text: String,
     hud_text: String,
+}
+
+impl EmojiPasteHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "emoji_paste" => Some(Self::Paste),
+            "emoji_paste_keep_open" => Some(Self::PasteKeepOpen),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Paste | Self::PasteKeepOpen => "No emoji selected",
+        }
+    }
+
+    fn trace_action(self) -> &'static str {
+        match self {
+            Self::Paste => "emoji_paste",
+            Self::PasteKeepOpen => "emoji_paste_keep_open",
+        }
+    }
+
+    fn close_behavior(self) -> PasteCloseBehavior {
+        match self {
+            Self::Paste => PasteCloseBehavior::HideWindow,
+            Self::PasteKeepOpen => PasteCloseBehavior::KeepWindowOpen,
+        }
+    }
 }
 
 impl EmojiPinHandlerAction {
@@ -142,14 +178,17 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         match action_id {
-            "emoji_paste" => {
+            "emoji_paste" | "emoji_paste_keep_open" => {
+                let Some(paste_action) = EmojiPasteHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
+                    self.show_error_toast(paste_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 tracing::info!(
-                    action = "emoji_paste",
+                    action = paste_action.trace_action(),
                     emoji = %emoji.value,
                     emoji_name = %emoji.name,
                     "emoji action"
@@ -158,7 +197,7 @@ impl ScriptListApp {
                 self.finalize_paste_after_clipboard_ready(
                     "emoji",
                     &emoji.name,
-                    PasteCloseBehavior::HideWindow,
+                    paste_action.close_behavior(),
                     cx,
                 )
             }
@@ -183,26 +222,6 @@ impl ScriptListApp {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(payload.clipboard_text));
                 self.show_hud(payload.hud_text, Some(HUD_SHORT_MS), cx);
                 DispatchOutcome::success()
-            }
-            "emoji_paste_keep_open" => {
-                let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                tracing::info!(
-                    action = "emoji_paste_keep_open",
-                    emoji = %emoji.value,
-                    emoji_name = %emoji.name,
-                    "emoji action"
-                );
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(emoji.value.clone()));
-                self.finalize_paste_after_clipboard_ready(
-                    "emoji",
-                    &emoji.name,
-                    PasteCloseBehavior::KeepWindowOpen,
-                    cx,
-                )
             }
             "emoji_pin" | "emoji_unpin" => {
                 let Some(pin_action) = EmojiPinHandlerAction::from_action_id(action_id) else {
