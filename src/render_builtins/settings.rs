@@ -75,13 +75,13 @@ fn get_settings_items() -> Vec<SettingsItem> {
             action: SettingsAction::CheckPermissions,
         },
         SettingsItem {
-            name: "Allow Accessibility",
+            name: "Accessibility Permission Assistant",
             description: "Open the Permission Assistant for Accessibility",
             icon: "accessibility",
             action: SettingsAction::AllowAccessibility,
         },
         SettingsItem {
-            name: "Allow Screen Recording",
+            name: "Screen Recording Permission Assistant",
             description: "Open the Permission Assistant for Screen Recording",
             icon: "monitor",
             action: SettingsAction::AllowScreenRecording,
@@ -314,7 +314,7 @@ impl ScriptListApp {
                     id: crate::config::canonical_builtin_command_id(
                         "builtin/allow-accessibility",
                     ),
-                    name: "Allow Accessibility".to_string(),
+                    name: "Accessibility Permission Assistant".to_string(),
                     description: "Open the Permission Assistant for Accessibility".to_string(),
                     keywords: vec![
                         "allow".to_string(),
@@ -337,7 +337,7 @@ impl ScriptListApp {
                     id: crate::config::canonical_builtin_command_id(
                         "builtin/allow-screen-recording",
                     ),
-                    name: "Allow Screen Recording".to_string(),
+                    name: "Screen Recording Permission Assistant".to_string(),
                     description: "Open the Permission Assistant for Screen Recording".to_string(),
                     keywords: vec![
                         "allow".to_string(),

@@ -116,3 +116,41 @@ fn acp_history_text_names_agent_chat_conversations() {
         "ACP history text should not use generic AI conversation wording"
     );
 }
+
+#[test]
+fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+    let settings = super::read_source("src/render_builtins/settings.rs");
+
+    for (id, expected_name, expected_action, expected_description) in [
+        (
+            "builtin/allow-accessibility",
+            "Accessibility Permission Assistant",
+            "Open Accessibility Assistant",
+            "Open the Permission Assistant for Accessibility",
+        ),
+        (
+            "builtin/allow-screen-recording",
+            "Screen Recording Permission Assistant",
+            "Open Screen Recording Assistant",
+            "Open the Permission Assistant for Screen Recording",
+        ),
+    ] {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap_or_else(|| panic!("missing permission assistant builtin {id}"));
+
+        assert_eq!(entry.name, expected_name, "{id} name");
+        assert_eq!(entry.default_action_text(), expected_action, "{id} action");
+        assert_eq!(entry.description, expected_description, "{id} description");
+        assert!(
+            !entry.name.starts_with("Allow ") && !entry.default_action_text().starts_with("Allow "),
+            "{id} should not imply Script Kit can directly grant macOS permission"
+        );
+        assert!(
+            settings.contains(expected_name) && settings.contains(expected_description),
+            "settings hub should use the same assistant wording for {id}"
+        );
+    }
+}

@@ -526,8 +526,8 @@ impl BuiltInEntry {
                 PermissionCommandType::CheckPermissions => "Check Permissions",
                 PermissionCommandType::RequestAccessibility => "Request Accessibility Access",
                 PermissionCommandType::OpenAccessibilitySettings => "Open Accessibility Settings",
-                PermissionCommandType::AllowAccessibility => "Allow Accessibility",
-                PermissionCommandType::AllowScreenRecording => "Allow Screen Recording",
+                PermissionCommandType::AllowAccessibility => "Open Accessibility Assistant",
+                PermissionCommandType::AllowScreenRecording => "Open Screen Recording Assistant",
             },
             BuiltInFeature::FrecencyCommand(action) => match action {
                 FrecencyCommandType::ClearSuggested => "Clear Suggested Items",
@@ -1503,7 +1503,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/allow-accessibility",
-            "Allow Accessibility",
+            "Accessibility Permission Assistant",
             "Open the Permission Assistant for Accessibility",
             vec![
                 "allow",
@@ -1518,7 +1518,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/allow-screen-recording",
-            "Allow Screen Recording",
+            "Screen Recording Permission Assistant",
             "Open the Permission Assistant for Screen Recording",
             vec![
                 "allow",
