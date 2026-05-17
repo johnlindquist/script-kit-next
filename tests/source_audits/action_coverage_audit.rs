@@ -777,14 +777,11 @@ fn view_logs_toggles_log_panel() {
 fn reveal_in_finder_shows_hud_on_success() {
     let content = handle_action_content();
 
-    let reveal_pos = content
-        .find("\"reveal_in_finder\"")
-        .expect("Expected reveal_in_finder handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 3000)];
+    let block = handler_branch_block(&content, "\"reveal_in_finder\" =>", 3000);
 
     assert!(
-        block.contains("Opened in Finder"),
-        "reveal_in_finder should show 'Opened in Finder' HUD"
+        block.contains("reveal_action.success_hud()"),
+        "reveal_in_finder should show success HUD through named action state"
     );
     assert!(
         block.contains("HUD_SHORT_MS"),
@@ -796,14 +793,11 @@ fn reveal_in_finder_shows_hud_on_success() {
 fn reveal_in_finder_shows_error_toast_for_unsupported_types() {
     let content = handle_action_content();
 
-    let reveal_pos = content
-        .find("\"reveal_in_finder\"")
-        .expect("Expected reveal_in_finder handler");
-    let block = &content[reveal_pos..content.len().min(reveal_pos + 4000)];
+    let block = handler_branch_block(&content, "\"reveal_in_finder\" =>", 4000);
 
     assert!(
-        block.contains("Cannot reveal this item type in Finder"),
-        "reveal_in_finder should show error for unsupported types"
+        block.contains("reveal_action.unsupported_message()"),
+        "reveal_in_finder should show unsupported-type error through named action state"
     );
 }
 

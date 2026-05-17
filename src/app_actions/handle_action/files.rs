@@ -105,6 +105,11 @@ enum FileSearchDeeplinkCopyHandlerAction {
     CopyDeeplink,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchRevealHandlerAction {
+    RevealInFinder,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -397,6 +402,29 @@ impl FileSearchDeeplinkCopyHandlerAction {
     }
 }
 
+impl FileSearchRevealHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "reveal_in_finder" => Some(Self::RevealInFinder),
+            _ => None,
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::RevealInFinder => "Opened in Finder",
+        }
+    }
+
+    fn unsupported_message(self) -> gpui::SharedString {
+        match self {
+            Self::RevealInFinder => {
+                gpui::SharedString::from("Cannot reveal this item type in Finder")
+            }
+        }
+    }
+}
+
 impl ScriptListApp {
     fn deeplink_for_result(result: &scripts::SearchResult) -> String {
         result
@@ -656,6 +684,10 @@ impl ScriptListApp {
         let action_id = action_id.strip_prefix("file:").unwrap_or(action_id);
         match action_id {
             "reveal_in_finder" => {
+                let Some(reveal_action) = FileSearchRevealHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "reveal in Finder action");
                 let path_result =
                     self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
@@ -679,7 +711,7 @@ impl ScriptListApp {
                                     "Async action completed: reveal_in_finder"
                                 );
                                 this.show_hud(
-                                    "Opened in Finder".to_string(),
+                                    reveal_action.success_hud().to_string(),
                                     Some(HUD_SHORT_MS),
                                     cx,
                                 );
@@ -703,9 +735,10 @@ impl ScriptListApp {
                     })
                     .detach();
                 } else {
-                    let msg = path_result.err().flatten().unwrap_or_else(|| {
-                        gpui::SharedString::from("Cannot reveal this item type in Finder")
-                    });
+                    let msg = path_result
+                        .err()
+                        .flatten()
+                        .unwrap_or_else(|| reveal_action.unsupported_message());
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
                         msg.to_string(),
