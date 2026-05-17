@@ -458,6 +458,25 @@ fn acp_model_selection_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn acp_root_change_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum AcpRootPickerActionPlan")
+            && content.contains("CurrentSelection")
+            && content.contains("NoCurrentSelection"),
+        "ACP root Change Agent/Model descriptions should be driven by named picker plan states"
+    );
+    assert!(
+        content.contains("AcpRootPickerActionPlan::from_selected_display_name")
+            && content.contains("agent_picker_plan.description(ACP_CHANGE_AGENT_DESCRIPTION)")
+            && content.contains("model_picker_plan.description(ACP_CHANGE_MODEL_DESCRIPTION)"),
+        "ACP root Change Agent/Model actions should derive current/fallback copy from the named picker plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
