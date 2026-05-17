@@ -366,14 +366,23 @@ pub(crate) fn root_unified_actions_for_subject(
             } else {
                 action(RootUnifiedResultAction::ClipboardPin, "Pin", "Actions")
             };
-            vec![
+            let mut actions = vec![
                 action(RootUnifiedResultAction::ClipboardPaste, "Paste Clipboard", "Open"),
                 action(RootUnifiedResultAction::ClipboardCopy, "Copy to Clipboard", "Share"),
-                action(
+            ];
+            if matches!(
+                entry.content_type,
+                crate::clipboard_history::ContentType::Text
+                    | crate::clipboard_history::ContentType::Link
+                    | crate::clipboard_history::ContentType::Color
+            ) {
+                actions.push(action(
                     RootUnifiedResultAction::ClipboardAttachToAi,
                     "Attach to Agent Chat",
                     "Share",
-                ),
+                ));
+            }
+            actions.extend([
                 pin_action,
                 action(
                     RootUnifiedResultAction::ClipboardQuickLook,
@@ -385,7 +394,8 @@ pub(crate) fn root_unified_actions_for_subject(
                     "Delete Clipboard Entry",
                     "Danger",
                 ),
-            ]
+            ]);
+            actions
         }
         RootUnifiedActionSubject::BrowserTab(_) => vec![
             action(RootUnifiedResultAction::BrowserTabSwitch, "Switch to Tab", "Open"),
@@ -895,6 +905,44 @@ mod tests {
         entry.pinned = true;
         assert!(ids(&RootUnifiedActionSubject::Clipboard(entry))
             .contains(&"root_clipboard_unpin".to_string()));
+    }
+
+    #[test]
+    fn clipboard_attach_action_only_shows_for_text_submit_content() {
+        fn entry(content_type: crate::clipboard_history::ContentType) -> RootUnifiedActionSubject {
+            RootUnifiedActionSubject::Clipboard(crate::clipboard_history::ClipboardEntryMeta {
+                id: "clip".to_string(),
+                content_type,
+                timestamp: 0,
+                pinned: false,
+                text_preview: "clip".to_string(),
+                image_width: None,
+                image_height: None,
+                byte_size: 4,
+                ocr_text: None,
+            })
+        }
+
+        for content_type in [
+            crate::clipboard_history::ContentType::Text,
+            crate::clipboard_history::ContentType::Link,
+            crate::clipboard_history::ContentType::Color,
+        ] {
+            assert!(
+                ids(&entry(content_type)).contains(&"root_clipboard_attach_to_ai".to_string()),
+                "root clipboard attach should be visible for {content_type:?}"
+            );
+        }
+
+        for content_type in [
+            crate::clipboard_history::ContentType::File,
+            crate::clipboard_history::ContentType::Image,
+        ] {
+            assert!(
+                !ids(&entry(content_type)).contains(&"root_clipboard_attach_to_ai".to_string()),
+                "root clipboard attach should be hidden for {content_type:?}"
+            );
+        }
     }
 
     #[test]
