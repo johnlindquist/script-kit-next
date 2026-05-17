@@ -1418,29 +1418,48 @@ fn ai_capture_hide_settle_duration() -> std::time::Duration {
     std::time::Duration::from_millis(AI_CAPTURE_HIDE_SETTLE_MS)
 }
 
-fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> bool {
-    // All active AI commands now route to the harness terminal, which is
-    // a view inside the main window — keep it visible.
-    match cmd_type {
-        builtins::AiCommandType::GenerateScript
-        | builtins::AiCommandType::GenerateScriptFromCurrentApp
-        | builtins::AiCommandType::SendScreenToAi
-        | builtins::AiCommandType::SendFocusedWindowToAi
-        | builtins::AiCommandType::SendSelectedTextToAi
-        | builtins::AiCommandType::SendBrowserTabToAi
-        | builtins::AiCommandType::SendScreenAreaToAi => true,
-        // Legacy aliases (OpenAi, MiniAi, NewConversation, ClearConversation)
-        // also open the harness terminal inside the main window.
-        cmd if cmd.is_legacy_harness_alias() => true,
-        // Preset commands (debug-only) retain their original behavior.
-        _ => false,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiCommandWindowPlan {
+    KeepMainWindowVisible,
+    HideMainWindowDeferred,
+    HideMainWindowForCapture,
+}
+
+impl AiCommandWindowPlan {
+    fn from_command(cmd_type: &builtins::AiCommandType) -> Self {
+        // All active AI commands now route to the harness terminal, which is
+        // a view inside the main window — keep it visible.
+        match cmd_type {
+            builtins::AiCommandType::GenerateScript
+            | builtins::AiCommandType::GenerateScriptFromCurrentApp
+            | builtins::AiCommandType::SendScreenToAi
+            | builtins::AiCommandType::SendFocusedWindowToAi
+            | builtins::AiCommandType::SendSelectedTextToAi
+            | builtins::AiCommandType::SendBrowserTabToAi
+            | builtins::AiCommandType::SendScreenAreaToAi => Self::KeepMainWindowVisible,
+            // Legacy aliases (OpenAi, MiniAi, NewConversation, ClearConversation)
+            // also open the harness terminal inside the main window.
+            cmd if cmd.is_legacy_harness_alias() => Self::KeepMainWindowVisible,
+            // Preset commands (debug-only) retain their original behavior.
+            _ => Self::HideMainWindowDeferred,
+        }
+    }
+
+    fn keeps_main_window_visible(self) -> bool {
+        matches!(self, Self::KeepMainWindowVisible)
+    }
+
+    fn uses_hide_then_capture_flow(self) -> bool {
+        matches!(self, Self::HideMainWindowForCapture)
     }
 }
 
-fn ai_command_uses_hide_then_capture_flow(_cmd_type: &builtins::AiCommandType) -> bool {
-    // Legacy capture flow no longer needed — all active AI commands route to
-    // the harness terminal which captures context inline.
-    false
+fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> bool {
+    AiCommandWindowPlan::from_command(cmd_type).keeps_main_window_visible()
+}
+
+fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
+    AiCommandWindowPlan::from_command(cmd_type).uses_hide_then_capture_flow()
 }
 
 #[cfg(test)]
@@ -3449,21 +3468,8 @@ impl ScriptListApp {
 
                 use builtins::AiCommandType;
 
-                let keeps_main_window_visible = ai_command_keeps_main_window_visible(cmd_type);
-                let uses_hide_then_capture_flow = ai_command_uses_hide_then_capture_flow(cmd_type);
-                if !keeps_main_window_visible {
-                    script_kit_gpui::set_main_window_visible(false);
-                    self.reset_to_script_list(cx);
-                    if uses_hide_then_capture_flow {
-                        tracing::debug!(
-                            action = ?cmd_type,
-                            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
-                            "Deferring main window hide to async capture flow"
-                        );
-                    } else {
-                        platform::defer_hide_main_window(cx);
-                    }
-                }
+                let window_plan = AiCommandWindowPlan::from_command(cmd_type);
+                self.apply_ai_command_window_plan(window_plan, cmd_type, cx);
 
                 match cmd_type {
                     // -------------------------------------------------------
@@ -4328,6 +4334,31 @@ impl ScriptListApp {
         cx.notify();
 
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn apply_ai_command_window_plan(
+        &mut self,
+        plan: AiCommandWindowPlan,
+        cmd_type: &builtins::AiCommandType,
+        cx: &mut Context<Self>,
+    ) {
+        match plan {
+            AiCommandWindowPlan::KeepMainWindowVisible => {}
+            AiCommandWindowPlan::HideMainWindowDeferred => {
+                script_kit_gpui::set_main_window_visible(false);
+                self.reset_to_script_list(cx);
+                platform::defer_hide_main_window(cx);
+            }
+            AiCommandWindowPlan::HideMainWindowForCapture => {
+                script_kit_gpui::set_main_window_visible(false);
+                self.reset_to_script_list(cx);
+                tracing::debug!(
+                    action = ?cmd_type,
+                    hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+                    "Deferring main window hide to async capture flow"
+                );
+            }
+        }
     }
 
     fn execute_window_switcher_builtin(
@@ -7626,7 +7657,7 @@ mod builtin_execution_ai_feedback_tests {
         ai_capture_hide_settle_duration, ai_command_keeps_main_window_visible,
         ai_command_uses_hide_then_capture_flow, ai_open_failure_message,
         created_file_path_for_feedback, emoji_picker_label, favorites_loaded_message,
-        AI_CAPTURE_HIDE_SETTLE_MS,
+        AiCommandWindowPlan, AI_CAPTURE_HIDE_SETTLE_MS,
     };
     use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
@@ -7710,6 +7741,30 @@ mod builtin_execution_ai_feedback_tests {
         assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::MiniAi
         ));
+    }
+
+    #[test]
+    fn ai_command_window_plan_names_harness_visible_and_preset_hide_paths() {
+        assert_eq!(
+            AiCommandWindowPlan::from_command(&AiCommandType::GenerateScript),
+            AiCommandWindowPlan::KeepMainWindowVisible
+        );
+        assert_eq!(
+            AiCommandWindowPlan::from_command(&AiCommandType::SendScreenToAi),
+            AiCommandWindowPlan::KeepMainWindowVisible
+        );
+        assert_eq!(
+            AiCommandWindowPlan::from_command(&AiCommandType::OpenAi),
+            AiCommandWindowPlan::KeepMainWindowVisible
+        );
+        assert_eq!(
+            AiCommandWindowPlan::from_command(&AiCommandType::CreateAiPreset),
+            AiCommandWindowPlan::HideMainWindowDeferred
+        );
+        assert!(
+            !AiCommandWindowPlan::from_command(&AiCommandType::SendBrowserTabToAi)
+                .uses_hide_then_capture_flow()
+        );
     }
 
     #[test]
