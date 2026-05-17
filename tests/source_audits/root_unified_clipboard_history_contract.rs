@@ -69,6 +69,31 @@ fn root_unified_clipboard_history_result_is_stable_and_non_bindable() {
 }
 
 #[test]
+fn root_unified_clipboard_attach_action_is_limited_to_text_submit_content() {
+    let actions = include_str!("../../src/app_impl/root_unified_result_actions.rs");
+    let clipboard_arm = actions
+        .split("RootUnifiedActionSubject::Clipboard(entry) => {")
+        .nth(1)
+        .and_then(|rest| rest.split("RootUnifiedActionSubject::BrowserTab(_)").next())
+        .expect("root unified clipboard actions arm should exist");
+
+    assert!(clipboard_arm.contains("RootUnifiedResultAction::ClipboardAttachToAi"));
+    assert!(clipboard_arm.contains("Attach to Agent Chat"));
+    assert!(clipboard_arm.contains("entry.content_type"));
+    assert!(clipboard_arm.contains("ContentType::Text"));
+    assert!(clipboard_arm.contains("ContentType::Link"));
+    assert!(clipboard_arm.contains("ContentType::Color"));
+    assert!(
+        !clipboard_arm.contains("ContentType::File"),
+        "root unified attach only submits text; file rows should not advertise attachment"
+    );
+    assert!(
+        !clipboard_arm.contains("ContentType::Image"),
+        "root unified attach only submits text; image rows should not advertise attachment"
+    );
+}
+
+#[test]
 fn root_unified_clipboard_history_enter_reuses_existing_paste_contract() {
     let selection = include_str!("../../src/app_impl/selection_fallback.rs");
 
