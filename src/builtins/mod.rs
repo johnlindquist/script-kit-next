@@ -589,7 +589,7 @@ impl BuiltInEntry {
             BuiltInFeature::DesignGallery => "Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
-            BuiltInFeature::AiChat => "Chat",
+            BuiltInFeature::AiChat => "Agent Chat",
             BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Emoji",
             BuiltInFeature::SyncToGithub => "Sync",
@@ -633,7 +633,7 @@ impl BuiltInEntry {
                 NotesCommandType::QuickCapture => "Quick Capture",
             },
             BuiltInFeature::AiCommand(action) => match action {
-                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open Chat",
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Agent Chat",
                 AiCommandType::NewConversation => "New Chat",
                 AiCommandType::ClearConversation => "Clear Chat",
                 AiCommandType::GenerateScript => "New Script",

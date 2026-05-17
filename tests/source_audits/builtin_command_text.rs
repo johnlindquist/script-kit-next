@@ -3,6 +3,13 @@ use script_kit_gpui::{builtins::get_builtin_entries, config::BuiltInConfig};
 #[test]
 fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
+    let agent_chat = entries
+        .iter()
+        .find(|entry| entry.id == "builtin/ai-chat")
+        .expect("agent chat entry should exist");
+    assert_eq!(agent_chat.name, "Agent Chat");
+    assert_eq!(agent_chat.default_action_text(), "Open Agent Chat");
+    assert_eq!(agent_chat.footer_action_text(), "Agent Chat");
 
     for (id, expected_name, expected_action) in [
         (
