@@ -504,6 +504,29 @@ impl SettingsCommandBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiPresetViewBuiltinAction {
+    Create,
+    Search,
+}
+
+impl AiPresetViewBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        match command {
+            builtins::AiCommandType::CreateAiPreset => Some(Self::Create),
+            builtins::AiCommandType::SearchAiPresets => Some(Self::Search),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Create => "ai_create_preset",
+            Self::Search => "ai_search_presets",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3139,15 +3162,9 @@ impl ScriptListApp {
                             trace_id = %dctx.trace_id,
                             "Opening create AI preset form"
                         );
-                        self.current_view = AppView::CreateAiPresetView {
-                            name: String::new(),
-                            system_prompt: String::new(),
-                            model: String::new(),
-                            active_field: 0,
-                        };
-                        self.pending_focus = Some(FocusTarget::AppRoot);
-                        cx.notify();
-                        Self::builtin_success(dctx, "ai_create_preset")
+                        let preset_action = AiPresetViewBuiltinAction::from_command(*cmd_type)
+                            .expect("AI preset view arm should only receive create preset command");
+                        self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
                     }
 
                     AiCommandType::ImportAiPresets => {
@@ -3325,13 +3342,11 @@ impl ScriptListApp {
                             trace_id = %dctx.trace_id,
                             "Opening AI presets search"
                         );
-                        self.current_view = AppView::SearchAiPresetsView {
-                            filter: String::new(),
-                            selected_index: 0,
-                        };
-                        self.pending_focus = Some(FocusTarget::MainFilter);
-                        cx.notify();
-                        Self::builtin_success(dctx, "ai_search_presets")
+                        let preset_action = AiPresetViewBuiltinAction::from_command(*cmd_type)
+                            .expect(
+                                "AI preset view arm should only receive search presets command",
+                            );
+                        self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
                     }
 
                     // Legacy AI aliases — all route to the harness terminal.
@@ -4547,6 +4562,35 @@ impl ScriptListApp {
                 self.execute_settings_snap_mode_builtin(snap_action, dctx, cx)
             }
         }
+    }
+
+    fn execute_ai_preset_view_builtin(
+        &mut self,
+        action: AiPresetViewBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            AiPresetViewBuiltinAction::Create => {
+                self.current_view = AppView::CreateAiPresetView {
+                    name: String::new(),
+                    system_prompt: String::new(),
+                    model: String::new(),
+                    active_field: 0,
+                };
+                self.pending_focus = Some(FocusTarget::AppRoot);
+            }
+            AiPresetViewBuiltinAction::Search => {
+                self.current_view = AppView::SearchAiPresetsView {
+                    filter: String::new(),
+                    selected_index: 0,
+                };
+                self.pending_focus = Some(FocusTarget::MainFilter);
+            }
+        }
+
+        cx.notify();
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_settings_snap_mode_builtin(

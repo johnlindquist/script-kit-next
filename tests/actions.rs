@@ -928,6 +928,32 @@ fn settings_command_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_preset_view_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiPresetViewBuiltinAction")
+            && content.contains("Create")
+            && content.contains("Search"),
+        "AI preset view built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("AiPresetViewBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_ai_preset_view_builtin(")
+            && content.contains("AiPresetViewBuiltinAction::Create")
+            && content.contains("AiPresetViewBuiltinAction::Search"),
+        "AI preset view command routing should delegate through the named state"
+    );
+    assert!(
+        content.contains("AppView::CreateAiPresetView")
+            && content.contains("AppView::SearchAiPresetsView")
+            && content.contains("Self::builtin_success(dctx, action.success_detail())"),
+        "AI preset view state should own the target views and success details"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
