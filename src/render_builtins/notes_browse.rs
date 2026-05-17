@@ -1,4 +1,35 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NotesBrowseEmptyState {
+    NoNotesYet,
+    NoFilteredMatches,
+}
+
+impl NotesBrowseEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoNotesYet
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoNotesYet => "No notes yet",
+            Self::NoFilteredMatches => "No notes match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
+    fn notes_browse_display_title(note: &crate::notes::Note) -> String {
+        if note.title.trim().is_empty() {
+            "Untitled Note".to_string()
+        } else {
+            note.title.clone()
+        }
+    }
+
     fn notes_browse_filtered_notes(filter: &str) -> Vec<crate::notes::Note> {
         let result = if filter.trim().is_empty() {
             crate::notes::get_all_notes()
@@ -42,13 +73,7 @@ impl ScriptListApp {
     fn notes_browse_visible_row_labels(filter: &str) -> Vec<String> {
         Self::notes_browse_visible_rows(filter)
             .into_iter()
-            .map(|note| {
-                if note.title.trim().is_empty() {
-                    "Untitled Note".to_string()
-                } else {
-                    note.title
-                }
-            })
+            .map(|note| Self::notes_browse_display_title(&note))
             .collect()
     }
 
@@ -69,11 +94,7 @@ impl ScriptListApp {
         &self,
         note: &crate::notes::Note,
     ) -> crate::ai::message_parts::AiContextPart {
-        let title = if note.title.trim().is_empty() {
-            "Untitled Note".to_string()
-        } else {
-            note.title.clone()
-        };
+        let title = Self::notes_browse_display_title(note);
         let note_id = note.id.as_str();
         let target = crate::ai::TabAiTargetContext {
             source: "NotesBrowse".to_string(),
@@ -231,11 +252,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgba(chrome.text_hint_rgba))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No notes yet"
-                } else {
-                    "No notes match your filter"
-                })
+                .child(NotesBrowseEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let notes_for_closure = filtered_notes.clone();
@@ -253,11 +270,7 @@ impl ScriptListApp {
                 .children(notes_for_closure.into_iter().enumerate().map(
                     move |(display_ix, note)| {
                         let is_selected = display_ix == selected;
-                        let title = if note.title.trim().is_empty() {
-                            "Untitled Note".to_string()
-                        } else {
-                            note.title.clone()
-                        };
+                        let title = Self::notes_browse_display_title(&note);
                         let description = format!(
                             "{} · {} chars{}",
                             crate::formatting::format_absolute_datetime(note.updated_at),
@@ -318,11 +331,7 @@ impl ScriptListApp {
 
         let preview_panel: AnyElement = match preview_note {
             Some(note) => {
-                let title = if note.title.trim().is_empty() {
-                    "Untitled Note".to_string()
-                } else {
-                    note.title.clone()
-                };
+                let title = Self::notes_browse_display_title(&note);
 
                 div()
                     .w_full()
