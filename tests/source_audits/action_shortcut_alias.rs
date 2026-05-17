@@ -79,7 +79,7 @@ fn remove_shortcut_calls_persistence_and_shows_hud() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_shortcut\"")
+        .find("\"remove_shortcut\" => {")
         .expect("Expected remove_shortcut action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
@@ -88,7 +88,7 @@ fn remove_shortcut_calls_persistence_and_shows_hud() {
         "remove_shortcut should remove command shortcuts through config.ts"
     );
     assert!(
-        block.contains("Shortcut removed"),
+        block.contains("remove_action.success_hud()") && content.contains("Shortcut removed"),
         "remove_shortcut should show HUD on success"
     );
     assert!(
@@ -102,7 +102,7 @@ fn remove_shortcut_checks_live_unregister_result() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_shortcut\"")
+        .find("\"remove_shortcut\" => {")
         .expect("Expected remove_shortcut action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
@@ -156,12 +156,13 @@ fn remove_shortcut_shows_error_on_persistence_failure() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_shortcut\"")
+        .find("\"remove_shortcut\" => {")
         .expect("Expected remove_shortcut action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("Failed to remove shortcut:"),
+        block.contains("remove_action.failure_message(e)")
+            && content.contains("Failed to remove shortcut:"),
         "remove_shortcut should surface error on persistence failure"
     );
     // Error may be surfaced via DispatchOutcome::error (centralized feedback)
@@ -177,12 +178,13 @@ fn remove_shortcut_rejects_unsupported_item_types() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_shortcut\"")
+        .find("\"remove_shortcut\" => {")
         .expect("Expected remove_shortcut action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("Cannot remove shortcut for this item type"),
+        block.contains("remove_action.cannot_remove_message()")
+            && content.contains("Cannot remove shortcut for this item type"),
         "remove_shortcut should show error for unsupported item types (e.g. Window)"
     );
 }
@@ -297,7 +299,7 @@ fn remove_alias_calls_persistence_and_shows_hud() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_alias\"")
+        .find("\"remove_alias\" => {")
         .expect("Expected remove_alias action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
@@ -306,7 +308,7 @@ fn remove_alias_calls_persistence_and_shows_hud() {
         "remove_alias should call remove_alias_override for persistence"
     );
     assert!(
-        block.contains("Alias removed"),
+        block.contains("remove_action.success_hud()") && content.contains("Alias removed"),
         "remove_alias should show HUD on success"
     );
     assert!(
@@ -324,12 +326,13 @@ fn remove_alias_shows_error_on_persistence_failure() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_alias\"")
+        .find("\"remove_alias\" => {")
         .expect("Expected remove_alias action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("Failed to remove alias:"),
+        block.contains("remove_action.failure_message(e)")
+            && content.contains("Failed to remove alias:"),
         "remove_alias should surface error on persistence failure"
     );
     // Error may be surfaced via DispatchOutcome::error (centralized feedback)
@@ -345,12 +348,13 @@ fn remove_alias_rejects_unsupported_item_types() {
     let content = super::read_all_handle_action_sources();
 
     let remove_pos = content
-        .find("\"remove_alias\"")
+        .find("\"remove_alias\" => {")
         .expect("Expected remove_alias action handler");
     let block = &content[remove_pos..content.len().min(remove_pos + 5000)];
 
     assert!(
-        block.contains("Cannot remove alias for this item type"),
+        block.contains("remove_action.cannot_remove_message()")
+            && content.contains("Cannot remove alias for this item type"),
         "remove_alias should show error for unsupported item types (e.g. Window)"
     );
 }
