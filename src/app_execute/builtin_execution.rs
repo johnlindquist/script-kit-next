@@ -1424,6 +1424,125 @@ impl AiPresetFileBuiltinAction {
             Self::Export => "ai_export_presets_dispatched",
         }
     }
+
+    fn log_action(self) -> &'static str {
+        match self {
+            Self::Import => "import_ai_presets",
+            Self::Export => "export_ai_presets",
+        }
+    }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Import => "Opening file picker for AI preset import",
+            Self::Export => "Opening save dialog for AI preset export",
+        }
+    }
+
+    fn import_prompt_title(self) -> &'static str {
+        match self {
+            Self::Import => "Select AI presets JSON file",
+            Self::Export => unreachable!("export presets uses a save dialog filename"),
+        }
+    }
+
+    fn export_default_filename(self) -> &'static str {
+        match self {
+            Self::Export => "ai-presets-export.json",
+            Self::Import => unreachable!("import presets uses an open-file prompt"),
+        }
+    }
+
+    fn read_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Import => format!("Failed to read file: {error}"),
+            Self::Export => unreachable!("export presets does not read an import file"),
+        }
+    }
+
+    fn invalid_file_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Import => format!("Invalid preset file: {error}"),
+            Self::Export => unreachable!("export presets does not validate an import file"),
+        }
+    }
+
+    fn worker_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Import => format!("Import failed: {error}"),
+            Self::Export => format!("Export failed: {error}"),
+        }
+    }
+
+    fn success_log_action(self) -> &'static str {
+        match self {
+            Self::Import => "import_presets_success",
+            Self::Export => "export_presets_success",
+        }
+    }
+
+    fn success_log_message(self) -> &'static str {
+        match self {
+            Self::Import => "Imported AI presets via file picker",
+            Self::Export => "Exported AI presets via file picker",
+        }
+    }
+
+    fn success_hud(self, count: usize) -> String {
+        match self {
+            Self::Import => format!("Imported presets ({count} total)"),
+            Self::Export => format!("Exported {count} presets"),
+        }
+    }
+
+    fn failure_log_action(self) -> &'static str {
+        match self {
+            Self::Import => "import_presets_failed",
+            Self::Export => "export_presets_failed",
+        }
+    }
+
+    fn failure_log_message(self) -> &'static str {
+        match self {
+            Self::Import => "Failed to import presets",
+            Self::Export => "Failed to export presets",
+        }
+    }
+
+    fn failure_toast(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Import => format!("Failed to import presets: {error}"),
+            Self::Export => format!("Failed to export presets: {error}"),
+        }
+    }
+
+    fn cancelled_log_action(self) -> &'static str {
+        match self {
+            Self::Import => "import_presets_cancelled",
+            Self::Export => "export_presets_cancelled",
+        }
+    }
+
+    fn cancelled_log_message(self) -> &'static str {
+        match self {
+            Self::Import => "User cancelled import file picker",
+            Self::Export => "User cancelled export save dialog",
+        }
+    }
+
+    fn picker_error_message(self) -> &'static str {
+        match self {
+            Self::Import => "Import file picker returned error",
+            Self::Export => "Export save dialog returned error",
+        }
+    }
+
+    fn picker_channel_closed_message(self) -> &'static str {
+        match self {
+            Self::Import => "Import file picker channel closed unexpectedly",
+            Self::Export => "Export save dialog channel closed unexpectedly",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4610,21 +4729,12 @@ impl ScriptListApp {
                 self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
             }
             AiCommandBuiltinAction::PresetFile(file_action) => {
-                match file_action {
-                    AiPresetFileBuiltinAction::Import => {
-                        tracing::info!(
-                            action = "import_ai_presets",
-                            "Opening file picker for AI preset import"
-                        );
-                    }
-                    AiPresetFileBuiltinAction::Export => {
-                        tracing::info!(
-                            action = "export_ai_presets",
-                            trace_id = %dctx.trace_id,
-                            "Opening save dialog for AI preset export"
-                        );
-                    }
-                }
+                tracing::info!(
+                    action = file_action.log_action(),
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    file_action.opening_message()
+                );
                 self.execute_ai_preset_file_builtin(file_action, dctx, cx)
             }
             AiCommandBuiltinAction::LegacyHarness(legacy_action) => {
@@ -4686,10 +4796,11 @@ impl ScriptListApp {
                     files: true,
                     directories: false,
                     multiple: false,
-                    prompt: Some("Select AI presets JSON file".into()),
+                    prompt: Some(action.import_prompt_title().into()),
                     allowed_extensions: vec!["json".into()],
                 });
 
+                let action_for_task = action;
                 cx.spawn(async move |this, cx| {
                     match rx.await {
                         Ok(Ok(Some(paths))) => {
@@ -4702,13 +4813,15 @@ impl ScriptListApp {
                                         async move {
                                             let contents =
                                                 std::fs::read_to_string(&path).map_err(|e| {
-                                                    format!("Failed to read file: {}", e)
+                                                    action_for_task.read_failure_message(&e)
                                                 })?;
                                             ai::presets::validate_presets_json(&contents).map_err(
-                                                |e| format!("Invalid preset file: {}", e),
+                                                |e| action_for_task.invalid_file_message(&e),
                                             )?;
                                             ai::presets::import_presets_from_file(&path)
-                                                .map_err(|e| format!("Import failed: {}", e))
+                                                .map_err(|e| {
+                                                    action_for_task.worker_failure_message(&e)
+                                                })
                                         }
                                     })
                                     .await;
@@ -4718,11 +4831,12 @@ impl ScriptListApp {
                                         Ok(total) => {
                                             tracing::info!(
                                                 total = total,
-                                                action = "import_presets_success",
-                                                "Imported AI presets via file picker"
+                                                action = action_for_task.success_log_action(),
+                                                "{}",
+                                                action_for_task.success_log_message()
                                             );
                                             this.show_hud(
-                                                format!("Imported presets ({} total)", total),
+                                                action_for_task.success_hud(total),
                                                 Some(HUD_SHORT_MS),
                                                 cx,
                                             );
@@ -4731,13 +4845,11 @@ impl ScriptListApp {
                                         Err(e) => {
                                             tracing::error!(
                                                 error = %e,
-                                                action = "import_presets_failed",
-                                                "Failed to import presets"
+                                                action = action_for_task.failure_log_action(),
+                                                "{}",
+                                                action_for_task.failure_log_message()
                                             );
-                                            this.show_error_toast(
-                                                format!("Failed to import presets: {}", e),
-                                                cx,
-                                            );
+                                            this.show_error_toast(action_for_task.failure_toast(&e), cx);
                                         }
                                     }
                                     cx.notify();
@@ -4746,15 +4858,16 @@ impl ScriptListApp {
                         }
                         Ok(Ok(None)) => {
                             tracing::info!(
-                                action = "import_presets_cancelled",
-                                "User cancelled import file picker"
+                                action = action_for_task.cancelled_log_action(),
+                                "{}",
+                                action_for_task.cancelled_log_message()
                             );
                         }
                         Ok(Err(e)) => {
-                            tracing::warn!(error = %e, "Import file picker returned error");
+                            tracing::warn!(error = %e, "{}", action_for_task.picker_error_message());
                         }
                         Err(_) => {
-                            tracing::warn!("Import file picker channel closed unexpectedly");
+                            tracing::warn!("{}", action_for_task.picker_channel_closed_message());
                         }
                     }
                 })
@@ -4766,8 +4879,10 @@ impl ScriptListApp {
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(crate::setup::get_kit_path);
 
-                let rx = cx.prompt_for_new_path(&default_dir, Some("ai-presets-export.json"));
+                let rx =
+                    cx.prompt_for_new_path(&default_dir, Some(action.export_default_filename()));
 
+                let action_for_task = action;
                 cx.spawn(async move |this, cx| match rx.await {
                     Ok(Ok(Some(path))) => {
                         let export_result = cx
@@ -4776,7 +4891,7 @@ impl ScriptListApp {
                                 let path = path.clone();
                                 async move {
                                     ai::presets::export_presets_to_file(&path)
-                                        .map_err(|e| format!("Export failed: {}", e))
+                                        .map_err(|e| action_for_task.worker_failure_message(&e))
                                 }
                             })
                             .await;
@@ -4787,11 +4902,12 @@ impl ScriptListApp {
                                     tracing::info!(
                                         count = count,
                                         path = %path.display(),
-                                        action = "export_presets_success",
-                                        "Exported AI presets via file picker"
+                                        action = action_for_task.success_log_action(),
+                                        "{}",
+                                        action_for_task.success_log_message()
                                     );
                                     this.show_hud(
-                                        format!("Exported {} presets", count),
+                                        action_for_task.success_hud(count),
                                         Some(HUD_SHORT_MS),
                                         cx,
                                     );
@@ -4799,13 +4915,11 @@ impl ScriptListApp {
                                 Err(e) => {
                                     tracing::error!(
                                         error = %e,
-                                        action = "export_presets_failed",
-                                        "Failed to export presets"
+                                        action = action_for_task.failure_log_action(),
+                                        "{}",
+                                        action_for_task.failure_log_message()
                                     );
-                                    this.show_error_toast(
-                                        format!("Failed to export presets: {}", e),
-                                        cx,
-                                    );
+                                    this.show_error_toast(action_for_task.failure_toast(&e), cx);
                                 }
                             }
                             cx.notify();
@@ -4813,15 +4927,16 @@ impl ScriptListApp {
                     }
                     Ok(Ok(None)) => {
                         tracing::info!(
-                            action = "export_presets_cancelled",
-                            "User cancelled export save dialog"
+                            action = action_for_task.cancelled_log_action(),
+                            "{}",
+                            action_for_task.cancelled_log_message()
                         );
                     }
                     Ok(Err(e)) => {
-                        tracing::warn!(error = %e, "Export save dialog returned error");
+                        tracing::warn!(error = %e, "{}", action_for_task.picker_error_message());
                     }
                     Err(_) => {
-                        tracing::warn!("Export save dialog channel closed unexpectedly");
+                        tracing::warn!("{}", action_for_task.picker_channel_closed_message());
                     }
                 })
                 .detach();
