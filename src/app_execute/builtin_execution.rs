@@ -603,6 +603,58 @@ impl UtilityCurrentAppCommandsBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityCommandBuiltinAction {
+    Open(UtilityOpenBuiltinAction),
+    Process(UtilityProcessBuiltinAction),
+    Context(UtilityContextBuiltinAction),
+    Trace(UtilityTraceBuiltinAction),
+    Recipe(UtilityRecipeBuiltinAction),
+    DoInCurrentApp(UtilityDoInCurrentAppBuiltinAction),
+    CurrentAppCommands(UtilityCurrentAppCommandsBuiltinAction),
+}
+
+impl UtilityCommandBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Self {
+        match command {
+            builtins::UtilityCommandType::MiniMainWindow
+            | builtins::UtilityCommandType::ScratchPad
+            | builtins::UtilityCommandType::QuickTerminal
+            | builtins::UtilityCommandType::ClaudeCode
+            | builtins::UtilityCommandType::ProcessManager => Self::Open(
+                UtilityOpenBuiltinAction::from_command(command)
+                    .expect("utility open command should map to open action"),
+            ),
+            builtins::UtilityCommandType::StopAllProcesses => Self::Process(
+                UtilityProcessBuiltinAction::from_command(command)
+                    .expect("utility process command should map to process action"),
+            ),
+            builtins::UtilityCommandType::InspectCurrentContext => Self::Context(
+                UtilityContextBuiltinAction::from_command(command)
+                    .expect("utility context command should map to context action"),
+            ),
+            builtins::UtilityCommandType::TraceCurrentAppIntent => Self::Trace(
+                UtilityTraceBuiltinAction::from_command(command)
+                    .expect("utility trace command should map to trace action"),
+            ),
+            builtins::UtilityCommandType::VerifyCurrentAppRecipe
+            | builtins::UtilityCommandType::ReplayCurrentAppRecipe
+            | builtins::UtilityCommandType::TurnThisIntoCommand => Self::Recipe(
+                UtilityRecipeBuiltinAction::from_command(command)
+                    .expect("utility recipe command should map to recipe action"),
+            ),
+            builtins::UtilityCommandType::DoInCurrentApp => Self::DoInCurrentApp(
+                UtilityDoInCurrentAppBuiltinAction::from_command(command)
+                    .expect("utility do-in command should map to do-in action"),
+            ),
+            builtins::UtilityCommandType::CurrentAppCommands => Self::CurrentAppCommands(
+                UtilityCurrentAppCommandsBuiltinAction::from_command(command)
+                    .expect("utility current-app command should map to current-app action"),
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MenuBarBuiltinAction {
     Execute,
 }
@@ -3606,76 +3658,8 @@ impl ScriptListApp {
                     "Executing utility command"
                 );
 
-                use builtins::UtilityCommandType;
-
-                match cmd_type {
-                    UtilityCommandType::MiniMainWindow
-                    | UtilityCommandType::ScratchPad
-                    | UtilityCommandType::QuickTerminal
-                    | UtilityCommandType::ClaudeCode
-                    | UtilityCommandType::ProcessManager => {
-                        let open_action = UtilityOpenBuiltinAction::from_command(*cmd_type)
-                            .expect("utility open arm should only receive open commands");
-                        self.execute_utility_open_builtin(open_action, dctx, cx)
-                    }
-                    UtilityCommandType::StopAllProcesses => {
-                        let process_action = UtilityProcessBuiltinAction::from_command(*cmd_type)
-                            .expect("utility process arm should only receive process commands");
-                        self.execute_utility_process_builtin(process_action, dctx, cx)
-                    }
-                    UtilityCommandType::InspectCurrentContext => {
-                        let context_action = UtilityContextBuiltinAction::from_command(*cmd_type)
-                            .expect("utility context arm should only receive context commands");
-                        self.execute_utility_context_builtin(context_action, dctx, cx)
-                    }
-                    UtilityCommandType::TraceCurrentAppIntent => {
-                        let trace_action = UtilityTraceBuiltinAction::from_command(*cmd_type)
-                            .expect("utility trace arm should only receive trace commands");
-                        self.execute_utility_trace_builtin(trace_action, query_override, dctx, cx)
-                    }
-                    UtilityCommandType::VerifyCurrentAppRecipe => {
-                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
-                            .expect("utility recipe arm should only receive recipe commands");
-                        self.execute_utility_verify_recipe_builtin(recipe_action, dctx, cx)
-                    }
-                    UtilityCommandType::ReplayCurrentAppRecipe => {
-                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
-                            .expect("utility recipe arm should only receive recipe commands");
-                        self.execute_utility_replay_recipe_builtin(recipe_action, dctx, cx)
-                    }
-                    UtilityCommandType::TurnThisIntoCommand => {
-                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
-                            .expect("utility recipe arm should only receive recipe commands");
-                        self.execute_utility_turn_this_into_command_builtin(
-                            recipe_action,
-                            query_override,
-                            dctx,
-                            cx,
-                        )
-                    }
-                    UtilityCommandType::DoInCurrentApp => {
-                        let do_in_action =
-                            UtilityDoInCurrentAppBuiltinAction::from_command(*cmd_type)
-                                .expect("utility do-in arm should only receive DoInCurrentApp");
-                        self.execute_utility_do_in_current_app_builtin(
-                            do_in_action,
-                            query_override,
-                            dctx,
-                            cx,
-                        )
-                    }
-                    UtilityCommandType::CurrentAppCommands => {
-                        let current_app_action =
-                            UtilityCurrentAppCommandsBuiltinAction::from_command(*cmd_type).expect(
-                                "utility current-app arm should only receive CurrentAppCommands",
-                            );
-                        self.execute_utility_current_app_commands_builtin(
-                            current_app_action,
-                            dctx,
-                            cx,
-                        )
-                    }
-                }
+                let utility_action = UtilityCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_utility_command_builtin(utility_action, query_override, dctx, cx)
             }
 
             // =========================================================================
@@ -5091,6 +5075,49 @@ impl ScriptListApp {
         }
 
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_utility_command_builtin(
+        &mut self,
+        action: UtilityCommandBuiltinAction,
+        query_override: Option<&str>,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            UtilityCommandBuiltinAction::Open(open_action) => {
+                self.execute_utility_open_builtin(open_action, dctx, cx)
+            }
+            UtilityCommandBuiltinAction::Process(process_action) => {
+                self.execute_utility_process_builtin(process_action, dctx, cx)
+            }
+            UtilityCommandBuiltinAction::Context(context_action) => {
+                self.execute_utility_context_builtin(context_action, dctx, cx)
+            }
+            UtilityCommandBuiltinAction::Trace(trace_action) => {
+                self.execute_utility_trace_builtin(trace_action, query_override, dctx, cx)
+            }
+            UtilityCommandBuiltinAction::Recipe(recipe_action) => match recipe_action {
+                UtilityRecipeBuiltinAction::VerifyCurrentApp => {
+                    self.execute_utility_verify_recipe_builtin(recipe_action, dctx, cx)
+                }
+                UtilityRecipeBuiltinAction::ReplayCurrentApp => {
+                    self.execute_utility_replay_recipe_builtin(recipe_action, dctx, cx)
+                }
+                UtilityRecipeBuiltinAction::TurnThisIntoCommand => self
+                    .execute_utility_turn_this_into_command_builtin(
+                        recipe_action,
+                        query_override,
+                        dctx,
+                        cx,
+                    ),
+            },
+            UtilityCommandBuiltinAction::DoInCurrentApp(do_in_action) => self
+                .execute_utility_do_in_current_app_builtin(do_in_action, query_override, dctx, cx),
+            UtilityCommandBuiltinAction::CurrentAppCommands(current_app_action) => {
+                self.execute_utility_current_app_commands_builtin(current_app_action, dctx, cx)
+            }
+        }
     }
 
     fn execute_utility_process_builtin(
