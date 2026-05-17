@@ -1670,18 +1670,45 @@ fn ai_preset_file_builtin_uses_named_action_states() {
         "AI preset file built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("AiPresetFileBuiltinAction::from_command(*cmd_type)")
+        content.contains("AiPresetFileBuiltinAction::from_command(command)")
             && content.contains("fn execute_ai_preset_file_builtin(")
+            && content.contains("file_action.log_action()")
+            && content.contains("file_action.opening_message()")
             && content.contains("action.success_detail()"),
-        "AI preset file commands should dispatch through named state success details"
+        "AI preset file commands should dispatch through named state logs and success details"
     );
     assert!(
         content.contains("prompt_for_paths(gpui::PathPromptOptions")
-            && content
-                .contains("prompt_for_new_path(&default_dir, Some(\"ai-presets-export.json\"))")
+            && content.contains("action.import_prompt_title().into()")
+            && content.contains("action.export_default_filename()")
             && content.contains("validate_presets_json(&contents)")
             && content.contains("export_presets_to_file(&path)"),
         "AI preset file states should preserve import validation and export file picker behavior"
+    );
+    assert!(
+        content.contains("action_for_task.read_failure_message(&e)")
+            && content.contains("action_for_task.invalid_file_message(&e)")
+            && content.contains("action_for_task.worker_failure_message(&e)")
+            && content.contains("action_for_task.success_log_action()")
+            && content.contains("action_for_task.success_log_message()")
+            && content.contains("action_for_task.success_hud(")
+            && content.contains("action_for_task.failure_log_action()")
+            && content.contains("action_for_task.failure_log_message()")
+            && content.contains("action_for_task.failure_toast(&e)")
+            && content.contains("action_for_task.cancelled_log_action()")
+            && content.contains("action_for_task.cancelled_log_message()")
+            && content.contains("action_for_task.picker_error_message()")
+            && content.contains("action_for_task.picker_channel_closed_message()"),
+        "AI preset file async feedback should derive read, validation, import/export, cancellation, and picker copy from named state"
+    );
+    assert!(
+        content.contains("\"Select AI presets JSON file\"")
+            && content.contains("\"ai-presets-export.json\"")
+            && content.contains("format!(\"Imported presets ({count} total)\")")
+            && content.contains("format!(\"Exported {count} presets\")")
+            && content.contains("format!(\"Failed to import presets: {error}\")")
+            && content.contains("format!(\"Failed to export presets: {error}\")"),
+        "AI preset file named state should preserve picker, success HUD, and failure toast copy"
     );
 }
 
