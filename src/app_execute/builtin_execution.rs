@@ -1263,10 +1263,6 @@ enum AiLegacyHarnessBuiltinAction {
 
 impl AiLegacyHarnessBuiltinAction {
     fn from_command(command: builtins::AiCommandType) -> Option<Self> {
-        if !command.is_legacy_harness_alias() {
-            return None;
-        }
-
         match command {
             builtins::AiCommandType::OpenAi => Some(Self::OpenAi),
             builtins::AiCommandType::MiniAi => Some(Self::MiniAi),
