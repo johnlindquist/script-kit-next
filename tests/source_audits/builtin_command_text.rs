@@ -107,6 +107,23 @@ fn generate_script_actions_name_agent_chat_handoff() {
 }
 
 #[test]
+fn builtin_actions_dialog_uses_builtin_default_action_text() {
+    let focused_info = super::read_source("src/app_render/focused_info.rs");
+    let script_context_actions = super::read_source("src/actions/builders/script_context.rs");
+
+    assert!(
+        focused_info.contains("m.entry.default_action_text()"),
+        "built-in rows should pass their concrete default action text into the actions dialog"
+    );
+    assert!(
+        script_context_actions.contains("fn primary_action_title(script: &ScriptInfo)")
+            && script_context_actions.contains("is_builtin_context(script)")
+            && script_context_actions.contains("script.action_verb.clone()"),
+        "built-in action rows should preserve full labels like 'Open Agent Chat' instead of title-casing a generic verb"
+    );
+}
+
+#[test]
 fn acp_history_text_names_agent_chat_conversations() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let acp_history = entries
