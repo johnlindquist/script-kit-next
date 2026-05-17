@@ -2562,11 +2562,19 @@ fn acp_last_code_block_handlers_use_named_action_states() {
             && content.contains("code_block_action.missing_code_message()")
             && content.contains("code_block_action.saved_script_message(&name, ext)")
             && content.contains("code_block_action.temp_write_failure_message(e)")
+            && content.contains("code_block_action.running_message(&name)")
+            && content.contains("code_block_action\n                                            .run_success_message(&stdout)")
+            && content.contains("code_block_action\n                                            .run_failure_message(output.status, &out)")
+            && content.contains("code_block_action\n                                    .run_spawn_failure_message(e)")
             && content.contains("No code block found in last response")
             && content.contains("No code block found")
             && content.contains("Saved as {name}.{ext}")
-            && content.contains("Failed to write temp file: {error}"),
-        "ACP save/run-last-code handlers should derive missing-code, save-success, and temp-write feedback from the named state"
+            && content.contains("Failed to write temp file: {error}")
+            && content.contains("Running `{name}`...")
+            && content.contains("Finished (no output)")
+            && content.contains("Error (exit {status})")
+            && content.contains("Failed to run: {error}"),
+        "ACP save/run-last-code handlers should derive missing-code, save-success, run status, and failure feedback from the named state"
     );
 }
 

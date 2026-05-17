@@ -193,6 +193,40 @@ impl AcpLastCodeBlockHandlerAction {
             Self::SaveAsScript => None,
         }
     }
+
+    fn running_message(self, name: &str) -> Option<String> {
+        match self {
+            Self::RunLastCode => Some(format!("Running `{name}`...")),
+            Self::SaveAsScript => None,
+        }
+    }
+
+    fn run_success_message(self, stdout: &str) -> Option<String> {
+        match self {
+            Self::RunLastCode => {
+                if stdout.is_empty() {
+                    Some("Finished (no output)".to_string())
+                } else {
+                    Some(format!("```\n{stdout}\n```"))
+                }
+            }
+            Self::SaveAsScript => None,
+        }
+    }
+
+    fn run_failure_message(self, status: std::process::ExitStatus, output: &str) -> Option<String> {
+        match self {
+            Self::RunLastCode => Some(format!("Error (exit {status}):\n```\n{output}\n```")),
+            Self::SaveAsScript => None,
+        }
+    }
+
+    fn run_spawn_failure_message(self, error: impl std::fmt::Display) -> Option<String> {
+        match self {
+            Self::RunLastCode => Some(format!("Failed to run: {error}")),
+            Self::SaveAsScript => None,
+        }
+    }
 }
 
 impl AcpPanelWindowHandlerAction {
@@ -1725,7 +1759,9 @@ impl ScriptListApp {
                             return DispatchOutcome::not_handled();
                         };
                         thread.update(cx, |t, cx| {
-                            t.push_system_message(format!("Running `{name}`..."), cx);
+                            if let Some(message) = code_block_action.running_message(&name) {
+                                t.push_system_message(message, cx);
+                            }
                         });
 
                         // Spawn async execution to avoid blocking the UI
@@ -1752,17 +1788,19 @@ impl ScriptListApp {
                                     let stderr =
                                         String::from_utf8_lossy(&output.stderr).trim().to_string();
                                     if output.status.success() {
-                                        if stdout.is_empty() {
-                                            "Finished (no output)".to_string()
-                                        } else {
-                                            format!("```\n{stdout}\n```")
-                                        }
+                                        code_block_action
+                                            .run_success_message(&stdout)
+                                            .unwrap_or_default()
                                     } else {
                                         let out = if stderr.is_empty() { stdout } else { stderr };
-                                        format!("Error (exit {}):\n```\n{out}\n```", output.status)
+                                        code_block_action
+                                            .run_failure_message(output.status, &out)
+                                            .unwrap_or_default()
                                     }
                                 }
-                                Err(e) => format!("Failed to run: {e}"),
+                                Err(e) => code_block_action
+                                    .run_spawn_failure_message(e)
+                                    .unwrap_or_default(),
                             };
 
                             let _ = cx.update(|cx| {
