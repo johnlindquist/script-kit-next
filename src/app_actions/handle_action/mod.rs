@@ -20,6 +20,11 @@ enum AcpConversationSessionHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpRetryLastHandlerAction {
+    RetryLastMessage,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AcpCodeCopyHandlerAction {
     CopyAllCode,
 }
@@ -93,6 +98,21 @@ impl AcpConversationSessionHandlerAction {
         match self {
             Self::NewConversation => true,
             Self::ClearConversation => false,
+        }
+    }
+}
+
+impl AcpRetryLastHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_retry_last" => Some(Self::RetryLastMessage),
+            _ => None,
+        }
+    }
+
+    fn missing_user_message(self) -> &'static str {
+        match self {
+            Self::RetryLastMessage => "No previous message to retry",
         }
     }
 }
@@ -1524,6 +1544,10 @@ impl ScriptListApp {
                 }
             }
             "acp_retry_last" => {
+                let Some(retry_action) = AcpRetryLastHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let last_user_msg = {
                     let view = entity.read(cx);
@@ -1552,7 +1576,7 @@ impl ScriptListApp {
                     DispatchOutcome::success()
                 } else {
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No previous message to retry".to_string());
+                    o.user_message = Some(retry_action.missing_user_message().to_string());
                     o
                 }
             }
