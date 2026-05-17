@@ -285,6 +285,12 @@ impl ClipboardCleanShotHandlerAction {
         }
     }
 
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Annotate | Self::Upload => "No clipboard entry selected",
+        }
+    }
+
     fn success_hud(self) -> &'static str {
         match self {
             Self::Annotate => "Opening CleanShot X…",
@@ -308,6 +314,12 @@ impl ClipboardCleanShotHandlerAction {
     fn decode_failure_message(self) -> &'static str {
         match self {
             Self::Annotate | Self::Upload => "Failed to decode image",
+        }
+    }
+
+    fn temp_save_failure_message(self) -> &'static str {
+        match self {
+            Self::Annotate | Self::Upload => "Failed to save image",
         }
     }
 }
@@ -746,7 +758,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(cleanshot_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -794,7 +806,10 @@ impl ScriptListApp {
 
                             if let Err(e) = std::fs::write(&temp_path, png_bytes) {
                                 tracing::error!(error = %e, "failed to write temp image");
-                                self.show_error_toast("Failed to save image", cx);
+                                self.show_error_toast(
+                                    cleanshot_action.temp_save_failure_message(),
+                                    cx,
+                                );
                                 return DispatchOutcome::success();
                             }
 
