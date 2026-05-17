@@ -3012,11 +3012,16 @@ fn app_open_handler_uses_named_action_states() {
     assert!(
         content.contains("AppOpenHandlerAction::from_action_id(action_id)")
             && content.contains("open_action.success_hud()")
-            && content.contains("open_action.error_prefix()")
+            && content.contains("self.error_prefix()")
+            && content.contains("open_action.failure_message(e)")
             && content.contains("self.missing_target_message()")
             && content.contains("open_action.target_error_message(msg)")
             && content.contains("open_action.run(path)"),
         "application open/show handler should derive execution and feedback copy from the named state"
+    );
+    assert!(
+        content.contains("format!(\"{}: {error}\", self.error_prefix())"),
+        "application open/show handler should derive final failure toast from the named state"
     );
 }
 
