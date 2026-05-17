@@ -145,7 +145,6 @@ impl ScriptListApp {
                 Some("Restore the theme from when Theme Designer opened".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("Esc")
             .with_section("Theme")
             .with_icon(IconName::Close),
             Action::new(
