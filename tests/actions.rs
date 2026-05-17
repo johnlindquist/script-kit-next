@@ -2555,6 +2555,26 @@ fn acp_panel_window_handlers_use_named_action_states() {
     );
 }
 
+#[test]
+fn acp_history_mutation_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpHistoryMutationHandlerAction")
+            && content.contains("ClearHistory"),
+        "ACP history mutation handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpHistoryMutationHandlerAction::from_action_id(action_id)")
+            && content.contains("history_action.history_index_path(&kit)")
+            && content.contains("history_action.conversations_dir(&kit)")
+            && content.contains("history_action.success_message()")
+            && content.contains("Conversation history cleared"),
+        "ACP clear-history should derive deletion targets and success copy from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

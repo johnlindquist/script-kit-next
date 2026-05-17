@@ -38,6 +38,11 @@ enum AcpPanelWindowHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpHistoryMutationHandlerAction {
+    ClearHistory,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AcpModelSwitchHandlerAction {
     SwitchModel,
 }
@@ -169,6 +174,33 @@ impl AcpPanelWindowHandlerAction {
         match self {
             Self::ShowHistory => Some("Search conversation history..."),
             Self::DetachWindow | Self::ReattachPanel => None,
+        }
+    }
+}
+
+impl AcpHistoryMutationHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_clear_history" => Some(Self::ClearHistory),
+            _ => None,
+        }
+    }
+
+    fn history_index_path(self, kit: &std::path::Path) -> std::path::PathBuf {
+        match self {
+            Self::ClearHistory => kit.join("acp-history.jsonl"),
+        }
+    }
+
+    fn conversations_dir(self, kit: &std::path::Path) -> std::path::PathBuf {
+        match self {
+            Self::ClearHistory => kit.join("acp-conversations"),
+        }
+    }
+
+    fn success_message(self) -> &'static str {
+        match self {
+            Self::ClearHistory => "Conversation history cleared",
         }
     }
 }
@@ -1861,12 +1893,17 @@ impl ScriptListApp {
                 outcome
             }
             "acp_clear_history" => {
+                let Some(history_action) =
+                    AcpHistoryMutationHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 // Delete history index and conversations directory
                 let kit = crate::setup::get_kit_path();
-                let _ = std::fs::remove_file(kit.join("acp-history.jsonl"));
-                let _ = std::fs::remove_dir_all(kit.join("acp-conversations"));
+                let _ = std::fs::remove_file(history_action.history_index_path(&kit));
+                let _ = std::fs::remove_dir_all(history_action.conversations_dir(&kit));
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("Conversation history cleared".to_string());
+                o.user_message = Some(history_action.success_message().to_string());
                 o
             }
             "acp_scroll_to_top" => {
