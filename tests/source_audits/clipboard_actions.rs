@@ -77,3 +77,21 @@ fn clipboard_save_snippet_rejects_non_text_entries() {
         "Expected clipboard_save_snippet to show a clear user-facing error for non-text entries"
     );
 }
+
+#[test]
+fn clipboard_builder_only_advertises_save_snippet_for_text_entries() {
+    let builder = read("src/actions/builders/clipboard.rs");
+    let save_snippet = builder
+        .find("\"clip:clipboard_save_snippet\"")
+        .expect("Expected clipboard builder to define clipboard_save_snippet");
+    let before_save_snippet = &builder[..save_snippet];
+    let text_guard = before_save_snippet
+        .rfind("if entry.content_type == ContentType::Text")
+        .expect("Expected clipboard_save_snippet to be guarded by text content type");
+    let image_guard = before_save_snippet.rfind("if entry.content_type == ContentType::Image");
+
+    assert!(
+        image_guard.map_or(true, |index| index < text_guard),
+        "clipboard_save_snippet must live inside the text-entry guard, not the image-entry guard"
+    );
+}
