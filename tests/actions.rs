@@ -768,12 +768,14 @@ fn settings_editor_launch_uses_named_plan_states() {
     );
     assert!(
         content.contains("SettingsEditorLaunchPlan::from_editor(&editor)")
-            && content.contains("launch_plan.spawn(&editor, &config_dir, &config_file)")
+            && content.contains(".spawn(&editor, &config_dir, &config_file)")
+            && content.contains("launch_plan.success_hud(&editor_for_hud)")
+            && content.contains("launch_plan.failure_message(&editor_for_hud, e)")
             && content.contains("\"code\" | \"cursor\"")
             && content.contains("Command::new(\"zed\")")
             && content.contains("Command::new(\"subl\")")
             && content.contains("Command::new(editor).arg(config_file).spawn()"),
-        "settings should derive editor-specific command arguments from the named launch plan"
+        "settings should derive editor-specific command arguments and feedback copy from the named launch plan"
     );
 }
 
