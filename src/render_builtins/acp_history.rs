@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpHistoryEmptyState {
+    NoConversationHistory,
+    NoFilteredMatches,
+}
+
+impl AcpHistoryEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoConversationHistory
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoConversationHistory => "No conversation history",
+            Self::NoFilteredMatches => "No conversations match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn acp_history_visible_rows(filter: &str) -> Vec<crate::ai::acp::history::AcpHistoryEntry> {
         crate::ai::acp::history::search_history(filter, 100)
@@ -313,11 +336,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No conversation history"
-                } else {
-                    "No conversations match your filter"
-                })
+                .child(AcpHistoryEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let entries_for_closure: Vec<crate::ai::acp::history::AcpHistoryEntry> =
