@@ -34,6 +34,12 @@ enum ScriptletContextActionPlan {
     ShortcutAndAlias,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptletRankingActionPlan {
+    NoRankingAction,
+    ResetSuggestedRanking,
+}
+
 impl ScriptletContextActionPlan {
     fn from_script(script: &ScriptInfo) -> Self {
         match (script.shortcut.is_some(), script.alias.is_some()) {
@@ -50,6 +56,33 @@ impl ScriptletContextActionPlan {
 
     fn has_alias(self) -> bool {
         matches!(self, Self::AliasOnly | Self::ShortcutAndAlias)
+    }
+}
+
+impl ScriptletRankingActionPlan {
+    fn from_script(script: &ScriptInfo) -> Self {
+        if script.is_suggested {
+            Self::ResetSuggestedRanking
+        } else {
+            Self::NoRankingAction
+        }
+    }
+
+    fn reset_action(self) -> Option<Action> {
+        match self {
+            Self::NoRankingAction => None,
+            Self::ResetSuggestedRanking => Some(
+                Action::new(
+                    "reset_ranking",
+                    "Reset Ranking",
+                    Some("Remove this item from Suggested section".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌃⌘R")
+                .with_icon(IconName::Refresh)
+                .with_section("Destructive"),
+            ),
+        }
     }
 }
 
@@ -193,6 +226,7 @@ pub fn get_scriptlet_context_actions_with_custom(
     let mut actions = Vec::new();
     let mut destructive_actions = Vec::new();
     let action_plan = ScriptletContextActionPlan::from_script(script);
+    let ranking_plan = ScriptletRankingActionPlan::from_script(script);
 
     actions.push(
         Action::new(
@@ -348,18 +382,8 @@ pub fn get_scriptlet_context_actions_with_custom(
         .with_section("Share"),
     );
 
-    if script.is_suggested {
-        destructive_actions.push(
-            Action::new(
-                "reset_ranking",
-                "Reset Ranking",
-                Some("Remove this item from Suggested section".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌃⌘R")
-            .with_icon(IconName::Refresh)
-            .with_section("Destructive"),
-        );
+    if let Some(reset_action) = ranking_plan.reset_action() {
+        destructive_actions.push(reset_action);
     }
 
     actions.extend(destructive_actions);

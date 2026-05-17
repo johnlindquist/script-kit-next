@@ -245,6 +245,25 @@ fn scriptlet_context_actions_use_named_plan_states() {
 }
 
 #[test]
+fn scriptlet_ranking_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
+        .expect("Failed to read scriptlet builder");
+
+    assert!(
+        content.contains("enum ScriptletRankingActionPlan")
+            && content.contains("NoRankingAction")
+            && content.contains("ResetSuggestedRanking"),
+        "scriptlet suggested ranking row should be driven by named ranking plan states"
+    );
+    assert!(
+        content.contains("ScriptletRankingActionPlan::from_script(script)")
+            && content.contains("fn reset_action")
+            && content.contains("ranking_plan.reset_action()"),
+        "scriptlet ranking row should derive availability and copy from the named plan"
+    );
+}
+
+#[test]
 fn file_path_actions_use_named_item_plan_states() {
     let content = fs::read_to_string("src/actions/builders/file_path.rs")
         .expect("Failed to read file path builder");
