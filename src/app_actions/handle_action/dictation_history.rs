@@ -1,3 +1,52 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DictationHistoryHandlerAction {
+    Paste,
+    AttachToAi,
+    SaveNote,
+    Copy,
+}
+
+impl DictationHistoryHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "dictation_history_paste" => Some(Self::Paste),
+            "dictation_history_attach_to_ai" => Some(Self::AttachToAi),
+            "dictation_history_save_note" => Some(Self::SaveNote),
+            "dictation_history_copy" => Some(Self::Copy),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Paste | Self::AttachToAi | Self::SaveNote | Self::Copy => "No dictation selected",
+        }
+    }
+
+    fn user_message(self) -> Option<&'static str> {
+        match self {
+            Self::Paste => Some("Pasting to frontmost app…"),
+            Self::AttachToAi => Some("Opening Agent Chat..."),
+            Self::SaveNote | Self::Copy => None,
+        }
+    }
+
+    fn success_hud(self) -> Option<&'static str> {
+        match self {
+            Self::SaveNote => Some("Saved dictation as note"),
+            Self::Copy => Some("Copied dictation to clipboard"),
+            Self::Paste | Self::AttachToAi => None,
+        }
+    }
+
+    fn error_prefix(self) -> Option<&'static str> {
+        match self {
+            Self::SaveNote => Some("Failed to save note"),
+            Self::Paste | Self::AttachToAi | Self::Copy => None,
+        }
+    }
+}
+
 impl ScriptListApp {
     fn refresh_dictation_history_selection_after_delete(&mut self) {
         if let AppView::DictationHistoryView {
@@ -26,8 +75,12 @@ impl ScriptListApp {
     ) -> DispatchOutcome {
         match action_id {
             "dictation_history_paste" => {
+                let Some(history_action) = DictationHistoryHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast("No dictation selected", cx);
+                    self.show_error_toast(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -42,12 +95,16 @@ impl ScriptListApp {
                 });
 
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some("Pasting to frontmost app…".to_string());
+                outcome.user_message = history_action.user_message().map(String::from);
                 outcome
             }
             "dictation_history_attach_to_ai" => {
+                let Some(history_action) = DictationHistoryHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast("No dictation selected", cx);
+                    self.show_error_toast(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -62,27 +119,32 @@ impl ScriptListApp {
                 );
 
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some("Opening Agent Chat...".to_string());
+                outcome.user_message = history_action.user_message().map(String::from);
                 outcome
             }
             "dictation_history_save_note" => {
+                let Some(history_action) = DictationHistoryHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast("No dictation selected", cx);
+                    self.show_error_toast(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 match crate::notes::save_note_with_content(&mut **cx, entry.transcript) {
                     Ok(()) => {
-                        self.show_hud(
-                            "Saved dictation as note".to_string(),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
+                        if let Some(message) = history_action.success_hud() {
+                            self.show_hud(message.to_string(), Some(HUD_MEDIUM_MS), cx);
+                        }
                     }
                     Err(error) => {
+                        let prefix = history_action
+                            .error_prefix()
+                            .unwrap_or("Failed to complete dictation action");
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("Failed to save note: {error}"),
+                            format!("{prefix}: {error}"),
                         );
                     }
                 }
@@ -90,17 +152,19 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "dictation_history_copy" => {
+                let Some(history_action) = DictationHistoryHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast("No dictation selected", cx);
+                    self.show_error_toast(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(entry.transcript));
-                self.show_hud(
-                    "Copied dictation to clipboard".to_string(),
-                    Some(HUD_MEDIUM_MS),
-                    cx,
-                );
+                if let Some(message) = history_action.success_hud() {
+                    self.show_hud(message.to_string(), Some(HUD_MEDIUM_MS), cx);
+                }
                 DispatchOutcome::success()
             }
             "dictation_history_delete" => {

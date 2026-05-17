@@ -601,6 +601,29 @@ fn favorites_browse_handler_uses_named_action_states() {
 }
 
 #[test]
+fn dictation_history_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/dictation_history.rs")
+        .expect("Failed to read dictation history action handler");
+
+    assert!(
+        content.contains("enum DictationHistoryHandlerAction")
+            && content.contains("Paste")
+            && content.contains("AttachToAi")
+            && content.contains("SaveNote")
+            && content.contains("Copy"),
+        "dictation history paste/attach/save/copy handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("DictationHistoryHandlerAction::from_action_id(action_id)")
+            && content.contains("history_action.selection_required_message()")
+            && content.contains("history_action.user_message()")
+            && content.contains("history_action.success_hud()")
+            && content.contains("error_prefix()"),
+        "dictation history handlers should derive empty-selection, user message, HUD, and error copy from named states"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
