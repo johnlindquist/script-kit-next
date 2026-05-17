@@ -752,6 +752,27 @@ fn app_copy_handler_uses_named_action_states() {
     );
 }
 
+#[test]
+fn app_open_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/apps.rs")
+        .expect("Failed to read app action handler");
+
+    assert!(
+        content.contains("enum AppOpenHandlerAction")
+            && content.contains("ShowInfoInFinder")
+            && content.contains("ShowPackageContents"),
+        "application open/show handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AppOpenHandlerAction::from_action_id(action_id)")
+            && content.contains("open_action.success_hud()")
+            && content.contains("open_action.error_prefix()")
+            && content.contains("open_action.missing_target_message()")
+            && content.contains("open_action.run(path)"),
+        "application open/show handler should derive execution and feedback copy from the named state"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------
