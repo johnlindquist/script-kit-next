@@ -89,12 +89,33 @@ fn select_clipboard_entry_meta<'a>(
     filtered_entries.get(clamped_index).copied()
 }
 
-fn clipboard_pin_action_success_hud(action_id: &str) -> Option<&'static str> {
-    match action_id {
-        "clipboard_pin" => Some("Pinned"),
-        "clipboard_unpin" => Some("Unpinned"),
-        _ => None,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardPinFeedbackPlan {
+    Pin,
+    Unpin,
+    Unsupported,
+}
+
+impl ClipboardPinFeedbackPlan {
+    fn from_action_id(action_id: &str) -> Self {
+        match action_id {
+            "clipboard_pin" => Self::Pin,
+            "clipboard_unpin" => Self::Unpin,
+            _ => Self::Unsupported,
+        }
     }
+
+    fn success_hud(self) -> Option<&'static str> {
+        match self {
+            Self::Pin => Some("Pinned"),
+            Self::Unpin => Some("Unpinned"),
+            Self::Unsupported => None,
+        }
+    }
+}
+
+fn clipboard_pin_action_success_hud(action_id: &str) -> Option<&'static str> {
+    ClipboardPinFeedbackPlan::from_action_id(action_id).success_hud()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
