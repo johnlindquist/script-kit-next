@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiPickerEmptyState {
+    NoEmojisFound,
+    NoFilteredMatches,
+}
+
+impl EmojiPickerEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoEmojisFound
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoEmojisFound => "No emojis found",
+            Self::NoFilteredMatches => "No emojis match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     // Helper retained for callers that prefer a single-call row-aware
     // navigator. The live `cx.intercept_keystrokes` Up/Down arm in
@@ -258,11 +281,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_dimmed))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No emojis found"
-                } else {
-                    "No emojis match your filter"
-                })
+                .child(EmojiPickerEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
