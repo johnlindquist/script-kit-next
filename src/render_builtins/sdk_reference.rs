@@ -11,7 +11,38 @@ impl SdkReferenceCatalogAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SdkReferenceEmptyState {
+    NoFunctionsAvailable,
+    NoFilteredMatches,
+}
+
+impl SdkReferenceEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.trim().is_empty() {
+            Self::NoFunctionsAvailable
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoFunctionsAvailable => "No SDK functions available",
+            Self::NoFilteredMatches => "No SDK functions match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
+    fn sdk_reference_row_description(entry: &crate::mcp_resources::SdkFunctionRef) -> String {
+        if entry.signature.is_empty() {
+            entry.category.clone()
+        } else {
+            format!("{}  ·  {}", entry.category, entry.signature)
+        }
+    }
+
     /// Render the in-product SDK Reference browser (list + preview).
     ///
     /// Data source is [`crate::mcp_resources::sdk_reference_entries_for_ui`] —
@@ -173,11 +204,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(text_hint)
                 .font_family(design_typography.font_family)
-                .child(if filter.trim().is_empty() {
-                    "No SDK functions available"
-                } else {
-                    "No SDK functions match your filter"
-                })
+                .child(SdkReferenceEmptyState::from_filter(filter).message())
                 .into_any_element()
         } else {
             let entries_for_list = entries.clone();
@@ -201,11 +228,7 @@ impl ScriptListApp {
                         let is_unsupported =
                             entry.support == crate::mcp_resources::SdkSupport::Unsupported;
 
-                        let description = if entry.signature.is_empty() {
-                            entry.category.clone()
-                        } else {
-                            format!("{}  ·  {}", entry.category, entry.signature)
-                        };
+                        let description = Self::sdk_reference_row_description(entry);
 
                         let item = ListItem::new(entry.name.clone(), list_colors)
                             .description_opt(Some(description))
