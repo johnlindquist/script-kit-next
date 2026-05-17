@@ -18,6 +18,12 @@ enum SettingsEditorLaunchPlan {
     GenericFileOnly,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptManagementHandlerAction {
+    CreateScript,
+    ReloadScripts,
+}
+
 impl ScriptSourceHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -60,6 +66,30 @@ impl ScriptSourceHandlerAction {
                 .as_ref()
                 .map(|p| std::path::PathBuf::from(p.split('#').next().unwrap_or(p))),
             _ => None,
+        }
+    }
+}
+
+impl ScriptManagementHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "create_script" => Some(Self::CreateScript),
+            "reload_scripts" => Some(Self::ReloadScripts),
+            _ => None,
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::CreateScript => "Opened scripts folder",
+            Self::ReloadScripts => "Scripts reloaded",
+        }
+    }
+
+    fn open_failure_message(self, error: impl std::fmt::Display) -> Option<String> {
+        match self {
+            Self::CreateScript => Some(format!("Failed to open scripts folder: {}", error)),
+            Self::ReloadScripts => None,
         }
     }
 }
@@ -110,6 +140,11 @@ impl ScriptListApp {
         let trace_id = &dctx.trace_id;
         match action_id {
             "create_script" => {
+                let Some(management_action) =
+                    ScriptManagementHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", trace_id = %trace_id, "create script action - opening scripts folder");
                 let scripts_dir = crate::script_creation::scripts_dir()
                     .to_string_lossy()
@@ -134,7 +169,7 @@ impl ScriptListApp {
                                 "Async action completed: create_script"
                             );
                             this.show_hud(
-                                "Opened scripts folder".to_string(),
+                                management_action.success_hud().to_string(),
                                 Some(HUD_SHORT_MS),
                                 cx,
                             );
@@ -148,10 +183,9 @@ impl ScriptListApp {
                                 error = %e,
                                 "Async action failed: create_script"
                             );
-                            this.show_error_toast(
-                                format!("Failed to open scripts folder: {}", e),
-                                cx,
-                            );
+                            if let Some(message) = management_action.open_failure_message(e) {
+                                this.show_error_toast(message, cx);
+                            }
                         }
                     });
                 })
@@ -353,9 +387,18 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "reload_scripts" => {
+                let Some(management_action) =
+                    ScriptManagementHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", "reload scripts action");
                 self.refresh_scripts(cx);
-                self.show_hud("Scripts reloaded".to_string(), Some(HUD_SHORT_MS), cx);
+                self.show_hud(
+                    management_action.success_hud().to_string(),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
                 DispatchOutcome::success()
             }
             "settings" => {

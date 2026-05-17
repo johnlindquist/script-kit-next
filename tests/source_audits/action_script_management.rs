@@ -10,7 +10,7 @@ fn edit_script_uses_async_editor_launch() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
-        .find("\"edit_script\"")
+        .find("\"edit_script\" => {")
         .expect("Expected edit_script action handler");
     let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
@@ -29,12 +29,14 @@ fn edit_script_supports_scripts_and_agents() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
-        .find("\"edit_script\"")
+        .find("\"edit_script\" => {")
         .expect("Expected edit_script action handler");
     let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
-        block.contains("SearchResult::Script(m)") && block.contains("SearchResult::Agent(m)"),
+        block.contains("source_action.path_from_result(&result)")
+            && content.contains("SearchResult::Script(m)")
+            && content.contains("SearchResult::Agent(m)"),
         "edit_script should support both Script and Agent result types"
     );
 }
@@ -48,12 +50,13 @@ fn edit_script_shows_error_for_unsupported_item_types() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
-        .find("\"edit_script\"")
+        .find("\"edit_script\" => {")
         .expect("Expected edit_script action handler");
     let block = &content[edit_pos..content.len().min(edit_pos + 3500)];
 
     assert!(
-        block.contains("Cannot edit this item type"),
+        block.contains("source_action.unsupported_message()")
+            && content.contains("Cannot edit this item type"),
         "edit_script should show error for non-editable item types"
     );
 }
@@ -63,7 +66,7 @@ fn edit_script_shows_error_when_no_selection() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
-        .find("\"edit_script\"")
+        .find("\"edit_script\" => {")
         .expect("Expected edit_script action handler");
     let block = &content[edit_pos..content.len().min(edit_pos + 4000)];
 
@@ -78,7 +81,7 @@ fn edit_script_shows_toast_on_editor_launch_failure() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
-        .find("\"edit_script\"")
+        .find("\"edit_script\" => {")
         .expect("Expected edit_script action handler");
     let block = &content[edit_pos..content.len().min(edit_pos + 4000)];
 
@@ -97,7 +100,7 @@ fn reload_scripts_refreshes_and_shows_hud() {
     let content = super::read_all_handle_action_sources();
 
     let reload_pos = content
-        .find("\"reload_scripts\"")
+        .find("\"reload_scripts\" => {")
         .expect("Expected reload_scripts action handler");
     let block = &content[reload_pos..content.len().min(reload_pos + 3000)];
 
@@ -106,7 +109,7 @@ fn reload_scripts_refreshes_and_shows_hud() {
         "reload_scripts should call refresh_scripts"
     );
     assert!(
-        block.contains("Scripts reloaded"),
+        block.contains("management_action.success_hud()") && content.contains("Scripts reloaded"),
         "reload_scripts should show HUD confirming reload"
     );
     assert!(

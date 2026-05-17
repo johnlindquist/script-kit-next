@@ -685,12 +685,13 @@ fn create_script_shows_hud_on_success() {
     let content = handle_action_content();
 
     let create_pos = content
-        .find("\"create_script\"")
+        .find("\"create_script\" => {")
         .expect("Expected create_script handler");
     let block = &content[create_pos..content.len().min(create_pos + 3000)];
 
     assert!(
-        block.contains("Opened scripts folder"),
+        block.contains("management_action.success_hud()")
+            && content.contains("Opened scripts folder"),
         "create_script should show 'Opened scripts folder' HUD"
     );
     assert!(
@@ -704,12 +705,13 @@ fn create_script_shows_error_toast_on_failure() {
     let content = handle_action_content();
 
     let create_pos = content
-        .find("\"create_script\"")
+        .find("\"create_script\" => {")
         .expect("Expected create_script handler");
     let block = &content[create_pos..content.len().min(create_pos + 3000)];
 
     assert!(
-        block.contains("show_error_toast("),
+        block.contains("management_action.open_failure_message(e)")
+            && block.contains("show_error_toast("),
         "create_script failure should use show_error_toast"
     );
 }
