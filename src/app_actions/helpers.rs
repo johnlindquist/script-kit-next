@@ -121,28 +121,69 @@ fn should_transition_to_script_list_after_action(current_view: &AppView) -> bool
     matches!(current_view, AppView::ScriptList | AppView::ActionsDialog)
 }
 
-fn selection_required_message_for_action(action_id: &str) -> &'static str {
-    match action_id {
-        "copy_path" => "Select an item to copy its path.",
-        "copy_deeplink" => "Select an item to copy its deeplink.",
-        "configure_shortcut" | "add_shortcut" | "update_shortcut" => {
-            "Select an item to configure its shortcut."
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SelectionRequiredMessagePlan {
+    CopyPath,
+    CopyDeeplink,
+    ConfigureShortcut,
+    RemoveShortcut,
+    ConfigureAlias,
+    RemoveAlias,
+    EditScript,
+    EditScriptlet,
+    RevealScriptlet,
+    CopyScriptletPath,
+    CopyContent,
+    RemoveScript,
+    ResetRanking,
+    RunScriptletAction,
+    Default,
+}
+
+impl SelectionRequiredMessagePlan {
+    fn from_action_id(action_id: &str) -> Self {
+        match action_id {
+            "copy_path" => Self::CopyPath,
+            "copy_deeplink" => Self::CopyDeeplink,
+            "configure_shortcut" | "add_shortcut" | "update_shortcut" => Self::ConfigureShortcut,
+            "remove_shortcut" => Self::RemoveShortcut,
+            "add_alias" | "update_alias" => Self::ConfigureAlias,
+            "remove_alias" => Self::RemoveAlias,
+            "edit_script" => Self::EditScript,
+            "edit_scriptlet" => Self::EditScriptlet,
+            "reveal_scriptlet_in_finder" => Self::RevealScriptlet,
+            "copy_scriptlet_path" => Self::CopyScriptletPath,
+            "copy_content" => Self::CopyContent,
+            "remove_script" | "delete_script" => Self::RemoveScript,
+            "reset_ranking" => Self::ResetRanking,
+            action if action.starts_with("scriptlet_action:") => Self::RunScriptletAction,
+            _ => Self::Default,
         }
-        "remove_shortcut" => "Select an item to remove its shortcut.",
-        "add_alias" | "update_alias" => "Select an item to add or update its alias.",
-        "remove_alias" => "Select an item to remove its alias.",
-        "edit_script" => "Select a script to edit.",
-        "edit_scriptlet" => "Select a scriptlet to edit.",
-        "reveal_scriptlet_in_finder" => "Select a scriptlet to reveal in Finder.",
-        "copy_scriptlet_path" => "Select a scriptlet to copy its path.",
-        "copy_content" => "Select a script, agent, or scriptlet to copy its content.",
-        "remove_script" | "delete_script" => "Select a script to remove.",
-        "reset_ranking" => "Select an item to reset its ranking.",
-        action if action.starts_with("scriptlet_action:") => {
-            "Select a scriptlet to run this action."
-        }
-        _ => "Select an item to continue.",
     }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::CopyPath => "Select an item to copy its path.",
+            Self::CopyDeeplink => "Select an item to copy its deeplink.",
+            Self::ConfigureShortcut => "Select an item to configure its shortcut.",
+            Self::RemoveShortcut => "Select an item to remove its shortcut.",
+            Self::ConfigureAlias => "Select an item to add or update its alias.",
+            Self::RemoveAlias => "Select an item to remove its alias.",
+            Self::EditScript => "Select a script to edit.",
+            Self::EditScriptlet => "Select a scriptlet to edit.",
+            Self::RevealScriptlet => "Select a scriptlet to reveal in Finder.",
+            Self::CopyScriptletPath => "Select a scriptlet to copy its path.",
+            Self::CopyContent => "Select a script, agent, or scriptlet to copy its content.",
+            Self::RemoveScript => "Select a script to remove.",
+            Self::ResetRanking => "Select an item to reset its ranking.",
+            Self::RunScriptletAction => "Select a scriptlet to run this action.",
+            Self::Default => "Select an item to continue.",
+        }
+    }
+}
+
+fn selection_required_message_for_action(action_id: &str) -> &'static str {
+    SelectionRequiredMessagePlan::from_action_id(action_id).message()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
