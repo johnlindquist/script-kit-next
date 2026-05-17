@@ -494,7 +494,7 @@ impl BuiltInEntry {
                 SystemActionType::OpenNetworkSettings => "Open Network Settings",
                 SystemActionType::OpenKeyboardSettings => "Open Keyboard Settings",
                 SystemActionType::OpenBluetoothSettings => "Open Bluetooth Settings",
-                SystemActionType::OpenNotificationsSettings => "Open Notification Settings",
+                SystemActionType::OpenNotificationsSettings => "Open Notifications Settings",
             },
             BuiltInFeature::NotesCommand(action) => match action {
                 NotesCommandType::OpenNotes => "Open Notes",
@@ -1243,7 +1243,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/notifications-settings",
-            "Notification Settings",
+            "Notifications Settings",
             "Open Notifications settings",
             vec!["notifications", "alerts", "banners", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenNotificationsSettings),
