@@ -180,6 +180,77 @@ fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
 }
 
 #[test]
+fn system_settings_builtins_name_the_settings_pane_they_open() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+
+    for (id, expected_name, expected_action, expected_description) in [
+        (
+            "builtin/system-preferences",
+            "macOS System Settings",
+            "Open macOS System Settings",
+            "Open macOS System Settings",
+        ),
+        (
+            "builtin/privacy-settings",
+            "Privacy & Security Settings",
+            "Open Privacy Settings",
+            "Open Privacy & Security settings",
+        ),
+        (
+            "builtin/display-settings",
+            "Display Settings",
+            "Open Display Settings",
+            "Open Display settings",
+        ),
+        (
+            "builtin/sound-settings",
+            "Sound Settings",
+            "Open Sound Settings",
+            "Open Sound settings",
+        ),
+        (
+            "builtin/network-settings",
+            "Network Settings",
+            "Open Network Settings",
+            "Open Network settings",
+        ),
+        (
+            "builtin/keyboard-settings",
+            "Keyboard Settings",
+            "Open Keyboard Settings",
+            "Open Keyboard settings",
+        ),
+        (
+            "builtin/bluetooth-settings",
+            "Bluetooth Settings",
+            "Open Bluetooth Settings",
+            "Open Bluetooth settings",
+        ),
+        (
+            "builtin/notifications-settings",
+            "Notifications Settings",
+            "Open Notifications Settings",
+            "Open Notifications settings",
+        ),
+    ] {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap_or_else(|| panic!("missing settings builtin {id}"));
+
+        assert_eq!(entry.name, expected_name, "{id} name");
+        assert_eq!(entry.default_action_text(), expected_action, "{id} action");
+        assert_eq!(entry.description, expected_description, "{id} description");
+        assert!(
+            !entry.name.contains("System Preferences")
+                && !entry.description.contains("System Preferences")
+                && !entry.default_action_text().contains("System Preferences"),
+            "{id} should use modern macOS System Settings wording"
+        );
+    }
+}
+
+#[test]
 fn force_quit_command_text_names_the_dialog_it_opens() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let system_actions = super::read_source("src/system_actions/mod.rs");
