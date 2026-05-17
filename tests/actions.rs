@@ -735,6 +735,28 @@ fn paste_sequential_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn settings_snap_mode_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum SettingsSnapModeBuiltinAction")
+            && content.contains("Disable")
+            && content.contains("Simple")
+            && content.contains("Expanded")
+            && content.contains("Precision"),
+        "settings snap-mode built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("SettingsSnapModeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("let target_mode = snap_action.target_mode()")
+            && content.contains("snap_action.hud_text()")
+            && content.contains("snap_action.success_detail()"),
+        "snap-mode target mode, HUD text, and success detail should derive from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
