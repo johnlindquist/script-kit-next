@@ -1366,6 +1366,31 @@ fn menu_bar_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn system_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum SystemBuiltinAction")
+            && content.contains("SystemBuiltinAction::from_action(action_type)")
+            && content.contains("fn execute_system_builtin("),
+        "System built-ins should route through a named action state before dispatch"
+    );
+    assert!(
+        content.contains("action.handler_name()")
+            && content.contains("self.dispatch_system_action(action_type, dctx, cx)"),
+        "System built-in helper should preserve structured logging and shared dispatch"
+    );
+    assert!(
+        content.contains("SystemActionType::Restart")
+            && content.contains("SystemActionType::ShutDown")
+            && content.contains("SystemActionType::EmptyTrash")
+            && content.contains("SystemActionType::QuitScriptKit"),
+        "System action dispatch should preserve destructive action branches without executing them in tests"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
