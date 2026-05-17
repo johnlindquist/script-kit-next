@@ -74,6 +74,39 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
 }
 
 #[test]
+fn generate_script_actions_name_agent_chat_handoff() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+
+    for (id, expected_name, expected_action, expected_description) in [
+        (
+            "builtin/generate-script-with-ai",
+            "Generate Script with AI",
+            "Open Agent Chat to Generate Script",
+            "Open Agent Chat to generate a Script Kit script from your prompt text",
+        ),
+        (
+            "builtin/generate-script-from-current-app",
+            "Generate Script from Current App",
+            "Open Agent Chat to Generate App Script",
+            "Generate a Script Kit script using the frontmost app's menu, selection, and browser context",
+        ),
+    ] {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap_or_else(|| panic!("missing generate script builtin {id}"));
+
+        assert_eq!(entry.name, expected_name, "{id} name");
+        assert_eq!(entry.default_action_text(), expected_action, "{id} action");
+        assert_eq!(entry.description, expected_description, "{id} description");
+        assert!(
+            entry.default_action_text().contains("Agent Chat"),
+            "{id} action should name the Agent Chat handoff"
+        );
+    }
+}
+
+#[test]
 fn acp_history_text_names_agent_chat_conversations() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let acp_history = entries

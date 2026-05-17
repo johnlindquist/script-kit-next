@@ -506,8 +506,10 @@ impl BuiltInEntry {
                 AiCommandType::OpenAi | AiCommandType::MiniAi => "Open Agent Chat",
                 AiCommandType::NewConversation => "Start New Chat",
                 AiCommandType::ClearConversation => "Clear Conversation",
-                AiCommandType::GenerateScript => "Generate Script",
-                AiCommandType::GenerateScriptFromCurrentApp => "Generate Script from App",
+                AiCommandType::GenerateScript => "Open Agent Chat to Generate Script",
+                AiCommandType::GenerateScriptFromCurrentApp => {
+                    "Open Agent Chat to Generate App Script"
+                }
                 AiCommandType::SendScreenToAi => "Send Screen to Agent Chat",
                 AiCommandType::SendFocusedWindowToAi => "Send Window to Agent Chat",
                 AiCommandType::SendSelectedTextToAi => "Send Selection to Agent Chat",
