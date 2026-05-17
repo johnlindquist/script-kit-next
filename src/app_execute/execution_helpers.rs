@@ -44,6 +44,47 @@ impl ScratchPadExecutionAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClaudeCodeEnableAction {
+    EnableProvider,
+}
+
+impl ClaudeCodeEnableAction {
+    fn validation_restored_message(self) -> &'static str {
+        match self {
+            Self::EnableProvider => {
+                "Failed to enable Claude Code (invalid config). Backup restored."
+            }
+        }
+    }
+
+    fn validation_no_backup_message(self, reason: impl std::fmt::Display) -> String {
+        match self {
+            Self::EnableProvider => {
+                format!("Failed to enable Claude Code: {reason}. No backup available.")
+            }
+        }
+    }
+
+    fn validation_recovery_failed_message(
+        self,
+        reason: impl std::fmt::Display,
+        recover_error: impl std::fmt::Display,
+    ) -> String {
+        match self {
+            Self::EnableProvider => {
+                format!("Failed to enable Claude Code: {reason}. Recovery failed: {recover_error}")
+            }
+        }
+    }
+
+    fn write_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::EnableProvider => format!("Failed to enable Claude Code: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
         let execution_action = SearchResultExecutionAction::LaunchApp;
@@ -230,6 +271,7 @@ impl ScriptListApp {
     pub fn enable_claude_code_in_config(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         use crate::config::editor::{self, ConfigWriteError, WriteOutcome};
 
+        let enable_action = ClaudeCodeEnableAction::EnableProvider;
         tracing::info!(message = %"Enabling Claude Code in config.ts");
 
         let config_path =
@@ -253,17 +295,11 @@ impl ScriptListApp {
                     Ok(true) => {
                         tracing::info!(message = %"Config restored from backup after validation failure",
                         );
-                        self.show_error_toast(
-                            "Failed to enable Claude Code (invalid config). Backup restored.",
-                            cx,
-                        );
+                        self.show_error_toast(enable_action.validation_restored_message(), cx);
                     }
                     Ok(false) => {
                         self.show_error_toast(
-                            format!(
-                                "Failed to enable Claude Code: {}. No backup available.",
-                                reason
-                            ),
+                            enable_action.validation_no_backup_message(&reason),
                             cx,
                         );
                     }
@@ -271,10 +307,7 @@ impl ScriptListApp {
                         tracing::info!(message = %&format!("Backup recovery also failed: {}", recover_err),
                         );
                         self.show_error_toast(
-                            format!(
-                                "Failed to enable Claude Code: {}. Recovery failed: {}",
-                                reason, recover_err
-                            ),
+                            enable_action.validation_recovery_failed_message(&reason, &recover_err),
                             cx,
                         );
                     }
@@ -282,8 +315,9 @@ impl ScriptListApp {
                 return;
             }
             Err(e) => {
-                tracing::info!(message = %&format!("Failed to enable Claude Code: {}", e));
-                self.show_error_toast(format!("Failed to enable Claude Code: {}", e), cx);
+                let message = enable_action.write_failure_message(&e);
+                tracing::info!(message = %message);
+                self.show_error_toast(message, cx);
                 return;
             }
         }
