@@ -23,6 +23,7 @@ export SCRIPT_KIT_STARTUP_PROFILE="${SCRIPT_KIT_STARTUP_PROFILE:-dev-fast}"
 export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:-1}"
 export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
 export SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM="${SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM:-1}"
+export SCRIPT_KIT_DISABLE_CODEX_ACP="${SCRIPT_KIT_DISABLE_CODEX_ACP:-1}"
 
 # Agentic session name: dev.sh now launches through the reusable session contract
 # so autonomous agents can attach immediately after a rebuild.

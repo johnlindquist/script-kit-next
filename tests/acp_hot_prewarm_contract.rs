@@ -72,6 +72,10 @@ fn startup_schedules_acp_connection_prewarm() {
         dev_sh.contains("SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM"),
         "./dev.sh must opt out of hidden ACP connection prewarm so dev launch cannot trigger codex-acp keychain prompts"
     );
+    assert!(
+        dev_sh.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
+        "./dev.sh must disable Codex ACP entirely so dev launch cannot select the keychain-backed adapter"
+    );
 }
 
 #[test]
@@ -98,6 +102,30 @@ fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
     assert!(
         body.contains("self.prewarmed_acp_chat = Some(view);"),
         "the hidden view must be retained for later launch consumption"
+    );
+}
+
+#[test]
+fn dev_mode_disables_codex_acp_catalog_and_implicit_default() {
+    let config = fs::read_to_string("src/ai/acp/config.rs").expect("read ACP config source");
+
+    assert!(
+        config.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
+        "ACP config must read the dev Codex ACP kill switch"
+    );
+    assert!(
+        config.contains("return codex_acp_default_probe_state_from_parts(false, false, false);"),
+        "disabled Codex ACP must not remain the implicit default"
+    );
+    assert!(
+        config.contains("agent.id == CODEX_ACP_AGENT_ID")
+            && config.contains("event = \"acp_codex_agent_skipped\""),
+        "catalog codex-acp entries must be skipped when disabled"
+    );
+    assert!(
+        config.contains("!codex_acp_disabled_by_env()")
+            && config.contains("agents.push(codex_acp_agent_config());"),
+        "built-in Codex ACP auto-detection must be gated by the disable flag"
     );
 }
 

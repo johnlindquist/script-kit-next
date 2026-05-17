@@ -100,6 +100,9 @@ pub(crate) struct CodexAcpDefaultProbeState {
 }
 
 pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
+    if codex_acp_disabled_by_env() {
+        return codex_acp_default_probe_state_from_parts(false, false, false);
+    }
     codex_acp_default_probe_state_from_parts(
         command_exists("codex"),
         command_exists("npx"),
@@ -119,6 +122,16 @@ fn codex_acp_default_probe_state_from_parts(
         adapter_ready: npx_ready || codex_acp_binary_ready,
         should_be_implicit_codex_default: codex_cli_ready,
     }
+}
+
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var(name)
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn codex_acp_disabled_by_env() -> bool {
+    env_flag_enabled("SCRIPT_KIT_DISABLE_CODEX_ACP")
 }
 
 /// Default Claude Code models available via the ACP adapter.
@@ -808,6 +821,14 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
         }
         // Deduplicate: skip catalog entries whose id already exists.
         for agent in file.agents {
+            if codex_acp_disabled_by_env() && agent.id == CODEX_ACP_AGENT_ID {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_codex_agent_skipped",
+                    reason = "disabled_by_env",
+                );
+                continue;
+            }
             let agent = normalize_well_known_agent_config(agent);
             if !agents.iter().any(|existing| existing.id == agent.id) {
                 agents.push(agent);
@@ -827,7 +848,10 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
 
     // 5. Built-in Codex ACP detection.
     let codex_probe = codex_acp_default_probe_state();
-    if codex_probe.codex_cli_ready && !agents.iter().any(|a| a.id == CODEX_ACP_AGENT_ID) {
+    if !codex_acp_disabled_by_env()
+        && codex_probe.codex_cli_ready
+        && !agents.iter().any(|a| a.id == CODEX_ACP_AGENT_ID)
+    {
         agents.push(codex_acp_agent_config());
     }
     tracing::info!(
