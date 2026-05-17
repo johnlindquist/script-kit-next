@@ -83,6 +83,18 @@ impl EmojiPinHandlerAction {
         }
     }
 
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Pin | Self::Unpin => "No emoji selected",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Pin | Self::Unpin => format!("{}: {error}", self.error_prefix()),
+        }
+    }
+
     fn success_hud(self, emoji_value: &str) -> String {
         match self {
             Self::Pin => format!("Pinned {emoji_value}"),
@@ -138,6 +150,12 @@ impl EmojiCopyHandlerAction {
                     hud_text: format!("Copied {} emojis from {}", category_emojis.len(), category),
                 })
             }
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::Emoji | Self::Unicode | Self::Section => "No emoji selected",
         }
     }
 }
@@ -206,7 +224,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
+                    self.show_error_toast(copy_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -228,7 +246,7 @@ impl ScriptListApp {
                     return DispatchOutcome::not_handled();
                 };
                 let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
+                    self.show_error_toast(pin_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -236,7 +254,7 @@ impl ScriptListApp {
                 pin_action.apply(&mut self.pinned_emojis, &emoji.value);
                 if let Err(error) = crate::emoji_pins::save_pinned_emojis(&self.pinned_emojis) {
                     tracing::error!(error = %error, emoji = %emoji.value, action = %action_id, "failed to update pinned emoji");
-                    self.show_error_toast(format!("{}: {}", pin_action.error_prefix(), error), cx);
+                    self.show_error_toast(pin_action.failure_message(error), cx);
                 } else {
                     self.show_hud(pin_action.success_hud(&emoji.value), Some(HUD_SHORT_MS), cx);
                     cx.notify();
