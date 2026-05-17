@@ -622,6 +622,34 @@ impl AiPresetFileBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiUnavailableBuiltinAction {
+    ScreenAreaCapture,
+}
+
+impl AiUnavailableBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        match command {
+            builtins::AiCommandType::SendScreenAreaToAi => Some(Self::ScreenAreaCapture),
+            _ => None,
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::ScreenAreaCapture => {
+                "Send Screen Area to Agent Chat is unavailable until selected-area capture is attached to Agent Chat."
+            }
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::ScreenAreaCapture => "ai_send_screen_area_unavailable",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3182,19 +3210,11 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
-                        let message = "Send Screen Area to Agent Chat is unavailable until \
-                                       selected-area capture is attached to Agent Chat.";
-                        self.toast_manager.push(
-                            components::toast::Toast::error(message, &self.theme)
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
-                        cx.notify();
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message.to_string(),
-                            "ai_send_screen_area_unavailable",
+                        let unavailable_action = AiUnavailableBuiltinAction::from_command(
+                            *cmd_type,
                         )
+                        .expect("AI unavailable arm should only receive screen area command");
+                        self.execute_ai_unavailable_builtin(unavailable_action, dctx, cx)
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
@@ -4679,6 +4699,25 @@ impl ScriptListApp {
         }
 
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_ai_unavailable_builtin(
+        &mut self,
+        action: AiUnavailableBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let message = action.message();
+        self.toast_manager.push(
+            components::toast::Toast::error(message, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
+        );
+        cx.notify();
+        Self::builtin_error(
+            dctx,
+            crate::action_helpers::ERROR_ACTION_FAILED,
+            message.to_string(),
+            action.failure_detail(),
+        )
     }
 
     fn execute_ai_preset_view_builtin(
