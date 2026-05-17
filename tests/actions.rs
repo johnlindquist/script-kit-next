@@ -1315,11 +1315,25 @@ fn settings_snap_mode_builtin_uses_named_action_states() {
         "settings snap-mode built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("SettingsSnapModeBuiltinAction::from_command(*cmd_type)")
-            && content.contains("let target_mode = snap_action.target_mode()")
-            && content.contains("snap_action.hud_text()")
-            && content.contains("snap_action.success_detail()"),
+        content.contains("SettingsSnapModeBuiltinAction::from_command(command)")
+            && content.contains("let target_mode = action.target_mode()")
+            && content.contains("action.hud_text()")
+            && content.contains("action.success_detail()"),
         "snap-mode target mode, HUD text, and success detail should derive from the named state"
+    );
+    assert!(
+        content.contains("action.persistence_failure_log()")
+            && content.contains("action.persistence_failure_hud(&error)")
+            && content.contains("action.persistence_failure_code()")
+            && content.contains("action.persistence_failure_message()")
+            && content.contains("action.runtime_transition_failure_log()"),
+        "snap-mode persistence and runtime-transition failure copy should derive from the named state"
+    );
+    assert!(
+        content.contains("\"set_snap_mode_failed\"")
+            && content.contains("format!(\"Failed to update snap mode: {error}\")")
+            && content.contains("\"Failed to save snap mode\""),
+        "snap-mode failure state should preserve current user-facing copy and error code"
     );
 }
 
