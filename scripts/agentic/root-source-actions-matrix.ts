@@ -502,8 +502,24 @@ const cases: Json[] = [
     role: "primary",
     typeLabel: "Script",
     stableKeyIncludes: `${query} Build Script`,
-    expectedActions: [],
-    requireAnyActions: true,
+    expectedActions: [
+      ["run_script", "Run"],
+      ["toggle_info", "Show Info"],
+      ["add_shortcut", "Add Keyboard Shortcut"],
+      ["add_alias", "Add Alias"],
+      ["toggle_favorite", "Add to Favorites"],
+      ["edit_script", "Edit Script"],
+      ["view_logs", "Show Logs"],
+      ["reveal_in_finder", "Open in Finder"],
+      ["file:open_in_quick_terminal", "Open in Quick Terminal"],
+      ["copy_path", "Copy Path"],
+      ["copy_content", "Copy Content"],
+      ["copy_deeplink", "Share"],
+      ["delete_script", "Delete Script?"],
+      ["reload_scripts", "Reload Scripts"],
+      ["settings", "Open Settings"],
+    ],
+    destructiveActions: ["delete_script"],
   },
   {
     id: "commands",
@@ -512,8 +528,16 @@ const cases: Json[] = [
     expectedFilters: ["commands"],
     role: "primary",
     typeLabel: "Built-in",
-    expectedActions: [],
-    requireAnyActions: true,
+    stableKey: "builtin/bluetooth-settings",
+    expectedActions: [
+      ["run_script", "Open Bluetooth Settings"],
+      ["toggle_info", "Show Info"],
+      ["add_shortcut", "Add Keyboard Shortcut"],
+      ["add_alias", "Add Alias"],
+      ["copy_deeplink", "Copy Deep Link"],
+      ["reload_scripts", "Reload Scripts"],
+      ["settings", "Open Settings"],
+    ],
   },
   {
     id: "apps",
@@ -522,8 +546,28 @@ const cases: Json[] = [
     expectedFilters: ["apps"],
     role: "primary",
     typeLabel: "App",
-    expectedActions: [],
-    requireAnyActions: true,
+    stableKey: "app/com.example.fixture-actions-calendar",
+    expectedActions: [
+      ["run_script", "Launch"],
+      ["toggle_info", "Show Info"],
+      ["add_shortcut", "Add Keyboard Shortcut"],
+      ["add_alias", "Add Alias"],
+      ["toggle_favorite", "Add to Favorites"],
+      ["reveal_in_finder", "Show in Finder"],
+      ["file:open_in_quick_terminal", "Open in Quick Terminal"],
+      ["show_info_in_finder", "Show Info in Finder"],
+      ["show_package_contents", "Show Package Contents"],
+      ["copy_name", "Copy Name"],
+      ["copy_path", "Copy Path"],
+      ["copy_bundle_id", "Copy Bundle Identifier"],
+      ["quit_app", "Quit Application"],
+      ["restart_app", "Restart Application"],
+      ["copy_deeplink", "Copy Deep Link"],
+      ["force_quit_app", "Force Quit Application"],
+      ["reload_scripts", "Reload Scripts"],
+      ["settings", "Open Settings"],
+    ],
+    destructiveActions: ["force_quit_app"],
   },
   {
     id: "windows",
@@ -614,8 +658,8 @@ function assertActionsDialog(state: Json, spec: Json, selected: Json): Json {
   }
   for (const id of spec.destructiveActions ?? []) {
     const action = actions.find((candidate: Json) => candidate.id === id);
-    if (!action?.destructive || action.section !== "Danger") {
-      throw new Error(`${spec.id}: expected ${id} to be destructive in Danger, got ${JSON.stringify(action)}`);
+    if (!action?.destructive || !["Danger", "Destructive"].includes(action.section)) {
+      throw new Error(`${spec.id}: expected ${id} to be destructive in Danger/Destructive, got ${JSON.stringify(action)}`);
     }
   }
   return dialog;
