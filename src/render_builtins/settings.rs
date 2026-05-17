@@ -385,7 +385,8 @@ impl ScriptListApp {
                         "builtin/accessibility-settings",
                     ),
                     name: "Open Accessibility Settings".to_string(),
-                    description: "Open Accessibility settings in System Preferences".to_string(),
+                    description: "Open Accessibility settings in macOS System Settings"
+                        .to_string(),
                     keywords: vec![
                         "accessibility".to_string(),
                         "settings".to_string(),
