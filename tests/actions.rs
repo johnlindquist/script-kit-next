@@ -2273,6 +2273,24 @@ fn terminal_utility_views_use_named_failure_states() {
 }
 
 #[test]
+fn webcam_utility_view_uses_named_failure_state() {
+    let content = fs::read_to_string("src/app_execute/utility_views.rs")
+        .expect("Failed to read utility view handler");
+
+    assert!(
+        content.contains("enum WebcamOpenUtilityAction")
+            && content.contains("OpenWebcamPrompt"),
+        "webcam utility view should route startup feedback through a named action state"
+    );
+    assert!(
+        content.contains("WebcamOpenUtilityAction::OpenWebcamPrompt")
+            && content.contains("webcam_action.start_failure_log(&err)")
+            && content.contains("format!(\"Failed to start webcam: {error}\")"),
+        "webcam startup failure log copy should derive from the named action state"
+    );
+}
+
+#[test]
 fn search_result_execution_helpers_use_named_failure_states() {
     let content = fs::read_to_string("src/app_execute/execution_helpers.rs")
         .expect("Failed to read execution helper handler");

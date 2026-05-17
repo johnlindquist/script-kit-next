@@ -4,6 +4,11 @@ enum TerminalOpenUtilityAction {
     QuickTerminal,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WebcamOpenUtilityAction {
+    OpenWebcamPrompt,
+}
+
 impl TerminalOpenUtilityAction {
     fn creation_failure_log(self, error: impl std::fmt::Display) -> String {
         match self {
@@ -17,6 +22,14 @@ impl TerminalOpenUtilityAction {
             Self::SdkCommandTerminal | Self::QuickTerminal => {
                 format!("Failed to open terminal: {error}")
             }
+        }
+    }
+}
+
+impl WebcamOpenUtilityAction {
+    fn start_failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::OpenWebcamPrompt => format!("Failed to start webcam: {error}"),
         }
     }
 }
@@ -635,11 +648,12 @@ impl ScriptListApp {
         // Camera frames arrive as CVPixelBuffer on a dispatch queue,
         // then we poll and pass them to gpui::surface() — no CPU conversion.
         let entity_weak = entity.downgrade();
+        let webcam_action = WebcamOpenUtilityAction::OpenWebcamPrompt;
 
         let (frame_rx, capture_handle) = match crate::camera::start_capture(640) {
             Ok(pair) => pair,
             Err(err) => {
-                tracing::error!(message = %&format!("Failed to start webcam: {}", err));
+                tracing::error!(message = %webcam_action.start_failure_log(&err));
                 // Still show the prompt with an error
                 let entity_weak2 = entity.downgrade();
                 let err_msg = err.to_string();
