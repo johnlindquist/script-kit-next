@@ -570,7 +570,7 @@ impl BuiltInEntry {
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
             BuiltInFeature::DictationHistory => "Open Dictation History",
             BuiltInFeature::Settings => "Open Script Kit Settings",
-            BuiltInFeature::AcpHistory => "Open Conversation History",
+            BuiltInFeature::AcpHistory => "Open Agent Chat History",
             BuiltInFeature::AiVault => "Open AI Vault",
             BuiltInFeature::SdkReference => "Open SDK Reference",
             BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
@@ -800,7 +800,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/acp-history",
-            "Conversation History",
+            "Agent Chat History",
             "Browse and manage past Agent Chat conversations",
             vec!["history", "conversations", "chat", "ai", "past", "previous"],
             BuiltInFeature::AcpHistory,

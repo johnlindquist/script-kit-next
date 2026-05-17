@@ -292,7 +292,7 @@ fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
         },
         BuiltInEntry {
             id: "builtin/acp-history".to_string(),
-            name: "Conversation History".to_string(),
+            name: "Agent Chat History".to_string(),
             description: "Browse Agent Chat conversations".to_string(),
             keywords: vec!["history".to_string(), "conversation".to_string()],
             feature: BuiltInFeature::AcpHistory,
@@ -372,7 +372,7 @@ fn test_get_grouped_results_ai_vault_builtin_beats_stale_script_history() {
         path: PathBuf::from("/vault.ts"),
         extension: "ts".to_string(),
         icon: None,
-        description: Some("Search past AI conversations".to_string()),
+        description: Some("Search past Agent Chat conversations".to_string()),
         alias: None,
         shortcut: None,
         ..Default::default()
