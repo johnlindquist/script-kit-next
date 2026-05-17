@@ -17,6 +17,29 @@ impl BrowserTabsActivationAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserTabsEmptyState {
+    NoOpenTabs,
+    NoFilteredMatches,
+}
+
+impl BrowserTabsEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoOpenTabs
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoOpenTabs => "No open browser tabs",
+            Self::NoFilteredMatches => "No browser tabs match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn browser_tabs_visible_rows(&self, filter: &str) -> Vec<crate::browser_tabs::BrowserTabInfo> {
         crate::browser_tabs::fuzzy_search_browser_tabs(&self.cached_browser_tabs, filter)
@@ -185,11 +208,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No open browser tabs"
-                } else {
-                    "No browser tabs match your filter"
-                })
+                .child(BrowserTabsEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let app_icons: std::collections::HashMap<String, crate::app_launcher::DecodedIcon> =
