@@ -1,10 +1,27 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchResultExecutionAction {
+    LaunchApp,
+    FocusWindow,
+}
+
+impl SearchResultExecutionAction {
+    fn failure_message(self, target_name: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::LaunchApp => format!("Failed to launch {target_name}: {error}"),
+            Self::FocusWindow => format!("Failed to focus window: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
+        let execution_action = SearchResultExecutionAction::LaunchApp;
         tracing::info!(message = %&format!("Launching app from search: {}", app.name));
 
         if let Err(e) = app_launcher::launch_application(app) {
-            tracing::error!(message = %&format!("Failed to launch {}: {}", app.name, e));
-            self.show_error_toast(format!("Failed to launch {}: {}", app.name, e), cx);
+            let message = execution_action.failure_message(&app.name, &e);
+            tracing::error!(message = %message);
+            self.show_error_toast(message, cx);
         } else {
             tracing::info!(message = %&format!("Launched app: {}", app.name));
             self.close_and_reset_window(cx);
@@ -17,12 +34,14 @@ impl ScriptListApp {
         window: &window_control::WindowInfo,
         cx: &mut Context<Self>,
     ) {
+        let execution_action = SearchResultExecutionAction::FocusWindow;
         tracing::info!(message = %&format!("Focusing window: {} - {}", window.app, window.title),
         );
 
         if let Err(e) = window_control::focus_window(window.id) {
-            tracing::error!(message = %&format!("Failed to focus window: {}", e));
-            self.show_error_toast(format!("Failed to focus window: {}", e), cx);
+            let message = execution_action.failure_message(&window.title, &e);
+            tracing::error!(message = %message);
+            self.show_error_toast(message, cx);
         } else {
             tracing::info!(message = %&format!("Focused window: {}", window.title));
             self.close_and_reset_window(cx);
