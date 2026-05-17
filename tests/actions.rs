@@ -189,8 +189,9 @@ fn clipboard_copy_paste_handler_uses_named_action_states() {
             && content.contains("copy_paste_action.paste_close_behavior()")
             && content.contains("self.finalize_paste_after_clipboard_ready(")
             && content.contains("copy_paste_action.success_hud()")
-            && content.contains("copy_paste_action.failure_prefix()"),
-        "clipboard paste/copy handler should derive finalizer close behavior, HUD, and error behavior from named states"
+            && content.contains("copy_paste_action.selection_required_message()")
+            && content.contains("copy_paste_action.failure_message(e)"),
+        "clipboard paste/copy handler should derive finalizer close behavior, HUD, guard, and error behavior from named states"
     );
 }
 
