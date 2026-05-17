@@ -582,6 +582,25 @@ fn script_context_favorite_actions_use_named_plan_states() {
 }
 
 #[test]
+fn favorites_browse_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/favorites.rs")
+        .expect("Failed to read favorites action handler");
+
+    assert!(
+        content.contains("enum FavoritesBrowseHandlerAction")
+            && content.contains("EditScript")
+            && content.contains("CopyScriptUrl"),
+        "Favorites browse edit/copy URL handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("FavoritesBrowseHandlerAction::from_action_id(action_id)")
+            && content.contains("favorites_action.selection_required_message()")
+            && content.contains("favorites_action.copied_url_hud(&deeplink_url)"),
+        "Favorites browse handlers should derive required-selection and copied URL feedback from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
