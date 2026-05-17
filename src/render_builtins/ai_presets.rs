@@ -1,3 +1,22 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CreateAiPresetFormAction {
+    Submit,
+}
+
+impl CreateAiPresetFormAction {
+    fn success_hud(self, preset_name: &str) -> String {
+        match self {
+            Self::Submit => format!("Preset '{preset_name}' created"),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::Submit => format!("Failed to create preset: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render the searchable AI presets list view.
     fn render_search_ai_presets(
@@ -367,6 +386,7 @@ impl ScriptListApp {
                 *active_field = (active + 1) % 3;
                 cx.notify();
             } else if crate::ui_foundation::is_key_enter(key) {
+                let form_action = CreateAiPresetFormAction::Submit;
                 let name_val = name.clone();
                 let prompt_val = system_prompt.clone();
                 let model_val = if model.trim().is_empty() {
@@ -378,7 +398,7 @@ impl ScriptListApp {
                     Ok(preset) => {
                         tracing::info!(id = %preset.id, name = %preset.name, action = "create_preset_success", "AI preset created");
                         self.show_hud(
-                            format!("Preset '{}' created", preset.name),
+                            form_action.success_hud(&preset.name),
                             Some(HUD_SHORT_MS),
                             cx,
                         );
@@ -387,7 +407,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, action = "create_preset_failed", "Failed to create preset");
-                        self.show_error_toast(format!("Failed to create preset: {}", e), cx);
+                        self.show_error_toast(form_action.failure_message(e), cx);
                     }
                 }
             } else if crate::ui_foundation::is_key_escape(key) {
