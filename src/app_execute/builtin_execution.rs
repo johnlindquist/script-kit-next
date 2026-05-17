@@ -464,6 +464,46 @@ impl FrecencyCommandBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsCommandBuiltinAction {
+    ResetWindowPositions,
+    ChooseTheme,
+    DictationSetup,
+    SelectMicrophone,
+    SnapMode(SettingsSnapModeBuiltinAction),
+}
+
+impl SettingsCommandBuiltinAction {
+    fn from_command(command: builtins::SettingsCommandType) -> Self {
+        if let Some(snap_action) = SettingsSnapModeBuiltinAction::from_command(command) {
+            return Self::SnapMode(snap_action);
+        }
+
+        match command {
+            builtins::SettingsCommandType::ResetWindowPositions => Self::ResetWindowPositions,
+            builtins::SettingsCommandType::ChooseTheme => Self::ChooseTheme,
+            builtins::SettingsCommandType::DictationSetup => Self::DictationSetup,
+            builtins::SettingsCommandType::SelectMicrophone => Self::SelectMicrophone,
+            builtins::SettingsCommandType::DisableWindowSnapping
+            | builtins::SettingsCommandType::SnapModeSimple
+            | builtins::SettingsCommandType::SnapModeExpanded
+            | builtins::SettingsCommandType::SnapModePrecision => unreachable!(
+                "snap mode commands should be converted before non-snap settings dispatch"
+            ),
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::ResetWindowPositions => "reset_window_positions",
+            Self::ChooseTheme => "choose_theme",
+            Self::DictationSetup => "dictation_setup",
+            Self::SelectMicrophone => "select_microphone",
+            Self::SnapMode(action) => action.success_detail(),
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3433,179 +3473,8 @@ impl ScriptListApp {
                     "Executing settings command"
                 );
 
-                use builtins::SettingsCommandType;
-
-                match cmd_type {
-                    SettingsCommandType::ResetWindowPositions => {
-                        self.reset_window_positions_to_default_main_menu(cx);
-                        Self::builtin_success(dctx, "reset_window_positions")
-                    }
-                    SettingsCommandType::ChooseTheme => {
-                        self.open_theme_chooser_view(cx);
-
-                        Self::builtin_success(dctx, "choose_theme")
-                    }
-                    SettingsCommandType::DictationSetup => {
-                        self.open_dictation_model_prompt(cx);
-                        Self::builtin_success(dctx, "dictation_setup")
-                    }
-                    SettingsCommandType::DisableWindowSnapping
-                    | SettingsCommandType::SnapModeSimple
-                    | SettingsCommandType::SnapModeExpanded
-                    | SettingsCommandType::SnapModePrecision => {
-                        let snap_action = SettingsSnapModeBuiltinAction::from_command(*cmd_type)
-                            .expect("snap mode arm should only receive snap mode commands");
-                        let target_mode = snap_action.target_mode();
-
-                        let previous = window_control::current_snap_mode();
-                        let runtime_active = window_control::is_snap_runtime_active();
-
-                        let mode = match window_control::persist_snap_mode(target_mode) {
-                            Ok(mode) => mode,
-                            Err(error) => {
-                                tracing::error!(
-                                    category = "WINDOW",
-                                    trace_id = %dctx.trace_id,
-                                    %error,
-                                    ?target_mode,
-                                    "Failed to persist snap mode from built-in command"
-                                );
-                                self.show_hud(
-                                    format!("Failed to update snap mode: {error}"),
-                                    Some(HUD_SHORT_MS),
-                                    cx,
-                                );
-                                return Self::builtin_error(
-                                    dctx,
-                                    "set_snap_mode_failed",
-                                    "Failed to save snap mode",
-                                    error.to_string(),
-                                );
-                            }
-                        };
-
-                        if runtime_active {
-                            let runtime_result = if mode == window_control::SnapMode::Off {
-                                window_control::cancel_snap_runtime(cx)
-                            } else {
-                                window_control::refresh_snap_runtime_for_mode(cx)
-                            };
-
-                            if let Err(error) = runtime_result {
-                                tracing::warn!(
-                                    category = "WINDOW",
-                                    trace_id = %dctx.trace_id,
-                                    %error,
-                                    ?mode,
-                                    "Failed to apply runtime transition after snap mode change"
-                                );
-                            }
-                        }
-
-                        tracing::info!(
-                            category = "WINDOW",
-                            trace_id = %dctx.trace_id,
-                            previous = ?previous,
-                            ?mode,
-                            runtime_active,
-                            "Updated snap mode from built-in command"
-                        );
-
-                        self.show_hud(snap_action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
-                        Self::builtin_success(dctx, snap_action.success_detail())
-                    }
-                    SettingsCommandType::SelectMicrophone => {
-                        let prefs = crate::config::load_user_preferences();
-                        let menu_items = match crate::dictation::list_input_device_menu_items(
-                            prefs.dictation.selected_device_id.as_deref(),
-                        ) {
-                            Ok(items) => items,
-                            Err(error) => {
-                                tracing::error!(
-                                    category = "DICTATION",
-                                    error = %error,
-                                    "Failed to enumerate microphone devices"
-                                );
-                                self.show_hud(
-                                    format!("Failed to list microphones: {error}"),
-                                    Some(HUD_SHORT_MS),
-                                    cx,
-                                );
-                                return Self::builtin_error(
-                                    dctx,
-                                    "select_microphone_failed",
-                                    "Failed to list microphones",
-                                    error.to_string(),
-                                );
-                            }
-                        };
-
-                        let mut start_index: usize = 0;
-                        let choices: Vec<Choice> = menu_items
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, item)| {
-                                let value = match &item.action {
-                                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
-                                        BUILTIN_MIC_DEFAULT_VALUE.to_string()
-                                    }
-                                    crate::dictation::DictationDeviceSelectionAction::UseDevice(id) => {
-                                        id.0.clone()
-                                    }
-                                };
-                                let name = if item.is_selected {
-                                    if start_index == 0 && idx > 0 {
-                                        start_index = idx;
-                                    }
-                                    format!("{} (current)", item.title)
-                                } else {
-                                    item.title.clone()
-                                };
-                                Choice {
-                                    name,
-                                    value: value.clone(),
-                                    description: Some(item.subtitle.clone()),
-                                    key: None,
-                                    semantic_id: Some(builtin_choice_semantic_id(
-                                        BUILTIN_MIC_SELECT_PROMPT_ID,
-                                        idx,
-                                        &value,
-                                    )),
-                                }
-                            })
-                            .collect();
-
-                        // Follow the canonical ShowMini pattern from prompt_handler
-                        // (not open_builtin_filterable_view which targets MainFilter focus)
-                        let choice_count = choices.len();
-                        tracing::info!(
-                            category = "AUTOMATION",
-                            prompt_id = BUILTIN_MIC_SELECT_PROMPT_ID,
-                            choice_count = choice_count,
-                            selected_index = start_index,
-                            semantic_ids_populated =
-                                choices.iter().all(|c| c.semantic_id.is_some()),
-                            "opened_builtin_microphone_prompt"
-                        );
-                        self.opened_from_main_menu = true;
-                        self.arg_input.clear();
-                        self.arg_selected_index = start_index;
-                        self.focused_input = FocusedInput::ArgPrompt;
-                        self.filter_text.clear();
-                        self.pending_filter_sync = true;
-                        self.pending_placeholder = Some("Select microphone...".to_string());
-                        self.pending_focus = Some(FocusTarget::MainFilter);
-                        self.current_view = AppView::MiniPrompt {
-                            id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
-                            placeholder: "Select microphone...".to_string(),
-                            choices,
-                        };
-                        resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
-                        cx.notify();
-
-                        Self::builtin_success(dctx, "select_microphone")
-                    }
-                }
+                let settings_action = SettingsCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_settings_command_builtin(settings_action, dctx, cx)
             }
 
             // =========================================================================
@@ -4651,6 +4520,193 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_settings_command_builtin(
+        &mut self,
+        action: SettingsCommandBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            SettingsCommandBuiltinAction::ResetWindowPositions => {
+                self.reset_window_positions_to_default_main_menu(cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            SettingsCommandBuiltinAction::ChooseTheme => {
+                self.open_theme_chooser_view(cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            SettingsCommandBuiltinAction::DictationSetup => {
+                self.open_dictation_model_prompt(cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            SettingsCommandBuiltinAction::SelectMicrophone => {
+                self.execute_select_microphone_builtin(dctx, cx)
+            }
+            SettingsCommandBuiltinAction::SnapMode(snap_action) => {
+                self.execute_settings_snap_mode_builtin(snap_action, dctx, cx)
+            }
+        }
+    }
+
+    fn execute_settings_snap_mode_builtin(
+        &mut self,
+        action: SettingsSnapModeBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let target_mode = action.target_mode();
+
+        let previous = window_control::current_snap_mode();
+        let runtime_active = window_control::is_snap_runtime_active();
+
+        let mode = match window_control::persist_snap_mode(target_mode) {
+            Ok(mode) => mode,
+            Err(error) => {
+                tracing::error!(
+                    category = "WINDOW",
+                    trace_id = %dctx.trace_id,
+                    %error,
+                    ?target_mode,
+                    "Failed to persist snap mode from built-in command"
+                );
+                self.show_hud(
+                    format!("Failed to update snap mode: {error}"),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+                return Self::builtin_error(
+                    dctx,
+                    "set_snap_mode_failed",
+                    "Failed to save snap mode",
+                    error.to_string(),
+                );
+            }
+        };
+
+        if runtime_active {
+            let runtime_result = if mode == window_control::SnapMode::Off {
+                window_control::cancel_snap_runtime(cx)
+            } else {
+                window_control::refresh_snap_runtime_for_mode(cx)
+            };
+
+            if let Err(error) = runtime_result {
+                tracing::warn!(
+                    category = "WINDOW",
+                    trace_id = %dctx.trace_id,
+                    %error,
+                    ?mode,
+                    "Failed to apply runtime transition after snap mode change"
+                );
+            }
+        }
+
+        tracing::info!(
+            category = "WINDOW",
+            trace_id = %dctx.trace_id,
+            previous = ?previous,
+            ?mode,
+            runtime_active,
+            "Updated snap mode from built-in command"
+        );
+
+        self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_select_microphone_builtin(
+        &mut self,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let prefs = crate::config::load_user_preferences();
+        let menu_items = match crate::dictation::list_input_device_menu_items(
+            prefs.dictation.selected_device_id.as_deref(),
+        ) {
+            Ok(items) => items,
+            Err(error) => {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to enumerate microphone devices"
+                );
+                self.show_hud(
+                    format!("Failed to list microphones: {error}"),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+                return Self::builtin_error(
+                    dctx,
+                    "select_microphone_failed",
+                    "Failed to list microphones",
+                    error.to_string(),
+                );
+            }
+        };
+
+        let mut start_index: usize = 0;
+        let choices: Vec<Choice> = menu_items
+            .iter()
+            .enumerate()
+            .map(|(idx, item)| {
+                let value = match &item.action {
+                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
+                        BUILTIN_MIC_DEFAULT_VALUE.to_string()
+                    }
+                    crate::dictation::DictationDeviceSelectionAction::UseDevice(id) => id.0.clone(),
+                };
+                let name = if item.is_selected {
+                    if start_index == 0 && idx > 0 {
+                        start_index = idx;
+                    }
+                    format!("{} (current)", item.title)
+                } else {
+                    item.title.clone()
+                };
+                Choice {
+                    name,
+                    value: value.clone(),
+                    description: Some(item.subtitle.clone()),
+                    key: None,
+                    semantic_id: Some(builtin_choice_semantic_id(
+                        BUILTIN_MIC_SELECT_PROMPT_ID,
+                        idx,
+                        &value,
+                    )),
+                }
+            })
+            .collect();
+
+        // Follow the canonical ShowMini pattern from prompt_handler
+        // (not open_builtin_filterable_view which targets MainFilter focus)
+        let choice_count = choices.len();
+        tracing::info!(
+            category = "AUTOMATION",
+            prompt_id = BUILTIN_MIC_SELECT_PROMPT_ID,
+            choice_count = choice_count,
+            selected_index = start_index,
+            semantic_ids_populated = choices.iter().all(|c| c.semantic_id.is_some()),
+            "opened_builtin_microphone_prompt"
+        );
+        self.opened_from_main_menu = true;
+        self.arg_input.clear();
+        self.arg_selected_index = start_index;
+        self.focused_input = FocusedInput::ArgPrompt;
+        self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Select microphone...".to_string());
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.current_view = AppView::MiniPrompt {
+            id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
+            placeholder: "Select microphone...".to_string(),
+            choices,
+        };
+        resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
+        cx.notify();
+
+        Self::builtin_success(dctx, "select_microphone")
+    }
 
     fn execute_script_command_builtin(
         &mut self,
