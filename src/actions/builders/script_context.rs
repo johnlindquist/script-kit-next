@@ -38,27 +38,73 @@ fn favorite_action_copy(is_favorite: bool) -> (&'static str, &'static str) {
     }
 }
 
-fn is_builtin_context(script: &ScriptInfo) -> bool {
-    !script.is_script
-        && !script.is_scriptlet
-        && !script.is_agent
-        && !script.is_app
-        && script.path.starts_with("builtin:")
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScriptContextKind {
+    App,
+    Agent,
+    Scriptlet,
+    Script,
+    Skill,
+    BuiltIn,
+    Generic,
 }
 
-fn primary_action_title(script: &ScriptInfo) -> String {
-    if is_builtin_context(script) {
-        script.action_verb.clone()
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PrimaryActionPlan {
+    PreserveCatalogActionText,
+    VerbForSubject { subject: &'static str },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PrimaryActionCopy {
+    title: String,
+    description: String,
+}
+
+fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
+    if script.is_app {
+        ScriptContextKind::App
+    } else if script.is_agent {
+        ScriptContextKind::Agent
+    } else if script.is_scriptlet {
+        ScriptContextKind::Scriptlet
+    } else if script.is_script {
+        ScriptContextKind::Script
+    } else if script.path.starts_with("skill:") {
+        ScriptContextKind::Skill
+    } else if script.path.starts_with("builtin:") {
+        ScriptContextKind::BuiltIn
     } else {
-        title_case_words(&script.action_verb)
+        ScriptContextKind::Generic
     }
 }
 
-fn primary_action_description(script: &ScriptInfo) -> String {
-    if is_builtin_context(script) {
-        script.action_verb.clone()
-    } else {
-        format!("{} this item", script.action_verb)
+fn primary_action_plan(kind: ScriptContextKind) -> PrimaryActionPlan {
+    match kind {
+        ScriptContextKind::BuiltIn => PrimaryActionPlan::PreserveCatalogActionText,
+        ScriptContextKind::Script => PrimaryActionPlan::VerbForSubject { subject: "script" },
+        ScriptContextKind::App => PrimaryActionPlan::VerbForSubject {
+            subject: "application",
+        },
+        ScriptContextKind::Scriptlet => PrimaryActionPlan::VerbForSubject {
+            subject: "scriptlet",
+        },
+        ScriptContextKind::Agent => PrimaryActionPlan::VerbForSubject { subject: "agent" },
+        ScriptContextKind::Skill => PrimaryActionPlan::VerbForSubject { subject: "skill" },
+        ScriptContextKind::Generic => PrimaryActionPlan::VerbForSubject { subject: "item" },
+    }
+}
+
+fn primary_action_copy(script: &ScriptInfo) -> PrimaryActionCopy {
+    match primary_action_plan(script_context_kind(script)) {
+        PrimaryActionPlan::PreserveCatalogActionText => PrimaryActionCopy {
+            title: script.action_verb.clone(),
+            description: script.action_verb.clone(),
+        },
+        PrimaryActionPlan::VerbForSubject { subject } => PrimaryActionCopy {
+            title: title_case_words(&script.action_verb),
+            description: format!("{} this {}", script.action_verb, subject),
+        },
     }
 }
 
@@ -77,6 +123,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
 
     let mut actions = Vec::new();
     let mut destructive_actions = Vec::new();
+    let primary_copy = primary_action_copy(script);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -93,8 +140,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "run_script",
-            primary_action_title(script),
-            Some(primary_action_description(script)),
+            primary_copy.title,
+            Some(primary_copy.description),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
@@ -1352,6 +1399,120 @@ mod tests {
             find_action_description(&actions, "run_script").as_deref(),
             Some("Open Agent Chat")
         );
+    }
+
+    #[test]
+    fn test_primary_action_plan_classifies_context_kind_matrix() {
+        let app = ScriptInfo::app("App", "/Applications/App.app", None, None, None);
+        let agent = ScriptInfo::agent("Agent", "/tmp/agent.md", None, None);
+        let scriptlet = ScriptInfo::scriptlet("Scriptlet", "/tmp/scriptlets.md", None, None);
+        let script = ScriptInfo::new("Script", "/tmp/script.ts");
+        let skill = ScriptInfo::with_action_verb("Skill", "skill:scriptkit:demo", false, "open");
+        let builtin = ScriptInfo::with_action_verb(
+            "Agent Chat",
+            "builtin:builtin/ai-chat",
+            false,
+            "Open Agent Chat",
+        );
+        let generic = ScriptInfo::with_action_verb("Thing", "virtual:thing", false, "open");
+        let typed_builtin_path =
+            ScriptInfo::with_action_verb("Typed", "builtin:builtin/new-script", true, "run");
+
+        assert_eq!(script_context_kind(&app), ScriptContextKind::App);
+        assert_eq!(script_context_kind(&agent), ScriptContextKind::Agent);
+        assert_eq!(
+            script_context_kind(&scriptlet),
+            ScriptContextKind::Scriptlet
+        );
+        assert_eq!(script_context_kind(&script), ScriptContextKind::Script);
+        assert_eq!(script_context_kind(&skill), ScriptContextKind::Skill);
+        assert_eq!(script_context_kind(&builtin), ScriptContextKind::BuiltIn);
+        assert_eq!(script_context_kind(&generic), ScriptContextKind::Generic);
+        assert_eq!(
+            script_context_kind(&typed_builtin_path),
+            ScriptContextKind::Script
+        );
+    }
+
+    #[test]
+    fn test_primary_action_copy_matrix() {
+        let mut script = ScriptInfo::new("Script", "/tmp/script.ts");
+        script.action_verb = "run".to_string();
+        let mut app = ScriptInfo::app("App", "/Applications/App.app", None, None, None);
+        app.action_verb = "launch".to_string();
+        let mut scriptlet = ScriptInfo::scriptlet("Scriptlet", "/tmp/scriptlets.md", None, None);
+        scriptlet.action_verb = "run".to_string();
+        let mut agent = ScriptInfo::agent("Agent", "/tmp/agent.md", None, None);
+        agent.action_verb = "open".to_string();
+        let skill = ScriptInfo::with_action_verb("Skill", "skill:scriptkit:demo", false, "open");
+        let generic = ScriptInfo::with_action_verb("Thing", "virtual:thing", false, "open");
+        let builtin = ScriptInfo::with_action_verb(
+            "Agent Chat",
+            "builtin:builtin/ai-chat",
+            false,
+            "Open Agent Chat",
+        );
+
+        for (context, script, expected) in [
+            (
+                "script",
+                script,
+                PrimaryActionCopy {
+                    title: "Run".to_string(),
+                    description: "run this script".to_string(),
+                },
+            ),
+            (
+                "app",
+                app,
+                PrimaryActionCopy {
+                    title: "Launch".to_string(),
+                    description: "launch this application".to_string(),
+                },
+            ),
+            (
+                "scriptlet",
+                scriptlet,
+                PrimaryActionCopy {
+                    title: "Run".to_string(),
+                    description: "run this scriptlet".to_string(),
+                },
+            ),
+            (
+                "agent",
+                agent,
+                PrimaryActionCopy {
+                    title: "Open".to_string(),
+                    description: "open this agent".to_string(),
+                },
+            ),
+            (
+                "skill",
+                skill,
+                PrimaryActionCopy {
+                    title: "Open".to_string(),
+                    description: "open this skill".to_string(),
+                },
+            ),
+            (
+                "generic",
+                generic,
+                PrimaryActionCopy {
+                    title: "Open".to_string(),
+                    description: "open this item".to_string(),
+                },
+            ),
+            (
+                "builtin",
+                builtin,
+                PrimaryActionCopy {
+                    title: "Open Agent Chat".to_string(),
+                    description: "Open Agent Chat".to_string(),
+                },
+            ),
+        ] {
+            assert_eq!(primary_action_copy(&script), expected, "{context}");
+        }
     }
 
     #[test]

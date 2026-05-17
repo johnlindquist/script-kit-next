@@ -116,10 +116,12 @@ fn builtin_actions_dialog_uses_builtin_default_action_text() {
         "built-in rows should pass their concrete default action text into the actions dialog"
     );
     assert!(
-        script_context_actions.contains("fn primary_action_title(script: &ScriptInfo)")
-            && script_context_actions.contains("is_builtin_context(script)")
-            && script_context_actions.contains("script.action_verb.clone()"),
-        "built-in action rows should preserve full labels like 'Open Agent Chat' instead of title-casing a generic verb"
+        script_context_actions.contains("enum ScriptContextKind")
+            && script_context_actions.contains("enum PrimaryActionPlan")
+            && script_context_actions.contains("PrimaryActionPlan::PreserveCatalogActionText")
+            && script_context_actions.contains("script.action_verb.clone()")
+            && script_context_actions.contains("ScriptContextKind::BuiltIn"),
+        "built-in action rows should use an explicit text plan instead of hiding preservation/normalization in ad hoc conditionals"
     );
 }
 
