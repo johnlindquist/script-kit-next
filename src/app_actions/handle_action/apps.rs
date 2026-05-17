@@ -9,6 +9,12 @@ enum AppCopyHandlerAction {
     BundleIdentifier,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppOpenHandlerAction {
+    ShowInfoInFinder,
+    ShowPackageContents,
+}
+
 impl AppCopyHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -45,6 +51,55 @@ impl AppCopyHandlerAction {
     }
 }
 
+impl AppOpenHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "show_info_in_finder" => Some(Self::ShowInfoInFinder),
+            "show_package_contents" => Some(Self::ShowPackageContents),
+            _ => None,
+        }
+    }
+
+    fn trace_name(self) -> &'static str {
+        match self {
+            Self::ShowInfoInFinder => "show_info_in_finder",
+            Self::ShowPackageContents => "show_package_contents",
+        }
+    }
+
+    fn missing_target_message(self) -> &'static str {
+        match self {
+            Self::ShowInfoInFinder => "Cannot show info for this item",
+            Self::ShowPackageContents => "Cannot show package contents for this item",
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::ShowInfoInFinder => "Opened Info in Finder",
+            Self::ShowPackageContents => "Opened Package Contents",
+        }
+    }
+
+    fn error_prefix(self) -> &'static str {
+        match self {
+            Self::ShowInfoInFinder => "Failed to show info",
+            Self::ShowPackageContents => "Failed to open package contents",
+        }
+    }
+
+    fn run(self, path: std::path::PathBuf) -> Result<(), String> {
+        match self {
+            Self::ShowInfoInFinder => crate::file_search::show_info(&path.to_string_lossy()),
+            Self::ShowPackageContents => std::process::Command::new("open")
+                .arg(path.join("Contents"))
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| e.to_string()),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Handle app-specific actions. Returns `DispatchOutcome` indicating if handled.
     fn handle_app_action(
@@ -55,36 +110,50 @@ impl ScriptListApp {
     ) -> DispatchOutcome {
         let trace_id = &dctx.trace_id;
         match action_id {
-            "show_info_in_finder" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "show info in Finder action");
+            "show_info_in_finder" | "show_package_contents" => {
+                let Some(open_action) = AppOpenHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(
+                    category = "UI",
+                    trace_id = %trace_id,
+                    action = open_action.trace_name(),
+                    "app open item action"
+                );
                 let path_result =
                     self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
 
                 match path_result {
                     Ok(path) => {
-                        let path_str = path.to_string_lossy().to_string();
                         let trace_id = trace_id.to_string();
                         cx.spawn(async move |this, cx| {
                             let result = cx
                                 .background_executor()
-                                .spawn(async move {
-                                    crate::file_search::show_info(&path_str)
-                                })
+                                .spawn(async move { open_action.run(path) })
                                 .await;
                             let _ = this.update(cx, |this, cx| match result {
                                 Ok(()) => {
-                                    tracing::info!(trace_id = %trace_id, "show_info_in_finder completed");
+                                    tracing::info!(
+                                        trace_id = %trace_id,
+                                        action = open_action.trace_name(),
+                                        "app open item action completed"
+                                    );
                                     this.show_hud(
-                                        "Opened Info in Finder".to_string(),
+                                        open_action.success_hud().to_string(),
                                         Some(HUD_SHORT_MS),
                                         cx,
                                     );
                                     this.hide_main_and_reset(cx);
                                 }
                                 Err(e) => {
-                                    tracing::error!(trace_id = %trace_id, error = %e, "show_info_in_finder failed");
+                                    tracing::error!(
+                                        trace_id = %trace_id,
+                                        error = %e,
+                                        action = open_action.trace_name(),
+                                        "app open item action failed"
+                                    );
                                     this.show_error_toast(
-                                        format!("Failed to show info: {}", e),
+                                        format!("{}: {}", open_action.error_prefix(), e),
                                         cx,
                                     );
                                 }
@@ -95,60 +164,7 @@ impl ScriptListApp {
                     }
                     Err(msg) => {
                         let msg = msg.unwrap_or_else(|| {
-                            gpui::SharedString::from("Cannot show info for this item")
-                        });
-                        DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            msg.to_string(),
-                        )
-                    }
-                }
-            }
-            "show_package_contents" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "show package contents action");
-                let path_result =
-                    self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
-
-                match path_result {
-                    Ok(path) => {
-                        let contents_path = path.join("Contents");
-                        let trace_id = trace_id.to_string();
-                        cx.spawn(async move |this, cx| {
-                            let result = cx
-                                .background_executor()
-                                .spawn(async move {
-                                    std::process::Command::new("open")
-                                        .arg(&contents_path)
-                                        .spawn()
-                                        .map(|_| ())
-                                        .map_err(|e| e.to_string())
-                                })
-                                .await;
-                            let _ = this.update(cx, |this, cx| match result {
-                                Ok(()) => {
-                                    tracing::info!(trace_id = %trace_id, "show_package_contents completed");
-                                    this.show_hud(
-                                        "Opened Package Contents".to_string(),
-                                        Some(HUD_SHORT_MS),
-                                        cx,
-                                    );
-                                    this.hide_main_and_reset(cx);
-                                }
-                                Err(e) => {
-                                    tracing::error!(trace_id = %trace_id, error = %e, "show_package_contents failed");
-                                    this.show_error_toast(
-                                        format!("Failed to open package contents: {}", e),
-                                        cx,
-                                    );
-                                }
-                            });
-                        })
-                        .detach();
-                        DispatchOutcome::success()
-                    }
-                    Err(msg) => {
-                        let msg = msg.unwrap_or_else(|| {
-                            gpui::SharedString::from("Cannot show package contents for this item")
+                            gpui::SharedString::from(open_action.missing_target_message())
                         });
                         DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
