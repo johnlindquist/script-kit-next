@@ -22,6 +22,13 @@ enum AppLifecycleHandlerAction {
     Restart,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AppLifecycleTarget {
+    app_name: String,
+    bundle_id: Option<String>,
+    app_path: std::path::PathBuf,
+}
+
 impl AppCopyHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -146,6 +153,21 @@ impl AppLifecycleHandlerAction {
             Self::Restart => "Restart is only available for applications",
         }
     }
+
+    fn target_from_result(
+        self,
+        result: Option<scripts::SearchResult>,
+    ) -> Result<AppLifecycleTarget, &'static str> {
+        let Some(scripts::SearchResult::App(app_result)) = result else {
+            return Err(self.unsupported_message());
+        };
+
+        Ok(AppLifecycleTarget {
+            app_name: app_result.app.name,
+            bundle_id: app_result.app.bundle_id,
+            app_path: app_result.app.path,
+        })
+    }
 }
 
 impl ScriptListApp {
@@ -243,134 +265,96 @@ impl ScriptListApp {
                         );
                         DispatchOutcome::success()
                     }
-                    Err(message) => DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        message,
-                    ),
+                    Err(message) => {
+                        DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
+                    }
                 }
             }
-            "quit_app" => {
+            "quit_app" | "force_quit_app" | "restart_app" => {
                 let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
                 else {
                     return DispatchOutcome::not_handled();
                 };
                 tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
-                if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
-                    let app_name = m.app.name.clone();
-                    let trace_id = trace_id.to_string();
-                    self.show_hud(lifecycle_action.hud_message(&app_name), Some(HUD_SHORT_MS), cx);
-                    self.hide_main_and_reset(cx);
-                    cx.spawn(async move |_this, cx| {
-                        let name = app_name.clone();
-                        let result = cx
-                            .background_executor()
-                            .spawn(async move { quit_app_by_name(&name) })
-                            .await;
-                        if let Err(e) = result {
-                            tracing::error!(trace_id = %trace_id, error = %e, "quit_app failed");
-                        }
-                    })
-                    .detach();
-                    DispatchOutcome::success()
-                } else {
-                    DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        lifecycle_action.unsupported_message(),
-                    )
-                }
-            }
-            "force_quit_app" => {
-                let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
-                else {
-                    return DispatchOutcome::not_handled();
+
+                let target = match lifecycle_action.target_from_result(self.get_selected_result()) {
+                    Ok(target) => target,
+                    Err(message) => {
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                        );
+                    }
                 };
-                tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
-                if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
-                    let app_name = m.app.name.clone();
-                    let bundle_id = m.app.bundle_id.clone();
-                    let trace_id = trace_id.to_string();
-                    self.show_hud(
-                        lifecycle_action.hud_message(&app_name),
-                        Some(HUD_SHORT_MS),
-                        cx,
-                    );
-                    self.hide_main_and_reset(cx);
-                    cx.spawn(async move |_this, cx| {
-                        let result = cx
-                            .background_executor()
-                            .spawn(async move {
-                                force_quit_app(&app_name, bundle_id.as_deref())
-                            })
-                            .await;
-                        if let Err(e) = result {
-                            tracing::error!(trace_id = %trace_id, error = %e, "force_quit_app failed");
+
+                let app_name = target.app_name.clone();
+                let trace_id = trace_id.to_string();
+                self.show_hud(
+                    lifecycle_action.hud_message(&app_name),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+                self.hide_main_and_reset(cx);
+                cx.spawn(async move |_this, cx| {
+                    match lifecycle_action {
+                        AppLifecycleHandlerAction::Quit => {
+                            let name = target.app_name.clone();
+                            let result = cx
+                                .background_executor()
+                                .spawn(async move { quit_app_by_name(&name) })
+                                .await;
+                            if let Err(e) = result {
+                                tracing::error!(trace_id = %trace_id, error = %e, "quit_app failed");
+                            }
                         }
-                    })
-                    .detach();
-                    DispatchOutcome::success()
-                } else {
-                    DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        lifecycle_action.unsupported_message(),
-                    )
-                }
-            }
-            "restart_app" => {
-                let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
-                else {
-                    return DispatchOutcome::not_handled();
-                };
-                tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
-                if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
-                    let app_name = m.app.name.clone();
-                    let app_path = m.app.path.clone();
-                    let trace_id = trace_id.to_string();
-                    self.show_hud(lifecycle_action.hud_message(&app_name), Some(HUD_SHORT_MS), cx);
-                    self.hide_main_and_reset(cx);
-                    cx.spawn(async move |_this, cx| {
-                        // Quit first
-                        let name = app_name.clone();
-                        let quit_result = cx
-                            .background_executor()
-                            .spawn(async move {
-                                quit_app_by_name(&name)
-                            })
-                            .await;
-
-                        if let Err(e) = &quit_result {
-                            tracing::warn!(trace_id = %trace_id, error = %e, "quit before restart failed, attempting launch anyway");
+                        AppLifecycleHandlerAction::ForceQuit => {
+                            let app_name = target.app_name;
+                            let bundle_id = target.bundle_id;
+                            let result = cx
+                                .background_executor()
+                                .spawn(async move { force_quit_app(&app_name, bundle_id.as_deref()) })
+                                .await;
+                            if let Err(e) = result {
+                                tracing::error!(trace_id = %trace_id, error = %e, "force_quit_app failed");
+                            }
                         }
+                        AppLifecycleHandlerAction::Restart => {
+                            let name = target.app_name.clone();
+                            let quit_result = cx
+                                .background_executor()
+                                .spawn(async move { quit_app_by_name(&name) })
+                                .await;
 
-                        // Brief delay to let the app finish quitting
-                        cx.background_executor()
-                            .timer(std::time::Duration::from_millis(500))
-                            .await;
+                            if let Err(e) = &quit_result {
+                                tracing::warn!(trace_id = %trace_id, error = %e, "quit before restart failed, attempting launch anyway");
+                            }
 
-                        // Relaunch
-                        let path = app_path;
-                        let result = cx
-                            .background_executor()
-                            .spawn(async move {
-                                std::process::Command::new("open")
-                                    .arg(&path)
-                                    .spawn()
-                                    .map(|_| ())
-                                    .map_err(|e| e.to_string())
-                            })
-                            .await;
+                            // Brief delay to let the app finish quitting
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(500))
+                                .await;
 
-                        if let Err(e) = result {
-                            tracing::error!(trace_id = %trace_id, error = %e, "restart relaunch failed");
+                            // Relaunch
+                            let path = target.app_path;
+                            let result = cx
+                                .background_executor()
+                                .spawn(async move {
+                                    std::process::Command::new("open")
+                                        .arg(&path)
+                                        .spawn()
+                                        .map(|_| ())
+                                        .map_err(|e| e.to_string())
+                                })
+                                .await;
+
+                            if let Err(e) = result {
+                                tracing::error!(trace_id = %trace_id, error = %e, "restart relaunch failed");
+                            }
                         }
-                    })
-                    .detach();
-                    DispatchOutcome::success()
-                } else {
-                    DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        lifecycle_action.unsupported_message(),
-                    )
-                }
+                    }
+                })
+                .detach();
+                DispatchOutcome::success()
             }
             _ => DispatchOutcome::not_handled(),
         }
