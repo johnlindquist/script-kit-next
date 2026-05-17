@@ -1111,6 +1111,9 @@ fn permission_command_builtin_uses_named_action_states() {
         content.contains("PermissionCommandBuiltinAction::from_command(*cmd_type)")
             && content.contains("fn execute_permission_command_builtin(")
             && content.contains("PermissionAssistantBuiltinAction::from_command(command)")
+            && content.contains(
+                "expect(\"permission assistant command should map to assistant action\")"
+            )
             && content.contains("action.success_detail()")
             && content.contains("action.failure_detail()"),
         "Permission command routing should delegate through named state details"

@@ -273,10 +273,6 @@ enum PermissionCommandBuiltinAction {
 
 impl PermissionCommandBuiltinAction {
     fn from_command(command: builtins::PermissionCommandType) -> Self {
-        if let Some(assistant_action) = PermissionAssistantBuiltinAction::from_command(command) {
-            return Self::Assistant(assistant_action);
-        }
-
         match command {
             builtins::PermissionCommandType::CheckPermissions => Self::CheckPermissions,
             builtins::PermissionCommandType::RequestAccessibility => Self::RequestAccessibility,
@@ -284,8 +280,9 @@ impl PermissionCommandBuiltinAction {
                 Self::OpenAccessibilitySettings
             }
             builtins::PermissionCommandType::AllowAccessibility
-            | builtins::PermissionCommandType::AllowScreenRecording => unreachable!(
-                "permission assistant commands should be converted before direct permission dispatch"
+            | builtins::PermissionCommandType::AllowScreenRecording => Self::Assistant(
+                PermissionAssistantBuiltinAction::from_command(command)
+                    .expect("permission assistant command should map to assistant action"),
             ),
         }
     }
