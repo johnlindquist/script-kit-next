@@ -148,6 +148,24 @@ fn clipboard_entry_actions_use_named_plan_states() {
 }
 
 #[test]
+fn clipboard_paste_destination_uses_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/clipboard.rs")
+        .expect("Failed to read clipboard action builder");
+
+    assert!(
+        content.contains("enum ClipboardPasteDestinationPlan")
+            && content.contains("FrontmostApp")
+            && content.contains("ActiveAppFallback"),
+        "clipboard paste title should be driven by named destination plan states"
+    );
+    assert!(
+        content.contains("ClipboardPasteDestinationPlan::from_entry(entry)")
+            && content.contains("paste_destination_plan.title(entry)"),
+        "clipboard paste action title should derive from the named destination plan"
+    );
+}
+
+#[test]
 fn emoji_entry_actions_use_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
