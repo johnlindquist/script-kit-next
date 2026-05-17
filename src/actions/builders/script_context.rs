@@ -71,6 +71,12 @@ enum FavoriteActionPlan {
     RemoveFromFavorites,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RankingActionPlan {
+    NoRankingAction,
+    ResetSuggestedRanking,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct ScriptContextShareActionCopy {
     title: &'static str,
@@ -99,6 +105,33 @@ impl FavoriteActionPlan {
 
 fn favorite_action_copy(is_favorite: bool) -> (&'static str, &'static str) {
     FavoriteActionPlan::from_is_favorite(is_favorite).copy()
+}
+
+impl RankingActionPlan {
+    fn from_is_suggested(is_suggested: bool) -> Self {
+        if is_suggested {
+            Self::ResetSuggestedRanking
+        } else {
+            Self::NoRankingAction
+        }
+    }
+
+    fn reset_action(self) -> Option<Action> {
+        match self {
+            Self::NoRankingAction => None,
+            Self::ResetSuggestedRanking => Some(
+                Action::new(
+                    "reset_ranking",
+                    "Delete Ranking Entry",
+                    Some("Remove this item from Suggested section".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌃⌘R")
+                .with_icon(IconName::Trash)
+                .with_section("Destructive"),
+            ),
+        }
+    }
 }
 
 fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
@@ -307,6 +340,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     let mut destructive_actions = Vec::new();
     let primary_copy = primary_action_copy(script);
     let preference_plan = preference_action_plan(script);
+    let ranking_plan = RankingActionPlan::from_is_suggested(script.is_suggested);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -669,18 +703,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_section("Share"),
     );
 
-    if script.is_suggested {
-        destructive_actions.push(
-            Action::new(
-                "reset_ranking",
-                "Delete Ranking Entry",
-                Some("Remove this item from Suggested section".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌃⌘R")
-            .with_icon(IconName::Trash)
-            .with_section("Destructive"),
-        );
+    if let Some(reset_action) = ranking_plan.reset_action() {
+        destructive_actions.push(reset_action);
     }
 
     actions.extend(destructive_actions);
