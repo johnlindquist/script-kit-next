@@ -183,6 +183,7 @@ fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
 fn force_quit_command_text_names_the_dialog_it_opens() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let system_actions = super::read_source("src/system_actions/mod.rs");
+    let execution = super::read_source("src/app_execute/builtin_execution.rs");
 
     let force_quit = entries
         .iter()
@@ -199,5 +200,11 @@ fn force_quit_command_text_names_the_dialog_it_opens() {
         system_actions.contains("Opening Force Quit Applications dialog")
             && system_actions.contains("command down, option down"),
         "Force Quit Apps builtin should open the macOS dialog instead of directly terminating apps"
+    );
+    assert!(
+        execution.contains("\"builtin/force-quit\"")
+            && execution.contains("\"Open Force Quit Apps\"")
+            && execution.contains("\"Open Force Quit Apps?\""),
+        "Force Quit confirmation should name the dialog-opening action"
     );
 }

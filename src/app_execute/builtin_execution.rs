@@ -1497,9 +1497,9 @@ impl ScriptListApp {
                 ..Default::default()
             },
             "builtin/force-quit" => crate::confirm::ParentConfirmOptions::destructive(
-                "Force Quit Apps",
+                "Open Force Quit Apps",
                 "Open Force Quit Apps?",
-                "Force Quit",
+                "Open",
             ),
             "builtin/stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
                 "Stop All Processes",
