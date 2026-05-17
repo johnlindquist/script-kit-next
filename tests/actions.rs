@@ -1900,6 +1900,29 @@ fn utility_process_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn process_manager_terminate_selected_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/process_manager.rs")
+        .expect("Failed to read process manager renderer");
+
+    assert!(
+        content.contains("enum ProcessManagerTerminateAction")
+            && content.contains("StopSelectedProcess"),
+        "process manager selected-process termination feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("ProcessManagerTerminateAction::StopSelectedProcess")
+            && content.contains("terminate_action.success_hud(script_name)")
+            && content.contains("terminate_action.failure_message(pid, &err_msg)"),
+        "process manager terminate success and failure feedback should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Stopped {script_name}\")")
+            && content.contains("format!(\"Failed to stop PID {pid}: {error}\")"),
+        "process manager terminate feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn utility_command_dispatch_uses_named_wrapper_state() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");

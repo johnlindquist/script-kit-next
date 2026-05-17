@@ -1,3 +1,22 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProcessManagerTerminateAction {
+    StopSelectedProcess,
+}
+
+impl ProcessManagerTerminateAction {
+    fn success_hud(self, script_name: &str) -> String {
+        match self {
+            Self::StopSelectedProcess => format!("Stopped {script_name}"),
+        }
+    }
+
+    fn failure_message(self, pid: u32, error: &str) -> String {
+        match self {
+            Self::StopSelectedProcess => format!("Failed to stop PID {pid}: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Refresh interval for the process manager list (2 seconds).
     const PROCESS_MANAGER_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
@@ -311,6 +330,7 @@ impl ScriptListApp {
                     if let Some((_, process_info)) = filtered.get(current_selected) {
                         let pid = process_info.pid;
                         let script_path = process_info.script_path.clone();
+                        let terminate_action = ProcessManagerTerminateAction::StopSelectedProcess;
 
                         tracing::info!(
                             correlation_id = "process-manager-terminate",
@@ -331,7 +351,7 @@ impl ScriptListApp {
                                     .unwrap_or("process");
 
                                 this.show_hud(
-                                    format!("Stopped {}", script_name),
+                                    terminate_action.success_hud(script_name),
                                     Some(HUD_SHORT_MS),
                                     cx,
                                 );
@@ -372,7 +392,7 @@ impl ScriptListApp {
                                     "process_manager.terminate_failed"
                                 );
                                 this.show_error_toast(
-                                    format!("Failed to stop PID {}: {}", pid, err_msg),
+                                    terminate_action.failure_message(pid, &err_msg),
                                     cx,
                                 );
                             }
