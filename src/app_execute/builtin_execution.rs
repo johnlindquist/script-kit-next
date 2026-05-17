@@ -730,6 +730,32 @@ impl SurfaceOpenBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BrowserTabsBuiltinAction {
+    Open,
+}
+
+impl BrowserTabsBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::BrowserTabs => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_browser_tabs",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_browser_tabs_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3283,67 +3309,9 @@ impl ScriptListApp {
                 }
             }
             builtins::BuiltInFeature::BrowserTabs => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Browser Tabs"
-                );
-                match crate::browser_tabs::list_open_tabs() {
-                    Ok(tabs) => {
-                        tracing::info!(
-                            category = "BUILTIN",
-                            trace_id = %dctx.trace_id,
-                            count = tabs.len(),
-                            "Loaded browser tabs"
-                        );
-                        self.cached_browser_tabs = tabs;
-
-                        // Kick off background favicon fetches for all tab domains.
-                        // Favicons are fetched on a background thread; when done,
-                        // we notify the entity so the list re-renders with icons.
-                        {
-                            let domains = crate::browser_tabs::domains_needing_favicons(
-                                &self.cached_browser_tabs,
-                            );
-                            if !domains.is_empty() {
-                                let task = cx.spawn(async move |this, cx| {
-                                    cx.background_executor()
-                                        .spawn(async move {
-                                            crate::browser_tabs::fetch_favicons_blocking(&domains);
-                                        })
-                                        .await;
-                                    let _ = cx.update(|cx| {
-                                        let _ = this.update(cx, |_, cx| cx.notify());
-                                    });
-                                });
-                                task.detach();
-                            }
-                        }
-
-                        self.open_builtin_filterable_view(
-                            AppView::BrowserTabsView {
-                                filter: String::new(),
-                                selected_index: 0,
-                            },
-                            "Search open browser tabs...",
-                            false,
-                            cx,
-                        );
-
-                        Self::builtin_success(dctx, "open_browser_tabs")
-                    }
-                    Err(error) => {
-                        let message = format!("Failed to list browser tabs: {}", error);
-                        self.show_error_toast(message.clone(), cx);
-                        cx.notify();
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
-                            "open_browser_tabs_failed",
-                        )
-                    }
-                }
+                let browser_tabs_action = BrowserTabsBuiltinAction::from_feature(&entry.feature)
+                    .expect("browser tabs arm should only receive BrowserTabs");
+                self.execute_browser_tabs_builtin(browser_tabs_action, dctx, cx)
             }
             builtins::BuiltInFeature::DesignGallery => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
@@ -4166,6 +4134,69 @@ impl ScriptListApp {
         }
 
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_browser_tabs_builtin(
+        &mut self,
+        action: BrowserTabsBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            "Opening Browser Tabs"
+        );
+        match crate::browser_tabs::list_open_tabs() {
+            Ok(tabs) => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    count = tabs.len(),
+                    "Loaded browser tabs"
+                );
+                self.cached_browser_tabs = tabs;
+
+                let domains =
+                    crate::browser_tabs::domains_needing_favicons(&self.cached_browser_tabs);
+                if !domains.is_empty() {
+                    let task = cx.spawn(async move |this, cx| {
+                        cx.background_executor()
+                            .spawn(async move {
+                                crate::browser_tabs::fetch_favicons_blocking(&domains);
+                            })
+                            .await;
+                        let _ = cx.update(|cx| {
+                            let _ = this.update(cx, |_, cx| cx.notify());
+                        });
+                    });
+                    task.detach();
+                }
+
+                self.open_builtin_filterable_view(
+                    AppView::BrowserTabsView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search open browser tabs...",
+                    false,
+                    cx,
+                );
+
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(error) => {
+                let message = format!("Failed to list browser tabs: {}", error);
+                self.show_error_toast(message.clone(), cx);
+                cx.notify();
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.failure_detail(),
+                )
+            }
+        }
     }
 
     fn execute_ai_capture_builtin(

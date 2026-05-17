@@ -1439,6 +1439,34 @@ fn surface_open_builtins_use_named_action_states() {
 }
 
 #[test]
+fn browser_tabs_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum BrowserTabsBuiltinAction")
+            && content.contains("BrowserTabsBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_browser_tabs_builtin("),
+        "Browser Tabs should route through a named action state"
+    );
+    assert!(
+        content.contains("crate::browser_tabs::list_open_tabs()")
+            && content.contains("self.cached_browser_tabs = tabs")
+            && content.contains("crate::browser_tabs::domains_needing_favicons")
+            && content.contains("crate::browser_tabs::fetch_favicons_blocking(&domains)")
+            && content.contains("AppView::BrowserTabsView"),
+        "Browser Tabs should preserve tab loading, favicon fetch scheduling, and view opening"
+    );
+    assert!(
+        content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()")
+            && content.contains("open_browser_tabs")
+            && content.contains("open_browser_tabs_failed"),
+        "Browser Tabs success and failure details should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
