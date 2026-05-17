@@ -258,6 +258,56 @@ impl SettingsSnapModeBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SettingsMicrophoneBuiltinAction {
+    Select,
+}
+
+impl SettingsMicrophoneBuiltinAction {
+    fn from_command(command: builtins::SettingsCommandType) -> Option<Self> {
+        match command {
+            builtins::SettingsCommandType::SelectMicrophone => Some(Self::Select),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Select => "select_microphone",
+        }
+    }
+
+    fn enumeration_failure_log(self) -> &'static str {
+        match self {
+            Self::Select => "Failed to enumerate microphone devices",
+        }
+    }
+
+    fn failure_hud(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Select => format!("Failed to list microphones: {error}"),
+        }
+    }
+
+    fn failure_code(self) -> &'static str {
+        match self {
+            Self::Select => "select_microphone_failed",
+        }
+    }
+
+    fn failure_message(self) -> &'static str {
+        match self {
+            Self::Select => "Failed to list microphones",
+        }
+    }
+
+    fn placeholder(self) -> &'static str {
+        match self {
+            Self::Select => "Select microphone...",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PermissionAssistantBuiltinAction {
     Accessibility,
     ScreenRecording,
@@ -1223,7 +1273,7 @@ enum SettingsCommandBuiltinAction {
     ResetWindowPositions,
     ChooseTheme,
     DictationSetup,
-    SelectMicrophone,
+    SelectMicrophone(SettingsMicrophoneBuiltinAction),
     SnapMode(SettingsSnapModeBuiltinAction),
 }
 
@@ -1233,7 +1283,10 @@ impl SettingsCommandBuiltinAction {
             builtins::SettingsCommandType::ResetWindowPositions => Self::ResetWindowPositions,
             builtins::SettingsCommandType::ChooseTheme => Self::ChooseTheme,
             builtins::SettingsCommandType::DictationSetup => Self::DictationSetup,
-            builtins::SettingsCommandType::SelectMicrophone => Self::SelectMicrophone,
+            builtins::SettingsCommandType::SelectMicrophone => Self::SelectMicrophone(
+                SettingsMicrophoneBuiltinAction::from_command(command)
+                    .expect("select microphone command should map to microphone action"),
+            ),
             builtins::SettingsCommandType::DisableWindowSnapping
             | builtins::SettingsCommandType::SnapModeSimple
             | builtins::SettingsCommandType::SnapModeExpanded
@@ -1249,7 +1302,7 @@ impl SettingsCommandBuiltinAction {
             Self::ResetWindowPositions => "reset_window_positions",
             Self::ChooseTheme => "choose_theme",
             Self::DictationSetup => "dictation_setup",
-            Self::SelectMicrophone => "select_microphone",
+            Self::SelectMicrophone(action) => action.success_detail(),
             Self::SnapMode(action) => action.success_detail(),
         }
     }
@@ -3920,8 +3973,8 @@ impl ScriptListApp {
                 self.open_dictation_model_prompt(cx);
                 Self::builtin_success(dctx, action.success_detail())
             }
-            SettingsCommandBuiltinAction::SelectMicrophone => {
-                self.execute_select_microphone_builtin(dctx, cx)
+            SettingsCommandBuiltinAction::SelectMicrophone(microphone_action) => {
+                self.execute_select_microphone_builtin(microphone_action, dctx, cx)
             }
             SettingsCommandBuiltinAction::SnapMode(snap_action) => {
                 self.execute_settings_snap_mode_builtin(snap_action, dctx, cx)
@@ -4906,6 +4959,7 @@ impl ScriptListApp {
 
     fn execute_select_microphone_builtin(
         &mut self,
+        action: SettingsMicrophoneBuiltinAction,
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
@@ -4918,17 +4972,18 @@ impl ScriptListApp {
                 tracing::error!(
                     category = "DICTATION",
                     error = %error,
-                    "Failed to enumerate microphone devices"
+                    "{}",
+                    action.enumeration_failure_log()
                 );
                 self.show_hud(
-                    format!("Failed to list microphones: {error}"),
+                    action.failure_hud(&error),
                     Some(HUD_SHORT_MS),
                     cx,
                 );
                 return Self::builtin_error(
                     dctx,
-                    "select_microphone_failed",
-                    "Failed to list microphones",
+                    action.failure_code(),
+                    action.failure_message(),
                     error.to_string(),
                 );
             }
@@ -4984,17 +5039,17 @@ impl ScriptListApp {
         self.focused_input = FocusedInput::ArgPrompt;
         self.filter_text.clear();
         self.pending_filter_sync = true;
-        self.pending_placeholder = Some("Select microphone...".to_string());
+        self.pending_placeholder = Some(action.placeholder().to_string());
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.current_view = AppView::MiniPrompt {
             id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
-            placeholder: "Select microphone...".to_string(),
+            placeholder: action.placeholder().to_string(),
             choices,
         };
         resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
         cx.notify();
 
-        Self::builtin_success(dctx, "select_microphone")
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_script_command_builtin(

@@ -1523,7 +1523,7 @@ fn settings_command_builtin_uses_named_action_states() {
             && content.contains("ResetWindowPositions")
             && content.contains("ChooseTheme")
             && content.contains("DictationSetup")
-            && content.contains("SelectMicrophone")
+            && content.contains("SelectMicrophone(SettingsMicrophoneBuiltinAction)")
             && content.contains("SnapMode(SettingsSnapModeBuiltinAction)"),
         "Settings built-ins should be routed through named action states"
     );
@@ -1539,8 +1539,38 @@ fn settings_command_builtin_uses_named_action_states() {
             && content
                 .contains("expect(\"snap mode settings command should map to snap mode action\")")
             && content.contains("Self::builtin_success(dctx, action.success_detail())")
-            && content.contains("Self::builtin_success(dctx, \"select_microphone\")"),
+            && content.contains("SettingsMicrophoneBuiltinAction::from_command(command)")
+            && content.contains(
+                "expect(\"select microphone command should map to microphone action\")"
+            )
+            && content.contains("self.execute_select_microphone_builtin(microphone_action"),
         "Settings command state should preserve snap-mode and microphone success details"
+    );
+}
+
+#[test]
+fn select_microphone_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum SettingsMicrophoneBuiltinAction")
+            && content.contains("fn execute_select_microphone_builtin(")
+            && content.contains("action.enumeration_failure_log()")
+            && content.contains("action.failure_hud(&error)")
+            && content.contains("action.failure_code()")
+            && content.contains("action.failure_message()")
+            && content.contains("action.placeholder().to_string()")
+            && content.contains("action.success_detail()"),
+        "Select Microphone should derive failure copy, placeholder text, and success detail from the named state"
+    );
+    assert!(
+        content.contains("\"select_microphone\"")
+            && content.contains("\"select_microphone_failed\"")
+            && content.contains("format!(\"Failed to list microphones: {error}\")")
+            && content.contains("\"Failed to list microphones\"")
+            && content.contains("\"Select microphone...\""),
+        "Select Microphone named state should preserve current success detail, error code, error copy, and placeholder"
     );
 }
 
