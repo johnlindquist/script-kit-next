@@ -170,3 +170,26 @@ fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
         "Accessibility Settings text should use modern macOS System Settings wording"
     );
 }
+
+#[test]
+fn force_quit_command_text_names_the_dialog_it_opens() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+    let system_actions = super::read_source("src/system_actions/mod.rs");
+
+    let force_quit = entries
+        .iter()
+        .find(|entry| entry.id == "builtin/force-quit")
+        .expect("force quit builtin should exist");
+
+    assert_eq!(force_quit.name, "Open Force Quit Apps");
+    assert_eq!(force_quit.default_action_text(), "Open Force Quit");
+    assert_eq!(
+        force_quit.description,
+        "Open the macOS Force Quit Applications dialog"
+    );
+    assert!(
+        system_actions.contains("Opening Force Quit Applications dialog")
+            && system_actions.contains("command down, option down"),
+        "Force Quit Apps builtin should open the macOS dialog instead of directly terminating apps"
+    );
+}

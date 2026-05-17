@@ -1070,8 +1070,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/force-quit",
-            "Force Quit Apps",
-            "Select and force quit running applications",
+            "Open Force Quit Apps",
+            "Open the macOS Force Quit Applications dialog",
             vec![
                 "force",
                 "quit",
