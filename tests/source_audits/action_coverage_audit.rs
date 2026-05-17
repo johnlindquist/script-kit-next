@@ -506,21 +506,22 @@ fn clipboard_quick_look_shows_error_when_no_entry() {
 fn clipboard_attach_to_ai_handles_all_content_types() {
     let content = handle_action_content();
 
-    let attach_pos = content
-        .find("\"clipboard_attach_to_ai\"")
-        .expect("Expected clipboard_attach_to_ai handler");
-    let block = &content[attach_pos..content.len().min(attach_pos + 3000)];
+    assert!(
+        content.contains("\"clipboard_attach_to_ai\""),
+        "Expected clipboard_attach_to_ai handler"
+    );
 
     assert!(
-        block.contains("ContentType::Text"),
+        content.contains("ClipboardAttachToAiHandlerAction::from_content_type")
+            && content.contains("ContentType::Text"),
         "clipboard_attach_to_ai should handle Text content"
     );
     assert!(
-        block.contains("ContentType::Image"),
+        content.contains("ContentType::Image"),
         "clipboard_attach_to_ai should handle Image content"
     );
     assert!(
-        block.contains("ContentType::File"),
+        content.contains("ContentType::File"),
         "clipboard_attach_to_ai should handle File content"
     );
 }
@@ -539,9 +540,9 @@ fn clipboard_attach_to_ai_uses_deferred_ai_window_action() {
         "clipboard_attach_to_ai should use open_ai_window_after_main_hide"
     );
     assert!(
-        block.contains("DeferredAiWindowAction::SetInput")
-            || block.contains("DeferredAiWindowAction::AddAttachment")
-            || block.contains("DeferredAiWindowAction::SetInputWithImage"),
+        content.contains("DeferredAiWindowAction::SetInput")
+            && content.contains("DeferredAiWindowAction::AddAttachment")
+            && block.contains("DeferredAiWindowAction::SetInputWithImage"),
         "clipboard_attach_to_ai should route clipboard content through a deferred AI handoff action"
     );
 }
