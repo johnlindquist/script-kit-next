@@ -47,7 +47,7 @@ impl NotesApp {
         items
     }
 
-    pub(super) fn open_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         // Update command bar actions based on current state (dynamic - depends on selection, etc.)
         let actions = get_notes_command_bar_actions(&NotesInfo {
             has_selection: self.selected_note_id.is_some(),

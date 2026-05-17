@@ -46,7 +46,7 @@ Notes must be treated as a first-class target, not as a launcher proxy. DevTools
 
 Required Notes shortcuts and ownership paths include `Cmd+K`, `Cmd+P`, `Cmd+Shift+P`, `Cmd+F`, `Cmd+Shift+F`, `Cmd+N`, `Cmd+Shift+N`, `Cmd+Shift+T`, `Cmd+W`, `Cmd+.`, `Cmd+Shift+.`, `Cmd+Shift+S`, `Cmd+Z`, `Cmd+D`, `Cmd+Shift+D`, `Cmd+Shift+X`, `Cmd+Shift+L`, `Cmd+L`, `Cmd+Shift+-`, `Cmd+Shift+H`, `Cmd+V`, `Cmd+Shift+C`, `Cmd+E`, `Cmd+/`, `Cmd+J`, `Cmd+Shift+U`, `Cmd+B`, `Cmd+I`, `Cmd+Shift+I`, `Cmd+Enter`, `Cmd+Shift+A`, `Cmd+Shift+O`, `Cmd+Up`, `Cmd+Down`, `Cmd+Shift+Up`, `Cmd+Shift+Down`, `Cmd+[`, `Cmd+]`, `Cmd+Shift+Backspace`, `Cmd+Shift+Delete`, `Cmd+Shift+7`, `Cmd+Shift+8`, `Cmd+1..Cmd+9`, `Tab`, `Shift+Tab`, `Alt+Up`, `Alt+Down`, `Alt+Shift+Up`, `Alt+Shift+Down`, `Ctrl+Shift+K`, `Escape`, `Enter`, arrows, paging, Home/End, Backspace, and Delete.
 
-Missing runtime primitives that block full Notes proof include target-scoped layout info, editor and preview scroll anchors, cursor and selection ranges, note store generation and sandbox identity, active note id and dirty state, command bar route stack, ACP embedded generation and origin receipts, portal session provenance, draft snapshot fingerprint, shortcut registry snapshots, focus owner transitions, and auto-resize before/after comparison.
+Runtime primitives now expose target-scoped layout info, cursor and selection ranges, note store generation and sandbox identity, active note id and dirty state, command bar route stack, shortcut registry snapshots, focus owner transitions, and redacted draft snapshot fingerprints. Missing runtime primitives that block full Notes proof include editor and preview scroll anchors with real scroll offsets, ACP embedded generation and origin receipts, portal session provenance, native shortcut activation parity, and auto-resize before/after comparison.
 
 ## Dictation Coverage Requirements
 
@@ -54,7 +54,7 @@ Dictation needs media-aware DevTools instead of generic screenshots or scripts. 
 
 Required Dictation shortcut and input paths include the configured dictation hotkey, `Escape`, `Enter`, `Space`, and `Cmd+W`.
 
-Missing runtime primitives that block full Dictation proof include `devtools.media.inspect`, passive microphone permission status, microphone device snapshots, model readiness generation, recording state generation, audio level metrics, target delivery generation, transcript fingerprints, cursor insertion range, wrong-target refusal receipts, hotkey binding snapshots, and media cleanup receipts.
+Runtime primitives now support passive Dictation readiness without opening the microphone: `getState` publishes redacted model readiness, passive microphone permission and device snapshots, hotkey state, recording generation, idle audio-level availability, and cleanup state, and `devtools.media.inspect` consumes that receipt. Missing runtime primitives that still block full Dictation proof include target delivery generation, transcript fingerprints, cursor insertion range, and wrong-target refusal receipts.
 
 Dictation History coverage must also expose fixture store identity, transcript row generation, preview generation, redacted transcript fingerprints, audio path redaction proof, scroll and selection anchor metrics, and portal attachment receipts.
 
@@ -64,7 +64,7 @@ Dictation History coverage must also expose fixture store identity, transcript r
 2. Use `devtools.coverage` to classify the target and missing primitive before using a recipe.
 3. Use `bun scripts/devtools/measure.ts --inspect <inspect.json> --coverage <coverage.json> --surface <id>` to turn inspect and coverage receipts into fail-closed layout, text fit, scroll, overlap, contrast, focus, media, and missing-primitive measurements.
 4. Build `devtools.act` for safe protocol-first input, shortcut, and click receipts.
-5. Use `bun scripts/devtools/media.ts --coverage <dictation-coverage.json>` as the first passive `devtools.media.inspect` slice before claiming live Dictation bugs are verifiable.
+5. Use `bun scripts/devtools/dictation.ts inspect --start --show` or `bun scripts/devtools/media.ts --coverage <dictation-coverage.json> --receipt <state-receipt.json>` as the passive `devtools.media.inspect` slice before claiming live Dictation bugs are verifiable.
 6. Build `devtools.compare` and `devtools.investigate` once measurement and action receipts have stable metric names.
 
 Recipes should only wrap these primitives for smoke tests, common regressions, or CI-safe repros.

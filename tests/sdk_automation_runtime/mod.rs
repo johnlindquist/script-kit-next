@@ -169,6 +169,16 @@ fn state_result_serializes_all_fields() {
         Some("tab-ai-screenshot-20260418T063000.000Z-11474-42.png".to_string()),
         None,
         None,
+        Some(serde_json::json!({
+            "activeNoteId": "note-1",
+            "dirtyState": { "hasUnsavedChanges": false },
+            "redacted": true,
+        })),
+        Some(serde_json::json!({
+            "isRecording": false,
+            "phase": "idle",
+            "passive": true,
+        })),
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
     assert_eq!(json["type"], "stateResult");
@@ -193,6 +203,11 @@ fn state_result_serializes_all_fields() {
         json["screenshotIdentity"],
         "tab-ai-screenshot-20260418T063000.000Z-11474-42.png"
     );
+    assert_eq!(json["dictation"]["phase"], "idle");
+    assert_eq!(json["dictation"]["isRecording"], false);
+    assert_eq!(json["notes"]["activeNoteId"], "note-1");
+    assert_eq!(json["notes"]["dirtyState"]["hasUnsavedChanges"], false);
+    assert_eq!(json["notes"]["redacted"], true);
 }
 
 #[test]
@@ -212,6 +227,8 @@ fn state_result_round_trips() {
         None,
         false,
         true,
+        None,
+        None,
         None,
         None,
         None,
@@ -252,6 +269,8 @@ fn state_result_round_trips() {
             screenshot_identity,
             drop_state,
             path_state,
+            notes_state,
+            dictation_state,
             ..
         } => {
             assert_eq!(request_id, "gs-rt");
@@ -262,6 +281,8 @@ fn state_result_round_trips() {
             assert_eq!(screenshot_identity, None);
             assert_eq!(drop_state, None);
             assert_eq!(path_state, None);
+            assert_eq!(notes_state, None);
+            assert_eq!(dictation_state, None);
         }
         other => panic!("Expected StateResult, got: {other:?}"),
     }

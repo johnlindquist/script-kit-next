@@ -1,0 +1,305 @@
+#!/usr/bin/env bun
+
+type JsonObject = Record<string, unknown>;
+
+type Args = {
+  session: string;
+  includeEnvPayload: boolean;
+  start: boolean;
+  show: boolean;
+  timeoutMs: number;
+};
+
+function usage() {
+  return [
+    "Usage:",
+    "  bun scripts/devtools/dictation.ts inspect [--session <name>] [--start] [--show] [--include-env-payload]",
+  ].join("\n");
+}
+
+function parseArgs(argv: string[]): Args {
+  if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(usage());
+    process.exit(0);
+  }
+  if (argv[0] !== "inspect") {
+    console.error(usage());
+    process.exit(2);
+  }
+  const args: Args = { session: "default", includeEnvPayload: false, start: false, show: false, timeoutMs: 8000 };
+  for (let index = 1; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--session") {
+      args.session = argv[++index] ?? args.session;
+    } else if (arg === "--include-env-payload") {
+      args.includeEnvPayload = true;
+    } else if (arg === "--start") {
+      args.start = true;
+    } else if (arg === "--show") {
+      args.show = true;
+    } else if (arg === "--timeout") {
+      args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
+    }
+  }
+  return args;
+}
+
+async function run(command: string[], label: string): Promise<JsonObject> {
+  const proc = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  if (exitCode !== 0) {
+    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+  }
+  try {
+    return JSON.parse(stdout);
+  } catch {
+    return { status: "ok", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+  }
+}
+
+async function maybeStartAndShow(args: Args) {
+  if (args.start) {
+    await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
+  }
+  if (args.show) {
+    await run(["bash", "scripts/agentic/session.sh", "send", args.session, JSON.stringify({ type: "show" }), "--await-parse", "--timeout", String(args.timeoutMs)], "session-show");
+  }
+}
+
+async function rpc(session: string, payload: JsonObject, expect: string, timeoutMs: number) {
+  return run(["bash", "scripts/agentic/session.sh", "rpc", session, JSON.stringify(payload), "--expect", expect, "--timeout", String(timeoutMs)], String(payload.type ?? "rpc"));
+}
+
+async function read(path: string) {
+  return Bun.file(path).text();
+}
+
+function asArray(value: unknown): JsonObject[] {
+  return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
+}
+
+function surface(coverage: JsonObject, id: string) {
+  return asArray(coverage.surfaces).find((entry) => entry.id === id) ?? {};
+}
+
+function enumVariants(source: string, enumName: string) {
+  const match = new RegExp(`pub enum ${enumName} \\{([\\s\\S]*?)\\n\\}`, "m").exec(source);
+  if (!match) {
+    return [];
+  }
+  return match[1]
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("///") && !line.startsWith("#"))
+    .map((line) => line.replace(/\(.*$/, "").replace(/,.*/, "").trim())
+    .filter(Boolean);
+}
+
+function hasRealProviderData(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const object = value as JsonObject;
+  if (object.available === false) {
+    return false;
+  }
+  if (Array.isArray(object.items) && object.items.length > 0) {
+    return true;
+  }
+  const envelopeKeys = new Set(["schemaVersion", "type", "ok", "available", "source", "items", "note", "nextStep"]);
+  return Object.keys(object).some((key) => !envelopeKeys.has(key));
+}
+
+function providerResource(includeEnvPayload: boolean) {
+  const raw = process.env.SCRIPT_KIT_DICTATION_JSON ?? "";
+  let parsed: JsonObject | null = null;
+  let parseError: string | null = null;
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw) as JsonObject;
+    } catch (error) {
+      parseError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  return {
+    uri: "kit://dictation",
+    envVar: "SCRIPT_KIT_DICTATION_JSON",
+    source: raw ? "env" : "none",
+    available: Boolean(raw && parsed && hasRealProviderData(parsed)),
+    parseError,
+    payloadFingerprint: raw ? fingerprint(raw) : null,
+    payloadLength: raw.length,
+    payload: includeEnvPayload ? parsed : null,
+  };
+}
+
+function fingerprint(value: string) {
+  let hash = 2166136261;
+  for (const char of value) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function stdinEvidence(stdinSource: string) {
+  return {
+    pushDictationResultVerb: stdinSource.includes("PushDictationResult") && stdinSource.includes("\"pushDictationResult\""),
+    acceptedTargetLabels: [
+      "mainWindowFilter",
+      "mainWindowPrompt",
+      "notesEditor",
+      "aiChatComposer",
+      "tabAiHarness",
+      "externalApp",
+    ],
+  };
+}
+
+function classify(media: JsonObject, sourceEvidence: JsonObject, provider: JsonObject, runtimeState: JsonObject | null) {
+  if (media.status === "ok") {
+    return "ok";
+  }
+  if (!runtimeState?.dictation) {
+    return "blocked-by-missing-primitive";
+  }
+  if (!(sourceEvidence.stdin as JsonObject | undefined)?.pushDictationResultVerb) {
+    return "blocked-by-missing-primitive";
+  }
+  if (provider.parseError) {
+    return "blocked-by-real-data-risk";
+  }
+  return "blocked-by-missing-primitive";
+}
+
+function hasDeliveryReceipt(runtimeState: JsonObject | null) {
+  const receipt = runtimeState?.dictation && typeof runtimeState.dictation === "object"
+    ? (runtimeState.dictation as JsonObject).lastDelivery
+    : null;
+  if (!receipt || typeof receipt !== "object") {
+    return false;
+  }
+  const object = receipt as JsonObject;
+  return Boolean(
+    object.generation
+      && object.target
+      && object.destination
+      && object.transcriptFingerprint
+      && object.transcriptLen !== undefined
+      && object.redacted === true,
+  );
+}
+
+async function main() {
+  const args = parseArgs(Bun.argv.slice(2));
+  await maybeStartAndShow(args);
+  const [coverage, typesSource, runtimeSource, stdinSource] = await Promise.all([
+    run(["bun", "scripts/devtools/coverage.ts", "--surface", "dictation"], "coverage.dictation"),
+    read("src/dictation/types.rs"),
+    read("src/dictation/runtime.rs"),
+    read("src/stdin_commands/mod.rs"),
+  ]);
+  const coveragePath = `/tmp/devtools-dictation-coverage-${process.pid}.json`;
+  await Bun.write(coveragePath, JSON.stringify(coverage));
+  const stateEnvelope = await rpc(args.session, {
+    type: "getState",
+    requestId: `devtools-dictation-state-${Date.now()}`,
+    target: { type: "main" },
+    summaryOnly: true,
+  }, "stateResult", args.timeoutMs);
+  const stateReceiptPath = `/tmp/devtools-dictation-state-${process.pid}.json`;
+  await Bun.write(stateReceiptPath, JSON.stringify(stateEnvelope));
+  const media = await run([
+    "bun",
+    "scripts/devtools/media.ts",
+    "--surface",
+    "dictation",
+    "--coverage",
+    coveragePath,
+    "--receipt",
+    stateReceiptPath,
+  ], "media.inspect");
+  const runtimeState = (stateEnvelope.response as JsonObject | undefined) ?? null;
+  const dictationSurface = surface(coverage, "dictation");
+  const provider = providerResource(args.includeEnvPayload);
+  const deliveryReceiptAvailable = hasDeliveryReceipt(runtimeState);
+  const sourceEvidence = {
+    phases: enumVariants(typesSource, "DictationSessionPhase"),
+    targets: enumVariants(typesSource, "DictationTarget"),
+    runtimeReadApis: {
+      isRecording: runtimeSource.includes("pub fn is_dictation_recording()"),
+      elapsed: runtimeSource.includes("pub fn dictation_elapsed()"),
+      currentPhase: runtimeSource.includes("pub fn current_dictation_phase()"),
+      currentTarget: runtimeSource.includes("pub fn get_dictation_target()"),
+      lastDelivery: runtimeSource.includes("pub fn last_delivery_receipt()"),
+      redactedFingerprint: runtimeSource.includes("pub fn redacted_transcript_fingerprint("),
+      automationState: runtimeSource.includes("pub fn automation_state()"),
+    },
+    stdin: stdinEvidence(stdinSource),
+  };
+  const missing = [
+    ...new Set([
+      ...(Array.isArray(media.missingRuntimePrimitives) ? media.missingRuntimePrimitives.map(String) : []),
+      ...(Array.isArray(dictationSurface.missingRuntimePrimitives) ? dictationSurface.missingRuntimePrimitives.map(String) : []),
+      runtimeState?.dictation ? "" : "passive current phase RPC",
+      runtimeState?.dictation ? "" : "passive current target RPC",
+      deliveryReceiptAvailable ? "" : "target delivery generation receipt",
+      deliveryReceiptAvailable ? "" : "transcript fingerprint receipt",
+    ].filter(Boolean)),
+  ];
+
+  console.log(JSON.stringify({
+    schemaVersion: 1,
+    tool: "script-kit-devtools.dictation",
+    command: "dictation.inspect",
+    classification: classify(media, sourceEvidence, provider, runtimeState),
+    session: args.session,
+    passiveSafety: {
+      noMicrophoneCaptureRequired: true,
+      noSystemSettingsRequired: true,
+      noTccMutationRequired: true,
+      noSyntheticTranscriptInjected: true,
+    },
+    redaction: {
+      transcriptContentReturned: false,
+      deviceLabelsReturned: false,
+      targetLabelsReturned: false,
+      rawDeviceIdsReturned: false,
+    },
+    coverage: {
+      id: dictationSurface.id ?? null,
+      status: dictationSurface.status ?? null,
+      features: dictationSurface.features ?? [],
+      shortcuts: dictationSurface.shortcuts ?? [],
+      supportedNow: dictationSurface.supportedNow ?? [],
+      missingRuntimePrimitives: dictationSurface.missingRuntimePrimitives ?? [],
+    },
+    mediaReceipt: media,
+    runtimeState: runtimeState?.dictation ?? null,
+    deliveryReceiptAvailable,
+    runtimeStateReceipt: stateEnvelope,
+    providerResource: provider,
+    sourceEvidence,
+    deliveryTargets: sourceEvidence.targets,
+    sessionPhases: sourceEvidence.phases,
+    missingPrimitives: missing,
+    recommendedNext: [
+      "Keep expanding passive dictation runtime state from source-owned receipts before any live microphone proof.",
+      deliveryReceiptAvailable
+        ? "Use pushDictationResult in an explicit delivery test to compare lastDelivery.generation, target, destination, and transcriptFingerprint before and after the user path."
+        : "Expose delivery receipts for pushDictationResult and real transcription that include target generation and redacted transcript fingerprint.",
+      "Expose cursor insertion range and wrong-target refusal receipts without starting microphone capture.",
+    ],
+    warnings: [
+      "Dictation inspection is intentionally passive; use pushDictationResult only in a separate explicit delivery test.",
+      missing.length > 0 ? "Dictation remains fail-closed until passive runtime state and delivery receipts exist." : "",
+    ].filter(Boolean),
+    errors: [media].filter((receipt) => receipt.status === "error"),
+  }, null, 2));
+}
+
+await main();

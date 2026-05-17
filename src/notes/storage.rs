@@ -18,6 +18,7 @@ use super::model::{Note, NoteId};
 static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 static ROOT_NOTES_SEARCH_CACHE: OnceLock<Mutex<RootNotesSearchCache>> = OnceLock::new();
 static ROOT_NOTES_SEARCH_CACHE_GENERATION: AtomicU64 = AtomicU64::new(0);
+static NOTES_STORAGE_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RootNotesSectionOptions {
@@ -88,11 +89,32 @@ fn root_notes_search_cache_key(
 
 fn invalidate_root_notes_search_cache() {
     ROOT_NOTES_SEARCH_CACHE_GENERATION.fetch_add(1, Ordering::Relaxed);
+    NOTES_STORAGE_GENERATION.fetch_add(1, Ordering::Relaxed);
     if let Some(cache) = ROOT_NOTES_SEARCH_CACHE.get() {
         if let Ok(mut guard) = cache.lock() {
             guard.hits_by_query.clear();
         }
     }
+}
+
+pub(crate) fn automation_storage_identity() -> serde_json::Value {
+    let db_path = get_notes_db_path();
+    let path_text = db_path.to_string_lossy();
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in path_text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+
+    serde_json::json!({
+        "schemaVersion": 1,
+        "redacted": true,
+        "generation": NOTES_STORAGE_GENERATION.load(Ordering::Relaxed),
+        "rootSearchCacheGeneration": ROOT_NOTES_SEARCH_CACHE_GENERATION.load(Ordering::Relaxed),
+        "dbPathFingerprint": format!("fnv1a64:{hash:016x}"),
+        "dbPathLength": path_text.chars().count(),
+        "testSandbox": std::env::var_os("SCRIPT_KIT_TEST_NOTES_DB_PATH").is_some() || cfg!(test),
+    })
 }
 
 pub(crate) fn root_notes_query_is_eligible(query: &str, options: RootNotesSectionOptions) -> bool {

@@ -18,6 +18,16 @@ fn batch_command_set_input_round_trips() {
 }
 
 #[test]
+fn batch_command_open_actions_round_trips() {
+    let cmd = BatchCommand::OpenActions;
+    let json = serde_json::to_value(&cmd).expect("serialize openActions");
+    assert_eq!(json["type"], "openActions");
+
+    let back: BatchCommand = serde_json::from_value(json).expect("deserialize openActions");
+    assert_eq!(back, cmd);
+}
+
+#[test]
 fn batch_command_select_by_value_round_trips() {
     let cmd = BatchCommand::SelectByValue {
         value: "apple".to_string(),

@@ -186,6 +186,8 @@ impl NotesApp {
             last_save_confirmed: None,
             action_feedback: None,
             pending_focus_surface: None,
+            focus_transition_generation: 0,
+            focus_transition_log: Vec::new(),
             surface_mode: NotesSurfaceMode::default(),
             embedded_acp_chat: None,
             notes_acp_generation: 0,

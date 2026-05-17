@@ -123,9 +123,11 @@ fn coverage_pins_notes_features_shortcuts_and_missing_primitives() {
         "Escape",
         "Tab",
         "Enter",
-        "Notes target-scoped layout info",
+        "getLayoutInfo(target notes) NotesWindow/titlebar/editor/footer/panel bounds",
         "editor and preview scroll anchors",
-        "ACP embedded generation and origin receipts",
+        "getState(target notes) redacted active note",
+        "getState(target notes) redacted draft snapshot fingerprint",
+        "ACP embedded origin receipts",
     ] {
         assert!(
             COVERAGE.contains(needle),

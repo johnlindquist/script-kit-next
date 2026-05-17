@@ -213,6 +213,18 @@ macro_rules! protocol_message_variants_query_ops {
         /// Omitted outside PathPrompt.
         #[serde(rename = "path", default, skip_serializing_if = "Option::is_none")]
         path_state: Option<serde_json::Value>,
+        /// Passive Notes window state for agent-facing UI/debug receipts.
+        /// Omitted outside Notes targets and never exposes raw note content.
+        #[serde(rename = "notes", default, skip_serializing_if = "Option::is_none")]
+        notes_state: Option<serde_json::Value>,
+        /// Passive Dictation runtime state for media/debug receipts.
+        /// This never starts capture or exposes transcript content.
+        #[serde(
+            rename = "dictation",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        dictation_state: Option<serde_json::Value>,
     },
 
     // ============================================================

@@ -135,7 +135,8 @@ function pickWindows(windows: JsonObject) {
     bounds: window.bounds ?? window.resolvedBounds ?? null,
     surfaceKind: window.surfaceKind ?? null,
     appViewVariant: window.appViewVariant ?? null,
-    parentAutomationId: window.parentAutomationId ?? null,
+    parentAutomationId: window.parentAutomationId ?? window.parentWindowId ?? null,
+    parentKind: window.parentKind ?? null,
   }));
 }
 
@@ -144,7 +145,10 @@ function expectedSurfaceMatches(snapshot: JsonObject, expectedSurfaceKind: strin
     return true;
   }
   const candidates = [
+    snapshot.windowKind,
+    snapshot.kind,
     snapshot.surfaceKind,
+    snapshot.semanticSurface,
     snapshot.appViewVariant,
     (snapshot.surfaceContract as JsonObject | undefined)?.surfaceKind,
     (snapshot.state as JsonObject | undefined)?.surfaceKind,
@@ -156,6 +160,7 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
   const snapshot = (inspect.snapshot as JsonObject | undefined) ?? inspect;
   const resolvedBounds = snapshot.resolvedBounds ?? snapshot.bounds ?? null;
   const windowId = snapshot.windowId ?? snapshot.id ?? null;
+  const listedWindow = pickWindows(windows).find((window) => window.automationId === windowId) ?? {};
   const strictTargetMatch = Boolean(windowId) && expectedSurfaceMatches(snapshot, args.expectedSurfaceKind);
   const ambiguity = args.strict && !windowId ? pickWindows(windows) : [];
 
@@ -170,7 +175,7 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
       stableTargetId: windowId,
       targetKind: snapshot.windowKind ?? snapshot.kind ?? null,
       hostKind: snapshot.hostKind ?? null,
-      parentAutomationId: snapshot.parentAutomationId ?? null,
+      parentAutomationId: snapshot.parentAutomationId ?? snapshot.parentWindowId ?? listedWindow.parentAutomationId ?? null,
       openerAutomationId: snapshot.openerAutomationId ?? null,
       surfaceKind: snapshot.surfaceKind ?? null,
       appViewVariant: snapshot.appViewVariant ?? null,

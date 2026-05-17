@@ -161,6 +161,7 @@ const INLINE_SHORTCUT_TEXT_SIZE: f32 = 11.0;
 const INLINE_SHORTCUT_KEYCAP_PADDING_X: f32 = 4.0;
 const INLINE_SHORTCUT_KEYCAP_PADDING_Y: f32 = 1.0;
 const INLINE_SHORTCUT_KEYCAP_RADIUS: f32 = 4.0;
+const INLINE_SHORTCUT_TEXT_CHAR_WIDTH: f32 = 6.5;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct InlineShortcutColors {
@@ -399,6 +400,81 @@ fn inline_shortcut_token(token: &str) -> InlineShortcutToken {
         value if value.chars().count() > 1 => InlineShortcutToken::Keycap(value.to_string().into()),
         value => InlineShortcutToken::Text(value.to_uppercase().into()),
     }
+}
+
+pub(crate) fn inline_shortcut_layout_model<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+    origin_x: f32,
+    origin_y: f32,
+) -> serde_json::Value {
+    let mut x = origin_x;
+    let mut token_values = Vec::new();
+    let mut tokens = Vec::new();
+
+    for key in keys {
+        let token_value = key.to_string();
+        let token = inline_shortcut_token(key);
+        let (kind, width, height, exact_width) = match &token {
+            InlineShortcutToken::Icon(_) => (
+                "icon",
+                INLINE_SHORTCUT_ICON_SIZE,
+                INLINE_SHORTCUT_ICON_SIZE,
+                true,
+            ),
+            InlineShortcutToken::Text(text) => (
+                "text",
+                text.chars().count() as f32 * INLINE_SHORTCUT_TEXT_CHAR_WIDTH,
+                INLINE_SHORTCUT_TEXT_SIZE,
+                false,
+            ),
+            InlineShortcutToken::Keycap(text) => (
+                "keycap",
+                (text.chars().count() as f32 * INLINE_SHORTCUT_TEXT_CHAR_WIDTH)
+                    + (INLINE_SHORTCUT_KEYCAP_PADDING_X * 2.0),
+                INLINE_SHORTCUT_TEXT_SIZE + (INLINE_SHORTCUT_KEYCAP_PADDING_Y * 2.0),
+                false,
+            ),
+        };
+
+        token_values.push(token_value.clone());
+        tokens.push(serde_json::json!({
+            "token": token_value,
+            "kind": kind,
+            "bounds": {
+                "x": x,
+                "y": origin_y,
+                "width": width,
+                "height": height,
+            },
+            "widthExact": exact_width,
+            "widthSource": if exact_width { "renderer-constant" } else { "font-model" },
+        }));
+        x += width + INLINE_SHORTCUT_GAP;
+    }
+
+    if !tokens.is_empty() {
+        x -= INLINE_SHORTCUT_GAP;
+    }
+
+    serde_json::json!({
+        "tokens": token_values,
+        "tokenBounds": tokens,
+        "bounds": {
+            "x": origin_x,
+            "y": origin_y,
+            "width": (x - origin_x).max(0.0),
+            "height": INLINE_SHORTCUT_ICON_SIZE
+                .max(INLINE_SHORTCUT_TEXT_SIZE + (INLINE_SHORTCUT_KEYCAP_PADDING_Y * 2.0)),
+        },
+        "boundsAvailable": true,
+        "coordinateSpace": "providedOriginLogicalPx",
+        "units": "logicalPx",
+        "gap": INLINE_SHORTCUT_GAP,
+        "heightSource": "renderer-constant",
+        "widthSource": "renderer-token-model",
+        "exactTokenBounds": false,
+        "stopReason": "text and keycap glyph widths use the shared shortcut renderer font model until GPUI exposes measured text layout",
+    })
 }
 
 pub(crate) fn render_inline_shortcut_keys<'a>(
