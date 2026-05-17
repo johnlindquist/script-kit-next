@@ -576,6 +576,29 @@ impl AiCaptureBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiGenerateBuiltinAction {
+    NewScript,
+    CurrentAppScript,
+}
+
+impl AiGenerateBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        match command {
+            builtins::AiCommandType::GenerateScript => Some(Self::NewScript),
+            builtins::AiCommandType::GenerateScriptFromCurrentApp => Some(Self::CurrentAppScript),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::NewScript => "ai_generate_script_routed_to_harness",
+            Self::CurrentAppScript => "ai_generate_script_from_current_app_routed_to_harness",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3112,39 +3135,15 @@ impl ScriptListApp {
                     // The harness captures context inline via its own snapshot.
                     // -------------------------------------------------------
                     AiCommandType::GenerateScript => {
-                        let request =
-                            crate::menu_bar::current_app_commands::normalize_generate_script_request(
-                                Some(query_override.unwrap_or(&self.filter_text)),
-                            )
-                            .map(str::to_string);
-                        if let Some(request) = request {
-                            self.open_tab_ai_chat_with_entry_intent(Some(request), cx);
-                        } else {
-                            self.open_tab_ai_acp_with_entry_intent(None, cx);
-                        }
-                        Self::builtin_success(dctx, "ai_generate_script_routed_to_harness")
+                        let generate_action = AiGenerateBuiltinAction::from_command(*cmd_type)
+                            .expect("AI generate arm should only receive generate script command");
+                        self.execute_ai_generate_builtin(generate_action, query_override, dctx, cx)
                     }
 
                     AiCommandType::GenerateScriptFromCurrentApp => {
-                        let request = crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(
-                            Some(query_override.unwrap_or(&self.filter_text)),
-                        );
-                        let intent = if let Some(request) = request {
-                            format!(
-                                "Generate a Script Kit script for the frontmost app \
-                                 using the current menu, selection, and browser context. \
-                                 User request: {request}"
-                            )
-                        } else {
-                            "Generate a Script Kit script for the frontmost app \
-                             using the current menu, selection, and browser context."
-                                .to_string()
-                        };
-                        self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
-                        Self::builtin_success(
-                            dctx,
-                            "ai_generate_script_from_current_app_routed_to_harness",
-                        )
+                        let generate_action = AiGenerateBuiltinAction::from_command(*cmd_type)
+                            .expect("AI generate arm should only receive current-app command");
+                        self.execute_ai_generate_builtin(generate_action, query_override, dctx, cx)
                     }
 
                     AiCommandType::SendScreenToAi => {
@@ -4606,6 +4605,47 @@ impl ScriptListApp {
             action.capture_kind(),
             cx,
         );
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_ai_generate_builtin(
+        &mut self,
+        action: AiGenerateBuiltinAction,
+        query_override: Option<&str>,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let query = query_override.unwrap_or(&self.filter_text);
+        match action {
+            AiGenerateBuiltinAction::NewScript => {
+                let request =
+                    crate::menu_bar::current_app_commands::normalize_generate_script_request(Some(
+                        query,
+                    ))
+                    .map(str::to_string);
+                if let Some(request) = request {
+                    self.open_tab_ai_chat_with_entry_intent(Some(request), cx);
+                } else {
+                    self.open_tab_ai_acp_with_entry_intent(None, cx);
+                }
+            }
+            AiGenerateBuiltinAction::CurrentAppScript => {
+                let request = crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(Some(query));
+                let intent = if let Some(request) = request {
+                    format!(
+                        "Generate a Script Kit script for the frontmost app \
+                         using the current menu, selection, and browser context. \
+                         User request: {request}"
+                    )
+                } else {
+                    "Generate a Script Kit script for the frontmost app \
+                     using the current menu, selection, and browser context."
+                        .to_string()
+                };
+                self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
+            }
+        }
+
         Self::builtin_success(dctx, action.success_detail())
     }
 
