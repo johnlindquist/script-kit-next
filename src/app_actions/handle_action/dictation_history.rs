@@ -4,6 +4,7 @@ enum DictationHistoryHandlerAction {
     AttachToAi,
     SaveNote,
     Copy,
+    Delete,
 }
 
 impl DictationHistoryHandlerAction {
@@ -13,13 +14,16 @@ impl DictationHistoryHandlerAction {
             "dictation_history_attach_to_ai" => Some(Self::AttachToAi),
             "dictation_history_save_note" => Some(Self::SaveNote),
             "dictation_history_copy" => Some(Self::Copy),
+            "dictation_history_delete" => Some(Self::Delete),
             _ => None,
         }
     }
 
     fn selection_required_message(self) -> &'static str {
         match self {
-            Self::Paste | Self::AttachToAi | Self::SaveNote | Self::Copy => "No dictation selected",
+            Self::Paste | Self::AttachToAi | Self::SaveNote | Self::Copy | Self::Delete => {
+                "No dictation selected"
+            }
         }
     }
 
@@ -27,7 +31,7 @@ impl DictationHistoryHandlerAction {
         match self {
             Self::Paste => Some("Pasting to frontmost app…"),
             Self::AttachToAi => Some("Opening Agent Chat..."),
-            Self::SaveNote | Self::Copy => None,
+            Self::SaveNote | Self::Copy | Self::Delete => None,
         }
     }
 
@@ -35,6 +39,7 @@ impl DictationHistoryHandlerAction {
         match self {
             Self::SaveNote => Some("Saved dictation as note"),
             Self::Copy => Some("Copied dictation to clipboard"),
+            Self::Delete => Some("Deleted dictation"),
             Self::Paste | Self::AttachToAi => None,
         }
     }
@@ -42,6 +47,7 @@ impl DictationHistoryHandlerAction {
     fn error_prefix(self) -> Option<&'static str> {
         match self {
             Self::SaveNote => Some("Failed to save note"),
+            Self::Delete => Some("Failed to delete dictation"),
             Self::Paste | Self::AttachToAi | Self::Copy => None,
         }
     }
@@ -168,20 +174,29 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "dictation_history_delete" => {
+                let Some(history_action) = DictationHistoryHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(entry) = selected_entry else {
-                    self.show_error_toast("No dictation selected", cx);
+                    self.show_error_toast(history_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if let Err(error) = crate::dictation::delete_history_entry(&entry.id) {
+                    let prefix = history_action
+                        .error_prefix()
+                        .unwrap_or("Failed to complete dictation action");
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Failed to delete dictation: {error}"),
+                        format!("{prefix}: {error}"),
                     );
                 }
 
                 self.refresh_dictation_history_selection_after_delete();
-                self.show_hud("Deleted dictation".to_string(), Some(HUD_MEDIUM_MS), cx);
+                if let Some(message) = history_action.success_hud() {
+                    self.show_hud(message.to_string(), Some(HUD_MEDIUM_MS), cx);
+                }
                 cx.notify();
                 DispatchOutcome::success()
             }

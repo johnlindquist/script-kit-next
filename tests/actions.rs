@@ -822,15 +822,18 @@ fn dictation_history_handler_uses_named_action_states() {
             && content.contains("Paste")
             && content.contains("AttachToAi")
             && content.contains("SaveNote")
-            && content.contains("Copy"),
-        "dictation history paste/attach/save/copy handlers should be driven by named action states"
+            && content.contains("Copy")
+            && content.contains("Delete"),
+        "dictation history paste/attach/save/copy/delete handlers should be driven by named action states"
     );
     assert!(
         content.contains("DictationHistoryHandlerAction::from_action_id(action_id)")
             && content.contains("history_action.selection_required_message()")
             && content.contains("history_action.user_message()")
             && content.contains("history_action.success_hud()")
-            && content.contains("error_prefix()"),
+            && content.contains("error_prefix()")
+            && content.contains("\"Deleted dictation\"")
+            && content.contains("\"Failed to delete dictation\""),
         "dictation history handlers should derive empty-selection, user message, HUD, and error copy from named states"
     );
 }
