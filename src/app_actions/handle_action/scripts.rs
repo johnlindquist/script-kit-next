@@ -25,6 +25,18 @@ enum ScriptManagementHandlerAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptRemovalHandlerAction {
+    MoveToTrash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptRemovalTargetError {
+    NoSelection,
+    UnsupportedItemType,
+    MissingPath,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ScriptRankingHandlerAction {
     ResetRanking,
 }
@@ -95,6 +107,61 @@ impl ScriptManagementHandlerAction {
         match self {
             Self::CreateScript => Some(format!("Failed to open scripts folder: {}", error)),
             Self::ReloadScripts => None,
+        }
+    }
+}
+
+impl ScriptRemovalHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "remove_script" | "delete_script" => Some(Self::MoveToTrash),
+            _ => None,
+        }
+    }
+
+    fn target_error_message(
+        self,
+        error: ScriptRemovalTargetError,
+        action_id: &str,
+        target: Option<&ScriptRemovalTarget>,
+    ) -> String {
+        match (self, error) {
+            (Self::MoveToTrash, ScriptRemovalTargetError::NoSelection) => {
+                selection_required_message_for_action(action_id).to_string()
+            }
+            (Self::MoveToTrash, ScriptRemovalTargetError::UnsupportedItemType) => {
+                "Cannot remove this item type".to_string()
+            }
+            (Self::MoveToTrash, ScriptRemovalTargetError::MissingPath) => {
+                let name = target
+                    .map(|target| target.name.as_str())
+                    .unwrap_or("Selected item");
+                format!("{name} no longer exists")
+            }
+        }
+    }
+
+    fn confirm_title(self) -> &'static str {
+        match self {
+            Self::MoveToTrash => "Move to Trash",
+        }
+    }
+
+    fn confirm_body(self, target: &ScriptRemovalTarget) -> String {
+        match self {
+            Self::MoveToTrash => format!("Move \"{}\" to Trash?", target.name),
+        }
+    }
+
+    fn success_hud(self, target: &ScriptRemovalTarget) -> String {
+        match self {
+            Self::MoveToTrash => format!("Moved '{}' to Trash", target.name),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::MoveToTrash => format!("Failed to remove: {error}"),
         }
     }
 }
@@ -317,19 +384,31 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "remove_script" | "delete_script" => {
+                let Some(removal_action) = ScriptRemovalHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(category = "UI", action = action_id, "action triggered");
 
                 let Some(result) = self.get_selected_result() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        selection_required_message_for_action(action_id),
+                        removal_action.target_error_message(
+                            ScriptRemovalTargetError::NoSelection,
+                            action_id,
+                            None,
+                        ),
                     );
                 };
 
                 let Some(target) = script_removal_target_from_result(&result) else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Cannot remove this item type",
+                        removal_action.target_error_message(
+                            ScriptRemovalTargetError::UnsupportedItemType,
+                            action_id,
+                            None,
+                        ),
                     );
                 };
 
@@ -337,11 +416,15 @@ impl ScriptListApp {
                     self.refresh_scripts(cx);
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("{} no longer exists", target.name),
+                        removal_action.target_error_message(
+                            ScriptRemovalTargetError::MissingPath,
+                            action_id,
+                            Some(&target),
+                        ),
                     );
                 }
 
-                let body: gpui::SharedString = format!("Move \"{}\" to Trash?", target.name).into();
+                let body: gpui::SharedString = removal_action.confirm_body(&target).into();
 
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
@@ -353,9 +436,9 @@ impl ScriptListApp {
                     cx,
                     owner,
                     crate::confirm::ParentConfirmOptions {
-                        title: "Move to Trash".into(),
+                        title: removal_action.confirm_title().into(),
                         body,
-                        confirm_text: "Move to Trash".into(),
+                        confirm_text: removal_action.confirm_title().into(),
                         cancel_text: "Cancel".into(),
                         confirm_variant: gpui_component::button::ButtonVariant::Danger,
                         width: gpui::px(448.),
@@ -363,6 +446,7 @@ impl ScriptListApp {
                     {
                         let trace_id = trace_id.clone();
                         let target = target.clone();
+                        let removal_action = removal_action;
                         move |_window, cx| {
                             tracing::info!(
                                 trace_id = %trace_id,
@@ -389,7 +473,7 @@ impl ScriptListApp {
                                             );
                                             this.refresh_scripts(cx);
                                             this.show_hud(
-                                                format!("Moved '{}' to Trash", target.name),
+                                                removal_action.success_hud(&target),
                                                 Some(HUD_2200_MS),
                                                 cx,
                                             );
@@ -408,7 +492,7 @@ impl ScriptListApp {
                                                 "Async action failed: remove_script"
                                             );
                                             this.show_error_toast_with_code(
-                                                format!("Failed to remove: {}", e),
+                                                removal_action.failure_message(e),
                                                 Some(crate::action_helpers::ERROR_TRASH_FAILED),
                                                 cx,
                                             );
