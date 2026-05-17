@@ -757,6 +757,28 @@ fn settings_snap_mode_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn permission_assistant_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum PermissionAssistantBuiltinAction")
+            && content.contains("Accessibility")
+            && content.contains("ScreenRecording"),
+        "Permission Assistant built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("PermissionAssistantBuiltinAction::from_command(")
+            && content.contains("fn execute_permission_assistant_builtin(")
+            && content.contains("action.panel()")
+            && content.contains("action.success_hud()")
+            && content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()"),
+        "Permission Assistant panel, HUD text, and dispatch details should derive from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
