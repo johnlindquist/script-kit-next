@@ -28,6 +28,7 @@ include!("vibrancy_cycle.rs");
 include!("secondary_window_config.rs");
 include!("positioning.rs");
 include!("screenshots_window_open.rs");
+include!("selfie_capture.rs");
 include!("path_actions.rs");
 include!("ai_commands.rs");
 include!("osascript.rs");
