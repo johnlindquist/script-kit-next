@@ -34,6 +34,8 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "screenshot_identity",
     "drop_state",
     "path_state",
+    "notes_state",
+    "dictation_state",
 ];
 
 fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {

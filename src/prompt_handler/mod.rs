@@ -237,6 +237,14 @@ fn resolve_main_only_target(
 
 enum GetStateTargetResolution {
     MainCompatible,
+    Notes {
+        resolved: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::notes::NotesApp>,
+    },
+    ActionsDialog {
+        resolved: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::actions::ActionsDialog>,
+    },
     UnsupportedNonMain {
         resolved: crate::protocol::AutomationWindowInfo,
     },
@@ -248,10 +256,11 @@ enum GetStateTargetResolution {
 fn resolve_get_state_target(
     request_id: &str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
+    cx: &gpui::App,
 ) -> GetStateTargetResolution {
-    // getState is a main-window state contract. Secondary surfaces are
-    // inspected through getElements(target), inspectAutomationWindow(target),
-    // and getAcpState(target) rather than partial secondary stateResult data.
+    // getState defaults to the main-window state contract. Notes is the first
+    // secondary surface with a redacted passive state envelope because agents
+    // need dirty state, cursor, and autosize receipts for user-reported UX bugs.
     match target {
         None
         | Some(crate::protocol::AutomationWindowTarget::Main)
@@ -261,6 +270,34 @@ fn resolve_get_state_target(
         Some(t) => match crate::windows::resolve_automation_window(Some(t)) {
             Ok(resolved) if resolved.kind == crate::protocol::AutomationWindowKind::Main => {
                 GetStateTargetResolution::MainCompatible
+            }
+            Ok(resolved) if resolved.kind == crate::protocol::AutomationWindowKind::Notes => {
+                match crate::notes::get_notes_app_entity_and_handle() {
+                    Some((entity, _handle)) => {
+                        let _ = entity.read(cx);
+                        GetStateTargetResolution::Notes { resolved, entity }
+                    }
+                    None => GetStateTargetResolution::ResolutionFailed {
+                        error: format!(
+                            "getState resolved notes target {} but no live Notes entity is available",
+                            resolved.id
+                        ),
+                    },
+                }
+            }
+            Ok(resolved) if resolved.kind == crate::protocol::AutomationWindowKind::ActionsDialog => {
+                match crate::actions::get_actions_dialog_entity(cx) {
+                    Some(entity) => {
+                        let _ = entity.read(cx);
+                        GetStateTargetResolution::ActionsDialog { resolved, entity }
+                    }
+                    None => GetStateTargetResolution::ResolutionFailed {
+                        error: format!(
+                            "getState resolved ActionsDialog target {} but no live dialog entity is available",
+                            resolved.id
+                        ),
+                    },
+                }
             }
             Ok(resolved) => {
                 tracing::warn!(
@@ -380,7 +417,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
                 unsupported_target_name: "Notes",
-                supported_commands: &["setInput", "waitFor"],
+                supported_commands: &["setInput", "openActions", "waitFor"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::ActionsDialog => Self {
@@ -2733,8 +2770,78 @@ impl ScriptListApp {
                     "Collecting state for request"
                 );
 
-                match resolve_get_state_target(&request_id, target.as_ref()) {
+                match resolve_get_state_target(&request_id, target.as_ref(), cx) {
                     GetStateTargetResolution::MainCompatible => {}
+                    GetStateTargetResolution::Notes { resolved, entity } => {
+                        if let Some(ref sender) = self.response_sender {
+                            let notes_state = entity.read(cx).automation_state(cx);
+                            let _ = sender.try_send(Message::state_result(
+                                request_id.clone(),
+                                "notes".to_string(),
+                                Some(format!("target:{:?}:{}", resolved.kind, resolved.id)),
+                                None,
+                                None,
+                                None,
+                                None,
+                                String::new(),
+                                0,
+                                0,
+                                -1,
+                                None,
+                                resolved.focused,
+                                resolved.visible,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                Some(notes_state),
+                                None,
+                            ));
+                        }
+                        return;
+                    }
+                    GetStateTargetResolution::ActionsDialog { resolved, entity } => {
+                        if let Some(ref sender) = self.response_sender {
+                            let actions_state = entity.read(cx).automation_state("actionsDialog");
+                            let _ = sender.try_send(Message::state_result(
+                                request_id.clone(),
+                                "actionsDialog".to_string(),
+                                Some(format!("target:{:?}:{}", resolved.kind, resolved.id)),
+                                None,
+                                None,
+                                None,
+                                None,
+                                String::new(),
+                                0,
+                                0,
+                                -1,
+                                None,
+                                resolved.focused,
+                                resolved.visible,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                Some(actions_state),
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                                None,
+                            ));
+                        }
+                        return;
+                    }
                     GetStateTargetResolution::UnsupportedNonMain { resolved } => {
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(Message::state_result(
@@ -2752,6 +2859,8 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 resolved.visible,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -2784,6 +2893,8 @@ impl ScriptListApp {
                                 None,
                                 false,
                                 false,
+                                None,
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3765,6 +3876,7 @@ impl ScriptListApp {
                     }
                     _ => None,
                 };
+                let dictation_state = Some(crate::dictation::automation_state());
 
                 // Create the response
                 let response = Message::state_result(
@@ -3793,6 +3905,8 @@ impl ScriptListApp {
                     crate::ai::harness::screenshot_files::current_screenshot_identity(),
                     drop_state,
                     path_state,
+                    None,
+                    dictation_state,
                 );
 
                 tracing::info!(
@@ -4325,17 +4439,53 @@ impl ScriptListApp {
                     "Collecting layout info for request"
                 );
 
-                // Reject non-main targets — layout info is only available
-                // for the main window today. Return an empty LayoutInfo
-                // with a log message so agents get honest diagnostics.
                 if target.is_some() {
-                    match resolve_main_only_target(&request_id, "getLayoutInfo", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
+                    match crate::windows::resolve_automation_window(target.as_ref()) {
+                        Ok(resolved)
+                            if resolved.kind == crate::protocol::AutomationWindowKind::Notes =>
+                        {
+                            if let Some((entity, _handle)) =
+                                crate::notes::get_notes_app_entity_and_handle()
+                            {
+                                let layout_info = entity.read(cx).automation_layout_info(&resolved);
+                                let response =
+                                    Message::layout_info_result(request_id.clone(), layout_info);
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(response);
+                                }
+                            } else if let Some(ref sender) = self.response_sender {
+                                let empty_info = crate::protocol::LayoutInfo::default();
+                                let _ = sender.try_send(Message::layout_info_result(
+                                    request_id.clone(),
+                                    empty_info,
+                                ));
+                            }
+                            return;
+                        }
+                        Ok(resolved)
+                            if resolved.kind == crate::protocol::AutomationWindowKind::Main =>
+                        { /* main window — proceed */ }
+                        Ok(resolved) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                resolved_kind = ?resolved.kind,
+                                resolved_id = %resolved.id,
+                                "getLayoutInfo: target rejected"
+                            );
+                            let empty_info = crate::protocol::LayoutInfo::default();
+                            let response =
+                                Message::layout_info_result(request_id.clone(), empty_info);
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(response);
+                            }
+                            return;
+                        }
                         Err(error) => {
                             tracing::warn!(
                                 target: "script_kit::automation",
                                 request_id = %request_id,
-                                error = %error.message,
+                                error = %error,
                                 "getLayoutInfo: target rejected"
                             );
                             let empty_info = crate::protocol::LayoutInfo::default();
@@ -5431,6 +5581,48 @@ impl ScriptListApp {
                                         }
                                     }
                                 }
+                                protocol::BatchCommand::OpenActions => {
+                                    let ne = notes_entity.clone();
+                                    let nh = notes_handle;
+                                    let result = nh.update(cx, |_root, window, cx| {
+                                        window.defer(cx, move |window, cx| {
+                                            ne.update(cx, |app, cx| {
+                                                app.open_actions_panel(window, cx);
+                                            });
+                                        });
+                                        tracing::info!(
+                                            target: "script_kit::transaction",
+                                            event = "transaction_notes_open_actions",
+                                            request_id = %rid,
+                                            "Notes open_actions scheduled"
+                                        );
+                                    });
+                                    match result {
+                                        Ok(()) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "openActions", "batch.notes.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: true,
+                                                command: "openActions".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: None,
+                                            });
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "openActions".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
                                 protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
                                     let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
                                     let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
@@ -6378,6 +6570,24 @@ impl ScriptListApp {
                                         failed = true;
                                         if opts.stop_on_error { break; }
                                     }
+                                }
+                            }
+                            protocol::BatchCommand::OpenActions => {
+                                let command = batch_command_name(cmd);
+                                results.push(protocol::BatchResultEntry {
+                                    index,
+                                    success: false,
+                                    command,
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(unsupported_batch_command_error(
+                                        AutomationBatchTargetKind::Main,
+                                        cmd,
+                                    )),
+                                });
+                                failed = true;
+                                if opts.stop_on_error {
+                                    break;
                                 }
                             }
                             protocol::BatchCommand::ForceSubmit { value } => {
@@ -8509,6 +8719,7 @@ impl ScriptListApp {
 fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
     match cmd {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
+        protocol::BatchCommand::OpenActions => "openActions".to_string(),
         protocol::BatchCommand::ForceSubmit { .. } => "forceSubmit".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),

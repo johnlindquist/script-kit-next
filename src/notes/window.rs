@@ -190,6 +190,19 @@ pub enum NotesSurfaceMode {
 }
 
 #[derive(Debug, Clone)]
+struct NotesFocusTransition {
+    generation: u64,
+    phase: &'static str,
+    surface: focus::NotesFocusSurface,
+    previous_surface: focus::NotesFocusSurface,
+    command_bar_open: bool,
+    note_switcher_open: bool,
+    has_active_dialog: bool,
+    surface_mode: NotesSurfaceMode,
+    recorded_at: Instant,
+}
+
+#[derive(Debug, Clone)]
 struct NotesMentionPortalEditSession {
     mention_range: Range<usize>,
     original_token: String,
@@ -358,6 +371,10 @@ pub struct NotesApp {
     /// Pending focus surface request — applied in the next render frame.
     /// Used to defer focus changes until after dialog dismissal completes.
     pending_focus_surface: Option<focus::NotesFocusSurface>,
+    /// Monotonic generation for DevTools focus-owner transition receipts.
+    focus_transition_generation: u64,
+    /// Bounded recent focus-owner transition timeline for runtime UX proof.
+    focus_transition_log: Vec<NotesFocusTransition>,
 
     // ── ACP host surface ──────────────────────────────────────────────
     /// Which surface is currently visible (Notes editor or embedded ACP).

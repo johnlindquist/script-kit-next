@@ -569,6 +569,9 @@ pub struct ActionsDialog {
     /// Tracks the last row armed by a mouse click so actions require an explicit
     /// second click, while native double-click still submits immediately.
     mouse_armed_row: Option<usize>,
+    /// Last row entered by pointer hover. This mirrors GPUI's visual hover so
+    /// DevTools can prove hover/selection mismatches without screenshots.
+    hovered_row: Option<usize>,
     /// Current animated scrollbar visibility (0.0 hidden .. 1.0 visible).
     scrollbar_visibility: crate::transitions::Opacity,
     /// Generation counter used to cancel stale scrollbar fade tasks.
@@ -782,6 +785,7 @@ impl ActionsDialog {
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
             mouse_armed_row: None,
+            hovered_row: None,
             scrollbar_visibility: crate::transitions::Opacity::INVISIBLE,
             scrollbar_fade_gen: 0,
             last_scroll_time: None,
@@ -1604,6 +1608,428 @@ mod unicode_keycap_safety_tests {
 
 // --- merged from part_02.rs ---
 impl ActionsDialog {
+    fn devtools_rect(x: f32, y: f32, width: f32, height: f32) -> serde_json::Value {
+        serde_json::json!({
+            "x": x,
+            "y": y,
+            "width": width,
+            "height": height,
+        })
+    }
+
+    fn devtools_row_geometry(&self) -> serde_json::Value {
+        let style = actions_dialog_default_style();
+        let attached_popup_generation = crate::actions::actions_popup_automation_snapshot()
+            .and_then(|snapshot| {
+                snapshot
+                    .get("generation")
+                    .and_then(serde_json::Value::as_u64)
+            });
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+        let search_height = if show_search {
+            SEARCH_INPUT_HEIGHT
+        } else {
+            0.0
+        };
+        let header_height = if self.shows_context_header() && style.show_header {
+            HEADER_HEIGHT
+        } else {
+            0.0
+        };
+        let list_top = if search_at_top { search_height } else { 0.0 } + header_height;
+
+        let mut content_height = 0.0;
+        let mut action_count = 0_usize;
+        let mut section_count = 0_usize;
+        for item in &self.grouped_items {
+            match item {
+                GroupedActionItem::SectionHeader(_) => {
+                    section_count += 1;
+                    content_height += SECTION_HEADER_HEIGHT;
+                }
+                GroupedActionItem::Item(_) => {
+                    action_count += 1;
+                    content_height += style.row_height;
+                }
+            }
+        }
+
+        let min_content_height = if action_count == 0 {
+            style.row_height
+        } else {
+            0.0
+        };
+        let viewport_height = actions_dialog_scrollbar_viewport_height(
+            content_height.max(min_content_height),
+            show_search,
+            self.shows_context_header() && style.show_header,
+            self.config.show_footer,
+            self.config.max_height,
+        );
+        let scroll_top_item_index = self.list_state.logical_scroll_top().item_ix;
+        let scroll_top_content_y: f32 = self
+            .grouped_items
+            .iter()
+            .take(scroll_top_item_index)
+            .map(|item| match item {
+                GroupedActionItem::SectionHeader(_) => SECTION_HEADER_HEIGHT,
+                GroupedActionItem::Item(_) => style.row_height,
+            })
+            .sum();
+
+        let viewport_bottom = list_top + viewport_height;
+        let mut content_y = 0.0;
+        let mut rows = Vec::new();
+        let mut sections = Vec::new();
+        let mut shortcut_layout_rows = Vec::new();
+        let mut selected_row = None;
+
+        for (visual_index, item) in self.grouped_items.iter().enumerate() {
+            let (kind, height, label, action_id, shortcut, shortcut_tokens) = match item {
+                GroupedActionItem::SectionHeader(label) => (
+                    "section",
+                    SECTION_HEADER_HEIGHT,
+                    Some(label.as_str()),
+                    None,
+                    None,
+                    Vec::<String>::new(),
+                ),
+                GroupedActionItem::Item(filter_idx) => {
+                    let action = self
+                        .filtered_actions
+                        .get(*filter_idx)
+                        .and_then(|action_idx| self.actions.get(*action_idx));
+                    (
+                        "action",
+                        style.row_height,
+                        action.map(|action| action.title.as_str()),
+                        action.map(|action| action.id.as_str()),
+                        action.and_then(|action| action.shortcut.as_deref()),
+                        action
+                            .and_then(|action| {
+                                action_shortcut_tokens_for_render(action)
+                                    .map(|tokens| tokens.iter().cloned().collect::<Vec<_>>())
+                            })
+                            .unwrap_or_default(),
+                    )
+                }
+            };
+            let viewport_y = list_top + content_y - scroll_top_content_y;
+            let rect = Self::devtools_rect(0.0, viewport_y, POPUP_WIDTH, height);
+            let inner_rect = if kind == "action" {
+                Self::devtools_rect(
+                    ACTION_ROW_INSET,
+                    viewport_y + 2.0,
+                    POPUP_WIDTH - (ACTION_ROW_INSET * 2.0),
+                    (height - 4.0).max(0.0),
+                )
+            } else {
+                Self::devtools_rect(0.0, viewport_y, POPUP_WIDTH, height)
+            };
+            let shortcut_layout = if kind == "action" && !shortcut_tokens.is_empty() {
+                let probe = crate::components::hint_strip::inline_shortcut_layout_model(
+                    shortcut_tokens.iter().map(String::as_str),
+                    0.0,
+                    0.0,
+                );
+                let shortcut_bounds = probe.get("bounds");
+                let shortcut_width = shortcut_bounds
+                    .and_then(|bounds| bounds.get("width"))
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0) as f32;
+                let shortcut_height = shortcut_bounds
+                    .and_then(|bounds| bounds.get("height"))
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or(0.0) as f32;
+                let inner_x = ACTION_ROW_INSET;
+                let inner_y = viewport_y + 2.0;
+                let inner_width = POPUP_WIDTH - (ACTION_ROW_INSET * 2.0);
+                let inner_height = (height - 4.0).max(0.0);
+                let shortcut_x = inner_x + (inner_width - shortcut_width).max(0.0);
+                let shortcut_y = inner_y + ((inner_height - shortcut_height).max(0.0) / 2.0);
+                let layout = crate::components::hint_strip::inline_shortcut_layout_model(
+                    shortcut_tokens.iter().map(String::as_str),
+                    shortcut_x,
+                    shortcut_y,
+                );
+                let row_layout = serde_json::json!({
+                    "visualIndex": visual_index,
+                    "actionId": action_id,
+                    "shortcut": shortcut,
+                    "shortcutTokens": shortcut_tokens.clone(),
+                    "layout": layout,
+                    "rightAligned": true,
+                    "clipped": shortcut_width > inner_width,
+                });
+                shortcut_layout_rows.push(row_layout.clone());
+                Some(row_layout)
+            } else {
+                None
+            };
+            let visible = viewport_y + height > list_top && viewport_y < viewport_bottom;
+            let is_selected = visual_index == self.selected_index;
+            let row = serde_json::json!({
+                "semanticId": if kind == "action" {
+                    action_id.map(|id| format!("choice:{visual_index}:{id}"))
+                } else {
+                    Some(format!("section:{visual_index}"))
+                },
+                "visualIndex": visual_index,
+                "groupedIndex": visual_index,
+                "kind": kind,
+                "labelLength": label.map(|value| value.chars().count()),
+                "labelFingerprint": label.map(Self::devtools_text_fingerprint),
+                "actionId": action_id,
+                "selected": is_selected,
+                "hovered": self.hovered_row == Some(visual_index),
+                "visible": visible,
+                "clipped": !visible,
+                "contentY": content_y,
+                "bounds": rect.clone(),
+                "rect": rect,
+                "innerBounds": inner_rect.clone(),
+                "innerRect": inner_rect,
+                "shortcut": shortcut,
+                "shortcutTokens": shortcut_tokens.clone(),
+                "shortcutBoundsAvailable": shortcut_layout.is_some(),
+                "shortcutBounds": shortcut_layout
+                    .as_ref()
+                    .and_then(|layout| layout.get("layout"))
+                    .and_then(|layout| layout.get("bounds"))
+                    .cloned(),
+                "shortcutLayout": shortcut_layout,
+                "disabledReasonBoundsAvailable": false,
+            });
+
+            if kind == "section" {
+                sections.push(row.clone());
+            }
+            if is_selected {
+                selected_row = Some(row.clone());
+            }
+            rows.push(row);
+            content_y += height;
+        }
+        let hovered_row = self.hovered_row.and_then(|hovered_index| {
+            rows.iter()
+                .find(|row| {
+                    row.get("visualIndex").and_then(serde_json::Value::as_u64)
+                        == Some(hovered_index as u64)
+                })
+                .cloned()
+        });
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "available": true,
+            "source": "runtime.actionsDialog.render",
+            "generation": attached_popup_generation.unwrap_or(0),
+            "attachedPopupGeneration": attached_popup_generation,
+            "stale": false,
+            "measurementSource": "runtime.actionsDialog.render",
+            "coordinateSpace": "popupLogicalPx",
+            "units": "logicalPx",
+            "ownerWindowId": "actions-dialog",
+            "stopReason": null,
+            "quality": "model",
+            "popupWidth": POPUP_WIDTH,
+            "listViewportRect": Self::devtools_rect(0.0, list_top, POPUP_WIDTH, viewport_height),
+            "viewport": {
+                "containerBounds": Self::devtools_rect(0.0, 0.0, POPUP_WIDTH, list_top + viewport_height),
+                "searchBounds": if show_search {
+                    Some(Self::devtools_rect(
+                        0.0,
+                        if search_at_top { 0.0 } else { list_top + viewport_height },
+                        POPUP_WIDTH,
+                        search_height,
+                    ))
+                } else {
+                    None
+                },
+                "contextHeaderBounds": if header_height > 0.0 {
+                    Some(Self::devtools_rect(
+                        0.0,
+                        if search_at_top { search_height } else { 0.0 },
+                        POPUP_WIDTH,
+                        header_height,
+                    ))
+                } else {
+                    None
+                },
+                "listBounds": Self::devtools_rect(0.0, list_top, POPUP_WIDTH, viewport_height),
+                "visibleRange": {
+                    "firstGroupedIndex": rows.iter().find(|row| row.get("visible").and_then(serde_json::Value::as_bool) == Some(true)).and_then(|row| row.get("groupedIndex")).cloned(),
+                    "lastGroupedIndex": rows.iter().rev().find(|row| row.get("visible").and_then(serde_json::Value::as_bool) == Some(true)).and_then(|row| row.get("groupedIndex")).cloned(),
+                },
+                "scroll": {
+                    "topGroupedIndex": scroll_top_item_index,
+                    "pixelOffsetAvailable": false,
+                    "pixelOffset": null,
+                },
+            },
+            "contentHeight": content_height.max(min_content_height),
+            "scrollTopItemIndex": scroll_top_item_index,
+            "scrollTopContentY": scroll_top_content_y,
+            "sectionBoundsAvailable": true,
+            "rowBoundsAvailable": true,
+            "selectedRowBoundsAvailable": selected_row.is_some(),
+            "hoverRowAvailable": true,
+            "hoveredRow": {
+                "available": true,
+                "state": if hovered_row.is_some() { "hovered" } else { "none" },
+                "row": hovered_row,
+            },
+            "shortcutBoundsAvailable": true,
+            "disabledReasonBoundsAvailable": false,
+            "shortcutLayout": {
+                "boundsAvailable": true,
+                "rowCount": shortcut_layout_rows.len(),
+                "rows": shortcut_layout_rows,
+                "stopReason": null,
+                "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel",
+            },
+            "disabledReasonLayout": {
+                "status": "no-visible-disabled-reasons",
+                "boundsAvailable": false,
+                "rowCount": 0,
+                "rows": [],
+            },
+            "warnings": [],
+            "counts": {
+                "rows": rows.len(),
+                "actions": action_count,
+                "sections": section_count,
+            },
+            "selectedRow": selected_row,
+            "sections": sections,
+            "rows": rows,
+        })
+    }
+
+    fn devtools_text_fingerprint(value: &str) -> String {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for byte in value.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("fnv1a64:{hash:016x}")
+    }
+
+    fn devtools_action_summary(action: &Action) -> serde_json::Value {
+        serde_json::json!({
+            "id": action.id.as_str(),
+            "titleLength": action.title.chars().count(),
+            "titleFingerprint": Self::devtools_text_fingerprint(&action.title),
+            "descriptionLength": action.description.as_ref().map(|value| value.chars().count()),
+            "descriptionFingerprint": action.description.as_ref().map(|value| Self::devtools_text_fingerprint(value)),
+            "section": action.section.as_deref(),
+            "category": format!("{:?}", action.category),
+            "hasShortcut": action.shortcut.is_some(),
+            "shortcut": action.shortcut.as_deref(),
+            "hasAction": action.has_action,
+        })
+    }
+
+    pub(crate) fn automation_state(&self, surface: &str) -> serde_json::Value {
+        let selected_action = self.get_selected_action();
+        let visible_actions: Vec<serde_json::Value> = self
+            .filtered_actions
+            .iter()
+            .filter_map(|idx| self.actions.get(*idx))
+            .take(20)
+            .map(Self::devtools_action_summary)
+            .collect();
+        let section_count = self.count_section_headers();
+        let mut sections = std::collections::BTreeMap::<String, usize>::new();
+        for action in self
+            .filtered_actions
+            .iter()
+            .filter_map(|idx| self.actions.get(*idx))
+        {
+            let section = action
+                .section
+                .clone()
+                .unwrap_or_else(|| "Unsectioned".to_string());
+            *sections.entry(section).or_insert(0) += 1;
+        }
+        let route_stack: Vec<serde_json::Value> = self
+            .route_stack
+            .iter()
+            .map(|state| {
+                serde_json::json!({
+                    "id": state.route.id.as_str(),
+                    "actionCount": state.route.actions.len(),
+                    "contextTitleLength": state.route.context_title.as_ref().map(|value| value.chars().count()),
+                    "contextTitleFingerprint": state.route.context_title.as_ref().map(|value| Self::devtools_text_fingerprint(value)),
+                    "searchTextLength": state.search_text.chars().count(),
+                    "searchTextFingerprint": Self::devtools_text_fingerprint(&state.search_text),
+                    "selectedActionId": state.selected_action_id.as_deref(),
+                })
+            })
+            .collect();
+
+        let mut state = serde_json::json!({
+            "schemaVersion": 1,
+            "surface": surface,
+            "redacted": true,
+            "search": {
+                "textLength": self.search_text.chars().count(),
+                "textFingerprint": Self::devtools_text_fingerprint(&self.search_text),
+                "placeholderLength": self.current_search_placeholder().map(|value| value.chars().count()),
+                "placeholderFingerprint": self.current_search_placeholder().map(Self::devtools_text_fingerprint),
+                "hidden": self.hide_search || matches!(self.config.search_position, SearchPosition::Hidden),
+                "position": actions_dialog_search_position_name(&self.config.search_position),
+            },
+            "selection": {
+                "groupedIndex": self.selected_index,
+                "filteredIndex": self.get_selected_filtered_index(),
+                "actionId": selected_action.map(|action| action.id.clone()),
+                "actionTitleLength": selected_action.map(|action| action.title.chars().count()),
+                "actionTitleFingerprint": selected_action.map(|action| Self::devtools_text_fingerprint(&action.title)),
+                "shouldClose": self.selected_action_should_close(),
+            },
+            "actions": {
+                "totalCount": self.actions.len(),
+                "filteredCount": self.filtered_actions.len(),
+                "groupedRowCount": self.grouped_items.len(),
+                "sectionHeaderCount": section_count,
+                "sections": sections,
+                "visibleSampleLimit": visible_actions.len(),
+                "visibleSample": visible_actions,
+                "shortcutCount": self.actions.iter().filter(|action| action.shortcut.is_some()).count(),
+                "sdkActionsActive": self.has_sdk_actions(),
+            },
+            "route": {
+                "currentRouteId": self.current_route_id(),
+                "depth": self.route_depth(),
+                "canPop": self.can_pop_route(),
+                "hintLabel": self.route_hint_label(),
+                "stack": route_stack,
+                "registeredDrillDownRouteCount": self.drill_down_routes.len(),
+            },
+            "config": {
+                "searchPosition": actions_dialog_search_position_name(&self.config.search_position),
+                "sectionMode": actions_dialog_section_mode_name(&self.config.section_style),
+                "anchor": match self.config.anchor {
+                    AnchorPosition::Top => "top",
+                    AnchorPosition::Bottom => "bottom",
+                },
+                "showIcons": self.config.show_icons,
+                "showFooter": self.config.show_footer,
+                "maxHeight": self.config.max_height,
+            },
+        });
+
+        if let Some(attached_popup) = crate::actions::actions_popup_automation_snapshot() {
+            state["attachedPopup"] = attached_popup;
+        }
+        state["rowGeometry"] = self.devtools_row_geometry();
+
+        state
+    }
+
     /// Set actions from SDK (replaces built-in actions)
     ///
     /// Converts `ProtocolAction` items to internal `Action` format and updates
@@ -3260,6 +3686,22 @@ impl Render for ActionsDialog {
                                                     {
                                                         callback(activation, window, cx);
                                                     }
+                                                }
+                                            })
+                                            .on_hover({
+                                                let entity = entity.clone();
+                                                move |hovered: &bool, _window, cx| {
+                                                    entity.update(cx, |this, cx| {
+                                                        if *hovered {
+                                                            if this.hovered_row != Some(ix) {
+                                                                this.hovered_row = Some(ix);
+                                                                cx.notify();
+                                                            }
+                                                        } else if this.hovered_row == Some(ix) {
+                                                            this.hovered_row = None;
+                                                            cx.notify();
+                                                        }
+                                                    });
                                                 }
                                             });
 

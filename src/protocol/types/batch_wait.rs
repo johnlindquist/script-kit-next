@@ -143,6 +143,7 @@ pub enum BatchCommand {
     SetInput {
         text: String,
     },
+    OpenActions,
     ForceSubmit {
         value: serde_json::Value,
     },

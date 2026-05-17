@@ -3,6 +3,468 @@ use itertools::Itertools;
 use super::*;
 
 impl NotesApp {
+    fn devtools_text_fingerprint(value: &str) -> String {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for byte in value.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("fnv1a64:{hash:016x}")
+    }
+
+    fn automation_shortcut_registry(&self) -> serde_json::Value {
+        let active_scope = if self.command_bar.is_open() || self.show_actions_panel {
+            "actionsPanel"
+        } else if self.note_switcher.is_open() || self.show_browse_panel {
+            "noteSwitcher"
+        } else if self.surface_mode == NotesSurfaceMode::Acp {
+            "embeddedAcp"
+        } else {
+            "editor"
+        };
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "redacted": true,
+            "activeScope": active_scope,
+            "currentFocusSurface": format!("{:?}", self.current_focus_surface()),
+            "pendingFocusSurface": self.pending_focus_surface.map(|surface| format!("{surface:?}")),
+            "modalGuard": {
+                "activeDialogFirst": true,
+                "handles": ["Enter", "Escape", "Tab", "Shift+Tab"],
+            },
+            "scopes": [
+                {
+                    "id": "actionsPanel",
+                    "open": self.command_bar.is_open() || self.show_actions_panel,
+                    "owner": "Notes CommandBar",
+                    "toggle": "Cmd+K",
+                    "handles": ["Escape", "Cmd+K", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "text input"],
+                },
+                {
+                    "id": "noteSwitcher",
+                    "open": self.note_switcher.is_open() || self.show_browse_panel,
+                    "owner": "Notes note switcher",
+                    "toggle": "Cmd+P",
+                    "handles": ["Escape", "Cmd+P", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Backspace", "Delete", "text input"],
+                },
+                {
+                    "id": "embeddedAcp",
+                    "open": self.surface_mode == NotesSurfaceMode::Acp,
+                    "owner": "Notes-hosted ACP",
+                    "toggle": "Cmd+Enter",
+                    "handles": ["Escape", "Cmd+K", "Cmd+W", "Cmd+Shift+A"],
+                },
+                {
+                    "id": "editor",
+                    "open": self.surface_mode == NotesSurfaceMode::Notes,
+                    "owner": "Notes editor",
+                    "handles": [
+                        "Escape", "Tab", "Shift+Tab", "Alt+Up", "Alt+Down", "Alt+Shift+Up", "Alt+Shift+Down",
+                        "Ctrl+Shift+K", "Cmd+Enter", "Cmd+K", "Cmd+Shift+O", "Cmd+P", "Cmd+Shift+P",
+                        "Cmd+F", "Cmd+Shift+F", "Cmd+Shift+A", "Cmd+N", "Cmd+Shift+N", "Cmd+Shift+T",
+                        "Cmd+W", "Cmd+.", "Cmd+Shift+.", "Cmd+Shift+S", "Cmd+Z", "Cmd+D", "Cmd+Shift+D",
+                        "Cmd+Shift+X", "Cmd+L", "Cmd+Shift+L", "Cmd+Shift+-", "Cmd+Shift+H", "Cmd+V",
+                        "Cmd+Shift+C", "Cmd+E", "Cmd+J", "Cmd+Shift+U", "Cmd+B", "Cmd+I", "Cmd+Shift+I",
+                        "Cmd+Up", "Cmd+Down", "Cmd+Shift+Up", "Cmd+Shift+Down", "Cmd+[", "Cmd+]",
+                        "Cmd+Shift+Backspace", "Cmd+Shift+Delete", "Cmd+Shift+7", "Cmd+Shift+8", "Cmd+1..Cmd+9"
+                    ],
+                },
+            ],
+        })
+    }
+
+    fn automation_focus_transition_timeline(&self) -> serde_json::Value {
+        let entries: Vec<serde_json::Value> = self
+            .focus_transition_log
+            .iter()
+            .map(|entry| {
+                serde_json::json!({
+                    "generation": entry.generation,
+                    "phase": entry.phase,
+                    "surface": format!("{:?}", entry.surface),
+                    "previousSurface": format!("{:?}", entry.previous_surface),
+                    "commandBarOpen": entry.command_bar_open,
+                    "noteSwitcherOpen": entry.note_switcher_open,
+                    "hasActiveDialog": entry.has_active_dialog,
+                    "surfaceMode": format!("{:?}", entry.surface_mode),
+                    "ageMs": entry.recorded_at.elapsed().as_millis() as u64,
+                })
+            })
+            .collect();
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "redacted": true,
+            "generation": self.focus_transition_generation,
+            "entryCount": entries.len(),
+            "entries": entries,
+        })
+    }
+
+    fn automation_line_anchor(
+        editor_text: &str,
+        selection: &std::ops::Range<usize>,
+    ) -> serde_json::Value {
+        let cursor = selection.start.min(editor_text.len());
+        let line_start = editor_text[..cursor]
+            .rfind('\n')
+            .map_or(0, |index| index + 1);
+        let line_end = editor_text[cursor..]
+            .find('\n')
+            .map_or(editor_text.len(), |index| cursor + index);
+        let line_text = &editor_text[line_start..line_end];
+        let line_index = editor_text[..cursor].matches('\n').count();
+        let total_lines = editor_text.lines().count().max(1);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "redacted": true,
+            "cursor": cursor,
+            "offsetUnit": "utf8ByteOffset",
+            "line": {
+                "index": line_index,
+                "total": total_lines,
+                "start": line_start,
+                "end": line_end,
+                "length": line_text.chars().count(),
+                "byteLength": line_text.len(),
+                "fingerprint": Self::devtools_text_fingerprint(line_text),
+            },
+            "selectionRange": [selection.start, selection.end],
+            "selectionUnit": "utf8ByteOffset",
+            "selectionFingerprint": Self::devtools_text_fingerprint(&format!("{}..{}", selection.start, selection.end)),
+        })
+    }
+
+    fn automation_draft_snapshot(
+        &self,
+        editor_text: &str,
+        selection: &std::ops::Range<usize>,
+        selected_note: Option<&Note>,
+        storage_identity: &serde_json::Value,
+    ) -> serde_json::Value {
+        let note_id = self.selected_note_id.map(|id| id.as_str());
+        let storage_generation = storage_identity
+            .get("generation")
+            .and_then(serde_json::Value::as_u64);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "contentReturned": false,
+            "titleReturned": false,
+            "noteIdFingerprint": note_id.as_deref().map(Self::devtools_text_fingerprint),
+            "noteIdLength": note_id.as_deref().map(|id| id.chars().count()),
+            "storageGeneration": storage_generation,
+            "focusTransitionGeneration": self.focus_transition_generation,
+            "dirty": self.has_unsaved_changes,
+            "draft": {
+                "bodyLength": editor_text.chars().count(),
+                "bodyByteLength": editor_text.len(),
+                "bodyFingerprint": Self::devtools_text_fingerprint(editor_text),
+                "lineCount": editor_text.lines().count().max(1),
+                "selectionRange": [selection.start, selection.end],
+                "selectionUnit": "utf8ByteOffset",
+                "selectionFingerprint": Self::devtools_text_fingerprint(&format!("{}..{}", selection.start, selection.end)),
+            },
+            "persisted": selected_note.map(|note| serde_json::json!({
+                "titleLength": note.title.chars().count(),
+                "titleFingerprint": Self::devtools_text_fingerprint(&note.title),
+                "contentLength": note.content.chars().count(),
+                "contentFingerprint": Self::devtools_text_fingerprint(&note.content),
+                "updatedAtMs": note.updated_at.timestamp_millis(),
+                "deleted": note.deleted_at.is_some(),
+                "isPinned": note.is_pinned,
+            })),
+        })
+    }
+
+    fn automation_editor_anchor(
+        &self,
+        editor_text: &str,
+        selection: &std::ops::Range<usize>,
+    ) -> serde_json::Value {
+        let anchor = Self::automation_line_anchor(editor_text, selection);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "available": true,
+            "anchor": anchor,
+            "scrollMetricsAvailable": false,
+            "scrollTopAvailable": false,
+            "scrollHeightAvailable": false,
+            "clientHeightAvailable": false,
+            "stopReason": "Notes editor InputState does not expose runtime scroll offsets yet",
+        })
+    }
+
+    fn automation_preview_anchor(
+        &self,
+        editor_text: &str,
+        selection: &std::ops::Range<usize>,
+    ) -> serde_json::Value {
+        let anchor = Self::automation_line_anchor(editor_text, selection);
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "source": "runtime.notes.automationState",
+            "redacted": true,
+            "available": self.preview_enabled,
+            "previewEnabled": self.preview_enabled,
+            "anchor": if self.preview_enabled { anchor } else { serde_json::Value::Null },
+            "scrollMetricsAvailable": false,
+            "scrollTopAvailable": false,
+            "scrollHeightAvailable": false,
+            "clientHeightAvailable": false,
+            "stopReason": if self.preview_enabled {
+                "Notes markdown preview does not expose runtime scroll offsets yet"
+            } else {
+                "Notes markdown preview is not mounted"
+            },
+        })
+    }
+
+    pub(crate) fn automation_state(&self, cx: &gpui::App) -> serde_json::Value {
+        let editor = self.editor_state.read(cx);
+        let editor_text = editor.value().to_string();
+        let selection = editor.selection();
+        let selected_note = self
+            .selected_note_id
+            .and_then(|id| self.get_visible_notes().iter().find(|note| note.id == id));
+        let note_position = self.get_note_position();
+        let storage_identity = storage::automation_storage_identity();
+        let cursor = selection.start.min(editor_text.len());
+        let cursor_line = (!editor_text.is_empty()).then(|| {
+            (
+                editor_text[..cursor].matches('\n').count() + 1,
+                editor_text.lines().count().max(1),
+            )
+        });
+        let search_text = self.search_state.read(cx).value().to_string();
+
+        serde_json::json!({
+            "schemaVersion": 1,
+            "passive": true,
+            "redacted": true,
+            "activeNoteId": self.selected_note_id.map(|id| id.as_str()),
+            "dirtyState": {
+                "hasUnsavedChanges": self.has_unsaved_changes,
+                "lastSaveConfirmedMsAgo": self.last_save_confirmed.map(|instant| instant.elapsed().as_millis() as u64),
+                "lastSaveAttemptMsAgo": self.last_save_time.map(|instant| instant.elapsed().as_millis() as u64),
+            },
+            "selectedNote": selected_note.map(|note| serde_json::json!({
+                "id": note.id.as_str(),
+                "titleLength": note.title.chars().count(),
+                "titleFingerprint": Self::devtools_text_fingerprint(&note.title),
+                "contentLength": note.content.chars().count(),
+                "contentFingerprint": Self::devtools_text_fingerprint(&note.content),
+                "isPinned": note.is_pinned,
+                "deleted": note.deleted_at.is_some(),
+                "position": note_position.map(|(position, total)| serde_json::json!({
+                    "index": position,
+                    "total": total,
+                })),
+            })),
+            "editor": {
+                "textLength": editor_text.chars().count(),
+                "textFingerprint": Self::devtools_text_fingerprint(&editor_text),
+                "selectionRange": [selection.start, selection.end],
+                "selectionLength": selection.end.saturating_sub(selection.start),
+                "hasSelection": selection.start != selection.end,
+                "cursor": cursor,
+                "cursorLine": cursor_line.map(|(line, total)| serde_json::json!({
+                    "line": line,
+                    "total": total,
+                })),
+                "lastLineCount": self.last_line_count,
+            },
+            "draftSnapshot": self.automation_draft_snapshot(
+                &editor_text,
+                &selection,
+                selected_note,
+                &storage_identity,
+            ),
+            "editorAnchor": self.automation_editor_anchor(&editor_text, &selection),
+            "previewAnchor": self.automation_preview_anchor(&editor_text, &selection),
+            "view": {
+                "viewMode": format!("{:?}", self.view_mode),
+                "surfaceMode": format!("{:?}", self.surface_mode),
+                "focusSurface": format!("{:?}", self.current_focus_surface()),
+                "focusMode": self.focus_mode,
+                "sortMode": format!("{:?}", self.sort_mode),
+                "showSearch": self.show_search,
+                "showFormatToolbar": self.show_format_toolbar,
+                "previewEnabled": self.preview_enabled,
+                "showActionsPanel": self.show_actions_panel || self.command_bar.is_open(),
+                "showBrowsePanel": self.show_browse_panel || self.note_switcher.is_open(),
+                "autoSizingEnabled": self.auto_sizing_enabled,
+                "initialHeight": self.initial_height,
+                "lastWindowHeight": self.last_window_height,
+                "notesAcpGeneration": self.notes_acp_generation,
+            },
+            "commandBars": {
+                "actions": self.command_bar.automation_state("notes.actions", cx),
+                "noteSwitcher": self.note_switcher.automation_state("notes.switcher", cx),
+            },
+            "shortcutRegistry": self.automation_shortcut_registry(),
+            "focusTransitions": self.automation_focus_transition_timeline(),
+            "search": {
+                "visible": self.show_search,
+                "queryLength": search_text.chars().count(),
+                "queryFingerprint": Self::devtools_text_fingerprint(&search_text),
+            },
+            "storage": storage_identity,
+            "counts": {
+                "notes": self.notes.len(),
+                "deletedNotes": self.deleted_notes.len(),
+                "visibleNotes": self.get_visible_notes().len(),
+                "historyBack": self.history_back.len(),
+                "historyForward": self.history_forward.len(),
+            },
+        })
+    }
+
+    pub(crate) fn automation_layout_info(
+        &self,
+        target: &crate::protocol::AutomationWindowInfo,
+    ) -> crate::protocol::LayoutInfo {
+        use crate::protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
+
+        let (window_width, window_height) = target
+            .bounds
+            .as_ref()
+            .map(|bounds| (bounds.width as f32, bounds.height as f32))
+            .unwrap_or((728.0, self.last_window_height.max(self.initial_height)));
+        let titlebar_height = super::TITLEBAR_HEIGHT;
+        let footer_height = super::FOOTER_HEIGHT;
+        let search_height = if self.show_search { 40.0 } else { 0.0 };
+        let toolbar_height = if self.show_format_toolbar { 36.0 } else { 0.0 };
+        let content_top = titlebar_height + search_height + toolbar_height;
+        let editor_height = (window_height - content_top - footer_height).max(0.0);
+        let mut components = Vec::new();
+
+        components.push(
+            LayoutComponentInfo::new("NotesWindow", LayoutComponentType::Container)
+                .with_bounds(0.0, 0.0, window_width, window_height)
+                .with_flex_column()
+                .with_depth(0)
+                .with_explanation(
+                    "Floating Notes window root measured from the resolved target bounds.",
+                ),
+        );
+        components.push(
+            LayoutComponentInfo::new("NotesTitlebar", LayoutComponentType::Header)
+                .with_bounds(0.0, 0.0, window_width, titlebar_height)
+                .with_depth(1)
+                .with_parent("NotesWindow")
+                .with_explanation(
+                    "Titlebar area that hosts note title and hover-revealed controls.",
+                ),
+        );
+
+        if self.show_search {
+            components.push(
+                LayoutComponentInfo::new("NotesSearchBar", LayoutComponentType::Input)
+                    .with_bounds(0.0, titlebar_height, window_width, search_height)
+                    .with_depth(1)
+                    .with_parent("NotesWindow")
+                    .with_explanation("Editor find/search row shown by Cmd+F."),
+            );
+        }
+
+        if self.show_format_toolbar {
+            components.push(
+                LayoutComponentInfo::new("NotesFormatToolbar", LayoutComponentType::Panel)
+                    .with_bounds(
+                        0.0,
+                        titlebar_height + search_height,
+                        window_width,
+                        toolbar_height,
+                    )
+                    .with_depth(1)
+                    .with_parent("NotesWindow")
+                    .with_explanation(
+                        "Formatting toolbar shown for rich-text and markdown actions.",
+                    ),
+            );
+        }
+
+        let editor_name = if self.surface_mode == NotesSurfaceMode::Acp {
+            "NotesEmbeddedAcp"
+        } else if self.preview_enabled {
+            "NotesPreview"
+        } else {
+            "NotesEditor"
+        };
+        components.push(
+            LayoutComponentInfo::new(editor_name, LayoutComponentType::Prompt)
+                .with_bounds(0.0, content_top, window_width, editor_height)
+                .with_flex_column()
+                .with_flex_grow(1.0)
+                .with_depth(1)
+                .with_parent("NotesWindow")
+                .with_explanation(
+                    "Primary Notes content region after titlebar/search/toolbar reservations.",
+                ),
+        );
+
+        components.push(
+            LayoutComponentInfo::new("NotesFooter", LayoutComponentType::Panel)
+                .with_bounds(
+                    0.0,
+                    (window_height - footer_height).max(0.0),
+                    window_width,
+                    footer_height,
+                )
+                .with_depth(1)
+                .with_parent("NotesWindow")
+                .with_explanation("Status/footer strip with save state, counts, and mode hints."),
+        );
+
+        if self.command_bar.is_open() || self.show_actions_panel {
+            components.push(
+                LayoutComponentInfo::new("NotesActionsPanel", LayoutComponentType::Panel)
+                    .with_bounds(
+                        16.0,
+                        (titlebar_height + super::ACTIONS_PANEL_TOP_OFFSET).min(window_height),
+                        (window_width - 32.0).max(0.0),
+                        super::ACTIONS_PANEL_WINDOW_MARGIN.min(window_height),
+                    )
+                    .with_depth(2)
+                    .with_parent("NotesWindow")
+                    .with_explanation("Notes actions command surface anchored under the titlebar."),
+            );
+        }
+
+        if self.note_switcher.is_open() || self.show_browse_panel {
+            components.push(
+                LayoutComponentInfo::new("NotesBrowsePanel", LayoutComponentType::Panel)
+                    .with_bounds(
+                        ((window_width - super::BROWSE_PANEL_WIDTH) / 2.0).max(0.0),
+                        titlebar_height,
+                        super::BROWSE_PANEL_WIDTH.min(window_width),
+                        super::BROWSE_PANEL_MAX_HEIGHT
+                            .min((window_height - titlebar_height).max(0.0)),
+                    )
+                    .with_depth(2)
+                    .with_parent("NotesWindow")
+                    .with_explanation("Notes switcher/browse panel overlay."),
+            );
+        }
+
+        LayoutInfo {
+            window_width,
+            window_height,
+            prompt_type: "notes".to_string(),
+            components,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
     fn byte_offset_to_char_index(text: &str, byte_offset: usize) -> usize {
         text[..byte_offset.min(text.len())].chars().count()
     }

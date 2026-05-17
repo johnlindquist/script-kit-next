@@ -108,6 +108,9 @@ static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = On
 
 /// Track the position mode of the current actions window for resize behavior
 static ACTIONS_WINDOW_POSITION: OnceLock<Mutex<WindowPosition>> = OnceLock::new();
+static ACTIONS_POPUP_AUTOMATION_SNAPSHOT: OnceLock<Mutex<Option<serde_json::Value>>> =
+    OnceLock::new();
+static ACTIONS_POPUP_AUTOMATION_GENERATION: OnceLock<Mutex<u64>> = OnceLock::new();
 
 const ACTIONS_WINDOW_PAGE_JUMP: usize = 8;
 #[cfg(target_os = "macos")]
@@ -1203,6 +1206,119 @@ fn publish_actions_popup_bounds_to_registry(bounds: Bounds<Pixels>) {
     crate::windows::set_automation_bounds("actions-dialog", Some(registry_bounds));
 }
 
+fn protocol_bounds_json(bounds: Bounds<Pixels>) -> serde_json::Value {
+    serde_json::json!({
+        "x": f32::from(bounds.origin.x) as f64,
+        "y": f32::from(bounds.origin.y) as f64,
+        "width": f32::from(bounds.size.width) as f64,
+        "height": f32::from(bounds.size.height) as f64,
+    })
+}
+
+fn next_actions_popup_automation_generation() -> u64 {
+    let storage = ACTIONS_POPUP_AUTOMATION_GENERATION.get_or_init(|| Mutex::new(0));
+    match storage.lock() {
+        Ok(mut guard) => {
+            *guard += 1;
+            *guard
+        }
+        Err(_) => 0,
+    }
+}
+
+fn clear_actions_popup_automation_snapshot() {
+    let storage = ACTIONS_POPUP_AUTOMATION_SNAPSHOT.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = storage.lock() {
+        *guard = None;
+    }
+}
+
+fn update_actions_popup_automation_snapshot_for_resize(
+    popup_bounds: Bounds<Pixels>,
+    position: WindowPosition,
+) {
+    let storage = ACTIONS_POPUP_AUTOMATION_SNAPSHOT.get_or_init(|| Mutex::new(None));
+    let generation = next_actions_popup_automation_generation();
+    if let Ok(mut guard) = storage.lock() {
+        let Some(snapshot) = guard.as_mut() else {
+            return;
+        };
+        snapshot["generation"] = serde_json::json!(generation);
+        snapshot["updatedStage"] = serde_json::json!("resize");
+        snapshot["stale"] = serde_json::json!(false);
+        snapshot["position"] = serde_json::json!(format!("{position:?}"));
+        if let Some(geometry) = snapshot
+            .get_mut("geometry")
+            .and_then(serde_json::Value::as_object_mut)
+        {
+            geometry.insert("popupRect".to_string(), protocol_bounds_json(popup_bounds));
+            geometry.insert(
+                "position".to_string(),
+                serde_json::json!(format!("{position:?}")),
+            );
+            geometry.insert(
+                "pinnedEdge".to_string(),
+                serde_json::json!(match position {
+                    WindowPosition::BottomRight => "bottom",
+                    WindowPosition::TopRight | WindowPosition::TopCenter => "top",
+                }),
+            );
+        }
+    }
+}
+
+fn record_actions_popup_automation_snapshot(
+    parent_automation_id: &str,
+    parent_kind: AutomationWindowKind,
+    receipt: &ActionsPopupPlacementReceipt,
+) {
+    let generation = next_actions_popup_automation_generation();
+    let snapshot = serde_json::json!({
+        "schemaVersion": 1,
+        "generation": generation,
+        "updatedStage": "open",
+        "stale": false,
+        "host": match parent_kind {
+            AutomationWindowKind::Notes => "notes.actions",
+            AutomationWindowKind::Main => "main.actions",
+            AutomationWindowKind::Ai => "ai.actions",
+            AutomationWindowKind::MiniAi => "miniAi.actions",
+            AutomationWindowKind::AcpDetached => "acpDetached.actions",
+            AutomationWindowKind::ActionsDialog => "actionsDialog.actions",
+            AutomationWindowKind::PromptPopup => "promptPopup.actions",
+        },
+        "parentAutomationId": parent_automation_id,
+        "parentKind": format!("{parent_kind:?}"),
+        "position": format!("{:?}", receipt.position),
+        "displayId": format!("{:?}", receipt.display_id),
+        "geometry": {
+            "popupRect": protocol_bounds_json(receipt.popup_bounds),
+            "parentRect": protocol_bounds_json(receipt.main_window_bounds),
+            "anchorRect": {
+                "x": f32::from(receipt.anchor_x) as f64,
+                "y": f32::from(receipt.anchor_y) as f64,
+                "width": 0.0,
+                "height": 0.0,
+            },
+            "position": format!("{:?}", receipt.position),
+            "pinnedEdge": receipt.pinned_edge,
+            "displayId": format!("{:?}", receipt.display_id),
+        },
+    });
+    let storage = ACTIONS_POPUP_AUTOMATION_SNAPSHOT.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = storage.lock() {
+        *guard = Some(snapshot);
+    }
+}
+
+pub(crate) fn actions_popup_automation_snapshot() -> Option<serde_json::Value> {
+    ACTIONS_POPUP_AUTOMATION_SNAPSHOT
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+}
+
 #[cfg(target_os = "macos")]
 fn resized_actions_window_frame(
     frame: cocoa::foundation::NSRect,
@@ -1621,6 +1737,7 @@ pub fn open_actions_window(
         &dialog_entity,
         cx,
     );
+    record_actions_popup_automation_snapshot(&parent_automation_id, parent_kind, &receipt);
 
     // Structured receipt for agentic verification
     let dialog_ref = dialog_entity.read(cx);
@@ -1644,6 +1761,7 @@ pub fn open_actions_window(
 /// Close the actions window if it's open
 pub fn close_actions_window(cx: &mut App) {
     // Unregister from automation registry before destroying the window
+    clear_actions_popup_automation_snapshot();
     crate::windows::automation_surface_collector::remove_actions_dialog_snapshot("actions-dialog");
     crate::windows::remove_automation_window("actions-dialog");
 
@@ -1878,6 +1996,7 @@ pub fn resize_actions_window_direct(
     let post_resize_bounds =
         resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
     publish_actions_popup_bounds_to_registry(post_resize_bounds);
+    update_actions_popup_automation_snapshot_for_resize(post_resize_bounds, position);
 
     crate::logging::log(
         "ACTIONS",
@@ -2027,6 +2146,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             let post_resize_bounds =
                 resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
             publish_actions_popup_bounds_to_registry(post_resize_bounds);
+            update_actions_popup_automation_snapshot_for_resize(post_resize_bounds, position);
 
             cx.notify();
         });

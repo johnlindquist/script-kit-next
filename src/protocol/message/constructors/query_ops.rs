@@ -106,6 +106,8 @@ impl Message {
         screenshot_identity: Option<String>,
         drop_state: Option<serde_json::Value>,
         path_state: Option<serde_json::Value>,
+        notes_state: Option<serde_json::Value>,
+        dictation_state: Option<serde_json::Value>,
     ) -> Self {
         Message::StateResult {
             request_id,
@@ -133,6 +135,8 @@ impl Message {
             screenshot_identity,
             drop_state,
             path_state,
+            notes_state,
+            dictation_state,
         }
     }
 

@@ -582,6 +582,75 @@ mod command_bar_key_intent_tests {
 // --- merged from part_02.rs ---
 #[allow(dead_code)] // Public API - many methods for future integrations
 impl CommandBar {
+    fn devtools_text_fingerprint(value: &str) -> String {
+        let mut hash = 0xcbf29ce484222325_u64;
+        for byte in value.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        format!("fnv1a64:{hash:016x}")
+    }
+
+    pub(crate) fn automation_state(&self, surface: &str, cx: &App) -> serde_json::Value {
+        let mut sections = std::collections::BTreeMap::<String, usize>::new();
+        for action in &self.actions {
+            let section = action
+                .section
+                .clone()
+                .unwrap_or_else(|| "Unsectioned".to_string());
+            *sections.entry(section).or_insert(0) += 1;
+        }
+        let configured_section_count = sections.len();
+        let configured_shortcut_count = self
+            .actions
+            .iter()
+            .filter(|action| action.shortcut.is_some())
+            .count();
+
+        let base = serde_json::json!({
+            "schemaVersion": 1,
+            "surface": surface,
+            "redacted": true,
+            "open": self.is_open,
+            "configuredActionCount": self.actions.len(),
+            "configuredSectionCount": configured_section_count,
+            "configuredSections": sections,
+            "configuredShortcutCount": configured_shortcut_count,
+            "closePolicy": {
+                "closeOnSelect": self.config.close_on_select,
+                "closeOnClickOutside": self.config.close_on_click_outside,
+                "closeOnEscape": self.config.close_on_escape,
+            },
+            "config": {
+                "searchPosition": command_bar_search_position_name(&self.config.dialog_config.search_position),
+                "sectionMode": command_bar_section_style_name(&self.config.dialog_config.section_style),
+                "anchor": command_bar_anchor_name(&self.config.dialog_config.anchor),
+                "showIcons": self.config.dialog_config.show_icons,
+                "showFooter": self.config.dialog_config.show_footer,
+                "maxHeight": self.config.dialog_config.max_height,
+            },
+        });
+
+        if let Some(dialog) = &self.dialog {
+            let dialog_state = dialog.read(cx).automation_state(surface);
+            serde_json::json!({
+                "schemaVersion": 1,
+                "surface": surface,
+                "redacted": true,
+                "open": self.is_open,
+                "configuredActionCount": self.actions.len(),
+                "configuredSectionCount": configured_section_count,
+                "configuredShortcutCount": configured_shortcut_count,
+                "selectedActionId": self.get_selected_action_id(cx),
+                "selectedActionTitleFingerprint": self.get_selected_action(cx).map(|action| Self::devtools_text_fingerprint(&action.title)),
+                "dialog": dialog_state,
+                "base": base,
+            })
+        } else {
+            base
+        }
+    }
+
     #[inline]
     fn reset_open_state(&mut self) {
         self.is_open = false;
