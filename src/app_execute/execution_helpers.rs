@@ -13,6 +13,37 @@ impl SearchResultExecutionAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScratchPadExecutionAction {
+    CreateDirectory,
+    CreateFile,
+    ReadFile,
+    SubmitSave,
+    AutoSave,
+}
+
+impl ScratchPadExecutionAction {
+    fn log_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::CreateDirectory => format!("Failed to create scratch pad directory: {error}"),
+            Self::CreateFile => format!("Failed to create scratch pad file: {error}"),
+            Self::ReadFile => format!("Failed to read scratch pad: {error}"),
+            Self::SubmitSave => format!("Failed to save scratch pad on submit: {error}"),
+            Self::AutoSave => format!("Auto-save failed: {error}"),
+        }
+    }
+
+    fn toast_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::CreateDirectory => format!("Failed to create directory: {error}"),
+            Self::CreateFile => format!("Failed to create scratch pad: {error}"),
+            Self::ReadFile => format!("Failed to read scratch pad: {error}"),
+            Self::SubmitSave => format!("Failed to save scratch pad: {error}"),
+            Self::AutoSave => format!("Auto-save failed: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn execute_app(&mut self, app: &app_launcher::AppInfo, cx: &mut Context<Self>) {
         let execution_action = SearchResultExecutionAction::LaunchApp;
@@ -319,9 +350,9 @@ impl ScriptListApp {
         // Ensure parent directory exists
         if let Some(parent) = scratch_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                tracing::error!(message = %&format!("Failed to create scratch pad directory: {}", e),
-                );
-                self.show_error_toast(format!("Failed to create directory: {}", e), cx);
+                let action = ScratchPadExecutionAction::CreateDirectory;
+                tracing::error!(message = %action.log_message(&e));
+                self.show_error_toast(action.toast_message(&e), cx);
                 return;
             }
         }
@@ -332,16 +363,17 @@ impl ScriptListApp {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 // Create empty file
                 if let Err(write_err) = std::fs::write(&scratch_path, "") {
-                    tracing::error!(message = %&format!("Failed to create scratch pad file: {}", write_err),
-                    );
-                    self.show_error_toast(format!("Failed to create scratch pad: {}", write_err), cx);
+                    let action = ScratchPadExecutionAction::CreateFile;
+                    tracing::error!(message = %action.log_message(&write_err));
+                    self.show_error_toast(action.toast_message(&write_err), cx);
                     return;
                 }
                 String::new()
             }
             Err(e) => {
-                tracing::error!(message = %&format!("Failed to read scratch pad: {}", e));
-                self.show_error_toast(format!("Failed to read scratch pad: {}", e), cx);
+                let action = ScratchPadExecutionAction::ReadFile;
+                tracing::error!(message = %action.log_message(&e));
+                self.show_error_toast(action.toast_message(&e), cx);
                 return;
             }
         };
@@ -360,8 +392,9 @@ impl ScriptListApp {
                 if let Some(content) = value {
                     // Save the content to disk
                     if let Err(e) = std::fs::write(&scratch_path_clone, &content) {
-                        tracing::error!(error = %e, "Failed to save scratch pad on submit");
-                        let _ = save_err_tx.try_send(format!("Failed to save scratch pad: {}", e));
+                        let action = ScratchPadExecutionAction::SubmitSave;
+                        tracing::error!(message = %action.log_message(&e));
+                        let _ = save_err_tx.try_send(action.toast_message(&e));
                     } else {
                         tracing::info!(bytes = content.len(), "Scratch pad saved on submit");
                     }
@@ -412,8 +445,9 @@ impl ScriptListApp {
                         // Use update on the entity to get the correct Context<EditorPrompt>
                         let content: String = entity.update(cx, |editor, cx| editor.content(cx));
                         if let Err(e) = std::fs::write(&scratch_path_for_save, &content) {
-                            tracing::warn!(error = %e, "Auto-save failed");
-                            let _ = autosave_err_tx.try_send(format!("Auto-save failed: {}", e));
+                            let action = ScratchPadExecutionAction::AutoSave;
+                            tracing::warn!(message = %action.log_message(&e));
+                            let _ = autosave_err_tx.try_send(action.toast_message(&e));
                         } else {
                             tracing::debug!(bytes = content.len(), "Auto-saved scratch pad");
                         }
