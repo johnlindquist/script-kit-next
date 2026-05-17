@@ -2484,6 +2484,24 @@ fn acp_conversation_session_handlers_use_named_action_states() {
 }
 
 #[test]
+fn acp_retry_last_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpRetryLastHandlerAction")
+            && content.contains("RetryLastMessage"),
+        "ACP retry-last handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("AcpRetryLastHandlerAction::from_action_id(action_id)")
+            && content.contains("retry_action.missing_user_message()")
+            && content.contains("No previous message to retry"),
+        "ACP retry-last handler should derive missing-message copy from the named state"
+    );
+}
+
+#[test]
 fn acp_code_copy_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
