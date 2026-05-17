@@ -351,6 +351,14 @@ impl PermissionAssistantBuiltinAction {
             Self::ScreenRecording => "allow_screen_recording_failed",
         }
     }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Accessibility | Self::ScreenRecording => {
+                format!("Failed to open Permission Assistant: {error}")
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6442,7 +6450,7 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, action.success_detail())
             }
             Err(error) => {
-                let message = format!("Failed to open Permission Assistant: {}", error);
+                let message = action.failure_message(&error);
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
                     dctx,

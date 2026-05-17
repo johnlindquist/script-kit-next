@@ -1354,8 +1354,13 @@ fn permission_assistant_builtin_uses_named_action_states() {
             && content.contains("action.panel()")
             && content.contains("action.success_hud()")
             && content.contains("action.success_detail()")
+            && content.contains("action.failure_message(&error)")
             && content.contains("action.failure_detail()"),
-        "Permission Assistant panel, HUD text, and dispatch details should derive from the named state"
+        "Permission Assistant panel, HUD text, failure copy, and dispatch details should derive from the named state"
+    );
+    assert!(
+        content.contains("format!(\"Failed to open Permission Assistant: {error}\")"),
+        "Permission Assistant state should preserve failure toast copy"
     );
 }
 
