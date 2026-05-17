@@ -2713,16 +2713,18 @@ fn app_lifecycle_handler_uses_named_action_states() {
 
     assert!(
         content.contains("enum AppLifecycleHandlerAction")
+            && content.contains("struct AppLifecycleTarget")
             && content.contains("Quit")
             && content.contains("ForceQuit")
             && content.contains("Restart"),
         "application quit/force-quit/restart handlers should be driven by named action states"
     );
     assert!(
-        content.contains("AppLifecycleHandlerAction::from_action_id(action_id)")
+        content.contains("AppLifecycleHandlerAction::from_action_id")
             && content.contains("lifecycle_action.trace_message()")
+            && content.contains("lifecycle_action.target_from_result(self.get_selected_result())")
             && content.contains("lifecycle_action.hud_message(&app_name)")
-            && content.contains("lifecycle_action.unsupported_message()")
+            && content.contains("self.unsupported_message()")
             && content.contains("Quitting {app_name}")
             && content.contains("Force quitting {app_name}")
             && content.contains("Restarting {app_name}")
