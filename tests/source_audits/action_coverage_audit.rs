@@ -274,6 +274,40 @@ fn markdown_copy_actions_do_not_advertise_file_export() {
 }
 
 #[test]
+fn theme_chooser_actions_do_not_advertise_dialog_reserved_escape_shortcut() {
+    let builder = read("src/render_builtins/actions.rs");
+    let undo_action = builder
+        .split("\"theme_chooser_undo_close\"")
+        .nth(1)
+        .and_then(|section| section.split("\"theme_chooser_remix\"").next())
+        .expect("theme chooser undo/close action should be present");
+    let router = read("src/app_impl/actions_dialog.rs");
+    let escape_branch = router
+        .split("if is_key_escape(key) {")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("// Check if keystroke matches any action shortcut")
+                .next()
+        })
+        .expect("actions dialog escape branch should precede shortcut matching");
+
+    assert!(
+        undo_action.contains("\"Undo Changes and Close\""),
+        "Theme Designer should still offer the explicit undo-and-close action"
+    );
+    assert!(
+        !undo_action.contains(".with_shortcut(\"Esc\")"),
+        "Theme Designer actions dialog must not advertise Esc for undo/close because Esc is reserved for dialog close/back while the popup is open"
+    );
+    assert!(
+        escape_branch.contains("d.handle_escape(cx)")
+            && escape_branch.contains("self.close_actions_popup(host, window, cx);"),
+        "Actions dialog Escape should remain reserved for popup close/back before action shortcut matching"
+    );
+}
+
+#[test]
 fn handle_action_uses_only_named_toast_duration_constants() {
     let content = handle_action_content();
 
