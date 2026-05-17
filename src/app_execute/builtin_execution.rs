@@ -1240,6 +1240,74 @@ impl AiLegacyHarnessBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiCommandBuiltinAction {
+    Generate(AiGenerateBuiltinAction),
+    Capture(AiCaptureBuiltinAction),
+    Unavailable(AiUnavailableBuiltinAction),
+    PresetView(AiPresetViewBuiltinAction),
+    PresetFile(AiPresetFileBuiltinAction),
+    LegacyHarness(AiLegacyHarnessBuiltinAction),
+}
+
+impl AiCommandBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Self {
+        match command {
+            builtins::AiCommandType::GenerateScript => Self::Generate(
+                AiGenerateBuiltinAction::from_command(command)
+                    .expect("generate command should map to generate action"),
+            ),
+            builtins::AiCommandType::GenerateScriptFromCurrentApp => Self::Generate(
+                AiGenerateBuiltinAction::from_command(command)
+                    .expect("current-app generate command should map to generate action"),
+            ),
+            builtins::AiCommandType::SendScreenToAi => Self::Capture(
+                AiCaptureBuiltinAction::from_command(command)
+                    .expect("screen command should map to capture action"),
+            ),
+            builtins::AiCommandType::SendFocusedWindowToAi => Self::Capture(
+                AiCaptureBuiltinAction::from_command(command)
+                    .expect("focused-window command should map to capture action"),
+            ),
+            builtins::AiCommandType::SendSelectedTextToAi => Self::Capture(
+                AiCaptureBuiltinAction::from_command(command)
+                    .expect("selected-text command should map to capture action"),
+            ),
+            builtins::AiCommandType::SendBrowserTabToAi => Self::Capture(
+                AiCaptureBuiltinAction::from_command(command)
+                    .expect("browser-tab command should map to capture action"),
+            ),
+            builtins::AiCommandType::SendScreenAreaToAi => Self::Unavailable(
+                AiUnavailableBuiltinAction::from_command(command)
+                    .expect("screen-area command should map to unavailable action"),
+            ),
+            builtins::AiCommandType::CreateAiPreset => Self::PresetView(
+                AiPresetViewBuiltinAction::from_command(command)
+                    .expect("create preset command should map to preset view action"),
+            ),
+            builtins::AiCommandType::SearchAiPresets => Self::PresetView(
+                AiPresetViewBuiltinAction::from_command(command)
+                    .expect("search presets command should map to preset view action"),
+            ),
+            builtins::AiCommandType::ImportAiPresets => Self::PresetFile(
+                AiPresetFileBuiltinAction::from_command(command)
+                    .expect("import presets command should map to preset file action"),
+            ),
+            builtins::AiCommandType::ExportAiPresets => Self::PresetFile(
+                AiPresetFileBuiltinAction::from_command(command)
+                    .expect("export presets command should map to preset file action"),
+            ),
+            builtins::AiCommandType::OpenAi
+            | builtins::AiCommandType::MiniAi
+            | builtins::AiCommandType::NewConversation
+            | builtins::AiCommandType::ClearConversation => Self::LegacyHarness(
+                AiLegacyHarnessBuiltinAction::from_command(command)
+                    .expect("legacy command should map to legacy harness action"),
+            ),
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3466,113 +3534,11 @@ impl ScriptListApp {
                     "Executing AI command"
                 );
 
-                use builtins::AiCommandType;
-
                 let window_plan = AiCommandWindowPlan::from_command(cmd_type);
                 self.apply_ai_command_window_plan(window_plan, cmd_type, cx);
 
-                match cmd_type {
-                    // -------------------------------------------------------
-                    // All active AI commands now route to the harness terminal.
-                    // The harness captures context inline via its own snapshot.
-                    // -------------------------------------------------------
-                    AiCommandType::GenerateScript => {
-                        let generate_action = AiGenerateBuiltinAction::from_command(*cmd_type)
-                            .expect("AI generate arm should only receive generate script command");
-                        self.execute_ai_generate_builtin(generate_action, query_override, dctx, cx)
-                    }
-
-                    AiCommandType::GenerateScriptFromCurrentApp => {
-                        let generate_action = AiGenerateBuiltinAction::from_command(*cmd_type)
-                            .expect("AI generate arm should only receive current-app command");
-                        self.execute_ai_generate_builtin(generate_action, query_override, dctx, cx)
-                    }
-
-                    AiCommandType::SendScreenToAi => {
-                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
-                            .expect("AI capture arm should only receive screen capture command");
-                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
-                    }
-
-                    AiCommandType::SendFocusedWindowToAi => {
-                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
-                            .expect("AI capture arm should only receive focused window command");
-                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
-                    }
-
-                    AiCommandType::SendScreenAreaToAi => {
-                        let unavailable_action = AiUnavailableBuiltinAction::from_command(
-                            *cmd_type,
-                        )
-                        .expect("AI unavailable arm should only receive screen area command");
-                        self.execute_ai_unavailable_builtin(unavailable_action, dctx, cx)
-                    }
-
-                    AiCommandType::SendSelectedTextToAi => {
-                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
-                            .expect("AI capture arm should only receive selected text command");
-                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
-                    }
-
-                    AiCommandType::SendBrowserTabToAi => {
-                        let capture_action = AiCaptureBuiltinAction::from_command(*cmd_type)
-                            .expect("AI capture arm should only receive browser tab command");
-                        self.execute_ai_capture_builtin(capture_action, dctx, cx)
-                    }
-
-                    AiCommandType::CreateAiPreset => {
-                        tracing::info!(
-                            action = "create_ai_preset",
-                            trace_id = %dctx.trace_id,
-                            "Opening create AI preset form"
-                        );
-                        let preset_action = AiPresetViewBuiltinAction::from_command(*cmd_type)
-                            .expect("AI preset view arm should only receive create preset command");
-                        self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
-                    }
-
-                    AiCommandType::ImportAiPresets => {
-                        tracing::info!(
-                            action = "import_ai_presets",
-                            "Opening file picker for AI preset import"
-                        );
-                        let file_action = AiPresetFileBuiltinAction::from_command(*cmd_type)
-                            .expect("AI preset file arm should only receive import command");
-                        self.execute_ai_preset_file_builtin(file_action, dctx, cx)
-                    }
-
-                    AiCommandType::ExportAiPresets => {
-                        tracing::info!(
-                            action = "export_ai_presets",
-                            trace_id = %dctx.trace_id,
-                            "Opening save dialog for AI preset export"
-                        );
-                        let file_action = AiPresetFileBuiltinAction::from_command(*cmd_type)
-                            .expect("AI preset file arm should only receive export command");
-                        self.execute_ai_preset_file_builtin(file_action, dctx, cx)
-                    }
-
-                    AiCommandType::SearchAiPresets => {
-                        tracing::info!(
-                            action = "search_ai_presets",
-                            trace_id = %dctx.trace_id,
-                            "Opening AI presets search"
-                        );
-                        let preset_action = AiPresetViewBuiltinAction::from_command(*cmd_type)
-                            .expect(
-                                "AI preset view arm should only receive search presets command",
-                            );
-                        self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
-                    }
-
-                    // Legacy AI aliases — all route to the harness terminal.
-                    // Classification is centralized in `AiCommandType::is_legacy_harness_alias()`.
-                    cmd => {
-                        let legacy_action = AiLegacyHarnessBuiltinAction::from_command(*cmd)
-                            .expect("AI legacy alias arm should only receive legacy commands");
-                        self.execute_ai_legacy_harness_builtin(legacy_action, dctx, cx)
-                    }
-                }
+                let ai_action = AiCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_ai_command_builtin(ai_action, query_override, dctx, cx)
             }
 
             // =========================================================================
@@ -4420,6 +4386,66 @@ impl ScriptListApp {
             cx,
         );
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_ai_command_builtin(
+        &mut self,
+        action: AiCommandBuiltinAction,
+        query_override: Option<&str>,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            AiCommandBuiltinAction::Generate(generate_action) => {
+                self.execute_ai_generate_builtin(generate_action, query_override, dctx, cx)
+            }
+            AiCommandBuiltinAction::Capture(capture_action) => {
+                self.execute_ai_capture_builtin(capture_action, dctx, cx)
+            }
+            AiCommandBuiltinAction::Unavailable(unavailable_action) => {
+                self.execute_ai_unavailable_builtin(unavailable_action, dctx, cx)
+            }
+            AiCommandBuiltinAction::PresetView(preset_action) => {
+                match preset_action {
+                    AiPresetViewBuiltinAction::Create => {
+                        tracing::info!(
+                            action = "create_ai_preset",
+                            trace_id = %dctx.trace_id,
+                            "Opening create AI preset form"
+                        );
+                    }
+                    AiPresetViewBuiltinAction::Search => {
+                        tracing::info!(
+                            action = "search_ai_presets",
+                            trace_id = %dctx.trace_id,
+                            "Opening AI presets search"
+                        );
+                    }
+                }
+                self.execute_ai_preset_view_builtin(preset_action, dctx, cx)
+            }
+            AiCommandBuiltinAction::PresetFile(file_action) => {
+                match file_action {
+                    AiPresetFileBuiltinAction::Import => {
+                        tracing::info!(
+                            action = "import_ai_presets",
+                            "Opening file picker for AI preset import"
+                        );
+                    }
+                    AiPresetFileBuiltinAction::Export => {
+                        tracing::info!(
+                            action = "export_ai_presets",
+                            trace_id = %dctx.trace_id,
+                            "Opening save dialog for AI preset export"
+                        );
+                    }
+                }
+                self.execute_ai_preset_file_builtin(file_action, dctx, cx)
+            }
+            AiCommandBuiltinAction::LegacyHarness(legacy_action) => {
+                self.execute_ai_legacy_harness_builtin(legacy_action, dctx, cx)
+            }
+        }
     }
 
     fn execute_ai_generate_builtin(
