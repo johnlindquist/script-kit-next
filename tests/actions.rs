@@ -2195,9 +2195,16 @@ fn notes_builtin_uses_named_action_states() {
     assert!(
         content.contains("action.success_detail()")
             && content.contains("action.failure_detail()")
+            && content.contains("action.opening_message()")
+            && content.contains("action.failure_message(&error)")
             && content.contains("open_notes")
             && content.contains("open_notes_failed"),
-        "Notes success and failure details should come from the named state"
+        "Notes copy, success detail, and failure detail should come from the named state"
+    );
+    assert!(
+        content.contains("\"Opening Notes window (preserving launcher context)\"")
+            && content.contains("format!(\"Failed to open Notes: {error}\")"),
+        "Notes named state should preserve handoff log and failure copy"
     );
 }
 

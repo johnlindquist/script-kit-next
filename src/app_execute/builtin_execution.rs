@@ -946,6 +946,18 @@ impl NotesBuiltinAction {
             Self::Open => "open_notes_failed",
         }
     }
+
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::Open => "Opening Notes window (preserving launcher context)",
+        }
+    }
+
+    fn failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Open => format!("Failed to open Notes: {error}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4252,7 +4264,8 @@ impl ScriptListApp {
             event = "notes_handoff_preserving_launcher_context",
             filter_text_len = self.filter_text.len(),
             show_actions_popup = self.show_actions_popup,
-            "Opening Notes window (preserving launcher context)"
+            "{}",
+            action.opening_message()
         );
 
         // Close companion UI before hiding so it does not stay stale.
@@ -4272,7 +4285,7 @@ impl ScriptListApp {
         if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
             script_kit_gpui::set_main_window_visible(true);
             platform::show_main_window_without_activation();
-            let message = format!("Failed to open Notes: {}", error);
+            let message = action.failure_message(&error);
             self.show_error_toast(message.clone(), cx);
             Self::builtin_error(
                 dctx,
