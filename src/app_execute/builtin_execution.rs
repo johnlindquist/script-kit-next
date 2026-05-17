@@ -853,6 +853,28 @@ impl SyncToGithubBuiltinAction {
     }
 }
 
+#[cfg(feature = "storybook")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DesignExplorerBuiltinAction {
+    Open,
+}
+
+#[cfg(feature = "storybook")]
+impl DesignExplorerBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::DesignExplorer => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_design_explorer",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
@@ -3355,33 +3377,9 @@ impl ScriptListApp {
             }
             #[cfg(feature = "storybook")]
             builtins::BuiltInFeature::DesignExplorer => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Design Explorer"
-                );
-
-                let explorer = cx.new(|cx| {
-                    let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
-                    browser.configure_for_design_explorer(Some(
-                        script_kit_gpui::storybook::StorySurface::MainMenu,
-                    ));
-                    browser.open_compare_mode();
-                    let _ = browser.select_variant_id("current-main-menu");
-                    tracing::info!(
-                        event = "design_explorer_opened",
-                        surface = "main-menu",
-                        preview_mode = "compare",
-                        variant_id = "current-main-menu",
-                        "Opened in-app design explorer on the compare-ready Main Menu surface"
-                    );
-                    browser
-                });
-
-                self.current_view = AppView::DesignExplorerView { entity: explorer };
-                cx.notify();
-
-                Self::builtin_success(dctx, "open_design_explorer")
+                let design_action = DesignExplorerBuiltinAction::from_feature(&entry.feature)
+                    .expect("design explorer arm should only receive DesignExplorer");
+                self.execute_design_explorer_builtin(design_action, dctx, cx)
             }
             builtins::BuiltInFeature::AiChat => {
                 let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
@@ -4292,6 +4290,42 @@ impl ScriptListApp {
             });
         })
         .detach();
+
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    #[cfg(feature = "storybook")]
+    fn execute_design_explorer_builtin(
+        &mut self,
+        action: DesignExplorerBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            "Opening Design Explorer"
+        );
+
+        let explorer = cx.new(|cx| {
+            let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
+            browser.configure_for_design_explorer(Some(
+                script_kit_gpui::storybook::StorySurface::MainMenu,
+            ));
+            browser.open_compare_mode();
+            let _ = browser.select_variant_id("current-main-menu");
+            tracing::info!(
+                event = "design_explorer_opened",
+                surface = "main-menu",
+                preview_mode = "compare",
+                variant_id = "current-main-menu",
+                "Opened in-app design explorer on the compare-ready Main Menu surface"
+            );
+            browser
+        });
+
+        self.current_view = AppView::DesignExplorerView { entity: explorer };
+        cx.notify();
 
         Self::builtin_success(dctx, action.success_detail())
     }

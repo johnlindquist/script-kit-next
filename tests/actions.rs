@@ -1581,6 +1581,32 @@ fn sync_to_github_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn design_explorer_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum DesignExplorerBuiltinAction")
+            && content.contains("DesignExplorerBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_design_explorer_builtin("),
+        "Design Explorer should route through a named action state"
+    );
+    assert!(
+        content.contains("script_kit_gpui::storybook::StoryBrowser::new(cx)")
+            && content.contains("browser.configure_for_design_explorer")
+            && content.contains("script_kit_gpui::storybook::StorySurface::MainMenu")
+            && content.contains("browser.open_compare_mode()")
+            && content.contains("browser.select_variant_id(\"current-main-menu\")")
+            && content.contains("AppView::DesignExplorerView"),
+        "Design Explorer should preserve storybook browser setup, compare mode, variant selection, and view opening"
+    );
+    assert!(
+        content.contains("action.success_detail()") && content.contains("open_design_explorer"),
+        "Design Explorer success detail should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
