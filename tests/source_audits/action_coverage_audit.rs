@@ -342,8 +342,8 @@ fn clipboard_pin_unpin_uses_hud_short_ms_on_success() {
     let block = &content[pin_pos..content.len().min(pin_pos + 4000)];
 
     assert!(
-        block.contains("clipboard_pin_action_success_hud(action_id)"),
-        "clipboard_pin/unpin should use clipboard_pin_action_success_hud for success message"
+        block.contains("pin_action.success_hud()"),
+        "clipboard_pin/unpin should use ClipboardPinHandlerAction for success message"
     );
     assert!(
         block.contains("HUD_SHORT_MS"),

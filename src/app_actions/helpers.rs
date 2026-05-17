@@ -90,35 +90,6 @@ fn select_clipboard_entry_meta<'a>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ClipboardPinFeedbackPlan {
-    Pin,
-    Unpin,
-    Unsupported,
-}
-
-impl ClipboardPinFeedbackPlan {
-    fn from_action_id(action_id: &str) -> Self {
-        match action_id {
-            "clipboard_pin" => Self::Pin,
-            "clipboard_unpin" => Self::Unpin,
-            _ => Self::Unsupported,
-        }
-    }
-
-    fn success_hud(self) -> Option<&'static str> {
-        match self {
-            Self::Pin => Some("Pinned"),
-            Self::Unpin => Some("Unpinned"),
-            Self::Unsupported => None,
-        }
-    }
-}
-
-fn clipboard_pin_action_success_hud(action_id: &str) -> Option<&'static str> {
-    ClipboardPinFeedbackPlan::from_action_id(action_id).success_hud()
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FileSearchActionFeedbackPlan {
     Open,
     QuickLook,
@@ -310,9 +281,9 @@ end tell"#,
 #[cfg(test)]
 mod app_actions_tests {
     use super::{
-        ScriptRemovalTarget, clipboard_pin_action_success_hud, extract_scriptlet_source_path,
-        file_search_action_error_hud_prefix, file_search_action_success_hud,
-        script_removal_target_from_result, select_clipboard_entry_meta,
+        ScriptRemovalTarget, extract_scriptlet_source_path, file_search_action_error_hud_prefix,
+        file_search_action_success_hud, script_removal_target_from_result,
+        select_clipboard_entry_meta,
         selection_required_message_for_action, should_transition_to_script_list_after_action,
     };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
@@ -391,19 +362,6 @@ mod app_actions_tests {
             result.id, "1",
             "Index 0 with no filter should return first entry"
         );
-    }
-
-    #[test]
-    fn test_clipboard_pin_action_success_hud_messages() {
-        assert_eq!(
-            clipboard_pin_action_success_hud("clipboard_pin"),
-            Some("Pinned")
-        );
-        assert_eq!(
-            clipboard_pin_action_success_hud("clipboard_unpin"),
-            Some("Unpinned")
-        );
-        assert_eq!(clipboard_pin_action_success_hud("clipboard_share"), None);
     }
 
     #[test]

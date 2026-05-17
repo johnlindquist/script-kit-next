@@ -32,6 +32,13 @@ impl ClipboardPinHandlerAction {
             Self::Unpin => clipboard_history::unpin_entry(entry_id),
         }
     }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::Pin => "Pinned",
+            Self::Unpin => "Unpinned",
+        }
+    }
 }
 
 impl ClipboardCopyPasteHandlerAction {
@@ -205,9 +212,11 @@ impl ScriptListApp {
                                 .map(|(_, entry)| entry.id.clone());
                         }
 
-                        if let Some(message) = clipboard_pin_action_success_hud(action_id) {
-                            self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
-                        }
+                        self.show_hud(
+                            pin_action.success_hud().to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
                         cx.notify();
                     }
                     Err(e) => {

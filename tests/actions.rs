@@ -161,8 +161,9 @@ fn clipboard_pin_handler_uses_named_action_states() {
     );
     assert!(
         content.contains("ClipboardPinHandlerAction::from_action_id(action_id)")
-            && content.contains("pin_action.apply(&entry.id)"),
-        "clipboard pin/unpin handler should derive the storage operation from the named action state"
+            && content.contains("pin_action.apply(&entry.id)")
+            && content.contains("pin_action.success_hud()"),
+        "clipboard pin/unpin handler should derive storage operation and HUD text from the named action state"
     );
 }
 
@@ -1885,20 +1886,22 @@ fn shortcut_alias_edit_handlers_use_named_action_states() {
 }
 
 #[test]
-fn clipboard_pin_feedback_helper_uses_named_plan_states() {
-    let content =
-        fs::read_to_string("src/app_actions/helpers.rs").expect("Failed to read action helpers");
+fn clipboard_pin_feedback_uses_handler_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
 
     assert!(
-        content.contains("enum ClipboardPinFeedbackPlan")
+        content.contains("enum ClipboardPinHandlerAction")
             && content.contains("Pin")
-            && content.contains("Unpin")
-            && content.contains("Unsupported"),
-        "clipboard pin/unpin success feedback should be driven by named action states"
+            && content.contains("Unpin"),
+        "clipboard pin/unpin success feedback should be driven by the handler action state"
     );
     assert!(
-        content.contains("ClipboardPinFeedbackPlan::from_action_id(action_id).success_hud()"),
-        "clipboard pin/unpin feedback helper should derive visible HUD text from the named plan"
+        content.contains("fn success_hud(self) -> &'static str")
+            && content.contains("Self::Pin => \"Pinned\"")
+            && content.contains("Self::Unpin => \"Unpinned\"")
+            && content.contains("pin_action.success_hud().to_string()"),
+        "clipboard pin/unpin handler should derive visible HUD text from the named action"
     );
 }
 
