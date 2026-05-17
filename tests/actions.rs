@@ -322,6 +322,25 @@ fn file_path_actions_use_named_item_plan_states() {
 }
 
 #[test]
+fn file_search_sort_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/file_path.rs")
+        .expect("Failed to read file path builder");
+
+    assert!(
+        content.contains("enum FileSearchSortActionPlan")
+            && content.contains("ActiveSort")
+            && content.contains("AvailableSort"),
+        "file-search sort checkmark and current-sort text should be driven by named sort action plan states"
+    );
+    assert!(
+        content.contains("FileSearchSortActionPlan::from_active(name_asc_active)")
+            && content.contains("fn title")
+            && content.contains("fn description"),
+        "file-search sort actions should derive title and description copy from the named sort plan"
+    );
+}
+
+#[test]
 fn script_context_preference_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
