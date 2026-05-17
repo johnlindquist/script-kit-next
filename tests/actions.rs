@@ -281,6 +281,24 @@ fn scriptlet_context_actions_use_named_plan_states() {
 }
 
 #[test]
+fn scriptlet_defined_action_shortcuts_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
+        .expect("Failed to read scriptlet builder");
+
+    assert!(
+        content.contains("enum ScriptletDefinedActionShortcutPlan")
+            && content.contains("NoShortcut")
+            && content.contains("Shortcut(&'a str)"),
+        "scriptlet-defined H3 action shortcuts should be driven by named shortcut plan states"
+    );
+    assert!(
+        content.contains("ScriptletDefinedActionShortcutPlan::from_shortcut(sa.shortcut.as_deref())")
+            && content.contains("shortcut_plan.apply_to_action(Action::new"),
+        "scriptlet-defined action rows should apply shortcut copy through the named plan"
+    );
+}
+
+#[test]
 fn scriptlet_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
         .expect("Failed to read scriptlet builder");
