@@ -225,6 +225,27 @@ fn emoji_pin_handler_uses_named_action_states() {
 }
 
 #[test]
+fn emoji_copy_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/emoji.rs")
+        .expect("Failed to read emoji action handler");
+
+    assert!(
+        content.contains("enum EmojiCopyHandlerAction")
+            && content.contains("Emoji")
+            && content.contains("Unicode")
+            && content.contains("Section"),
+        "emoji copy/Unicode/section handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("EmojiCopyHandlerAction::from_action_id(action_id)")
+            && content.contains("copy_action.payload(&emoji)")
+            && content.contains("clipboard_text")
+            && content.contains("hud_text"),
+        "emoji copy handler should derive clipboard and HUD copy from the named state"
+    );
+}
+
+#[test]
 fn emoji_paste_destination_uses_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/emoji.rs").expect("Failed to read emoji builder");
