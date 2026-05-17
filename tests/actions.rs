@@ -933,6 +933,29 @@ fn file_search_duplicate_handler_uses_named_action_state() {
 }
 
 #[test]
+fn file_search_trash_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchTrashHandlerAction")
+            && content.contains("MoveToTrash"),
+        "file-search trash handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("FileSearchTrashHandlerAction::from_action_id(action_id)")
+            && content.contains("trash_action.selection_required_message()")
+            && content.contains("trash_action.confirm_title()")
+            && content.contains("trash_action.confirm_message(&name)")
+            && content.contains("trash_action.confirm_button()")
+            && content.contains("trash_action.confirmation_failure_message()")
+            && content.contains("trash_action.success_hud(&name)")
+            && content.contains("trash_action.failure_message(e)"),
+        "file-search trash handler should derive selection, confirmation, HUD, and failure copy from the named state"
+    );
+}
+
+#[test]
 fn file_search_sort_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
         .expect("Failed to read file action handler");
