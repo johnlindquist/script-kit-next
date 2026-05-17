@@ -1607,6 +1607,33 @@ fn design_explorer_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn ai_command_window_policy_uses_named_plan_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AiCommandWindowPlan")
+            && content.contains("KeepMainWindowVisible")
+            && content.contains("HideMainWindowDeferred")
+            && content.contains("HideMainWindowForCapture"),
+        "AI command window policy should be represented by named plan states"
+    );
+    assert!(
+        content.contains("AiCommandWindowPlan::from_command(cmd_type)")
+            && content.contains("fn apply_ai_command_window_plan("),
+        "AI command dispatch should apply the named window plan before routing actions"
+    );
+    assert!(
+        content.contains("AiCommandWindowPlan::KeepMainWindowVisible => {}")
+            && content.contains("AiCommandWindowPlan::HideMainWindowDeferred")
+            && content.contains("platform::defer_hide_main_window(cx)")
+            && content.contains("AiCommandWindowPlan::HideMainWindowForCapture")
+            && content.contains("hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS"),
+        "AI command window plan should preserve keep-visible, deferred-hide, and capture-hide behavior"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
