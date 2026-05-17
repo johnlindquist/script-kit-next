@@ -1959,6 +1959,30 @@ fn acp_model_selection_actions_use_named_plan_states() {
 }
 
 #[test]
+fn acp_model_switch_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpModelSwitchHandlerAction")
+            && content.contains("SwitchModel"),
+        "ACP model switch handler should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpModelSwitchHandlerAction::from_action_id(action_id)")
+            && content.contains("model_action.unavailable_message(model_id)")
+            && content.contains("model_action.already_selected_message(&model_display_name)")
+            && content.contains("model_action.hud_message(&model_display_name)")
+            && content.contains("model_action.switched_message(&model_display_name)")
+            && content.contains("Model '{model_id}' is no longer available")
+            && content.contains("Already using {display_name}")
+            && content.contains("Model: {display_name}")
+            && content.contains("Switched model to {display_name}"),
+        "ACP model switch handler should derive unavailable/current/HUD/switched feedback from named state"
+    );
+}
+
+#[test]
 fn acp_root_change_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

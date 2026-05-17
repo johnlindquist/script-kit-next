@@ -37,6 +37,11 @@ enum AcpPanelWindowHandlerAction {
     ReattachPanel,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpModelSwitchHandlerAction {
+    SwitchModel,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -154,6 +159,36 @@ impl AcpPanelWindowHandlerAction {
         match self {
             Self::ShowHistory => Some("Search conversation history..."),
             Self::DetachWindow | Self::ReattachPanel => None,
+        }
+    }
+}
+
+impl AcpModelSwitchHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        crate::actions::acp_switch_model_id_from_action(action_id).map(|_| Self::SwitchModel)
+    }
+
+    fn unavailable_message(self, model_id: &str) -> String {
+        match self {
+            Self::SwitchModel => format!("Model '{model_id}' is no longer available"),
+        }
+    }
+
+    fn already_selected_message(self, display_name: &str) -> String {
+        match self {
+            Self::SwitchModel => format!("Already using {display_name}"),
+        }
+    }
+
+    fn hud_message(self, display_name: &str) -> String {
+        match self {
+            Self::SwitchModel => format!("Model: {display_name}"),
+        }
+    }
+
+    fn switched_message(self, display_name: &str) -> String {
+        match self {
+            Self::SwitchModel => format!("Switched model to {display_name}"),
         }
     }
 }
@@ -926,6 +961,9 @@ impl ScriptListApp {
         };
 
         if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
+            let Some(model_action) = AcpModelSwitchHandlerAction::from_action_id(action_id) else {
+                return DispatchOutcome::not_handled();
+            };
             let Some((current_selected_model_id, model_display_name)) = ({
                 let view = entity.read(cx);
                 view.thread()
@@ -949,13 +987,14 @@ impl ScriptListApp {
             }) else {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    format!("Model '{model_id}' is no longer available"),
+                    model_action.unavailable_message(model_id),
                 );
             };
 
             if current_selected_model_id.as_deref() == Some(model_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("Already using {model_display_name}"));
+                outcome.user_message =
+                    Some(model_action.already_selected_message(&model_display_name));
                 return outcome;
             }
 
@@ -974,13 +1013,13 @@ impl ScriptListApp {
                 }
             });
             self.show_hud(
-                format!("Model: {model_display_name}"),
+                model_action.hud_message(&model_display_name),
                 Some(HUD_SHORT_MS),
                 cx,
             );
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!("Switched model to {model_display_name}"));
+            outcome.user_message = Some(model_action.switched_message(&model_display_name));
             return outcome;
         }
 
