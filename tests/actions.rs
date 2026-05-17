@@ -1846,16 +1846,17 @@ fn utility_process_builtin_uses_named_action_states() {
         "Utility process built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityProcessBuiltinAction::from_command(*cmd_type)")
+        content.contains("UtilityProcessBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_process_builtin(")
             && content.contains("action.empty_hud()")
+            && content.contains("action.success_hud(process_count)")
             && content.contains("action.success_detail()"),
         "Utility process command routing should delegate through named state details"
     );
     assert!(
         content.contains("PROCESS_MANAGER.active_count()")
             && content.contains("PROCESS_MANAGER.kill_all_processes()")
-            && content.contains("Stopped {} running script process(es).")
+            && content.contains("Stopped {process_count} running script process(es).")
             && content.contains("stop_all_processes"),
         "Stop All Processes should preserve its guarded count check, destructive kill path, and success detail"
     );
