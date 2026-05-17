@@ -99,6 +99,30 @@ fn chat_transcript_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn clipboard_entry_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/clipboard.rs")
+        .expect("Failed to read clipboard action builder");
+
+    assert!(
+        content.contains("enum ClipboardEntryActionPlan")
+            && content.contains("TextPinned")
+            && content.contains("TextUnpinned")
+            && content.contains("ImagePinned")
+            && content.contains("ImageUnpinned")
+            && content.contains("OtherPinned")
+            && content.contains("OtherUnpinned"),
+        "clipboard text/image and pin/unpin actions should be driven by named entry action plan states"
+    );
+    assert!(
+        content.contains("ClipboardEntryActionPlan::from_entry(entry)")
+            && content.contains("fn pin_action")
+            && content.contains("fn is_image")
+            && content.contains("fn is_text"),
+        "clipboard context actions should derive pin and content-specific rows from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
