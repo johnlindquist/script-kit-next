@@ -1162,6 +1162,27 @@ impl AcpModelSelectionActionPlan {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum AcpRootPickerActionPlan {
+    CurrentSelection(String),
+    NoCurrentSelection,
+}
+
+impl AcpRootPickerActionPlan {
+    fn from_selected_display_name(selected_display_name: Option<String>) -> Self {
+        selected_display_name
+            .map(Self::CurrentSelection)
+            .unwrap_or(Self::NoCurrentSelection)
+    }
+
+    fn description(&self, fallback_description: &'static str) -> String {
+        match self {
+            Self::CurrentSelection(display_name) => format!("Current: {display_name}"),
+            Self::NoCurrentSelection => fallback_description.to_string(),
+        }
+    }
+}
+
 fn acp_model_switch_description(
     entry: &crate::ai::acp::config::AcpModelEntry,
     is_selected: bool,
@@ -1182,15 +1203,17 @@ pub(crate) fn get_acp_chat_root_actions(
         selected_agent_id.and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id));
     let selected_model =
         selected_model_id.and_then(|id| available_models.iter().find(|entry| entry.id == id));
+    let agent_picker_plan = AcpRootPickerActionPlan::from_selected_display_name(
+        selected_agent.map(|entry| entry.display_name.to_string()),
+    );
+    let model_picker_plan = AcpRootPickerActionPlan::from_selected_display_name(
+        selected_model.map(acp_model_display_name),
+    );
 
     let mut actions = vec![Action::new(
         ACP_CHANGE_AGENT_ACTION_ID,
         ACP_CHANGE_AGENT_LABEL,
-        Some(
-            selected_agent
-                .map(|e| format!("Current: {}", e.display_name))
-                .unwrap_or_else(|| ACP_CHANGE_AGENT_DESCRIPTION.to_string()),
-        ),
+        Some(agent_picker_plan.description(ACP_CHANGE_AGENT_DESCRIPTION)),
         ActionCategory::ScriptContext,
     )
     .with_icon(IconName::Terminal)
@@ -1201,11 +1224,7 @@ pub(crate) fn get_acp_chat_root_actions(
             Action::new(
                 ACP_CHANGE_MODEL_ACTION_ID,
                 ACP_CHANGE_MODEL_LABEL,
-                Some(
-                    selected_model
-                        .map(|entry| format!("Current: {}", acp_model_display_name(entry)))
-                        .unwrap_or_else(|| ACP_CHANGE_MODEL_DESCRIPTION.to_string()),
-                ),
+                Some(model_picker_plan.description(ACP_CHANGE_MODEL_DESCRIPTION)),
                 ActionCategory::ScriptContext,
             )
             .with_icon(IconName::Settings)
