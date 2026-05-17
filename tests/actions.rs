@@ -1123,6 +1123,32 @@ fn permission_command_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_process_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityProcessBuiltinAction")
+            && content.contains("StopAllProcesses"),
+        "Utility process built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("UtilityProcessBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_process_builtin(")
+            && content.contains("action.empty_hud()")
+            && content.contains("action.success_detail()"),
+        "Utility process command routing should delegate through named state details"
+    );
+    assert!(
+        content.contains("PROCESS_MANAGER.active_count()")
+            && content.contains("PROCESS_MANAGER.kill_all_processes()")
+            && content.contains("Stopped {} running script process(es).")
+            && content.contains("stop_all_processes"),
+        "Stop All Processes should preserve its guarded count check, destructive kill path, and success detail"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
