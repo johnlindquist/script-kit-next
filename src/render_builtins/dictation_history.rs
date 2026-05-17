@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DictationHistoryEmptyState {
+    NoSavedDictation,
+    NoFilteredMatches,
+}
+
+impl DictationHistoryEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoSavedDictation
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoSavedDictation => "No saved dictation yet",
+            Self::NoFilteredMatches => "No dictations match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn dictation_history_visible_rows(filter: &str) -> Vec<crate::dictation::DictationHistoryEntry> {
         crate::dictation::search_history(filter, 100)
@@ -257,11 +280,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No saved dictation yet"
-                } else {
-                    "No dictations match your filter"
-                })
+                .child(DictationHistoryEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             let selected = selected_index;
