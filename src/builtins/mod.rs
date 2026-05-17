@@ -508,10 +508,10 @@ impl BuiltInEntry {
                 AiCommandType::ClearConversation => "Clear Conversation",
                 AiCommandType::GenerateScript => "Generate Script",
                 AiCommandType::GenerateScriptFromCurrentApp => "Generate Script from App",
-                AiCommandType::SendScreenToAi => "Send Screen to AI",
-                AiCommandType::SendFocusedWindowToAi => "Send Window to AI",
-                AiCommandType::SendSelectedTextToAi => "Send Selection to AI",
-                AiCommandType::SendBrowserTabToAi => "Send Tab to AI",
+                AiCommandType::SendScreenToAi => "Send Screen to Agent Chat",
+                AiCommandType::SendFocusedWindowToAi => "Send Window to Agent Chat",
+                AiCommandType::SendSelectedTextToAi => "Send Selection to Agent Chat",
+                AiCommandType::SendBrowserTabToAi => "Send Tab to Agent Chat",
                 AiCommandType::SendScreenAreaToAi => "Select Area for AI",
                 AiCommandType::CreateAiPreset => "Create AI Preset",
                 AiCommandType::ImportAiPresets => "Import AI Presets",
@@ -565,7 +565,7 @@ impl BuiltInEntry {
             BuiltInFeature::FileSearch => "Search Files",
             BuiltInFeature::Webcam => "Open Webcam",
             BuiltInFeature::Dictation => "Start Dictation Here",
-            BuiltInFeature::DictationToAiHarness => "Start Dictation to AI",
+            BuiltInFeature::DictationToAiHarness => "Start Dictation to Agent Chat",
             BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
             BuiltInFeature::DictationHistory => "Open Dictation History",
@@ -695,7 +695,7 @@ impl BuiltInEntry {
             BuiltInFeature::FileSearch => "Files",
             BuiltInFeature::Webcam => "Webcam",
             BuiltInFeature::Dictation => "Dictate Here",
-            BuiltInFeature::DictationToAiHarness => "Dictate AI",
+            BuiltInFeature::DictationToAiHarness => "Dictate Chat",
             BuiltInFeature::DictationToFrontmostApp => "Dictate App",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
             BuiltInFeature::DictationHistory => "History",
@@ -1345,7 +1345,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-screen-to-ai",
-            "Send Screen to AI",
+            "Send Screen to Agent Chat",
             "Capture the full screen and send it to Agent Chat",
             vec![
                 "send",
@@ -1362,7 +1362,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-focused-window-to-ai",
-            "Send Focused Window to AI",
+            "Send Focused Window to Agent Chat",
             "Capture the focused window and send it to Agent Chat",
             vec![
                 "send",
@@ -1379,7 +1379,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-selected-text-to-ai",
-            "Send Selected Text to AI",
+            "Send Selected Text to Agent Chat",
             "Send the currently selected text to Agent Chat",
             vec![
                 "send",
@@ -1396,7 +1396,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-browser-tab-to-ai",
-            "Send Focused Browser Tab to AI",
+            "Send Focused Browser Tab to Agent Chat",
             "Send the current browser tab URL to Agent Chat",
             vec![
                 "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
@@ -2057,7 +2057,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-to-ai",
-            "Dictate to AI",
+            "Dictate to Agent Chat",
             "Voice dictation - speak and submit to Agent Chat",
             vec![
                 "dictate ai",
@@ -3236,7 +3236,10 @@ mod tests {
             .iter()
             .find(|e| e.id == "builtin/send-browser-tab-to-ai")
             .unwrap();
-        assert_eq!(send_browser_tab.default_action_text(), "Send Tab to AI");
+        assert_eq!(
+            send_browser_tab.default_action_text(),
+            "Send Tab to Agent Chat"
+        );
 
         let inspect_context = entries
             .iter()
@@ -3249,6 +3252,57 @@ mod tests {
 
         let webcam = entries.iter().find(|e| e.id == "builtin/webcam").unwrap();
         assert_eq!(webcam.default_action_text(), "Open Webcam");
+    }
+
+    #[test]
+    fn agent_chat_route_labels_name_agent_chat_not_generic_ai() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        for (id, expected_name, expected_action) in [
+            (
+                "builtin/send-screen-to-ai",
+                "Send Screen to Agent Chat",
+                "Send Screen to Agent Chat",
+            ),
+            (
+                "builtin/send-focused-window-to-ai",
+                "Send Focused Window to Agent Chat",
+                "Send Window to Agent Chat",
+            ),
+            (
+                "builtin/send-selected-text-to-ai",
+                "Send Selected Text to Agent Chat",
+                "Send Selection to Agent Chat",
+            ),
+            (
+                "builtin/send-browser-tab-to-ai",
+                "Send Focused Browser Tab to Agent Chat",
+                "Send Tab to Agent Chat",
+            ),
+            (
+                "builtin/dictation-to-ai",
+                "Dictate to Agent Chat",
+                "Start Dictation to Agent Chat",
+            ),
+        ] {
+            let entry = entries
+                .iter()
+                .find(|entry| entry.id == id)
+                .unwrap_or_else(|| panic!("missing builtin entry {id}"));
+            assert_eq!(entry.name, expected_name, "{id} name");
+            assert_eq!(entry.default_action_text(), expected_action, "{id} action");
+            assert!(
+                !entry.name.contains(" to AI") && !entry.default_action_text().contains(" to AI"),
+                "{id} should name the concrete Agent Chat destination"
+            );
+        }
+
+        let dictation = entries
+            .iter()
+            .find(|entry| entry.id == "builtin/dictation-to-ai")
+            .expect("dictation-to-ai entry should exist");
+        assert_eq!(dictation.footer_action_text(), "Dictate Chat");
     }
 
     #[test]

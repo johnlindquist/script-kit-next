@@ -62,6 +62,9 @@ mod consistent_structured_fields;
 #[path = "source_audits/builtin_dispatch_consistency.rs"]
 mod builtin_dispatch_consistency;
 
+#[path = "source_audits/builtin_command_text.rs"]
+mod builtin_command_text;
+
 #[path = "source_audits/resize_presentation_contract.rs"]
 mod resize_presentation_contract;
 
