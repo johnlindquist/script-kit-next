@@ -23,6 +23,99 @@ const BUILTIN_DICTATION_MODEL_CANCEL: &str = "cancel";
 /// Choice value: user wants to hide the prompt while download continues.
 const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin/dictation-model-hide";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DictationBuiltinAction {
+    CurrentSurface,
+    AgentChat,
+    FrontmostApp,
+    Notes,
+}
+
+impl DictationBuiltinAction {
+    fn opening_message(self) -> &'static str {
+        match self {
+            Self::CurrentSurface => "Opening Dictation",
+            Self::AgentChat => "Opening Dictation to Agent Chat",
+            Self::FrontmostApp => "Opening Dictation to Frontmost App",
+            Self::Notes => "Opening Dictation to Notes",
+        }
+    }
+
+    fn failure_message(self) -> &'static str {
+        match self {
+            Self::CurrentSurface => "Failed to toggle dictation",
+            Self::AgentChat => "Failed to toggle dictation to Agent Chat",
+            Self::FrontmostApp => "Failed to toggle dictation to frontmost app",
+            Self::Notes => "Failed to toggle dictation to notes",
+        }
+    }
+
+    fn preflight_failure_message(self) -> &'static str {
+        match self {
+            Self::CurrentSurface => "Dictation start preflight failed",
+            Self::AgentChat => "Dictation-to-Agent-Chat start preflight failed",
+            Self::FrontmostApp => "Dictation-to-app start preflight failed",
+            Self::Notes => "Dictation-to-notes start preflight failed",
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::CurrentSurface => "dictation_toggle",
+            Self::AgentChat => "dictation_to_ai_toggle",
+            Self::FrontmostApp => "dictation_to_frontmost_app_toggle",
+            Self::Notes => "dictation_to_notes_toggle",
+        }
+    }
+
+    fn forced_target(self) -> Option<crate::dictation::DictationTarget> {
+        match self {
+            Self::CurrentSurface => None,
+            Self::AgentChat => Some(crate::dictation::DictationTarget::TabAiHarness),
+            Self::FrontmostApp => Some(crate::dictation::DictationTarget::ExternalApp),
+            Self::Notes => Some(crate::dictation::DictationTarget::NotesEditor),
+        }
+    }
+
+    fn stop_fallback_target(self) -> crate::dictation::DictationTarget {
+        self.forced_target()
+            .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
+    }
+
+    fn conceal_before_overlay(self) -> bool {
+        matches!(self, Self::AgentChat | Self::FrontmostApp)
+    }
+
+    fn dispatch_start_before_overlay(self) -> bool {
+        matches!(self, Self::CurrentSurface)
+    }
+
+    fn log_forced_route(self) -> bool {
+        matches!(self, Self::FrontmostApp | Self::Notes)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DictationStartPreflight {
+    Ready,
+    OpenedSetup,
+    DownloadInProgress,
+    OpenedModelPrompt,
+    Failed,
+}
+
+impl DictationStartPreflight {
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Ready => "dictation_ready",
+            Self::OpenedSetup => "dictation_setup_opened",
+            Self::DownloadInProgress => "dictation_model_download_in_progress",
+            Self::OpenedModelPrompt => "dictation_model_prompt_opened",
+            Self::Failed => "dictation_preflight_failed",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -4415,452 +4508,18 @@ impl ScriptListApp {
                 self.open_webcam(cx);
                 Self::builtin_success(dctx, "open_webcam")
             }
-            builtins::BuiltInFeature::Dictation => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Dictation"
-                );
-
-                // Preflight: on the start edge, verify we have somewhere to
-                // deliver transcribed text before beginning capture.
-                if !crate::dictation::is_dictation_recording() {
-                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
-                        return Self::builtin_success(dctx, "dictation_setup_opened");
-                    }
-                    // Check that the Parakeet model is downloaded before
-                    // starting capture — no silent Whisper fallback.
-                    if !crate::dictation::is_parakeet_model_available() {
-                        // If already downloading, reopen the progress prompt
-                        // so the user can inspect the current state or hide it.
-                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
-                            .load(std::sync::atomic::Ordering::Acquire)
-                        {
-                            self.open_dictation_model_prompt(cx);
-                            return Self::builtin_success(
-                                dctx,
-                                "dictation_model_download_in_progress",
-                            );
-                        }
-                        tracing::info!(
-                            category = "DICTATION",
-                            "Parakeet model not downloaded, opening consent prompt"
-                        );
-                        self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
-                    }
-
-                    if let Err(error) = self.ensure_dictation_delivery_target_available() {
-                        let error_text = error.to_string();
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error_text,
-                            "Dictation start preflight failed"
-                        );
-                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
-                        return Self::builtin_success(dctx, "dictation_preflight_failed");
-                    }
-                }
-
-                // Resolve the delivery target at start time based on what
-                // Script Kit surface is currently active.  On the stop edge
-                // the target stored in the session is used instead.
-                let dictation_target = if !crate::dictation::is_dictation_recording() {
-                    self.resolve_dictation_target()
-                } else {
-                    // Stop edge — the target was captured at start time.
-                    crate::dictation::get_dictation_target()
-                        .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
-                };
-
-                match crate::dictation::toggle_dictation(dictation_target) {
-                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        let _ = crate::dictation::set_dictation_target_cycle(
-                            self.dictation_target_cycle_for(dictation_target),
-                        );
-                        // Track window state through orchestrator.
-                        let orch_target =
-                            crate::window_orchestrator::executor::to_orchestrator_target(
-                                &dictation_target,
-                            );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::StartDictation {
-                                target: orch_target,
-                            },
-                            cx,
-                        );
-                        self.start_dictation_overlay_session(cx);
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        self.begin_dictation_transcription(capture, dictation_target, cx);
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
-                        let _ = crate::dictation::close_dictation_overlay(cx);
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                    Err(error) => {
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error,
-                            "Failed to toggle dictation"
-                        );
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Failed(
-                                    error.to_string(),
-                                ),
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.schedule_dictation_overlay_close(
-                            cx,
-                            std::time::Duration::from_millis(800),
-                        );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                }
-                Self::builtin_success(dctx, "dictation_toggle")
-            }
+            builtins::BuiltInFeature::Dictation => self.execute_dictation_builtin_action(
+                DictationBuiltinAction::CurrentSurface,
+                dctx,
+                cx,
+            ),
             builtins::BuiltInFeature::DictationToAiHarness => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Dictation to Agent Chat"
-                );
-
-                // On the start edge, run the same model-download and
-                // delivery-target preflight as generic Dictation, but
-                // use the target-aware validator so TabAiHarness is
-                // accepted without needing the harness to be open yet.
-                if !crate::dictation::is_dictation_recording() {
-                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
-                        return Self::builtin_success(dctx, "dictation_setup_opened");
-                    }
-                    if !crate::dictation::is_parakeet_model_available() {
-                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
-                            .load(std::sync::atomic::Ordering::Acquire)
-                        {
-                            self.open_dictation_model_prompt(cx);
-                            return Self::builtin_success(
-                                dctx,
-                                "dictation_model_download_in_progress",
-                            );
-                        }
-                        self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
-                    }
-
-                    let target = self.resolve_dictation_target_with_override(true);
-                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
-                    {
-                        let error_text = error.to_string();
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error_text,
-                            "Dictation-to-Agent-Chat start preflight failed"
-                        );
-                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
-                        return Self::builtin_success(dctx, "dictation_preflight_failed");
-                    }
-                }
-
-                // Force the target to TabAiHarness regardless of the
-                // currently active view.
-                let dictation_target = if !crate::dictation::is_dictation_recording() {
-                    self.resolve_dictation_target_with_override(true)
-                } else {
-                    crate::dictation::get_dictation_target()
-                        .unwrap_or(crate::dictation::DictationTarget::TabAiHarness)
-                };
-
-                match crate::dictation::toggle_dictation(dictation_target) {
-                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        let _ = crate::dictation::set_dictation_target_cycle(
-                            self.dictation_target_cycle_for(dictation_target),
-                        );
-                        // Hide the main window SYNCHRONOUSLY before opening
-                        // the overlay.  The orchestrator dispatch is deferred
-                        // (cx.spawn), so relying on it for ConcealMain causes
-                        // a race: the overlay opens while the main window is
-                        // still visible, and macOS pushes the overlay behind
-                        // other apps.
-                        platform::conceal_main_window();
-
-                        self.start_dictation_overlay_session(cx);
-
-                        // Update orchestrator state for bookkeeping (commands
-                        // are mostly no-ops since we already concealed + opened).
-                        let orch_target =
-                            crate::window_orchestrator::executor::to_orchestrator_target(
-                                &dictation_target,
-                            );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::StartDictation {
-                                target: orch_target,
-                            },
-                            cx,
-                        );
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        self.begin_dictation_transcription(capture, dictation_target, cx);
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
-                        let _ = crate::dictation::close_dictation_overlay(cx);
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                    Err(error) => {
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error,
-                            "Failed to toggle dictation to Agent Chat"
-                        );
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Failed(
-                                    error.to_string(),
-                                ),
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.schedule_dictation_overlay_close(
-                            cx,
-                            std::time::Duration::from_millis(800),
-                        );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                }
-                Self::builtin_success(dctx, "dictation_to_ai_toggle")
+                self.execute_dictation_builtin_action(DictationBuiltinAction::AgentChat, dctx, cx)
             }
-            builtins::BuiltInFeature::DictationToFrontmostApp => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Dictation to Frontmost App"
-                );
-
-                if !crate::dictation::is_dictation_recording() {
-                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
-                        return Self::builtin_success(dctx, "dictation_setup_opened");
-                    }
-                    if !crate::dictation::is_parakeet_model_available() {
-                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
-                            .load(std::sync::atomic::Ordering::Acquire)
-                        {
-                            self.open_dictation_model_prompt(cx);
-                            return Self::builtin_success(
-                                dctx,
-                                "dictation_model_download_in_progress",
-                            );
-                        }
-                        self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
-                    }
-
-                    let target = crate::dictation::DictationTarget::ExternalApp;
-                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
-                    {
-                        let error_text = error.to_string();
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error_text,
-                            ?target,
-                            "Dictation-to-app start preflight failed"
-                        );
-                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
-                        return Self::builtin_success(dctx, "dictation_preflight_failed");
-                    }
-                }
-
-                let dictation_target = if !crate::dictation::is_dictation_recording() {
-                    crate::dictation::DictationTarget::ExternalApp
-                } else {
-                    crate::dictation::get_dictation_target()
-                        .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
-                };
-
-                match crate::dictation::toggle_dictation(dictation_target) {
-                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        let _ = crate::dictation::set_dictation_target_cycle(
-                            self.dictation_target_cycle_for(dictation_target),
-                        );
-                        tracing::info!(
-                            category = "DICTATION",
-                            ?dictation_target,
-                            target_label = dictation_target.overlay_label(),
-                            "Starting forced-route dictation"
-                        );
-                        platform::conceal_main_window();
-                        self.start_dictation_overlay_session(cx);
-
-                        let orch_target =
-                            crate::window_orchestrator::executor::to_orchestrator_target(
-                                &dictation_target,
-                            );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::StartDictation {
-                                target: orch_target,
-                            },
-                            cx,
-                        );
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        self.begin_dictation_transcription(capture, dictation_target, cx);
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
-                        let _ = crate::dictation::close_dictation_overlay(cx);
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                    Err(error) => {
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error,
-                            "Failed to toggle dictation to frontmost app"
-                        );
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Failed(
-                                    error.to_string(),
-                                ),
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.schedule_dictation_overlay_close(
-                            cx,
-                            std::time::Duration::from_millis(800),
-                        );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                }
-                Self::builtin_success(dctx, "dictation_to_frontmost_app_toggle")
-            }
+            builtins::BuiltInFeature::DictationToFrontmostApp => self
+                .execute_dictation_builtin_action(DictationBuiltinAction::FrontmostApp, dctx, cx),
             builtins::BuiltInFeature::DictationToNotes => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Dictation to Notes"
-                );
-
-                if !crate::dictation::is_dictation_recording() {
-                    if self.open_dictation_setup_if_microphone_not_ready(cx) {
-                        return Self::builtin_success(dctx, "dictation_setup_opened");
-                    }
-                    if !crate::dictation::is_parakeet_model_available() {
-                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
-                            .load(std::sync::atomic::Ordering::Acquire)
-                        {
-                            self.open_dictation_model_prompt(cx);
-                            return Self::builtin_success(
-                                dctx,
-                                "dictation_model_download_in_progress",
-                            );
-                        }
-                        self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
-                    }
-
-                    let target = crate::dictation::DictationTarget::NotesEditor;
-                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
-                    {
-                        let error_text = error.to_string();
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error_text,
-                            ?target,
-                            "Dictation-to-notes start preflight failed"
-                        );
-                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
-                        return Self::builtin_success(dctx, "dictation_preflight_failed");
-                    }
-                }
-
-                let dictation_target = if !crate::dictation::is_dictation_recording() {
-                    crate::dictation::DictationTarget::NotesEditor
-                } else {
-                    crate::dictation::get_dictation_target()
-                        .unwrap_or(crate::dictation::DictationTarget::NotesEditor)
-                };
-
-                match crate::dictation::toggle_dictation(dictation_target) {
-                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        let _ = crate::dictation::set_dictation_target_cycle(
-                            self.dictation_target_cycle_for(dictation_target),
-                        );
-                        tracing::info!(
-                            category = "DICTATION",
-                            ?dictation_target,
-                            target_label = dictation_target.overlay_label(),
-                            "Starting forced-route dictation"
-                        );
-                        self.start_dictation_overlay_session(cx);
-
-                        let orch_target =
-                            crate::window_orchestrator::executor::to_orchestrator_target(
-                                &dictation_target,
-                            );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::StartDictation {
-                                target: orch_target,
-                            },
-                            cx,
-                        );
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        self.begin_dictation_transcription(capture, dictation_target, cx);
-                    }
-                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
-                        let _ = crate::dictation::close_dictation_overlay(cx);
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                    Err(error) => {
-                        tracing::error!(
-                            category = "DICTATION",
-                            error = %error,
-                            "Failed to toggle dictation to notes"
-                        );
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Failed(
-                                    error.to_string(),
-                                ),
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.schedule_dictation_overlay_close(
-                            cx,
-                            std::time::Duration::from_millis(800),
-                        );
-                        self.dispatch_window_event(
-                            crate::window_orchestrator::WindowEvent::AbortDictation,
-                            cx,
-                        );
-                    }
-                }
-                Self::builtin_success(dctx, "dictation_to_notes_toggle")
+                self.execute_dictation_builtin_action(DictationBuiltinAction::Notes, dctx, cx)
             }
             builtins::BuiltInFeature::FileSearch => {
                 tracing::info!(
@@ -5005,6 +4664,173 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_dictation_builtin_action(
+        &mut self,
+        action: DictationBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            "{}", action.opening_message()
+        );
+
+        let is_start_edge = !crate::dictation::is_dictation_recording();
+        if is_start_edge {
+            let preflight = self.prepare_dictation_builtin_start(action, cx);
+            if preflight != DictationStartPreflight::Ready {
+                return Self::builtin_success(dctx, preflight.success_detail());
+            }
+        }
+
+        let dictation_target = if is_start_edge {
+            self.dictation_start_target(action)
+        } else {
+            crate::dictation::get_dictation_target()
+                .unwrap_or_else(|| action.stop_fallback_target())
+        };
+
+        match crate::dictation::toggle_dictation(dictation_target) {
+            Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                self.handle_dictation_started(action, dictation_target, cx);
+            }
+            Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                self.begin_dictation_transcription(capture, dictation_target, cx);
+            }
+            Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                let _ = crate::dictation::close_dictation_overlay(cx);
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                    cx,
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    failure_message = action.failure_message(),
+                    "Dictation toggle failed"
+                );
+                let _ = crate::dictation::update_dictation_overlay(
+                    crate::dictation::DictationOverlayState {
+                        phase: crate::dictation::DictationSessionPhase::Failed(error.to_string()),
+                        ..Default::default()
+                    },
+                    cx,
+                );
+                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                    cx,
+                );
+            }
+        }
+
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn prepare_dictation_builtin_start(
+        &mut self,
+        action: DictationBuiltinAction,
+        cx: &mut Context<Self>,
+    ) -> DictationStartPreflight {
+        if self.open_dictation_setup_if_microphone_not_ready(cx) {
+            return DictationStartPreflight::OpenedSetup;
+        }
+
+        if !crate::dictation::is_parakeet_model_available() {
+            if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS.load(std::sync::atomic::Ordering::Acquire) {
+                self.open_dictation_model_prompt(cx);
+                return DictationStartPreflight::DownloadInProgress;
+            }
+            tracing::info!(
+                category = "DICTATION",
+                "Parakeet model not downloaded, opening consent prompt"
+            );
+            self.open_dictation_model_prompt(cx);
+            return DictationStartPreflight::OpenedModelPrompt;
+        }
+
+        if let Err(error) = self.ensure_dictation_builtin_target_available(action) {
+            let error_text = error.to_string();
+            tracing::error!(
+                category = "DICTATION",
+                error = %error_text,
+                action = ?action,
+                "{}", action.preflight_failure_message()
+            );
+            self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
+            return DictationStartPreflight::Failed;
+        }
+
+        DictationStartPreflight::Ready
+    }
+
+    fn ensure_dictation_builtin_target_available(
+        &self,
+        action: DictationBuiltinAction,
+    ) -> anyhow::Result<()> {
+        if let Some(target) = action.forced_target() {
+            self.ensure_dictation_delivery_target_available_for(target)
+        } else {
+            self.ensure_dictation_delivery_target_available()
+        }
+    }
+
+    fn dictation_start_target(
+        &self,
+        action: DictationBuiltinAction,
+    ) -> crate::dictation::DictationTarget {
+        action
+            .forced_target()
+            .unwrap_or_else(|| self.resolve_dictation_target())
+    }
+
+    fn handle_dictation_started(
+        &mut self,
+        action: DictationBuiltinAction,
+        dictation_target: crate::dictation::DictationTarget,
+        cx: &mut Context<Self>,
+    ) {
+        let _ = crate::dictation::set_dictation_target_cycle(
+            self.dictation_target_cycle_for(dictation_target),
+        );
+
+        if action.log_forced_route() {
+            tracing::info!(
+                category = "DICTATION",
+                ?dictation_target,
+                target_label = dictation_target.overlay_label(),
+                "Starting forced-route dictation"
+            );
+        }
+
+        if action.conceal_before_overlay() {
+            platform::conceal_main_window();
+        }
+
+        let orch_target =
+            crate::window_orchestrator::executor::to_orchestrator_target(&dictation_target);
+        if action.dispatch_start_before_overlay() {
+            self.dispatch_window_event(
+                crate::window_orchestrator::WindowEvent::StartDictation {
+                    target: orch_target,
+                },
+                cx,
+            );
+            self.start_dictation_overlay_session(cx);
+        } else {
+            self.start_dictation_overlay_session(cx);
+            self.dispatch_window_event(
+                crate::window_orchestrator::WindowEvent::StartDictation {
+                    target: orch_target,
+                },
+                cx,
+            );
+        }
+    }
 
     /// Open the overlay, register the abort callback, start the pump.
     ///

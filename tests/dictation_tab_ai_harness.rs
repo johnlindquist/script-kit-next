@@ -1,9 +1,9 @@
 //! Contract tests verifying the dedicated dictation-to-AI-harness entry path.
 //!
-//! The `DictationToAiHarness` built-in forces `DictationTarget::TabAiHarness`
-//! via `resolve_dictation_target_with_override(true)` and validates it with
-//! `ensure_dictation_delivery_target_available_for(target)`.  This file
-//! asserts that the wiring exists and stays correct.
+//! The `DictationToAiHarness` built-in routes through
+//! `DictationBuiltinAction::AgentChat`, which forces
+//! `DictationTarget::TabAiHarness` and validates it with
+//! `ensure_dictation_delivery_target_available_for(target)`.
 
 const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
@@ -38,8 +38,8 @@ fn dictation_to_ai_harness_entry_registered() {
 // Target override wiring
 // =========================================================================
 
-/// The DictationToAiHarness handler must use the target-override helper
-/// to force `TabAiHarness`, not the generic `resolve_dictation_target()`.
+/// The DictationToAiHarness handler must route through the named AgentChat
+/// state, which forces `TabAiHarness`, not the generic current-surface state.
 #[test]
 fn handler_uses_target_override() {
     let handler_start = BUILTIN_EXECUTION_SOURCE
@@ -53,13 +53,13 @@ fn handler_uses_target_override() {
     let handler_body = &handler_body[..next_arm];
 
     assert!(
-        handler_body.contains("resolve_dictation_target_with_override(true)"),
-        "DictationToAiHarness handler must call resolve_dictation_target_with_override(true)"
+        handler_body.contains("execute_dictation_builtin_action(DictationBuiltinAction::AgentChat"),
+        "DictationToAiHarness handler must route through DictationBuiltinAction::AgentChat"
     );
     assert!(
-        !handler_body.contains("self.resolve_dictation_target()")
-            || handler_body.contains("resolve_dictation_target_with_override"),
-        "DictationToAiHarness handler must not fall back to the generic target resolver"
+        BUILTIN_EXECUTION_SOURCE
+            .contains("Self::AgentChat => Some(crate::dictation::DictationTarget::TabAiHarness)"),
+        "AgentChat action state must force DictationTarget::TabAiHarness"
     );
 }
 
@@ -67,18 +67,12 @@ fn handler_uses_target_override() {
 /// generic `ensure_dictation_delivery_target_available()`.
 #[test]
 fn handler_uses_target_aware_validation() {
-    let handler_start = BUILTIN_EXECUTION_SOURCE
-        .find("BuiltInFeature::DictationToAiHarness")
-        .expect("DictationToAiHarness match arm must exist");
-    let handler_body = &BUILTIN_EXECUTION_SOURCE[handler_start..];
-    let next_arm = handler_body[1..]
-        .find("builtins::BuiltInFeature::")
-        .unwrap_or(handler_body.len());
-    let handler_body = &handler_body[..next_arm];
-
     assert!(
-        handler_body.contains("ensure_dictation_delivery_target_available_for(target)"),
-        "DictationToAiHarness handler must call ensure_dictation_delivery_target_available_for(target)"
+        BUILTIN_EXECUTION_SOURCE.contains("fn ensure_dictation_builtin_target_available(")
+            && BUILTIN_EXECUTION_SOURCE.contains("if let Some(target) = action.forced_target()")
+            && BUILTIN_EXECUTION_SOURCE
+                .contains("self.ensure_dictation_delivery_target_available_for(target)"),
+        "forced dictation action states must use target-aware validation"
     );
 }
 
@@ -107,7 +101,7 @@ fn target_aware_validator_accepts_tab_ai_harness() {
     );
 }
 
-/// The resolve_dictation_target_with_override(true) must return TabAiHarness.
+/// The older override helper still returns TabAiHarness for callers that use it.
 #[test]
 fn target_override_forces_tab_ai_harness() {
     let fn_start = BUILTIN_EXECUTION_SOURCE
@@ -260,38 +254,32 @@ fn dictation_return_origin_helper_targets_script_list_main_filter() {
 
 #[test]
 fn stop_edge_defaults_to_tab_ai_harness() {
-    let handler_start = BUILTIN_EXECUTION_SOURCE
-        .find("BuiltInFeature::DictationToAiHarness")
-        .expect("DictationToAiHarness match arm must exist");
-    let handler_body = &BUILTIN_EXECUTION_SOURCE[handler_start..];
-    let next_arm = handler_body[1..]
-        .find("builtins::BuiltInFeature::")
-        .unwrap_or(handler_body.len());
-    let handler_body = &handler_body[..next_arm];
-
-    // On the stop edge, the fallback target must be TabAiHarness
-    // (not ExternalApp like the generic handler uses).
     assert!(
-        handler_body.contains("unwrap_or(crate::dictation::DictationTarget::TabAiHarness)"),
-        "Stop edge must default to TabAiHarness, not ExternalApp"
+        BUILTIN_EXECUTION_SOURCE
+            .contains("fn stop_fallback_target(self) -> crate::dictation::DictationTarget")
+            && BUILTIN_EXECUTION_SOURCE.contains("self.forced_target()")
+            && BUILTIN_EXECUTION_SOURCE.contains(
+                "Self::AgentChat => Some(crate::dictation::DictationTarget::TabAiHarness)"
+            ),
+        "AgentChat stop edge must default through its forced TabAiHarness target"
     );
 }
 
 #[test]
 fn dictation_to_ai_empty_capture_aborts_without_opening_acp() {
-    let handler_start = BUILTIN_EXECUTION_SOURCE
-        .find("BuiltInFeature::DictationToAiHarness")
-        .expect("DictationToAiHarness match arm must exist");
-    let handler_body = &BUILTIN_EXECUTION_SOURCE[handler_start..];
-    let next_arm = handler_body[1..]
-        .find("builtins::BuiltInFeature::")
-        .unwrap_or(handler_body.len());
-    let handler_body = &handler_body[..next_arm];
+    let helper_start = BUILTIN_EXECUTION_SOURCE
+        .find("fn execute_dictation_builtin_action(")
+        .expect("execute_dictation_builtin_action must exist");
+    let helper_body = &BUILTIN_EXECUTION_SOURCE[helper_start..];
+    let next_fn = helper_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(helper_body.len());
+    let helper_body = &helper_body[..next_fn];
 
-    let stopped_none_start = handler_body
+    let stopped_none_start = helper_body
         .find("Ok(crate::dictation::DictationToggleOutcome::Stopped(None))")
-        .expect("DictationToAiHarness handler must handle Stopped(None)");
-    let stopped_none_tail = &handler_body[stopped_none_start..];
+        .expect("dictation action helper must handle Stopped(None)");
+    let stopped_none_tail = &helper_body[stopped_none_start..];
     let err_arm_offset = stopped_none_tail
         .find("Err(error) =>")
         .expect("Stopped(None) arm must be followed by the error arm");
@@ -317,21 +305,21 @@ fn dictation_to_ai_empty_capture_aborts_without_opening_acp() {
 
 #[test]
 fn harness_dictation_checks_model_availability() {
-    let handler_start = BUILTIN_EXECUTION_SOURCE
-        .find("BuiltInFeature::DictationToAiHarness")
-        .expect("DictationToAiHarness match arm must exist");
-    let handler_body = &BUILTIN_EXECUTION_SOURCE[handler_start..];
-    let next_arm = handler_body[1..]
-        .find("builtins::BuiltInFeature::")
-        .unwrap_or(handler_body.len());
-    let handler_body = &handler_body[..next_arm];
+    let helper_start = BUILTIN_EXECUTION_SOURCE
+        .find("fn prepare_dictation_builtin_start(")
+        .expect("prepare_dictation_builtin_start must exist");
+    let helper_body = &BUILTIN_EXECUTION_SOURCE[helper_start..];
+    let next_fn = helper_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(helper_body.len());
+    let helper_body = &helper_body[..next_fn];
 
     assert!(
-        handler_body.contains("is_parakeet_model_available()"),
+        helper_body.contains("is_parakeet_model_available()"),
         "DictationToAiHarness must check Parakeet model availability"
     );
     assert!(
-        handler_body.contains("open_dictation_model_prompt(cx)"),
+        helper_body.contains("open_dictation_model_prompt(cx)"),
         "DictationToAiHarness must open the model download prompt when model is missing"
     );
 }
