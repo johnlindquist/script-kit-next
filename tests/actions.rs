@@ -2840,6 +2840,18 @@ fn ai_text_capture_builtins_use_named_failure_states() {
 }
 
 #[test]
+fn ai_open_failure_helper_preserves_actionable_copy() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("fn ai_open_failure_message(error: impl std::fmt::Display) -> String")
+            && content.contains("format!(\"Failed to open AI: {error}\")"),
+        "AI open failure helper should preserve actionable user-facing copy with error details"
+    );
+}
+
+#[test]
 fn acp_conversation_session_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");

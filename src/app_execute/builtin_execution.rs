@@ -2052,7 +2052,7 @@ fn parakeet_model_download_cancel_slot(
 
 #[cfg(test)]
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
-    format!("Failed to open AI: {}", error)
+    format!("Failed to open AI: {error}")
 }
 
 #[derive(Debug)]
