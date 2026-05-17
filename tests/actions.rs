@@ -1093,6 +1093,36 @@ fn ai_legacy_harness_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn permission_command_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum PermissionCommandBuiltinAction")
+            && content.contains("CheckPermissions")
+            && content.contains("RequestAccessibility")
+            && content.contains("OpenAccessibilitySettings")
+            && content.contains("Assistant(PermissionAssistantBuiltinAction)"),
+        "Permission built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("PermissionCommandBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_permission_command_builtin(")
+            && content.contains("PermissionAssistantBuiltinAction::from_command(command)")
+            && content.contains("action.success_detail()")
+            && content.contains("action.failure_detail()"),
+        "Permission command routing should delegate through named state details"
+    );
+    assert!(
+        content.contains("All permissions granted!")
+            && content
+                .contains("Accessibility permission not granted. Some features may not work.")
+            && content.contains("open_accessibility_settings_failed"),
+        "Permission command states should preserve user-facing permission feedback"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
