@@ -48,6 +48,44 @@ impl FileSearchHandlerAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchSortHandlerAction {
+    NameAsc,
+    NameDesc,
+    ModifiedDesc,
+    ModifiedAsc,
+}
+
+impl FileSearchSortHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "sort_name_asc" => Some(Self::NameAsc),
+            "sort_name_desc" => Some(Self::NameDesc),
+            "sort_modified_desc" => Some(Self::ModifiedDesc),
+            "sort_modified_asc" => Some(Self::ModifiedAsc),
+            _ => None,
+        }
+    }
+
+    fn mode(self) -> crate::actions::FileSearchSortMode {
+        match self {
+            Self::NameAsc => crate::actions::FileSearchSortMode::NameAsc,
+            Self::NameDesc => crate::actions::FileSearchSortMode::NameDesc,
+            Self::ModifiedDesc => crate::actions::FileSearchSortMode::ModifiedDesc,
+            Self::ModifiedAsc => crate::actions::FileSearchSortMode::ModifiedAsc,
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::NameAsc => "Sorted by Name (A\u{2192}Z)",
+            Self::NameDesc => "Sorted by Name (Z\u{2192}A)",
+            Self::ModifiedDesc => "Sorted by Modified (Newest)",
+            Self::ModifiedAsc => "Sorted by Modified (Oldest)",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn deeplink_for_result(result: &scripts::SearchResult) -> String {
         result
@@ -833,14 +871,12 @@ impl ScriptListApp {
             }
             // ── Current-directory actions ────────────────────────────────
             "sort_name_asc" | "sort_name_desc" | "sort_modified_desc" | "sort_modified_asc" => {
-                let preferred_selected_path = self.current_file_search_selected_path();
-                let mode = match action_id {
-                    "sort_name_asc" => crate::actions::FileSearchSortMode::NameAsc,
-                    "sort_name_desc" => crate::actions::FileSearchSortMode::NameDesc,
-                    "sort_modified_desc" => crate::actions::FileSearchSortMode::ModifiedDesc,
-                    "sort_modified_asc" => crate::actions::FileSearchSortMode::ModifiedAsc,
-                    _ => unreachable!(),
+                let Some(sort_action) = FileSearchSortHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
                 };
+                let preferred_selected_path = self.current_file_search_selected_path();
+                let mode = sort_action.mode();
                 tracing::info!(
                     category = "FILE_SEARCH",
                     event = "sort_action_selected",
@@ -861,17 +897,7 @@ impl ScriptListApp {
                     self.file_search_scroll_handle
                         .scroll_to_item(*selected_index, gpui::ScrollStrategy::Nearest);
                 }
-                let label = match mode {
-                    crate::actions::FileSearchSortMode::NameAsc => "Sorted by Name (A\u{2192}Z)",
-                    crate::actions::FileSearchSortMode::NameDesc => "Sorted by Name (Z\u{2192}A)",
-                    crate::actions::FileSearchSortMode::ModifiedDesc => {
-                        "Sorted by Modified (Newest)"
-                    }
-                    crate::actions::FileSearchSortMode::ModifiedAsc => {
-                        "Sorted by Modified (Oldest)"
-                    }
-                };
-                self.show_hud(label.to_string(), Some(HUD_SHORT_MS), cx);
+                self.show_hud(sort_action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
                 self.restore_file_search_input_focus(cx);
                 cx.notify();
                 DispatchOutcome::success()
