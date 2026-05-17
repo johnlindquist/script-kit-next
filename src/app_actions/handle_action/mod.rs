@@ -464,6 +464,15 @@ impl DeferredAiWindowAction {
         }
     }
 
+    fn failure_message(action_name: &str, error: impl std::fmt::Display) -> String {
+        match action_name {
+            "open_only" => format!("Failed to open Agent Chat: {error}"),
+            "add_attachment" => format!("Failed to attach file to Agent Chat: {error}"),
+            "apply_preset" => format!("Failed to apply AI preset: {error}"),
+            _ => format!("Failed to send to Agent Chat: {error}"),
+        }
+    }
+
     fn requires_legacy_ai_window(&self) -> bool {
         matches!(self, Self::ApplyPreset { .. })
     }
@@ -811,7 +820,13 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to complete deferred chat handoff after hiding main window"
                         );
-                        this.show_error_toast(format!("Failed to send to Agent Chat: {}", error), cx);
+                        this.show_error_toast(
+                            DeferredAiWindowAction::failure_message(
+                                deferred_action_name,
+                                &error,
+                            ),
+                            cx,
+                        );
                     });
                 }
             }
