@@ -64,6 +64,59 @@ fn is_chat_prompt_info_valid(info: &ChatPromptInfo) -> bool {
     true
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChatTranscriptActionPlan {
+    NoTranscriptActions,
+    CopyLastResponse,
+    ClearConversation,
+    CopyLastResponseAndClearConversation,
+}
+
+impl ChatTranscriptActionPlan {
+    fn from_info(info: &ChatPromptInfo) -> Self {
+        match (info.has_response, info.has_messages) {
+            (false, false) => Self::NoTranscriptActions,
+            (true, false) => Self::CopyLastResponse,
+            (false, true) => Self::ClearConversation,
+            (true, true) => Self::CopyLastResponseAndClearConversation,
+        }
+    }
+}
+
+fn copy_last_response_action() -> Action {
+    Action::new(
+        "chat:copy_response",
+        "Copy Last Response",
+        Some("Copies the last assistant response".to_string()),
+        ActionCategory::ScriptContext,
+    )
+    .with_shortcut("⌘C")
+    .with_icon(IconName::Copy)
+}
+
+fn clear_conversation_action() -> Action {
+    Action::new(
+        "chat:clear_conversation",
+        "Clear Conversation",
+        Some("Clears all messages".to_string()),
+        ActionCategory::ScriptContext,
+    )
+    .with_shortcut("⌘⌫")
+    .with_icon(IconName::Trash)
+}
+
+fn append_transcript_actions(actions: &mut Vec<Action>, plan: ChatTranscriptActionPlan) {
+    match plan {
+        ChatTranscriptActionPlan::NoTranscriptActions => {}
+        ChatTranscriptActionPlan::CopyLastResponse => actions.push(copy_last_response_action()),
+        ChatTranscriptActionPlan::ClearConversation => actions.push(clear_conversation_action()),
+        ChatTranscriptActionPlan::CopyLastResponseAndClearConversation => {
+            actions.push(copy_last_response_action());
+            actions.push(clear_conversation_action());
+        }
+    }
+}
+
 // ── Chat route constants ─────────────────────────────────────────────
 
 pub const CHAT_CHANGE_MODEL_ACTION_ID: &str = "chat:change_model";
@@ -172,31 +225,7 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         .with_icon(IconName::MessageCircle),
     );
 
-    if info.has_response {
-        actions.push(
-            Action::new(
-                "chat:copy_response",
-                "Copy Last Response",
-                Some("Copies the last assistant response".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘C")
-            .with_icon(IconName::Copy),
-        );
-    }
-
-    if info.has_messages {
-        actions.push(
-            Action::new(
-                "chat:clear_conversation",
-                "Clear Conversation",
-                Some("Clears all messages".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⌘⌫")
-            .with_icon(IconName::Trash),
-        );
-    }
+    append_transcript_actions(&mut actions, ChatTranscriptActionPlan::from_info(info));
 
     actions.push(
         Action::new(

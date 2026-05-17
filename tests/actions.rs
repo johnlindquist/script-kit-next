@@ -79,6 +79,26 @@ fn action_handler_dispatch_structure_exists() {
     );
 }
 
+#[test]
+fn chat_transcript_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/chat.rs")
+        .expect("Failed to read chat action builder");
+
+    assert!(
+        content.contains("enum ChatTranscriptActionPlan")
+            && content.contains("NoTranscriptActions")
+            && content.contains("CopyLastResponse")
+            && content.contains("ClearConversation")
+            && content.contains("CopyLastResponseAndClearConversation"),
+        "chat transcript copy/clear actions should be driven by named transcript action plan states"
+    );
+    assert!(
+        content.contains("fn append_transcript_actions")
+            && content.contains("ChatTranscriptActionPlan::from_info(info)"),
+        "chat context actions should append transcript actions from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
