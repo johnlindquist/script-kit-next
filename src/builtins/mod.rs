@@ -1553,7 +1553,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/accessibility-settings",
             "Open Accessibility Settings",
-            "Open Accessibility settings in System Preferences",
+            "Open Accessibility settings in macOS System Settings",
             vec!["accessibility", "settings", "permission", "open"],
             BuiltInFeature::PermissionCommand(PermissionCommandType::OpenAccessibilitySettings),
             "accessibility",

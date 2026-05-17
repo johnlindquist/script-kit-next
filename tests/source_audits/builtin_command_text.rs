@@ -153,4 +153,20 @@ fn permission_assistant_commands_do_not_claim_to_grant_permissions() {
             "settings hub should use the same assistant wording for {id}"
         );
     }
+
+    let accessibility_settings = entries
+        .iter()
+        .find(|entry| entry.id == "builtin/accessibility-settings")
+        .expect("accessibility settings builtin should exist");
+    assert_eq!(
+        accessibility_settings.description,
+        "Open Accessibility settings in macOS System Settings"
+    );
+    assert!(
+        !accessibility_settings
+            .description
+            .contains("System Preferences")
+            && settings.contains("Open Accessibility settings in macOS System Settings"),
+        "Accessibility Settings text should use modern macOS System Settings wording"
+    );
 }
