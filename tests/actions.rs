@@ -1402,7 +1402,13 @@ fn surface_open_builtins_use_named_action_states() {
         "Open-surface built-ins should route through named action states"
     );
     assert!(
-        content.contains("SurfaceOpenBuiltinAction::Webcam")
+        content.contains("SurfaceOpenBuiltinAction::ClipboardHistory")
+            && content.contains("SurfaceOpenBuiltinAction::Favorites")
+            && content.contains("SurfaceOpenBuiltinAction::AppLauncher")
+            && content.contains("SurfaceOpenBuiltinAction::DesignGallery")
+            && content.contains("SurfaceOpenBuiltinAction::AiChat")
+            && content.contains("SurfaceOpenBuiltinAction::EmojiPicker")
+            && content.contains("SurfaceOpenBuiltinAction::Webcam")
             && content.contains("SurfaceOpenBuiltinAction::FileSearch")
             && content.contains("SurfaceOpenBuiltinAction::Settings")
             && content.contains("SurfaceOpenBuiltinAction::AcpHistory")
@@ -1413,7 +1419,13 @@ fn surface_open_builtins_use_named_action_states() {
         "Open-surface state machine should name each covered built-in"
     );
     assert!(
-        content.contains("self.open_webcam(cx)")
+        content.contains("clipboard_history::get_cached_entries(100)")
+            && content.contains("AppView::FavoritesBrowseView")
+            && content.contains("app_launcher::scan_applications()")
+            && content.contains("AppView::DesignGalleryView")
+            && content.contains("open_tab_ai_acp_with_entry_intent(None, cx)")
+            && content.contains("crate::emoji_usage::load_frequent_snapshot")
+            && content.contains("self.open_webcam(cx)")
             && content.contains("self.open_file_search(String::new(), cx)")
             && content.contains("AppView::SettingsView")
             && content.contains("AppView::AcpHistoryView")
