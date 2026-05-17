@@ -2719,8 +2719,8 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
-                        let message = "Send Screen Area to AI is unavailable until \
-                                       selected-area capture is attached to the harness.";
+                        let message = "Send Screen Area to Agent Chat is unavailable until \
+                                       selected-area capture is attached to Agent Chat.";
                         self.toast_manager.push(
                             components::toast::Toast::error(message, &self.theme)
                                 .duration_ms(Some(TOAST_ERROR_MS)),
@@ -4532,7 +4532,7 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening Dictation to AI Harness"
+                    "Opening Dictation to Agent Chat"
                 );
 
                 // On the start edge, run the same model-download and
@@ -4564,7 +4564,7 @@ impl ScriptListApp {
                         tracing::error!(
                             category = "DICTATION",
                             error = %error_text,
-                            "Dictation-to-AI start preflight failed"
+                            "Dictation-to-Agent-Chat start preflight failed"
                         );
                         self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
                         return Self::builtin_success(dctx, "dictation_preflight_failed");
@@ -4622,7 +4622,7 @@ impl ScriptListApp {
                         tracing::error!(
                             category = "DICTATION",
                             error = %error,
-                            "Failed to toggle dictation to AI harness"
+                            "Failed to toggle dictation to Agent Chat"
                         );
                         let _ = crate::dictation::update_dictation_overlay(
                             crate::dictation::DictationOverlayState {
@@ -6267,8 +6267,8 @@ impl ScriptListApp {
     }
 
     /// Resolve the dictation delivery target, optionally overriding to
-    /// `TabAiHarness` so a dedicated "dictate to AI" action can force
-    /// harness delivery even when the harness is not already on-screen.
+    /// `TabAiHarness` so a dedicated "dictate to Agent Chat" action can
+    /// force harness delivery even when the harness is not already on-screen.
     pub(crate) fn resolve_dictation_target_with_override(
         &self,
         force_tab_ai_harness: bool,

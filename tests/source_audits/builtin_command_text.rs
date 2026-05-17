@@ -4,6 +4,7 @@ use script_kit_gpui::{builtins::get_builtin_entries, config::BuiltInConfig};
 fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
     let entries = get_builtin_entries(&BuiltInConfig::default());
     let builtins_source = super::read_source("src/builtins/mod.rs");
+    let execution_source = super::read_source("src/app_execute/builtin_execution.rs");
     let agent_chat = entries
         .iter()
         .find(|entry| entry.id == "builtin/ai-chat")
@@ -16,6 +17,13 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
             .contains("AiCommandType::SendScreenAreaToAi => \"Select Area for Agent Chat\"")
             && !builtins_source.contains("Select Area for AI"),
         "screen-area Agent Chat label should not regress to generic AI wording"
+    );
+    assert!(
+        execution_source.contains("Send Screen Area to Agent Chat is unavailable")
+            && execution_source.contains("Opening Dictation to Agent Chat")
+            && !execution_source.contains("Send Screen Area to AI is unavailable")
+            && !execution_source.contains("Dictation-to-AI"),
+        "Agent Chat execution messages should not regress to generic AI wording"
     );
 
     for (id, expected_name, expected_action) in [
