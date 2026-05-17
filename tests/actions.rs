@@ -1937,10 +1937,13 @@ fn utility_trace_builtin_uses_named_action_states() {
         "Utility trace built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("UtilityTraceBuiltinAction::from_command(*cmd_type)")
+        content.contains("UtilityTraceBuiltinAction::from_command(command)")
             && content.contains("fn execute_utility_trace_builtin(")
             && content.contains("action.success_detail()")
             && content.contains("action.serialize_failure_detail()")
+            && content.contains("action.copied_hud(")
+            && content.contains("action.serialize_failure_message(&e)")
+            && content.contains("action.capture_failure_message(&e)")
             && content.contains("action.capture_failure_detail()"),
         "Utility trace command routing should delegate through named state details"
     );
@@ -1950,6 +1953,12 @@ fn utility_trace_builtin_uses_named_action_states() {
             && content.contains("Copied app intent trace:")
             && content.contains("trace_current_app_intent_capture_failed"),
         "Trace Current App Intent should preserve query normalization, receipt copy, HUD, and capture failure copy"
+    );
+    assert!(
+        content.contains("Copied app intent trace: {action_name}")
+            && content.contains("format!(\"Failed to serialize current app intent trace: {error}\")")
+            && content.contains("Failed to inspect current app intent: {error}. Check Accessibility permission"),
+        "Trace Current App Intent state should preserve copied HUD and failure copy"
     );
 }
 

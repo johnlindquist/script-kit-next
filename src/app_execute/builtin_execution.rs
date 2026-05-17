@@ -599,6 +599,35 @@ impl UtilityTraceBuiltinAction {
             Self::CurrentAppIntent => "trace_current_app_intent_capture_failed",
         }
     }
+
+    fn copied_hud(
+        self,
+        action_name: &str,
+        exact_matches: usize,
+        filtered_entries: usize,
+    ) -> String {
+        match self {
+            Self::CurrentAppIntent => format!(
+                "Copied app intent trace: {action_name} ({exact_matches} exact / {filtered_entries} filtered)"
+            ),
+        }
+    }
+
+    fn serialize_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::CurrentAppIntent => {
+                format!("Failed to serialize current app intent trace: {error}")
+            }
+        }
+    }
+
+    fn capture_failure_message(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::CurrentAppIntent => format!(
+                "Failed to inspect current app intent: {error}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again."
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -5677,9 +5706,8 @@ impl ScriptListApp {
 
                         cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
                         self.show_hud(
-                            format!(
-                                "Copied app intent trace: {} ({} exact / {} filtered)",
-                                trace_receipt.action,
+                            action.copied_hud(
+                                &trace_receipt.action,
                                 trace_receipt.exact_matches,
                                 trace_receipt.filtered_entries,
                             ),
@@ -5690,8 +5718,7 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, action.success_detail())
                     }
                     Err(e) => {
-                        let message =
-                            format!("Failed to serialize current app intent trace: {}", e);
+                        let message = action.serialize_failure_message(&e);
                         tracing::error!(
                             trace_id = %dctx.trace_id,
                             error = %e,
@@ -5708,10 +5735,7 @@ impl ScriptListApp {
                 }
             }
             Err(e) => {
-                let message = format!(
-                    "Failed to inspect current app intent: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
-                    e
-                );
+                let message = action.capture_failure_message(&e);
                 tracing::warn!(
                     trace_id = %dctx.trace_id,
                     error = %e,
