@@ -1201,6 +1201,33 @@ fn utility_trace_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_verify_recipe_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityRecipeBuiltinAction") && content.contains("VerifyCurrentApp"),
+        "Utility recipe built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_verify_recipe_builtin(")
+            && content.contains("action.success_detail()")
+            && content.contains("action.clipboard_failure_detail()")
+            && content.contains("action.serialize_failure_detail()")
+            && content.contains("action.capture_failure_detail()"),
+        "Verify Current App Recipe routing should delegate through named state details"
+    );
+    assert!(
+        content.contains("load_current_app_command_recipe_from_clipboard")
+            && content.contains("verify_current_app_command_recipe")
+            && content.contains("build_current_app_command_verification_hud_message")
+            && content.contains("verify_current_app_recipe_capture_failed"),
+        "Verify Current App Recipe should preserve clipboard loading, live verification, HUD, and capture failure copy"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
