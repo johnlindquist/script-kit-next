@@ -80,7 +80,7 @@ fn generate_script_actions_name_agent_chat_handoff() {
     for (id, expected_name, expected_action, expected_description) in [
         (
             "builtin/generate-script-with-ai",
-            "Generate Script with AI",
+            "Generate Script with Agent Chat",
             "Open Agent Chat to Generate Script",
             "Open Agent Chat to generate a Script Kit script from your prompt text",
         ),
