@@ -37,7 +37,8 @@ impl FileSearchHandlerAction {
     fn error_prefix(self, action_id: &str) -> &'static str {
         match self {
             Self::Open | Self::QuickLook | Self::OpenWith | Self::ShowInfo => {
-                file_search_action_error_hud_prefix(action_id).unwrap_or("Failed to complete action")
+                file_search_action_error_hud_prefix(action_id)
+                    .unwrap_or("Failed to complete action")
             }
             Self::AttachToAi => "Failed to attach",
         }
@@ -54,6 +55,14 @@ enum FileSearchSortHandlerAction {
     NameDesc,
     ModifiedDesc,
     ModifiedAsc,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchCurrentDirectoryAction {
+    Refresh,
+    Reveal,
+    CopyPath,
+    OpenQuickTerminal,
 }
 
 impl FileSearchSortHandlerAction {
@@ -82,6 +91,44 @@ impl FileSearchSortHandlerAction {
             Self::NameDesc => "Sorted by Name (Z\u{2192}A)",
             Self::ModifiedDesc => "Sorted by Modified (Newest)",
             Self::ModifiedAsc => "Sorted by Modified (Oldest)",
+        }
+    }
+}
+
+impl FileSearchCurrentDirectoryAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "refresh_directory" => Some(Self::Refresh),
+            "reveal_current_directory" => Some(Self::Reveal),
+            "copy_current_directory_path" => Some(Self::CopyPath),
+            "open_current_directory_in_quick_terminal" => Some(Self::OpenQuickTerminal),
+            _ => None,
+        }
+    }
+
+    fn missing_directory_message(self) -> &'static str {
+        match self {
+            Self::Refresh => "No current directory to refresh",
+            Self::Reveal => "No current directory to reveal",
+            Self::CopyPath => "No current directory to copy",
+            Self::OpenQuickTerminal => "No current directory to open",
+        }
+    }
+
+    fn success_hud(self, dir: &str) -> Option<String> {
+        match self {
+            Self::Refresh => Some("Refreshed Directory".to_string()),
+            Self::Reveal => Some("Opened in Finder".to_string()),
+            Self::CopyPath => Some(format!("Copied: {dir}")),
+            Self::OpenQuickTerminal => None,
+        }
+    }
+
+    fn error_prefix(self) -> &'static str {
+        match self {
+            Self::Reveal => "Failed to reveal current directory",
+            Self::OpenQuickTerminal => "Failed to open current directory in Quick Terminal",
+            Self::Refresh | Self::CopyPath => "Failed to use current directory",
         }
     }
 }
@@ -897,87 +944,94 @@ impl ScriptListApp {
                     self.file_search_scroll_handle
                         .scroll_to_item(*selected_index, gpui::ScrollStrategy::Nearest);
                 }
-                self.show_hud(sort_action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
+                self.show_hud(
+                    sort_action.success_hud().to_string(),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
                 self.restore_file_search_input_focus(cx);
                 cx.notify();
                 DispatchOutcome::success()
             }
-            "refresh_directory" => {
+            "refresh_directory"
+            | "reveal_current_directory"
+            | "copy_current_directory_path"
+            | "open_current_directory_in_quick_terminal" => {
+                let Some(directory_action) =
+                    FileSearchCurrentDirectoryAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(dir) = self.current_file_search_directory_abs() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No current directory to refresh",
+                        directory_action.missing_directory_message(),
                     );
                 };
-                let (query, presentation) = if let AppView::FileSearchView {
-                    query,
-                    presentation,
-                    ..
-                } = &self.current_view
-                {
-                    (query.clone(), *presentation)
-                } else {
-                    (format!("{dir}/"), FileSearchPresentation::Mini)
-                };
-                let frozen_filter = crate::file_search::parse_directory_path(&query)
-                    .map(|parsed| parsed.filter)
-                    .unwrap_or(None);
-                self.restart_file_search_stream_for_query(
-                    query,
-                    presentation,
-                    Some(frozen_filter),
-                    true,
-                    cx,
-                );
-                self.show_hud("Refreshed Directory".to_string(), Some(HUD_SHORT_MS), cx);
-                self.restore_file_search_input_focus(cx);
-                DispatchOutcome::success()
-            }
-            "reveal_current_directory" => {
-                let Some(dir) = self.current_file_search_directory_abs() else {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No current directory to reveal",
-                    );
-                };
-                match crate::file_search::reveal_in_finder(&dir) {
-                    Ok(()) => {
-                        self.show_hud("Opened in Finder".to_string(), Some(HUD_SHORT_MS), cx);
+
+                match directory_action {
+                    FileSearchCurrentDirectoryAction::Refresh => {
+                        let (query, presentation) = if let AppView::FileSearchView {
+                            query,
+                            presentation,
+                            ..
+                        } = &self.current_view
+                        {
+                            (query.clone(), *presentation)
+                        } else {
+                            (format!("{dir}/"), FileSearchPresentation::Mini)
+                        };
+                        let frozen_filter = crate::file_search::parse_directory_path(&query)
+                            .map(|parsed| parsed.filter)
+                            .unwrap_or(None);
+                        self.restart_file_search_stream_for_query(
+                            query,
+                            presentation,
+                            Some(frozen_filter),
+                            true,
+                            cx,
+                        );
+                        if let Some(message) = directory_action.success_hud(&dir) {
+                            self.show_hud(message, Some(HUD_SHORT_MS), cx);
+                        }
+                        self.restore_file_search_input_focus(cx);
                         DispatchOutcome::success()
                     }
-                    Err(e) => DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Failed to reveal current directory: {e}"),
-                    ),
-                }
-            }
-            "copy_current_directory_path" => {
-                let Some(dir) = self.current_file_search_directory_abs() else {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No current directory to copy",
-                    );
-                };
-                self.copy_to_clipboard_with_feedback(&dir, format!("Copied: {dir}"), true, cx);
-                DispatchOutcome::success()
-            }
-            "open_current_directory_in_quick_terminal" => {
-                let Some(dir) = self.current_file_search_directory_abs() else {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No current directory to open",
-                    );
-                };
-                match crate::action_helpers::resolve_quick_terminal_cwd(std::path::Path::new(&dir))
-                {
-                    Ok(cwd) => {
-                        self.open_quick_terminal(Some(cwd), cx);
+                    FileSearchCurrentDirectoryAction::Reveal => {
+                        match crate::file_search::reveal_in_finder(&dir) {
+                            Ok(()) => {
+                                if let Some(message) = directory_action.success_hud(&dir) {
+                                    self.show_hud(message, Some(HUD_SHORT_MS), cx);
+                                }
+                                DispatchOutcome::success()
+                            }
+                            Err(e) => DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                format!("{}: {e}", directory_action.error_prefix()),
+                            ),
+                        }
+                    }
+                    FileSearchCurrentDirectoryAction::CopyPath => {
+                        let message = directory_action
+                            .success_hud(&dir)
+                            .unwrap_or_else(|| format!("Copied: {dir}"));
+                        self.copy_to_clipboard_with_feedback(&dir, message, true, cx);
                         DispatchOutcome::success()
                     }
-                    Err(e) => DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Failed to open current directory in Quick Terminal: {e}"),
-                    ),
+                    FileSearchCurrentDirectoryAction::OpenQuickTerminal => {
+                        match crate::action_helpers::resolve_quick_terminal_cwd(
+                            std::path::Path::new(&dir),
+                        ) {
+                            Ok(cwd) => {
+                                self.open_quick_terminal(Some(cwd), cx);
+                                DispatchOutcome::success()
+                            }
+                            Err(e) => DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                format!("{}: {e}", directory_action.error_prefix()),
+                            ),
+                        }
+                    }
                 }
             }
             _ => DispatchOutcome::not_handled(),

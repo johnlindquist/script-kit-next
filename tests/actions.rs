@@ -503,6 +503,28 @@ fn file_search_sort_handler_uses_named_action_states() {
 }
 
 #[test]
+fn file_search_current_directory_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchCurrentDirectoryAction")
+            && content.contains("Refresh")
+            && content.contains("Reveal")
+            && content.contains("CopyPath")
+            && content.contains("OpenQuickTerminal"),
+        "file-search current-directory handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("FileSearchCurrentDirectoryAction::from_action_id(action_id)")
+            && content.contains("directory_action.missing_directory_message()")
+            && content.contains("directory_action.success_hud(&dir)")
+            && content.contains("directory_action.error_prefix()"),
+        "file-search current-directory handler should derive missing-target, HUD, and error copy from named states"
+    );
+}
+
+#[test]
 fn file_search_sort_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/file_path.rs")
         .expect("Failed to read file path builder");
