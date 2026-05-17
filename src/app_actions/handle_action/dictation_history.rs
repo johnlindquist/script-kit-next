@@ -51,6 +51,13 @@ impl DictationHistoryHandlerAction {
             Self::Paste | Self::AttachToAi | Self::Copy => None,
         }
     }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        let prefix = self
+            .error_prefix()
+            .unwrap_or("Failed to complete dictation action");
+        format!("{prefix}: {error}")
+    }
 }
 
 impl ScriptListApp {
@@ -145,12 +152,9 @@ impl ScriptListApp {
                         }
                     }
                     Err(error) => {
-                        let prefix = history_action
-                            .error_prefix()
-                            .unwrap_or("Failed to complete dictation action");
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("{prefix}: {error}"),
+                            history_action.failure_message(error),
                         );
                     }
                 }
@@ -184,12 +188,9 @@ impl ScriptListApp {
                 };
 
                 if let Err(error) = crate::dictation::delete_history_entry(&entry.id) {
-                    let prefix = history_action
-                        .error_prefix()
-                        .unwrap_or("Failed to complete dictation action");
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("{prefix}: {error}"),
+                        history_action.failure_message(error),
                     );
                 }
 
