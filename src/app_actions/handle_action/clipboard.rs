@@ -47,6 +47,11 @@ enum ClipboardExternalFileHandlerAction {
     OpenWith,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardSaveSnippetHandlerAction {
+    SaveSnippet,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -1150,18 +1155,19 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "clipboard_save_snippet" => {
+                let save_snippet_action = ClipboardSaveSnippetHandlerAction::SaveSnippet;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(save_snippet_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
                 if entry.content_type != clipboard_history::ContentType::Text {
-                    self.show_error_toast("Only text can be saved as snippet", cx);
+                    self.show_error_toast(save_snippet_action.text_required_message(), cx);
                     return DispatchOutcome::success();
                 }
 
                 let Some(content) = clipboard_history::get_entry_content(&entry.id) else {
-                    self.show_error_toast("Clipboard content unavailable", cx);
+                    self.show_error_toast(save_snippet_action.content_unavailable_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -1173,7 +1179,7 @@ impl ScriptListApp {
                     .collect::<String>()
                     .to_lowercase();
                 let default_keyword = if default_keyword.is_empty() {
-                    "snippet".to_string()
+                    save_snippet_action.default_keyword().to_string()
                 } else {
                     default_keyword
                 };
@@ -1186,7 +1192,7 @@ impl ScriptListApp {
                     if let Err(e) = std::fs::create_dir_all(&scriptlets_dir) {
                         tracing::error!(error = %e, "failed to create scriptlets dir");
                         self.show_error_toast(
-                            format!("Failed to create snippets: {}", e),
+                            save_snippet_action.create_failure_message(e),
                             cx,
                         );
                         return DispatchOutcome::success();
@@ -1232,7 +1238,7 @@ impl ScriptListApp {
                     Ok(()) => {
                         tracing::info!(keyword = %keyword, "created snippet");
                         self.show_hud(
-                            format!("Snippet created: type '{}' to paste", keyword),
+                            save_snippet_action.success_hud(&keyword),
                             Some(HUD_LONG_MS),
                             cx,
                         );
@@ -1241,7 +1247,7 @@ impl ScriptListApp {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to save snippet");
-                        self.show_error_toast(format!("Failed to save: {}", e), cx);
+                        self.show_error_toast(save_snippet_action.save_failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1296,6 +1302,50 @@ impl ClipboardExternalFileHandlerAction {
         match self {
             Self::QuickLook => "Quick Look",
             Self::OpenWith => "Open With",
+        }
+    }
+}
+
+impl ClipboardSaveSnippetHandlerAction {
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::SaveSnippet => "No clipboard entry selected",
+        }
+    }
+
+    fn text_required_message(self) -> &'static str {
+        match self {
+            Self::SaveSnippet => "Only text can be saved as snippet",
+        }
+    }
+
+    fn content_unavailable_message(self) -> &'static str {
+        match self {
+            Self::SaveSnippet => "Clipboard content unavailable",
+        }
+    }
+
+    fn default_keyword(self) -> &'static str {
+        match self {
+            Self::SaveSnippet => "snippet",
+        }
+    }
+
+    fn create_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SaveSnippet => format!("Failed to create snippets: {error}"),
+        }
+    }
+
+    fn success_hud(self, keyword: &str) -> String {
+        match self {
+            Self::SaveSnippet => format!("Snippet created: type '{keyword}' to paste"),
+        }
+    }
+
+    fn save_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SaveSnippet => format!("Failed to save: {error}"),
         }
     }
 }
