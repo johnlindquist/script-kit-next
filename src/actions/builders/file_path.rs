@@ -377,7 +377,7 @@ fn has_missing_file_context_fields(name: &str, path: &str) -> bool {
 ///
 /// Actions vary based on whether the item is a file or directory:
 /// - Directory: `file:open_directory` as primary
-/// - File: `file:open_file` as primary, plus Quick Look and Attach to AI (macOS)
+/// - File: `file:open_file` as primary, plus Quick Look and Attach to Agent Chat (macOS)
 ///
 /// Secondary actions are driven by `FILE_SEARCH_SECONDARY_COMMANDS` — the
 /// single source of truth shared with the footer and key handler.
@@ -912,7 +912,7 @@ mod secondary_command_contract_tests {
         }
     }
 
-    // --- File on macOS: Quick Look and Attach to AI ---
+    // --- File on macOS: Quick Look and Attach to Agent Chat ---
 
     #[cfg(target_os = "macos")]
     #[test]

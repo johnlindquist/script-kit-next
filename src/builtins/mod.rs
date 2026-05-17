@@ -886,7 +886,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/emoji-picker",
             "Emoji Picker",
-            "Pick an emoji from the built-in list and copy it to the clipboard",
+            "Pick an emoji from the built-in list and paste it into the frontmost app",
             vec!["emoji", "picker", "symbols", "unicode", "copy", "clipboard"],
             BuiltInFeature::EmojiPicker,
             "smile",

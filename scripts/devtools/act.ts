@@ -287,14 +287,25 @@ function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: Json
   };
 }
 
-function classify(targetReceipt: JsonObject, guard: ReturnType<typeof safety>, actionEnvelope: JsonObject, after: JsonObject) {
+function actionFailed(actionReceipt: JsonObject) {
+  if (actionReceipt.status === "error") return true;
+  if (actionReceipt.success === false) return true;
+  if (Array.isArray(actionReceipt.results)) {
+    return actionReceipt.results.some((result) => {
+      return typeof result === "object" && result !== null && (result as JsonObject).success === false;
+    });
+  }
+  return false;
+}
+
+function classify(targetReceipt: JsonObject, guard: ReturnType<typeof safety>, actionReceipt: JsonObject, after: JsonObject) {
   if (guard.errors.length > 0) {
     return "blocked-by-unsafe-operation";
   }
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
-  if (actionEnvelope.status === "error") {
+  if (actionFailed(actionReceipt)) {
     return "blocked-by-timeout";
   }
   if (after.classification && after.classification !== "ok") {
@@ -323,7 +334,8 @@ async function main() {
   const after = await focusReceipt(args, "focus.after");
   const afterScroll = await scrollReceipt(args, "scroll.after");
   const endedAt = new Date().toISOString();
-  const classification = classify(targetReceipt, guard, actionEnvelope, after);
+  const actionReceipt = responseOf(actionEnvelope);
+  const classification = classify(targetReceipt, guard, actionReceipt, after);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -350,7 +362,7 @@ async function main() {
       noNativeEscalation: true,
       prePostReceipts: ["focus.inspect", "scroll.inspect"],
     },
-    actionReceipt: responseOf(actionEnvelope),
+    actionReceipt,
     targetAfter: after.target ?? null,
     visibleResult: visibleResult(before, after, beforeScroll, afterScroll),
     before: { focus: before, scroll: beforeScroll },
@@ -363,7 +375,7 @@ async function main() {
     errors: [
       ...guard.errors.map((error) => ({ error })),
       targetReceipt.classification !== "ok" ? targetReceipt : null,
-      actionEnvelope.status === "error" ? actionEnvelope : null,
+      actionFailed(actionReceipt) ? actionReceipt : null,
     ].filter(Boolean),
   }, null, 2));
 }
