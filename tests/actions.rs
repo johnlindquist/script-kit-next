@@ -327,6 +327,29 @@ fn clipboard_external_file_handlers_use_named_action_states() {
 }
 
 #[test]
+fn clipboard_save_snippet_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardSaveSnippetHandlerAction")
+            && content.contains("SaveSnippet"),
+        "clipboard save-snippet handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("let save_snippet_action = ClipboardSaveSnippetHandlerAction::SaveSnippet")
+            && content.contains("save_snippet_action.selection_required_message()")
+            && content.contains("save_snippet_action.text_required_message()")
+            && content.contains("save_snippet_action.content_unavailable_message()")
+            && content.contains("save_snippet_action.default_keyword()")
+            && content.contains("save_snippet_action.create_failure_message(e)")
+            && content.contains("save_snippet_action.success_hud(&keyword)")
+            && content.contains("save_snippet_action.save_failure_message(e)"),
+        "clipboard save-snippet handler should derive guard, default, success, and failure text from the named action"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");
