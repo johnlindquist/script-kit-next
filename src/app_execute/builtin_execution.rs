@@ -264,6 +264,51 @@ impl PermissionAssistantBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PermissionCommandBuiltinAction {
+    CheckPermissions,
+    RequestAccessibility,
+    OpenAccessibilitySettings,
+    Assistant(PermissionAssistantBuiltinAction),
+}
+
+impl PermissionCommandBuiltinAction {
+    fn from_command(command: builtins::PermissionCommandType) -> Self {
+        if let Some(assistant_action) = PermissionAssistantBuiltinAction::from_command(command) {
+            return Self::Assistant(assistant_action);
+        }
+
+        match command {
+            builtins::PermissionCommandType::CheckPermissions => Self::CheckPermissions,
+            builtins::PermissionCommandType::RequestAccessibility => Self::RequestAccessibility,
+            builtins::PermissionCommandType::OpenAccessibilitySettings => {
+                Self::OpenAccessibilitySettings
+            }
+            builtins::PermissionCommandType::AllowAccessibility
+            | builtins::PermissionCommandType::AllowScreenRecording => unreachable!(
+                "permission assistant commands should be converted before direct permission dispatch"
+            ),
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::CheckPermissions => "check_permissions",
+            Self::RequestAccessibility => "request_accessibility",
+            Self::OpenAccessibilitySettings => "open_accessibility_settings",
+            Self::Assistant(action) => action.success_detail(),
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::OpenAccessibilitySettings => "open_accessibility_settings_failed",
+            Self::Assistant(action) => action.failure_detail(),
+            Self::CheckPermissions | Self::RequestAccessibility => "",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UtilityOpenBuiltinAction {
     MiniMainWindow,
     ScratchPad,
@@ -3343,78 +3388,8 @@ impl ScriptListApp {
                     "Executing permission command"
                 );
 
-                use builtins::PermissionCommandType;
-
-                match cmd_type {
-                    PermissionCommandType::CheckPermissions => {
-                        let status = permissions_wizard::check_all_permissions();
-                        if status.all_granted() {
-                            self.show_hud(
-                                "All permissions granted!".to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
-                        } else {
-                            let missing: Vec<_> = status
-                                .missing_permissions()
-                                .iter()
-                                .map(|p| p.permission_type.name())
-                                .collect();
-                            self.toast_manager.push(
-                                components::toast::Toast::warning(
-                                    format!("Missing permissions: {}", missing.join(", ")),
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(TOAST_WARNING_MS)),
-                            );
-                        }
-                        cx.notify();
-                        Self::builtin_success(dctx, "check_permissions")
-                    }
-                    PermissionCommandType::RequestAccessibility => {
-                        let granted = permissions_wizard::request_accessibility_permission();
-                        if granted {
-                            self.show_hud(
-                                "Accessibility permission granted!".to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
-                        } else {
-                            self.toast_manager.push(
-                                components::toast::Toast::warning(
-                                    "Accessibility permission not granted. Some features may not work.",
-                                    &self.theme,
-                                )
-                                .duration_ms(Some(TOAST_WARNING_MS)),
-                            );
-                        }
-                        cx.notify();
-                        Self::builtin_success(dctx, "request_accessibility")
-                    }
-                    PermissionCommandType::OpenAccessibilitySettings => {
-                        if let Err(e) = permissions_wizard::open_accessibility_settings() {
-                            let message = format!("Failed to open settings: {}", e);
-                            self.show_error_toast(message.clone(), cx);
-                            Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_LAUNCH_FAILED,
-                                message,
-                                "open_accessibility_settings_failed",
-                            )
-                        } else {
-                            self.close_and_reset_window(cx);
-                            Self::builtin_success(dctx, "open_accessibility_settings")
-                        }
-                    }
-                    PermissionCommandType::AllowAccessibility
-                    | PermissionCommandType::AllowScreenRecording => {
-                        let assistant_action = PermissionAssistantBuiltinAction::from_command(
-                            *cmd_type,
-                        )
-                        .expect("permission assistant arm should only receive assistant commands");
-                        self.execute_permission_assistant_builtin(assistant_action, dctx, cx)
-                    }
-                }
+                let permission_action = PermissionCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_permission_command_builtin(permission_action, dctx, cx)
             }
 
             // =========================================================================
@@ -5182,6 +5157,79 @@ impl ScriptListApp {
         }
 
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_permission_command_builtin(
+        &mut self,
+        action: PermissionCommandBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            PermissionCommandBuiltinAction::CheckPermissions => {
+                let status = permissions_wizard::check_all_permissions();
+                if status.all_granted() {
+                    self.show_hud(
+                        "All permissions granted!".to_string(),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
+                } else {
+                    let missing: Vec<_> = status
+                        .missing_permissions()
+                        .iter()
+                        .map(|p| p.permission_type.name())
+                        .collect();
+                    self.toast_manager.push(
+                        components::toast::Toast::warning(
+                            format!("Missing permissions: {}", missing.join(", ")),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    );
+                }
+                cx.notify();
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            PermissionCommandBuiltinAction::RequestAccessibility => {
+                let granted = permissions_wizard::request_accessibility_permission();
+                if granted {
+                    self.show_hud(
+                        "Accessibility permission granted!".to_string(),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
+                } else {
+                    self.toast_manager.push(
+                        components::toast::Toast::warning(
+                            "Accessibility permission not granted. Some features may not work.",
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_WARNING_MS)),
+                    );
+                }
+                cx.notify();
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            PermissionCommandBuiltinAction::OpenAccessibilitySettings => {
+                if let Err(e) = permissions_wizard::open_accessibility_settings() {
+                    let message = format!("Failed to open settings: {}", e);
+                    self.show_error_toast(message.clone(), cx);
+                    Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_LAUNCH_FAILED,
+                        message,
+                        action.failure_detail(),
+                    )
+                } else {
+                    self.close_and_reset_window(cx);
+                    Self::builtin_success(dctx, action.success_detail())
+                }
+            }
+            PermissionCommandBuiltinAction::Assistant(assistant_action) => {
+                self.execute_permission_assistant_builtin(assistant_action, dctx, cx)
+            }
+        }
     }
 
     fn execute_permission_assistant_builtin(
