@@ -29,6 +29,29 @@ impl AppLauncherActivationAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLauncherEmptyState {
+    NoApplicationsFound,
+    NoFilteredMatches,
+}
+
+impl AppLauncherEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoApplicationsFound
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoApplicationsFound => "No applications found",
+            Self::NoFilteredMatches => "No apps match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn app_launcher_filtered_entries<'a>(
         apps: &'a [app_launcher::AppInfo],
@@ -246,11 +269,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No applications found"
-                } else {
-                    "No apps match your filter"
-                })
+                .child(AppLauncherEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             // Clone data for the closure
