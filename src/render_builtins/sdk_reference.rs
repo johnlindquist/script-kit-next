@@ -1,3 +1,16 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SdkReferenceCatalogAction {
+    CopyMarkdownCard,
+}
+
+impl SdkReferenceCatalogAction {
+    fn copied_hud(self, entry_name: &str) -> String {
+        match self {
+            Self::CopyMarkdownCard => format!("Copied {entry_name} reference"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render the in-product SDK Reference browser (list + preview).
     ///
@@ -112,12 +125,13 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if has_cmd && key.eq_ignore_ascii_case("c") {
                     if let Some(entry) = visible.get(current_selected).map(|row| row.entry) {
+                        let catalog_action = SdkReferenceCatalogAction::CopyMarkdownCard;
                         let markdown =
                             crate::mcp_resources::format_sdk_reference_entry_markdown(entry);
                         match crate::platform::copy_text_to_clipboard(&markdown) {
                             Ok(()) => {
                                 this.show_hud(
-                                    format!("Copied {} reference", entry.name),
+                                    catalog_action.copied_hud(&entry.name),
                                     Some(2000),
                                     cx,
                                 );
@@ -130,13 +144,14 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if crate::ui_foundation::is_key_enter(key) {
                     if let Some(entry) = visible.get(current_selected).map(|row| row.entry) {
+                        let catalog_action = SdkReferenceCatalogAction::CopyMarkdownCard;
                         let markdown =
                             crate::mcp_resources::format_sdk_reference_entry_markdown(entry);
                         if let Err(e) = crate::platform::copy_text_to_clipboard(&markdown) {
                             tracing::warn!(error = %e, "sdk_reference enter-copy failed");
                         } else {
                             this.show_hud(
-                                format!("Copied {} reference", entry.name),
+                                catalog_action.copied_hud(&entry.name),
                                 Some(2000),
                                 cx,
                             );
