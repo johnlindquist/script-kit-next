@@ -435,9 +435,10 @@ fn clipboard_paste_keep_open_spawns_paste_simulation_on_success() {
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
     assert!(
-        block.contains("copy_paste_action.should_simulate_paste()")
-            && block.contains("spawn_clipboard_paste_simulation()"),
-        "clipboard_paste_keep_open should call spawn_clipboard_paste_simulation on success"
+        block.contains("copy_paste_action.paste_close_behavior()")
+            && block.contains("finalize_paste_after_clipboard_ready(")
+            && content.contains("Self::PasteKeepOpen => Some(PasteCloseBehavior::KeepWindowOpen)"),
+        "clipboard_paste_keep_open should finalize paste while keeping the window open"
     );
 }
 
@@ -446,19 +447,19 @@ fn clipboard_paste_keep_open_does_not_hide_window() {
     let content = handle_action_content();
 
     let paste_pos = content
-        .find("fn should_hide_window")
+        .find("fn paste_close_behavior")
         .expect("Expected clipboard_paste_keep_open handler");
     // Use a tight window (just this handler) to avoid bleeding
     // into subsequent handlers that do call hide_main_and_reset.
     let end = content[paste_pos..]
-        .find("fn should_simulate_paste")
+        .find("fn success_event")
         .map(|offset| paste_pos + offset)
         .unwrap_or_else(|| content.len().min(paste_pos + 1000));
     let block = &content[paste_pos..end];
 
     assert!(
-        block.contains("matches!(self, Self::PasteAndClose)")
-            && !block.contains("Self::PasteKeepOpen"),
+        block.contains("Self::PasteKeepOpen => Some(PasteCloseBehavior::KeepWindowOpen)")
+            && !block.contains("Self::PasteKeepOpen => Some(PasteCloseBehavior::HideWindow)"),
         "clipboard_paste_keep_open should NOT hide the main window"
     );
 }
@@ -919,13 +920,14 @@ fn clipboard_paste_hides_window_and_spawns_paste_simulation() {
     let block = &content[paste_pos..content.len().min(paste_pos + 3000)];
 
     assert!(
-        block.contains("copy_paste_action.should_hide_window()")
-            && block.contains("hide_main_and_reset"),
+        block.contains("copy_paste_action.paste_close_behavior()")
+            && block.contains("finalize_paste_after_clipboard_ready(")
+            && content.contains("Self::PasteAndClose => Some(PasteCloseBehavior::HideWindow)"),
         "clipboard_paste should hide the main window before pasting"
     );
     assert!(
-        block.contains("spawn_clipboard_paste_simulation()"),
-        "clipboard_paste should call spawn_clipboard_paste_simulation"
+        block.contains("finalize_paste_after_clipboard_ready("),
+        "clipboard_paste should call the shared paste finalizer"
     );
 }
 

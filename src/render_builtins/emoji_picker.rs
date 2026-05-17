@@ -231,18 +231,12 @@ impl ScriptListApp {
                                         "failed to record emoji usage"
                                     );
                                 }
-                                this.hide_main_and_reset(cx);
-                                std::thread::spawn(|| {
-                                    std::thread::sleep(std::time::Duration::from_millis(100));
-                                    if let Err(e) =
-                                        crate::selected_text::simulate_paste_with_cg()
-                                    {
-                                        tracing::error!(
-                                            error = %e,
-                                            "failed to simulate emoji paste"
-                                        );
-                                    }
-                                });
+                                let _ = this.finalize_paste_after_clipboard_ready(
+                                    "emoji",
+                                    emoji.name,
+                                    PasteCloseBehavior::HideWindow,
+                                    cx,
+                                );
                             }
                             cx.stop_propagation();
                         }

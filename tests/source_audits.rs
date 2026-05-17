@@ -80,6 +80,9 @@ mod trigger_builtin_registry_consistency;
 #[path = "source_audits/emoji_picker.rs"]
 mod emoji_picker;
 
+#[path = "source_audits/paste_parity.rs"]
+mod paste_parity;
+
 #[path = "source_audits/dialog_tab_navigation.rs"]
 mod dialog_tab_navigation;
 

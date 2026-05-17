@@ -52,12 +52,12 @@ impl ClipboardCopyPasteHandlerAction {
         }
     }
 
-    fn should_hide_window(self) -> bool {
-        matches!(self, Self::PasteAndClose)
-    }
-
-    fn should_simulate_paste(self) -> bool {
-        matches!(self, Self::PasteAndClose | Self::PasteKeepOpen)
+    fn paste_close_behavior(self) -> Option<PasteCloseBehavior> {
+        match self {
+            Self::PasteAndClose => Some(PasteCloseBehavior::HideWindow),
+            Self::PasteKeepOpen => Some(PasteCloseBehavior::KeepWindowOpen),
+            Self::CopyOnly => None,
+        }
     }
 
     fn success_event(self) -> &'static str {
@@ -289,11 +289,13 @@ impl ScriptListApp {
                             event = copy_paste_action.success_event(),
                             "entry copied to clipboard"
                         );
-                        if copy_paste_action.should_hide_window() {
-                            self.hide_main_and_reset(cx);
-                        }
-                        if copy_paste_action.should_simulate_paste() {
-                            self.spawn_clipboard_paste_simulation();
+                        if let Some(close_behavior) = copy_paste_action.paste_close_behavior() {
+                            return self.finalize_paste_after_clipboard_ready(
+                                "clipboard",
+                                &entry.id,
+                                close_behavior,
+                                cx,
+                            );
                         }
                         if let Some(hud) = copy_paste_action.success_hud() {
                             self.show_hud(hud.to_string(), Some(HUD_SHORT_MS), cx);

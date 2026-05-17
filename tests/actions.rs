@@ -180,11 +180,11 @@ fn clipboard_copy_paste_handler_uses_named_action_states() {
     );
     assert!(
         content.contains("ClipboardCopyPasteHandlerAction::from_action_id(action_id)")
-            && content.contains("copy_paste_action.should_hide_window()")
-            && content.contains("copy_paste_action.should_simulate_paste()")
+            && content.contains("copy_paste_action.paste_close_behavior()")
+            && content.contains("self.finalize_paste_after_clipboard_ready(")
             && content.contains("copy_paste_action.success_hud()")
             && content.contains("copy_paste_action.failure_prefix()"),
-        "clipboard paste/copy handler should derive close, paste, hud, and error behavior from named states"
+        "clipboard paste/copy handler should derive finalizer close behavior, HUD, and error behavior from named states"
     );
 }
 
