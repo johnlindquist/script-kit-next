@@ -220,11 +220,9 @@ impl FileSearchSecondaryCommand {
 
     /// Build an `Action` from this command definition.
     pub(crate) fn to_action(self, file_info: &FileInfo) -> Action {
+        let action_plan = FileItemActionPlan::from_is_dir(file_info.is_dir);
         let description = if self.action_id == "move_to_trash" {
-            format!(
-                "Moves this {} to the Trash",
-                if file_info.is_dir { "folder" } else { "file" }
-            )
+            format!("Moves this {} to the Trash", action_plan.item_noun())
         } else {
             self.description.to_string()
         };
@@ -373,6 +371,77 @@ fn has_missing_file_context_fields(name: &str, path: &str) -> bool {
     name.trim().is_empty() || path.trim().is_empty()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileItemActionPlan {
+    File,
+    Directory,
+}
+
+impl FileItemActionPlan {
+    fn from_is_dir(is_dir: bool) -> Self {
+        if is_dir {
+            Self::Directory
+        } else {
+            Self::File
+        }
+    }
+
+    fn item_noun(self) -> &'static str {
+        match self {
+            Self::File => "file",
+            Self::Directory => "folder",
+        }
+    }
+
+    fn supports_attach_to_ai(self) -> bool {
+        matches!(self, Self::File)
+    }
+
+    fn file_context_primary_action(self, name: &str) -> Action {
+        match self {
+            Self::File => Action::new(
+                "file:open_file",
+                format!("Open \"{}\"", name),
+                Some("Opens with the default app".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("\u{21b5}")
+            .with_icon(IconName::File)
+            .with_section("Actions"),
+            Self::Directory => Action::new(
+                "file:open_directory",
+                format!("Open \"{}\"", name),
+                Some("Opens this folder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("\u{21b5}")
+            .with_icon(IconName::FolderOpen)
+            .with_section("Actions"),
+        }
+    }
+
+    fn path_context_primary_action(self, name: &str) -> Action {
+        match self {
+            Self::File => Action::new(
+                "file:select_file",
+                format!("Select \"{}\"", name),
+                Some("Selects this file".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_icon(IconName::File),
+            Self::Directory => Action::new(
+                "file:open_directory",
+                format!("Open \"{}\"", name),
+                Some("Opens this directory".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_icon(IconName::FolderOpen),
+        }
+    }
+}
+
 /// Get actions specific to a file search result.
 ///
 /// Actions vary based on whether the item is a file or directory:
@@ -394,6 +463,7 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
     }
 
     let mut actions = Vec::new();
+    let action_plan = FileItemActionPlan::from_is_dir(file_info.is_dir);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -403,31 +473,7 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
     );
 
     // Primary action: open file or directory
-    if file_info.is_dir {
-        actions.push(
-            Action::new(
-                "file:open_directory",
-                format!("Open \"{}\"", file_info.name),
-                Some("Opens this folder".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("\u{21b5}")
-            .with_icon(IconName::FolderOpen)
-            .with_section("Actions"),
-        );
-    } else {
-        actions.push(
-            Action::new(
-                "file:open_file",
-                format!("Open \"{}\"", file_info.name),
-                Some("Opens with the default app".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("\u{21b5}")
-            .with_icon(IconName::File)
-            .with_section("Actions"),
-        );
-    }
+    actions.push(action_plan.file_context_primary_action(&file_info.name));
 
     // Reveal in Finder — kept explicit (not a secondary keyboard command)
     actions.push(
@@ -452,7 +498,7 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         actions.push(command.to_action(file_info));
     }
 
-    if !file_info.is_dir {
+    if action_plan.supports_attach_to_ai() {
         actions.push(
             Action::new(
                 "file:attach_to_ai",
@@ -523,6 +569,7 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         return Vec::new();
     }
 
+    let action_plan = FileItemActionPlan::from_is_dir(path_info.is_dir);
     let mut actions = vec![
         Action::new(
             "file:copy_path",
@@ -561,7 +608,7 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
             "Move to Trash",
             Some(format!(
                 "Moves this {} to the Trash",
-                if path_info.is_dir { "folder" } else { "file" }
+                action_plan.item_noun()
             )),
             ActionCategory::ScriptContext,
         )
@@ -569,31 +616,7 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         .with_icon(IconName::Trash),
     ];
 
-    if path_info.is_dir {
-        actions.insert(
-            0,
-            Action::new(
-                "file:open_directory",
-                format!("Open \"{}\"", path_info.name),
-                Some("Opens this directory".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("↵")
-            .with_icon(IconName::FolderOpen),
-        );
-    } else {
-        actions.insert(
-            0,
-            Action::new(
-                "file:select_file",
-                format!("Select \"{}\"", path_info.name),
-                Some("Selects this file".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("↵")
-            .with_icon(IconName::File),
-        );
-    }
+    actions.insert(0, action_plan.path_context_primary_action(&path_info.name));
 
     actions
 }
