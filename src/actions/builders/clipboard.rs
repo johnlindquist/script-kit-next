@@ -20,6 +20,64 @@ pub struct ClipboardEntryInfo {
     pub frontmost_app_name: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardEntryActionPlan {
+    TextPinned,
+    TextUnpinned,
+    ImagePinned,
+    ImageUnpinned,
+    OtherPinned,
+    OtherUnpinned,
+}
+
+impl ClipboardEntryActionPlan {
+    fn from_entry(entry: &ClipboardEntryInfo) -> Self {
+        match (entry.content_type, entry.pinned) {
+            (ContentType::Text, true) => Self::TextPinned,
+            (ContentType::Text, false) => Self::TextUnpinned,
+            (ContentType::Image, true) => Self::ImagePinned,
+            (ContentType::Image, false) => Self::ImageUnpinned,
+            (_, true) => Self::OtherPinned,
+            (_, false) => Self::OtherUnpinned,
+        }
+    }
+
+    fn is_image(self) -> bool {
+        matches!(self, Self::ImagePinned | Self::ImageUnpinned)
+    }
+
+    fn is_text(self) -> bool {
+        matches!(self, Self::TextPinned | Self::TextUnpinned)
+    }
+
+    fn pin_action(self) -> Action {
+        if matches!(
+            self,
+            Self::TextPinned | Self::ImagePinned | Self::OtherPinned
+        ) {
+            Action::new(
+                "clip:clipboard_unpin",
+                "Unpin Entry",
+                Some("Removes the pin from this entry".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P")
+            .with_icon(IconName::StarFilled)
+            .with_section("Edit")
+        } else {
+            Action::new(
+                "clip:clipboard_pin",
+                "Pin Entry",
+                Some("Pins this entry to prevent auto-removal".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘P")
+            .with_icon(IconName::Star)
+            .with_section("Edit")
+        }
+    }
+}
+
 /// Get actions specific to a clipboard history entry.
 #[allow(clippy::vec_init_then_push)]
 pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<Action> {
@@ -34,6 +92,7 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
     }
 
     let mut actions = Vec::new();
+    let entry_plan = ClipboardEntryActionPlan::from_entry(entry);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -120,7 +179,7 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         .with_section("Actions"),
     );
 
-    if entry.content_type == ContentType::Image {
+    if entry_plan.is_image() {
         #[cfg(target_os = "macos")]
         actions.push(
             Action::new(
@@ -161,33 +220,9 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         );
     }
 
-    if entry.pinned {
-        actions.push(
-            Action::new(
-                "clip:clipboard_unpin",
-                "Unpin Entry",
-                Some("Removes the pin from this entry".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::StarFilled)
-            .with_section("Edit"),
-        );
-    } else {
-        actions.push(
-            Action::new(
-                "clip:clipboard_pin",
-                "Pin Entry",
-                Some("Pins this entry to prevent auto-removal".to_string()),
-                ActionCategory::ScriptContext,
-            )
-            .with_shortcut("⇧⌘P")
-            .with_icon(IconName::Star)
-            .with_section("Edit"),
-        );
-    }
+    actions.push(entry_plan.pin_action());
 
-    if entry.content_type == ContentType::Image {
+    if entry_plan.is_image() {
         actions.push(
             Action::new(
                 "clip:clipboard_ocr",
@@ -201,7 +236,7 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
         );
     }
 
-    if entry.content_type == ContentType::Text {
+    if entry_plan.is_text() {
         actions.push(
             Action::new(
                 "clip:clipboard_save_snippet",
