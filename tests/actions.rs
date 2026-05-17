@@ -1314,6 +1314,32 @@ fn utility_do_in_current_app_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_current_app_commands_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum UtilityCurrentAppCommandsBuiltinAction")
+            && content.contains("UtilityCurrentAppCommandsBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_current_app_commands_builtin("),
+        "Current App Commands should route through a named utility action state"
+    );
+    assert!(
+        content.contains("action.success_detail()")
+            && content.contains("action.capture_failure_detail()")
+            && content.contains("open_current_app_commands")
+            && content.contains("current_app_commands_capture_failed"),
+        "Current App Commands outcomes should use named state details"
+    );
+    assert!(
+        content.contains("load_frontmost_menu_snapshot")
+            && content.contains("into_entries_with_receipt")
+            && content.contains("present_current_app_commands_entries(entries, &receipt, pid, \"\", cx)"),
+        "Current App Commands should preserve frontmost snapshot loading and empty-filter presentation"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

@@ -580,6 +580,32 @@ impl UtilityDoInCurrentAppBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityCurrentAppCommandsBuiltinAction {
+    Open,
+}
+
+impl UtilityCurrentAppCommandsBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::CurrentAppCommands => Some(Self::Open),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Open => "open_current_app_commands",
+        }
+    }
+
+    fn capture_failure_detail(self) -> &'static str {
+        match self {
+            Self::Open => "current_app_commands_capture_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3708,49 +3734,15 @@ impl ScriptListApp {
                         )
                     }
                     UtilityCommandType::CurrentAppCommands => {
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            "current_app_commands.open_requested"
-                        );
-                        match crate::menu_bar::load_frontmost_menu_snapshot() {
-                            Ok(snapshot) => {
-                                let pid = snapshot.pid;
-                                let (entries, receipt) = snapshot.into_entries_with_receipt();
-
-                                tracing::info!(
-                                    trace_id = %dctx.trace_id,
-                                    pid,
-                                    app_name = %receipt.app_name,
-                                    bundle_id = %receipt.bundle_id,
-                                    top_level_menu_count = receipt.top_level_menu_count,
-                                    leaf_entry_count = receipt.leaf_entry_count,
-                                    placeholder = %receipt.placeholder,
-                                    source = receipt.source,
-                                    "current_app_commands.snapshot_ready"
-                                );
-
-                                self.present_current_app_commands_entries(
-                                    entries, &receipt, pid, "", cx,
-                                );
-                                Self::builtin_success(dctx, "open_current_app_commands")
-                            }
-                            Err(e) => {
-                                let message =
-                                    format!("Failed to load frontmost app menu bar: {}", e);
-                                tracing::warn!(
-                                    trace_id = %dctx.trace_id,
-                                    error = %e,
-                                    "current_app_commands.capture_failed"
-                                );
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "current_app_commands_capture_failed",
-                                )
-                            }
-                        }
+                        let current_app_action =
+                            UtilityCurrentAppCommandsBuiltinAction::from_command(*cmd_type).expect(
+                                "utility current-app arm should only receive CurrentAppCommands",
+                            );
+                        self.execute_utility_current_app_commands_builtin(
+                            current_app_action,
+                            dctx,
+                            cx,
+                        )
                     }
                 }
             }
@@ -5418,6 +5410,54 @@ impl ScriptListApp {
             }
             Err(e) => {
                 let message = format!("Failed to load frontmost app menu bar: {}", e);
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.capture_failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_utility_current_app_commands_builtin(
+        &mut self,
+        action: UtilityCurrentAppCommandsBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            "current_app_commands.open_requested"
+        );
+        match crate::menu_bar::load_frontmost_menu_snapshot() {
+            Ok(snapshot) => {
+                let pid = snapshot.pid;
+                let (entries, receipt) = snapshot.into_entries_with_receipt();
+
+                tracing::info!(
+                    trace_id = %dctx.trace_id,
+                    pid,
+                    app_name = %receipt.app_name,
+                    bundle_id = %receipt.bundle_id,
+                    top_level_menu_count = receipt.top_level_menu_count,
+                    leaf_entry_count = receipt.leaf_entry_count,
+                    placeholder = %receipt.placeholder,
+                    source = receipt.source,
+                    "current_app_commands.snapshot_ready"
+                );
+
+                self.present_current_app_commands_entries(entries, &receipt, pid, "", cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(e) => {
+                let message = format!("Failed to load frontmost app menu bar: {}", e);
+                tracing::warn!(
+                    trace_id = %dctx.trace_id,
+                    error = %e,
+                    "current_app_commands.capture_failed"
+                );
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
                     dctx,
