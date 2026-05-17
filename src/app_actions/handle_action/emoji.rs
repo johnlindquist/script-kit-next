@@ -8,6 +8,18 @@ enum EmojiPinHandlerAction {
     Unpin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmojiCopyHandlerAction {
+    Emoji,
+    Unicode,
+    Section,
+}
+
+struct EmojiCopyPayload {
+    clipboard_text: String,
+    hud_text: String,
+}
+
 impl EmojiPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -39,6 +51,57 @@ impl EmojiPinHandlerAction {
         match self {
             Self::Pin => format!("Pinned {emoji_value}"),
             Self::Unpin => format!("Unpinned {emoji_value}"),
+        }
+    }
+}
+
+impl EmojiCopyHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "emoji_copy" => Some(Self::Emoji),
+            "emoji_copy_unicode" => Some(Self::Unicode),
+            "emoji_copy_section" => Some(Self::Section),
+            _ => None,
+        }
+    }
+
+    fn payload(
+        self,
+        emoji: &crate::actions::EmojiActionInfo,
+    ) -> Result<EmojiCopyPayload, &'static str> {
+        match self {
+            Self::Emoji => Ok(EmojiCopyPayload {
+                clipboard_text: emoji.value.clone(),
+                hud_text: format!("Copied {}", emoji.value),
+            }),
+            Self::Unicode => {
+                use itertools::Itertools as _;
+                let unicode_str = emoji
+                    .value
+                    .chars()
+                    .map(|c| format!("U+{:04X}", c as u32))
+                    .join(" ");
+
+                Ok(EmojiCopyPayload {
+                    clipboard_text: unicode_str.clone(),
+                    hud_text: format!("Copied {unicode_str}"),
+                })
+            }
+            Self::Section => {
+                let Some(category) = emoji.category else {
+                    return Err("No category for this emoji");
+                };
+                let category_emojis = crate::emoji::emojis_by_category(category);
+                let all_emojis = {
+                    use itertools::Itertools as _;
+                    category_emojis.iter().map(|e| e.emoji).join("")
+                };
+
+                Ok(EmojiCopyPayload {
+                    clipboard_text: all_emojis,
+                    hud_text: format!("Copied {} emojis from {}", category_emojis.len(), category),
+                })
+            }
         }
     }
 }
@@ -99,15 +162,26 @@ impl ScriptListApp {
                     cx,
                 )
             }
-            "emoji_copy" => {
+            "emoji_copy" | "emoji_copy_unicode" | "emoji_copy_section" => {
+                let Some(copy_action) = EmojiCopyHandlerAction::from_action_id(action_id) else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(emoji) = selected_emoji else {
                     self.show_error_toast("No emoji selected", cx);
                     return DispatchOutcome::success();
                 };
 
-                tracing::info!(action = "emoji_copy", emoji = %emoji.value, "emoji action");
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(emoji.value.clone()));
-                self.show_hud(format!("Copied {}", emoji.value), Some(HUD_SHORT_MS), cx);
+                let payload = match copy_action.payload(&emoji) {
+                    Ok(payload) => payload,
+                    Err(message) => {
+                        self.show_error_toast(message, cx);
+                        return DispatchOutcome::success();
+                    }
+                };
+
+                tracing::info!(action = %action_id, emoji = %emoji.value, "emoji action");
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(payload.clipboard_text));
+                self.show_hud(payload.hud_text, Some(HUD_SHORT_MS), cx);
                 DispatchOutcome::success()
             }
             "emoji_paste_keep_open" => {
@@ -148,70 +222,6 @@ impl ScriptListApp {
                     self.show_hud(pin_action.success_hud(&emoji.value), Some(HUD_SHORT_MS), cx);
                     cx.notify();
                 }
-                DispatchOutcome::success()
-            }
-            "emoji_copy_unicode" => {
-                let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                let unicode_str: String = {
-                    use itertools::Itertools as _;
-                    emoji
-                        .value
-                        .chars()
-                        .map(|c| format!("U+{:04X}", c as u32))
-                        .join(" ")
-                };
-
-                tracing::info!(
-                    action = "emoji_copy_unicode",
-                    emoji = %emoji.value,
-                    unicode = %unicode_str,
-                    "emoji action"
-                );
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(unicode_str.clone()));
-                self.show_hud(
-                    format!("Copied {}", unicode_str),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
-                DispatchOutcome::success()
-            }
-            "emoji_copy_section" => {
-                let Some(emoji) = selected_emoji else {
-                    self.show_error_toast("No emoji selected", cx);
-                    return DispatchOutcome::success();
-                };
-
-                let Some(category) = emoji.category else {
-                    self.show_error_toast("No category for this emoji", cx);
-                    return DispatchOutcome::success();
-                };
-
-                let category_emojis = crate::emoji::emojis_by_category(category);
-                let all_emojis: String = {
-                    use itertools::Itertools as _;
-                    category_emojis.iter().map(|e| e.emoji).join("")
-                };
-
-                tracing::info!(
-                    action = "emoji_copy_section",
-                    category = %category,
-                    count = category_emojis.len(),
-                    "emoji action"
-                );
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(all_emojis));
-                self.show_hud(
-                    format!(
-                        "Copied {} emojis from {}",
-                        category_emojis.len(),
-                        category
-                    ),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
                 DispatchOutcome::success()
             }
             _ => DispatchOutcome::not_handled(),
