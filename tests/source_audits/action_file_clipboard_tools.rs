@@ -103,8 +103,8 @@ fn clipboard_ocr_guards_non_image_entries() {
         "clipboard_ocr should check that entry is an image"
     );
     assert!(
-        block.contains("OCR is only available for images"),
-        "clipboard_ocr should reject non-image entries with clear message"
+        block.contains("ocr_action.image_required_message()"),
+        "clipboard_ocr should reject non-image entries through named action state"
     );
 }
 
@@ -126,8 +126,8 @@ fn clipboard_ocr_uses_cached_text_when_available() {
         "clipboard_ocr should log when using cached OCR text"
     );
     assert!(
-        block.contains("Copied text from image"),
-        "clipboard_ocr success should show copy feedback"
+        block.contains("ocr_action.copied_hud()"),
+        "clipboard_ocr success should show copy feedback through named action state"
     );
 }
 
@@ -145,8 +145,8 @@ fn clipboard_ocr_shows_error_when_no_entry_selected() {
     let block = &content[ocr_pos..content.len().min(ocr_pos + 3000)];
 
     assert!(
-        block.contains("No clipboard entry selected"),
-        "clipboard_ocr should show error when no entry is selected"
+        block.contains("ocr_action.selection_required_message()"),
+        "clipboard_ocr should show error through named action state when no entry is selected"
     );
 }
 
