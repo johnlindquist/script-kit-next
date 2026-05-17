@@ -68,6 +68,18 @@ enum ClipboardBulkDeleteHandlerAction {
     AllUnpinned,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ClipboardBulkDeleteResult {
+    deleted: usize,
+    failed: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardBulkDeleteOutcome {
+    Complete,
+    PartialFailure,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -1011,18 +1023,8 @@ impl ScriptListApp {
                         this.refresh_clipboard_selection_after_delete();
                         cx.notify();
 
-                        if failed == 0 {
-                            this.show_hud(
-                                bulk_delete_action.success_hud(deleted),
-                                Some(HUD_2500_MS),
-                                cx,
-                            );
-                        } else {
-                            this.show_error_toast(
-                                bulk_delete_action.partial_failure_message(deleted, failed),
-                                cx,
-                            );
-                        }
+                        ClipboardBulkDeleteResult { deleted, failed }
+                            .show_feedback(bulk_delete_action, this, cx);
                     });
                 })
                 .detach();
@@ -1572,6 +1574,31 @@ impl ClipboardBulkDeleteHandlerAction {
         match self {
             Self::MatchingEntries | Self::AllUnpinned => {
                 format!("Failed to delete: {error}")
+            }
+        }
+    }
+}
+
+impl ClipboardBulkDeleteResult {
+    fn outcome(self) -> ClipboardBulkDeleteOutcome {
+        match self.failed {
+            0 => ClipboardBulkDeleteOutcome::Complete,
+            _ => ClipboardBulkDeleteOutcome::PartialFailure,
+        }
+    }
+
+    fn show_feedback(
+        self,
+        action: ClipboardBulkDeleteHandlerAction,
+        app: &mut ScriptListApp,
+        cx: &mut Context<ScriptListApp>,
+    ) {
+        match self.outcome() {
+            ClipboardBulkDeleteOutcome::Complete => {
+                app.show_hud(action.success_hud(self.deleted), Some(HUD_2500_MS), cx);
+            }
+            ClipboardBulkDeleteOutcome::PartialFailure => {
+                app.show_error_toast(action.partial_failure_message(self.deleted, self.failed), cx);
             }
         }
     }
