@@ -535,6 +535,30 @@ fn script_source_handler_uses_named_action_states() {
 }
 
 #[test]
+fn settings_editor_launch_uses_named_plan_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+        .expect("Failed to read script action handler");
+
+    assert!(
+        content.contains("enum SettingsEditorLaunchPlan")
+            && content.contains("ReuseWindowWithProject")
+            && content.contains("FileOnlyZed")
+            && content.contains("AddToSublimeProject")
+            && content.contains("GenericFileOnly"),
+        "settings editor launch should be driven by named editor plan states"
+    );
+    assert!(
+        content.contains("SettingsEditorLaunchPlan::from_editor(&editor)")
+            && content.contains("launch_plan.spawn(&editor, &config_dir, &config_file)")
+            && content.contains("\"code\" | \"cursor\"")
+            && content.contains("Command::new(\"zed\")")
+            && content.contains("Command::new(\"subl\")")
+            && content.contains("Command::new(editor).arg(config_file).spawn()"),
+        "settings should derive editor-specific command arguments from the named launch plan"
+    );
+}
+
+#[test]
 fn scriptlet_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/scriptlet.rs")
         .expect("Failed to read scriptlet builder");
