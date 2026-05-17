@@ -281,10 +281,10 @@ end tell"#,
 #[cfg(test)]
 mod app_actions_tests {
     use super::{
-        ScriptRemovalTarget, extract_scriptlet_source_path, file_search_action_error_hud_prefix,
+        extract_scriptlet_source_path, file_search_action_error_hud_prefix,
         file_search_action_success_hud, script_removal_target_from_result,
-        select_clipboard_entry_meta,
-        selection_required_message_for_action, should_transition_to_script_list_after_action,
+        select_clipboard_entry_meta, selection_required_message_for_action,
+        should_transition_to_script_list_after_action, ScriptRemovalTarget,
     };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
@@ -847,8 +847,8 @@ mod app_actions_tests {
             "Expected remove_script to use the entity-owned parent confirm helper before deleting"
         );
         assert!(
-            block.contains("Move to Trash"),
-            "Expected confirmation dialog to say 'Move to Trash'"
+            block.contains("removal_action.confirm_title()"),
+            "Expected confirmation dialog text to come from the script removal action"
         );
     }
 
@@ -862,8 +862,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 1200];
 
         assert!(
-            block.contains("Failed to remove:"),
-            "Expected remove_script failure to show descriptive error toast"
+            block.contains("removal_action.failure_message(e)"),
+            "Expected remove_script failure copy to come from the script removal action"
         );
         assert!(
             block.contains("show_error_toast("),
@@ -885,8 +885,8 @@ mod app_actions_tests {
             "Expected remove_script to check if path exists before confirmation"
         );
         assert!(
-            block.contains("no longer exists"),
-            "Expected remove_script to show 'no longer exists' error for missing files"
+            block.contains("ScriptRemovalTargetError::MissingPath"),
+            "Expected remove_script to use the named missing-path target error"
         );
     }
 
@@ -900,8 +900,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 400];
 
         assert!(
-            block.contains("selection_required_message_for_action(action_id)"),
-            "Expected remove_script to use selection_required_message_for_action on missing selection"
+            block.contains("ScriptRemovalTargetError::NoSelection"),
+            "Expected remove_script to use the named no-selection target error"
         );
     }
 
@@ -915,8 +915,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 500];
 
         assert!(
-            block.contains("Cannot remove this item type"),
-            "Expected remove_script to show error for unsupported item types"
+            block.contains("ScriptRemovalTargetError::UnsupportedItemType"),
+            "Expected remove_script to use the named unsupported-item target error"
         );
     }
 
@@ -930,8 +930,8 @@ mod app_actions_tests {
         let block = &content[remove_section..remove_section + 1200];
 
         assert!(
-            block.contains("Moved '{}' to Trash"),
-            "Expected remove_script success to show HUD with item name"
+            block.contains("removal_action.success_hud(&target)"),
+            "Expected remove_script success HUD to come from the script removal action"
         );
     }
 

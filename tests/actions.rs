@@ -754,6 +754,31 @@ fn script_management_handler_uses_named_action_states() {
 }
 
 #[test]
+fn script_removal_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
+        .expect("Failed to read script action handler");
+
+    assert!(
+        content.contains("enum ScriptRemovalHandlerAction")
+            && content.contains("enum ScriptRemovalTargetError")
+            && content.contains("MoveToTrash")
+            && content.contains("NoSelection")
+            && content.contains("UnsupportedItemType")
+            && content.contains("MissingPath"),
+        "script removal should model target resolution and Trash feedback as named states"
+    );
+    assert!(
+        content.contains("ScriptRemovalHandlerAction::from_action_id(action_id)")
+            && content.contains("removal_action.target_error_message(")
+            && content.contains("removal_action.confirm_body(&target)")
+            && content.contains("removal_action.confirm_title()")
+            && content.contains("removal_action.success_hud(&target)")
+            && content.contains("removal_action.failure_message(e)"),
+        "script removal should derive target errors, confirmation copy, success HUD, and failure copy from the named state"
+    );
+}
+
+#[test]
 fn settings_editor_launch_uses_named_plan_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/scripts.rs")
         .expect("Failed to read script action handler");
