@@ -1391,6 +1391,42 @@ fn system_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn surface_open_builtins_use_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum SurfaceOpenBuiltinAction")
+            && content.contains("SurfaceOpenBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_surface_open_builtin("),
+        "Open-surface built-ins should route through named action states"
+    );
+    assert!(
+        content.contains("SurfaceOpenBuiltinAction::Webcam")
+            && content.contains("SurfaceOpenBuiltinAction::FileSearch")
+            && content.contains("SurfaceOpenBuiltinAction::Settings")
+            && content.contains("SurfaceOpenBuiltinAction::AcpHistory")
+            && content.contains("SurfaceOpenBuiltinAction::AiVault")
+            && content.contains("SurfaceOpenBuiltinAction::DictationHistory")
+            && content.contains("SurfaceOpenBuiltinAction::SdkReference")
+            && content.contains("SurfaceOpenBuiltinAction::ScriptTemplateCatalog"),
+        "Open-surface state machine should name each covered built-in"
+    );
+    assert!(
+        content.contains("self.open_webcam(cx)")
+            && content.contains("self.open_file_search(String::new(), cx)")
+            && content.contains("AppView::SettingsView")
+            && content.contains("AppView::AcpHistoryView")
+            && content.contains("self.open_ai_vault_source_filter(cx)")
+            && content.contains("AppView::DictationHistoryView")
+            && content.contains("sdk_reference_entries_for_ui")
+            && content.contains("script_template_entries_for_ui")
+            && content.contains("action.success_detail()"),
+        "Open-surface helper should preserve the same view constructors, resource loaders, and success details"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
