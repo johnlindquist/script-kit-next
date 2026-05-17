@@ -38,6 +38,30 @@ fn favorite_action_copy(is_favorite: bool) -> (&'static str, &'static str) {
     }
 }
 
+fn is_builtin_context(script: &ScriptInfo) -> bool {
+    !script.is_script
+        && !script.is_scriptlet
+        && !script.is_agent
+        && !script.is_app
+        && script.path.starts_with("builtin:")
+}
+
+fn primary_action_title(script: &ScriptInfo) -> String {
+    if is_builtin_context(script) {
+        script.action_verb.clone()
+    } else {
+        title_case_words(&script.action_verb)
+    }
+}
+
+fn primary_action_description(script: &ScriptInfo) -> String {
+    if is_builtin_context(script) {
+        script.action_verb.clone()
+    } else {
+        format!("{} this item", script.action_verb)
+    }
+}
+
 /// Get actions specific to the focused script.
 pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     if has_invalid_script_context_input(script) {
@@ -69,8 +93,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "run_script",
-            title_case_words(&script.action_verb),
-            Some(format!("{} this item", script.action_verb)),
+            primary_action_title(script),
+            Some(primary_action_description(script)),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
@@ -1263,6 +1287,13 @@ mod tests {
             .expect("action id should exist in script context actions")
     }
 
+    fn find_action_description(actions: &[Action], id: &str) -> Option<String> {
+        actions
+            .iter()
+            .find(|action| action.id == id)
+            .and_then(|action| action.description.clone())
+    }
+
     fn has_action(actions: &[Action], id: &str) -> bool {
         actions.iter().any(|action| action.id == id)
     }
@@ -1303,6 +1334,24 @@ mod tests {
         let actions = get_script_context_actions(&script);
 
         assert_eq!(find_action_title(&actions, "run_script"), "Switch To");
+    }
+
+    #[test]
+    fn test_get_script_context_actions_preserves_builtin_action_text() {
+        let script = ScriptInfo::with_action_verb(
+            "Agent Chat",
+            "builtin:builtin/ai-chat",
+            false,
+            "Open Agent Chat",
+        );
+
+        let actions = get_script_context_actions(&script);
+
+        assert_eq!(find_action_title(&actions, "run_script"), "Open Agent Chat");
+        assert_eq!(
+            find_action_description(&actions, "run_script").as_deref(),
+            Some("Open Agent Chat")
+        );
     }
 
     #[test]

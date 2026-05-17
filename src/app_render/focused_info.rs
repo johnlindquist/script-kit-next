@@ -1236,7 +1236,7 @@ impl ScriptListApp {
                                 &m.entry.name,
                                 format!("builtin:{}", &m.entry.id),
                                 false,
-                                "Run",
+                                m.entry.default_action_text(),
                                 override_shortcut,
                                 override_alias,
                             )
