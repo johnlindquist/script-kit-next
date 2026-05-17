@@ -215,6 +215,46 @@ impl SettingsSnapModeBuiltinAction {
             Self::Precision => "set_snap_mode::precision",
         }
     }
+
+    fn persistence_failure_code(self) -> &'static str {
+        match self {
+            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
+                "set_snap_mode_failed"
+            }
+        }
+    }
+
+    fn persistence_failure_log(self) -> &'static str {
+        match self {
+            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
+                "Failed to persist snap mode from built-in command"
+            }
+        }
+    }
+
+    fn persistence_failure_hud(self, error: &dyn std::fmt::Display) -> String {
+        match self {
+            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
+                format!("Failed to update snap mode: {error}")
+            }
+        }
+    }
+
+    fn persistence_failure_message(self) -> &'static str {
+        match self {
+            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
+                "Failed to save snap mode"
+            }
+        }
+    }
+
+    fn runtime_transition_failure_log(self) -> &'static str {
+        match self {
+            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
+                "Failed to apply runtime transition after snap mode change"
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4815,17 +4855,18 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     %error,
                     ?target_mode,
-                    "Failed to persist snap mode from built-in command"
+                    "{}",
+                    action.persistence_failure_log()
                 );
                 self.show_hud(
-                    format!("Failed to update snap mode: {error}"),
+                    action.persistence_failure_hud(&error),
                     Some(HUD_SHORT_MS),
                     cx,
                 );
                 return Self::builtin_error(
                     dctx,
-                    "set_snap_mode_failed",
-                    "Failed to save snap mode",
+                    action.persistence_failure_code(),
+                    action.persistence_failure_message(),
                     error.to_string(),
                 );
             }
@@ -4844,7 +4885,8 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     %error,
                     ?mode,
-                    "Failed to apply runtime transition after snap mode change"
+                    "{}",
+                    action.runtime_transition_failure_log()
                 );
             }
         }
