@@ -217,6 +217,52 @@ impl SettingsSnapModeBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PermissionAssistantBuiltinAction {
+    Accessibility,
+    ScreenRecording,
+}
+
+impl PermissionAssistantBuiltinAction {
+    fn from_command(command: builtins::PermissionCommandType) -> Option<Self> {
+        match command {
+            builtins::PermissionCommandType::AllowAccessibility => Some(Self::Accessibility),
+            builtins::PermissionCommandType::AllowScreenRecording => Some(Self::ScreenRecording),
+            builtins::PermissionCommandType::CheckPermissions
+            | builtins::PermissionCommandType::RequestAccessibility
+            | builtins::PermissionCommandType::OpenAccessibilitySettings => None,
+        }
+    }
+
+    fn panel(self) -> platform::permiso::PermisoPanel {
+        match self {
+            Self::Accessibility => platform::permiso::PermisoPanel::Accessibility,
+            Self::ScreenRecording => platform::permiso::PermisoPanel::ScreenRecording,
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::Accessibility => "Drag Script Kit into Accessibility",
+            Self::ScreenRecording => "Drag Script Kit into Screen Recording",
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Accessibility => "allow_accessibility",
+            Self::ScreenRecording => "allow_screen_recording",
+        }
+    }
+
+    fn failure_detail(self) -> &'static str {
+        match self {
+            Self::Accessibility => "allow_accessibility_failed",
+            Self::ScreenRecording => "allow_screen_recording_failed",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3193,55 +3239,13 @@ impl ScriptListApp {
                             Self::builtin_success(dctx, "open_accessibility_settings")
                         }
                     }
-                    PermissionCommandType::AllowAccessibility => {
-                        match platform::permiso::PermisoAssistant::present_retained(
-                            platform::permiso::PermisoPanel::Accessibility,
-                        ) {
-                            Ok(()) => {
-                                self.show_hud(
-                                    "Drag Script Kit into Accessibility".to_string(),
-                                    Some(HUD_SHORT_MS),
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "allow_accessibility")
-                            }
-                            Err(error) => {
-                                let message =
-                                    format!("Failed to open Permission Assistant: {}", error);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_LAUNCH_FAILED,
-                                    message,
-                                    "allow_accessibility_failed",
-                                )
-                            }
-                        }
-                    }
-                    PermissionCommandType::AllowScreenRecording => {
-                        match platform::permiso::PermisoAssistant::present_retained(
-                            platform::permiso::PermisoPanel::ScreenRecording,
-                        ) {
-                            Ok(()) => {
-                                self.show_hud(
-                                    "Drag Script Kit into Screen Recording".to_string(),
-                                    Some(HUD_SHORT_MS),
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "allow_screen_recording")
-                            }
-                            Err(error) => {
-                                let message =
-                                    format!("Failed to open Permission Assistant: {}", error);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_LAUNCH_FAILED,
-                                    message,
-                                    "allow_screen_recording_failed",
-                                )
-                            }
-                        }
+                    PermissionCommandType::AllowAccessibility
+                    | PermissionCommandType::AllowScreenRecording => {
+                        let assistant_action = PermissionAssistantBuiltinAction::from_command(
+                            *cmd_type,
+                        )
+                        .expect("permission assistant arm should only receive assistant commands");
+                        self.execute_permission_assistant_builtin(assistant_action, dctx, cx)
                     }
                 }
             }
@@ -4661,6 +4665,30 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_permission_assistant_builtin(
+        &mut self,
+        action: PermissionAssistantBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match platform::permiso::PermisoAssistant::present_retained(action.panel()) {
+            Ok(()) => {
+                self.show_hud(action.success_hud().to_string(), Some(HUD_SHORT_MS), cx);
+                Self::builtin_success(dctx, action.success_detail())
+            }
+            Err(error) => {
+                let message = format!("Failed to open Permission Assistant: {}", error);
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_LAUNCH_FAILED,
+                    message,
+                    action.failure_detail(),
+                )
+            }
+        }
+    }
 
     fn execute_paste_sequential_builtin(
         &mut self,
