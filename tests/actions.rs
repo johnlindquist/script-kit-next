@@ -269,6 +269,28 @@ fn notes_command_bar_actions_use_named_plan_states() {
 }
 
 #[test]
+fn notes_new_chat_actions_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");
+
+    assert!(
+        content.contains("enum NotesNewChatActionPlan")
+            && content.contains("LastUsedModel")
+            && content.contains("Preset")
+            && content.contains("Model"),
+        "notes new-chat model and preset row copy should be driven by named action states"
+    );
+    assert!(
+        content.contains("NotesNewChatActionPlan::LastUsedModel")
+            && content.contains("NotesNewChatActionPlan::Preset")
+            && content.contains("NotesNewChatActionPlan::Model")
+            && content.contains("action_plan.model_description")
+            && content.contains("action_plan.preset_description"),
+        "notes new-chat rows should derive model and preset descriptions from the named plan"
+    );
+}
+
+#[test]
 fn note_switcher_actions_use_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");
