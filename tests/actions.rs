@@ -2356,6 +2356,27 @@ fn surface_open_builtins_use_named_action_states() {
 }
 
 #[test]
+fn script_template_catalog_copy_uses_named_action_state() {
+    let content = fs::read_to_string("src/render_builtins/script_templates.rs")
+        .expect("Failed to read script template catalog renderer");
+
+    assert!(
+        content.contains("enum ScriptTemplateCatalogAction")
+            && content.contains("CopyMarkdownCard"),
+        "script template catalog copy feedback should be driven by a named action state"
+    );
+    assert!(
+        content.contains("ScriptTemplateCatalogAction::CopyMarkdownCard")
+            && content.contains("catalog_action.copied_hud(&template.title)"),
+        "script template catalog copy HUD should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Copied {template_title} template\")"),
+        "script template catalog copy feedback should preserve existing visible copy"
+    );
+}
+
+#[test]
 fn terminal_utility_views_use_named_failure_states() {
     let content = fs::read_to_string("src/app_execute/utility_views.rs")
         .expect("Failed to read utility view handler");
