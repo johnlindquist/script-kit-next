@@ -782,6 +782,32 @@ impl WindowSwitcherBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLaunchBuiltinAction {
+    Launch,
+}
+
+impl AppLaunchBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::App(_) => Some(Self::Launch),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self, app_name: &str) -> String {
+        match self {
+            Self::Launch => format!("launch_app::{app_name}"),
+        }
+    }
+
+    fn not_found_detail(self, app_name: &str) -> String {
+        match self {
+            Self::Launch => format!("launch_app_not_found::{app_name}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3261,37 +3287,9 @@ impl ScriptListApp {
                 self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::App(app_name) => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    app = %app_name,
-                    "Launching app"
-                );
-                let apps = app_launcher::scan_applications();
-                if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
-                    if let Err(e) = app_launcher::launch_application(app) {
-                        let message = format!("Failed to launch {}: {}", app_name, e);
-                        self.show_error_toast(message.clone(), cx);
-                        Self::builtin_error(
-                            dctx,
-                            crate::action_helpers::ERROR_LAUNCH_FAILED,
-                            message,
-                            format!("launch_app::{app_name}"),
-                        )
-                    } else {
-                        self.close_and_reset_window(cx);
-                        Self::builtin_success(dctx, format!("launch_app::{app_name}"))
-                    }
-                } else {
-                    let message = format!("App not found: {}", app_name);
-                    self.show_error_toast(message.clone(), cx);
-                    Self::builtin_error(
-                        dctx,
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        message,
-                        format!("launch_app_not_found::{app_name}"),
-                    )
-                }
+                let launch_action = AppLaunchBuiltinAction::from_feature(&entry.feature)
+                    .expect("app launch arm should only receive App");
+                self.execute_app_launch_builtin(launch_action, app_name, dctx, cx)
             }
             builtins::BuiltInFeature::WindowSwitcher => {
                 let window_switcher_action =
@@ -4187,6 +4185,46 @@ impl ScriptListApp {
                     action.failure_detail(),
                 )
             }
+        }
+    }
+
+    fn execute_app_launch_builtin(
+        &mut self,
+        action: AppLaunchBuiltinAction,
+        app_name: &str,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            category = "BUILTIN",
+            trace_id = %dctx.trace_id,
+            app = %app_name,
+            "Launching app"
+        );
+        let apps = app_launcher::scan_applications();
+        if let Some(app) = apps.iter().find(|a| a.name == *app_name) {
+            if let Err(error) = app_launcher::launch_application(app) {
+                let message = format!("Failed to launch {}: {}", app_name, error);
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_LAUNCH_FAILED,
+                    message,
+                    action.success_detail(app_name),
+                )
+            } else {
+                self.close_and_reset_window(cx);
+                Self::builtin_success(dctx, action.success_detail(app_name))
+            }
+        } else {
+            let message = format!("App not found: {}", app_name);
+            self.show_error_toast(message.clone(), cx);
+            Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_ACTION_FAILED,
+                message,
+                action.not_found_detail(app_name),
+            )
         }
     }
 

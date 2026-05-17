@@ -1493,6 +1493,32 @@ fn window_switcher_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn app_launch_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum AppLaunchBuiltinAction")
+            && content.contains("AppLaunchBuiltinAction::from_feature(&entry.feature)")
+            && content.contains("fn execute_app_launch_builtin("),
+        "App launch should route through a named action state"
+    );
+    assert!(
+        content.contains("app_launcher::scan_applications()")
+            && content.contains("app_launcher::launch_application(app)")
+            && content.contains("self.close_and_reset_window(cx)"),
+        "App launch should preserve app scanning, launch dispatch, and close/reset behavior"
+    );
+    assert!(
+        content.contains("action.success_detail(app_name)")
+            && content.contains("action.not_found_detail(app_name)")
+            && content.contains("launch_app::{app_name}")
+            && content.contains("launch_app_not_found::{app_name}"),
+        "App launch success and missing-app details should come from the named state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
