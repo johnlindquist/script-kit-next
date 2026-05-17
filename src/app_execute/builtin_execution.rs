@@ -404,6 +404,35 @@ impl NotesCommandBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptCommandBuiltinAction {
+    NewScript,
+    NewExtension,
+}
+
+impl ScriptCommandBuiltinAction {
+    fn from_command(command: builtins::ScriptCommandType) -> Self {
+        match command {
+            builtins::ScriptCommandType::NewScript => Self::NewScript,
+            builtins::ScriptCommandType::NewExtension => Self::NewExtension,
+        }
+    }
+
+    fn naming_target(self) -> prompts::NamingTarget {
+        match self {
+            Self::NewScript => prompts::NamingTarget::Script,
+            Self::NewExtension => prompts::NamingTarget::Extension,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::NewScript => "script_command::NewScript",
+            Self::NewExtension => "script_command::NewExtension",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3258,14 +3287,8 @@ impl ScriptListApp {
                     "Executing script command"
                 );
 
-                use builtins::ScriptCommandType;
-
-                let target = match cmd_type {
-                    ScriptCommandType::NewScript => prompts::NamingTarget::Script,
-                    ScriptCommandType::NewExtension => prompts::NamingTarget::Extension,
-                };
-                self.show_naming_dialog(target, cx);
-                Self::builtin_success(dctx, format!("script_command::{cmd_type:?}"))
+                let script_action = ScriptCommandBuiltinAction::from_command(*cmd_type);
+                self.execute_script_command_builtin(script_action, dctx, cx)
             }
 
             // =========================================================================
@@ -4628,6 +4651,16 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    fn execute_script_command_builtin(
+        &mut self,
+        action: ScriptCommandBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        self.show_naming_dialog(action.naming_target(), cx);
+        Self::builtin_success(dctx, action.success_detail())
+    }
 
     fn execute_notes_command_builtin(
         &mut self,
