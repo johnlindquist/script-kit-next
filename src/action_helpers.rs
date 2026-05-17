@@ -62,7 +62,7 @@ pub fn extract_path_for_reveal(
             SharedString::from("Notes row has no filesystem path"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
-            SharedString::from("AI Conversations row has no filesystem path"),
+            SharedString::from("Agent Chat conversations row has no filesystem path"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Vault row has no filesystem path"),
@@ -112,7 +112,7 @@ pub fn extract_path_for_copy(
             SharedString::from("Notes row has no filesystem path"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
-            SharedString::from("AI Conversations row has no filesystem path"),
+            SharedString::from("Agent Chat conversations row has no filesystem path"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Vault row has no filesystem path"),
@@ -172,7 +172,7 @@ pub fn extract_path_for_quick_terminal(
             SharedString::from("Cannot open notes in Quick Terminal"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
-            SharedString::from("Cannot open AI conversations in Quick Terminal"),
+            SharedString::from("Cannot open Agent Chat conversations in Quick Terminal"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Use the AI Vault resume action to open a terminal"),
@@ -254,7 +254,7 @@ pub fn extract_path_for_edit(
             SharedString::from("Cannot edit fallback commands"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
-            SharedString::from("Cannot edit AI conversations"),
+            SharedString::from("Cannot edit Agent Chat conversations"),
         )),
         Some(SearchResult::AiVault(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit AI Vault rows"),

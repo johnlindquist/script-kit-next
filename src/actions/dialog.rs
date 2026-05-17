@@ -4712,7 +4712,7 @@ mod tests {
         let actions = vec![
             Action::new(
                 "history",
-                "Conversation History",
+                "Agent Chat History",
                 None,
                 ActionCategory::ScriptContext,
             )

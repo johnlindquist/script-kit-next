@@ -2074,7 +2074,7 @@ fn predicate_user_label(predicate: &Predicate) -> String {
             ArtifactKind::Window => "windows only".to_string(),
             ArtifactKind::File => "files only".to_string(),
             ArtifactKind::Note => "notes only".to_string(),
-            ArtifactKind::AcpHistory => "AI conversations only".to_string(),
+            ArtifactKind::AcpHistory => "Agent Chat conversations only".to_string(),
             ArtifactKind::AiVault => "AI Vault sessions only".to_string(),
             ArtifactKind::ClipboardHistory => "clipboard history only".to_string(),
             ArtifactKind::DictationHistory => "dictation history only".to_string(),
@@ -2386,7 +2386,7 @@ fn source_zero_copy_label(spec: &crate::menu_syntax::payload::SourceHeadSpec) ->
     use crate::menu_syntax::payload::RootUnifiedSourceFilter;
     match spec.source {
         RootUnifiedSourceFilter::ClipboardHistory => "clipboard entries".to_string(),
-        RootUnifiedSourceFilter::Conversations => "AI conversations".to_string(),
+        RootUnifiedSourceFilter::Conversations => "Agent Chat conversations".to_string(),
         RootUnifiedSourceFilter::Notes => "notes".to_string(),
         RootUnifiedSourceFilter::Files => "files".to_string(),
         RootUnifiedSourceFilter::BrowserTabs => "browser tabs".to_string(),
@@ -2412,7 +2412,7 @@ fn artifact_kind_zero_copy_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::Window => "windows",
         ArtifactKind::File => "files",
         ArtifactKind::Note => "notes",
-        ArtifactKind::AcpHistory => "AI conversations",
+        ArtifactKind::AcpHistory => "Agent Chat conversations",
         ArtifactKind::AiVault => "AI Vault sessions",
         ArtifactKind::ClipboardHistory => "clipboard entries",
         ArtifactKind::DictationHistory => "dictation entries",
@@ -2442,7 +2442,9 @@ fn type_value_label(value: &str) -> &'static str {
             "browser tabs"
         }
         "browser" | "browser-history" | "browserhistory" | "web" => "browser history entries",
-        "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => "AI conversations",
+        "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
+            "Agent Chat conversations"
+        }
         "fallback" | "fallbacks" => "fallbacks",
         "issue" | "issues" | "scriptissue" | "script-issue" => "issues",
         _ => "matching items",

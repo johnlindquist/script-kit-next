@@ -770,8 +770,8 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Navigate"),
         Action::new(
             "acp_show_history",
-            "Conversation History",
-            Some("Browse and manage past conversations".to_string()),
+            "Agent Chat History",
+            Some("Browse and manage past Agent Chat conversations".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2318}P")
