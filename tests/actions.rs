@@ -242,6 +242,28 @@ fn file_path_actions_use_named_item_plan_states() {
     );
 }
 
+#[test]
+fn script_context_preference_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum ScriptContextPreferenceActionPlan")
+            && content.contains("AgentNoPreferenceActions")
+            && content.contains("NoShortcutNoAlias")
+            && content.contains("ShortcutOnly")
+            && content.contains("AliasOnly")
+            && content.contains("ShortcutAndAlias"),
+        "script context shortcut and alias rows should be driven by named preference plan states"
+    );
+    assert!(
+        content.contains("preference_action_plan(script)")
+            && content.contains("fn append_shortcut_preference_actions")
+            && content.contains("fn append_alias_preference_actions"),
+        "script context preference rows should be appended from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

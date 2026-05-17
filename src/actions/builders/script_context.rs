@@ -61,6 +61,15 @@ struct PrimaryActionCopy {
     description: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ScriptContextPreferenceActionPlan {
+    AgentNoPreferenceActions,
+    NoShortcutNoAlias,
+    ShortcutOnly,
+    AliasOnly,
+    ShortcutAndAlias,
+}
+
 fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
     if script.is_app {
         ScriptContextKind::App
@@ -79,6 +88,19 @@ fn script_context_kind(script: &ScriptInfo) -> ScriptContextKind {
     }
 }
 
+fn preference_action_plan(script: &ScriptInfo) -> ScriptContextPreferenceActionPlan {
+    if script.is_agent {
+        return ScriptContextPreferenceActionPlan::AgentNoPreferenceActions;
+    }
+
+    match (script.shortcut.is_some(), script.alias.is_some()) {
+        (false, false) => ScriptContextPreferenceActionPlan::NoShortcutNoAlias,
+        (true, false) => ScriptContextPreferenceActionPlan::ShortcutOnly,
+        (false, true) => ScriptContextPreferenceActionPlan::AliasOnly,
+        (true, true) => ScriptContextPreferenceActionPlan::ShortcutAndAlias,
+    }
+}
+
 fn primary_action_plan(kind: ScriptContextKind) -> PrimaryActionPlan {
     match kind {
         ScriptContextKind::BuiltIn => PrimaryActionPlan::PreserveCatalogActionText,
@@ -92,6 +114,107 @@ fn primary_action_plan(kind: ScriptContextKind) -> PrimaryActionPlan {
         ScriptContextKind::Agent => PrimaryActionPlan::VerbForSubject { subject: "agent" },
         ScriptContextKind::Skill => PrimaryActionPlan::VerbForSubject { subject: "skill" },
         ScriptContextKind::Generic => PrimaryActionPlan::VerbForSubject { subject: "item" },
+    }
+}
+
+fn append_shortcut_preference_actions(
+    plan: ScriptContextPreferenceActionPlan,
+    actions: &mut Vec<Action>,
+    destructive_actions: &mut Vec<Action>,
+) {
+    match plan {
+        ScriptContextPreferenceActionPlan::AgentNoPreferenceActions => {}
+        ScriptContextPreferenceActionPlan::ShortcutOnly
+        | ScriptContextPreferenceActionPlan::ShortcutAndAlias => {
+            actions.push(
+                Action::new(
+                    "update_shortcut",
+                    "Edit Keyboard Shortcut",
+                    Some("Change the keyboard shortcut for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧K")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+            destructive_actions.push(
+                Action::new(
+                    "remove_shortcut",
+                    "Delete Keyboard Shortcut",
+                    Some("Remove the keyboard shortcut from this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⌥K")
+                .with_icon(IconName::Trash)
+                .with_section("Destructive"),
+            );
+        }
+        ScriptContextPreferenceActionPlan::NoShortcutNoAlias
+        | ScriptContextPreferenceActionPlan::AliasOnly => {
+            actions.push(
+                Action::new(
+                    "add_shortcut",
+                    "Add Keyboard Shortcut",
+                    Some("Set a keyboard shortcut for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧K")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+        }
+    }
+}
+
+fn append_alias_preference_actions(
+    plan: ScriptContextPreferenceActionPlan,
+    actions: &mut Vec<Action>,
+    destructive_actions: &mut Vec<Action>,
+) {
+    match plan {
+        ScriptContextPreferenceActionPlan::AgentNoPreferenceActions => {}
+        ScriptContextPreferenceActionPlan::AliasOnly
+        | ScriptContextPreferenceActionPlan::ShortcutAndAlias => {
+            actions.push(
+                Action::new(
+                    "update_alias",
+                    "Edit Alias",
+                    Some("Change the alias trigger for this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧A")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+            destructive_actions.push(
+                Action::new(
+                    "remove_alias",
+                    "Delete Alias",
+                    Some("Remove the alias trigger from this item".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⌥A")
+                .with_icon(IconName::Trash)
+                .with_section("Destructive"),
+            );
+        }
+        ScriptContextPreferenceActionPlan::NoShortcutNoAlias
+        | ScriptContextPreferenceActionPlan::ShortcutOnly => {
+            actions.push(
+                Action::new(
+                    "add_alias",
+                    "Add Alias",
+                    Some(
+                        "Set an alias trigger for this item (type alias + space to run)"
+                            .to_string(),
+                    ),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⌘⇧A")
+                .with_icon(IconName::Settings)
+                .with_section("Edit"),
+            );
+        }
     }
 }
 
@@ -124,6 +247,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     let mut actions = Vec::new();
     let mut destructive_actions = Vec::new();
     let primary_copy = primary_action_copy(script);
+    let preference_plan = preference_action_plan(script);
 
     tracing::debug!(
         target: "script_kit::actions",
@@ -161,84 +285,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_section("Actions"),
     );
 
-    if !script.is_agent {
-        if script.shortcut.is_some() {
-            actions.push(
-                Action::new(
-                    "update_shortcut",
-                    "Edit Keyboard Shortcut",
-                    Some("Change the keyboard shortcut for this item".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⇧K")
-                .with_icon(IconName::Settings)
-                .with_section("Edit"),
-            );
-            destructive_actions.push(
-                Action::new(
-                    "remove_shortcut",
-                    "Delete Keyboard Shortcut",
-                    Some("Remove the keyboard shortcut from this item".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⌥K")
-                .with_icon(IconName::Trash)
-                .with_section("Destructive"),
-            );
-        } else {
-            actions.push(
-                Action::new(
-                    "add_shortcut",
-                    "Add Keyboard Shortcut",
-                    Some("Set a keyboard shortcut for this item".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⇧K")
-                .with_icon(IconName::Settings)
-                .with_section("Edit"),
-            );
-        }
-
-        if script.alias.is_some() {
-            actions.push(
-                Action::new(
-                    "update_alias",
-                    "Edit Alias",
-                    Some("Change the alias trigger for this item".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⇧A")
-                .with_icon(IconName::Settings)
-                .with_section("Edit"),
-            );
-            destructive_actions.push(
-                Action::new(
-                    "remove_alias",
-                    "Delete Alias",
-                    Some("Remove the alias trigger from this item".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⌥A")
-                .with_icon(IconName::Trash)
-                .with_section("Destructive"),
-            );
-        } else {
-            actions.push(
-                Action::new(
-                    "add_alias",
-                    "Add Alias",
-                    Some(
-                        "Set an alias trigger for this item (type alias + space to run)"
-                            .to_string(),
-                    ),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("⌘⇧A")
-                .with_icon(IconName::Settings)
-                .with_section("Edit"),
-            );
-        }
-    }
+    append_shortcut_preference_actions(preference_plan, &mut actions, &mut destructive_actions);
+    append_alias_preference_actions(preference_plan, &mut actions, &mut destructive_actions);
 
     if (script.is_script || script.is_scriptlet || script.is_agent || script.is_app)
         && !script.path.trim().is_empty()
