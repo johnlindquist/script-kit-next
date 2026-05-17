@@ -39,7 +39,13 @@ mod preview_panel_metadata_tests {
         );
         assert_eq!(
             builtin_feature_annotation(&BuiltInFeature::AiChat),
-            "AI Assistant"
+            "Agent Chat"
+        );
+        assert_eq!(
+            builtin_feature_annotation(&BuiltInFeature::AiCommand(
+                crate::builtins::AiCommandType::SendSelectedTextToAi,
+            )),
+            "Agent Chat Command"
         );
         assert_eq!(
             builtin_feature_annotation(&BuiltInFeature::UtilityCommand(
