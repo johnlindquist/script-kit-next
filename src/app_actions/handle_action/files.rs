@@ -70,6 +70,11 @@ enum FileSearchEditorHandlerAction {
     OpenInEditor,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchRenameHandlerAction {
+    RenamePath,
+}
+
 impl FileSearchSortHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -161,6 +166,33 @@ impl FileSearchEditorHandlerAction {
     fn failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::OpenInEditor => format!("Failed to open in editor: {error}"),
+        }
+    }
+}
+
+impl FileSearchRenameHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "rename_path" => Some(Self::RenamePath),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::RenamePath => "No file selected",
+        }
+    }
+
+    fn success_hud(self, new_name: &str) -> String {
+        match self {
+            Self::RenamePath => format!("Renamed to {new_name}"),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::RenamePath => format!("Failed to rename: {error}"),
         }
     }
 }
@@ -675,10 +707,14 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "rename_path" => {
+                let Some(rename_action) = FileSearchRenameHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((path, _, _name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
+                        rename_action.selection_required_message(),
                     );
                 };
                 let previous_display_index = match &self.current_view {
@@ -699,7 +735,7 @@ impl ScriptListApp {
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(format!("Failed to rename: {}", e), cx);
+                                this.show_error_toast(rename_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             });
                             return;
@@ -711,7 +747,7 @@ impl ScriptListApp {
                             Ok(new_path) => {
                                 this.clear_file_search_action_target();
                                 this.show_hud(
-                                    format!("Renamed to {}", new_name),
+                                    rename_action.success_hud(&new_name),
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
@@ -725,7 +761,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.file_search_actions_path = None;
-                                this.show_error_toast(format!("Failed to rename: {}", e), cx);
+                                this.show_error_toast(rename_action.failure_message(e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }
