@@ -703,7 +703,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Response"),
         Action::new(
             "acp_export_markdown",
-            "Export as Markdown",
+            "Copy Conversation as Markdown",
             Some("Copy the full conversation as markdown".to_string()),
             ActionCategory::ScriptContext,
         )
