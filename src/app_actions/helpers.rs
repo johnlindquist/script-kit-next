@@ -97,24 +97,53 @@ fn clipboard_pin_action_success_hud(action_id: &str) -> Option<&'static str> {
     }
 }
 
-fn file_search_action_success_hud(action_id: &str) -> Option<&'static str> {
-    match action_id {
-        "open_file" | "open_directory" => Some("Opened"),
-        "quick_look" => Some("Quick Look opened"),
-        "open_with" => Some("Open With opened"),
-        "show_info" => Some("Info opened"),
-        _ => None,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchActionFeedbackPlan {
+    Open,
+    QuickLook,
+    OpenWith,
+    ShowInfo,
+    Unsupported,
+}
+
+impl FileSearchActionFeedbackPlan {
+    fn from_action_id(action_id: &str) -> Self {
+        match action_id {
+            "open_file" | "open_directory" => Self::Open,
+            "quick_look" => Self::QuickLook,
+            "open_with" => Self::OpenWith,
+            "show_info" => Self::ShowInfo,
+            _ => Self::Unsupported,
+        }
+    }
+
+    fn success_hud(self) -> Option<&'static str> {
+        match self {
+            Self::Open => Some("Opened"),
+            Self::QuickLook => Some("Quick Look opened"),
+            Self::OpenWith => Some("Open With opened"),
+            Self::ShowInfo => Some("Info opened"),
+            Self::Unsupported => None,
+        }
+    }
+
+    fn error_prefix(self) -> Option<&'static str> {
+        match self {
+            Self::Open => Some("Failed to open"),
+            Self::QuickLook => Some("Failed to Quick Look"),
+            Self::OpenWith => Some("Failed to Open With"),
+            Self::ShowInfo => Some("Failed to Show Info"),
+            Self::Unsupported => None,
+        }
     }
 }
 
+fn file_search_action_success_hud(action_id: &str) -> Option<&'static str> {
+    FileSearchActionFeedbackPlan::from_action_id(action_id).success_hud()
+}
+
 fn file_search_action_error_hud_prefix(action_id: &str) -> Option<&'static str> {
-    match action_id {
-        "open_file" | "open_directory" => Some("Failed to open"),
-        "quick_look" => Some("Failed to Quick Look"),
-        "open_with" => Some("Failed to Open With"),
-        "show_info" => Some("Failed to Show Info"),
-        _ => None,
-    }
+    FileSearchActionFeedbackPlan::from_action_id(action_id).error_prefix()
 }
 
 fn should_transition_to_script_list_after_action(current_view: &AppView) -> bool {
