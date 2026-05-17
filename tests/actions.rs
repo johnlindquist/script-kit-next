@@ -857,6 +857,25 @@ fn file_search_handler_actions_use_named_plan_states() {
 }
 
 #[test]
+fn file_search_editor_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
+        .expect("Failed to read file action handler");
+
+    assert!(
+        content.contains("enum FileSearchEditorHandlerAction")
+            && content.contains("OpenInEditor"),
+        "file-search open-in-editor handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("FileSearchEditorHandlerAction::from_action_id(action_id)")
+            && content.contains("editor_action.selection_required_message()")
+            && content.contains("editor_action.success_hud()")
+            && content.contains("editor_action.failure_message(e)"),
+        "file-search open-in-editor handler should derive selection, HUD, and failure copy from the named state"
+    );
+}
+
+#[test]
 fn file_search_sort_handler_uses_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/files.rs")
         .expect("Failed to read file action handler");
