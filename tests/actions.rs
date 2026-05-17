@@ -1259,6 +1259,34 @@ fn utility_replay_recipe_builtin_uses_named_action_states() {
 }
 
 #[test]
+fn utility_turn_this_into_command_builtin_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("TurnThisIntoCommand")
+            && content.contains("UtilityRecipeBuiltinAction::from_command(*cmd_type)")
+            && content.contains("fn execute_utility_turn_this_into_command_builtin("),
+        "Turn This Into a Command should share named utility recipe action routing"
+    );
+    assert!(
+        content.contains("normalize_turn_this_into_a_command_request")
+            && content.contains("action.missing_query_failure_detail()")
+            && content.contains("action.serialize_failure_detail()")
+            && content.contains("action.capture_failure_detail()")
+            && content.contains("action.success_detail()"),
+        "Turn This Into a Command should use named state details for query, success, serialize, and capture outcomes"
+    );
+    assert!(
+        content.contains("build_current_app_command_recipe")
+            && content.contains("Automation recipe copied:")
+            && content.contains("spawn_generate_script_from_recipe_after_hide")
+            && content.contains("turn_this_into_command_capture_failed"),
+        "Turn This Into a Command should preserve recipe copy, HUD, deferred generation, and capture failure copy"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");
