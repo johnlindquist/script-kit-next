@@ -599,6 +599,29 @@ impl AiGenerateBuiltinAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiPresetFileBuiltinAction {
+    Import,
+    Export,
+}
+
+impl AiPresetFileBuiltinAction {
+    fn from_command(command: builtins::AiCommandType) -> Option<Self> {
+        match command {
+            builtins::AiCommandType::ImportAiPresets => Some(Self::Import),
+            builtins::AiCommandType::ExportAiPresets => Some(Self::Export),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Import => "ai_import_presets_dispatched",
+            Self::Export => "ai_export_presets_dispatched",
+        }
+    }
+}
+
 /// Generate a stable semantic ID for a built-in prompt choice.
 ///
 /// Format: `{prompt_id}:choice:{index}:{value_slug}`
@@ -3202,93 +3225,9 @@ impl ScriptListApp {
                             action = "import_ai_presets",
                             "Opening file picker for AI preset import"
                         );
-                        let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
-                            files: true,
-                            directories: false,
-                            multiple: false,
-                            prompt: Some("Select AI presets JSON file".into()),
-                            allowed_extensions: vec!["json".into()],
-                        });
-
-                        cx.spawn(async move |this, cx| {
-                            match rx.await {
-                                Ok(Ok(Some(paths))) => {
-                                    if let Some(path) = paths.first() {
-                                        // Validate file contents before importing
-                                        let import_result = cx
-                                            .background_executor()
-                                            .spawn({
-                                                let path = path.clone();
-                                                async move {
-                                                    let contents = std::fs::read_to_string(&path)
-                                                        .map_err(|e| {
-                                                        format!("Failed to read file: {}", e)
-                                                    })?;
-                                                    ai::presets::validate_presets_json(&contents)
-                                                        .map_err(|e| {
-                                                        format!("Invalid preset file: {}", e)
-                                                    })?;
-                                                    ai::presets::import_presets_from_file(&path)
-                                                        .map_err(|e| {
-                                                            format!("Import failed: {}", e)
-                                                        })
-                                                }
-                                            })
-                                            .await;
-
-                                        let _ = this.update(cx, |this, cx| {
-                                            match import_result {
-                                                Ok(total) => {
-                                                    tracing::info!(
-                                                        total = total,
-                                                        action = "import_presets_success",
-                                                        "Imported AI presets via file picker"
-                                                    );
-                                                    this.show_hud(
-                                                        format!(
-                                                            "Imported presets ({} total)",
-                                                            total
-                                                        ),
-                                                        Some(HUD_SHORT_MS),
-                                                        cx,
-                                                    );
-                                                    ai::reload_ai_presets(cx);
-                                                }
-                                                Err(e) => {
-                                                    tracing::error!(
-                                                        error = %e,
-                                                        action = "import_presets_failed",
-                                                        "Failed to import presets"
-                                                    );
-                                                    this.show_error_toast(
-                                                        format!("Failed to import presets: {}", e),
-                                                        cx,
-                                                    );
-                                                }
-                                            }
-                                            cx.notify();
-                                        });
-                                    }
-                                }
-                                Ok(Ok(None)) => {
-                                    tracing::info!(
-                                        action = "import_presets_cancelled",
-                                        "User cancelled import file picker"
-                                    );
-                                }
-                                Ok(Err(e)) => {
-                                    tracing::warn!(error = %e, "Import file picker returned error");
-                                }
-                                Err(_) => {
-                                    tracing::warn!(
-                                        "Import file picker channel closed unexpectedly"
-                                    );
-                                }
-                            }
-                        })
-                        .detach();
-                        // Async — outcome tracked in spawned task
-                        Self::builtin_success(dctx, "ai_import_presets_dispatched")
+                        let file_action = AiPresetFileBuiltinAction::from_command(*cmd_type)
+                            .expect("AI preset file arm should only receive import command");
+                        self.execute_ai_preset_file_builtin(file_action, dctx, cx)
                     }
 
                     AiCommandType::ExportAiPresets => {
@@ -3297,73 +3236,9 @@ impl ScriptListApp {
                             trace_id = %dctx.trace_id,
                             "Opening save dialog for AI preset export"
                         );
-                        let default_dir = ai::presets::get_presets_path()
-                            .parent()
-                            .map(|p| p.to_path_buf())
-                            .unwrap_or_else(crate::setup::get_kit_path);
-
-                        let rx =
-                            cx.prompt_for_new_path(&default_dir, Some("ai-presets-export.json"));
-
-                        cx.spawn(async move |this, cx| match rx.await {
-                            Ok(Ok(Some(path))) => {
-                                let export_result = cx
-                                    .background_executor()
-                                    .spawn({
-                                        let path = path.clone();
-                                        async move {
-                                            ai::presets::export_presets_to_file(&path)
-                                                .map_err(|e| format!("Export failed: {}", e))
-                                        }
-                                    })
-                                    .await;
-
-                                let _ = this.update(cx, |this, cx| {
-                                    match export_result {
-                                        Ok(count) => {
-                                            tracing::info!(
-                                                count = count,
-                                                path = %path.display(),
-                                                action = "export_presets_success",
-                                                "Exported AI presets via file picker"
-                                            );
-                                            this.show_hud(
-                                                format!("Exported {} presets", count),
-                                                Some(HUD_SHORT_MS),
-                                                cx,
-                                            );
-                                        }
-                                        Err(e) => {
-                                            tracing::error!(
-                                                error = %e,
-                                                action = "export_presets_failed",
-                                                "Failed to export presets"
-                                            );
-                                            this.show_error_toast(
-                                                format!("Failed to export presets: {}", e),
-                                                cx,
-                                            );
-                                        }
-                                    }
-                                    cx.notify();
-                                });
-                            }
-                            Ok(Ok(None)) => {
-                                tracing::info!(
-                                    action = "export_presets_cancelled",
-                                    "User cancelled export save dialog"
-                                );
-                            }
-                            Ok(Err(e)) => {
-                                tracing::warn!(error = %e, "Export save dialog returned error");
-                            }
-                            Err(_) => {
-                                tracing::warn!("Export save dialog channel closed unexpectedly");
-                            }
-                        })
-                        .detach();
-                        // Async — outcome tracked in spawned task
-                        Self::builtin_success(dctx, "ai_export_presets_dispatched")
+                        let file_action = AiPresetFileBuiltinAction::from_command(*cmd_type)
+                            .expect("AI preset file arm should only receive export command");
+                        self.execute_ai_preset_file_builtin(file_action, dctx, cx)
                     }
 
                     AiCommandType::SearchAiPresets => {
@@ -4643,6 +4518,163 @@ impl ScriptListApp {
                         .to_string()
                 };
                 self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
+            }
+        }
+
+        Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_ai_preset_file_builtin(
+        &mut self,
+        action: AiPresetFileBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            AiPresetFileBuiltinAction::Import => {
+                let rx = cx.prompt_for_paths(gpui::PathPromptOptions {
+                    files: true,
+                    directories: false,
+                    multiple: false,
+                    prompt: Some("Select AI presets JSON file".into()),
+                    allowed_extensions: vec!["json".into()],
+                });
+
+                cx.spawn(async move |this, cx| {
+                    match rx.await {
+                        Ok(Ok(Some(paths))) => {
+                            if let Some(path) = paths.first() {
+                                // Validate file contents before importing
+                                let import_result = cx
+                                    .background_executor()
+                                    .spawn({
+                                        let path = path.clone();
+                                        async move {
+                                            let contents =
+                                                std::fs::read_to_string(&path).map_err(|e| {
+                                                    format!("Failed to read file: {}", e)
+                                                })?;
+                                            ai::presets::validate_presets_json(&contents).map_err(
+                                                |e| format!("Invalid preset file: {}", e),
+                                            )?;
+                                            ai::presets::import_presets_from_file(&path)
+                                                .map_err(|e| format!("Import failed: {}", e))
+                                        }
+                                    })
+                                    .await;
+
+                                let _ = this.update(cx, |this, cx| {
+                                    match import_result {
+                                        Ok(total) => {
+                                            tracing::info!(
+                                                total = total,
+                                                action = "import_presets_success",
+                                                "Imported AI presets via file picker"
+                                            );
+                                            this.show_hud(
+                                                format!("Imported presets ({} total)", total),
+                                                Some(HUD_SHORT_MS),
+                                                cx,
+                                            );
+                                            ai::reload_ai_presets(cx);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(
+                                                error = %e,
+                                                action = "import_presets_failed",
+                                                "Failed to import presets"
+                                            );
+                                            this.show_error_toast(
+                                                format!("Failed to import presets: {}", e),
+                                                cx,
+                                            );
+                                        }
+                                    }
+                                    cx.notify();
+                                });
+                            }
+                        }
+                        Ok(Ok(None)) => {
+                            tracing::info!(
+                                action = "import_presets_cancelled",
+                                "User cancelled import file picker"
+                            );
+                        }
+                        Ok(Err(e)) => {
+                            tracing::warn!(error = %e, "Import file picker returned error");
+                        }
+                        Err(_) => {
+                            tracing::warn!("Import file picker channel closed unexpectedly");
+                        }
+                    }
+                })
+                .detach();
+            }
+            AiPresetFileBuiltinAction::Export => {
+                let default_dir = ai::presets::get_presets_path()
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(crate::setup::get_kit_path);
+
+                let rx = cx.prompt_for_new_path(&default_dir, Some("ai-presets-export.json"));
+
+                cx.spawn(async move |this, cx| match rx.await {
+                    Ok(Ok(Some(path))) => {
+                        let export_result = cx
+                            .background_executor()
+                            .spawn({
+                                let path = path.clone();
+                                async move {
+                                    ai::presets::export_presets_to_file(&path)
+                                        .map_err(|e| format!("Export failed: {}", e))
+                                }
+                            })
+                            .await;
+
+                        let _ = this.update(cx, |this, cx| {
+                            match export_result {
+                                Ok(count) => {
+                                    tracing::info!(
+                                        count = count,
+                                        path = %path.display(),
+                                        action = "export_presets_success",
+                                        "Exported AI presets via file picker"
+                                    );
+                                    this.show_hud(
+                                        format!("Exported {} presets", count),
+                                        Some(HUD_SHORT_MS),
+                                        cx,
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::error!(
+                                        error = %e,
+                                        action = "export_presets_failed",
+                                        "Failed to export presets"
+                                    );
+                                    this.show_error_toast(
+                                        format!("Failed to export presets: {}", e),
+                                        cx,
+                                    );
+                                }
+                            }
+                            cx.notify();
+                        });
+                    }
+                    Ok(Ok(None)) => {
+                        tracing::info!(
+                            action = "export_presets_cancelled",
+                            "User cancelled export save dialog"
+                        );
+                    }
+                    Ok(Err(e)) => {
+                        tracing::warn!(error = %e, "Export save dialog returned error");
+                    }
+                    Err(_) => {
+                        tracing::warn!("Export save dialog channel closed unexpectedly");
+                    }
+                })
+                .detach();
             }
         }
 
