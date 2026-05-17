@@ -94,8 +94,9 @@ fn scriptlet_action_prefix_is_handled() {
     let content = super::read_all_handle_action_sources();
 
     assert!(
-        content.contains("action_id.starts_with(\"scriptlet_action:\")"),
-        "handle_action should match scriptlet_action: prefix for scriptlet-specific actions"
+        content.contains("ScriptletDynamicHandlerAction::from_action_id(action_id)")
+            && content.contains("action_id.strip_prefix(\"scriptlet_action:\")"),
+        "handle_action should parse scriptlet_action: prefix through the named dynamic action state"
     );
 }
 
@@ -104,12 +105,13 @@ fn scriptlet_action_strips_prefix_and_logs() {
     let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
-        .find("starts_with(\"scriptlet_action:\")")
+        .find("ScriptletDynamicHandlerAction::from_action_id(action_id)")
         .expect("Expected scriptlet_action handler");
     let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 
     assert!(
-        block.contains("strip_prefix(\"scriptlet_action:\")"),
+        content.contains("strip_prefix(\"scriptlet_action:\")")
+            && block.contains("dynamic_action.command()"),
         "scriptlet_action handler should strip the prefix to get the action command"
     );
     assert!(
@@ -127,7 +129,7 @@ fn scriptlet_action_shows_error_when_no_selection() {
     let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
-        .find("starts_with(\"scriptlet_action:\")")
+        .find("ScriptletDynamicHandlerAction::from_action_id(action_id)")
         .expect("Expected scriptlet_action handler");
     let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 
@@ -142,7 +144,7 @@ fn scriptlet_action_shows_error_when_item_is_not_scriptlet() {
     let content = super::read_all_handle_action_sources();
 
     let scriptlet_pos = content
-        .find("starts_with(\"scriptlet_action:\")")
+        .find("ScriptletDynamicHandlerAction::from_action_id(action_id)")
         .expect("Expected scriptlet_action handler");
     let block = &content[scriptlet_pos..content.len().min(scriptlet_pos + 12000)];
 

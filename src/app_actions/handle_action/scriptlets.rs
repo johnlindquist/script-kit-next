@@ -15,6 +15,18 @@ struct ScriptletSourceTarget {
     path_text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScriptletDynamicHandlerAction {
+    command: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ScriptletDynamicExecutionResult {
+    Success,
+    Failed(String),
+    LaunchFailed(String),
+}
+
 impl ScriptletSourceHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -37,6 +49,58 @@ impl ScriptletSourceHandlerAction {
         match self {
             Self::CopyPath => format!("Copied: {path_text}"),
             Self::Edit | Self::RevealInFinder => path_text.to_string(),
+        }
+    }
+}
+
+impl ScriptletDynamicHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        let command = action_id.strip_prefix("scriptlet_action:")?;
+        Some(Self {
+            command: command.to_string(),
+        })
+    }
+
+    fn command(&self) -> &str {
+        &self.command
+    }
+
+    fn not_found_message(&self) -> &'static str {
+        "Scriptlet action not found"
+    }
+}
+
+impl ScriptletDynamicExecutionResult {
+    fn from_exec_result(result: executor::ScriptletResult) -> Self {
+        if result.success {
+            Self::Success
+        } else {
+            let message = if result.stderr.is_empty() {
+                "Unknown error".to_string()
+            } else {
+                result.stderr
+            };
+            Self::Failed(message)
+        }
+    }
+
+    fn from_launch_error(error: impl std::fmt::Display) -> Self {
+        Self::LaunchFailed(error.to_string())
+    }
+
+    fn success_hud(&self, action_name: &str) -> Option<String> {
+        match self {
+            Self::Success => Some(format!("Executed: {action_name}")),
+            Self::Failed(_) | Self::LaunchFailed(_) => None,
+        }
+    }
+
+    fn error_toast(&self) -> Option<String> {
+        match self {
+            Self::Success => None,
+            Self::Failed(message) | Self::LaunchFailed(message) => {
+                Some(format!("Failed to execute action: {message}"))
+            }
         }
     }
 }
@@ -195,9 +259,12 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             // Handle scriptlet actions defined via H3 headers
-            action_id if action_id.starts_with("scriptlet_action:") => {
-                let action_command = action_id.strip_prefix("scriptlet_action:").unwrap_or("");
-                tracing::info!(category = "UI", action = %action_command, "scriptlet action triggered");
+            action_id => {
+                let Some(dynamic_action) = ScriptletDynamicHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(category = "UI", action = %dynamic_action.command(), "scriptlet action triggered");
 
                 // Find the scriptlet and execute its action
                 if let Some(result) = self.get_selected_result() {
@@ -231,7 +298,7 @@ impl ScriptListApp {
                                     if let Some(action) = full_scriptlet
                                         .actions
                                         .iter()
-                                        .find(|a| a.command == action_command)
+                                        .find(|a| a.command == dynamic_action.command())
                                     {
                                         // Create a scriptlet for executing the action
                                         let action_scriptlet = scriptlets::Scriptlet {
@@ -264,38 +331,42 @@ impl ScriptListApp {
                                             inputs,
                                             ..Default::default()
                                         };
-                                        match executor::run_scriptlet(&action_scriptlet, options) {
+                                        let execution_result = match executor::run_scriptlet(
+                                            &action_scriptlet,
+                                            options,
+                                        ) {
                                             Ok(exec_result) => {
-                                                if exec_result.success {
-                                                    tracing::info!(category = "UI", action = %action.name, "scriptlet action executed successfully");
-                                                    self.show_hud(
-                                                        format!("Executed: {}", action.name),
-                                                        Some(HUD_MEDIUM_MS),
-                                                        cx,
-                                                    );
-                                                } else {
-                                                    let error_msg = if exec_result.stderr.is_empty()
-                                                    {
-                                                        "Unknown error".to_string()
-                                                    } else {
-                                                        exec_result.stderr.clone()
-                                                    };
-                                                    tracing::error!(action = %action.name, error = %error_msg, "scriptlet action failed");
-                                                    self.show_error_toast(
-                                                        format!(
-                                                            "Failed to execute action: {}",
-                                                            error_msg
-                                                        ),
-                                                        cx,
-                                                    );
-                                                }
+                                                ScriptletDynamicExecutionResult::from_exec_result(
+                                                    exec_result,
+                                                )
                                             }
                                             Err(e) => {
                                                 tracing::error!(action = %action.name, error = %e, "failed to execute scriptlet action");
-                                                self.show_error_toast(
-                                                    format!("Failed to execute action: {}", e),
-                                                    cx,
-                                                );
+                                                ScriptletDynamicExecutionResult::from_launch_error(
+                                                    e,
+                                                )
+                                            }
+                                        };
+
+                                        match &execution_result {
+                                            ScriptletDynamicExecutionResult::Success => {
+                                                if let Some(message) =
+                                                    execution_result.success_hud(&action.name)
+                                                {
+                                                    tracing::info!(category = "UI", action = %action.name, "scriptlet action executed successfully");
+                                                    self.show_hud(message, Some(HUD_MEDIUM_MS), cx);
+                                                }
+                                            }
+                                            ScriptletDynamicExecutionResult::Failed(error_msg)
+                                            | ScriptletDynamicExecutionResult::LaunchFailed(
+                                                error_msg,
+                                            ) => {
+                                                tracing::error!(action = %action.name, error = %error_msg, "scriptlet action failed");
+                                                if let Some(message) =
+                                                    execution_result.error_toast()
+                                                {
+                                                    self.show_error_toast(message, cx);
+                                                }
                                             }
                                         }
                                         self.hide_main_and_reset(cx);
@@ -315,10 +386,10 @@ impl ScriptListApp {
                         };
 
                         if !action_found {
-                            tracing::error!(action = %action_command, "scriptlet action not found");
+                            tracing::error!(action = %dynamic_action.command(), "scriptlet action not found");
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Scriptlet action not found",
+                                dynamic_action.not_found_message(),
                             );
                         }
                     } else {
@@ -335,7 +406,6 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
-            _ => DispatchOutcome::not_handled(),
         }
     }
 }
