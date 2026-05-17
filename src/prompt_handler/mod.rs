@@ -3832,7 +3832,7 @@ impl ScriptListApp {
                                     "label": action.title,
                                     "section": action.section,
                                     "shortcut": action.shortcut,
-                                    "destructive": action.section.as_deref() == Some("Danger"),
+                                    "destructive": crate::actions::is_destructive_action(action),
                                     "enabled": true,
                                 })
                             })

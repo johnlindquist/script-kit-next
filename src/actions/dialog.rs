@@ -190,6 +190,7 @@ pub(crate) fn is_destructive_action(action: &Action) -> bool {
     if id == "move_to_trash"
         || id == "reset_ranking"
         || id == "clear_conversation"
+        || id == "force_quit_app"
         || id.starts_with("remove_")
         || id.starts_with("delete_")
         || id.contains("_delete")
@@ -201,6 +202,7 @@ pub(crate) fn is_destructive_action(action: &Action) -> bool {
     action.title_lower.starts_with("remove ")
         || action.title_lower.starts_with("delete ")
         || action.title_lower.starts_with("clear ")
+        || action.title_lower.starts_with("force quit ")
         || action.title_lower.starts_with("move to trash")
 }
 
