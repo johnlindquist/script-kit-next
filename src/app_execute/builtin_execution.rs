@@ -453,6 +453,7 @@ impl UtilityTraceBuiltinAction {
 enum UtilityRecipeBuiltinAction {
     VerifyCurrentApp,
     ReplayCurrentApp,
+    TurnThisIntoCommand,
 }
 
 impl UtilityRecipeBuiltinAction {
@@ -460,6 +461,7 @@ impl UtilityRecipeBuiltinAction {
         match command {
             builtins::UtilityCommandType::VerifyCurrentAppRecipe => Some(Self::VerifyCurrentApp),
             builtins::UtilityCommandType::ReplayCurrentAppRecipe => Some(Self::ReplayCurrentApp),
+            builtins::UtilityCommandType::TurnThisIntoCommand => Some(Self::TurnThisIntoCommand),
             _ => None,
         }
     }
@@ -468,6 +470,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe",
             Self::ReplayCurrentApp => "replay_current_app_recipe",
+            Self::TurnThisIntoCommand => "turn_this_into_command",
         }
     }
 
@@ -475,6 +478,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_clipboard_failed",
             Self::ReplayCurrentApp => "replay_current_app_recipe_clipboard_failed",
+            Self::TurnThisIntoCommand => "turn_this_into_command_clipboard_failed",
         }
     }
 
@@ -482,6 +486,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_serialize_failed",
             Self::ReplayCurrentApp => "replay_current_app_recipe_serialize_failed",
+            Self::TurnThisIntoCommand => "turn_this_into_command_serialize_failed",
         }
     }
 
@@ -489,6 +494,15 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_capture_failed",
             Self::ReplayCurrentApp => "replay_current_app_recipe_capture_failed",
+            Self::TurnThisIntoCommand => "turn_this_into_command_capture_failed",
+        }
+    }
+
+    fn missing_query_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_missing_query",
+            Self::ReplayCurrentApp => "replay_current_app_recipe_missing_query",
+            Self::TurnThisIntoCommand => "turn_this_into_command_missing_query",
         }
     }
 
@@ -496,6 +510,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_drift",
             Self::ReplayCurrentApp => "replay_current_app_recipe_drift",
+            Self::TurnThisIntoCommand => "turn_this_into_command_drift",
         }
     }
 
@@ -503,6 +518,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_missing_entry_index",
             Self::ReplayCurrentApp => "replay_current_app_recipe_missing_entry_index",
+            Self::TurnThisIntoCommand => "turn_this_into_command_missing_entry_index",
         }
     }
 
@@ -510,6 +526,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_open_palette",
             Self::ReplayCurrentApp => "replay_current_app_recipe_open_palette",
+            Self::TurnThisIntoCommand => "turn_this_into_command_open_palette",
         }
     }
 
@@ -517,6 +534,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_generate_script",
             Self::ReplayCurrentApp => "replay_current_app_recipe_generate_script",
+            Self::TurnThisIntoCommand => "turn_this_into_command_generate_script",
         }
     }
 
@@ -524,6 +542,7 @@ impl UtilityRecipeBuiltinAction {
         match self {
             Self::VerifyCurrentApp => "verify_current_app_recipe_unknown_action",
             Self::ReplayCurrentApp => "replay_current_app_recipe_unknown_action",
+            Self::TurnThisIntoCommand => "turn_this_into_command_unknown_action",
         }
     }
 }
@@ -3636,131 +3655,14 @@ impl ScriptListApp {
                         self.execute_utility_replay_recipe_builtin(recipe_action, dctx, cx)
                     }
                     UtilityCommandType::TurnThisIntoCommand => {
-                        let raw_query_owned =
-                            query_override.unwrap_or(&self.filter_text).to_string();
-
-                        let effective_query =
-                            crate::menu_bar::current_app_commands::normalize_turn_this_into_a_command_request(
-                                Some(&raw_query_owned),
-                            )
-                            .unwrap_or_default();
-
-                        if effective_query.is_empty() {
-                            let message =
-                                "Type what you want to automate after \"Turn This Into a Command\""
-                                    .to_string();
-                            self.show_error_toast(message.clone(), cx);
-                            Self::builtin_error(
-                                dctx,
-                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                message,
-                                "turn_this_into_command_missing_query",
-                            )
-                        } else {
-                            tracing::info!(
-                                trace_id = %dctx.trace_id,
-                                raw_query = %raw_query_owned,
-                                effective_query = %effective_query,
-                                "turn_this_into_command.requested"
-                            );
-
-                            match crate::menu_bar::load_frontmost_menu_snapshot() {
-                                Ok(snapshot) => {
-                                    let selected_text = crate::selected_text::get_selected_text()
-                                        .ok()
-                                        .filter(|text| !text.trim().is_empty());
-
-                                    let browser_url =
-                                        crate::platform::get_focused_browser_tab_url()
-                                            .ok()
-                                            .filter(|url| !url.trim().is_empty());
-
-                                    let recipe =
-                                        crate::menu_bar::current_app_commands::build_current_app_command_recipe(
-                                            snapshot,
-                                            Some(&raw_query_owned),
-                                            selected_text.as_deref(),
-                                            browser_url.as_deref(),
-                                        );
-
-                                    match serde_json::to_string_pretty(&recipe) {
-                                        Ok(json) => {
-                                            tracing::info!(
-                                                category = "CURRENT_APP_RECIPE",
-                                                trace_id = %dctx.trace_id,
-                                                app_name = %recipe.prompt_receipt.app_name,
-                                                bundle_id = %recipe.prompt_receipt.bundle_id,
-                                                effective_query = %recipe.effective_query,
-                                                route = %recipe.trace.action,
-                                                suggested_script_name = %recipe.suggested_script_name,
-                                                candidate_count = recipe.trace.candidates.len(),
-                                                included_selected_text = recipe.prompt_receipt.included_selected_text,
-                                                included_browser_url = recipe.prompt_receipt.included_browser_url,
-                                                json_bytes = json.len(),
-                                                "turn_this_into_command.recipe_copied"
-                                            );
-
-                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                                json,
-                                            ));
-
-                                            self.show_hud(
-                                                format!(
-                                                    "Automation recipe copied: {}",
-                                                    recipe.suggested_script_name,
-                                                ),
-                                                Some(HUD_MEDIUM_MS),
-                                                cx,
-                                            );
-
-                                            self.spawn_generate_script_from_recipe_after_hide(
-                                                dctx.trace_id.to_string(),
-                                                recipe.clone(),
-                                                cx,
-                                            );
-
-                                            Self::builtin_success(dctx, "turn_this_into_command")
-                                        }
-                                        Err(e) => {
-                                            let message = format!(
-                                                "Failed to serialize current app command recipe: {}",
-                                                e
-                                            );
-                                            tracing::error!(
-                                                trace_id = %dctx.trace_id,
-                                                error = %e,
-                                                "turn_this_into_command.serialize_failed"
-                                            );
-                                            self.show_error_toast(message.clone(), cx);
-                                            Self::builtin_error(
-                                                dctx,
-                                                crate::action_helpers::ERROR_ACTION_FAILED,
-                                                message,
-                                                "turn_this_into_command_serialize_failed",
-                                            )
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    let message = format!(
-                                        "Failed to capture current app command recipe: {}. Check Accessibility permission in System Settings \u{2192} Privacy & Security \u{2192} Accessibility, then refocus the target app and try again.",
-                                        e
-                                    );
-                                    tracing::warn!(
-                                        trace_id = %dctx.trace_id,
-                                        error = %e,
-                                        "turn_this_into_command.capture_failed"
-                                    );
-                                    self.show_error_toast(message.clone(), cx);
-                                    Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "turn_this_into_command_capture_failed",
-                                    )
-                                }
-                            }
-                        }
+                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
+                            .expect("utility recipe arm should only receive recipe commands");
+                        self.execute_utility_turn_this_into_command_builtin(
+                            recipe_action,
+                            query_override,
+                            dctx,
+                            cx,
+                        )
                     }
                     UtilityCommandType::DoInCurrentApp => {
                         let raw_query_owned =
@@ -5342,6 +5244,130 @@ impl ScriptListApp {
                 let message = format!(
                     "Failed to replay current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
                     error
+                );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.capture_failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_utility_turn_this_into_command_builtin(
+        &mut self,
+        action: UtilityRecipeBuiltinAction,
+        query_override: Option<&str>,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let raw_query_owned = query_override.unwrap_or(&self.filter_text).to_string();
+
+        let effective_query =
+            crate::menu_bar::current_app_commands::normalize_turn_this_into_a_command_request(
+                Some(&raw_query_owned),
+            )
+            .unwrap_or_default();
+
+        if effective_query.is_empty() {
+            let message =
+                "Type what you want to automate after \"Turn This Into a Command\"".to_string();
+            self.show_error_toast(message.clone(), cx);
+            return Self::builtin_error(
+                dctx,
+                crate::action_helpers::ERROR_ACTION_FAILED,
+                message,
+                action.missing_query_failure_detail(),
+            );
+        }
+
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            raw_query = %raw_query_owned,
+            effective_query = %effective_query,
+            "turn_this_into_command.requested"
+        );
+
+        match crate::menu_bar::load_frontmost_menu_snapshot() {
+            Ok(snapshot) => {
+                let selected_text = crate::selected_text::get_selected_text()
+                    .ok()
+                    .filter(|text| !text.trim().is_empty());
+
+                let browser_url = crate::platform::get_focused_browser_tab_url()
+                    .ok()
+                    .filter(|url| !url.trim().is_empty());
+
+                let recipe =
+                    crate::menu_bar::current_app_commands::build_current_app_command_recipe(
+                        snapshot,
+                        Some(&raw_query_owned),
+                        selected_text.as_deref(),
+                        browser_url.as_deref(),
+                    );
+
+                match serde_json::to_string_pretty(&recipe) {
+                    Ok(json) => {
+                        tracing::info!(
+                            category = "CURRENT_APP_RECIPE",
+                            trace_id = %dctx.trace_id,
+                            app_name = %recipe.prompt_receipt.app_name,
+                            bundle_id = %recipe.prompt_receipt.bundle_id,
+                            effective_query = %recipe.effective_query,
+                            route = %recipe.trace.action,
+                            suggested_script_name = %recipe.suggested_script_name,
+                            candidate_count = recipe.trace.candidates.len(),
+                            included_selected_text = recipe.prompt_receipt.included_selected_text,
+                            included_browser_url = recipe.prompt_receipt.included_browser_url,
+                            json_bytes = json.len(),
+                            "turn_this_into_command.recipe_copied"
+                        );
+
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+
+                        self.show_hud(
+                            format!("Automation recipe copied: {}", recipe.suggested_script_name,),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+
+                        self.spawn_generate_script_from_recipe_after_hide(
+                            dctx.trace_id.to_string(),
+                            recipe.clone(),
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, action.success_detail())
+                    }
+                    Err(e) => {
+                        let message =
+                            format!("Failed to serialize current app command recipe: {}", e);
+                        tracing::error!(
+                            trace_id = %dctx.trace_id,
+                            error = %e,
+                            "turn_this_into_command.serialize_failed"
+                        );
+                        self.show_error_toast(message.clone(), cx);
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                            action.serialize_failure_detail(),
+                        )
+                    }
+                }
+            }
+            Err(e) => {
+                let message = format!(
+                    "Failed to capture current app command recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
+                    e
+                );
+                tracing::warn!(
+                    trace_id = %dctx.trace_id,
+                    error = %e,
+                    "turn_this_into_command.capture_failed"
                 );
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
