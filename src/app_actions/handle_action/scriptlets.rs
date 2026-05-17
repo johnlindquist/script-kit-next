@@ -15,6 +15,13 @@ struct ScriptletSourceTarget {
     path_text: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptletSourceTargetError {
+    NoSelection,
+    NotScriptlet,
+    MissingSourcePath,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ScriptletDynamicHandlerAction {
     command: String,
@@ -49,6 +56,27 @@ impl ScriptletSourceHandlerAction {
         match self {
             Self::CopyPath => format!("Copied: {path_text}"),
             Self::Edit | Self::RevealInFinder => path_text.to_string(),
+        }
+    }
+
+    fn reveal_success_hud(self) -> &'static str {
+        match self {
+            Self::RevealInFinder => "Opened in Finder",
+            Self::Edit | Self::CopyPath => "Opened in Finder",
+        }
+    }
+
+    fn target_error_message(self, error: ScriptletSourceTargetError, action_id: &str) -> String {
+        match error {
+            ScriptletSourceTargetError::NoSelection => {
+                selection_required_message_for_action(action_id).to_string()
+            }
+            ScriptletSourceTargetError::NotScriptlet => {
+                "Selected item is not a scriptlet".to_string()
+            }
+            ScriptletSourceTargetError::MissingSourcePath => {
+                "Scriptlet has no source file path".to_string()
+            }
         }
     }
 }
@@ -107,15 +135,15 @@ impl ScriptletDynamicExecutionResult {
 
 fn scriptlet_source_target(
     selected: Option<scripts::SearchResult>,
-) -> Result<ScriptletSourceTarget, &'static str> {
+) -> Result<ScriptletSourceTarget, ScriptletSourceTargetError> {
     let Some(result) = selected else {
-        return Err("No item selected");
+        return Err(ScriptletSourceTargetError::NoSelection);
     };
     let scripts::SearchResult::Scriptlet(m) = result else {
-        return Err("Selected item is not a scriptlet");
+        return Err(ScriptletSourceTargetError::NotScriptlet);
     };
     let Some(ref file_path) = m.scriptlet.file_path else {
-        return Err("Scriptlet has no source file path");
+        return Err(ScriptletSourceTargetError::MissingSourcePath);
     };
     let path_text = file_path
         .split('#')
@@ -150,16 +178,10 @@ impl ScriptListApp {
                 );
                 let target = match scriptlet_source_target(self.get_selected_result()) {
                     Ok(target) => target,
-                    Err("No item selected") => {
+                    Err(error) => {
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
-                            selection_required_message_for_action(action_id),
-                        );
-                    }
-                    Err(message) => {
-                        return DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            message,
+                            source_action.target_error_message(error, action_id),
                         );
                     }
                 };
@@ -222,7 +244,7 @@ impl ScriptListApp {
                                         "Async action completed: reveal_scriptlet_in_finder"
                                     );
                                     this.show_hud(
-                                        "Opened in Finder".to_string(),
+                                        source_action.reveal_success_hud().to_string(),
                                         Some(HUD_SHORT_MS),
                                         cx,
                                     );

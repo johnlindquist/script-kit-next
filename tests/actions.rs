@@ -666,6 +666,7 @@ fn scriptlet_source_handler_uses_named_action_states() {
 
     assert!(
         content.contains("enum ScriptletSourceHandlerAction")
+            && content.contains("enum ScriptletSourceTargetError")
             && content.contains("Edit")
             && content.contains("RevealInFinder")
             && content.contains("CopyPath"),
@@ -674,8 +675,10 @@ fn scriptlet_source_handler_uses_named_action_states() {
     assert!(
         content.contains("ScriptletSourceHandlerAction::from_action_id(action_id)")
             && content.contains("scriptlet_source_target(self.get_selected_result())")
-            && content.contains("source_action.copied_hud(&target.path_text)"),
-        "scriptlet source handlers should derive target resolution and copy feedback from the named state"
+            && content.contains("source_action.copied_hud(&target.path_text)")
+            && content.contains("source_action.reveal_success_hud()")
+            && content.contains("source_action.target_error_message(error, action_id)"),
+        "scriptlet source handlers should derive target resolution and feedback from named states"
     );
 }
 
