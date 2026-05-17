@@ -400,7 +400,7 @@ const cases: Json[] = [
     expectedActions: [
       ["root_clipboard_paste", "Paste Clipboard"],
       ["root_clipboard_copy", "Copy to Clipboard"],
-      ["root_clipboard_attach_to_ai", "Attach to AI"],
+      ["root_clipboard_attach_to_ai", "Attach to Agent Chat"],
       ["root_clipboard_pin", "Pin"],
       ["root_clipboard_quick_look", "Quick Look"],
       ["root_clipboard_delete", "Delete Clipboard Entry"],
@@ -447,8 +447,8 @@ const cases: Json[] = [
     query: "conversation",
     expectedFilters: ["conversations"],
     role: "rootPassive",
-    typeLabel: "AI Conversation",
-    sourceName: "AI Conversations",
+    typeLabel: "Agent Chat Conversation",
+    sourceName: "Agent Chat Conversations",
     stableKey: "acp-history/acp-source-actions",
     expectedActions: [
       ["root_acp_history_resume", "Resume Conversation"],
@@ -488,7 +488,7 @@ const cases: Json[] = [
     expectedActions: [
       ["root_dictation_paste", "Paste Dictation"],
       ["root_dictation_copy_transcript", "Copy Transcript"],
-      ["root_dictation_attach_to_ai", "Attach to AI"],
+      ["root_dictation_attach_to_ai", "Attach to Agent Chat"],
       ["root_dictation_create_note", "Create Note from Transcript"],
       ["root_dictation_delete", "Delete Dictation"],
     ],
