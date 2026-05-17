@@ -3,6 +3,36 @@
 // Contains: favorites_run, favorites_edit_script, favorites_copy_script_url,
 // favorites_move_up, favorites_move_down, favorites_remove.
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FavoritesBrowseHandlerAction {
+    EditScript,
+    CopyScriptUrl,
+}
+
+impl FavoritesBrowseHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "favorites_edit_script" => Some(Self::EditScript),
+            "favorites_copy_script_url" => Some(Self::CopyScriptUrl),
+            _ => None,
+        }
+    }
+
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::EditScript => "Select a favorite to edit.",
+            Self::CopyScriptUrl => "Select a favorite to copy its URL.",
+        }
+    }
+
+    fn copied_url_hud(self, url: &str) -> String {
+        match self {
+            Self::CopyScriptUrl => format!("Copied: {url}"),
+            Self::EditScript => url.to_string(),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn handle_favorites_action(
         &mut self,
@@ -19,10 +49,14 @@ impl ScriptListApp {
                     DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
                 }),
             "favorites_edit_script" => {
+                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some((favorite_id, path)) = self.selected_favorite_source_path() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Select a favorite to edit.",
+                        favorites_action.selection_required_message(),
                     );
                 };
 
@@ -67,17 +101,21 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "favorites_copy_script_url" => {
+                let Some(favorites_action) = FavoritesBrowseHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(favorite_id) = self.selected_favorite_id() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Select a favorite to copy its URL.",
+                        favorites_action.selection_required_message(),
                     );
                 };
                 let deeplink_name = crate::actions::to_deeplink_name(&favorite_id);
                 let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
                 self.copy_to_clipboard_with_feedback(
                     &deeplink_url,
-                    format!("Copied: {}", deeplink_url),
+                    favorites_action.copied_url_hud(&deeplink_url),
                     true,
                     cx,
                 );
