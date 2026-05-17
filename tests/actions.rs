@@ -2017,6 +2017,31 @@ fn acp_code_copy_handler_uses_named_action_states() {
     );
 }
 
+#[test]
+fn acp_conversation_markdown_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpConversationMarkdownHandlerAction")
+            && content.contains("CopyToClipboard")
+            && content.contains("SaveAsNote"),
+        "ACP conversation markdown copy/save handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpConversationMarkdownHandlerAction::from_action_id(action_id)")
+            && content.contains("markdown_action.empty_message()")
+            && content.contains("markdown_action.success_message()")
+            && content.contains(".failure_message(e)")
+            && content.contains("No Agent Chat messages to copy")
+            && content.contains("No Agent Chat messages to save")
+            && content.contains("Copied Agent Chat conversation as markdown")
+            && content.contains("Saved Agent Chat conversation to Notes")
+            && content.contains("Failed to save note: {error}"),
+        "ACP markdown handlers should derive empty, success, and save-failure feedback from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

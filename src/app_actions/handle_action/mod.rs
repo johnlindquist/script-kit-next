@@ -18,6 +18,12 @@ enum AcpCodeCopyHandlerAction {
     CopyAllCode,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpConversationMarkdownHandlerAction {
+    CopyToClipboard,
+    SaveAsNote,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -47,6 +53,37 @@ impl AcpCodeCopyHandlerAction {
         match (self, copied_any_code) {
             (Self::CopyAllCode, true) => "All code blocks copied",
             (Self::CopyAllCode, false) => "No code blocks found",
+        }
+    }
+}
+
+impl AcpConversationMarkdownHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_export_markdown" => Some(Self::CopyToClipboard),
+            "acp_save_as_note" => Some(Self::SaveAsNote),
+            _ => None,
+        }
+    }
+
+    fn empty_message(self) -> &'static str {
+        match self {
+            Self::CopyToClipboard => "No Agent Chat messages to copy",
+            Self::SaveAsNote => "No Agent Chat messages to save",
+        }
+    }
+
+    fn success_message(self) -> &'static str {
+        match self {
+            Self::CopyToClipboard => "Copied Agent Chat conversation as markdown",
+            Self::SaveAsNote => "Saved Agent Chat conversation to Notes",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> Option<String> {
+        match self {
+            Self::CopyToClipboard => None,
+            Self::SaveAsNote => Some(format!("Failed to save note: {error}")),
         }
     }
 }
@@ -1471,6 +1508,11 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_export_markdown" => {
+                let Some(markdown_action) =
+                    AcpConversationMarkdownHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let markdown = {
                     let view = entity.read(cx);
@@ -1506,7 +1548,7 @@ impl ScriptListApp {
                         "ACP export-as-markdown blocked"
                     );
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("No Agent Chat messages to copy".to_string());
+                    outcome.user_message = Some(markdown_action.empty_message().to_string());
                     return outcome;
                 };
 
@@ -1522,10 +1564,15 @@ impl ScriptListApp {
                 );
 
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some("Copied Agent Chat conversation as markdown".to_string());
+                outcome.user_message = Some(markdown_action.success_message().to_string());
                 outcome
             }
             "acp_save_as_note" => {
+                let Some(markdown_action) =
+                    AcpConversationMarkdownHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let markdown = {
                     let view = entity.read(cx);
@@ -1561,7 +1608,7 @@ impl ScriptListApp {
                         "ACP save-as-note blocked"
                     );
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No Agent Chat messages to save".to_string());
+                    o.user_message = Some(markdown_action.empty_message().to_string());
                     return o;
                 };
 
@@ -1578,7 +1625,7 @@ impl ScriptListApp {
                             "ACP save-as-note completed"
                         );
                         let mut o = DispatchOutcome::success();
-                        o.user_message = Some("Saved Agent Chat conversation to Notes".to_string());
+                        o.user_message = Some(markdown_action.success_message().to_string());
                         o
                     }
                     Err(e) => {
@@ -1590,10 +1637,10 @@ impl ScriptListApp {
                             error = %e,
                             "ACP save-as-note failed"
                         );
-                        DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("Failed to save note: {e}"),
-                        )
+                        let message = markdown_action
+                            .failure_message(e)
+                            .unwrap_or_else(|| "Failed to handle Agent Chat markdown".to_string());
+                        DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, message)
                     }
                 }
             }
