@@ -25,6 +25,15 @@ fn script_kit_selfie_captures_composited_desktop_region_and_receipt() {
     assert!(platform.contains(".scriptkit"));
     assert!(platform.contains("screenshots"));
     assert!(platform.contains("selfies"));
+    assert!(platform.contains("ScriptKitSelfieWindowKind::Dictation"));
+    assert!(platform.contains("ScriptKitSelfieWindowKind::Notes"));
+    assert!(platform.contains("select_script_kit_selfie_candidate_index"));
+    assert!(platform.contains("crate::dictation::is_dictation_overlay_open()"));
+    assert!(platform.contains("selfie_prefers_dictation_then_notes_before_main_window"));
+    assert!(platform.contains("selfie_prefers_notes_over_focused_main_when_dictation_is_absent"));
+    assert!(
+        platform.contains("selfie_recognizes_titleless_dictation_overlay_when_dictation_is_open")
+    );
 
     let executor = read_source("src/app_execute/builtin_execution.rs");
     assert!(executor.contains("capture_script_kit_selfie(&state)"));

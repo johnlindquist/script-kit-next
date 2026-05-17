@@ -486,11 +486,15 @@ mod tests {
         assert_eq!(mini_ai_chat.role, "adoptableVariation");
 
         for story in &snapshot.stories {
-            assert_ne!(
-                story.role, "designExperiment",
-                "{} should not be registered in the primary Storybook catalog",
-                story.story_id
-            );
+            if story.story_id == "dictation-ui-variations" {
+                assert_eq!(story.role, "designExperiment");
+            } else {
+                assert_ne!(
+                    story.role, "designExperiment",
+                    "{} should not be registered in the primary Storybook catalog",
+                    story.story_id
+                );
+            }
         }
     }
 
@@ -506,7 +510,6 @@ mod tests {
         for archived_story_id in [
             "acp-chat-raycast-weight-studies",
             "ask-tab-glyph-options",
-            "dictation-ui-variations",
             "mention-picker-redesigns",
             "slash-picker-redesigns",
             "slash-picker-typography",

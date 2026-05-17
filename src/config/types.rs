@@ -345,17 +345,21 @@ impl BrowserHistoryProvider {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum AiVaultProvider {
+    Claude,
+    Codex,
     HermesAgent,
     RovoDev,
 }
 
 impl AiVaultProvider {
     pub(crate) fn default_root_providers() -> Vec<Self> {
-        vec![Self::HermesAgent, Self::RovoDev]
+        vec![Self::Claude, Self::Codex, Self::HermesAgent, Self::RovoDev]
     }
 
     pub(crate) fn cmux_id(&self) -> &'static str {
         match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
             Self::HermesAgent => "hermes-agent",
             Self::RovoDev => "rovodev",
         }

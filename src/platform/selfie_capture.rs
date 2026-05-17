@@ -31,6 +31,82 @@ const SCRIPT_KIT_SELFIE_COMMAND_ID: &str = "builtin/script-kit-selfie";
 const SCRIPT_KIT_SELFIE_SHORTCUT: &str = "cmd+alt+1";
 const SCRIPT_KIT_SELFIE_MARGIN: i32 = 48;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptKitSelfieWindowKind {
+    Dictation,
+    Notes,
+    MainOrOther,
+}
+
+impl ScriptKitSelfieWindowKind {
+    fn priority(self) -> i32 {
+        match self {
+            Self::Dictation => 3,
+            Self::Notes => 2,
+            Self::MainOrOther => 1,
+        }
+    }
+
+    fn state_label(self, fallback: &str) -> String {
+        match self {
+            Self::Dictation => "Dictation".to_string(),
+            Self::Notes => "Notes".to_string(),
+            Self::MainOrOther => fallback.to_string(),
+        }
+    }
+
+    fn capture_method_suffix(self) -> &'static str {
+        match self {
+            Self::Dictation => "dictation",
+            Self::Notes => "notes",
+            Self::MainOrOther => "main",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ScriptKitSelfieCandidateSnapshot {
+    title: String,
+    app_name: String,
+    focused: bool,
+    width: i32,
+    height: i32,
+}
+
+fn classify_script_kit_selfie_candidate(
+    candidate: &ScriptKitSelfieCandidateSnapshot,
+    dictation_open: bool,
+) -> ScriptKitSelfieWindowKind {
+    let title = candidate.title.to_lowercase();
+    let app_name = candidate.app_name.to_lowercase();
+    let title_or_app_mentions_dictation =
+        title.contains("dictation") || app_name.contains("dictation");
+    let looks_like_titleless_dictation_overlay =
+        dictation_open && candidate.height <= 220 && candidate.width >= 240 && candidate.width <= 900;
+    if title_or_app_mentions_dictation || looks_like_titleless_dictation_overlay {
+        ScriptKitSelfieWindowKind::Dictation
+    } else if title.contains("notes") || app_name.contains("notes") {
+        ScriptKitSelfieWindowKind::Notes
+    } else {
+        ScriptKitSelfieWindowKind::MainOrOther
+    }
+}
+
+fn select_script_kit_selfie_candidate_index(
+    candidates: &[ScriptKitSelfieCandidateSnapshot],
+    dictation_open: bool,
+) -> Option<usize> {
+    candidates
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, candidate)| {
+            let kind = classify_script_kit_selfie_candidate(candidate, dictation_open);
+            let area = candidate.width as i64 * candidate.height as i64;
+            (kind.priority(), candidate.focused, area)
+        })
+        .map(|(index, _)| index)
+}
+
 pub fn script_kit_selfie_output_dir() -> std::path::PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -81,16 +157,24 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
     let candidates = list_script_kit_candidates().map_err(|error| {
         anyhow::anyhow!("failed to enumerate Script Kit windows for selfie capture: {error}")
     })?;
-    let candidate = candidates
+    let candidate_snapshots = candidates
         .iter()
-        .filter(|candidate| candidate.focused)
-        .max_by_key(|candidate| candidate.width * candidate.height)
-        .or_else(|| {
-            candidates
-                .iter()
-                .max_by_key(|candidate| candidate.width * candidate.height)
+        .map(|candidate| ScriptKitSelfieCandidateSnapshot {
+            title: candidate.title.clone(),
+            app_name: candidate.app_name.clone(),
+            focused: candidate.focused,
+            width: candidate.width,
+            height: candidate.height,
         })
+        .collect::<Vec<_>>();
+    let dictation_open = crate::dictation::is_dictation_overlay_open();
+    let candidate_index =
+        select_script_kit_selfie_candidate_index(&candidate_snapshots, dictation_open)
         .context("no visible Script Kit window found for selfie capture")?;
+    let candidate = &candidates[candidate_index];
+    let captured_kind =
+        classify_script_kit_selfie_candidate(&candidate_snapshots[candidate_index], dictation_open);
+    let captured_state = captured_kind.state_label(state);
 
     let window_x = candidate.window.x().context("failed to read window x")?;
     let window_y = candidate.window.y().context("failed to read window y")?;
@@ -129,7 +213,7 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
 
     let created_at = chrono::Local::now();
     let timestamp = created_at.format("%Y%m%d-%H%M%S-%3f").to_string();
-    let state_slug = slugify_script_kit_selfie_state(state);
+    let state_slug = slugify_script_kit_selfie_state(&captured_state);
     let receipt_id = format!("{timestamp}-{state_slug}");
     let dir = script_kit_selfie_output_dir();
     std::fs::create_dir_all(&dir).with_context(|| {
@@ -150,9 +234,12 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
         command_id: SCRIPT_KIT_SELFIE_COMMAND_ID.to_string(),
         receipt_id,
         created_at: created_at.to_rfc3339(),
-        state: state.to_string(),
+        state: captured_state,
         shortcut: SCRIPT_KIT_SELFIE_SHORTCUT.to_string(),
-        capture_method: "xcap.monitor.capture_region.composited_desktop".to_string(),
+        capture_method: format!(
+            "xcap.monitor.capture_region.composited_desktop.{}",
+            captured_kind.capture_method_suffix()
+        ),
         png_path: png_path.to_string_lossy().to_string(),
         receipt_path: receipt_path.to_string_lossy().to_string(),
         window_bounds: ScriptKitSelfieBounds {
@@ -186,7 +273,11 @@ fn capture_script_kit_selfie_macos(state: &str) -> anyhow::Result<ScriptKitSelfi
 
 #[cfg(test)]
 mod selfie_capture_tests {
-    use super::slugify_script_kit_selfie_state;
+    use super::{
+        classify_script_kit_selfie_candidate, select_script_kit_selfie_candidate_index,
+        slugify_script_kit_selfie_state, ScriptKitSelfieCandidateSnapshot,
+        ScriptKitSelfieWindowKind,
+    };
 
     #[test]
     fn selfie_state_slug_is_filename_safe() {
@@ -195,5 +286,93 @@ mod selfie_capture_tests {
             "current-app-commands-view"
         );
         assert_eq!(slugify_script_kit_selfie_state(""), "unknown-state");
+    }
+
+    #[test]
+    fn selfie_prefers_dictation_then_notes_before_main_window() {
+        let candidates = vec![
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Script Kit".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: true,
+                width: 1200,
+                height: 900,
+            },
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Notes".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: false,
+                width: 350,
+                height: 280,
+            },
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Dictation".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: false,
+                width: 520,
+                height: 120,
+            },
+        ];
+
+        let index = select_script_kit_selfie_candidate_index(&candidates, true).unwrap();
+        assert_eq!(index, 2);
+        assert_eq!(
+            classify_script_kit_selfie_candidate(&candidates[index], true),
+            ScriptKitSelfieWindowKind::Dictation
+        );
+    }
+
+    #[test]
+    fn selfie_prefers_notes_over_focused_main_when_dictation_is_absent() {
+        let candidates = vec![
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Script Kit".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: true,
+                width: 1200,
+                height: 900,
+            },
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Notes".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: false,
+                width: 350,
+                height: 280,
+            },
+        ];
+
+        let index = select_script_kit_selfie_candidate_index(&candidates, false).unwrap();
+        assert_eq!(index, 1);
+        assert_eq!(
+            classify_script_kit_selfie_candidate(&candidates[index], false),
+            ScriptKitSelfieWindowKind::Notes
+        );
+    }
+
+    #[test]
+    fn selfie_recognizes_titleless_dictation_overlay_when_dictation_is_open() {
+        let candidates = vec![
+            ScriptKitSelfieCandidateSnapshot {
+                title: "Script Kit".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: true,
+                width: 1200,
+                height: 900,
+            },
+            ScriptKitSelfieCandidateSnapshot {
+                title: "".to_string(),
+                app_name: "Script Kit".to_string(),
+                focused: false,
+                width: 520,
+                height: 120,
+            },
+        ];
+
+        let index = select_script_kit_selfie_candidate_index(&candidates, true).unwrap();
+        assert_eq!(index, 1);
+        assert_eq!(
+            classify_script_kit_selfie_candidate(&candidates[index], true),
+            ScriptKitSelfieWindowKind::Dictation
+        );
     }
 }

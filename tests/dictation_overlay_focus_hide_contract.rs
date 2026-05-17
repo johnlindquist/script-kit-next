@@ -75,7 +75,7 @@ fn dictation_overlay_opens_without_revealing_hidden_main_panel() {
 fn dictation_overlay_renders_visible_shortcut_rail() {
     assert!(
         DICTATION_WINDOW.contains("pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;")
-            && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 58.0;"),
+            && DICTATION_WINDOW.contains("pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;"),
         "dictation overlay must reserve enough room for visible controls and action chips"
     );
     assert!(
@@ -101,6 +101,12 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
             && DICTATION_WINDOW.contains("this.submit_overlay_session(window, cx)")
             && DICTATION_WINDOW.contains("this.abort_overlay_session(window, cx)"),
         "recording Stop and Cancel controls must be clickable from the overlay"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("fn default_dictation_stop_keycap()")
+            && DICTATION_WINDOW.contains("key: \"Semicolon\".to_string()")
+            && !DICTATION_WINDOW.contains("unwrap_or_else(|| \"again\".to_string())"),
+        "recording Stop must show the configured dictation hotkey, falling back to Cmd+Shift+; instead of the stale Again label"
     );
 
     let runtime_render = section_between(

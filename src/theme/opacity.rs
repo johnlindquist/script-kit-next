@@ -41,7 +41,7 @@ pub const OPACITY_ICON_MUTED: f32 = 0.55;
 /// Medium accent emphasis.
 pub const OPACITY_ACCENT_MEDIUM: f32 = 0.60;
 /// Secondary label/body text emphasis.
-pub const OPACITY_TEXT_MUTED: f32 = 0.65;
+pub const OPACITY_TEXT_MUTED: f32 = 0.80;
 /// Strong emphasis.
 pub const OPACITY_STRONG: f32 = 0.70;
 /// Preview/secondary text in sidebars.
@@ -85,6 +85,7 @@ mod tests {
         assert_opacity_eq(OPACITY_MESSAGE_ASSISTANT_BACKGROUND, 0.10);
         assert_opacity_eq(OPACITY_MESSAGE_USER_BACKGROUND, 0.18);
         assert_opacity_eq(OPACITY_MUTED, 0.30);
+        assert_opacity_eq(OPACITY_TEXT_MUTED, 0.80);
         assert_opacity_eq(OPACITY_STRONG, 0.70);
         assert_opacity_eq(OPACITY_NEAR_FULL, 0.85);
         assert_opacity_eq(OPACITY_CARD_BG, 0.12);

@@ -86,11 +86,11 @@ pub fn hex_to_hsla_with_alpha(hex: u32, alpha: f32) -> Hsla {
     }
 }
 /// Opacity for vibrancy window backgrounds in dark mode.
-/// 75% opacity balances vibrancy blur visibility with readability.
-pub const VIBRANCY_DARK_OPACITY: f32 = 0.75;
+/// 50% opacity keeps theme backgrounds consistently translucent by default.
+pub const VIBRANCY_DARK_OPACITY: f32 = 0.50;
 /// Opacity for vibrancy window backgrounds in light mode.
-/// Higher value (85%) needed for visibility - matches POC's FAFAFA tint at D9 alpha.
-pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.85;
+/// 50% opacity keeps theme backgrounds consistently translucent by default.
+pub const VIBRANCY_LIGHT_OPACITY: f32 = 0.50;
 /// 38% opacity - arg input selection highlight fill.
 pub(crate) const ALPHA_SELECTION: u8 = 0x60;
 /// 38% opacity - prompt dividers and subtle section borders.
@@ -108,8 +108,8 @@ pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
 ///
 /// # Returns
 /// An Rgba color with appropriate opacity for the current theme mode:
-/// - Light mode: 85% opacity (matches POC's proven appearance)
-/// - Dark mode: 75% opacity (balances blur visibility with readability)
+/// - Light mode: 50% opacity
+/// - Dark mode: 50% opacity
 ///
 /// # Example
 /// ```ignore
@@ -122,7 +122,7 @@ pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
 ///
 /// Uses cached theme to avoid file I/O on every render.
 /// If `theme.opacity.vibrancy_background` is set, that value is used.
-/// Otherwise, mode-specific defaults are used (75% dark / 85% light).
+/// Otherwise, mode-specific defaults are used (50% dark / 50% light).
 #[inline]
 fn resolve_window_vibrancy_opacity(theme: &Theme) -> f32 {
     let opacity = theme.get_opacity();

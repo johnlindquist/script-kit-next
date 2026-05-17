@@ -15,7 +15,8 @@ fn current_app_commands_empty_state_copy_is_modeled() {
         "Current App Commands empty state should own filter classification, title, and detail copy"
     );
     assert!(
-        CURRENT_APP_COMMANDS.contains("let empty_state = CurrentAppCommandsEmptyState::from_filter(&filter);")
+        CURRENT_APP_COMMANDS
+            .contains("let empty_state = CurrentAppCommandsEmptyState::from_filter(&filter);")
             && CURRENT_APP_COMMANDS.contains("let empty_title = empty_state.title();")
             && CURRENT_APP_COMMANDS.contains("let empty_detail = empty_state.detail(&filter);"),
         "Current App Commands renderer should derive empty-state title/detail from the model"

@@ -197,7 +197,9 @@ impl Render for ShortcutRecorder {
             .id("shortcut-modal-content")
             .w(px(RECORDER_MODAL_WIDTH))
             .p(px(RECORDER_MODAL_PADDING))
-            .bg(rgba(chrome.popup_surface_rgba))
+            .when(!self.detached_window, |modal| {
+                modal.bg(rgba(chrome.popup_surface_rgba))
+            })
             .border_1()
             .border_color(rgba(chrome.border_rgba))
             .rounded(px(8.))

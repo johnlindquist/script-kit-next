@@ -3,6 +3,17 @@ use gpui::Context;
 
 impl ScriptListApp {
     pub(crate) fn warm_quick_terminal_pty(&mut self, cx: &mut Context<Self>) {
+        if std::env::var("SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY")
+            .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+        {
+            tracing::debug!(
+                event = "quick_terminal_warm_pty_skipped",
+                reason = "disabled_by_env",
+            );
+            return;
+        }
+
         if self.quick_terminal_warm_pty.is_some() || self.quick_terminal_warm_inflight {
             return;
         }

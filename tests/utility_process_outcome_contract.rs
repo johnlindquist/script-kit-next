@@ -9,10 +9,12 @@ fn utility_process_builtin_uses_named_outcome_state() {
         "Stop All Processes should classify active-count state with a named outcome"
     );
     assert!(
-        BUILTIN_EXECUTION.contains("fn outcome(self, process_count: usize) -> UtilityProcessBuiltinOutcome")
+        BUILTIN_EXECUTION
+            .contains("fn outcome(self, process_count: usize) -> UtilityProcessBuiltinOutcome")
             && BUILTIN_EXECUTION.contains("0 => UtilityProcessBuiltinOutcome::NoRunningProcesses")
-            && BUILTIN_EXECUTION
-                .contains("process_count => UtilityProcessBuiltinOutcome::StopRequested { process_count }"),
+            && BUILTIN_EXECUTION.contains(
+                "process_count => UtilityProcessBuiltinOutcome::StopRequested { process_count }"
+            ),
         "Stop All Processes should map process counts to outcome state in one transition"
     );
 }

@@ -133,6 +133,10 @@ pub use dictation_states::{
     dictation_state_story_variants, render_dictation_state_compare_thumbnail,
     render_dictation_state_gallery, render_dictation_state_story_preview,
 };
+pub use dictation_ui_variations::{
+    dictation_ui_story_variants, render_dictation_ui_compare_thumbnail,
+    render_dictation_ui_gallery, render_dictation_ui_story_preview,
+};
 pub use footer_variations::{
     config_from_footer_variation_spec, config_from_storybook_footer_selection,
     config_from_storybook_footer_selection_value, footer_story_variants, footer_variation_specs,

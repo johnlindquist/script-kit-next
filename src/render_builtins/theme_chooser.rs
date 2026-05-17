@@ -384,6 +384,26 @@ impl ScriptListApp {
         (1.00, "100%"),
     ];
 
+    /// Secondary text opacity presets for placeholder/hint/description tiers.
+    const TEXT_OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.50, "50%"),
+        (0.60, "60%"),
+        (0.65, "65%"),
+        (0.70, "70%"),
+        (0.80, "80%"),
+        (0.90, "90%"),
+    ];
+
+    /// Focused row/background opacity presets.
+    const FOCUSED_BACKGROUND_OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.05, "5%"),
+        (0.07, "7%"),
+        (0.10, "10%"),
+        (0.15, "15%"),
+        (0.20, "20%"),
+        (0.25, "25%"),
+    ];
+
     /// Find the closest accent palette index for a given accent color
     fn find_accent_palette_index(accent: u32) -> Option<usize> {
         Self::ACCENT_PALETTE.iter().position(|&(c, _)| c == accent)
@@ -628,14 +648,35 @@ impl ScriptListApp {
         let mut opacity = next.get_opacity();
         opacity.main = value;
         opacity.title_bar = value;
-        opacity.search_box = (value + 0.06).min(1.0);
+        opacity.search_box = value;
         opacity.log_panel = value;
         opacity.dialog = value;
-        opacity.input = (value + 0.04).min(1.0);
+        opacity.input = value;
         opacity.panel = value;
-        opacity.input_inactive = (value + 0.02).min(1.0);
-        opacity.input_active = (value + 0.08).min(1.0);
+        opacity.input_inactive = value;
+        opacity.input_active = value;
         opacity.vibrancy_background = Some(value);
+        next.opacity = Some(opacity);
+        next
+    }
+
+    fn apply_text_opacity_preset(theme: &crate::theme::Theme, value: f32) -> crate::theme::Theme {
+        let mut next = theme.clone();
+        let mut opacity = next.get_opacity();
+        opacity.text_placeholder = value.clamp(0.0, 1.0);
+        opacity.text_hint = (value + 0.05).clamp(0.0, 1.0);
+        opacity.text_muted_alpha = (value + 0.15).clamp(0.0, 1.0);
+        next.opacity = Some(opacity);
+        next
+    }
+
+    fn apply_focused_background_opacity_preset(
+        theme: &crate::theme::Theme,
+        value: f32,
+    ) -> crate::theme::Theme {
+        let mut next = theme.clone();
+        let mut opacity = next.get_opacity();
+        opacity.selected = value.clamp(0.0, 1.0);
         next.opacity = Some(opacity);
         next
     }
@@ -1250,6 +1291,8 @@ impl ScriptListApp {
 
         // ── Preview panel with customization controls ─────────────
         let current_opacity_main = self.theme.get_opacity().main;
+        let current_text_placeholder_opacity = self.theme.get_opacity().text_placeholder;
+        let current_focused_background_opacity = self.theme.get_opacity().selected;
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -1313,6 +1356,120 @@ impl ScriptListApp {
                     .into_any_element()
             })
             .collect();
+
+        let text_opacity_buttons: Vec<gpui::AnyElement> = Self::TEXT_OPACITY_PRESETS
+            .iter()
+            .enumerate()
+            .map(|(i, &(value, label))| {
+                let is_current =
+                    (value - current_text_placeholder_opacity).abs() < OPACITY_MATCH_TOLERANCE;
+                let click_entity = entity_handle_for_customize.clone();
+                let tooltip_label =
+                    format!("Set placeholder/hint/description opacity to {}", label);
+                div()
+                    .id(ElementId::NamedInteger("text-opacity-btn".into(), i as u64))
+                    .px(px(8.0))
+                    .py(px(3.0))
+                    .rounded(px(4.0))
+                    .cursor_pointer()
+                    .text_xs()
+                    .when(is_current, |d| {
+                        d.bg(rgb(accent_color))
+                            .text_color(rgb(text_on_accent))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                    })
+                    .when(!is_current, |d| {
+                        d.border_1()
+                            .border_color(badge_border_bg)
+                            .text_color(rgb(text_secondary))
+                            .hover(move |s| s.bg(theme_row_hover_bg))
+                    })
+                    .tooltip(move |window, cx| {
+                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                            .build(window, cx)
+                    })
+                    .on_click(
+                        move |_event: &gpui::ClickEvent,
+                              _window: &mut Window,
+                              cx: &mut gpui::App| {
+                            cx.stop_propagation();
+                            if let Some(app) = click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    let modified =
+                                        Self::apply_text_opacity_preset(this.theme.as_ref(), value);
+                                    this.apply_and_persist_theme(
+                                        modified,
+                                        "theme_chooser_text_opacity_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    )
+                    .child(label.to_string())
+                    .into_any_element()
+            })
+            .collect();
+
+        let focused_background_opacity_buttons: Vec<gpui::AnyElement> =
+            Self::FOCUSED_BACKGROUND_OPACITY_PRESETS
+                .iter()
+                .enumerate()
+                .map(|(i, &(value, label))| {
+                    let is_current = (value - current_focused_background_opacity).abs()
+                        < OPACITY_MATCH_TOLERANCE;
+                    let click_entity = entity_handle_for_customize.clone();
+                    let tooltip_label = format!("Set focused row background opacity to {}", label);
+                    div()
+                        .id(ElementId::NamedInteger(
+                            "focused-background-opacity-btn".into(),
+                            i as u64,
+                        ))
+                        .px(px(8.0))
+                        .py(px(3.0))
+                        .rounded(px(4.0))
+                        .cursor_pointer()
+                        .text_xs()
+                        .when(is_current, |d| {
+                            d.bg(rgb(accent_color))
+                                .text_color(rgb(text_on_accent))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                        })
+                        .when(!is_current, |d| {
+                            d.border_1()
+                                .border_color(badge_border_bg)
+                                .text_color(rgb(text_secondary))
+                                .hover(move |s| s.bg(theme_row_hover_bg))
+                        })
+                        .tooltip(move |window, cx| {
+                            gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
+                                .build(window, cx)
+                        })
+                        .on_click(
+                            move |_event: &gpui::ClickEvent,
+                                  _window: &mut Window,
+                                  cx: &mut gpui::App| {
+                                cx.stop_propagation();
+                                if let Some(app) = click_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        let modified =
+                                            Self::apply_focused_background_opacity_preset(
+                                                this.theme.as_ref(),
+                                                value,
+                                            );
+                                        this.apply_and_persist_theme(
+                                            modified,
+                                            "theme_chooser_focused_background_opacity_click",
+                                            cx,
+                                        );
+                                    });
+                                }
+                            },
+                        )
+                        .child(label.to_string())
+                        .into_any_element()
+                })
+                .collect();
 
         // Build opacity preset buttons (clickable)
         let opacity_buttons: Vec<gpui::AnyElement> = Self::OPACITY_PRESETS
@@ -1685,6 +1842,44 @@ impl ScriptListApp {
                             .gap(px(6.0))
                             .child(surprise_button)
                             .child(reset_button),
+                    ),
+            )
+            // Secondary text opacity row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(preview_section_gap))
+                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
+                        "Secondary Text  {:.0}%",
+                        current_text_placeholder_opacity * 100.0
+                    )))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(2.0))
+                            .flex_wrap()
+                            .children(text_opacity_buttons),
+                    ),
+            )
+            // Focused background opacity row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(preview_section_gap))
+                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
+                        "Focused Background  {:.0}%",
+                        current_focused_background_opacity * 100.0
+                    )))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(2.0))
+                            .flex_wrap()
+                            .children(focused_background_opacity_buttons),
                     ),
             )
             // Accent color row (with name)

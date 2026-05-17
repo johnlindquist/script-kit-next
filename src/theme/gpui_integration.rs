@@ -151,23 +151,18 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     let main_bg = if vibrancy_enabled {
         // Get opacity from theme, with fallbacks for different modes
         // This controls how much blur shows through the window background
-        // Fallback value (0.85) matches the vibrancy POC (src/bin/vibrancy-poc.rs):
-        // - POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity (0xD9/255 = 0.851)
+        // Fallback value (0.50) matches the shared theme opacity default:
+        // - 50% opacity keeps every stock theme surface consistently translucent.
         //
-        // IMPORTANT: Light mode requires higher opacity for readability.
-        // User theme.json may have low dark mode values (e.g., 0.3) that would
-        // make light mode backgrounds too transparent. We enforce a minimum
-        // of 0.75 for light mode to ensure text remains readable.
+        // IMPORTANT: Light and dark modes intentionally use the same floor here.
+        // Secondary text and placeholder alpha tiers are raised in the theme
+        // defaults to keep text readable over the more transparent background.
         let bg_alpha = if is_dark {
             // Dark mode: use user's value or default
-            opacity.vibrancy_background.unwrap_or(0.75)
+            opacity.vibrancy_background.unwrap_or(0.50)
         } else {
-            // Light mode: ensure minimum 0.75 opacity for visibility
-            // User's value is clamped to at least 0.75 for light mode
-            opacity
-                .vibrancy_background
-                .map(|v| v.max(0.75))
-                .unwrap_or(0.75)
+            // Light mode: use user's value or default without forcing a higher floor
+            opacity.vibrancy_background.unwrap_or(0.50)
         }
         .clamp(0.0, 1.0);
 

@@ -24,6 +24,7 @@ export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:
 export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
 export SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM="${SCRIPT_KIT_DISABLE_ACP_HOT_PREWARM:-1}"
 export SCRIPT_KIT_DISABLE_CODEX_ACP="${SCRIPT_KIT_DISABLE_CODEX_ACP:-1}"
+export SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY="${SCRIPT_KIT_DISABLE_QUICK_TERMINAL_WARM_PTY:-1}"
 
 # Agentic session name: dev.sh now launches through the reusable session contract
 # so autonomous agents can attach immediately after a rebuild.
@@ -33,9 +34,10 @@ mkdir -p "$SESSION_DIR_RAW"
 export SCRIPT_KIT_SESSION_DIR="$(cd "$SESSION_DIR_RAW" && pwd -P)"
 
 # Keep local cargo artifacts from silently consuming the disk during long
-# cargo-watch/test cycles. Override with SCRIPT_KIT_TARGET_AUTO_CLEAN=0.
+# cargo-watch/test cycles. Cleanup is opt-in because cargo clean can take a
+# long time with no progress output and forces the dev loop into a cold build.
 SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB="${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB:-50}"
-SCRIPT_KIT_TARGET_AUTO_CLEAN="${SCRIPT_KIT_TARGET_AUTO_CLEAN:-1}"
+SCRIPT_KIT_TARGET_AUTO_CLEAN="${SCRIPT_KIT_TARGET_AUTO_CLEAN:-0}"
 
 if [ -d target ]; then
     if [[ "$SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB" =~ ^[0-9]+$ ]] && [ "$SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB" -gt 0 ]; then
@@ -54,7 +56,8 @@ if [ -d target ]; then
                 echo ""
             else
                 echo "Skipping target cleanup because SCRIPT_KIT_TARGET_AUTO_CLEAN=${SCRIPT_KIT_TARGET_AUTO_CLEAN}."
-                echo "   Run cargo clean manually or lower disk usage before a long dev loop."
+                echo "   To clean before launch: SCRIPT_KIT_TARGET_AUTO_CLEAN=1 ./dev.sh"
+                echo "   Or run cargo clean manually when you can wait for a cold rebuild."
                 echo ""
             fi
         fi
@@ -83,6 +86,7 @@ else
 fi
 echo "   Agentic session: ${SCRIPT_KIT_DEV_SESSION_NAME}"
 echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
+echo "   Quick Terminal warm PTY: disabled"
 echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
 echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"

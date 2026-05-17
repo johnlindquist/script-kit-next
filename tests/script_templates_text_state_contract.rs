@@ -14,8 +14,7 @@ fn script_template_empty_state_copy_is_modeled() {
         "Script Template catalog empty states should own filter classification and visible copy"
     );
     assert!(
-        SCRIPT_TEMPLATES
-            .contains("ScriptTemplateCatalogEmptyState::from_filter(filter).message()"),
+        SCRIPT_TEMPLATES.contains("ScriptTemplateCatalogEmptyState::from_filter(filter).message()"),
         "Script Template catalog renderer should derive empty-state copy from the model"
     );
     assert!(

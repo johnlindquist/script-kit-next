@@ -75,6 +75,10 @@ fn shortcut_recorder_detached_render_removes_parent_backdrop() {
         "detached popup rendering must not dim the parent launcher with the old backdrop"
     );
     assert!(
+        !detached_branch.contains(".bg(rgba(chrome.popup_surface_rgba))"),
+        "detached popup surface should not paint an extra background while visual tuning"
+    );
+    assert!(
         detached_branch.contains("detached_surface_cancel")
             && detached_branch.contains(".on_mouse_down(gpui::MouseButton::Left"),
         "detached popup margin should be an invisible click-to-cancel target"
