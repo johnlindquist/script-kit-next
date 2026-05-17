@@ -24,6 +24,23 @@ const BUILTIN_DICTATION_MODEL_CANCEL: &str = "cancel";
 const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin/dictation-model-hide";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AiImageCaptureBuiltinAction {
+    SendScreen,
+    SendFocusedWindow,
+    SendScreenArea,
+}
+
+impl AiImageCaptureBuiltinAction {
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SendScreen => format!("Failed to capture screen: {error}"),
+            Self::SendFocusedWindow => format!("Failed to capture window: {error}"),
+            Self::SendScreenArea => format!("Failed to capture screen area: {error}"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum DictationBuiltinAction {
     CurrentSurface,
     AgentChat,
@@ -2168,6 +2185,7 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
 
 impl ScriptListApp {
     fn spawn_send_screen_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+        let capture_action = AiImageCaptureBuiltinAction::SendScreen;
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -2257,7 +2275,7 @@ impl ScriptListApp {
                         error = %error,
                         "Failed to capture screen for AI"
                     );
-                    let message = format!("Failed to capture screen: {}", error);
+                    let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
                         this.show_error_toast(message, cx);
                     })
@@ -2273,6 +2291,7 @@ impl ScriptListApp {
         trace_id: &str,
         cx: &mut Context<Self>,
     ) {
+        let capture_action = AiImageCaptureBuiltinAction::SendFocusedWindow;
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -2378,7 +2397,7 @@ impl ScriptListApp {
                         error = %error,
                         "Failed to capture focused window for AI"
                     );
-                    let message = format!("Failed to capture window: {}", error);
+                    let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
                         this.show_error_toast(message, cx);
                     })
@@ -2390,6 +2409,7 @@ impl ScriptListApp {
     }
 
     fn spawn_send_screen_area_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+        let capture_action = AiImageCaptureBuiltinAction::SendScreenArea;
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -2488,7 +2508,7 @@ impl ScriptListApp {
                         error = %error,
                         "Failed to capture screen area for AI"
                     );
-                    let message = format!("Failed to capture screen area: {}", error);
+                    let message = capture_action.failure_message(&error);
                     this.update(cx, |this, cx| {
                         this.show_error_toast(message, cx);
                     })
