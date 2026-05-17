@@ -2042,6 +2042,30 @@ fn acp_conversation_markdown_handlers_use_named_action_states() {
     );
 }
 
+#[test]
+fn acp_last_code_block_handlers_use_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum AcpLastCodeBlockHandlerAction")
+            && content.contains("SaveAsScript")
+            && content.contains("RunLastCode"),
+        "ACP save/run-last-code handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AcpLastCodeBlockHandlerAction::from_action_id(action_id)")
+            && content.contains("code_block_action.missing_code_message()")
+            && content.contains("code_block_action.saved_script_message(&name, ext)")
+            && content.contains("code_block_action.temp_write_failure_message(e)")
+            && content.contains("No code block found in last response")
+            && content.contains("No code block found")
+            && content.contains("Saved as {name}.{ext}")
+            && content.contains("Failed to write temp file: {error}"),
+        "ACP save/run-last-code handlers should derive missing-code, save-success, and temp-write feedback from the named state"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

@@ -24,6 +24,12 @@ enum AcpConversationMarkdownHandlerAction {
     SaveAsNote,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpLastCodeBlockHandlerAction {
+    SaveAsScript,
+    RunLastCode,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -84,6 +90,37 @@ impl AcpConversationMarkdownHandlerAction {
         match self {
             Self::CopyToClipboard => None,
             Self::SaveAsNote => Some(format!("Failed to save note: {error}")),
+        }
+    }
+}
+
+impl AcpLastCodeBlockHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_save_as_script" => Some(Self::SaveAsScript),
+            "acp_run_last_code" => Some(Self::RunLastCode),
+            _ => None,
+        }
+    }
+
+    fn missing_code_message(self) -> &'static str {
+        match self {
+            Self::SaveAsScript => "No code block found in last response",
+            Self::RunLastCode => "No code block found",
+        }
+    }
+
+    fn saved_script_message(self, name: &str, ext: &str) -> Option<String> {
+        match self {
+            Self::SaveAsScript => Some(format!("Saved as {name}.{ext}")),
+            Self::RunLastCode => None,
+        }
+    }
+
+    fn temp_write_failure_message(self, error: impl std::fmt::Display) -> Option<String> {
+        match self {
+            Self::RunLastCode => Some(format!("Failed to write temp file: {error}")),
+            Self::SaveAsScript => None,
         }
     }
 }
@@ -1311,6 +1348,11 @@ impl ScriptListApp {
                 }
             }
             "acp_save_as_script" => {
+                let Some(code_block_action) =
+                    AcpLastCodeBlockHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let last_response = {
                     let view = entity.read(cx);
@@ -1372,16 +1414,21 @@ impl ScriptListApp {
                             tracing::warn!(%e, "acp_save_as_script_failed");
                         } else {
                             let mut o = DispatchOutcome::success();
-                            o.user_message = Some(format!("Saved as {name}.{ext}"));
+                            o.user_message = code_block_action.saved_script_message(&name, ext);
                             return o;
                         }
                     }
                 }
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("No code block found in last response".to_string());
+                o.user_message = Some(code_block_action.missing_code_message().to_string());
                 o
             }
             "acp_run_last_code" => {
+                let Some(code_block_action) =
+                    AcpLastCodeBlockHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let entity = entity.clone();
                 let last_response = {
                     let view = entity.read(cx);
@@ -1425,7 +1472,7 @@ impl ScriptListApp {
                         if let Err(e) = std::fs::write(&path, &block.code) {
                             tracing::warn!(%e, "acp_run_last_code_write_failed");
                             let mut o = DispatchOutcome::success();
-                            o.user_message = Some(format!("Failed to write temp file: {e}"));
+                            o.user_message = code_block_action.temp_write_failure_message(e);
                             return o;
                         }
 
@@ -1497,7 +1544,7 @@ impl ScriptListApp {
                     }
                 }
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("No code block found".to_string());
+                o.user_message = Some(code_block_action.missing_code_message().to_string());
                 o
             }
             "acp_open_in_editor" => {
