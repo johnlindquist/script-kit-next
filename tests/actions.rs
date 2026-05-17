@@ -253,6 +253,34 @@ fn clipboard_attach_to_ai_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_cleanshot_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardCleanShotHandlerAction")
+            && content.contains("Annotate")
+            && content.contains("Upload"),
+        "clipboard CleanShot handlers should classify annotate/upload with named action states"
+    );
+    assert!(
+        content.contains("ClipboardCleanShotHandlerAction::from_action_id(action_id)")
+            && content.contains("cleanshot_action.image_required_message()")
+            && content.contains("cleanshot_action.success_hud()")
+            && content.contains("cleanshot_action.open_failure_message()"),
+        "clipboard CleanShot handlers should derive guard, HUD, and failure text from the named action"
+    );
+    assert!(
+        content.contains("cleanshot://open-from-clipboard")
+            && content.contains("cleanshot://open-annotate?filepath={}&action=upload")
+            && content.contains("Opening CleanShot X…")
+            && content.contains("Opening CleanShot X upload…")
+            && content.contains("CleanShot actions are only available for images"),
+        "clipboard CleanShot state should preserve annotate/upload URLs and user-facing copy"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

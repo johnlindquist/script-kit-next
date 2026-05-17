@@ -584,23 +584,18 @@ fn clipboard_cleanshot_actions_show_error_when_no_entry() {
     let content = handle_action_content();
 
     // Both annotate and upload should guard on selected entry
-    let annotate_pos = content
-        .find("\"clipboard_annotate_cleanshot\"")
-        .expect("Expected clipboard_annotate_cleanshot handler");
-    let annotate_block = &content[annotate_pos..content.len().min(annotate_pos + 3000)];
+    let cleanshot_pos = content
+        .find("\"clipboard_annotate_cleanshot\" | \"clipboard_upload_cleanshot\"")
+        .expect("Expected combined CleanShot handler");
+    let cleanshot_block = &content[cleanshot_pos..content.len().min(cleanshot_pos + 5000)];
 
     assert!(
-        annotate_block.contains("No clipboard entry selected"),
+        cleanshot_block.contains("No clipboard entry selected"),
         "clipboard_annotate_cleanshot should error when no entry selected"
     );
 
-    let upload_pos = content
-        .find("\"clipboard_upload_cleanshot\"")
-        .expect("Expected clipboard_upload_cleanshot handler");
-    let upload_block = &content[upload_pos..content.len().min(upload_pos + 3000)];
-
     assert!(
-        upload_block.contains("No clipboard entry selected"),
+        cleanshot_block.contains("No clipboard entry selected"),
         "clipboard_upload_cleanshot should error when no entry selected"
     );
 }
