@@ -23,6 +23,29 @@ impl WindowSwitcherFocusAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowSwitcherEmptyState {
+    NoWindowsFound,
+    NoFilteredMatches,
+}
+
+impl WindowSwitcherEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoWindowsFound
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoWindowsFound => "No windows found",
+            Self::NoFilteredMatches => "No windows match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render window switcher view with 50/50 split layout
     /// P0 FIX: Data comes from self.cached_windows, view passes only state
@@ -213,11 +236,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No windows found"
-                } else {
-                    "No windows match your filter"
-                })
+                .child(WindowSwitcherEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             // Clone data for the closure
