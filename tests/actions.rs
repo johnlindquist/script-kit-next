@@ -2217,6 +2217,27 @@ fn surface_open_builtins_use_named_action_states() {
 }
 
 #[test]
+fn terminal_utility_views_use_named_failure_states() {
+    let content = fs::read_to_string("src/app_execute/utility_views.rs")
+        .expect("Failed to read utility view handler");
+
+    assert!(
+        content.contains("enum TerminalOpenUtilityAction")
+            && content.contains("SdkCommandTerminal")
+            && content.contains("QuickTerminal"),
+        "terminal utility views should distinguish SDK command terminals from Quick Terminal with named action states"
+    );
+    assert!(
+        content.contains("terminal_action.creation_failure_log(&e)")
+            && content.contains("terminal_action.open_failure_message(&e)")
+            && content.contains("format!(\"Failed to create terminal: {error}\")")
+            && content.contains("format!(\"Failed to create quick terminal: {error}\")")
+            && content.contains("format!(\"Failed to open terminal: {error}\")"),
+        "terminal utility view failure logs and user-facing toasts should be derived from named action states"
+    );
+}
+
+#[test]
 fn browser_tabs_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
