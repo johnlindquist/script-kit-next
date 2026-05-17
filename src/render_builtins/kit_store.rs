@@ -118,11 +118,7 @@ impl KitStoreOperationStep {
         format!("Failed to run {}: {}", command, error)
     }
 
-    fn git_status_failure(
-        self,
-        status: std::process::ExitStatus,
-        stderr: &[u8],
-    ) -> String {
+    fn git_status_failure(self, status: std::process::ExitStatus, stderr: &[u8]) -> String {
         let operation = self.git_command().unwrap_or("git");
         let stderr = String::from_utf8_lossy(stderr).trim().to_string();
         format!(
@@ -162,6 +158,55 @@ impl KitStoreOperationStep {
     fn empty_git_hash_message(self) -> String {
         let command = self.git_command().unwrap_or("git");
         format!("{} returned empty hash", command)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStoreBrowseEmptyState {
+    NoFeaturedKits,
+    NoSearchResults,
+}
+
+impl KitStoreBrowseEmptyState {
+    fn from_query(query: &str) -> Self {
+        if query.trim().is_empty() {
+            Self::NoFeaturedKits
+        } else {
+            Self::NoSearchResults
+        }
+    }
+
+    fn title(self) -> &'static str {
+        match self {
+            Self::NoFeaturedKits => "No kits available",
+            Self::NoSearchResults => "No kits found",
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoFeaturedKits => "Check your network connection or try again",
+            Self::NoSearchResults => "Try a different search query",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStoreInstalledEmptyState {
+    Empty,
+}
+
+impl KitStoreInstalledEmptyState {
+    fn title(self) -> &'static str {
+        match self {
+            Self::Empty => "No installed kits",
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::Empty => "Use \"Browse Kit Store\" to install one",
+        }
     }
 }
 
@@ -278,9 +323,8 @@ impl ScriptListApp {
             .output()
             .map_err(|error| KitStoreOperationStep::ReadGitHead.git_spawn_failure(error))?;
         if !output.status.success() {
-            return Err(
-                KitStoreOperationStep::ReadGitHead.git_status_failure(output.status, &output.stderr)
-            );
+            return Err(KitStoreOperationStep::ReadGitHead
+                .git_status_failure(output.status, &output.stderr));
         }
         let hash = String::from_utf8_lossy(&output.stdout).trim().to_string();
         if hash.is_empty() {
@@ -422,13 +466,19 @@ impl ScriptListApp {
     fn kit_store_browse_dataset_and_visible_counts(
         results: &[KitStoreSearchResult],
     ) -> (usize, usize) {
-        (results.len(), Self::kit_store_browse_visible_rows(results).len())
+        (
+            results.len(),
+            Self::kit_store_browse_visible_rows(results).len(),
+        )
     }
 
     fn kit_store_installed_dataset_and_visible_counts(
         kits: &[script_kit_gpui::kit_store::InstalledKit],
     ) -> (usize, usize) {
-        (kits.len(), Self::kit_store_installed_visible_rows(kits).len())
+        (
+            kits.len(),
+            Self::kit_store_installed_visible_rows(kits).len(),
+        )
     }
 
     fn kit_store_browse_visible_row_labels(results: &[KitStoreSearchResult]) -> Vec<String> {
@@ -445,6 +495,20 @@ impl ScriptListApp {
             .into_iter()
             .map(|(_, kit)| kit.name.clone())
             .collect()
+    }
+
+    fn kit_store_browse_row_description(result: &KitStoreSearchResult) -> String {
+        if result.description.is_empty() {
+            "No description".to_string()
+        } else {
+            result.description.clone()
+        }
+    }
+
+    fn kit_store_installed_row_commit_label(
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+    ) -> String {
+        format!("commit {}", kit.git_hash)
     }
 
     fn kit_store_install_selected_result(
@@ -914,6 +978,7 @@ impl ScriptListApp {
         let results_for_list = results.clone();
 
         let list: AnyElement = if results_for_list.is_empty() {
+            let empty_state = KitStoreBrowseEmptyState::from_query(&query_owned);
             div()
                 .w_full()
                 .h_full()
@@ -923,12 +988,12 @@ impl ScriptListApp {
                 .justify_center()
                 .gap(px(8.0))
                 .text_color(text_muted)
-                .child("No kits found")
+                .child(empty_state.title())
                 .child(
                     div()
                         .text_xs()
                         .text_color(text_hint)
-                        .child("Try a different search query"),
+                        .child(empty_state.message()),
                 )
                 .into_any_element()
         } else {
@@ -1013,11 +1078,9 @@ impl ScriptListApp {
                                                     .text_color(text_muted)
                                                     .overflow_hidden()
                                                     .text_ellipsis()
-                                                    .child(if result.description.is_empty() {
-                                                        "No description".to_string()
-                                                    } else {
-                                                        result.description.clone()
-                                                    }),
+                                                    .child(Self::kit_store_browse_row_description(
+                                                        result,
+                                                    )),
                                             ),
                                     )
                                     .child(
@@ -1309,15 +1372,19 @@ impl ScriptListApp {
                             }
                         }
                         _ if is_key_enter(key) => {
-                            let selected =
-                                Self::kit_store_installed_selected_visible_kit(kits, *selected_index);
+                            let selected = Self::kit_store_installed_selected_visible_kit(
+                                kits,
+                                *selected_index,
+                            );
                             if let Some(selected) = selected {
                                 this.kit_store_update_selected_kit(&selected, cx);
                             }
                         }
                         "delete" | "backspace" => {
-                            let selected =
-                                Self::kit_store_installed_selected_visible_kit(kits, *selected_index);
+                            let selected = Self::kit_store_installed_selected_visible_kit(
+                                kits,
+                                *selected_index,
+                            );
                             if let Some(selected) = selected {
                                 this.kit_store_remove_selected_kit(&selected, cx);
                             }
@@ -1340,6 +1407,7 @@ impl ScriptListApp {
         let kits_for_list = kits.clone();
 
         let list: AnyElement = if kits_for_list.is_empty() {
+            let empty_state = KitStoreInstalledEmptyState::Empty;
             div()
                 .w_full()
                 .h_full()
@@ -1349,12 +1417,12 @@ impl ScriptListApp {
                 .justify_center()
                 .gap(px(8.0))
                 .text_color(text_muted)
-                .child("No installed kits")
+                .child(empty_state.title())
                 .child(
                     div()
                         .text_xs()
                         .text_color(text_hint)
-                        .child("Use \"Browse Kit Store\" to install one"),
+                        .child(empty_state.message()),
                 )
                 .into_any_element()
         } else {
@@ -1438,7 +1506,11 @@ impl ScriptListApp {
                                                     .text_color(text_muted)
                                                     .overflow_hidden()
                                                     .text_ellipsis()
-                                                    .child(format!("commit {}", kit.git_hash)),
+                                                    .child(
+                                                        Self::kit_store_installed_row_commit_label(
+                                                            kit,
+                                                        ),
+                                                    ),
                                             ),
                                     )
                                     .child(
