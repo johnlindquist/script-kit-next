@@ -652,6 +652,60 @@ impl SystemBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SurfaceOpenBuiltinAction {
+    Webcam,
+    FileSearch,
+    Settings,
+    AcpHistory,
+    AiVault,
+    DictationHistory,
+    SdkReference,
+    ScriptTemplateCatalog,
+}
+
+impl SurfaceOpenBuiltinAction {
+    fn from_feature(feature: &builtins::BuiltInFeature) -> Option<Self> {
+        match feature {
+            builtins::BuiltInFeature::Webcam => Some(Self::Webcam),
+            builtins::BuiltInFeature::FileSearch => Some(Self::FileSearch),
+            builtins::BuiltInFeature::Settings => Some(Self::Settings),
+            builtins::BuiltInFeature::AcpHistory => Some(Self::AcpHistory),
+            builtins::BuiltInFeature::AiVault => Some(Self::AiVault),
+            builtins::BuiltInFeature::DictationHistory => Some(Self::DictationHistory),
+            builtins::BuiltInFeature::SdkReference => Some(Self::SdkReference),
+            builtins::BuiltInFeature::NewScriptFromTemplate => Some(Self::ScriptTemplateCatalog),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::Webcam => "open_webcam",
+            Self::FileSearch => "open_file_search",
+            Self::Settings => "open_settings",
+            Self::AcpHistory => "open_acp_history",
+            Self::AiVault => "open_ai_vault",
+            Self::DictationHistory => "open_dictation_history",
+            Self::SdkReference => "open_sdk_reference",
+            Self::ScriptTemplateCatalog => "open_script_template_catalog",
+        }
+    }
+
+    fn log_message(self) -> &'static str {
+        match self {
+            Self::Webcam => "Opening Webcam",
+            Self::FileSearch => "Opening File Search",
+            Self::Settings => "Opening Settings",
+            Self::AcpHistory => "Opening Agent Chat History",
+            Self::AiVault => "Opening AI Vault",
+            Self::DictationHistory => "Opening Dictation History",
+            Self::SdkReference => "Opening SDK Reference",
+            Self::ScriptTemplateCatalog => "Opening Script Template Catalog",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3836,14 +3890,9 @@ impl ScriptListApp {
             // File Search (Directory Navigation)
             // =========================================================================
             builtins::BuiltInFeature::Webcam => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Webcam"
-                );
-                self.opened_from_main_menu = true;
-                self.open_webcam(cx);
-                Self::builtin_success(dctx, "open_webcam")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive Webcam");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::Dictation => self.execute_dictation_builtin_action(
                 DictationBuiltinAction::CurrentSurface,
@@ -3859,111 +3908,43 @@ impl ScriptListApp {
                 self.execute_dictation_builtin_action(DictationBuiltinAction::Notes, dctx, cx)
             }
             builtins::BuiltInFeature::FileSearch => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening File Search"
-                );
-                self.opened_from_main_menu = true;
-                self.open_file_search(String::new(), cx);
-                Self::builtin_success(dctx, "open_file_search")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive FileSearch");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
             // Settings Hub
             // =========================================================================
             builtins::BuiltInFeature::Settings => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Settings"
-                );
-                self.open_builtin_filterable_view(
-                    AppView::SettingsView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search settings...",
-                    false,
-                    cx,
-                );
-                Self::builtin_success(dctx, "open_settings")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive Settings");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
             // ACP Conversation History
             // =========================================================================
             builtins::BuiltInFeature::AcpHistory => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Agent Chat History"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::AcpHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search conversation history...",
-                    true,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_acp_history")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive AcpHistory");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::AiVault => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening AI Vault"
-                );
-
-                self.open_ai_vault_source_filter(cx);
-
-                Self::builtin_success(dctx, "open_ai_vault")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive AiVault");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             builtins::BuiltInFeature::DictationHistory => {
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    "Opening Dictation History"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::DictationHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search dictation history...",
-                    true,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_dictation_history")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive DictationHistory");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
             // SDK Reference — browse kit://sdk-reference functions while authoring
             // =========================================================================
             builtins::BuiltInFeature::SdkReference => {
-                let entries = crate::mcp_resources::sdk_reference_entries_for_ui();
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    entry_count = entries.len(),
-                    "Opening SDK Reference"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::SdkReferenceView {
-                        filter: String::new(),
-                        selected_index: 0,
-                        entries,
-                    },
-                    "Search SDK functions…",
-                    true,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_sdk_reference")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive SdkReference");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
             // =========================================================================
             // New Script from Template — browse kit://script-templates catalog, pick
@@ -3974,26 +3955,9 @@ impl ScriptListApp {
             // `src/app_impl/naming_dialog.rs`.
             // =========================================================================
             builtins::BuiltInFeature::NewScriptFromTemplate => {
-                let templates = crate::mcp_resources::script_template_entries_for_ui();
-                tracing::info!(
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    template_count = templates.len(),
-                    "Opening Script Template Catalog"
-                );
-
-                self.open_builtin_filterable_view(
-                    AppView::ScriptTemplateCatalogView {
-                        filter: String::new(),
-                        selected_index: 0,
-                        templates,
-                    },
-                    "Search starter templates…",
-                    true,
-                    cx,
-                );
-
-                Self::builtin_success(dctx, "open_script_template_catalog")
+                let open_action = SurfaceOpenBuiltinAction::from_feature(&entry.feature)
+                    .expect("surface open arm should only receive NewScriptFromTemplate");
+                self.execute_surface_open_builtin(open_action, dctx, cx)
             }
         }
     }
@@ -4028,6 +3992,138 @@ impl ScriptListApp {
                 self.execute_settings_snap_mode_builtin(snap_action, dctx, cx)
             }
         }
+    }
+
+    fn execute_surface_open_builtin(
+        &mut self,
+        action: SurfaceOpenBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        match action {
+            SurfaceOpenBuiltinAction::Webcam => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.opened_from_main_menu = true;
+                self.open_webcam(cx);
+            }
+            SurfaceOpenBuiltinAction::FileSearch => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.opened_from_main_menu = true;
+                self.open_file_search(String::new(), cx);
+            }
+            SurfaceOpenBuiltinAction::Settings => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_builtin_filterable_view(
+                    AppView::SettingsView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search settings...",
+                    false,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::AcpHistory => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_builtin_filterable_view(
+                    AppView::AcpHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search conversation history...",
+                    true,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::AiVault => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_ai_vault_source_filter(cx);
+            }
+            SurfaceOpenBuiltinAction::DictationHistory => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "{}",
+                    action.log_message()
+                );
+                self.open_builtin_filterable_view(
+                    AppView::DictationHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search dictation history...",
+                    true,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::SdkReference => {
+                let entries = crate::mcp_resources::sdk_reference_entries_for_ui();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    entry_count = entries.len(),
+                    "{}",
+                    action.log_message()
+                );
+                self.open_builtin_filterable_view(
+                    AppView::SdkReferenceView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        entries,
+                    },
+                    "Search SDK functions…",
+                    true,
+                    cx,
+                );
+            }
+            SurfaceOpenBuiltinAction::ScriptTemplateCatalog => {
+                let templates = crate::mcp_resources::script_template_entries_for_ui();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    template_count = templates.len(),
+                    "{}",
+                    action.log_message()
+                );
+                self.open_builtin_filterable_view(
+                    AppView::ScriptTemplateCatalogView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        templates,
+                    },
+                    "Search starter templates…",
+                    true,
+                    cx,
+                );
+            }
+        }
+
+        Self::builtin_success(dctx, action.success_detail())
     }
 
     fn execute_ai_capture_builtin(
