@@ -58,6 +58,25 @@ enum CommandBarKeyIntent {
     TypeChar(char),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandBarOpenFeedbackAction {
+    OpenWindow,
+}
+
+impl CommandBarOpenFeedbackAction {
+    fn success_log(self, position: super::window::WindowPosition) -> String {
+        match self {
+            Self::OpenWindow => format!("Command bar opened at {position:?}"),
+        }
+    }
+
+    fn failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::OpenWindow => format!("Failed to open command bar: {error}"),
+        }
+    }
+}
+
 #[inline]
 fn is_non_text_named_key(key: &str) -> bool {
     key.eq_ignore_ascii_case("tab")
@@ -799,6 +818,7 @@ impl CommandBar {
         } else {
             crate::windows::focused_automation_window_id()
         };
+        let open_feedback = CommandBarOpenFeedbackAction::OpenWindow;
         match open_actions_window(
             cx,
             window.window_handle(),
@@ -809,13 +829,10 @@ impl CommandBar {
             parent_automation_id.as_deref(),
         ) {
             Ok(_) => {
-                logging::log(
-                    "COMMAND_BAR",
-                    &format!("Command bar opened at {:?}", position),
-                );
+                logging::log("COMMAND_BAR", &open_feedback.success_log(position));
             }
             Err(e) => {
-                logging::log("COMMAND_BAR", &format!("Failed to open command bar: {}", e));
+                logging::log("COMMAND_BAR", &open_feedback.failure_log(e));
                 self.reset_open_state();
             }
         }

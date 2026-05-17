@@ -571,6 +571,29 @@ fn notes_command_bar_actions_use_named_plan_states() {
 }
 
 #[test]
+fn command_bar_open_feedback_uses_named_action_state() {
+    let content =
+        fs::read_to_string("src/actions/command_bar.rs").expect("Failed to read command bar");
+
+    assert!(
+        content.contains("enum CommandBarOpenFeedbackAction")
+            && content.contains("OpenWindow"),
+        "command-bar open logging should be driven by a named action state"
+    );
+    assert!(
+        content.contains("CommandBarOpenFeedbackAction::OpenWindow")
+            && content.contains("open_feedback.success_log(position)")
+            && content.contains("open_feedback.failure_log(e)"),
+        "command-bar open success and failure text should derive from the named action state"
+    );
+    assert!(
+        content.contains("format!(\"Command bar opened at {position:?}\")")
+            && content.contains("format!(\"Failed to open command bar: {error}\")"),
+        "command-bar open feedback should preserve the existing log copy"
+    );
+}
+
+#[test]
 fn notes_new_chat_actions_use_named_plan_states() {
     let content =
         fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");
