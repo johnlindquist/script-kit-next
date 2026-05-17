@@ -1,3 +1,28 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WindowSwitcherFocusAction {
+    FocusSelectedWindow,
+}
+
+impl WindowSwitcherFocusAction {
+    fn attempt_log(self, window_title: &str) -> String {
+        match self {
+            Self::FocusSelectedWindow => format!("Focusing window: {window_title}"),
+        }
+    }
+
+    fn success_log(self, window_title: &str) -> String {
+        match self {
+            Self::FocusSelectedWindow => format!("Focused window: {window_title}"),
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::FocusSelectedWindow => format!("Failed to focus window: {error}"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render window switcher view with 50/50 split layout
     /// P0 FIX: Data comes from self.cached_windows, view passes only state
@@ -136,18 +161,20 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             // Focus selected window and hide Script Kit
                             if let Some((_, window_info)) = filtered_windows.get(*selected_index) {
+                                let focus_action = WindowSwitcherFocusAction::FocusSelectedWindow;
                                 logging::log(
                                     "EXEC",
-                                    &format!("Focusing window: {}", window_info.title),
+                                    &focus_action.attempt_log(&window_info.title),
                                 );
                                 if let Err(e) = window_control::focus_window(window_info.id) {
+                                    let failure_message = focus_action.failure_message(e);
                                     logging::log(
                                         "ERROR",
-                                        &format!("Failed to focus window: {}", e),
+                                        &failure_message,
                                     );
                                     this.toast_manager.push(
                                         components::toast::Toast::error(
-                                            format!("Failed to focus window: {}", e),
+                                            failure_message,
                                             &this.theme,
                                         )
                                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -156,7 +183,7 @@ impl ScriptListApp {
                                 } else {
                                     logging::log(
                                         "EXEC",
-                                        &format!("Focused window: {}", window_info.title),
+                                        &focus_action.success_log(&window_info.title),
                                     );
                                     this.hide_main_and_reset(cx);
                                 }
