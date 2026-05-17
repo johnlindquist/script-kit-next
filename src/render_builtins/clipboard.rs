@@ -23,6 +23,29 @@ impl ClipboardHistoryPasteAction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardHistoryEmptyState {
+    NoHistory,
+    NoFilteredMatches,
+}
+
+impl ClipboardHistoryEmptyState {
+    fn from_filter(filter: &str) -> Self {
+        if filter.is_empty() {
+            Self::NoHistory
+        } else {
+            Self::NoFilteredMatches
+        }
+    }
+
+    fn message(self) -> &'static str {
+        match self {
+            Self::NoHistory => "No clipboard history",
+            Self::NoFilteredMatches => "No entries match your filter",
+        }
+    }
+}
+
 impl ScriptListApp {
     fn clipboard_history_matches_filter(
         entry: &clipboard_history::ClipboardEntryMeta,
@@ -411,11 +434,7 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No clipboard history"
-                } else {
-                    "No entries match your filter"
-                })
+                .child(ClipboardHistoryEmptyState::from_filter(&filter).message())
                 .into_any_element()
         } else {
             // Clone data for the closure
