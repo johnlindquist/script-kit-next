@@ -1,3 +1,16 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptTemplateCatalogAction {
+    CopyMarkdownCard,
+}
+
+impl ScriptTemplateCatalogAction {
+    fn copied_hud(self, template_title: &str) -> String {
+        match self {
+            Self::CopyMarkdownCard => format!("Copied {template_title} template"),
+        }
+    }
+}
+
 impl ScriptListApp {
     /// Render the in-product starter-template catalog (list + preview).
     ///
@@ -121,12 +134,13 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if has_cmd && key.eq_ignore_ascii_case("c") {
                     if let Some(template) = visible.get(current_selected).map(|row| row.template) {
+                        let catalog_action = ScriptTemplateCatalogAction::CopyMarkdownCard;
                         let markdown =
                             crate::mcp_resources::format_script_template_markdown(template);
                         match crate::platform::copy_text_to_clipboard(&markdown) {
                             Ok(()) => {
                                 this.show_hud(
-                                    format!("Copied {} template", template.title),
+                                    catalog_action.copied_hud(&template.title),
                                     Some(2000),
                                     cx,
                                 );
