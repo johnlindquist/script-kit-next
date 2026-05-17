@@ -371,6 +371,25 @@ fn clipboard_save_file_handler_uses_named_action_state() {
 }
 
 #[test]
+fn clipboard_delete_entry_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardDeleteEntryHandlerAction")
+            && content.contains("DeleteEntry"),
+        "clipboard single-delete handler should be driven by a named action state"
+    );
+    assert!(
+        content.contains("let delete_action = ClipboardDeleteEntryHandlerAction::DeleteEntry")
+            && content.contains("delete_action.selection_required_message()")
+            && content.contains("delete_action.success_hud()")
+            && content.contains("delete_action.failure_message(e)"),
+        "clipboard single-delete handler should derive selection, success, and failure text from the named action"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

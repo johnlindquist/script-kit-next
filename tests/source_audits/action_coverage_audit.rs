@@ -614,8 +614,8 @@ fn clipboard_delete_single_shows_hud_on_success() {
     let block = &content[delete_pos..content.len().min(delete_pos + 3000)];
 
     assert!(
-        block.contains("Entry deleted"),
-        "clipboard_delete should show 'Entry deleted' HUD on success"
+        block.contains("delete_action.success_hud()"),
+        "clipboard_delete should show success HUD through named action state"
     );
     assert!(
         block.contains("HUD_SHORT_MS"),

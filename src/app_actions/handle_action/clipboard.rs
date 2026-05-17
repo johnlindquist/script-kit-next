@@ -57,6 +57,11 @@ enum ClipboardSaveFileHandlerAction {
     SaveFile,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardDeleteEntryHandlerAction {
+    DeleteEntry,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -951,8 +956,9 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "clipboard_delete" => {
+                let delete_action = ClipboardDeleteEntryHandlerAction::DeleteEntry;
                 let Some(entry) = selected_clipboard_entry else {
-                    self.show_error_toast("No clipboard entry selected", cx);
+                    self.show_error_toast(delete_action.selection_required_message(), cx);
                     return DispatchOutcome::success();
                 };
 
@@ -966,12 +972,16 @@ impl ScriptListApp {
                         // Update selection respecting active filter
                         self.refresh_clipboard_selection_after_delete();
 
-                        self.show_hud("Entry deleted".to_string(), Some(HUD_SHORT_MS), cx);
+                        self.show_hud(
+                            delete_action.success_hud().to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
                         cx.notify();
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "failed to delete clipboard entry");
-                        self.show_error_toast(format!("Failed to delete: {}", e), cx);
+                        self.show_error_toast(delete_action.failure_message(e), cx);
                     }
                 }
                 DispatchOutcome::success()
@@ -1384,6 +1394,26 @@ impl ClipboardSaveFileHandlerAction {
     fn save_failure_message(self, error: impl std::fmt::Display) -> String {
         match self {
             Self::SaveFile => format!("Failed to save: {error}"),
+        }
+    }
+}
+
+impl ClipboardDeleteEntryHandlerAction {
+    fn selection_required_message(self) -> &'static str {
+        match self {
+            Self::DeleteEntry => "No clipboard entry selected",
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::DeleteEntry => "Entry deleted",
+        }
+    }
+
+    fn failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::DeleteEntry => format!("Failed to delete: {error}"),
         }
     }
 }
