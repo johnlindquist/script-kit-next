@@ -30,6 +30,13 @@ enum AcpLastCodeBlockHandlerAction {
     RunLastCode,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpPanelWindowHandlerAction {
+    ShowHistory,
+    DetachWindow,
+    ReattachPanel,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -121,6 +128,32 @@ impl AcpLastCodeBlockHandlerAction {
         match self {
             Self::RunLastCode => Some(format!("Failed to write temp file: {error}")),
             Self::SaveAsScript => None,
+        }
+    }
+}
+
+impl AcpPanelWindowHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "acp_show_history" => Some(Self::ShowHistory),
+            "acp_detach_window" => Some(Self::DetachWindow),
+            "acp_reattach_panel" => Some(Self::ReattachPanel),
+            _ => None,
+        }
+    }
+
+    fn success_message(self) -> Option<&'static str> {
+        match self {
+            Self::ShowHistory => Some("Opened conversation history"),
+            Self::DetachWindow => Some("Chat kept open in window"),
+            Self::ReattachPanel => Some("Chat returned to panel"),
+        }
+    }
+
+    fn history_search_placeholder(self) -> Option<&'static str> {
+        match self {
+            Self::ShowHistory => Some("Search conversation history..."),
+            Self::DetachWindow | Self::ReattachPanel => None,
         }
     }
 }
@@ -1692,6 +1725,10 @@ impl ScriptListApp {
                 }
             }
             "acp_show_history" => {
+                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 tracing::info!(event = "acp_history_action_invoked", action = "openHistory");
                 if !self.open_embedded_acp_history_popup(window, cx) {
                     self.open_builtin_filterable_view(
@@ -1699,13 +1736,13 @@ impl ScriptListApp {
                             filter: String::new(),
                             selected_index: 0,
                         },
-                        "Search conversation history...",
+                        panel_action.history_search_placeholder().unwrap_or_default(),
                         true,
                         cx,
                     );
                 }
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some("Opened conversation history".to_string());
+                outcome.user_message = panel_action.success_message().map(String::from);
                 outcome
             }
             "acp_clear_history" => {
@@ -1771,6 +1808,10 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_detach_window" => {
+                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 let Some(thread) = entity.read(cx).thread() else {
                     return DispatchOutcome::not_handled();
                 };
@@ -1797,15 +1838,19 @@ impl ScriptListApp {
                         detached_window_activated = true,
                     );
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("Chat kept open in window".to_string());
+                    o.user_message = panel_action.success_message().map(String::from);
                     o
                 }
             }
             "acp_reattach_panel" => {
+                let Some(panel_action) = AcpPanelWindowHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
                 crate::ai::acp::chat_window::close_chat_window(cx);
                 self.reattach_embedded_acp_from_detached(cx);
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("Chat returned to panel".to_string());
+                o.user_message = panel_action.success_message().map(String::from);
                 o
             }
             "acp_close" => {
