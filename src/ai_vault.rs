@@ -157,6 +157,10 @@ pub(crate) fn resume_vault_session(
     hit: &AiVaultHit,
     terminal_routing: AiVaultTerminalRouting,
 ) -> AiVaultResumeReceipt {
+    if let Some(receipt) = resume_local_vault_session(hit, terminal_routing) {
+        return receipt;
+    }
+
     let request = serde_json::json!({
         "type": "aiVault.resume.v1",
         "provider": hit.provider,
@@ -203,6 +207,90 @@ pub(crate) fn resume_vault_session(
             terminal_target_id: None,
             error: Some(cmux_failure_message("resume", None)),
         },
+    }
+}
+
+fn resume_local_vault_session(
+    hit: &AiVaultHit,
+    terminal_routing: AiVaultTerminalRouting,
+) -> Option<AiVaultResumeReceipt> {
+    let resume_command = local_resume_command(hit)?;
+    let Some(mut command) = cmux_command() else {
+        return Some(AiVaultResumeReceipt {
+            status: "unavailable".to_string(),
+            provider: hit.provider.clone(),
+            session_id: hit.session_id.clone(),
+            terminal_routing: terminal_routing_value(terminal_routing).to_string(),
+            terminal_target_id: None,
+            error: Some("cmux command not configured".to_string()),
+        });
+    };
+
+    let cwd = hit
+        .workspace_path
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string)
+        .unwrap_or_else(|| home_dir().to_string_lossy().to_string());
+    command
+        .arg("new-workspace")
+        .arg("--name")
+        .arg(format!("AI Vault: {}", short_title(&hit.safe_title, 80)))
+        .arg("--description")
+        .arg(format!(
+            "{} resume from Script Kit AI Vault",
+            human_provider(&hit.provider)
+        ))
+        .arg("--cwd")
+        .arg(cwd)
+        .arg("--command")
+        .arg(resume_command)
+        .arg("--focus")
+        .arg("true");
+
+    match output_with_timeout(command, Duration::from_millis(5_000)) {
+        Ok(output) if output.status.success() => Some(AiVaultResumeReceipt {
+            status: "launched".to_string(),
+            provider: hit.provider.clone(),
+            session_id: hit.session_id.clone(),
+            terminal_routing: terminal_routing_value(terminal_routing).to_string(),
+            terminal_target_id: parse_cmux_target_id(&output.stdout),
+            error: None,
+        }),
+        Ok(output) => Some(AiVaultResumeReceipt {
+            status: "error".to_string(),
+            provider: hit.provider.clone(),
+            session_id: hit.session_id.clone(),
+            terminal_routing: terminal_routing_value(terminal_routing).to_string(),
+            terminal_target_id: None,
+            error: Some(cmux_failure_message("new-workspace", output.status.code())),
+        }),
+        Err(_error) => Some(AiVaultResumeReceipt {
+            status: "error".to_string(),
+            provider: hit.provider.clone(),
+            session_id: hit.session_id.clone(),
+            terminal_routing: terminal_routing_value(terminal_routing).to_string(),
+            terminal_target_id: None,
+            error: Some(cmux_failure_message("new-workspace", None)),
+        }),
+    }
+}
+
+fn local_resume_command(hit: &AiVaultHit) -> Option<String> {
+    match hit.provider.as_str() {
+        "claude" => {
+            let config_dir = std::env::var("CLAUDE_CONFIG_DIR")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| home_dir().join(".claude").to_string_lossy().to_string());
+            Some(format!(
+                "env CLAUDE_CONFIG_DIR={} claude --resume {}",
+                shell_quote(&config_dir),
+                shell_quote(&hit.session_id)
+            ))
+        }
+        "codex" => Some(format!("codex resume {}", shell_quote(&hit.session_id))),
+        _ => None,
     }
 }
 
@@ -360,7 +448,9 @@ fn read_claude_vault_hit(path: &Path, mtime: SystemTime, query: &str) -> Option<
     let mut newest = mtime;
 
     for line in reader.lines().map_while(Result::ok).take(1000) {
-        let event: serde_json::Value = serde_json::from_str(&line).ok()?;
+        let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
         if let Some(timestamp) = event.get("timestamp").and_then(|value| value.as_str()) {
             if let Some(parsed) = parse_timestamp(timestamp) {
                 newest = newest.max(parsed);
@@ -634,6 +724,48 @@ fn short_id(session_id: &str) -> String {
     session_id.chars().take(12).collect()
 }
 
+fn short_title(title: &str, max_chars: usize) -> String {
+    let title = title.trim();
+    if title.is_empty() {
+        return "Conversation".to_string();
+    }
+    if title.chars().count() <= max_chars {
+        title.to_string()
+    } else {
+        format!(
+            "{}...",
+            title
+                .chars()
+                .take(max_chars.saturating_sub(3))
+                .collect::<String>()
+                .trim_end()
+        )
+    }
+}
+
+fn shell_quote(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | '/' | ':' | '='))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', "'\\''"))
+    }
+}
+
+fn parse_cmux_target_id(stdout: &[u8]) -> Option<String> {
+    let value = serde_json::from_slice::<serde_json::Value>(stdout).ok()?;
+    for key in ["workspaceId", "workspace_id", "id", "url"] {
+        if let Some(value) = value.get(key).and_then(|value| value.as_str()) {
+            if !value.trim().is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
 fn load_fixture_hits() -> Result<Option<Vec<AiVaultHit>>> {
     let Ok(value) = std::env::var("SCRIPT_KIT_AI_VAULT_TEST_PROVIDER") else {
         return Ok(None);
@@ -690,6 +822,8 @@ fn generic_title(hit: &AiVaultHit) -> String {
 
 fn human_provider(provider: &str) -> &str {
     match provider {
+        "claude" => "Claude Code",
+        "codex" => "Codex",
         "hermes-agent" | "hermesAgent" => "Hermes Agent",
         "rovodev" | "rovoDev" => "Rovo Dev",
         _ => "AI Vault",
