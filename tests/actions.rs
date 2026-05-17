@@ -2656,6 +2656,28 @@ fn acp_last_response_handlers_use_named_action_states() {
 }
 
 #[test]
+fn deferred_ai_handoff_uses_named_failure_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
+        .expect("Failed to read action handler");
+
+    assert!(
+        content.contains("enum DeferredAiWindowAction")
+            && content.contains("fn name(&self) -> &'static str")
+            && content.contains("fn failure_message(action_name: &str")
+            && content.contains("DeferredAiWindowAction::failure_message(")
+            && content.contains("deferred_action_name"),
+        "deferred AI handoff failure feedback should derive from the named deferred action state"
+    );
+    assert!(
+        content.contains("Failed to open Agent Chat: {error}")
+            && content.contains("Failed to send to Agent Chat: {error}")
+            && content.contains("Failed to attach file to Agent Chat: {error}")
+            && content.contains("Failed to apply AI preset: {error}"),
+        "deferred AI handoff state should preserve action-specific failure copy"
+    );
+}
+
+#[test]
 fn acp_conversation_session_handlers_use_named_action_states() {
     let content = fs::read_to_string("src/app_actions/handle_action/mod.rs")
         .expect("Failed to read action handler");
