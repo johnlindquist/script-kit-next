@@ -1,3 +1,26 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TerminalOpenUtilityAction {
+    SdkCommandTerminal,
+    QuickTerminal,
+}
+
+impl TerminalOpenUtilityAction {
+    fn creation_failure_log(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SdkCommandTerminal => format!("Failed to create terminal: {error}"),
+            Self::QuickTerminal => format!("Failed to create quick terminal: {error}"),
+        }
+    }
+
+    fn open_failure_message(self, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SdkCommandTerminal | Self::QuickTerminal => {
+                format!("Failed to open terminal: {error}")
+            }
+        }
+    }
+}
+
 impl ScriptListApp {
     fn resolve_file_search_results_with(
         query: &str,
@@ -114,6 +137,7 @@ impl ScriptListApp {
 
     /// Open a terminal with a specific command (for fallback "Run in Terminal")
     pub fn open_terminal_with_command(&mut self, command: String, cx: &mut Context<Self>) {
+        let terminal_action = TerminalOpenUtilityAction::SdkCommandTerminal;
         tracing::info!(message = %&format!("Opening terminal with command: {}", command),
         );
 
@@ -152,13 +176,11 @@ impl ScriptListApp {
                 cx.notify();
             }
             Err(e) => {
-                tracing::error!(message = %&format!("Failed to create terminal: {}", e));
+                let failure_message = terminal_action.open_failure_message(&e);
+                tracing::error!(message = %terminal_action.creation_failure_log(&e));
                 self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to open terminal: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                    components::toast::Toast::error(failure_message, &self.theme)
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
@@ -487,6 +509,7 @@ impl ScriptListApp {
         cwd: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
+        let terminal_action = TerminalOpenUtilityAction::QuickTerminal;
         tracing::info!(
             message = %"Opening Quick Terminal",
             cwd = cwd.as_ref().map(|path| path.display().to_string()).as_deref()
@@ -566,13 +589,11 @@ impl ScriptListApp {
                 cx.notify();
             }
             Err(e) => {
-                tracing::error!(message = %&format!("Failed to create quick terminal: {}", e));
+                let failure_message = terminal_action.open_failure_message(&e);
+                tracing::error!(message = %terminal_action.creation_failure_log(&e));
                 self.toast_manager.push(
-                    components::toast::Toast::error(
-                        format!("Failed to open terminal: {}", e),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                    components::toast::Toast::error(failure_message, &self.theme)
+                        .duration_ms(Some(TOAST_ERROR_MS)),
                 );
                 cx.notify();
             }
