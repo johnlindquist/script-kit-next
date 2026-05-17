@@ -1811,9 +1811,20 @@ fn permission_command_builtin_uses_named_action_states() {
         "Permission command routing should delegate through named state details"
     );
     assert!(
+        content.contains("action.all_permissions_granted_hud().to_string()")
+            && content.contains("action.missing_permissions_message(&missing)")
+            && content.contains("action.accessibility_granted_hud().to_string()")
+            && content.contains("action.accessibility_not_granted_warning()")
+            && content.contains("action.open_settings_failure_message(&e)"),
+        "Permission command feedback copy should derive from the named state"
+    );
+    assert!(
         content.contains("All permissions granted!")
+            && content.contains("Missing permissions: {}")
+            && content.contains("Accessibility permission granted!")
             && content
                 .contains("Accessibility permission not granted. Some features may not work.")
+            && content.contains("format!(\"Failed to open settings: {error}\")")
             && content.contains("open_accessibility_settings_failed"),
         "Permission command states should preserve user-facing permission feedback"
     );
