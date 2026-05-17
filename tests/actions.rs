@@ -3043,6 +3043,8 @@ fn app_lifecycle_handler_uses_named_action_states() {
             && content.contains("lifecycle_action.trace_message()")
             && content.contains("lifecycle_action.target_from_result(self.get_selected_result())")
             && content.contains("lifecycle_action.hud_message(&app_name)")
+            && content.contains("lifecycle_action.async_failure_log()")
+            && content.contains("lifecycle_action.restart_quit_failure_log()")
             && content.contains("self.unsupported_message()")
             && content.contains("Quitting {app_name}")
             && content.contains("Force quitting {app_name}")
@@ -3050,7 +3052,14 @@ fn app_lifecycle_handler_uses_named_action_states() {
             && content.contains("Quit is only available for applications")
             && content.contains("Force Quit is only available for applications")
             && content.contains("Restart is only available for applications"),
-        "application lifecycle handlers should derive trace, HUD, and unsupported feedback from the named state"
+        "application lifecycle handlers should derive trace, HUD, unsupported, and async failure feedback from the named state"
+    );
+    assert!(
+        content.contains("\"quit_app failed\"")
+            && content.contains("\"force_quit_app failed\"")
+            && content.contains("\"restart relaunch failed\"")
+            && content.contains("\"quit before restart failed, attempting launch anyway\""),
+        "application lifecycle state should preserve async failure log copy"
     );
 }
 

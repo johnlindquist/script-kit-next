@@ -168,6 +168,21 @@ impl AppLifecycleHandlerAction {
         }
     }
 
+    fn async_failure_log(self) -> &'static str {
+        match self {
+            Self::Quit => "quit_app failed",
+            Self::ForceQuit => "force_quit_app failed",
+            Self::Restart => "restart relaunch failed",
+        }
+    }
+
+    fn restart_quit_failure_log(self) -> &'static str {
+        match self {
+            Self::Restart => "quit before restart failed, attempting launch anyway",
+            Self::Quit | Self::ForceQuit => "",
+        }
+    }
+
     fn target_from_result(
         self,
         result: Option<scripts::SearchResult>,
@@ -312,7 +327,7 @@ impl ScriptListApp {
                                 .spawn(async move { quit_app_by_name(&name) })
                                 .await;
                             if let Err(e) = result {
-                                tracing::error!(trace_id = %trace_id, error = %e, "quit_app failed");
+                                tracing::error!(trace_id = %trace_id, error = %e, "{}", lifecycle_action.async_failure_log());
                             }
                         }
                         AppLifecycleHandlerAction::ForceQuit => {
@@ -323,7 +338,7 @@ impl ScriptListApp {
                                 .spawn(async move { force_quit_app(&app_name, bundle_id.as_deref()) })
                                 .await;
                             if let Err(e) = result {
-                                tracing::error!(trace_id = %trace_id, error = %e, "force_quit_app failed");
+                                tracing::error!(trace_id = %trace_id, error = %e, "{}", lifecycle_action.async_failure_log());
                             }
                         }
                         AppLifecycleHandlerAction::Restart => {
@@ -334,7 +349,7 @@ impl ScriptListApp {
                                 .await;
 
                             if let Err(e) = &quit_result {
-                                tracing::warn!(trace_id = %trace_id, error = %e, "quit before restart failed, attempting launch anyway");
+                                tracing::warn!(trace_id = %trace_id, error = %e, "{}", lifecycle_action.restart_quit_failure_log());
                             }
 
                             // Brief delay to let the app finish quitting
@@ -356,7 +371,7 @@ impl ScriptListApp {
                                 .await;
 
                             if let Err(e) = result {
-                                tracing::error!(trace_id = %trace_id, error = %e, "restart relaunch failed");
+                                tracing::error!(trace_id = %trace_id, error = %e, "{}", lifecycle_action.async_failure_log());
                             }
                         }
                     }
