@@ -476,8 +476,10 @@ fn emoji_pin_handler_uses_named_action_states() {
     assert!(
         content.contains("EmojiPinHandlerAction::from_action_id(action_id)")
             && content.contains("pin_action.apply(&mut self.pinned_emojis, &emoji.value)")
-            && content.contains("pin_action.success_hud(&emoji.value)"),
-        "emoji pin/unpin handler should derive mutation and HUD copy from the named action state"
+            && content.contains("pin_action.success_hud(&emoji.value)")
+            && content.contains("pin_action.selection_required_message()")
+            && content.contains("pin_action.failure_message(error)"),
+        "emoji pin/unpin handler should derive mutation, HUD copy, and error copy from the named action state"
     );
 }
 
@@ -496,9 +498,10 @@ fn emoji_copy_handler_uses_named_action_states() {
     assert!(
         content.contains("EmojiCopyHandlerAction::from_action_id(action_id)")
             && content.contains("copy_action.payload(&emoji)")
+            && content.contains("copy_action.selection_required_message()")
             && content.contains("clipboard_text")
             && content.contains("hud_text"),
-        "emoji copy handler should derive clipboard and HUD copy from the named state"
+        "emoji copy handler should derive selection, clipboard, and HUD copy from the named state"
     );
 }
 
