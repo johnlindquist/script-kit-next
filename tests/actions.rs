@@ -322,6 +322,24 @@ fn file_path_actions_use_named_item_plan_states() {
 }
 
 #[test]
+fn file_search_secondary_descriptions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/file_path.rs")
+        .expect("Failed to read file path builder");
+
+    assert!(
+        content.contains("enum FileSearchSecondaryDescriptionPlan")
+            && content.contains("StaticDescription")
+            && content.contains("TrashItem"),
+        "file-search secondary command descriptions should be driven by named description plan states"
+    );
+    assert!(
+        content.contains("FileSearchSecondaryDescriptionPlan::from_action_id(self.action_id)")
+            && content.contains("description_plan.description(self.description, action_plan)"),
+        "file-search secondary actions should derive static/trash descriptions from the named plan"
+    );
+}
+
+#[test]
 fn file_search_sort_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/file_path.rs")
         .expect("Failed to read file path builder");

@@ -200,6 +200,32 @@ pub(crate) struct FileSearchSecondaryCommand {
     pub macos_only: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchSecondaryDescriptionPlan {
+    StaticDescription,
+    TrashItem,
+}
+
+impl FileSearchSecondaryDescriptionPlan {
+    fn from_action_id(action_id: &str) -> Self {
+        match action_id {
+            "move_to_trash" => Self::TrashItem,
+            _ => Self::StaticDescription,
+        }
+    }
+
+    fn description(
+        self,
+        fallback_description: &'static str,
+        item_plan: FileItemActionPlan,
+    ) -> String {
+        match self {
+            Self::StaticDescription => fallback_description.to_string(),
+            Self::TrashItem => format!("Moves this {} to the Trash", item_plan.item_noun()),
+        }
+    }
+}
+
 impl FileSearchSecondaryCommand {
     /// Whether this command applies to the given item type.
     pub(crate) fn supports(self, is_dir: bool) -> bool {
@@ -230,11 +256,8 @@ impl FileSearchSecondaryCommand {
     /// Build an `Action` from this command definition.
     pub(crate) fn to_action(self, file_info: &FileInfo) -> Action {
         let action_plan = FileItemActionPlan::from_is_dir(file_info.is_dir);
-        let description = if self.action_id == "move_to_trash" {
-            format!("Moves this {} to the Trash", action_plan.item_noun())
-        } else {
-            self.description.to_string()
-        };
+        let description_plan = FileSearchSecondaryDescriptionPlan::from_action_id(self.action_id);
+        let description = description_plan.description(self.description, action_plan);
 
         Action::new(
             format!("file:{}", self.action_id),
