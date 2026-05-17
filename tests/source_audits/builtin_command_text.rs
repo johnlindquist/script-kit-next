@@ -50,3 +50,28 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
         .expect("dictation-to-ai entry should exist");
     assert_eq!(dictation.footer_action_text(), "Dictate Chat");
 }
+
+#[test]
+fn acp_history_text_names_agent_chat_conversations() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+    let acp_history = entries
+        .iter()
+        .find(|entry| entry.id == "builtin/acp-history")
+        .expect("acp-history entry should exist");
+    let root_actions = super::read_source("src/app_impl/root_unified_result_actions.rs");
+
+    assert_eq!(acp_history.name, "Conversation History");
+    assert_eq!(
+        acp_history.description,
+        "Browse and manage past Agent Chat conversations"
+    );
+    assert!(
+        root_actions.contains("Self::AcpHistory(_) => \"Agent Chat Conversations\""),
+        "root-unified ACP history action context should name Agent Chat conversations"
+    );
+    assert!(
+        !acp_history.description.contains("AI conversations")
+            && !root_actions.contains("Self::AcpHistory(_) => \"AI Conversations\""),
+        "ACP history text should not use generic AI conversation wording"
+    );
+}

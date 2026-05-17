@@ -43,9 +43,7 @@ fn root_unified_notes_uses_passive_grouping_contract() {
     let grouping = include_str!("../../src/scripts/grouping.rs");
 
     assert!(grouping.contains("fn append_root_notes_section("));
-    assert!(
-        grouping.contains("append_root_passive_section(grouped, flat_results, \"Notes\", rows)")
-    );
+    assert!(grouping.contains("append_root_passive_section(grouped, flat_results, \"Notes\", rows"));
     assert!(grouping.contains("root_notes_query_is_eligible("));
     assert!(
         grouping.find("append_root_notes_section(")

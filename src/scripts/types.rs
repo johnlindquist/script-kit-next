@@ -524,7 +524,7 @@ impl SearchResult {
             SearchResult::Window(_) => "Window",
             SearchResult::File(_) => "File",
             SearchResult::Note(_) => "Note",
-            SearchResult::AcpHistory(_) => "AI Conversation",
+            SearchResult::AcpHistory(_) => "Agent Chat Conversation",
             SearchResult::AiVault(_) => "Vault Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
             SearchResult::DictationHistory(_) => "Dictation",
@@ -638,7 +638,7 @@ impl SearchResult {
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
             SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
             SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
-            SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
+            SearchResult::AcpHistory(_) => ("Agent Chat", 0x22C55E), // Green-500
             SearchResult::AiVault(_) => ("Vault", 0x14B8A6), // Teal-500
             SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
             SearchResult::DictationHistory(_) => ("Dictation", 0xFB7185), // Rose-400
@@ -686,7 +686,7 @@ impl SearchResult {
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             SearchResult::File(_) => Some("Files"),
             SearchResult::Note(_) => Some("Notes"),
-            SearchResult::AcpHistory(_) => Some("AI Conversations"),
+            SearchResult::AcpHistory(_) => Some("Agent Chat Conversations"),
             SearchResult::AiVault(_) => Some("AI Vault"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
             SearchResult::DictationHistory(_) => Some("Dictation History"),
@@ -938,14 +938,14 @@ mod tests {
             Some("Use the root launcher · 4 messages")
         );
         assert_eq!(result.score(), 80);
-        assert_eq!(result.type_label(), "AI Conversation");
+        assert_eq!(result.type_label(), "Agent Chat Conversation");
         assert_eq!(result.launcher_command_id(), None);
         assert_eq!(
             result.history_result_key(),
             Some("acp-history/session-123".to_string())
         );
-        assert_eq!(result.type_tag_info(), ("AI Chat", 0x22C55E));
-        assert_eq!(result.source_name(), Some("AI Conversations"));
+        assert_eq!(result.type_tag_info(), ("Agent Chat", 0x22C55E));
+        assert_eq!(result.source_name(), Some("Agent Chat Conversations"));
         assert_eq!(result.get_default_action_text(), "Resume Conversation");
     }
 

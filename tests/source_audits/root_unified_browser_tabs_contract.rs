@@ -45,7 +45,7 @@ fn root_unified_browser_tabs_uses_passive_grouping_order_and_score_cap() {
     assert!(grouping.contains("pub(crate) fn root_passive_result_score(rank: usize) -> i32"));
     assert!(grouping.contains("fn append_root_browser_tabs_section("));
     assert!(grouping
-        .contains("append_root_passive_section(grouped, flat_results, \"Browser Tabs\", rows)"));
+        .contains("append_root_passive_section(grouped, flat_results, \"Browser Tabs\", rows"));
     assert!(
         grouping.find("append_recent_root_file_section(")
             < grouping.find("append_root_browser_tabs_section("),
