@@ -2344,6 +2344,33 @@ fn app_open_handler_uses_named_action_states() {
     );
 }
 
+#[test]
+fn app_lifecycle_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/apps.rs")
+        .expect("Failed to read app action handler");
+
+    assert!(
+        content.contains("enum AppLifecycleHandlerAction")
+            && content.contains("Quit")
+            && content.contains("ForceQuit")
+            && content.contains("Restart"),
+        "application quit/force-quit/restart handlers should be driven by named action states"
+    );
+    assert!(
+        content.contains("AppLifecycleHandlerAction::from_action_id(action_id)")
+            && content.contains("lifecycle_action.trace_message()")
+            && content.contains("lifecycle_action.hud_message(&app_name)")
+            && content.contains("lifecycle_action.unsupported_message()")
+            && content.contains("Quitting {app_name}")
+            && content.contains("Force quitting {app_name}")
+            && content.contains("Restarting {app_name}")
+            && content.contains("Quit is only available for applications")
+            && content.contains("Force Quit is only available for applications")
+            && content.contains("Restart is only available for applications"),
+        "application lifecycle handlers should derive trace, HUD, and unsupported feedback from the named state"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Structural coverage tests for action handler consistency
 // ---------------------------------------------------------------------------

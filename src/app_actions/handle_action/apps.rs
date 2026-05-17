@@ -15,6 +15,13 @@ enum AppOpenHandlerAction {
     ShowPackageContents,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppLifecycleHandlerAction {
+    Quit,
+    ForceQuit,
+    Restart,
+}
+
 impl AppCopyHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -102,6 +109,41 @@ impl AppOpenHandlerAction {
                 .spawn()
                 .map(|_| ())
                 .map_err(|e| e.to_string()),
+        }
+    }
+}
+
+impl AppLifecycleHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        match action_id {
+            "quit_app" => Some(Self::Quit),
+            "force_quit_app" => Some(Self::ForceQuit),
+            "restart_app" => Some(Self::Restart),
+            _ => None,
+        }
+    }
+
+    fn trace_message(self) -> &'static str {
+        match self {
+            Self::Quit => "quit application action",
+            Self::ForceQuit => "force quit application action",
+            Self::Restart => "restart application action",
+        }
+    }
+
+    fn hud_message(self, app_name: &str) -> String {
+        match self {
+            Self::Quit => format!("Quitting {app_name}"),
+            Self::ForceQuit => format!("Force quitting {app_name}"),
+            Self::Restart => format!("Restarting {app_name}"),
+        }
+    }
+
+    fn unsupported_message(self) -> &'static str {
+        match self {
+            Self::Quit => "Quit is only available for applications",
+            Self::ForceQuit => "Force Quit is only available for applications",
+            Self::Restart => "Restart is only available for applications",
         }
     }
 }
@@ -208,11 +250,15 @@ impl ScriptListApp {
                 }
             }
             "quit_app" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "quit application action");
+                let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
                 if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
                     let app_name = m.app.name.clone();
                     let trace_id = trace_id.to_string();
-                    self.show_hud(format!("Quitting {}", app_name), Some(HUD_SHORT_MS), cx);
+                    self.show_hud(lifecycle_action.hud_message(&app_name), Some(HUD_SHORT_MS), cx);
                     self.hide_main_and_reset(cx);
                     cx.spawn(async move |_this, cx| {
                         let name = app_name.clone();
@@ -229,18 +275,22 @@ impl ScriptListApp {
                 } else {
                     DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Quit is only available for applications",
+                        lifecycle_action.unsupported_message(),
                     )
                 }
             }
             "force_quit_app" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "force quit application action");
+                let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
                 if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
                     let app_name = m.app.name.clone();
                     let bundle_id = m.app.bundle_id.clone();
                     let trace_id = trace_id.to_string();
                     self.show_hud(
-                        format!("Force quitting {}", app_name),
+                        lifecycle_action.hud_message(&app_name),
                         Some(HUD_SHORT_MS),
                         cx,
                     );
@@ -261,17 +311,21 @@ impl ScriptListApp {
                 } else {
                     DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Force Quit is only available for applications",
+                        lifecycle_action.unsupported_message(),
                     )
                 }
             }
             "restart_app" => {
-                tracing::info!(category = "UI", trace_id = %trace_id, "restart application action");
+                let Some(lifecycle_action) = AppLifecycleHandlerAction::from_action_id(action_id)
+                else {
+                    return DispatchOutcome::not_handled();
+                };
+                tracing::info!(category = "UI", trace_id = %trace_id, "{}", lifecycle_action.trace_message());
                 if let Some(scripts::SearchResult::App(m)) = self.get_selected_result() {
                     let app_name = m.app.name.clone();
                     let app_path = m.app.path.clone();
                     let trace_id = trace_id.to_string();
-                    self.show_hud(format!("Restarting {}", app_name), Some(HUD_SHORT_MS), cx);
+                    self.show_hud(lifecycle_action.hud_message(&app_name), Some(HUD_SHORT_MS), cx);
                     self.hide_main_and_reset(cx);
                     cx.spawn(async move |_this, cx| {
                         // Quit first
@@ -314,7 +368,7 @@ impl ScriptListApp {
                 } else {
                     DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        "Restart is only available for applications",
+                        lifecycle_action.unsupported_message(),
                     )
                 }
             }
