@@ -86,6 +86,25 @@ impl ScriptletRankingActionPlan {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ScriptletDefinedActionShortcutPlan<'a> {
+    NoShortcut,
+    Shortcut(&'a str),
+}
+
+impl<'a> ScriptletDefinedActionShortcutPlan<'a> {
+    fn from_shortcut(shortcut: Option<&'a str>) -> Self {
+        shortcut.map(Self::Shortcut).unwrap_or(Self::NoShortcut)
+    }
+
+    fn apply_to_action(self, action: Action) -> Action {
+        match self {
+            Self::NoShortcut => action,
+            Self::Shortcut(shortcut) => action.with_shortcut(format_shortcut_hint(shortcut)),
+        }
+    }
+}
+
 fn parse_scriptlet_action_command(action_id: &str) -> Option<&str> {
     action_id
         .strip_prefix(SCRIPTLET_ACTION_ID_PREFIX)
@@ -152,16 +171,14 @@ pub fn get_scriptlet_defined_actions(scriptlet: &Scriptlet) -> Vec<Action> {
             return vec![];
         };
 
-        let mut action = Action::new(
+        let shortcut_plan =
+            ScriptletDefinedActionShortcutPlan::from_shortcut(sa.shortcut.as_deref());
+        let mut action = shortcut_plan.apply_to_action(Action::new(
             action_id,
             &sa.name,
             sa.description.clone(),
             ActionCategory::ScriptContext,
-        );
-
-        if let Some(ref shortcut) = sa.shortcut {
-            action = action.with_shortcut(format_shortcut_hint(shortcut));
-        }
+        ));
 
         action = action
             .with_icon(IconName::PlayFilled)
