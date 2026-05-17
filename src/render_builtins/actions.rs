@@ -29,7 +29,7 @@ impl ScriptListApp {
             .with_icon(IconName::ArrowRight),
             Action::new(
                 "dictation_history_attach_to_ai",
-                "Attach to AI",
+                "Attach to Agent Chat",
                 Some("Open Agent Chat and stage this transcript in the composer".to_string()),
                 ActionCategory::ScriptContext,
             )

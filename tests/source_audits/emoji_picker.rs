@@ -162,3 +162,20 @@ fn test_emoji_picker_renders_shared_scrollbar_overlay() {
         "Emoji picker should mount the scrollbar overlay next to the tracked list",
     );
 }
+
+#[test]
+fn test_emoji_picker_builtin_description_matches_primary_paste_action() {
+    let source =
+        fs::read_to_string("src/builtins/mod.rs").expect("Failed to read src/builtins/mod.rs");
+
+    assert!(
+        source.contains(
+            "\"Pick an emoji from the built-in list and paste it into the frontmost app\""
+        ),
+        "Emoji Picker launcher text must describe the default paste behavior proven by the footer/action handlers"
+    );
+    assert!(
+        !source.contains("\"Pick an emoji from the built-in list and copy it to the clipboard\""),
+        "Emoji Picker launcher text must not advertise copy-only behavior when Enter pastes"
+    );
+}

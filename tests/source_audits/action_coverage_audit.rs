@@ -220,6 +220,31 @@ fn handle_action_uses_only_named_duration_constants() {
 }
 
 #[test]
+fn visible_attach_actions_use_agent_chat_label() {
+    for (path, label) in [
+        (
+            "src/render_builtins/actions.rs",
+            "dictation history actions",
+        ),
+        (
+            "src/app_impl/root_unified_result_actions.rs",
+            "root unified result actions",
+        ),
+        ("src/actions/dialog.rs", "actions dialog docs"),
+    ] {
+        let source = read(path);
+        assert!(
+            source.contains("Attach to Agent Chat"),
+            "{label} should use the concrete Agent Chat product label"
+        );
+        assert!(
+            !source.contains("Attach to AI"),
+            "{label} should not use the generic Attach to AI label"
+        );
+    }
+}
+
+#[test]
 fn handle_action_uses_only_named_toast_duration_constants() {
     let content = handle_action_content();
 

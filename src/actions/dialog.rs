@@ -918,7 +918,7 @@ impl ActionsDialog {
     }
 
     /// Create ActionsDialog for a clipboard history entry with clipboard-specific actions
-    /// Actions: Paste, Copy, Paste and Keep Open, Share, Attach to AI, Pin/Unpin, Delete, etc.
+    /// Actions: Paste, Copy, Paste and Keep Open, Share, Attach to Agent Chat, Pin/Unpin, Delete, etc.
     pub fn with_clipboard_entry(
         focus_handle: FocusHandle,
         on_select: ActionCallback,

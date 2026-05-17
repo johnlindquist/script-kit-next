@@ -371,7 +371,7 @@ pub(crate) fn root_unified_actions_for_subject(
                 action(RootUnifiedResultAction::ClipboardCopy, "Copy to Clipboard", "Share"),
                 action(
                     RootUnifiedResultAction::ClipboardAttachToAi,
-                    "Attach to AI",
+                    "Attach to Agent Chat",
                     "Share",
                 ),
                 pin_action,
@@ -493,7 +493,7 @@ pub(crate) fn root_unified_actions_for_subject(
             ),
             action(
                 RootUnifiedResultAction::DictationAttachToAi,
-                "Attach to AI",
+                "Attach to Agent Chat",
                 "Share",
             ),
             action(
