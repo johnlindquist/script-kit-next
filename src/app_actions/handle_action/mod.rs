@@ -42,6 +42,11 @@ enum AcpModelSwitchHandlerAction {
     SwitchModel,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AcpProfileSwitchHandlerAction {
+    SwitchProfile,
+}
+
 impl AcpLastResponseHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -189,6 +194,44 @@ impl AcpModelSwitchHandlerAction {
     fn switched_message(self, display_name: &str) -> String {
         match self {
             Self::SwitchModel => format!("Switched model to {display_name}"),
+        }
+    }
+}
+
+impl AcpProfileSwitchHandlerAction {
+    fn from_action_id(action_id: &str) -> Option<Self> {
+        crate::actions::acp_switch_profile_name_from_action(action_id).map(|_| Self::SwitchProfile)
+    }
+
+    fn unavailable_message(self, profile_name: &str) -> String {
+        match self {
+            Self::SwitchProfile => format!("Profile '{profile_name}' is no longer available"),
+        }
+    }
+
+    fn persist_failure_message(self, profile_name: &str, error: impl std::fmt::Display) -> String {
+        match self {
+            Self::SwitchProfile => format!("Failed to persist profile '{profile_name}': {error}"),
+        }
+    }
+
+    fn missing_relaunch_agent_message(self, profile_name: &str) -> String {
+        match self {
+            Self::SwitchProfile => format!("Profile '{profile_name}' has no agent to relaunch"),
+        }
+    }
+
+    fn relaunch_message(self, profile_name: &str, agent_display_name: &str) -> String {
+        match self {
+            Self::SwitchProfile => {
+                format!("Switching profile to {profile_name} ({agent_display_name})\u{2026}")
+            }
+        }
+    }
+
+    fn selected_message(self, profile_name: &str) -> String {
+        match self {
+            Self::SwitchProfile => format!("Profile: {profile_name}"),
         }
     }
 }
@@ -1026,6 +1069,10 @@ impl ScriptListApp {
         if let Some(profile_name) =
             crate::actions::acp_switch_profile_name_from_action(action_id)
         {
+            let Some(profile_action) = AcpProfileSwitchHandlerAction::from_action_id(action_id)
+            else {
+                return DispatchOutcome::not_handled();
+            };
             let (current_selected_agent_id, available_agents) = {
                 let view = entity.read(cx);
                 match &view.session {
@@ -1056,7 +1103,7 @@ impl ScriptListApp {
             else {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    format!("Profile '{profile_name}' is no longer available"),
+                    profile_action.unavailable_message(profile_name),
                 );
             };
 
@@ -1097,7 +1144,7 @@ impl ScriptListApp {
             if let Err(error) = persist_result {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    format!("Failed to persist profile '{}': {error}", profile.name),
+                    profile_action.persist_failure_message(&profile.name, error),
                 );
             }
 
@@ -1114,7 +1161,7 @@ impl ScriptListApp {
                 let Some(next_agent_id) = profile_agent_id.clone() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Profile '{}' has no agent to relaunch", profile.name),
+                        profile_action.missing_relaunch_agent_message(&profile.name),
                     );
                 };
 
@@ -1133,15 +1180,13 @@ impl ScriptListApp {
                 self.open_tab_ai_acp_with_entry_intent(None, cx);
 
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!(
-                    "Switching profile to {} ({agent_display_name})\u{2026}",
-                    profile.name
-                ));
+                outcome.user_message =
+                    Some(profile_action.relaunch_message(&profile.name, &agent_display_name));
                 return outcome;
             }
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!("Profile: {}", profile.name));
+            outcome.user_message = Some(profile_action.selected_message(&profile.name));
             return outcome;
         }
 
