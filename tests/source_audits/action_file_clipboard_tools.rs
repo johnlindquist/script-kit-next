@@ -15,19 +15,22 @@ fn clipboard_share_handles_text_and_image_content_types() {
     let block = &content[share_pos..content.len().min(share_pos + 3000)];
 
     assert!(
-        block.contains("ContentType::Text"),
+        content.contains("ClipboardShareHandlerAction::from_content_type")
+            && content.contains("ContentType::Text"),
         "clipboard_share should handle Text content type"
     );
     assert!(
-        block.contains("ContentType::Image"),
+        content.contains("ContentType::Image"),
         "clipboard_share should handle Image content type"
     );
     assert!(
-        block.contains("show_share_sheet"),
+        content.contains("show_share_sheet")
+            && block.contains("let share_result = share_action.share(content)"),
         "clipboard_share should call show_share_sheet for sharing"
     );
     assert!(
-        block.contains("Share sheet opened"),
+        content.contains("Share sheet opened")
+            && block.contains("share_action.success_hud().to_string()"),
         "clipboard_share should show success HUD after opening share sheet"
     );
 }
@@ -76,7 +79,8 @@ fn clipboard_share_shows_error_when_image_decode_fails() {
     let block = &content[share_pos..content.len().min(share_pos + 3000)];
 
     assert!(
-        block.contains("Failed to decode clipboard image"),
+        content.contains("Failed to decode clipboard image")
+            && block.contains("let share_result = share_action.share(content)"),
         "clipboard_share should show error when image decoding fails"
     );
 }
