@@ -689,6 +689,30 @@ fn dictation_history_handler_uses_named_action_states() {
 }
 
 #[test]
+fn dictation_builtin_execution_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin execution handler");
+
+    assert!(
+        content.contains("enum DictationBuiltinAction")
+            && content.contains("CurrentSurface")
+            && content.contains("AgentChat")
+            && content.contains("FrontmostApp")
+            && content.contains("Notes"),
+        "dictation built-ins should be routed through named action states"
+    );
+    assert!(
+        content.contains("fn execute_dictation_builtin_action(")
+            && content.contains("fn prepare_dictation_builtin_start(")
+            && content.contains("fn handle_dictation_started(")
+            && content.contains("action.opening_message()")
+            && content.contains("action.failure_message()")
+            && content.contains("action.success_detail()"),
+        "dictation start, toggle, and feedback behavior should derive from the named action state"
+    );
+}
+
+#[test]
 fn script_context_ranking_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/script_context.rs")
         .expect("Failed to read script context builder");

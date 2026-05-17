@@ -85,7 +85,9 @@ fn dictation_to_notes_handler_forces_notes_target() {
         .find("builtins::BuiltInFeature::")
         .unwrap_or(handler_body.len());
     let handler_body = &handler_body[..next_arm];
-    assert!(handler_body.contains("DictationTarget::NotesEditor"));
-    assert!(handler_body.contains("dictation_to_notes_toggle"));
-    assert!(handler_body.contains("Starting forced-route dictation"));
+    assert!(handler_body.contains("DictationBuiltinAction::Notes"));
+    assert!(BUILTIN_EXECUTION_SOURCE
+        .contains("Self::Notes => Some(crate::dictation::DictationTarget::NotesEditor)"));
+    assert!(BUILTIN_EXECUTION_SOURCE.contains("Self::Notes => \"dictation_to_notes_toggle\""));
+    assert!(BUILTIN_EXECUTION_SOURCE.contains("Starting forced-route dictation"));
 }

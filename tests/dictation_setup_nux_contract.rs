@@ -60,20 +60,39 @@ fn microphone_permission_preflight_is_read_only() {
 #[test]
 // doc-anchor-removed: [[tests/dictation-setup-nux#Dictation Setup NUX#Missing readiness opens setup]]
 fn dictation_start_paths_open_setup_when_microphone_is_not_ready() {
-    for marker in [
-        "BuiltInFeature::Dictation =>",
-        "BuiltInFeature::DictationToAiHarness =>",
-        "BuiltInFeature::DictationToFrontmostApp =>",
-        "BuiltInFeature::DictationToNotes =>",
+    assert!(
+        BUILTIN_EXECUTION.contains("fn prepare_dictation_builtin_start(")
+            && BUILTIN_EXECUTION.contains("open_dictation_setup_if_microphone_not_ready(cx)"),
+        "shared dictation start preflight must open setup before starting capture when microphone readiness fails"
+    );
+
+    for (marker, action) in [
+        (
+            "BuiltInFeature::Dictation =>",
+            "DictationBuiltinAction::CurrentSurface",
+        ),
+        (
+            "BuiltInFeature::DictationToAiHarness =>",
+            "DictationBuiltinAction::AgentChat",
+        ),
+        (
+            "BuiltInFeature::DictationToFrontmostApp =>",
+            "DictationBuiltinAction::FrontmostApp",
+        ),
+        (
+            "BuiltInFeature::DictationToNotes =>",
+            "DictationBuiltinAction::Notes",
+        ),
     ] {
         let start = BUILTIN_EXECUTION
             .find(marker)
             .unwrap_or_else(|| panic!("{} arm must exist", marker));
-        let body = &BUILTIN_EXECUTION[start..start + 2600.min(BUILTIN_EXECUTION.len() - start)];
+        let body = &BUILTIN_EXECUTION[start..start + 300.min(BUILTIN_EXECUTION.len() - start)];
         assert!(
-            body.contains("open_dictation_setup_if_microphone_not_ready(cx)"),
-            "{} must open setup before starting capture when microphone readiness fails",
-            marker
+            body.contains(action),
+            "{} must route through {} so shared setup preflight applies",
+            marker,
+            action
         );
     }
 }
