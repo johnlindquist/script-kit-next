@@ -2952,9 +2952,14 @@ fn shortcut_alias_remove_handlers_use_named_action_states() {
     assert!(
         content.contains("ShortcutAliasRemoveAction::from_action_id(action_id)")
             && content.contains("remove_action.success_hud()")
-            && content.contains("remove_action.failure_message(e)")
-            && content.contains("remove_action.cannot_remove_message()"),
+            && content.contains(".failure_message(e)")
+            && content.contains("cannot_remove_message()"),
         "shortcut and alias remove handlers should derive HUD and failure copy from named states"
+    );
+    assert!(
+        content.contains("format!(\"Failed to remove shortcut: {error}\")")
+            && content.contains("format!(\"Failed to remove alias: {error}\")"),
+        "shortcut and alias remove failure copy should be owned by the named remove action state"
     );
 }
 
