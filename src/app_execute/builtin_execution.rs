@@ -450,6 +450,44 @@ impl UtilityTraceBuiltinAction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityRecipeBuiltinAction {
+    VerifyCurrentApp,
+}
+
+impl UtilityRecipeBuiltinAction {
+    fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
+        match command {
+            builtins::UtilityCommandType::VerifyCurrentAppRecipe => Some(Self::VerifyCurrentApp),
+            _ => None,
+        }
+    }
+
+    fn success_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe",
+        }
+    }
+
+    fn clipboard_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_clipboard_failed",
+        }
+    }
+
+    fn serialize_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_serialize_failed",
+        }
+    }
+
+    fn capture_failure_detail(self) -> &'static str {
+        match self {
+            Self::VerifyCurrentApp => "verify_current_app_recipe_capture_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KitStoreBuiltinAction {
     BrowseKits,
     InstalledKits,
@@ -3547,109 +3585,9 @@ impl ScriptListApp {
                         self.execute_utility_trace_builtin(trace_action, query_override, dctx, cx)
                     }
                     UtilityCommandType::VerifyCurrentAppRecipe => {
-                        tracing::info!(
-                            trace_id = %dctx.trace_id,
-                            "verify_current_app_recipe.requested"
-                        );
-
-                        let stored_recipe =
-                            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard()
-                            {
-                                Ok(recipe) => recipe,
-                                Err(error) => {
-                                    let message = format!("Verify Current App Recipe failed: {}", error);
-                                    self.show_error_toast(message.clone(), cx);
-                                    return Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "verify_current_app_recipe_clipboard_failed",
-                                    );
-                                }
-                            };
-
-                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot()
-                        {
-                            Ok(snapshot) => {
-                                let selected_text = crate::selected_text::get_selected_text()
-                                    .ok()
-                                    .filter(|text| !text.trim().is_empty());
-
-                                let browser_url = crate::platform::get_focused_browser_tab_url()
-                                    .ok()
-                                    .filter(|url| !url.trim().is_empty());
-
-                                let verification =
-                                    crate::menu_bar::current_app_commands::verify_current_app_command_recipe(
-                                        &stored_recipe,
-                                        snapshot,
-                                        selected_text.as_deref(),
-                                        browser_url.as_deref(),
-                                    );
-
-                                match serde_json::to_string_pretty(&verification) {
-                                    Ok(json) => {
-                                        tracing::info!(
-                                            category = "CURRENT_APP_RECIPE_VERIFY",
-                                            trace_id = %dctx.trace_id,
-                                            expected_bundle_id = %verification.expected_bundle_id,
-                                            actual_bundle_id = %verification.actual_bundle_id,
-                                            expected_route = %verification.expected_route,
-                                            actual_route = %verification.actual_route,
-                                            prompt_matches = verification.prompt_matches,
-                                            selected_text_expected = verification.selected_text_expected,
-                                            selected_text_present = verification.selected_text_present,
-                                            browser_url_expected = verification.browser_url_expected,
-                                            browser_url_present = verification.browser_url_present,
-                                            warning_count = verification.warning_count,
-                                            status = %verification.status,
-                                            json_bytes = json.len(),
-                                            "verify_current_app_recipe.completed"
-                                        );
-
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                                            json,
-                                        ));
-                                        self.show_hud(
-                                            crate::menu_bar::current_app_commands::build_current_app_command_verification_hud_message(
-                                                &verification,
-                                            ),
-                                            Some(HUD_MEDIUM_MS),
-                                            cx,
-                                        );
-                                        self.close_and_reset_window(cx);
-
-                                        Self::builtin_success(dctx, "verify_current_app_recipe")
-                                    }
-                                    Err(error) => {
-                                        let message = format!(
-                                            "Failed to serialize current app recipe verification: {}",
-                                            error
-                                        );
-                                        self.show_error_toast(message.clone(), cx);
-                                        Self::builtin_error(
-                                            dctx,
-                                            crate::action_helpers::ERROR_ACTION_FAILED,
-                                            message,
-                                            "verify_current_app_recipe_serialize_failed",
-                                        )
-                                    }
-                                }
-                            }
-                            Err(error) => {
-                                let message = format!(
-                                    "Failed to verify current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
-                                    error
-                                );
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "verify_current_app_recipe_capture_failed",
-                                )
-                            }
-                        }
+                        let recipe_action = UtilityRecipeBuiltinAction::from_command(*cmd_type)
+                            .expect("utility recipe arm should only receive recipe commands");
+                        self.execute_utility_verify_recipe_builtin(recipe_action, dctx, cx)
                     }
                     UtilityCommandType::ReplayCurrentAppRecipe => {
                         tracing::info!(
@@ -5254,6 +5192,113 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     error = %e,
                     "current_app_intent_trace.capture_failed"
+                );
+                self.show_error_toast(message.clone(), cx);
+                Self::builtin_error(
+                    dctx,
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    message,
+                    action.capture_failure_detail(),
+                )
+            }
+        }
+    }
+
+    fn execute_utility_verify_recipe_builtin(
+        &mut self,
+        action: UtilityRecipeBuiltinAction,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        tracing::info!(
+            trace_id = %dctx.trace_id,
+            "verify_current_app_recipe.requested"
+        );
+
+        let stored_recipe =
+            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard() {
+                Ok(recipe) => recipe,
+                Err(error) => {
+                    let message = format!("Verify Current App Recipe failed: {}", error);
+                    self.show_error_toast(message.clone(), cx);
+                    return Self::builtin_error(
+                        dctx,
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        message,
+                        action.clipboard_failure_detail(),
+                    );
+                }
+            };
+
+        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
+            Ok(snapshot) => {
+                let selected_text = crate::selected_text::get_selected_text()
+                    .ok()
+                    .filter(|text| !text.trim().is_empty());
+
+                let browser_url = crate::platform::get_focused_browser_tab_url()
+                    .ok()
+                    .filter(|url| !url.trim().is_empty());
+
+                let verification =
+                    crate::menu_bar::current_app_commands::verify_current_app_command_recipe(
+                        &stored_recipe,
+                        snapshot,
+                        selected_text.as_deref(),
+                        browser_url.as_deref(),
+                    );
+
+                match serde_json::to_string_pretty(&verification) {
+                    Ok(json) => {
+                        tracing::info!(
+                            category = "CURRENT_APP_RECIPE_VERIFY",
+                            trace_id = %dctx.trace_id,
+                            expected_bundle_id = %verification.expected_bundle_id,
+                            actual_bundle_id = %verification.actual_bundle_id,
+                            expected_route = %verification.expected_route,
+                            actual_route = %verification.actual_route,
+                            prompt_matches = verification.prompt_matches,
+                            selected_text_expected = verification.selected_text_expected,
+                            selected_text_present = verification.selected_text_present,
+                            browser_url_expected = verification.browser_url_expected,
+                            browser_url_present = verification.browser_url_present,
+                            warning_count = verification.warning_count,
+                            status = %verification.status,
+                            json_bytes = json.len(),
+                            "verify_current_app_recipe.completed"
+                        );
+
+                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                        self.show_hud(
+                            crate::menu_bar::current_app_commands::build_current_app_command_verification_hud_message(
+                                &verification,
+                            ),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        self.close_and_reset_window(cx);
+
+                        Self::builtin_success(dctx, action.success_detail())
+                    }
+                    Err(error) => {
+                        let message = format!(
+                            "Failed to serialize current app recipe verification: {}",
+                            error
+                        );
+                        self.show_error_toast(message.clone(), cx);
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                            action.serialize_failure_detail(),
+                        )
+                    }
+                }
+            }
+            Err(error) => {
+                let message = format!(
+                    "Failed to verify current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
+                    error
                 );
                 self.show_error_toast(message.clone(), cx);
                 Self::builtin_error(
