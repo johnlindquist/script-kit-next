@@ -7,13 +7,15 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationSessionPhase, DictationTarget, DictationToggleOutcome,
+    DictationDeviceId, DictationModelStatus, DictationSessionPhase, DictationTarget,
+    DictationToggleOutcome,
 };
 use crate::dictation::visualizer::silent_bars;
 use crate::dictation::window::DictationOverlayState;
 use anyhow::{Context, Result};
 use gpui::SharedString;
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 // ---------------------------------------------------------------------------
@@ -49,6 +51,16 @@ static SESSION: Mutex<Option<DictationSession>> = Mutex::new(None);
 /// timeout via `maybe_unload_transcriber()`.
 static TRANSCRIBER: Mutex<Option<DictationTranscriber>> = Mutex::new(None);
 
+/// Monotonic counter for redacted delivery receipts exposed through automation.
+static DELIVERY_RECEIPT_GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Monotonic generation for passive dictation runtime state exposed to DevTools.
+static DICTATION_STATE_GENERATION: AtomicU64 = AtomicU64::new(1);
+
+/// Last dictation delivery receipt. This stores only routing metadata, length,
+/// and a one-way fingerprint; it never stores transcript text.
+static LAST_DELIVERY_RECEIPT: Mutex<Option<serde_json::Value>> = Mutex::new(None);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -76,6 +88,7 @@ pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
         return false;
     };
     session.overlay_phase = phase;
+    bump_dictation_state_generation();
     true
 }
 
@@ -115,6 +128,55 @@ pub fn get_dictation_target() -> Option<DictationTarget> {
     SESSION.lock().as_ref().map(|s| s.target)
 }
 
+/// Record a content-safe receipt for the most recent dictation delivery.
+///
+/// Agent-facing DevTools use this to prove target routing and delivery
+/// generation without reading transcript contents from logs or UI text.
+pub fn record_delivery_receipt(
+    transcript: &str,
+    audio_duration: std::time::Duration,
+    target: DictationTarget,
+    destination: crate::dictation::DictationDestination,
+    delivered_internally: bool,
+    history_entry_id: &str,
+) -> serde_json::Value {
+    let generation = DELIVERY_RECEIPT_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let receipt = serde_json::json!({
+        "generation": generation,
+        "target": format!("{:?}", target),
+        "targetLabel": target.overlay_label(),
+        "destination": format!("{:?}", destination),
+        "deliveredInternally": delivered_internally,
+        "historyEntryId": history_entry_id,
+        "transcriptLen": transcript.len(),
+        "transcriptFingerprint": redacted_transcript_fingerprint(transcript),
+        "audioDurationMs": audio_duration.as_millis() as u64,
+        "source": "deliveryPipeline",
+        "redacted": true,
+    });
+    *LAST_DELIVERY_RECEIPT.lock() = Some(receipt.clone());
+    bump_dictation_state_generation();
+    receipt
+}
+
+/// Return the latest content-safe dictation delivery receipt.
+pub fn last_delivery_receipt() -> Option<serde_json::Value> {
+    LAST_DELIVERY_RECEIPT.lock().clone()
+}
+
+/// Stable non-cryptographic fingerprint for correlating synthetic receipts.
+///
+/// This deliberately supports equality checks only; raw transcript text is not
+/// recoverable from the automation state.
+pub fn redacted_transcript_fingerprint(transcript: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in transcript.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{hash:016x}")
+}
+
 /// Replace the active session's destination cycle. The current target is
 /// preserved and inserted if omitted so overlay state and delivery stay aligned.
 pub fn set_dictation_target_cycle(targets: Vec<DictationTarget>) -> bool {
@@ -131,6 +193,7 @@ pub fn set_dictation_target_cycle(targets: Vec<DictationTarget>) -> bool {
     }
 
     session.target_cycle = cycle;
+    bump_dictation_state_generation();
     true
 }
 
@@ -161,6 +224,7 @@ pub fn cycle_dictation_target() -> Option<DictationTarget> {
     let next_ix = (current_ix + 1) % session.target_cycle.len();
     let next_target = session.target_cycle[next_ix];
     session.target = next_target;
+    bump_dictation_state_generation();
 
     tracing::info!(
         category = "DICTATION",
@@ -210,6 +274,221 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
         transcript: SharedString::default(),
         target: session.target,
     })
+}
+
+/// Passive, redacted automation snapshot for Script Kit DevTools.
+///
+/// This is safe for `getState`: it does not start capture, open System
+/// Settings, request TCC permission, transcribe audio, or expose transcript
+/// contents or raw microphone device ids.
+pub fn automation_state() -> serde_json::Value {
+    let (is_recording, phase, target, target_label, elapsed_ms, audio_levels) = {
+        let guard = SESSION.lock();
+        if let Some(session) = guard.as_ref() {
+            (
+                true,
+                session.overlay_phase.as_automation_str().to_string(),
+                Some(format!("{:?}", session.target)),
+                Some(session.target.overlay_label().to_string()),
+                Some(session.started_at.elapsed().as_millis() as u64),
+                serde_json::json!({
+                    "available": true,
+                    "bars": session.last_bars,
+                    "barCount": session.last_bars.len(),
+                    "source": "runtime.session.lastBars",
+                    "stopReason": null,
+                }),
+            )
+        } else {
+            (
+                false,
+                "idle".to_string(),
+                None,
+                None,
+                None,
+                serde_json::json!({
+                    "available": false,
+                    "bars": [],
+                    "barCount": 0,
+                    "source": "runtime.session.lastBars",
+                    "stopReason": "not recording",
+                }),
+            )
+        }
+    };
+
+    let config = crate::config::load_config();
+    let prefs = crate::config::load_user_preferences();
+    let selected_device_id = prefs.dictation.selected_device_id.as_deref();
+    let permission = crate::dictation::microphone_permission_status();
+    let devices_result = if matches!(
+        permission,
+        crate::dictation::DictationMicrophonePermissionStatus::Granted
+            | crate::dictation::DictationMicrophonePermissionStatus::Unknown
+    ) {
+        crate::dictation::list_input_devices().map_err(|error| error.to_string())
+    } else {
+        Ok(Vec::new())
+    };
+    let device_snapshot = microphone_device_snapshot(&devices_result, selected_device_id);
+    let setup_state = crate::dictation::build_dictation_setup_state(
+        dictation_model_status(),
+        permission,
+        devices_result,
+        selected_device_id,
+        config.get_dictation_hotkey().as_ref(),
+        config.is_dictation_hotkey_enabled(),
+    );
+    let hotkey = config.get_dictation_hotkey();
+    let generation = DICTATION_STATE_GENERATION.load(Ordering::Relaxed);
+
+    serde_json::json!({
+        "schemaVersion": 1,
+        "source": "runtime.dictation.automationState",
+        "passive": true,
+        "redacted": true,
+        "generation": generation,
+        "recordingStateGeneration": generation,
+        "isRecording": is_recording,
+        "phase": phase,
+        "target": target,
+        "targetLabel": target_label,
+        "elapsedMs": elapsed_ms,
+        "audioLevels": audio_levels,
+        "setup": {
+            "ready": setup_state.ready,
+            "model": {
+                "status": dictation_model_status_label(&setup_state.model_status),
+                "generation": generation,
+                "source": "parakeetModelAvailability",
+            },
+            "microphone": {
+                "permissionStatus": format!("{:?}", permission),
+                "status": microphone_status_label(&setup_state.microphone_status),
+                "deviceSnapshot": device_snapshot,
+                "generation": generation,
+                "source": "passiveAVFoundationEnumeration",
+                "noPermissionPrompt": true,
+            },
+            "hotkey": {
+                "enabled": config.is_dictation_hotkey_enabled(),
+                "configured": hotkey.is_some(),
+                "display": hotkey.as_ref().map(|value| value.to_display_string()),
+                "status": format!("{:?}", setup_state.hotkey_status),
+                "generation": generation,
+                "source": "config.dictationHotkey",
+            },
+            "configFingerprint": crate::config::current_config_fingerprint_receipt().map(|receipt| serde_json::json!({
+                "pathFingerprint": automation_fingerprint(&receipt.path),
+                "len": receipt.len,
+                "modifiedMs": receipt.modified_ms,
+            })),
+        },
+        "lastDelivery": crate::dictation::last_delivery_receipt(),
+        "deliveryReceiptAvailable": crate::dictation::last_delivery_receipt().is_some(),
+        "cleanup": {
+            "captureActive": is_recording,
+            "transcriberCached": TRANSCRIBER.lock().is_some(),
+            "generation": generation,
+            "source": "runtime.dictation.cleanupState",
+        },
+        "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false,
+        },
+    })
+}
+
+fn bump_dictation_state_generation() -> u64 {
+    DICTATION_STATE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1
+}
+
+fn dictation_model_status() -> DictationModelStatus {
+    if is_parakeet_model_available() {
+        DictationModelStatus::Available
+    } else {
+        DictationModelStatus::NotDownloaded
+    }
+}
+
+fn dictation_model_status_label(status: &DictationModelStatus) -> &'static str {
+    match status {
+        DictationModelStatus::Available => "available",
+        DictationModelStatus::NotDownloaded => "notDownloaded",
+        DictationModelStatus::Downloading { .. } => "downloading",
+        DictationModelStatus::Extracting => "extracting",
+        DictationModelStatus::DownloadFailed(_) => "downloadFailed",
+    }
+}
+
+fn microphone_status_label(status: &crate::dictation::DictationMicrophoneStatus) -> &'static str {
+    match status {
+        crate::dictation::DictationMicrophoneStatus::Ready { .. } => "ready",
+        crate::dictation::DictationMicrophoneStatus::SavedDeviceMissing { .. } => {
+            "savedDeviceMissing"
+        }
+        crate::dictation::DictationMicrophoneStatus::PermissionNeeded(_) => "permissionNeeded",
+        crate::dictation::DictationMicrophoneStatus::NoDevices => "noDevices",
+        crate::dictation::DictationMicrophoneStatus::EnumerationFailed(_) => "enumerationFailed",
+    }
+}
+
+fn automation_fingerprint(value: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("fnv1a64:{hash:016x}")
+}
+
+fn microphone_device_snapshot(
+    devices_result: &Result<Vec<crate::dictation::DictationDeviceInfo>, String>,
+    selected_device_id: Option<&str>,
+) -> serde_json::Value {
+    match devices_result {
+        Ok(devices) => {
+            let selected =
+                crate::dictation::resolve_selected_input_device(devices, selected_device_id);
+            serde_json::json!({
+                "available": true,
+                "deviceCount": devices.len(),
+                "defaultDevice": devices.iter().find(|device| device.is_default).map(|device| {
+                    serde_json::json!({
+                        "labelFingerprint": automation_fingerprint(&device.name),
+                        "idFingerprint": automation_fingerprint(&device.id.0),
+                        "transport": format!("{:?}", device.transport),
+                    })
+                }),
+                "selected": selected.as_ref().map(|selection| {
+                    serde_json::json!({
+                        "labelFingerprint": automation_fingerprint(&selection.device.name),
+                        "idFingerprint": automation_fingerprint(&selection.device.id.0),
+                        "transport": format!("{:?}", selection.device.transport),
+                        "fellBack": selection.fell_back,
+                    })
+                }),
+                "savedPreference": {
+                    "configured": selected_device_id.is_some(),
+                    "idFingerprint": selected_device_id.map(automation_fingerprint),
+                    "resolved": selected.as_ref().is_some_and(|selection| !selection.fell_back),
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false,
+            })
+        }
+        Err(error) => serde_json::json!({
+            "available": false,
+            "deviceCount": 0,
+            "error": error,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false,
+        }),
+    }
 }
 
 /// Transcribe previously captured audio chunks.
@@ -358,6 +637,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
     };
 
     *SESSION.lock() = Some(session);
+    bump_dictation_state_generation();
 
     tracing::info!(
         category = "DICTATION",
@@ -389,6 +669,7 @@ fn stop_recording() -> Result<Option<CompletedDictationCapture>> {
         );
         return Ok(None);
     };
+    bump_dictation_state_generation();
 
     stop_capture_and_collect(&mut session)?;
 

@@ -74,6 +74,43 @@ function receiptHas(receipt: JsonObject | null, field: string) {
   if (!receipt) {
     return false;
   }
+  const dictation = asObject(asObject(receipt.response).dictation ?? receipt.dictation ?? asObject(receipt.runtimeState).dictation);
+  const setup = asObject(dictation.setup);
+  const microphone = asObject(setup.microphone);
+  const model = asObject(setup.model);
+  const hotkey = asObject(setup.hotkey);
+  const cleanup = asObject(dictation.cleanup);
+  const lastDelivery = asObject(dictation.lastDelivery);
+  const audioLevels = asObject(dictation.audioLevels);
+
+  if (field === "passive microphone permission status") {
+    return typeof microphone.permissionStatus === "string";
+  }
+  if (field === "microphone device snapshot") {
+    return typeof microphone.deviceSnapshot === "object" && microphone.deviceSnapshot !== null;
+  }
+  if (field === "model readiness generation") {
+    return typeof model.status === "string" && typeof model.generation === "number";
+  }
+  if (field === "recording state generation") {
+    return typeof dictation.recordingStateGeneration === "number";
+  }
+  if (field === "audio level metrics") {
+    return typeof audioLevels.available === "boolean" && Array.isArray(audioLevels.bars);
+  }
+  if (field === "target delivery generation") {
+    return typeof lastDelivery.generation === "number";
+  }
+  if (field === "transcript fingerprint") {
+    return typeof lastDelivery.transcriptFingerprint === "string";
+  }
+  if (field === "hotkey binding snapshot") {
+    return typeof hotkey.enabled === "boolean" && typeof hotkey.generation === "number";
+  }
+  if (field === "media cleanup receipt") {
+    return typeof cleanup.captureActive === "boolean" && typeof cleanup.generation === "number";
+  }
+
   const normalized = field.replace(/[^a-z0-9]+/gi, "").toLowerCase();
   const serialized = JSON.stringify(receipt).replace(/[^a-z0-9]+/gi, "").toLowerCase();
   return serialized.includes(normalized);
@@ -109,6 +146,12 @@ function report(args: MediaArgs, coverage: JsonObject | null, receipt: JsonObjec
       noMicrophoneCaptureRequired: true,
       noSystemSettingsRequired: true,
       noTccMutationRequired: true,
+    },
+    redaction: {
+      transcriptContentReturned: false,
+      deviceLabelsReturned: false,
+      targetLabelsReturned: false,
+      rawDeviceIdsReturned: false,
     },
     requiredFields: required,
     missingRuntimePrimitives: missing,
