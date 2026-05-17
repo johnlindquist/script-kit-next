@@ -302,6 +302,25 @@ fn script_context_favorite_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn script_context_ranking_actions_use_named_plan_states() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script context builder");
+
+    assert!(
+        content.contains("enum RankingActionPlan")
+            && content.contains("NoRankingAction")
+            && content.contains("ResetSuggestedRanking"),
+        "suggested ranking destructive row should be driven by named ranking plan states"
+    );
+    assert!(
+        content.contains("RankingActionPlan::from_is_suggested(script.is_suggested)")
+            && content.contains("fn reset_action")
+            && content.contains("ranking_plan.reset_action()"),
+        "script context ranking row should derive availability and copy from the named plan"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {
