@@ -148,6 +148,24 @@ fn clipboard_entry_actions_use_named_plan_states() {
 }
 
 #[test]
+fn clipboard_pin_handler_uses_named_action_states() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardPinHandlerAction")
+            && content.contains("Pin")
+            && content.contains("Unpin"),
+        "clipboard pin/unpin handler should be driven by named action states"
+    );
+    assert!(
+        content.contains("ClipboardPinHandlerAction::from_action_id(action_id)")
+            && content.contains("pin_action.apply(&entry.id)"),
+        "clipboard pin/unpin handler should derive the storage operation from the named action state"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");
