@@ -170,6 +170,35 @@ fn notes_command_bar_actions_use_named_plan_states() {
     );
 }
 
+#[test]
+fn note_switcher_actions_use_named_plan_states() {
+    let content =
+        fs::read_to_string("src/actions/builders/notes.rs").expect("Failed to read notes builder");
+
+    assert!(
+        content.contains("enum NoteSwitcherRowPlan")
+            && content.contains("PinnedCurrent")
+            && content.contains("PinnedOther")
+            && content.contains("Current")
+            && content.contains("Recent"),
+        "note switcher pinned/current priority should be driven by named row plan states"
+    );
+    assert!(
+        content.contains("enum NoteSwitcherDescriptionPlan")
+            && content.contains("PreviewWithRelativeTime")
+            && content.contains("PreviewOnly")
+            && content.contains("RelativeTimeOnly")
+            && content.contains("CharacterCount"),
+        "note switcher preview/time/count text should be driven by named description plan states"
+    );
+    assert!(
+        content.contains("NoteSwitcherRowPlan::from_note(note)")
+            && content.contains("NoteSwitcherDescriptionPlan::from_note(note)")
+            && content.contains("fn truncated_preview"),
+        "note switcher actions should derive row text and description text from named plans"
+    );
+}
+
 /// Verify SDK actions use tracing, not legacy logging.
 #[test]
 fn sdk_actions_uses_modern_logging() {

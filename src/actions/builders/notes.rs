@@ -667,6 +667,94 @@ pub struct NoteSwitcherNoteInfo {
     pub relative_time: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoteSwitcherRowPlan {
+    PinnedCurrent,
+    PinnedOther,
+    Current,
+    Recent,
+}
+
+impl NoteSwitcherRowPlan {
+    fn from_note(note: &NoteSwitcherNoteInfo) -> Self {
+        match (note.is_pinned, note.is_current) {
+            (true, true) => Self::PinnedCurrent,
+            (true, false) => Self::PinnedOther,
+            (false, true) => Self::Current,
+            (false, false) => Self::Recent,
+        }
+    }
+
+    fn icon(self) -> IconName {
+        match self {
+            Self::PinnedCurrent | Self::PinnedOther => IconName::StarFilled,
+            Self::Current => IconName::Check,
+            Self::Recent => IconName::File,
+        }
+    }
+
+    fn title(self, note: &NoteSwitcherNoteInfo) -> String {
+        match self {
+            Self::PinnedCurrent | Self::Current => format!("• {}", note.title),
+            Self::PinnedOther | Self::Recent => note.title.clone(),
+        }
+    }
+
+    fn section(self) -> &'static str {
+        match self {
+            Self::PinnedCurrent | Self::PinnedOther => "Pinned",
+            Self::Current | Self::Recent => "Recent",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoteSwitcherDescriptionPlan {
+    PreviewWithRelativeTime,
+    PreviewOnly,
+    RelativeTimeOnly,
+    CharacterCount,
+}
+
+impl NoteSwitcherDescriptionPlan {
+    fn from_note(note: &NoteSwitcherNoteInfo) -> Self {
+        match (!note.preview.is_empty(), !note.relative_time.is_empty()) {
+            (true, true) => Self::PreviewWithRelativeTime,
+            (true, false) => Self::PreviewOnly,
+            (false, true) => Self::RelativeTimeOnly,
+            (false, false) => Self::CharacterCount,
+        }
+    }
+
+    fn description(self, note: &NoteSwitcherNoteInfo) -> String {
+        match self {
+            Self::PreviewWithRelativeTime => {
+                format!(
+                    "{} · {}",
+                    truncated_preview(&note.preview),
+                    note.relative_time
+                )
+            }
+            Self::PreviewOnly => truncated_preview(&note.preview),
+            Self::RelativeTimeOnly => note.relative_time.clone(),
+            Self::CharacterCount => format!(
+                "{} char{}",
+                note.char_count,
+                if note.char_count == 1 { "" } else { "s" }
+            ),
+        }
+    }
+}
+
+fn truncated_preview(preview: &str) -> String {
+    let truncated: String = preview.chars().take(60).collect();
+    if preview.chars().count() > 60 {
+        format!("{}…", truncated.trim_end())
+    } else {
+        truncated
+    }
+}
+
 /// Get actions for the note switcher dialog (Cmd+P in Notes window).
 pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> {
     let invalid_note_count = notes
@@ -687,53 +775,18 @@ pub fn get_note_switcher_actions(notes: &[NoteSwitcherNoteInfo]) -> Vec<Action> 
     let mut actions = Vec::new();
 
     for note in notes {
-        let icon = if note.is_pinned {
-            IconName::StarFilled
-        } else if note.is_current {
-            IconName::Check
-        } else {
-            IconName::File
-        };
-
-        let title = if note.is_current {
-            format!("• {}", note.title)
-        } else {
-            note.title.clone()
-        };
-
-        let description = if !note.preview.is_empty() {
-            let preview: String = note.preview.chars().take(60).collect();
-            let preview = if note.preview.chars().count() > 60 {
-                format!("{}…", preview.trim_end())
-            } else {
-                preview
-            };
-            if note.relative_time.is_empty() {
-                preview
-            } else {
-                format!("{} · {}", preview, note.relative_time)
-            }
-        } else if !note.relative_time.is_empty() {
-            note.relative_time.clone()
-        } else {
-            format!(
-                "{} char{}",
-                note.char_count,
-                if note.char_count == 1 { "" } else { "s" }
-            )
-        };
-
-        let section = if note.is_pinned { "Pinned" } else { "Recent" };
+        let row_plan = NoteSwitcherRowPlan::from_note(note);
+        let description_plan = NoteSwitcherDescriptionPlan::from_note(note);
 
         actions.push(
             Action::new(
                 format!("note_{}", note.id),
-                title,
-                Some(description),
+                row_plan.title(note),
+                Some(description_plan.description(note)),
                 ActionCategory::ScriptContext,
             )
-            .with_icon(icon)
-            .with_section(section),
+            .with_icon(row_plan.icon())
+            .with_section(row_plan.section()),
         );
     }
 
