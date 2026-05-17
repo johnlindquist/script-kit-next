@@ -542,6 +542,12 @@ enum UtilityProcessBuiltinAction {
     StopAllProcesses,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UtilityProcessBuiltinOutcome {
+    NoRunningProcesses,
+    StopRequested { process_count: usize },
+}
+
 impl UtilityProcessBuiltinAction {
     fn from_command(command: builtins::UtilityCommandType) -> Option<Self> {
         match command {
@@ -567,6 +573,27 @@ impl UtilityProcessBuiltinAction {
     fn success_detail(self) -> &'static str {
         match self {
             Self::StopAllProcesses => "stop_all_processes",
+        }
+    }
+
+    fn outcome(self, process_count: usize) -> UtilityProcessBuiltinOutcome {
+        let _ = self;
+        match process_count {
+            0 => UtilityProcessBuiltinOutcome::NoRunningProcesses,
+            process_count => UtilityProcessBuiltinOutcome::StopRequested { process_count },
+        }
+    }
+}
+
+impl UtilityProcessBuiltinOutcome {
+    fn should_stop_processes(self) -> bool {
+        matches!(self, Self::StopRequested { .. })
+    }
+
+    fn process_count(self) -> usize {
+        match self {
+            Self::NoRunningProcesses => 0,
+            Self::StopRequested { process_count } => process_count,
         }
     }
 }
@@ -5697,12 +5724,13 @@ impl ScriptListApp {
             "process_manager.stop_all"
         );
 
-        if process_count == 0 {
+        let outcome = action.outcome(process_count);
+        if !outcome.should_stop_processes() {
             self.show_hud(action.empty_hud().to_string(), Some(HUD_2200_MS), cx);
         } else {
             crate::process_manager::PROCESS_MANAGER.kill_all_processes();
             self.show_hud(
-                action.success_hud(process_count),
+                action.success_hud(outcome.process_count()),
                 Some(HUD_MEDIUM_MS),
                 cx,
             );
