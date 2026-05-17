@@ -190,6 +190,37 @@ fn clipboard_copy_paste_handler_uses_named_action_states() {
 }
 
 #[test]
+fn clipboard_share_handler_uses_named_action_state() {
+    let content = fs::read_to_string("src/app_actions/handle_action/clipboard.rs")
+        .expect("Failed to read clipboard action handler");
+
+    assert!(
+        content.contains("enum ClipboardShareHandlerAction")
+            && content.contains("TextLike")
+            && content.contains("Image"),
+        "clipboard share handler should classify share behavior with named action states"
+    );
+    assert!(
+        content.contains("ClipboardShareHandlerAction::from_content_type(entry.content_type)")
+            && content.contains("let share_result = share_action.share(content)")
+            && content.contains("share_action.success_hud().to_string()"),
+        "clipboard share handler should derive share item and HUD text from the named action"
+    );
+    assert!(
+        content.contains("ContentType::Text")
+            && content.contains("ContentType::Link")
+            && content.contains("ContentType::File")
+            && content.contains("ContentType::Color")
+            && content.contains("ContentType::Image")
+            && content.contains("ShareSheetItem::Text(content)")
+            && content.contains("ShareSheetItem::ImagePng")
+            && content.contains("Failed to decode clipboard image")
+            && content.contains("Share sheet opened"),
+        "clipboard share action should preserve text-like and image share behavior"
+    );
+}
+
+#[test]
 fn clipboard_paste_destination_uses_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/clipboard.rs")
         .expect("Failed to read clipboard action builder");

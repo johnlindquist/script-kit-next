@@ -17,6 +17,12 @@ enum ClipboardCopyPasteHandlerAction {
     PasteKeepOpen,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClipboardShareHandlerAction {
+    TextLike,
+    Image,
+}
+
 impl ClipboardPinHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -86,6 +92,46 @@ impl ClipboardCopyPasteHandlerAction {
             Self::PasteAndClose | Self::PasteKeepOpen => "Failed to paste",
             Self::CopyOnly => "Failed to copy",
         }
+    }
+}
+
+impl ClipboardShareHandlerAction {
+    fn from_content_type(content_type: clipboard_history::ContentType) -> Self {
+        match content_type {
+            clipboard_history::ContentType::Text
+            | clipboard_history::ContentType::Link
+            | clipboard_history::ContentType::File
+            | clipboard_history::ContentType::Color => Self::TextLike,
+            clipboard_history::ContentType::Image => Self::Image,
+        }
+    }
+
+    fn share(self, content: String) -> Result<(), String> {
+        match self {
+            Self::TextLike => {
+                crate::platform::show_share_sheet(crate::platform::ShareSheetItem::Text(content));
+                Ok(())
+            }
+            Self::Image => {
+                let Some(png_bytes) = clipboard_history::content_to_png_bytes(&content) else {
+                    return Err(Self::image_decode_failure().to_string());
+                };
+                crate::platform::show_share_sheet(crate::platform::ShareSheetItem::ImagePng(
+                    png_bytes,
+                ));
+                Ok(())
+            }
+        }
+    }
+
+    fn success_hud(self) -> &'static str {
+        match self {
+            Self::TextLike | Self::Image => "Share sheet opened",
+        }
+    }
+
+    fn image_decode_failure() -> &'static str {
+        "Failed to decode clipboard image"
     }
 }
 
@@ -239,33 +285,13 @@ impl ScriptListApp {
 
                 tracing::info!(entry_id = %entry.id, content_type = ?entry.content_type, "opening share sheet");
 
-                let share_result = match entry.content_type {
-                    clipboard_history::ContentType::Text
-                    | clipboard_history::ContentType::Link
-                    | clipboard_history::ContentType::File
-                    | clipboard_history::ContentType::Color => {
-                        crate::platform::show_share_sheet(
-                            crate::platform::ShareSheetItem::Text(content),
-                        );
-                        Ok(())
-                    }
-                    clipboard_history::ContentType::Image => {
-                        if let Some(png_bytes) =
-                            clipboard_history::content_to_png_bytes(&content)
-                        {
-                            crate::platform::show_share_sheet(
-                                crate::platform::ShareSheetItem::ImagePng(png_bytes),
-                            );
-                            Ok(())
-                        } else {
-                            Err("Failed to decode clipboard image".to_string())
-                        }
-                    }
-                };
+                let share_action =
+                    ClipboardShareHandlerAction::from_content_type(entry.content_type);
+                let share_result = share_action.share(content);
 
                 match share_result {
                     Ok(()) => self.show_hud(
-                        "Share sheet opened".to_string(),
+                        share_action.success_hud().to_string(),
                         Some(HUD_SHORT_MS),
                         cx,
                     ),
