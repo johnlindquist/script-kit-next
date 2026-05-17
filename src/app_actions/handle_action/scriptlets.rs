@@ -34,6 +34,12 @@ enum ScriptletDynamicExecutionResult {
     LaunchFailed(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ScriptletDynamicFailureDetail {
+    Stderr(String),
+    Unknown,
+}
+
 impl ScriptletSourceHandlerAction {
     fn from_action_id(action_id: &str) -> Option<Self> {
         match action_id {
@@ -103,12 +109,7 @@ impl ScriptletDynamicExecutionResult {
         if result.success {
             Self::Success
         } else {
-            let message = if result.stderr.is_empty() {
-                "Unknown error".to_string()
-            } else {
-                result.stderr
-            };
-            Self::Failed(message)
+            Self::Failed(ScriptletDynamicFailureDetail::from_stderr(result.stderr).message())
         }
     }
 
@@ -129,6 +130,23 @@ impl ScriptletDynamicExecutionResult {
             Self::Failed(message) | Self::LaunchFailed(message) => {
                 Some(format!("Failed to execute action: {message}"))
             }
+        }
+    }
+}
+
+impl ScriptletDynamicFailureDetail {
+    fn from_stderr(stderr: String) -> Self {
+        if stderr.is_empty() {
+            Self::Unknown
+        } else {
+            Self::Stderr(stderr)
+        }
+    }
+
+    fn message(self) -> String {
+        match self {
+            Self::Stderr(stderr) => stderr,
+            Self::Unknown => "Unknown error".to_string(),
         }
     }
 }
