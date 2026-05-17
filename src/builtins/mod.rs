@@ -512,7 +512,7 @@ impl BuiltInEntry {
                 AiCommandType::SendFocusedWindowToAi => "Send Window to Agent Chat",
                 AiCommandType::SendSelectedTextToAi => "Send Selection to Agent Chat",
                 AiCommandType::SendBrowserTabToAi => "Send Tab to Agent Chat",
-                AiCommandType::SendScreenAreaToAi => "Select Area for AI",
+                AiCommandType::SendScreenAreaToAi => "Select Area for Agent Chat",
                 AiCommandType::CreateAiPreset => "Create AI Preset",
                 AiCommandType::ImportAiPresets => "Import AI Presets",
                 AiCommandType::SearchAiPresets => "Search AI Presets",
