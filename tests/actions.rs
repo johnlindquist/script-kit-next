@@ -1652,18 +1652,29 @@ fn ai_generate_builtin_uses_named_action_states() {
         "AI generation built-ins should be routed through named action states"
     );
     assert!(
-        content.contains("AiGenerateBuiltinAction::from_command(*cmd_type)")
+        content.contains("AiGenerateBuiltinAction::from_command(command)")
             && content.contains("fn execute_ai_generate_builtin(")
             && content.contains("query_override.unwrap_or(&self.filter_text)")
+            && content.contains("action.normalized_request(query)")
+            && content.contains("action.entry_intent(request)")
+            && content.contains("action.opens_acp_when_request_empty()")
             && content.contains("action.success_detail()"),
-        "AI generation commands should delegate query handling and success details through their state"
+        "AI generation commands should delegate query handling, routing fallback, prompt text, and success details through their state"
     );
     assert!(
         content.contains("normalize_generate_script_request(Some(")
-            && content.contains("normalize_generate_script_from_current_app_request(Some(query))")
+            && content.contains("normalize_generate_script_from_current_app_request")
+            && content.contains("Some(query)")
             && content.contains("open_tab_ai_chat_with_entry_intent")
             && content.contains("open_tab_ai_acp_with_entry_intent"),
         "AI generation state should preserve direct script and current-app intent routing"
+    );
+    assert!(
+        content.contains("User request: {request}")
+            && content.contains("using the current menu, selection, and browser context.")
+            && content.contains("Self::NewScript => true")
+            && content.contains("Self::CurrentAppScript => false"),
+        "AI generation state should preserve current-app prompt copy and empty-request routing behavior"
     );
 }
 

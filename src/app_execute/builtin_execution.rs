@@ -1415,6 +1415,48 @@ impl AiGenerateBuiltinAction {
             Self::CurrentAppScript => "ai_generate_script_from_current_app_routed_to_harness",
         }
     }
+
+    fn normalized_request(self, query: &str) -> Option<String> {
+        match self {
+            Self::NewScript => {
+                crate::menu_bar::current_app_commands::normalize_generate_script_request(Some(
+                    query,
+                ))
+                .map(str::to_string)
+            }
+            Self::CurrentAppScript => {
+                crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(
+                    Some(query),
+                )
+                .map(str::to_string)
+            }
+        }
+    }
+
+    fn opens_acp_when_request_empty(self) -> bool {
+        match self {
+            Self::NewScript => true,
+            Self::CurrentAppScript => false,
+        }
+    }
+
+    fn entry_intent(self, request: Option<String>) -> Option<String> {
+        match self {
+            Self::NewScript => request,
+            Self::CurrentAppScript => Some(match request {
+                Some(request) => format!(
+                    "Generate a Script Kit script for the frontmost app \
+                     using the current menu, selection, and browser context. \
+                     User request: {request}"
+                ),
+                None => {
+                    "Generate a Script Kit script for the frontmost app \
+                     using the current menu, selection, and browser context."
+                        .to_string()
+                }
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -4755,34 +4797,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
         let query = query_override.unwrap_or(&self.filter_text);
-        match action {
-            AiGenerateBuiltinAction::NewScript => {
-                let request =
-                    crate::menu_bar::current_app_commands::normalize_generate_script_request(Some(
-                        query,
-                    ))
-                    .map(str::to_string);
-                if let Some(request) = request {
-                    self.open_tab_ai_chat_with_entry_intent(Some(request), cx);
-                } else {
-                    self.open_tab_ai_acp_with_entry_intent(None, cx);
-                }
-            }
-            AiGenerateBuiltinAction::CurrentAppScript => {
-                let request = crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(Some(query));
-                let intent = if let Some(request) = request {
-                    format!(
-                        "Generate a Script Kit script for the frontmost app \
-                         using the current menu, selection, and browser context. \
-                         User request: {request}"
-                    )
-                } else {
-                    "Generate a Script Kit script for the frontmost app \
-                     using the current menu, selection, and browser context."
-                        .to_string()
-                };
-                self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
-            }
+        let request = action.normalized_request(query);
+        let intent = action.entry_intent(request);
+        if intent.is_none() && action.opens_acp_when_request_empty() {
+            self.open_tab_ai_acp_with_entry_intent(None, cx);
+        } else {
+            self.open_tab_ai_chat_with_entry_intent(intent, cx);
         }
 
         Self::builtin_success(dctx, action.success_detail())
