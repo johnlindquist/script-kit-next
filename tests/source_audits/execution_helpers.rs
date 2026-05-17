@@ -178,13 +178,40 @@ fn handle_api_key_completion_rebuilds_provider_registry_on_success() {
 }
 
 #[test]
+fn handle_api_key_completion_uses_named_completion_outcome() {
+    let content = execution_helpers_content();
+
+    assert!(
+        content.contains("enum ApiKeyCompletionOutcome")
+            && content.contains("Saved")
+            && content.contains("NotSaved")
+            && content.contains("fn from_success(success: bool) -> Self")
+            && content.contains("fn success_message(self, provider: &str) -> Option<String>")
+            && content.contains("fn should_rebuild_provider_registry(self) -> bool"),
+        "Expected API key completion feedback to be driven by a named outcome state"
+    );
+
+    let completion_fn_start = content
+        .find("fn handle_api_key_completion(")
+        .expect("Expected handle_api_key_completion to exist");
+    let block = &content[completion_fn_start..completion_fn_start + 1400];
+
+    assert!(
+        block.contains("let completion_outcome = ApiKeyCompletionOutcome::from_success(success)")
+            && block.contains("completion_outcome.success_message(&provider)")
+            && block.contains("completion_outcome.should_rebuild_provider_registry()"),
+        "Expected handle_api_key_completion to route success toast and registry rebuild through the outcome state"
+    );
+}
+
+#[test]
 fn handle_api_key_completion_uses_deferred_resize() {
     let content = execution_helpers_content();
 
     let completion_fn_start = content
         .find("fn handle_api_key_completion(")
         .expect("Expected handle_api_key_completion to exist");
-    let block = &content[completion_fn_start..completion_fn_start + 1200];
+    let block = &content[completion_fn_start..completion_fn_start + 2600];
 
     assert!(
         block.contains("window.defer(cx,"),

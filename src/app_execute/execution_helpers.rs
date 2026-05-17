@@ -49,6 +49,12 @@ enum ClaudeCodeEnableAction {
     EnableProvider,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ApiKeyCompletionOutcome {
+    Saved,
+    NotSaved,
+}
+
 impl ClaudeCodeEnableAction {
     fn validation_restored_message(self) -> &'static str {
         match self {
@@ -82,6 +88,26 @@ impl ClaudeCodeEnableAction {
         match self {
             Self::EnableProvider => format!("Failed to enable Claude Code: {error}"),
         }
+    }
+}
+
+impl ApiKeyCompletionOutcome {
+    fn from_success(success: bool) -> Self {
+        match success {
+            true => Self::Saved,
+            false => Self::NotSaved,
+        }
+    }
+
+    fn success_message(self, provider: &str) -> Option<String> {
+        match self {
+            Self::Saved => Some(format!("{} API key saved successfully", provider)),
+            Self::NotSaved => None,
+        }
+    }
+
+    fn should_rebuild_provider_registry(self) -> bool {
+        matches!(self, Self::Saved)
     }
 }
 
@@ -233,17 +259,17 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.pending_api_key_config = None;
+        let completion_outcome = ApiKeyCompletionOutcome::from_success(success);
 
-        if success {
+        if let Some(message) = completion_outcome.success_message(&provider) {
             // Show success toast
             self.toast_manager.push(
-                components::toast::Toast::success(
-                    format!("{} API key saved successfully", provider),
-                    &self.theme,
-                )
+                components::toast::Toast::success(message, &self.theme)
                 .duration_ms(Some(TOAST_SUCCESS_MS)),
             );
+        }
 
+        if completion_outcome.should_rebuild_provider_registry() {
             // Rebuild provider registry so new key is available next time chat opens
             self.rebuild_provider_registry_async(cx);
         }
