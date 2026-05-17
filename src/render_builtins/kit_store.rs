@@ -44,6 +44,53 @@ struct KitStoreGithubRepo {
     clone_url: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KitStorePluginMutation {
+    Install,
+    Update,
+    Remove,
+}
+
+impl KitStorePluginMutation {
+    fn action(self) -> &'static str {
+        match self {
+            Self::Install => "install",
+            Self::Update => "update",
+            Self::Remove => "remove",
+        }
+    }
+
+    fn progress_message(self, plugin_name: &str) -> String {
+        match self {
+            Self::Install => format!("Installing '{}'...", plugin_name),
+            Self::Update => format!("Updating '{}'...", plugin_name),
+            Self::Remove => format!("Removing '{}'...", plugin_name),
+        }
+    }
+
+    fn success_message(self, plugin_name: &str) -> String {
+        match self {
+            Self::Install => format!("Installed plugin '{}' — commands are live now", plugin_name),
+            Self::Update => format!("Updated plugin '{}' — launcher refreshed", plugin_name),
+            Self::Remove => format!("Removed plugin '{}' from the launcher", plugin_name),
+        }
+    }
+
+    fn failure_message(self, plugin_name: Option<&str>, error: &str) -> String {
+        match (self, plugin_name) {
+            (Self::Install, _) => format!("Failed to install plugin: {}", error),
+            (Self::Update, Some(plugin_name)) => {
+                format!("Failed to update '{}': {}", plugin_name, error)
+            }
+            (Self::Update, None) => format!("Failed to update plugin: {}", error),
+            (Self::Remove, Some(plugin_name)) => {
+                format!("Failed to remove '{}': {}", plugin_name, error)
+            }
+            (Self::Remove, None) => format!("Failed to remove plugin: {}", error),
+        }
+    }
+}
+
 impl ScriptListApp {
     fn kit_store_search_results(query: &str) -> Vec<KitStoreSearchResult> {
         let agent = ureq::Agent::config_builder()
@@ -258,23 +305,14 @@ impl ScriptListApp {
             .map_err(|error| format!("Failed to update kit registry: {}", error))
     }
 
-    fn plugin_mutation_message(action: &str, plugin_name: &str) -> String {
-        match action {
-            "install" => format!("Installed plugin '{}' — commands are live now", plugin_name),
-            "update" => format!("Updated plugin '{}' — launcher refreshed", plugin_name),
-            "remove" => format!("Removed plugin '{}' from the launcher", plugin_name),
-            _ => format!("Updated plugin '{}'", plugin_name),
-        }
-    }
-
     fn request_plugin_runtime_refresh(
         &mut self,
-        action: &str,
+        action: KitStorePluginMutation,
         plugin_name: &str,
         cx: &mut Context<Self>,
     ) {
         tracing::info!(
-            action = %action,
+            action = %action.action(),
             plugin_id = %plugin_name,
             "plugin_runtime_refresh_requested"
         );
@@ -366,7 +404,7 @@ impl ScriptListApp {
 
         self.toast_manager.push(
             components::toast::Toast::info(
-                format!("Installing '{}'...", selected.name),
+                KitStorePluginMutation::Install.progress_message(&selected.name),
                 &self.theme,
             )
             .duration_ms(Some(TOAST_INFO_MS)),
@@ -386,10 +424,14 @@ impl ScriptListApp {
                         "plugin_store_installed"
                     );
                     this.kit_store_refresh_installed_view(cx);
-                    this.request_plugin_runtime_refresh("install", &installed.name, cx);
+                    this.request_plugin_runtime_refresh(
+                        KitStorePluginMutation::Install,
+                        &installed.name,
+                        cx,
+                    );
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            Self::plugin_mutation_message("install", &installed.name),
+                            KitStorePluginMutation::Install.success_message(&installed.name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -403,7 +445,7 @@ impl ScriptListApp {
                     );
                     this.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to install plugin: {}", error),
+                            KitStorePluginMutation::Install.failure_message(None, &error),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -424,8 +466,11 @@ impl ScriptListApp {
         let kit_name = kit.name.clone();
 
         self.toast_manager.push(
-            components::toast::Toast::info(format!("Updating '{}'...", kit_name), &self.theme)
-                .duration_ms(Some(TOAST_INFO_MS)),
+            components::toast::Toast::info(
+                KitStorePluginMutation::Update.progress_message(&kit_name),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
         );
         cx.notify();
 
@@ -438,10 +483,10 @@ impl ScriptListApp {
                 Ok(()) => {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_updated");
                     this.kit_store_refresh_installed_view(cx);
-                    this.request_plugin_runtime_refresh("update", &kit_name, cx);
+                    this.request_plugin_runtime_refresh(KitStorePluginMutation::Update, &kit_name, cx);
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            Self::plugin_mutation_message("update", &kit_name),
+                            KitStorePluginMutation::Update.success_message(&kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -452,7 +497,8 @@ impl ScriptListApp {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_update_failed");
                     this.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to update '{}': {}", kit_name, error),
+                            KitStorePluginMutation::Update
+                                .failure_message(Some(&kit_name), &error),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -473,8 +519,11 @@ impl ScriptListApp {
         let kit_name = kit.name.clone();
 
         self.toast_manager.push(
-            components::toast::Toast::info(format!("Removing '{}'...", kit_name), &self.theme)
-                .duration_ms(Some(TOAST_INFO_MS)),
+            components::toast::Toast::info(
+                KitStorePluginMutation::Remove.progress_message(&kit_name),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
         );
         cx.notify();
 
@@ -487,10 +536,10 @@ impl ScriptListApp {
                 Ok(()) => {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_removed");
                     this.kit_store_refresh_installed_view(cx);
-                    this.request_plugin_runtime_refresh("remove", &kit_name, cx);
+                    this.request_plugin_runtime_refresh(KitStorePluginMutation::Remove, &kit_name, cx);
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            Self::plugin_mutation_message("remove", &kit_name),
+                            KitStorePluginMutation::Remove.success_message(&kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -501,7 +550,8 @@ impl ScriptListApp {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_remove_failed");
                     this.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to remove '{}': {}", kit_name, error),
+                            KitStorePluginMutation::Remove
+                                .failure_message(Some(&kit_name), &error),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
