@@ -2238,6 +2238,27 @@ fn terminal_utility_views_use_named_failure_states() {
 }
 
 #[test]
+fn search_result_execution_helpers_use_named_failure_states() {
+    let content = fs::read_to_string("src/app_execute/execution_helpers.rs")
+        .expect("Failed to read execution helper handler");
+
+    assert!(
+        content.contains("enum SearchResultExecutionAction")
+            && content.contains("LaunchApp")
+            && content.contains("FocusWindow"),
+        "search result execution helpers should name app-launch and window-focus action states"
+    );
+    assert!(
+        content.contains("SearchResultExecutionAction::LaunchApp")
+            && content.contains("SearchResultExecutionAction::FocusWindow")
+            && content.contains("execution_action.failure_message(")
+            && content.contains("format!(\"Failed to launch {target_name}: {error}\")")
+            && content.contains("format!(\"Failed to focus window: {error}\")"),
+        "search result launch and focus failures should derive visible copy from the named action state"
+    );
+}
+
+#[test]
 fn browser_tabs_builtin_uses_named_action_states() {
     let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read builtin execution handler");
