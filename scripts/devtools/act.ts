@@ -24,9 +24,9 @@ type Args = {
 type SubmitLifecycleState =
   | { state: "not-submit"; reason: string }
   | { state: "blocked-before-dispatch"; reason: string; selectedSemanticId?: string | null }
-  | { state: "dispatched"; actionId?: string | null }
-  | { state: "source-live"; actionId?: string | null }
-  | { state: "source-closed-parent-live"; actionId?: string | null; parentTarget?: JsonObject | null }
+  | { state: "dispatched"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null }
+  | { state: "source-live"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null }
+  | { state: "source-closed-parent-live"; actionId?: string | null; parentSubjectId?: string | null; parentSubjectText?: string | null; parentTarget?: JsonObject | null }
   | { state: "failed"; reason: string; actionId?: string | null; sourceAfter?: JsonObject | null; parentAfter?: JsonObject | null };
 
 type PostActionLifecycleState =
@@ -346,6 +346,13 @@ const nonDestructiveLauncherSubmitIds = new Set([
   "search-files",
 ]);
 
+const nonDestructiveActionsDialogSubmitPairs = [
+  { parentText: "Launchpad", actionId: "copy_deeplink" },
+  { parentText: "Emoji Picker", actionId: "copy_deeplink" },
+  { parentText: "Design Gallery", actionId: "copy_deeplink" },
+  { parentText: "Open Notes", actionId: "copy_deeplink" },
+];
+
 function receiptErrorCode(receipt: JsonObject): string {
   const direct = (receipt.error as JsonObject | undefined)?.code;
   if (typeof direct === "string") return direct;
@@ -399,7 +406,54 @@ function isNonDestructiveLauncherSubmit(actionId: string | null) {
   return actionId !== null && nonDestructiveLauncherSubmitIds.has(actionId);
 }
 
-function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObject): SubmitLifecycleState {
+function targetInfo(receipt: JsonObject) {
+  return (receipt.resolvedTarget as JsonObject | undefined) ?? (receipt.target as JsonObject | undefined) ?? null;
+}
+
+async function parentFocusForTarget(args: Args, targetReceipt: JsonObject) {
+  const resolved = targetInfo(targetReceipt);
+  const parentAutomationId = resolved?.parentAutomationId;
+  if (typeof parentAutomationId !== "string" || parentAutomationId.length === 0) {
+    return null;
+  }
+  return run([
+    "bun",
+    "scripts/devtools/focus.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--target-id",
+    parentAutomationId,
+    "--strict",
+    "--timeout",
+    String(args.timeoutMs),
+  ], "focus.parent-submit-preflight");
+}
+
+function selectedSubjectFromFocus(parentFocus: JsonObject | null) {
+  const selectedNode = parentFocus?.selectedNode as JsonObject | undefined;
+  const id = selectedNode?.semanticId;
+  const text = selectedNode?.text;
+  return {
+    id: typeof id === "string" ? id : null,
+    text: typeof text === "string" ? text : null,
+  };
+}
+
+function isNonDestructiveActionsDialogSubmit(actionId: string | null, parentSubjectText: string | null) {
+  if (!actionId || !parentSubjectText) return false;
+  return nonDestructiveActionsDialogSubmitPairs.some((pair) => {
+    return pair.actionId === actionId && pair.parentText === parentSubjectText;
+  });
+}
+
+function isNonDestructiveSubmit(preflight: SubmitLifecycleState) {
+  return preflight.state === "dispatched"
+    && (isNonDestructiveLauncherSubmit(preflight.actionId ?? null)
+      || isNonDestructiveActionsDialogSubmit(preflight.actionId ?? null, preflight.parentSubjectText ?? null));
+}
+
+async function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObject): Promise<SubmitLifecycleState> {
   if (!isSubmitLike(args)) {
     return { state: "not-submit", reason: "action is not submit-like" };
   }
@@ -414,7 +468,21 @@ function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObje
   if (!actionId) {
     return { state: "blocked-before-dispatch", reason: "submit requires selected ActionsDialog choice:* row", selectedSemanticId: selectedSemanticId as string | null };
   }
-  return { state: "dispatched", actionId };
+  const parentFocus = await parentFocusForTarget(args, targetReceipt);
+  const parentSubject = selectedSubjectFromFocus(parentFocus);
+  if (!isNonDestructiveActionsDialogSubmit(actionId, parentSubject.text)) {
+    return {
+      state: "blocked-before-dispatch",
+      reason: "submit requires named non-destructive ActionsDialog parent/action allowlist",
+      selectedSemanticId: selectedSemanticId as string | null,
+    };
+  }
+  return {
+    state: "dispatched",
+    actionId,
+    parentSubjectId: parentSubject.id,
+    parentSubjectText: parentSubject.text,
+  };
 }
 
 async function inspectParentAfterSubmit(args: Args, targetReceipt: JsonObject) {
@@ -447,12 +515,19 @@ function resolveSubmitLifecycleAfterAction(
 ): SubmitLifecycleState {
   if (preflight.state !== "dispatched") return preflight;
   if (sourceAfter.classification === "ok") {
-    return { state: "source-live", actionId: preflight.actionId };
+    return {
+      state: "source-live",
+      actionId: preflight.actionId,
+      parentSubjectId: preflight.parentSubjectId,
+      parentSubjectText: preflight.parentSubjectText,
+    };
   }
   if (parentAfter?.classification === "ok") {
     return {
       state: "source-closed-parent-live",
       actionId: preflight.actionId,
+      parentSubjectId: preflight.parentSubjectId,
+      parentSubjectText: preflight.parentSubjectText,
       parentTarget: parentAfter.resolvedTarget as JsonObject | undefined ?? null,
     };
   }
@@ -560,12 +635,10 @@ async function main() {
   const before = await focusReceipt(args, "focus.before");
   const beforeScroll = await scrollReceipt(args, "scroll.before");
   const startedAt = new Date().toISOString();
-  const preflight = submitPreflight(args, targetReceipt, before);
-  const preflightNonDestructiveSubmit =
-    preflight.state === "dispatched" && isNonDestructiveLauncherSubmit(preflight.actionId ?? null);
+  const preflight = await submitPreflight(args, targetReceipt, before);
   const guardWithPreflight = {
     ...guard,
-    destructive: guard.destructive && !preflightNonDestructiveSubmit,
+    destructive: guard.destructive && !isNonDestructiveSubmit(preflight),
     submitAttempted: isSubmitLike(args) && preflight.state !== "blocked-before-dispatch",
     submitPreflightSelectedSemanticId: (before.selectedSemanticId as string | undefined) ?? null,
     errors: preflight.state === "blocked-before-dispatch"

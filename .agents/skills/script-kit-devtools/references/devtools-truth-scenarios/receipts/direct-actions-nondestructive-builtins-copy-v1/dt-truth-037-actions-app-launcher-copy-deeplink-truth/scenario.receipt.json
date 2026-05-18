@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-037-actions-app-launcher-copy-deeplink-truth",
+  "oracleSession": "actions-slice-retry-plan",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "01-main.inspect.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--value",
+          "launchpad"
+        ],
+        "receiptRef": "02-main-filter-launchpad.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "03-main-elements-filtered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "select",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--semantic-id",
+          "choice:44:launchpad"
+        ],
+        "receiptRef": "04-main-select-parent.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "05-main-focus-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "open-actions",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "06-open-actions.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "07-actions-open.inspect.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "08-actions-text-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "09-actions-layout-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--value",
+          "kill"
+        ],
+        "receiptRef": "10-actions-filter-kill.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "11-actions-kill.inspect.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--value",
+          "copy"
+        ],
+        "receiptRef": "12-actions-filter-copy.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "13-actions-copy.inspect.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "14-actions-elements-copy.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "select",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--semantic-id",
+          "choice:0:copy_deeplink"
+        ],
+        "receiptRef": "15-actions-select-copy-deeplink.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "Enter",
+          "--allow-submit"
+        ],
+        "receiptRef": "16-actions-submit-copy-deeplink.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "17-main-focus-after-submit.json"
+      }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:copy_deeplink",
+    "visibleLabel": "Copy Deep Link",
+    "footerIntent": "actions-dialog-copy",
+    "actionId": "copy_deeplink",
+    "handlerId": "builtin-launchpad",
+    "sideEffectClass": "deeplink-copy",
+    "disabledReason": "allowed by named non-destructive ActionsDialog allowlist",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:44:launchpad",
+    "parentSubjectText": "Launchpad",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": true,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": true,
+    "submitAttempted": true,
+    "nativeEscalation": false,
+    "allowedClassification": "ok",
+    "submitLifecycleState": "source-closed-parent-live"
+  },
+  "userPath": [
+    "Filter main launcher for launchpad",
+    "Select the live Launchpad parent row",
+    "Open ActionsDialog from the selected parent",
+    "Filter stale destructive-looking kill text and verify Copy Deep Link is not implied",
+    "Recover with copy filter, select Copy Deep Link, submit with allow-submit"
+  ],
+  "primitiveReceipts": [
+    {
+      "command": "targets.inspect",
+      "receiptRef": "01-main.inspect.json"
+    },
+    {
+      "command": "act.set-input",
+      "receiptRef": "02-main-filter-launchpad.json"
+    },
+    {
+      "command": "elements.snapshot",
+      "receiptRef": "03-main-elements-filtered.json"
+    },
+    {
+      "command": "act.select",
+      "receiptRef": "04-main-select-parent.json"
+    },
+    {
+      "command": "focus.inspect",
+      "receiptRef": "05-main-focus-selected.json"
+    },
+    {
+      "command": "act.open-actions",
+      "receiptRef": "06-open-actions.json"
+    },
+    {
+      "command": "actions.inspect",
+      "receiptRef": "07-actions-open.inspect.json"
+    },
+    {
+      "command": "text.measure",
+      "receiptRef": "08-actions-text-open.json"
+    },
+    {
+      "command": "layout.measure",
+      "receiptRef": "09-actions-layout-open.json"
+    },
+    {
+      "command": "act.set-input",
+      "receiptRef": "10-actions-filter-kill.json"
+    },
+    {
+      "command": "actions.inspect",
+      "receiptRef": "11-actions-kill.inspect.json"
+    },
+    {
+      "command": "act.set-input",
+      "receiptRef": "12-actions-filter-copy.json"
+    },
+    {
+      "command": "actions.inspect",
+      "receiptRef": "13-actions-copy.inspect.json"
+    },
+    {
+      "command": "elements.snapshot",
+      "receiptRef": "14-actions-elements-copy.json"
+    },
+    {
+      "command": "act.select",
+      "receiptRef": "15-actions-select-copy-deeplink.json"
+    },
+    {
+      "command": "act.key",
+      "receiptRef": "16-actions-submit-copy-deeplink.json"
+    },
+    {
+      "command": "focus.inspect",
+      "receiptRef": "17-main-focus-after-submit.json"
+    }
+  ],
+  "truthChecks": [
+    {
+      "name": "launchpadParentSelectionStable",
+      "status": "pass"
+    },
+    {
+      "name": "launchpadCopyDeepLinkVisible",
+      "status": "pass"
+    },
+    {
+      "name": "launchpadRejectsKillStaleCopy",
+      "status": "pass"
+    },
+    {
+      "name": "launchpadCopySubmitAllowedByNamedPair",
+      "status": "pass"
+    },
+    {
+      "name": "launchpadCopySubmitKeepsParentInspectable",
+      "status": "pass"
+    }
+  ]
+}

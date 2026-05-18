@@ -24,6 +24,9 @@ const SYSTEM_PERMISSION_AGENT_MANIFEST: &str = include_str!(
 const BUILTIN_INTERNAL_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/slice.manifest.json"
 );
+const NONDESTRUCTIVE_BUILTINS_COPY_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-nondestructive-builtins-copy-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -99,6 +102,18 @@ const DT_035_BUILTIN_INTERNAL: &str = include_str!(
 const DT_036_BUILTIN_INTERNAL: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/dt-truth-036-actions-do-current-app-collapsed-alias-copy-truth/scenario.receipt.json"
 );
+const DT_037_NONDESTRUCTIVE_BUILTINS_COPY: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-nondestructive-builtins-copy-v1/dt-truth-037-actions-app-launcher-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_038_NONDESTRUCTIVE_BUILTINS_COPY: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-nondestructive-builtins-copy-v1/dt-truth-038-actions-emoji-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_039_NONDESTRUCTIVE_BUILTINS_COPY: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-nondestructive-builtins-copy-v1/dt-truth-039-actions-design-gallery-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_040_NONDESTRUCTIVE_BUILTINS_COPY: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-nondestructive-builtins-copy-v1/dt-truth-040-actions-notes-copy-deeplink-truth/scenario.receipt.json"
+);
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
     "scripts/devtools/targets.ts",
@@ -108,6 +123,7 @@ const ALLOWED_PRIMITIVES: &[&str] = &[
     "scripts/devtools/layout.ts",
     "scripts/devtools/act.ts",
     "scripts/devtools/actions.ts",
+    "scripts/devtools/keyboard.ts",
 ];
 
 const FORBIDDEN_EXECUTORS: &[&str] = &[
@@ -1676,6 +1692,268 @@ fn direct_devtools_non_destructive_launcher_submit_uses_named_allowlist() {
         assert!(
             source.contains(expected),
             "direct DevTools submit safety should expose named launcher allowlist state {expected}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_nondestructive_builtins_copy_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(NONDESTRUCTIVE_BUILTINS_COPY_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(
+        manifest["sliceId"],
+        "direct-actions-nondestructive-builtins-copy-v1"
+    );
+    assert_eq!(manifest["oracleSession"], "actions-slice-retry-plan");
+    assert_eq!(
+        manifest["scenarioLedgerOracleSession"],
+        "actions-slice-retry-plan"
+    );
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-037-actions-app-launcher-copy-deeplink-truth",
+            "dt-truth-038-actions-emoji-copy-deeplink-truth",
+            "dt-truth-039-actions-design-gallery-copy-deeplink-truth",
+            "dt-truth-040-actions-notes-copy-deeplink-truth",
+        ]
+    );
+}
+
+#[test]
+fn direct_actions_nondestructive_builtins_copy_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-037-actions-app-launcher-copy-deeplink-truth",
+            DT_037_NONDESTRUCTIVE_BUILTINS_COPY,
+        ),
+        (
+            "dt-truth-038-actions-emoji-copy-deeplink-truth",
+            DT_038_NONDESTRUCTIVE_BUILTINS_COPY,
+        ),
+        (
+            "dt-truth-039-actions-design-gallery-copy-deeplink-truth",
+            DT_039_NONDESTRUCTIVE_BUILTINS_COPY,
+        ),
+        (
+            "dt-truth-040-actions-notes-copy-deeplink-truth",
+            DT_040_NONDESTRUCTIVE_BUILTINS_COPY,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["oracleSession"], "actions-slice-retry-plan");
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+        assert_eq!(receipt["safety"]["submitAllowed"], true);
+        assert_eq!(receipt["safety"]["submitAttempted"], true);
+        assert_eq!(receipt["safety"]["nativeEscalation"], false);
+        assert_eq!(receipt["safety"]["allowedClassification"], "ok");
+        assert_eq!(
+            receipt["safety"]["submitLifecycleState"],
+            "source-closed-parent-live"
+        );
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+
+        let primitive_commands = receipt["primitiveReceipts"]
+            .as_array()
+            .expect("primitiveReceipts must be array")
+            .iter()
+            .filter_map(|entry| entry["command"].as_str())
+            .collect::<Vec<_>>();
+        for expected in [
+            "targets.inspect",
+            "act.set-input",
+            "act.select",
+            "act.open-actions",
+            "actions.inspect",
+            "act.key",
+        ] {
+            assert!(
+                primitive_commands.contains(&expected),
+                "{expected_id} missing primitive command coverage {expected}; got {primitive_commands:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_nondestructive_builtins_copy_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_037_NONDESTRUCTIVE_BUILTINS_COPY,
+            vec![
+                "launchpadParentSelectionStable",
+                "launchpadCopyDeepLinkVisible",
+                "launchpadRejectsKillStaleCopy",
+                "launchpadCopySubmitAllowedByNamedPair",
+                "launchpadCopySubmitKeepsParentInspectable",
+            ],
+        ),
+        (
+            DT_038_NONDESTRUCTIVE_BUILTINS_COPY,
+            vec![
+                "emojiParentSelectionStable",
+                "emojiCopyDeepLinkVisible",
+                "emojiRejectsPasteStaleCopy",
+                "emojiKeyboardPrimitiveDoesNotChangeActionTruth",
+                "emojiCopySubmitAllowedByNamedPair",
+            ],
+        ),
+        (
+            DT_039_NONDESTRUCTIVE_BUILTINS_COPY,
+            vec![
+                "designGalleryParentSelectionStable",
+                "designGalleryCopyDeepLinkVisible",
+                "designGalleryRejectsInstallStaleCopy",
+                "designGalleryKeyboardPrimitiveDoesNotChangeActionTruth",
+                "designGalleryCopySubmitAllowedByNamedPair",
+            ],
+        ),
+        (
+            DT_040_NONDESTRUCTIVE_BUILTINS_COPY,
+            vec![
+                "openNotesParentSelectionStable",
+                "openNotesCopyDeepLinkVisible",
+                "openNotesRejectsSendStaleCopy",
+                "openNotesKeyboardPrimitiveDoesNotChangeActionTruth",
+                "openNotesCopySubmitAllowedByNamedPair",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_nondestructive_builtins_copy_records_exact_parent_action_pairs() {
+    let expected = [
+        (
+            DT_037_NONDESTRUCTIVE_BUILTINS_COPY,
+            "Launchpad",
+            "choice:44:launchpad",
+            "builtin-launchpad",
+        ),
+        (
+            DT_038_NONDESTRUCTIVE_BUILTINS_COPY,
+            "Emoji Picker",
+            "choice:35:emoji-picker",
+            "builtin-emoji-picker",
+        ),
+        (
+            DT_039_NONDESTRUCTIVE_BUILTINS_COPY,
+            "Design Gallery",
+            "choice:31:design-gallery",
+            "builtin-design-gallery",
+        ),
+        (
+            DT_040_NONDESTRUCTIVE_BUILTINS_COPY,
+            "Open Notes",
+            "choice:2:open-notes",
+            "builtin-open-notes",
+        ),
+    ];
+
+    for (raw, parent_text, parent_id, handler_id) in expected {
+        let receipt = parse(raw);
+        assert_eq!(receipt["truthModel"]["visibleLabel"], "Copy Deep Link");
+        assert_eq!(receipt["truthModel"]["actionId"], "copy_deeplink");
+        assert_eq!(receipt["truthModel"]["parentSubjectText"], parent_text);
+        assert_eq!(receipt["truthModel"]["parentSubjectId"], parent_id);
+        assert_eq!(receipt["truthModel"]["handlerId"], handler_id);
+        assert_eq!(receipt["truthModel"]["sideEffectClass"], "deeplink-copy");
+        assert_eq!(receipt["safety"]["systemPasteboardChanged"], true);
+    }
+}
+
+#[test]
+fn direct_devtools_actions_dialog_copy_submit_uses_parent_action_allowlist() {
+    let source = include_str!("../scripts/devtools/act.ts");
+    for expected in [
+        "nonDestructiveActionsDialogSubmitPairs",
+        "parentFocusForTarget",
+        "selectedSubjectFromFocus",
+        "isNonDestructiveActionsDialogSubmit",
+        "submit requires named non-destructive ActionsDialog parent/action allowlist",
+        "{ parentText: \"Launchpad\", actionId: \"copy_deeplink\" }",
+        "{ parentText: \"Emoji Picker\", actionId: \"copy_deeplink\" }",
+        "{ parentText: \"Design Gallery\", actionId: \"copy_deeplink\" }",
+        "{ parentText: \"Open Notes\", actionId: \"copy_deeplink\" }",
+        "pair.actionId === actionId && pair.parentText === parentSubjectText",
+    ] {
+        assert!(
+            source.contains(expected),
+            "direct DevTools ActionsDialog submit safety should expose exact parent/action allowlist state {expected}"
         );
     }
 }

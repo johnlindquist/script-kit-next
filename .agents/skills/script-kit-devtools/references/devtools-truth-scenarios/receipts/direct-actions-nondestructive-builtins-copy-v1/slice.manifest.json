@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "direct-actions-nondestructive-builtins-copy-v1",
+  "oracleSession": "actions-slice-retry-plan",
+  "scenarioLedgerOracleSession": "actions-slice-retry-plan",
+  "executor": "direct-devtools-primitives",
+  "hasRunner": false,
+  "forbiddenExecutorsUsed": false,
+  "scenarioIds": [
+    "dt-truth-037-actions-app-launcher-copy-deeplink-truth",
+    "dt-truth-038-actions-emoji-copy-deeplink-truth",
+    "dt-truth-039-actions-design-gallery-copy-deeplink-truth",
+    "dt-truth-040-actions-notes-copy-deeplink-truth"
+  ],
+  "summary": {
+    "pass": 4,
+    "fail": 0,
+    "blockedByMissingPrimitive": 0,
+    "blockedByUnsafeOperation": 0
+  },
+  "notes": [
+    "The current source removed the old App Launcher built-in row; dt037 records the live equivalent Launchpad parent while preserving the Oracle scenario id.",
+    "ActionsDialog Copy Deep Link submit is allowed only for exact parent/action pairs in the direct DevTools submit preflight."
+  ]
+}
