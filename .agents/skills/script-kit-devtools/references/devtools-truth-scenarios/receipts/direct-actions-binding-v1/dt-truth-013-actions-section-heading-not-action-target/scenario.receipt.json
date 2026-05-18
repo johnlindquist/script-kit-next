@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-013-actions-section-heading-not-action-target",
+  "oracleSession": "devtools-truth-execution",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "825cf4e34259fa3cb4e1aa296f6ef42040f14c8a",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T00:09:58Z",
+  "result": "blocked-by-missing-primitive",
+  "executor": "direct-devtools-primitives",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {"argv": ["bun", "scripts/devtools/targets.ts", "list", "--session", "dt-truth-013", "--start", "--show"], "receiptRef": "01-targets-list.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--session", "dt-truth-013", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "02-target-main-before.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "open-actions", "--session", "dt-truth-013", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "03-act-open-actions.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "04-actions-open.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "set-input", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--text", "o"], "receiptRef": "05-act-filter-actions-o.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "06-actions-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/elements.ts", "snapshot", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "07-elements-actions-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "08-focus-actions-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowdown"], "receiptRef": "09-act-arrowdown-1.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowdown"], "receiptRef": "10-act-arrowdown-2.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowup"], "receiptRef": "11-act-arrowup-1.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "12-actions-after-heading-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/elements.ts", "snapshot", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "13-elements-after-heading-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "14-focus-after-heading-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/layout.ts", "measure", "--session", "dt-truth-013", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "15-layout-actions-after-heading-navigation.json"}
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open actions and filter action rows",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "actionsDialog target became ambiguous after open-actions timeout",
+      "receiptRef": "05-act-filter-actions-o.json"
+    },
+    {
+      "step": 2,
+      "intent": "navigate across section heading/action rows",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "arrowdown, arrowdown, arrowup",
+      "visibleResult": "keyboard navigation receipts blocked by target ambiguity",
+      "receiptRef": "12-actions-after-heading-navigation.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {"step": 1, "tool": "script-kit-devtools.targets", "command": "targets.list", "targetSurface": "all", "receiptRef": "01-targets-list.json", "classification": "ok"},
+    {"step": 2, "tool": "script-kit-devtools.targets", "command": "targets.inspect", "targetSurface": "main", "receiptRef": "02-target-main-before.json", "classification": "ok"},
+    {"step": 3, "tool": "script-kit-devtools.act", "command": "act.open-actions", "targetSurface": "main", "receiptRef": "03-act-open-actions.json", "classification": "blocked-by-timeout"},
+    {"step": 4, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "04-actions-open.json", "classification": "blocked-by-missing-primitive"},
+    {"step": 5, "tool": "script-kit-devtools.act", "command": "act.set-input", "targetSurface": "actionsDialog", "receiptRef": "05-act-filter-actions-o.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 6, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "06-actions-after-filter.json", "classification": "blocked-by-missing-primitive"},
+    {"step": 7, "tool": "script-kit-devtools.elements", "command": "elements.snapshot", "targetSurface": "actionsDialog", "receiptRef": "07-elements-actions-after-filter.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 8, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "actionsDialog", "receiptRef": "08-focus-actions-after-filter.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 9, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "09-act-arrowdown-1.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 10, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "10-act-arrowdown-2.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 11, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "11-act-arrowup-1.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 12, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "12-actions-after-heading-navigation.json", "classification": "blocked-by-missing-primitive"},
+    {"step": 13, "tool": "script-kit-devtools.elements", "command": "elements.snapshot", "targetSurface": "actionsDialog", "receiptRef": "13-elements-after-heading-navigation.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 14, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "actionsDialog", "receiptRef": "14-focus-after-heading-navigation.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 15, "tool": "script-kit-devtools.layout", "command": "layout.measure", "targetSurface": "actionsDialog", "receiptRef": "15-layout-actions-after-heading-navigation.json", "classification": "blocked-by-target-ambiguity"}
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "unknown",
+    "selectedSemanticId": null,
+    "visibleLabel": "unknown",
+    "footerIntent": null,
+    "actionId": null,
+    "handlerId": null,
+    "sideEffectClass": "unknown",
+    "disabledReason": "blocked: actionsDialog target ambiguity prevents section/header executable proof",
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": null,
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "sectionRowsAreNonExecutable",
+      "expected": "section/header rows are present but never selected as actions",
+      "actual": "actions sections unavailable; sections.count=0 and boundsAvailable=false in fail-closed receipt",
+      "status": "blocked"
+    },
+    {
+      "name": "selectedSemanticIdExcludesHeadings",
+      "expected": "selected semantic id is a real action row, not section:*",
+      "actual": "elements snapshot blocked by target ambiguity",
+      "status": "blocked"
+    },
+    {
+      "name": "keyboardNavigationSkipsHeadings",
+      "expected": "arrow navigation selects only action rows",
+      "actual": "act.key receipts blocked by target ambiguity",
+      "status": "blocked"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false
+  }
+}

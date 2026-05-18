@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-015-actions-dialog-parent-focus-return-truth",
+  "oracleSession": "devtools-truth-execution",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "825cf4e34259fa3cb4e1aa296f6ef42040f14c8a",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T00:09:58Z",
+  "result": "blocked-by-missing-primitive",
+  "executor": "direct-devtools-primitives",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {"argv": ["bun", "scripts/devtools/targets.ts", "list", "--session", "dt-truth-015", "--start", "--show"], "receiptRef": "01-targets-list.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "02-target-main-before.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "03-focus-main-before.json"},
+      {"argv": ["bun", "scripts/devtools/text.ts", "measure", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "04-text-main-before.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "open-actions", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "05-act-open-actions.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-015", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "06-actions-open.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-015", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "07-focus-actions-open.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-015", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "escape"], "receiptRef": "08-act-escape-close-actions.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "09-target-main-after-escape.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "10-focus-main-after-escape.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "set-input", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList", "--text", "dt-truth-focus-return-probe"], "receiptRef": "11-act-parent-type-after-escape.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "12-focus-main-after-parent-type.json"},
+      {"argv": ["bun", "scripts/devtools/text.ts", "measure", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "13-text-main-after-parent-type.json"},
+      {"argv": ["bun", "scripts/devtools/elements.ts", "snapshot", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "14-elements-main-after-parent-type.json"},
+      {"argv": ["bun", "scripts/devtools/layout.ts", "measure", "--session", "dt-truth-015", "--main", "--strict", "--surface", "ScriptList"], "receiptRef": "15-layout-main-after-parent-type.json"}
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open actions from parent ScriptList",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "main",
+      "inputSummary": "target-scoped openActions",
+      "visibleResult": "open-actions blocked by timeout and actionsDialog inspect fail-closed",
+      "receiptRef": "05-act-open-actions.json"
+    },
+    {
+      "step": 2,
+      "intent": "close actions with Escape",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "Escape",
+      "visibleResult": "Escape target blocked by actionsDialog ambiguity",
+      "receiptRef": "08-act-escape-close-actions.json"
+    },
+    {
+      "step": 3,
+      "intent": "continue typing in parent filter",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "main",
+      "inputSummary": "dt-truth-focus-return-probe",
+      "visibleResult": "parent filter accepted text; focus receipt shows input:filter focused and LauncherFilter ownership",
+      "receiptRef": "11-act-parent-type-after-escape.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {"step": 1, "tool": "script-kit-devtools.targets", "command": "targets.list", "targetSurface": "all", "receiptRef": "01-targets-list.json", "classification": "ok"},
+    {"step": 2, "tool": "script-kit-devtools.targets", "command": "targets.inspect", "targetSurface": "main", "receiptRef": "02-target-main-before.json", "classification": "ok"},
+    {"step": 3, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "main", "receiptRef": "03-focus-main-before.json", "classification": "ok"},
+    {"step": 4, "tool": "script-kit-devtools.text", "command": "text.measure", "targetSurface": "main", "receiptRef": "04-text-main-before.json", "classification": "ok"},
+    {"step": 5, "tool": "script-kit-devtools.act", "command": "act.open-actions", "targetSurface": "main", "receiptRef": "05-act-open-actions.json", "classification": "blocked-by-timeout"},
+    {"step": 6, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "06-actions-open.json", "classification": "blocked-by-missing-primitive"},
+    {"step": 7, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "actionsDialog", "receiptRef": "07-focus-actions-open.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 8, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "08-act-escape-close-actions.json", "classification": "blocked-by-target-ambiguity"},
+    {"step": 9, "tool": "script-kit-devtools.targets", "command": "targets.inspect", "targetSurface": "main", "receiptRef": "09-target-main-after-escape.json", "classification": "ok"},
+    {"step": 10, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "main", "receiptRef": "10-focus-main-after-escape.json", "classification": "ok"},
+    {"step": 11, "tool": "script-kit-devtools.act", "command": "act.set-input", "targetSurface": "main", "receiptRef": "11-act-parent-type-after-escape.json", "classification": "ok"},
+    {"step": 12, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "main", "receiptRef": "12-focus-main-after-parent-type.json", "classification": "ok"},
+    {"step": 13, "tool": "script-kit-devtools.text", "command": "text.measure", "targetSurface": "main", "receiptRef": "13-text-main-after-parent-type.json", "classification": "ok"},
+    {"step": 14, "tool": "script-kit-devtools.elements", "command": "elements.snapshot", "targetSurface": "main", "receiptRef": "14-elements-main-after-parent-type.json", "classification": "ok"},
+    {"step": 15, "tool": "script-kit-devtools.layout", "command": "layout.measure", "targetSurface": "main", "receiptRef": "15-layout-main-after-parent-type.json", "classification": "ok"}
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "LauncherFilter",
+    "selectedSemanticId": "choice:0:cmux-dev-zed-open-te",
+    "visibleLabel": "cmux DEV zed-open-test Commands",
+    "footerIntent": "run:Do in Current App; ai:Agent Chat; actions:Actions",
+    "actionId": null,
+    "handlerId": null,
+    "sideEffectClass": "unknown",
+    "disabledReason": "blocked: actionsDialog focus and Escape receipts unavailable due target ambiguity",
+    "targetSurface": "main/actionsDialog",
+    "parentSubjectId": "choice:0:cmux-dev-zed-open-te",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "focusOwnerReturnsToParent",
+      "expected": "after Escape, focus target is main ScriptList",
+      "actual": "main focus after parent type is input:filter with LauncherFilter ownership, but Escape receipt itself is blocked by actionsDialog target ambiguity",
+      "status": "blocked"
+    },
+    {
+      "name": "parentInputAcceptsTyping",
+      "expected": "parent input accepts dt-truth-focus-return-probe after Escape",
+      "actual": "focus receipt after parent type shows keyboardOwner.inputValue=dt-truth-focus-return-probe and focusedSemanticId=input:filter",
+      "status": "pass"
+    },
+    {
+      "name": "footerIntentUsesParentRoute",
+      "expected": "active footer belongs to script_list route after return",
+      "actual": "activeFooter expectedSurface=requestedSurface=activeSurface script_list after parent type",
+      "status": "pass"
+    },
+    {
+      "name": "selectedRowFollowsParentFilter",
+      "expected": "selected row is current for parent filter state",
+      "actual": "selected semantic id is present, but filter result coherence needs route/input generation primitive",
+      "status": "blocked"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false
+  }
+}

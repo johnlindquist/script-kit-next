@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "blocked-by-target-ambiguity",
+  "session": "dt-truth-011",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "",
+    "stableTargetId": "",
+    "targetKind": "unknown",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": false,
+    "ambiguity": [
+      {
+        "index": 0,
+        "automationId": "main",
+        "windowKind": "main",
+        "title": "Script Kit",
+        "visible": false,
+        "focused": false,
+        "bounds": {
+          "x": 134,
+          "y": 169,
+          "width": 480,
+          "height": 440
+        },
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "parentAutomationId": null,
+        "parentKind": null
+      }
+    ]
+  },
+  "promptType": "",
+  "timestamp": "",
+  "componentCount": 0,
+  "window": {
+    "rect": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 0,
+    "clientHeight": 0,
+    "contentWidth": 0,
+    "contentHeight": 0,
+    "scrollWidth": 0,
+    "scrollHeight": 0,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "windowRect": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0
+  },
+  "regions": [],
+  "nodes": [],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 0,
+    "measuredContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "missingPrimitives": [
+    "layoutComponents",
+    "strictTargetIdentity"
+  ],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1779062912316-90cd2d",
+    "windowWidth": 0,
+    "windowHeight": 0,
+    "promptType": "",
+    "components": [],
+    "timestamp": ""
+  }
+}
