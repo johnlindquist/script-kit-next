@@ -321,14 +321,11 @@ fn render_soft_compact_meta_badge(
     is_selected: bool,
     colors: crate::components::inline_dropdown::InlineDropdownColors,
 ) -> AnyElement {
-    let theme = crate::theme::get_cached_theme();
-    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-
     div()
         .px(px(6.0))
         .py(px(2.0))
         .rounded(px(4.0))
-        .bg(gpui::rgba(chrome.badge_bg_rgba))
+        .bg(colors.foreground.opacity(GHOST))
         .child(render_soft_compact_meta_text(
             &meta,
             hits,

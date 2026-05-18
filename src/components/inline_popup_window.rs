@@ -149,6 +149,10 @@ pub fn inline_popup_window_options(
         focus: false,
         show: true,
         kind: WindowKind::PopUp,
+        // Popups size from row content via `set_inline_popup_window_bounds`; manual
+        // edge resize would fight the left-drawer / dense-picker height contract.
+        is_movable: false,
+        is_resizable: false,
         display_id,
         ..Default::default()
     }
@@ -372,6 +376,15 @@ mod tests {
     #[test]
     fn footer_anchor_keeps_popup_above_hint_strip() {
         assert!(footer_anchored_inline_popup_top(400.0, 80.0) >= 0.0);
+    }
+
+    #[test]
+    fn inline_popup_window_options_disable_manual_resize() {
+        let source = include_str!("inline_popup_window.rs");
+        assert!(
+            source.contains("is_movable: false") && source.contains("is_resizable: false"),
+            "inline popup windows must be sized only by content-driven bounds updates"
+        );
     }
 
     #[test]
