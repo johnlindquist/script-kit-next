@@ -50,6 +50,7 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
     pub(crate) acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
     pub(crate) ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
+    pub(crate) ai_vault_snapshot_generation: u64,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     pub(crate) browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
 }
@@ -64,6 +65,7 @@ pub(crate) struct RootPassiveFrame {
     pub(crate) ai_vault_hits: Vec<crate::ai_vault::AiVaultHit>,
     pub(crate) browser_tab_hits: Vec<crate::browser_tabs::RootBrowserTabSearchHit>,
     pub(crate) browser_history_hits: Vec<crate::browser_history::RootBrowserHistorySearchHit>,
+    pub(crate) ai_vault_snapshot_generation: u64,
     pub(crate) browser_tabs_snapshot_generation: u64,
     pub(crate) browser_history_snapshot_generation: u64,
 }

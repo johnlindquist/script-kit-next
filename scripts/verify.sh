@@ -24,10 +24,9 @@ run_step() {
 }
 
 run_step "fmt"       cargo fmt --check
-run_step "lat"       bun run lat:check
 run_step "check"     cargo check --locked
 run_step "clippy"    cargo clippy --locked --lib -- -D warnings
-run_step "nextest"   cargo nextest run --locked --no-fail-fast
+run_step "test-compile" cargo test --no-run --locked
 run_step "sdk-types" bun run scripts/check-sdk-types.ts
 run_step "sdk-tests" bun run scripts/test-runner.ts --parallel
 

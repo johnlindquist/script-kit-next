@@ -81,7 +81,7 @@ mod tests {
     fn capture_payload(target: &str, body: &str) -> CaptureInvocation {
         CaptureInvocation {
             target: target.to_string(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: body.to_string(),
             tags: vec![],
             priority: None,

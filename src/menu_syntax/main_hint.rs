@@ -2487,6 +2487,9 @@ fn artifact_kind_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::AcpHistory => "acp-history",
         ArtifactKind::ClipboardHistory => "clipboard-history",
         ArtifactKind::DictationHistory => "dictation-history",
+        ArtifactKind::AiVault => "ai-vault",
+        ArtifactKind::BrowserTab => "browser-tab",
+        ArtifactKind::BrowserHistory => "browser-history",
         ArtifactKind::Fallback => "fallback",
         ArtifactKind::Issue => "issue",
     }

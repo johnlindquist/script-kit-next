@@ -18,6 +18,8 @@ fn root_unified_ai_vault_contract() {
     let defaults = read_source("src/config/defaults.rs");
     let ai_vault = read_source("src/ai_vault.rs");
     let grouping = read_source("src/scripts/grouping.rs");
+    let app_state = read_source("src/main_sections/app_state.rs");
+    let filtering_cache = read_source("src/app_impl/filtering_cache.rs");
     let search_mode = read_source("src/scripts/grouping/search_mode.rs");
     let scripts_tests = read_source("src/scripts/tests/chunk_12.rs");
     let actions = read_source("src/app_impl/root_unified_result_actions.rs");
@@ -58,7 +60,16 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("FAST_CODEX_ROW_LIMIT"));
     assert!(ai_vault.contains("SYNC_CONTENT_SCAN_LIMIT"));
     assert!(ai_vault.contains("append_bounded_content_matches"));
+    let search_local_vault_body = ai_vault
+        .split("fn search_local_vault(")
+        .nth(1)
+        .and_then(|tail| tail.split("fn local_vault_index(").next())
+        .expect("search_local_vault body should be present");
+    assert!(!search_local_vault_body.contains("append_bounded_content_matches"));
+    assert!(!search_local_vault_body.contains("hydrate_rollout_search_terms"));
     assert!(ai_vault.contains("search_haystack"));
+    assert!(ai_vault.contains("root_ai_vault_snapshot_status"));
+    assert!(ai_vault.contains("ai_vault_cache_generation"));
     assert!(ai_vault.contains("fn read_claude_vault_hits("));
     assert!(ai_vault.contains("fn read_codex_vault_hits("));
     assert!(ai_vault.contains("fn read_codex_vault_hits_via_state_db("));
@@ -80,7 +91,7 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("\"includeContent\": false"));
     assert!(ai_vault.contains("\"type\": \"aiVault.resume.v1\""));
     assert!(ai_vault.contains("#[serde(default)]"));
-    assert!(ai_vault.contains("impl Default for AiVaultMatchedField"));
+    assert!(ai_vault.contains("#[default]"));
     assert!(ai_vault.contains("ai_vault_cache_get"));
     assert!(ai_vault.contains("output_with_timeout"));
     assert!(ai_vault.contains("cmux_failure_message"));
@@ -96,6 +107,9 @@ fn root_unified_ai_vault_contract() {
     assert!(grouping.contains("includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault)"));
     assert!(grouping.contains("SearchResult::AiVault"));
     assert!(grouping.contains("RootUnifiedSourceFilter::AiVault"));
+    assert!(app_state.contains("ai_vault_snapshot_generation"));
+    assert!(filtering_cache.contains("root_ai_vault_snapshot_status"));
+    assert!(filtering_cache.contains("ai-vault-gen="));
 
     for id in [
         "root_ai_vault_resume_preferred_terminal",

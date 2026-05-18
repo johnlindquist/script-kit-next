@@ -8,11 +8,12 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::Output;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const FAST_CODEX_ROW_LIMIT: usize = 500;
-const WARM_CODEX_ROW_LIMIT: usize = 10_000;
+const WARM_CODEX_ROW_LIMIT: usize = 2_000;
 const SYNC_CONTENT_SCAN_LIMIT: usize = 48;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +41,7 @@ impl Default for RootAiVaultSectionOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum AiVaultMatchedField {
     Title,
@@ -48,13 +49,8 @@ pub(crate) enum AiVaultMatchedField {
     Model,
     Workspace,
     Provider,
+    #[default]
     Recent,
-}
-
-impl Default for AiVaultMatchedField {
-    fn default() -> Self {
-        Self::Recent
-    }
 }
 
 impl AiVaultMatchedField {
@@ -134,6 +130,17 @@ pub(crate) struct AiVaultResumeReceipt {
     pub terminal_routing: String,
     pub terminal_target_id: Option<String>,
     pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AiVaultSnapshotStatus {
+    pub generation: u64,
+}
+
+pub(crate) fn root_ai_vault_snapshot_status() -> AiVaultSnapshotStatus {
+    AiVaultSnapshotStatus {
+        generation: ai_vault_cache_generation().load(Ordering::Relaxed),
+    }
 }
 
 pub(crate) fn root_ai_vault_query_is_eligible(
@@ -438,17 +445,16 @@ fn search_local_vault(query: &str, options: RootAiVaultSectionOptions) -> Result
     let normalized_query = query.trim().to_ascii_lowercase();
     let mut hits = local_vault_index(options.clone())?;
     if !normalized_query.is_empty() {
-        hits = hits
-            .into_iter()
-            .filter_map(|mut hit| {
-                apply_local_vault_query_match(&mut hit, &normalized_query, options.search_content)
-                    .then_some(hit)
-            })
-            .collect();
-        if options.search_content && hits.len() < options.max_results {
-            let remaining = options.max_results.saturating_sub(hits.len());
-            append_bounded_content_matches(&mut hits, &normalized_query, &options, remaining);
+        let mut matched_hits = Vec::with_capacity(options.max_results);
+        for mut hit in hits {
+            if apply_local_vault_query_match(&mut hit, &normalized_query, options.search_content) {
+                matched_hits.push(hit);
+                if matched_hits.len() >= options.max_results {
+                    break;
+                }
+            }
         }
+        hits = matched_hits;
     } else {
         for hit in &mut hits {
             hit.matched_field = AiVaultMatchedField::Recent;
@@ -885,6 +891,7 @@ fn hydrate_rollout_search_terms(hit: &mut AiVaultHit) {
     }
     if !indexed.is_empty() {
         hit.search_terms.push(indexed);
+        hit.search_haystack.clear();
     }
 }
 
@@ -977,7 +984,7 @@ fn collect_text_fragments(value: &serde_json::Value, fragments: &mut Vec<String>
 }
 
 fn normalize_title(raw: &str) -> Option<String> {
-    let mut value = raw.replace('\r', " ").replace('\n', " ").replace('\t', " ");
+    let mut value = raw.replace(['\r', '\n', '\t'], " ");
     for tag in [
         "system-reminder",
         "command-name",
@@ -1370,8 +1377,10 @@ fn provider_enabled(options: &RootAiVaultSectionOptions, provider: &str) -> bool
         .any(|candidate| candidate.cmux_id() == provider)
 }
 
-fn ai_vault_cache() -> &'static Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>> {
-    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<AiVaultHit>)>>> = OnceLock::new();
+type AiVaultCache = HashMap<String, (Instant, Vec<AiVaultHit>)>;
+
+fn ai_vault_cache() -> &'static Mutex<AiVaultCache> {
+    static CACHE: OnceLock<Mutex<AiVaultCache>> = OnceLock::new();
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1385,7 +1394,13 @@ fn ai_vault_cache_get(key: &str, ttl_ms: u64) -> Option<Vec<AiVaultHit>> {
 fn ai_vault_cache_put(key: String, hits: Vec<AiVaultHit>) {
     if let Ok(mut cache) = ai_vault_cache().lock() {
         cache.insert(key, (Instant::now(), hits));
+        ai_vault_cache_generation().fetch_add(1, Ordering::Relaxed);
     }
+}
+
+fn ai_vault_cache_generation() -> &'static AtomicU64 {
+    static GENERATION: OnceLock<AtomicU64> = OnceLock::new();
+    GENERATION.get_or_init(|| AtomicU64::new(1))
 }
 
 fn terminal_routing_value(routing: AiVaultTerminalRouting) -> &'static str {

@@ -4646,7 +4646,7 @@ mod tests {
             true,
             true,
             true,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
         // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (36) - HEADER_HEIGHT (24) - footer (32)
@@ -4661,7 +4661,7 @@ mod tests {
             true,
             true,
             true,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
         assert_eq!(viewport_height, 120.0);

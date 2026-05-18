@@ -248,6 +248,7 @@ fn test_unified_search_ties_scripts_first() {
         SearchResult::Skill(_) => panic!("Expected Script first"),
         SearchResult::Fallback(_) => panic!("Expected Script first"),
         SearchResult::ScriptIssue(_) => panic!("Expected Script first"),
+        _ => panic!("Expected Script first"),
     }
 }
 
@@ -433,4 +434,3 @@ fn test_mixed_content_search() {
     assert!(has_script);
     assert!(has_scriptlet);
 }
-

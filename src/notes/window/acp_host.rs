@@ -793,7 +793,7 @@ fn dispatch_notes_acp_action(
                 let view = acp_entity.read(cx);
                 view.thread().and_then(|thread| {
                     crate::ai::acp::export::build_acp_conversation_markdown_from_thread(
-                        &thread.read(cx),
+                        thread.read(cx),
                     )
                 })
             };

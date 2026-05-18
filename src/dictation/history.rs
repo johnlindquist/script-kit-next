@@ -80,6 +80,17 @@ pub struct RootDictationHistorySectionOptions {
     pub scan_limit: usize,
 }
 
+impl Default for RootDictationHistorySectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_results: 0,
+            min_query_chars: usize::MAX,
+            scan_limit: 0,
+        }
+    }
+}
+
 fn history_path() -> std::path::PathBuf {
     crate::setup::get_kit_path().join("dictation-history.jsonl")
 }
