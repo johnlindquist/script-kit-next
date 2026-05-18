@@ -1,5 +1,6 @@
 use super::types::{
-    ContextPickerItemKind, ContextPickerState, ContextPickerTrigger, SlashCommandPayload,
+    ContextPickerItemKind, ContextPickerState, ContextPickerTrigger, PortalKind,
+    SlashCommandPayload,
 };
 use super::{
     build_picker_items, build_slash_picker_items, build_slash_picker_items_with_payloads,
@@ -160,7 +161,10 @@ fn context_picker_builtins_grouped_before_files() {
     let mut seen_non_system = false;
     for item in &items {
         match &item.kind {
-            ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::Portal(_) => {
+            ContextPickerItemKind::BuiltIn(_)
+            | ContextPickerItemKind::Portal(_)
+            | ContextPickerItemKind::PortalPrefix(_)
+            | ContextPickerItemKind::PortalResult(_) => {
                 assert!(
                     !seen_non_system,
                     "Built-in/portal items must appear before file/folder items"
@@ -179,7 +183,7 @@ fn context_picker_empty_query_includes_all_portals() {
     let portal_labels: Vec<String> = items
         .iter()
         .filter_map(|item| match item.kind {
-            ContextPickerItemKind::Portal(_) => Some(item.label.to_string()),
+            ContextPickerItemKind::PortalPrefix(_) => Some(item.label.to_string()),
             _ => None,
         })
         .collect();
@@ -214,6 +218,102 @@ fn context_picker_browser_history_query_matches_portal() {
 }
 
 #[test]
+fn browser_history_colon_query_keeps_inline_fallback_in_picker() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "browser-history:");
+    assert!(
+        items.iter().any(|item| {
+            item.id.as_ref() == "portal-full:browser-history"
+                && matches!(
+                    item.kind,
+                    ContextPickerItemKind::Portal(PortalKind::BrowserHistory)
+                )
+        }),
+        "@browser-history: should keep an explicit full-browser fallback inline"
+    );
+}
+
+#[test]
+fn portal_prefix_rows_insert_colon_instead_of_opening_full_portal() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "browser");
+    let row = items
+        .iter()
+        .find(|item| item.label.as_ref() == "@browser-history")
+        .expect("browser history prefix should match browser query");
+    match &row.kind {
+        ContextPickerItemKind::PortalPrefix(payload) => {
+            assert_eq!(payload.portal_kind, PortalKind::BrowserHistory);
+            assert_eq!(payload.prefix, "browser-history");
+        }
+        other => panic!("expected PortalPrefix, got {other:?}"),
+    }
+}
+
+#[test]
+fn slash_query_never_returns_portal_prefix_or_result_rows() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "browser-history:");
+    assert!(
+        items.iter().all(|item| !matches!(
+            item.kind,
+            ContextPickerItemKind::PortalPrefix(_) | ContextPickerItemKind::PortalResult(_)
+        )),
+        "slash picker must stay command-only"
+    );
+}
+
+#[test]
+fn browser_history_entries_can_be_collected_as_inline_portal_results() {
+    let mut items = Vec::new();
+    super::collect_browser_history_inline_items_from_entries(
+        "rust",
+        vec![crate::browser_history::BrowserHistoryEntry {
+            browser_name: "Safari".to_string(),
+            browser_bundle_id: "com.apple.Safari".to_string(),
+            title: "Rust docs".to_string(),
+            url: "https://doc.rust-lang.org/".to_string(),
+            host: "doc.rust-lang.org".to_string(),
+            last_visited_at_ms: 1,
+            visit_count: 2,
+            profile: "Default".to_string(),
+        }],
+        &mut items,
+    );
+
+    assert!(
+        items
+            .iter()
+            .any(|item| matches!(item.kind, ContextPickerItemKind::PortalResult(_))),
+        "matching browser history entries should render inline result rows"
+    );
+}
+
+#[test]
+fn clipboard_entries_can_be_collected_as_inline_portal_results() {
+    let mut items = Vec::new();
+    super::collect_clipboard_inline_items_from_entries(
+        "token",
+        vec![crate::clipboard_history::ClipboardEntryMeta {
+            id: "clip-1".to_string(),
+            content_type: crate::clipboard_history::ContentType::Text,
+            timestamp: 1,
+            pinned: false,
+            text_preview: "token from clipboard".to_string(),
+            image_width: None,
+            image_height: None,
+            byte_size: 20,
+            ocr_text: None,
+        }],
+        &mut items,
+    );
+
+    assert!(
+        items
+            .iter()
+            .any(|item| matches!(item.kind, ContextPickerItemKind::PortalResult(_))),
+        "matching clipboard entries should render inline result rows"
+    );
+}
+
+#[test]
 fn context_picker_clipboard_query_keeps_builtin_ahead_of_portal() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "clipboard");
 
@@ -223,7 +323,10 @@ fn context_picker_clipboard_query_keeps_builtin_ahead_of_portal() {
         .expect("clipboard built-in should be present");
     let portal_index = items
         .iter()
-        .position(|item| item.label.as_ref() == "@clipboard")
+        .position(|item| {
+            item.label.as_ref() == "@clipboard"
+                && matches!(item.kind, ContextPickerItemKind::PortalPrefix(_))
+        })
         .expect("clipboard portal should be present");
 
     assert!(

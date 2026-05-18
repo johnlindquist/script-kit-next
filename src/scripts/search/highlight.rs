@@ -14,7 +14,7 @@ struct SearchHighlightMatchCtx {
 impl SearchHighlightMatchCtx {
     fn new(query: &str) -> Self {
         Self {
-            query_lower: query.to_lowercase(),
+            query_lower: query.trim().to_lowercase(),
             unicode_ctx: None,
         }
     }
@@ -94,7 +94,7 @@ impl UnicodeHighlightCtx {
 /// # Returns
 /// MatchIndices containing the character positions that match the query
 pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> MatchIndices {
-    if query.is_empty() {
+    if query.trim().is_empty() {
         return MatchIndices::default();
     }
 
@@ -402,5 +402,42 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         }
         // Script issues row is synthetic and not matched against the query
         SearchResult::ScriptIssue(_) => MatchIndices::default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_match_indices_for_result;
+    use crate::fallbacks::builtins::{BuiltinFallback, FallbackAction, FallbackCondition};
+    use crate::fallbacks::FallbackItem;
+    use crate::scripts::{FallbackMatch, SearchResult};
+
+    #[test]
+    fn fallback_label_highlight_ignores_trailing_query_space() {
+        let result = SearchResult::Fallback(
+            FallbackMatch::new(
+                FallbackItem::Builtin(BuiltinFallback::new(
+                    "search-files",
+                    "Search Files",
+                    "Search for files matching this query",
+                    "Search",
+                    FallbackAction::SearchFiles,
+                    FallbackCondition::Always,
+                    10,
+                )),
+                0,
+            )
+            .with_display_overrides(
+                "Search Files for \"what is codex\"",
+                "Open full File Search",
+            ),
+        );
+
+        let indices = compute_match_indices_for_result(&result, "what is codex ");
+
+        assert!(
+            !indices.name_indices.is_empty(),
+            "trailing spaces in the input should not clear the fallback row text highlight"
+        );
     }
 }
