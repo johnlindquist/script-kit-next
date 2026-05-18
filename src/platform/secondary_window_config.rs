@@ -124,6 +124,14 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     let _: () = msg_send![window, setMovable: false];
     let _: () = msg_send![window, setMovableByWindowBackground: false];
 
+    // Popups are content-sized by GPUI (`set_inline_popup_window_bounds` / actions
+    // resize helpers). Strip AppKit's resizable style mask so edge drags cannot
+    // override the computed height.
+    const NS_WINDOW_STYLE_MASK_RESIZABLE: u64 = 1 << 3;
+    let style_mask: u64 = msg_send![window, styleMask];
+    let non_resizable_mask = style_mask & !NS_WINDOW_STYLE_MASK_RESIZABLE;
+    let _: () = msg_send![window, setStyleMask: non_resizable_mask];
+
     // Regression guard:
     // Detached child popups can still take mouse focus even when GPUI opens them
     // with `focus: false`. If AppKit promotes the child to the key panel on click,
@@ -308,6 +316,16 @@ mod secondary_window_config_tests {
         assert!(
             source.contains("setBecomesKeyOnlyIfNeeded: true"),
             "actions-style child popups must keep becomesKeyOnlyIfNeeded enabled so clicking them does not visually demote the parent window"
+        );
+    }
+
+    #[test]
+    fn actions_popup_strips_appkit_resizable_style_mask() {
+        let source = include_str!("secondary_window_config.rs");
+        assert!(
+            source.contains("NS_WINDOW_STYLE_MASK_RESIZABLE")
+                && source.contains("setStyleMask: non_resizable_mask"),
+            "content-sized child popups must not keep AppKit edge-resize affordances"
         );
     }
 }

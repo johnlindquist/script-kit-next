@@ -408,20 +408,18 @@ impl PromptFooter {
         let hover_bg = rgba(footer_button_hover_rgba(self.colors));
         let active_bg = rgba(footer_button_active_rgba(self.colors));
 
-        // GPUI cursor styles don't inherit to children, so child elements
-        // must also set cursor_pointer when the button is interactive.
-        let mut label_element = div()
+        // Children must stay non-interactive: any hit-testable hover/cursor
+        // on a nested element re-computes the parent's hover state when the
+        // pointer crosses child boundaries, causing flicker. Cursor and hover
+        // live on the parent only (matches Zed's ButtonLike pattern).
+        let label_element = div()
             .text_size(px(button_font_size))
             .text_color(self.colors.accent.to_rgb())
             .child(label);
-        let mut shortcut_element = div()
+        let shortcut_element = div()
             .text_size(px(button_font_size))
             .text_color(self.colors.text_muted.to_rgb())
             .child(shortcut);
-        if is_clickable {
-            label_element = label_element.cursor_pointer();
-            shortcut_element = shortcut_element.cursor_pointer();
-        }
 
         let mut button = div()
             .id(ElementId::Name(id.into()))
@@ -432,7 +430,6 @@ impl PromptFooter {
             .px(px(8.))
             .py(px(6.))
             .rounded(px(4.))
-            .cursor_default()
             .child(label_element)
             .child(shortcut_element);
 
@@ -448,11 +445,14 @@ impl PromptFooter {
                 .active(move |s| s.bg(active_bg));
         } else if disabled {
             button = button.opacity(0.5).cursor_default();
+        } else {
+            button = button.cursor_default();
         }
 
         if is_clickable {
             if let Some(callback) = on_click {
                 button = button.on_click(move |event, window, cx| {
+                    cx.stop_propagation();
                     callback(event, window, cx);
                 });
             }

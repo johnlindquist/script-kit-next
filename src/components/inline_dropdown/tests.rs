@@ -44,6 +44,24 @@ fn soft_compact_picker_row_is_tighter_than_launcher_rows() {
 }
 
 #[test]
+fn soft_compact_meta_badge_uses_menu_tint_instead_of_dark_badge_surface() {
+    let row_source = include_str!("row.rs");
+    let badge_start = row_source
+        .find("fn render_soft_compact_meta_badge")
+        .expect("soft compact meta badge renderer should exist");
+    let badge_source = &row_source[badge_start..];
+
+    assert!(
+        badge_source.contains(".bg(colors.foreground.opacity(GHOST))"),
+        "soft compact metadata badges should use the same low-opacity foreground tint as launcher menu badges"
+    );
+    assert!(
+        !badge_source.contains("chrome.badge_bg_rgba"),
+        "soft compact metadata badges must not use the darker global badge surface"
+    );
+}
+
+#[test]
 fn inline_dropdown_visible_range_small_list() {
     // List smaller than max_visible — show everything.
     assert_eq!(inline_dropdown_visible_range(0, 3, 8), 0..3);
