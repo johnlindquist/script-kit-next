@@ -5,7 +5,7 @@ This POC demonstrates how to achieve macOS vibrancy (frosted glass blur) effect 
 ## Run
 
 ```bash
-cargo run --bin vibrancy-poc
+cargo run --bin vibrancy-poc --features vibrancy-poc
 ```
 
 ## Key Concepts

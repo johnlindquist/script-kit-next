@@ -34,11 +34,19 @@ required-features = ["storybook"]
 [[bin]]
 name = "vibrancy-poc"
 path = "src/bin/vibrancy-poc.rs"
+test = false
+required-features = ["vibrancy-poc"]
 
 [[bin]]
 name = "menu-syntax-doctor"
 path = "src/bin/menu_syntax_doctor.rs"
 test = false
+required-features = ["menu-syntax-doctor"]
+
+[[test]]
+name = "menu_syntax_doctor_cli"
+path = "tests/menu_syntax_doctor_cli.rs"
+required-features = ["menu-syntax-doctor"]
 
 [dependencies]
 gpui = { path = "vendor/gpui" }
@@ -214,6 +222,11 @@ perf = []
 # Storybook design explorer (disabled by default to speed up dev builds)
 # Run with: cargo run --bin storybook --features storybook
 storybook = []
+# Utility binaries (disabled by default to speed up dev/CI builds)
+# Run with: cargo run --bin vibrancy-poc --features vibrancy-poc
+vibrancy-poc = []
+# Run with: cargo run --bin menu-syntax-doctor --features menu-syntax-doctor
+menu-syntax-doctor = []
 
 [dev-dependencies]
 tree-sitter-highlight = "0.25.4"

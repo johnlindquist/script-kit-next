@@ -18,8 +18,7 @@
 //!   2 — argument or input parse failure (the input was unreadable, not
 //!        merely invalid by spec — argv error stays distinct from spec error)
 //!
-//! Receipt: `cargo test --test menu_syntax_doctor_cli` covers the four
-//! exit-code branches (good/bad-fixture × json/human × stdin/file).
+//! Receipt: `cargo test --features menu-syntax-doctor --test menu_syntax_doctor_cli`
 
 use std::fs;
 use std::io::{self, Read};

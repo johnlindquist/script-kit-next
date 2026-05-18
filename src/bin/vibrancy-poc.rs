@@ -1,6 +1,6 @@
 //! Raycast Light Theme Vibrancy POC
 //!
-//! Run with: cargo run --bin vibrancy-poc
+//! Run with: cargo run --bin vibrancy-poc --features vibrancy-poc
 //!
 //! Demonstrates macOS vibrancy (frosted glass blur) effect using GPUI.
 //! The key is combining:

@@ -2,6 +2,8 @@
 //!
 //! Exercises the four exit-code branches (good vs bad fixture, json vs
 //! human output, stdin vs --path) plus the argv-error branch (exit 2).
+//!
+//! Receipt: `cargo test --features menu-syntax-doctor --test menu_syntax_doctor_cli`
 
 use std::io::Write;
 use std::process::{Command, Stdio};
