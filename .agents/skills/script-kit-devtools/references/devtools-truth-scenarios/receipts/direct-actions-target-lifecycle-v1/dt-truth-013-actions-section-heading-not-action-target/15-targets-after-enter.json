@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "dt-truth-013-target-lifecycle-1779065154",
+  "classification": "blocked-by-timeout",
+  "targetCount": 0,
+  "targets": [],
+  "errors": [
+    {
+      "status": "error",
+      "label": "listAutomationWindows",
+      "exitCode": 1,
+      "stdout": "{\"schemaVersion\":1,\"status\":\"error\",\"error\":{\"code\":\"session_dead\",\"message\":\"Session 'dt-truth-013-target-lifecycle-1779065154' app process (pid 54527) is not running.\"}}",
+      "stderr": ""
+    }
+  ]
+}

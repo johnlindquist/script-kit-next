@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-013-actions-section-heading-not-action-target",
+  "oracleSession": "actions-target-session-fix",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "24f677f0587ed772500494fbdbb5f3349cb71445",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T00:47:00Z",
+  "result": "fail",
+  "executor": "direct-devtools-primitives",
+  "session": "dt-truth-013-target-lifecycle-1779065154",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--start", "--open", "--keep-open", "--timeout", "5000"], "receiptRef": "01-actions-open.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "list", "--session", "dt-truth-013-target-lifecycle-1779065154", "--timeout", "5000"], "receiptRef": "02-targets-list-open.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "set-input", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--text", "o", "--timeout", "5000"], "receiptRef": "03-act-filter-actions-o.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "04-actions-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/elements.ts", "snapshot", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "05-elements-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "06-focus-after-filter.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowdown", "--timeout", "5000"], "receiptRef": "07-act-arrowdown-1.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowdown", "--timeout", "5000"], "receiptRef": "08-act-arrowdown-2.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "arrowup", "--timeout", "5000"], "receiptRef": "09-act-arrowup-1.json"},
+      {"argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "10-actions-after-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/elements.ts", "snapshot", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "11-elements-after-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/focus.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "12-focus-after-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/layout.ts", "measure", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--timeout", "5000"], "receiptRef": "13-layout-after-navigation.json"},
+      {"argv": ["bun", "scripts/devtools/act.ts", "key", "--session", "dt-truth-013-target-lifecycle-1779065154", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "enter", "--allow-submit", "--timeout", "5000"], "receiptRef": "14-act-enter-toggle-info.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "list", "--session", "dt-truth-013-target-lifecycle-1779065154", "--timeout", "5000"], "receiptRef": "15-targets-after-enter.json"},
+      {"argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--session", "dt-truth-013-target-lifecycle-1779065154", "--main", "--strict", "--surface", "ScriptList", "--timeout", "5000"], "receiptRef": "16-target-main-after-enter.json"}
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open the actions dialog through the actions inspector and filter for actions containing o",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "actions dialog target resolved to automationId actions-dialog and retained six section headers plus ten action rows",
+      "receiptRef": "04-actions-after-filter.json"
+    },
+    {
+      "step": 2,
+      "intent": "navigate down, down, up across mixed action and section rows",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "arrowdown, arrowdown, arrowup",
+      "visibleResult": "selectedSemanticId was choice:2:toggle_info; no section:* row was selected",
+      "receiptRef": "11-elements-after-navigation.json"
+    },
+    {
+      "step": 3,
+      "intent": "submit only after proving the selected row is a real non-section action",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "enter on choice:2:toggle_info with --allow-submit",
+      "visibleResult": "preflight passed, but the session was dead before the submit command could inspect the target",
+      "receiptRef": "14-act-enter-toggle-info.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {"step": 1, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "01-actions-open.json", "classification": "ok"},
+    {"step": 2, "tool": "script-kit-devtools.targets", "command": "targets.list", "targetSurface": "all", "receiptRef": "02-targets-list-open.json", "classification": "ok"},
+    {"step": 3, "tool": "script-kit-devtools.act", "command": "act.set-input", "targetSurface": "actionsDialog", "receiptRef": "03-act-filter-actions-o.json", "classification": "ok"},
+    {"step": 4, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "04-actions-after-filter.json", "classification": "ok"},
+    {"step": 5, "tool": "script-kit-devtools.elements", "command": "elements.snapshot", "targetSurface": "actionsDialog", "receiptRef": "05-elements-after-filter.json", "classification": "ok"},
+    {"step": 6, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "actionsDialog", "receiptRef": "06-focus-after-filter.json", "classification": "ok"},
+    {"step": 7, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "07-act-arrowdown-1.json", "classification": "ok"},
+    {"step": 8, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "08-act-arrowdown-2.json", "classification": "ok"},
+    {"step": 9, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "09-act-arrowup-1.json", "classification": "ok"},
+    {"step": 10, "tool": "script-kit-devtools.actions", "command": "actions.inspect", "targetSurface": "actionsDialog", "receiptRef": "10-actions-after-navigation.json", "classification": "ok"},
+    {"step": 11, "tool": "script-kit-devtools.elements", "command": "elements.snapshot", "targetSurface": "actionsDialog", "receiptRef": "11-elements-after-navigation.json", "classification": "ok"},
+    {"step": 12, "tool": "script-kit-devtools.focus", "command": "focus.inspect", "targetSurface": "actionsDialog", "receiptRef": "12-focus-after-navigation.json", "classification": "ok"},
+    {"step": 13, "tool": "script-kit-devtools.layout", "command": "layout.measure", "targetSurface": "actionsDialog", "receiptRef": "13-layout-after-navigation.json", "classification": "ok"},
+    {"step": 14, "tool": "script-kit-devtools.act", "command": "act.key", "targetSurface": "actionsDialog", "receiptRef": "14-act-enter-toggle-info.json", "classification": "blocked-by-timeout"},
+    {"step": 15, "tool": "script-kit-devtools.targets", "command": "targets.list", "targetSurface": "all", "receiptRef": "15-targets-after-enter.json", "classification": "blocked-by-timeout"},
+    {"step": 16, "tool": "script-kit-devtools.targets", "command": "targets.inspect", "targetSurface": "main", "receiptRef": "16-target-main-after-enter.json", "classification": "blocked-by-timeout"}
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:2:toggle_info",
+    "visibleLabel": "Show Info",
+    "footerIntent": null,
+    "actionId": "toggle_info",
+    "handlerId": "app_actions.handle_action.scripts.toggle_info",
+    "sideEffectClass": "safe-ui-toggle",
+    "disabledReason": "session dead before submit verification; heading navigation itself resolved green",
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": 1
+  },
+  "truthChecks": [
+    {
+      "name": "actionsDialogTargetIsExplicit",
+      "expected": "actions inspector opens and inspects target kind actionsDialog with strict ActionsDialog surface",
+      "actual": "01-actions-open.json requested kind actionsDialog and resolved automationId actions-dialog targetKind ActionsDialog",
+      "status": "pass"
+    },
+    {
+      "name": "sectionRowsAreNonExecutable",
+      "expected": "section/header rows have no actionId and are not selected",
+      "actual": "10-actions-after-navigation.json reported six section rows, all with actionId null and selected false",
+      "status": "pass"
+    },
+    {
+      "name": "selectedSemanticIdExcludesHeadings",
+      "expected": "keyboard navigation selects a choice:* action row, not a section:* header row",
+      "actual": "11-elements-after-navigation.json selectedSemanticId was choice:2:toggle_info and sectionsSelected was empty",
+      "status": "pass"
+    },
+    {
+      "name": "keyboardNavigationSkipsHeadings",
+      "expected": "arrow navigation across grouped rows preserves an action selection even when section headers are visible between rows",
+      "actual": "07, 08, and 09 act.key receipts were ok; 11-elements-after-navigation selected the Show Info action",
+      "status": "pass"
+    },
+    {
+      "name": "safeSubmitRequiresLiveTarget",
+      "expected": "after proving choice:2:toggle_info, Enter with --allow-submit can inspect the live actionsDialog target before dispatch",
+      "actual": "14-act-enter-toggle-info.json blocked because targets.inspect returned session_dead before simulateKey was sent",
+      "status": "fail"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": "choice:2:toggle_info"
+  }
+}
