@@ -11,7 +11,7 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
         .expect("agent chat entry should exist");
     assert_eq!(agent_chat.name, "Agent Chat");
     assert_eq!(agent_chat.default_action_text(), "Open Agent Chat");
-    assert_eq!(agent_chat.footer_action_text(), "Agent Chat");
+    assert_eq!(agent_chat.footer_action_text(), "Agent");
     assert!(
         builtins_source
             .contains("AiCommandType::SendScreenAreaToAi => \"Select Area for Agent Chat\"")
@@ -71,6 +71,34 @@ fn agent_chat_destination_builtins_name_agent_chat_not_generic_ai() {
         .find(|entry| entry.id == "builtin/dictation-to-ai")
         .expect("dictation-to-ai entry should exist");
     assert_eq!(dictation.footer_action_text(), "Dictate Chat");
+}
+
+#[test]
+fn contextual_dictation_builtin_names_the_frontmost_app_destination() {
+    let entries = get_builtin_entries(&BuiltInConfig::default());
+    let builtins_source = super::read_source("src/builtins/mod.rs");
+    let dictation = entries
+        .iter()
+        .find(|entry| entry.id == "builtin/dictation")
+        .expect("dictation entry should exist");
+
+    assert_eq!(dictation.name, "Dictate to Current App");
+    assert_eq!(
+        dictation.default_action_text(),
+        "Start Dictation to Current App"
+    );
+    assert!(
+        builtins_source.contains("fn current_dictation_entry_name()")
+            && builtins_source.contains("crate::frontmost_app_tracker::get_last_real_app()")
+            && builtins_source.contains("format!(\"Dictate to {name}\")"),
+        "contextual dictation entry must use the tracked frontmost app name when available"
+    );
+    let old_name = ["Dictate", "Here"].join(" ");
+    let old_action = ["Start Dictation", "Here"].join(" ");
+    assert!(
+        !builtins_source.contains(&old_name) && !builtins_source.contains(&old_action),
+        "contextual dictation should not use the old 'Here' wording"
+    );
 }
 
 #[test]

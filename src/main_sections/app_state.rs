@@ -424,6 +424,14 @@ pub(crate) struct MainMenuSelectionSnapshot {
     selected_key: Option<String>,
 }
 
+impl MainMenuSelectionSnapshot {
+    fn is_root_file_handoff_selection(&self) -> bool {
+        self.selected_key
+            .as_deref()
+            .is_some_and(|key| key.starts_with("fallback/root-file-search-handoff/"))
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn root_file_source_chip_page_key_for(
         raw_filter_text: &str,
@@ -492,6 +500,35 @@ impl ScriptListApp {
         let Some(grouped_index) = self
             .main_menu_result_caches
             .grouped_index_for_stable_selection_key(&selected_key)
+        else {
+            return false;
+        };
+
+        if self.selected_index == grouped_index {
+            return false;
+        }
+
+        self.selected_index = grouped_index;
+        self.hovered_index = None;
+        self.last_scrolled_index = None;
+        true
+    }
+
+    pub(crate) fn restore_root_file_handoff_selection_from_snapshot(
+        &mut self,
+        snapshot: &MainMenuSelectionSnapshot,
+    ) -> bool {
+        if !snapshot.is_root_file_handoff_selection() {
+            return false;
+        }
+        let Some(selected_key) = snapshot.selected_key.as_deref() else {
+            return false;
+        };
+
+        self.get_grouped_results_cached();
+        let Some(grouped_index) = self
+            .main_menu_result_caches
+            .grouped_index_for_stable_selection_key(selected_key)
         else {
             return false;
         };

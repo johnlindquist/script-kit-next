@@ -73,8 +73,8 @@ fn startup_schedules_acp_connection_prewarm() {
         "./dev.sh must opt out of hidden ACP connection prewarm so dev launch cannot trigger codex-acp keychain prompts"
     );
     assert!(
-        dev_sh.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
-        "./dev.sh must disable Codex ACP entirely so dev launch cannot select the keychain-backed adapter"
+        !dev_sh.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
+        "./dev.sh must not hide Codex from the visible Agent Chat catalog; disabling hidden ACP prewarm is the prompt-safe dev guard"
     );
 }
 
@@ -106,15 +106,20 @@ fn acp_hot_prewarm_helper_creates_hidden_hosted_view() {
 }
 
 #[test]
-fn dev_mode_disables_codex_acp_catalog_and_implicit_default() {
+fn codex_acp_kill_switch_is_manual_not_dev_default() {
     let config = fs::read_to_string("src/ai/acp/config.rs").expect("read ACP config source");
+    let dev_sh = fs::read_to_string("dev.sh").expect("read dev.sh");
 
     assert!(
         config.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
-        "ACP config must read the dev Codex ACP kill switch"
+        "ACP config must keep a manual Codex ACP kill switch"
     );
     assert!(
-        config.contains("return codex_acp_default_probe_state_from_parts(false, false, false);"),
+        !dev_sh.contains("SCRIPT_KIT_DISABLE_CODEX_ACP"),
+        "dev.sh must not set the manual Codex ACP kill switch by default"
+    );
+    assert!(
+        config.contains("should_be_implicit_codex_default: false"),
         "disabled Codex ACP must not remain the implicit default"
     );
     assert!(

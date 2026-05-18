@@ -1295,7 +1295,7 @@ impl NotesBuiltinAction {
 
     fn opening_message(self) -> &'static str {
         match self {
-            Self::Open => "Opening Notes window (preserving launcher context)",
+            Self::Open => "Opening Notes window",
         }
     }
 
@@ -4821,7 +4821,7 @@ impl ScriptListApp {
             target: "script_kit::keyboard",
             category = "BUILTIN",
             trace_id = %dctx.trace_id,
-            event = "notes_handoff_preserving_launcher_context",
+            event = "notes_handoff_submit_reset",
             filter_text_len = self.filter_text.len(),
             show_actions_popup = self.show_actions_popup,
             "{}",
@@ -4840,11 +4840,7 @@ impl ScriptListApp {
         }
 
         self.pending_focus = None;
-        script_kit_gpui::set_main_window_visible(false);
-        platform::defer_hide_main_window(cx);
         if let Err(error) = notes::open_notes_window_without_launcher_restore(cx) {
-            script_kit_gpui::set_main_window_visible(true);
-            platform::show_main_window_without_activation();
             let message = action.failure_message(&error);
             self.show_error_toast(message.clone(), cx);
             Self::builtin_error(
@@ -4854,6 +4850,7 @@ impl ScriptListApp {
                 action.failure_detail(),
             )
         } else {
+            self.close_and_reset_window(cx);
             Self::builtin_success(dctx, action.success_detail())
         }
     }
@@ -5542,8 +5539,6 @@ impl ScriptListApp {
         }
 
         self.pending_focus = None;
-        script_kit_gpui::set_main_window_visible(false);
-        platform::defer_hide_main_window(cx);
 
         let result = if action.opens_notes_window() {
             notes::open_notes_window_without_launcher_restore(cx)
@@ -5552,8 +5547,6 @@ impl ScriptListApp {
         };
 
         if let Err(e) = result {
-            script_kit_gpui::set_main_window_visible(true);
-            platform::show_main_window_without_activation();
             let message = action.failure_message(&e);
             self.show_error_toast(message.clone(), cx);
             Self::builtin_error(
@@ -5563,6 +5556,7 @@ impl ScriptListApp {
                 action.failure_detail(),
             )
         } else {
+            self.close_and_reset_window(cx);
             Self::builtin_success(dctx, action.success_detail())
         }
     }
@@ -6848,6 +6842,14 @@ impl ScriptListApp {
 
         match crate::dictation::toggle_dictation(dictation_target) {
             Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                if is_start_edge
+                    && matches!(
+                        dictation_target,
+                        crate::dictation::DictationTarget::ExternalApp
+                    )
+                {
+                    self.close_and_reset_window(cx);
+                }
                 self.handle_dictation_started(action, dictation_target, cx);
             }
             Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
@@ -6994,7 +6996,8 @@ impl ScriptListApp {
     fn start_dictation_overlay_session(&mut self, cx: &mut Context<Self>) {
         let _ = crate::dictation::begin_overlay_session();
         let app_entity = cx.entity().downgrade();
-        crate::dictation::set_overlay_abort_callback(|cx| {
+        let abort_app_entity = app_entity.clone();
+        crate::dictation::set_overlay_abort_callback(move |cx| {
             if let Err(error) = crate::dictation::abort_dictation() {
                 tracing::error!(
                     category = "DICTATION",
@@ -7003,6 +7006,14 @@ impl ScriptListApp {
                 );
             }
             let _ = crate::dictation::close_dictation_overlay(cx);
+            if let Some(app) = abort_app_entity.upgrade() {
+                app.update(cx, |this, cx| {
+                    this.dispatch_window_event(
+                        crate::window_orchestrator::WindowEvent::AbortDictation,
+                        cx,
+                    );
+                });
+            }
         });
         crate::dictation::set_overlay_submit_callback(move |cx| {
             if let Some(app) = app_entity.upgrade() {
@@ -7337,8 +7348,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    let Some(target_bundle_id) =
-                        crate::frontmost_app_tracker::get_last_real_app_bundle_id()
+                    let Some(target_app) = crate::frontmost_app_tracker::get_last_real_app()
                     else {
                         tracing::error!(
                             category = "DICTATION",
@@ -7363,9 +7373,14 @@ impl ScriptListApp {
                         );
                         return;
                     };
+                    let target_pid = target_app.pid;
+                    let target_bundle_id = target_app.bundle_id;
+                    let target_app_name = target_app.name;
                     tracing::info!(
                         category = "DICTATION",
                         target_bundle_id = %target_bundle_id,
+                        target_pid,
+                        target_app_name = %target_app_name,
                         transcript_len = transcript.len(),
                         "Preparing frontmost-app dictation paste"
                     );
@@ -7376,7 +7391,14 @@ impl ScriptListApp {
                         // keyboard focus there before the CGEvent paste.
                         let yield_focus_result = match this.update(
                             cx,
-                            |this, cx| this.yield_focus_for_dictation_paste(&target_bundle_id, cx),
+                            |this, cx| {
+                                this.yield_focus_for_dictation_paste(
+                                    target_pid,
+                                    &target_bundle_id,
+                                    &target_app_name,
+                                    cx,
+                                )
+                            },
                         ) {
                             Ok(result) => result,
                             Err(error) => Err(anyhow::anyhow!(
@@ -8001,7 +8023,7 @@ impl ScriptListApp {
             ),
             DictationModelStatus::Available => (
                 "Dictation model ready".to_string(),
-                "Start dictation from the launcher or configured hotkey; no default is assumed."
+                "Start dictation from the launcher or the configured hotkey (default: ⌘⇧;)."
                     .to_string(),
                 vec![Choice {
                     name: "Done".to_string(),
@@ -8157,20 +8179,31 @@ impl ScriptListApp {
     /// - the frontmost-app tracker already has a previously tracked external target.
     fn open_dictation_setup_if_microphone_not_ready(&mut self, cx: &mut Context<Self>) -> bool {
         let permission = crate::dictation::microphone_permission_status();
-        if matches!(
-            permission,
+        match permission {
             crate::dictation::DictationMicrophonePermissionStatus::Granted
-                | crate::dictation::DictationMicrophonePermissionStatus::Unknown
-        ) {
-            return false;
+            | crate::dictation::DictationMicrophonePermissionStatus::Unknown => return false,
+            crate::dictation::DictationMicrophonePermissionStatus::NotDetermined => {
+                self.show_hud(
+                    "Allow microphone access to start dictation".to_string(),
+                    Some(HUD_LONG_MS),
+                    cx,
+                );
+                let permission = crate::dictation::request_microphone_permission();
+                if matches!(
+                    permission,
+                    crate::dictation::DictationMicrophonePermissionStatus::Granted
+                        | crate::dictation::DictationMicrophonePermissionStatus::Unknown
+                ) {
+                    return false;
+                }
+            }
+            crate::dictation::DictationMicrophonePermissionStatus::Denied => {}
         }
 
-        self.show_hud(
-            "Dictation needs microphone permission".to_string(),
-            Some(HUD_SHORT_MS),
+        self.show_error_toast(
+            "Microphone access is denied. Enable Script Kit in System Settings → Privacy & Security → Microphone",
             cx,
         );
-        self.open_dictation_model_prompt(cx);
         true
     }
 
@@ -8188,6 +8221,10 @@ impl ScriptListApp {
         crate::frontmost_app_tracker::get_last_real_app_bundle_id()
             .context("no previously tracked frontmost app is available for dictation paste")?;
         Ok(())
+    }
+
+    fn has_dictation_frontmost_target() -> bool {
+        crate::frontmost_app_tracker::get_last_real_app_bundle_id().is_some()
     }
 
     /// Validate that a specific delivery target is reachable before
@@ -8263,19 +8300,22 @@ impl ScriptListApp {
     /// Determine the delivery target for a new dictation session based on
     /// which Script Kit surface is currently active.
     ///
-    /// Priority: notes editor > AI chat composer > launcher main filter >
-    /// active prompt > external app.
+    /// Priority: notes editor > AI chat composer > active prompt >
+    /// tracked frontmost app > launcher main filter fallback > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
+        let has_frontmost_app_target = Self::has_dictation_frontmost_target();
         let target = if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             crate::dictation::DictationTarget::TabAiHarness
         } else if notes::is_notes_window_open() {
             crate::dictation::DictationTarget::NotesEditor
         } else if ai::is_ai_window_open() {
             crate::dictation::DictationTarget::AiChatComposer
-        } else if self.can_accept_dictation_into_main_filter() {
-            crate::dictation::DictationTarget::MainWindowFilter
         } else if self.can_accept_dictation_into_prompt() {
             crate::dictation::DictationTarget::MainWindowPrompt
+        } else if has_frontmost_app_target {
+            crate::dictation::DictationTarget::ExternalApp
+        } else if self.can_accept_dictation_into_main_filter() {
+            crate::dictation::DictationTarget::MainWindowFilter
         } else {
             crate::dictation::DictationTarget::ExternalApp
         };
@@ -8285,6 +8325,7 @@ impl ScriptListApp {
             current_view = ?std::mem::discriminant(&self.current_view),
             notes_open = notes::is_notes_window_open(),
             ai_open = ai::is_ai_window_open(),
+            has_frontmost_app_target,
             accepts_main_filter = self.can_accept_dictation_into_main_filter(),
             accepts_prompt = self.can_accept_dictation_into_prompt(),
             "Resolved dictation target"
@@ -8292,27 +8333,22 @@ impl ScriptListApp {
         target
     }
 
-    /// Close the dictation overlay and hide Script Kit so macOS naturally
-    /// returns keyboard focus to the previously-active window before the
-    /// CGEvent Cmd+V paste fires.
-    ///
-    /// Script Kit is a non-activating accessory app (NSPanel with
-    /// NonactivatingPanel style), so when our panels close via `orderOut:`,
-    /// macOS automatically restores focus to the window that was active
-    /// before — no explicit `activate` call is needed.  Avoiding AppleScript
-    /// `tell application id … to activate` is important because that can
-    /// reorder windows within multi-window apps like Chrome, causing the
-    /// paste to land in the wrong window.
+    /// Close the dictation overlay, hide Script Kit, and activate the tracked
+    /// target app before the CGEvent Cmd+V paste fires.
     fn yield_focus_for_dictation_paste(
         &mut self,
+        target_pid: i32,
         target_bundle_id: &str,
+        target_app_name: &str,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
         tracing::info!(
             category = "DICTATION",
+            target_pid,
             target_bundle_id = %target_bundle_id,
-            "Yielding focus for dictation paste (non-activating panel dismiss)"
+            target_app_name = %target_app_name,
+            "Yielding focus for dictation paste"
         );
         crate::dictation::close_dictation_overlay(cx)
             .context("failed to close dictation overlay before paste")?;
@@ -8320,6 +8356,66 @@ impl ScriptListApp {
             script_kit_gpui::set_main_window_visible(false);
             platform::defer_hide_main_window(cx);
         }
+        Self::activate_tracked_app_for_dictation_paste(
+            target_pid,
+            target_bundle_id,
+            target_app_name,
+        )?;
+        Ok(())
+    }
+
+    #[cfg(target_os = "macos")]
+    fn activate_tracked_app_for_dictation_paste(
+        target_pid: i32,
+        target_bundle_id: &str,
+        target_app_name: &str,
+    ) -> anyhow::Result<()> {
+        use anyhow::{anyhow, Context as _};
+        use objc::runtime::{Class, Object};
+        use objc::{msg_send, sel, sel_impl};
+
+        unsafe {
+            let workspace_class = Class::get("NSWorkspace").context("NSWorkspace unavailable")?;
+            let workspace: *mut Object = msg_send![workspace_class, sharedWorkspace];
+            let running_apps: *mut Object = msg_send![workspace, runningApplications];
+            let app_count: usize = msg_send![running_apps, count];
+
+            for i in 0..app_count {
+                let app: *mut Object = msg_send![running_apps, objectAtIndex: i];
+                let app_pid: i32 = msg_send![app, processIdentifier];
+                if app_pid != target_pid {
+                    continue;
+                }
+
+                let activated: bool = msg_send![app, activateWithOptions: 2u64];
+                if activated {
+                    tracing::info!(
+                        category = "DICTATION",
+                        target_pid,
+                        target_bundle_id,
+                        target_app_name,
+                        "Activated tracked app for dictation paste"
+                    );
+                    return Ok(());
+                }
+
+                return Err(anyhow!(
+                    "failed to activate {target_app_name} ({target_bundle_id}) for dictation paste"
+                ));
+            }
+        }
+
+        Err(anyhow!(
+            "tracked app {target_app_name} ({target_bundle_id}) with pid {target_pid} is no longer running"
+        ))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn activate_tracked_app_for_dictation_paste(
+        _target_pid: i32,
+        _target_bundle_id: &str,
+        _target_app_name: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 

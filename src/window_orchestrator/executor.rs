@@ -37,10 +37,12 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
             // Using the deferred variant would delay the hide by one tick,
             // causing the overlay to open while the main window is still
             // visible (and macOS may push the overlay behind other apps).
+            crate::set_main_window_visible(false);
             crate::platform::conceal_main_window();
         }
 
         WindowCommand::DismissMain => {
+            crate::set_main_window_visible(false);
             crate::platform::defer_hide_main_window(cx);
         }
 
@@ -48,6 +50,7 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
             activate_app,
             make_key,
         } => {
+            crate::set_main_window_visible(true);
             if *activate_app {
                 crate::platform::activate_main_window();
             } else if *make_key {
@@ -127,6 +130,7 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
                     );
                 }
                 SurfaceId::Main => {
+                    crate::set_main_window_visible(true);
                     crate::platform::ensure_main_panel_configured(
                         "window_orchestrator::executor::FocusSurface/Main",
                     );

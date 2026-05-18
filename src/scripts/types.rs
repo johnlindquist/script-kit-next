@@ -244,6 +244,8 @@ pub struct FallbackMatch {
     pub title_override: Option<String>,
     /// Optional row description override for synthetic fallback placements.
     pub description_override: Option<String>,
+    /// Optional stable selection identity for synthetic fallback placements.
+    pub stable_selection_key_override: Option<String>,
 }
 
 impl FallbackMatch {
@@ -253,6 +255,7 @@ impl FallbackMatch {
             score,
             title_override: None,
             description_override: None,
+            stable_selection_key_override: None,
         }
     }
 
@@ -263,6 +266,11 @@ impl FallbackMatch {
     ) -> Self {
         self.title_override = Some(title.into());
         self.description_override = Some(description.into());
+        self
+    }
+
+    pub fn with_stable_selection_key(mut self, key: impl Into<String>) -> Self {
+        self.stable_selection_key_override = Some(key.into());
         self
     }
 
@@ -606,7 +614,10 @@ impl SearchResult {
     /// input history to promote those rows on future exact-query recall.
     pub fn stable_selection_key(&self) -> Option<String> {
         match self {
-            SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
+            SearchResult::Fallback(fm) => fm
+                .stable_selection_key_override
+                .clone()
+                .or_else(|| Some(format!("fallback/{}", fm.fallback.name()))),
             SearchResult::Agent(am) => Some(format!("agent/{}", am.agent.path.display())),
             SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::ScriptIssue(issue) => Some(format!(
@@ -1003,6 +1014,34 @@ mod tests {
         assert_eq!(
             result.stable_selection_key(),
             Some("fallback/Search Test".to_string())
+        );
+    }
+
+    #[test]
+    fn fallback_result_can_override_stable_selection_key() {
+        let result = SearchResult::Fallback(
+            FallbackMatch::new(
+                FallbackItem::Builtin(BuiltinFallback::new(
+                    "search-test",
+                    "Search Test",
+                    "Search a test engine",
+                    "Search",
+                    FallbackAction::SearchUrl {
+                        template: "https://example.com/?q={query}".to_string(),
+                    },
+                    FallbackCondition::Always,
+                    20,
+                )),
+                0,
+            )
+            .with_display_overrides("Search Test for \"docs\"", "Open search")
+            .with_stable_selection_key("fallback/root-file-search-handoff/global"),
+        );
+
+        assert_eq!(result.history_result_key(), None);
+        assert_eq!(
+            result.stable_selection_key(),
+            Some("fallback/root-file-search-handoff/global".to_string())
         );
     }
 

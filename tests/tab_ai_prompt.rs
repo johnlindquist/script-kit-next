@@ -300,6 +300,22 @@ fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
 }
 
 #[test]
+fn tab_ai_overlay_placeholders_use_main_menu_placeholder_theme_token() {
+    let placeholder_render = ACP_VIEW_SOURCE
+        .split(r#""Ask anything\u{2026}""#)
+        .next()
+        .and_then(|prefix| prefix.rsplit(".text_color(").next())
+        .unwrap_or("");
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("AppChromeColors::from_theme(&theme)")
+            && ACP_VIEW_SOURCE.contains("chrome.placeholder_text_rgba")
+            && placeholder_render.contains("placeholder_text"),
+        "ACP placeholders must use AppChromeColors::placeholder_text_rgba, matching main menu placeholder opacity"
+    );
+}
+
+#[test]
 fn tab_ai_save_offer_uses_named_opacity_constants() {
     // The save-offer overlay must not use raw float literals for opacity
     assert!(

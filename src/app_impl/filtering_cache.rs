@@ -773,7 +773,7 @@ impl ScriptListApp {
             let dynamic_builtin_entries =
                 current_app_commands_app_name.as_deref().map(|app_name| {
                     let mut entries = self.builtin_entries.clone();
-                    let label =
+                    let commands_label =
                         crate::menu_bar::current_app_commands::current_app_commands_launcher_label(
                             Some(app_name),
                         );
@@ -781,7 +781,14 @@ impl ScriptListApp {
                         .iter_mut()
                         .find(|entry| entry.id == "builtin/do-in-current-app")
                     {
-                        entry.name = label;
+                        entry.name = commands_label;
+                    }
+                    if let Some(entry) = entries
+                        .iter_mut()
+                        .find(|entry| entry.id == "builtin/dictation")
+                    {
+                        entry.name = format!("Dictate to {app_name}");
+                        entry.description = format!("Voice dictation for {app_name}");
                     }
                     entries
                 });

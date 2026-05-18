@@ -398,6 +398,48 @@ fn abort_tab_ai_dictation_from_notes_does_not_reveal_main() {
 }
 
 #[test]
+fn finish_external_app_dictation_from_main_keeps_main_hidden() {
+    let mut state = OrchestratorState::default();
+
+    state.dispatch(WindowEvent::StartDictation {
+        target: DictationTarget::ExternalApp,
+    });
+    let cmds = state.dispatch(WindowEvent::FinishDictation);
+
+    assert_eq!(state.dictation, DictationSurfaceState::Hidden);
+    assert_eq!(
+        state.main.visibility,
+        MainVisibility::Hidden(HiddenReason::Dismissed)
+    );
+    assert_eq!(state.key_surface, None);
+    assert!(cmds.contains(&WindowCommand::CloseDictationOverlay));
+    assert!(!cmds
+        .iter()
+        .any(|c| matches!(c, WindowCommand::RevealMain { .. })));
+}
+
+#[test]
+fn abort_external_app_dictation_from_main_keeps_main_hidden() {
+    let mut state = OrchestratorState::default();
+
+    state.dispatch(WindowEvent::StartDictation {
+        target: DictationTarget::ExternalApp,
+    });
+    let cmds = state.dispatch(WindowEvent::AbortDictation);
+
+    assert_eq!(state.dictation, DictationSurfaceState::Hidden);
+    assert_eq!(
+        state.main.visibility,
+        MainVisibility::Hidden(HiddenReason::Dismissed)
+    );
+    assert_eq!(state.key_surface, None);
+    assert!(cmds.contains(&WindowCommand::CloseDictationOverlay));
+    assert!(!cmds
+        .iter()
+        .any(|c| matches!(c, WindowCommand::RevealMain { .. })));
+}
+
+#[test]
 fn double_start_dictation_is_idempotent() {
     let mut state = OrchestratorState::default();
     state.dispatch(WindowEvent::StartDictation {

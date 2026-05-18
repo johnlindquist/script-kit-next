@@ -47,7 +47,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::KitStoreCommand(_) => "Kit Store".to_string(),
         builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
         builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
-        builtins::BuiltInFeature::Dictation => "Dictate Here".to_string(),
+        builtins::BuiltInFeature::Dictation => "Dictate to Current App".to_string(),
         builtins::BuiltInFeature::DictationToAiHarness => "Voice Dictation to Agent Chat".to_string(),
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),

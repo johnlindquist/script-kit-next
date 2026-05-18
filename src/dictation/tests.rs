@@ -1458,9 +1458,10 @@ fn generic_dictation_builtin_remains_contextual() {
     let branch_src = &branch_tail[..next_branch];
 
     assert!(
-        branch_src
-            .contains("let dictation_target = if !crate::dictation::is_dictation_recording()")
-            && branch_src.contains("self.resolve_dictation_target()"),
+        branch_src.contains("DictationBuiltinAction::CurrentSurface")
+            && src.contains("let is_start_edge = !crate::dictation::is_dictation_recording();")
+            && src.contains("self.dictation_start_target(action)")
+            && src.contains(".unwrap_or_else(|| self.resolve_dictation_target())"),
         "generic dictation builtin must continue resolving context-sensitive targets"
     );
 }
@@ -1878,9 +1879,15 @@ fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
     let handler_src = &src[handler_start..];
     let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
 
+    let compacted_frontmost_src: String = frontmost_src
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect();
     assert!(
-        frontmost_src.contains("this.yield_focus_for_dictation_paste(&target_bundle_id, cx)"),
-        "frontmost-app delivery must call yield_focus_for_dictation_paste with target bundle ID"
+        compacted_frontmost_src.contains(
+            "this.yield_focus_for_dictation_paste(target_pid,&target_bundle_id,&target_app_name,cx,)"
+        ),
+        "frontmost-app delivery must call yield_focus_for_dictation_paste with tracked app identity"
     );
 
     // Scope to the async block that does close+paste (up to paste_text) to
@@ -1956,26 +1963,28 @@ fn delivery_focus_helper_closes_overlay_before_hiding_main_window() {
 }
 
 #[test]
-fn delivery_focus_helper_does_not_activate_target_app() {
-    // Script Kit is a non-activating accessory app.  When the dictation
-    // overlay closes (orderOut:) and the main window hides, macOS
-    // automatically returns focus to the previously-active window.
-    // Explicit AppleScript `activate` must NOT be used because it can
-    // reorder windows in multi-window apps like Chrome.
+fn delivery_focus_helper_activates_tracked_target_app() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
     let helper_src = dictation_yield_focus_helper_source(&src);
 
     assert!(
-        helper_src.contains("bundle_id: &str"),
-        "yield_focus_for_dictation_paste must accept the tracked target bundle id"
+        helper_src.contains("target_pid: i32")
+            && helper_src.contains("target_bundle_id: &str")
+            && helper_src.contains("target_app_name: &str"),
+        "yield_focus_for_dictation_paste must accept the tracked target app identity"
     );
 
     assert!(
-        !helper_src.contains("activate_bundle_id_for_dictation_paste"),
-        "focus helper must NOT explicitly activate the target app — \
-         non-activating panel dismiss handles focus restoration naturally"
+        helper_src.contains("activate_tracked_app_for_dictation_paste("),
+        "focus helper must activate the tracked target app before paste"
+    );
+    assert!(
+        src.contains("let app_pid: i32 = msg_send![app, processIdentifier];")
+            && src.contains("if app_pid != target_pid")
+            && src.contains("activateWithOptions: 2u64"),
+        "activation must find the tracked running app by pid rather than guessing from the current frontmost window"
     );
 }
 
@@ -3172,6 +3181,48 @@ fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
 }
 
 #[test]
+fn active_recording_microphone_is_captured_at_session_start() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+
+    assert!(
+        runtime_src.contains("active_device: Option<DictationDeviceInfo>"),
+        "dictation sessions must remember the microphone opened by the live capture"
+    );
+    assert!(
+        runtime_src.contains("pub fn get_active_dictation_device()"),
+        "runtime must expose the active capture microphone for honest overlay copy"
+    );
+    assert!(
+        runtime_src.contains("let active_device = resolve_preferred_device_info()?")
+            && runtime_src.contains("active_device: active_device.clone()"),
+        "start_recording must capture the resolved microphone once at session start"
+    );
+    assert!(
+        mod_src.contains("get_active_dictation_device"),
+        "active capture microphone must be re-exported for source/runtime receipts"
+    );
+}
+
+#[test]
+fn overlay_microphone_control_is_labeled_as_next_recording_preference() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("const ACTION_MIC_LABEL: &str = \"Next Mic\""),
+        "overlay mic action must not imply the active capture input changes live"
+    );
+    assert!(
+        window_src.contains("The current recording keeps using the device it opened with"),
+        "overlay source contract must document that cycling only changes the next recording"
+    );
+    assert!(
+        window_src.contains("updated preference for next recording"),
+        "overlay mic cycling logs/copy must state the preference applies next recording"
+    );
+}
+
+#[test]
 fn start_recording_initialises_overlay_phase_to_recording() {
     let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
@@ -3348,6 +3399,10 @@ fn abort_callback_never_invokes_transcript_delivery() {
         "abort callback must close the overlay"
     );
     assert!(
+        callback_src.contains("WindowEvent::AbortDictation"),
+        "abort callback must notify the window orchestrator so main-window toggle state does not get stuck"
+    );
+    assert!(
         !callback_src.contains("handle_dictation_transcript"),
         "abort callback must NEVER invoke handle_dictation_transcript — \
          the user chose to discard the recording"
@@ -3364,6 +3419,38 @@ fn abort_callback_never_invokes_transcript_delivery() {
         !callback_src.contains("transcribe_captured_audio"),
         "abort callback must NEVER invoke transcription — \
          the recording is discarded, not transcribed"
+    );
+}
+
+#[test]
+fn orchestrator_executor_keeps_global_main_visibility_in_sync() {
+    let src =
+        std::fs::read_to_string("src/window_orchestrator/executor.rs").expect("read executor.rs");
+
+    let conceal_start = src
+        .find("WindowCommand::ConcealMain")
+        .expect("executor must handle ConcealMain");
+    let dismiss_start = src
+        .find("WindowCommand::DismissMain")
+        .expect("executor must handle DismissMain");
+    let reveal_start = src
+        .find("WindowCommand::RevealMain")
+        .expect("executor must handle RevealMain");
+    let focus_surface_start = src
+        .find("WindowCommand::FocusSurface")
+        .expect("executor must handle FocusSurface");
+
+    assert!(
+        src[conceal_start..dismiss_start].contains("set_main_window_visible(false)"),
+        "ConcealMain must mark the main window hidden before dictation opens"
+    );
+    assert!(
+        src[dismiss_start..reveal_start].contains("set_main_window_visible(false)"),
+        "DismissMain must mark the main window hidden"
+    );
+    assert!(
+        src[reveal_start..focus_surface_start].contains("set_main_window_visible(true)"),
+        "RevealMain must mark the main window visible"
     );
 }
 
@@ -4941,7 +5028,7 @@ fn dictation_destination_includes_main_window_filter_variant() {
 }
 
 #[test]
-fn resolve_dictation_target_routes_script_list_to_main_window_filter() {
+fn resolve_dictation_target_prefers_frontmost_app_over_script_list() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4951,12 +5038,19 @@ fn resolve_dictation_target_routes_script_list_to_main_window_filter() {
     let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
 
     assert!(
-        resolver_src.contains("can_accept_dictation_into_main_filter()"),
-        "resolver must check launcher/main filter dictation eligibility"
+        resolver_src
+            .contains("let has_frontmost_app_target = Self::has_dictation_frontmost_target();"),
+        "resolver must snapshot whether a frontmost app can receive contextual dictation"
     );
+    let frontmost_pos = resolver_src
+        .find("has_frontmost_app_target")
+        .expect("resolver must check frontmost-app availability");
+    let main_filter_pos = resolver_src
+        .find("can_accept_dictation_into_main_filter()")
+        .expect("resolver must keep launcher/main filter fallback");
     assert!(
-        resolver_src.contains("DictationTarget::MainWindowFilter"),
-        "resolver must route ScriptList to MainWindowFilter"
+        frontmost_pos < main_filter_pos,
+        "contextual dictation must prefer the tracked frontmost app before falling back to Script Kit's main menu"
     );
 }
 

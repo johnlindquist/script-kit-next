@@ -7,8 +7,8 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationModelStatus, DictationSessionPhase, DictationTarget,
-    DictationToggleOutcome,
+    DictationDeviceId, DictationDeviceInfo, DictationModelStatus, DictationSessionPhase,
+    DictationTarget, DictationToggleOutcome,
 };
 use crate::dictation::visualizer::silent_bars;
 use crate::dictation::window::DictationOverlayState;
@@ -39,6 +39,9 @@ struct DictationSession {
     target: DictationTarget,
     /// Ordered list of destinations the overlay badge cycles through.
     target_cycle: Vec<DictationTarget>,
+    /// Microphone resolved when capture started. Changing preferences while
+    /// recording applies to the next session, not this live AVCaptureSession.
+    active_device: Option<DictationDeviceInfo>,
 }
 
 /// Global singleton guarded by a parking_lot Mutex.
@@ -126,6 +129,14 @@ pub fn toggle_dictation(target: DictationTarget) -> Result<DictationToggleOutcom
 /// session started.  Returns `None` when no session is active.
 pub fn get_dictation_target() -> Option<DictationTarget> {
     SESSION.lock().as_ref().map(|s| s.target)
+}
+
+/// Return the microphone that the active capture session opened with.
+pub fn get_active_dictation_device() -> Option<DictationDeviceInfo> {
+    SESSION
+        .lock()
+        .as_ref()
+        .and_then(|session| session.active_device.clone())
 }
 
 /// Record a content-safe receipt for the most recent dictation delivery.
@@ -624,7 +635,8 @@ pub(crate) fn reset_cached_transcriber_for_tests() {
 // ---------------------------------------------------------------------------
 
 fn start_recording(target: DictationTarget) -> Result<()> {
-    let device_id = resolve_preferred_device()?;
+    let active_device = resolve_preferred_device_info()?;
+    let device_id = active_device.as_ref().map(|device| device.id.clone());
     let capture_config = DictationCaptureConfig::default();
 
     let (event_rx, capture_handle) = start_capture(capture_config, device_id.as_ref())
@@ -639,6 +651,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
         overlay_phase: DictationSessionPhase::Recording,
         target,
         target_cycle: vec![target],
+        active_device: active_device.clone(),
     };
 
     *SESSION.lock() = Some(session);
@@ -647,6 +660,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
     tracing::info!(
         category = "DICTATION",
         device = ?device_id,
+        device_name = ?active_device.as_ref().map(|device| device.name.as_str()),
         ?target,
         target_label = target.overlay_label(),
         "Recording started"
@@ -729,6 +743,10 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
 /// Delegates the pure selection logic to [`resolve_selected_input_device`] so
 /// the behavior is deterministic and testable without I/O.
 pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
+    Ok(resolve_preferred_device_info()?.map(|device| device.id))
+}
+
+pub(crate) fn resolve_preferred_device_info() -> Result<Option<DictationDeviceInfo>> {
     let prefs = crate::config::load_user_preferences();
     let preferred_id = prefs.dictation.selected_device_id.clone();
 
@@ -745,7 +763,7 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
                 saved = preferred_id.is_some(),
                 "Using microphone"
             );
-            Ok(Some(res.device.id))
+            Ok(Some(res.device))
         }
         Some(res) => {
             // Saved device disappeared — clear the stale preference.
@@ -764,7 +782,7 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
                     "Failed to clear stale microphone preference"
                 );
             }
-            Ok(Some(res.device.id))
+            Ok(Some(res.device))
         }
         None => {
             tracing::warn!(category = "DICTATION", "No input devices available");

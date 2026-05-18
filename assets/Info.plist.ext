@@ -2,3 +2,9 @@
 <true/>
 <key>LSBackgroundOnly</key>
 <false/>
+<key>NSMicrophoneUsageDescription</key>
+<string>Script Kit uses the microphone to record local dictation audio when you start dictation.</string>
+<key>NSCameraUsageDescription</key>
+<string>Script Kit uses the camera to capture webcam frames when you open the webcam prompt.</string>
+<key>NSAppleEventsUsageDescription</key>
+<string>Script Kit sends Apple Events when you run scripts or built-in actions that automate other apps.</string>

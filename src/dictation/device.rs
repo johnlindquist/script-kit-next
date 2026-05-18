@@ -190,6 +190,54 @@ pub fn microphone_permission_status() -> crate::dictation::DictationMicrophonePe
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn request_microphone_permission() -> crate::dictation::DictationMicrophonePermissionStatus {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSString;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    if !matches!(
+        microphone_permission_status(),
+        crate::dictation::DictationMicrophonePermissionStatus::NotDetermined
+    ) {
+        return microphone_permission_status();
+    }
+
+    #[link(name = "AVFoundation", kind = "framework")]
+    extern "C" {}
+
+    let (tx, rx) = mpsc::channel();
+    let block = block::ConcreteBlock::new(move |granted: BOOL| {
+        let _ = tx.send(granted == YES);
+    });
+    let block = block.copy();
+
+    unsafe {
+        let media_type = NSString::alloc(nil).init_str("soun");
+        if media_type == nil {
+            return crate::dictation::DictationMicrophonePermissionStatus::Unknown;
+        }
+
+        let _: () = msg_send![
+            class!(AVCaptureDevice),
+            requestAccessForMediaType: media_type as id
+            completionHandler: &*block
+        ];
+    }
+
+    match rx.recv_timeout(Duration::from_secs(60)) {
+        Ok(true) => crate::dictation::DictationMicrophonePermissionStatus::Granted,
+        Ok(false) => crate::dictation::DictationMicrophonePermissionStatus::Denied,
+        Err(_) => crate::dictation::DictationMicrophonePermissionStatus::Unknown,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn request_microphone_permission() -> crate::dictation::DictationMicrophonePermissionStatus {
+    crate::dictation::DictationMicrophonePermissionStatus::Unknown
+}
+
 /// Persist a picker selection to config-backed preferences.
 pub fn apply_device_selection(action: &DictationDeviceSelectionAction) -> Result<()> {
     match action {
@@ -216,7 +264,7 @@ pub fn save_dictation_device_id(device_id: Option<&str>) -> Result<()> {
 }
 
 #[cfg(target_os = "macos")]
-use objc::runtime::Object;
+use objc::runtime::{Object, BOOL, YES};
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 

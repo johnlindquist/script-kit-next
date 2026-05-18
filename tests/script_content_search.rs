@@ -231,6 +231,26 @@ fn current_app_recipe_headers_do_not_contribute_body_matches() {
     );
 }
 
+#[test]
+fn natural_language_question_does_not_fuzzy_match_unrelated_script_body() {
+    let scripts = vec![make_script(
+        "Create GitHub Issue",
+        Some(
+            "Create a GitHub issue from ;github menu syntax using a saved GitHub device-flow token",
+        ),
+        Some(include_str!(
+            "../scripts/examples/menu-syntax/capture-github-local.ts"
+        )),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "What is the reasoning");
+
+    assert!(
+        results.is_empty(),
+        "natural-language questions should not surface unrelated scripts through sparse body fuzziness"
+    );
+}
+
 // ── Fuzzy body matching ──────────────────────────────────────────────
 
 #[test]
@@ -246,6 +266,21 @@ fn content_search_uses_fuzzy_matching_for_body_lines() {
     assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
     assert_eq!(results[0].score, 5);
     assert_eq!(results[0].content_match.as_ref().unwrap().line_number, 1);
+}
+
+#[test]
+fn multi_word_content_search_requires_phrase_match() {
+    let scripts = vec![make_script(
+        "alpha",
+        None,
+        Some("line one\nconst message = 'What is the reasoning';\nline three\n"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "what is the reasoning");
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
+    assert_eq!(results[0].content_match.as_ref().unwrap().line_number, 2);
 }
 
 #[test]

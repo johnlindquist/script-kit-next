@@ -80,6 +80,69 @@ fn action_handler_dispatch_structure_exists() {
 }
 
 #[test]
+fn launcher_handoff_builtins_use_submit_reset_not_focus_loss_preserve() {
+    let content = fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("Failed to read builtin_execution.rs");
+
+    let notes_start = content
+        .find("fn execute_notes_builtin")
+        .expect("execute_notes_builtin must exist");
+    let notes_tail = &content[notes_start..];
+    let notes_end = notes_tail
+        .find("fn execute_sync_to_github_builtin")
+        .expect("execute_notes_builtin boundary must exist");
+    let notes_fn = &notes_tail[..notes_end];
+
+    assert!(
+        notes_fn.contains("event = \"notes_handoff_submit_reset\""),
+        "Open Notes handoff should be treated as a launcher submit, not focus-loss preservation"
+    );
+    assert!(
+        notes_fn.contains("self.close_and_reset_window(cx);"),
+        "Open Notes must reset the launcher so the next main-menu open starts with an empty input"
+    );
+    assert!(
+        !notes_fn.contains("defer_hide_main_window(cx)"),
+        "Open Notes should not manually hide while preserving the launcher filter"
+    );
+
+    let notes_command_start = content
+        .find("fn execute_notes_command_builtin")
+        .expect("execute_notes_command_builtin must exist");
+    let notes_command_tail = &content[notes_command_start..];
+    let notes_command_end = notes_command_tail
+        .find("fn execute_kit_store_builtin")
+        .expect("execute_notes_command_builtin boundary must exist");
+    let notes_command_fn = &notes_command_tail[..notes_command_end];
+
+    assert!(
+        notes_command_fn.contains("self.close_and_reset_window(cx);"),
+        "Notes commands that hand off to the Notes window must use the submit reset path"
+    );
+    assert!(
+        !notes_command_fn.contains("defer_hide_main_window(cx)"),
+        "Notes commands should not preserve stale launcher input via manual hide"
+    );
+
+    let dictation_start = content
+        .find("fn execute_dictation_builtin_action")
+        .expect("execute_dictation_builtin_action must exist");
+    let dictation_tail = &content[dictation_start..];
+    let dictation_end = dictation_tail
+        .find("fn prepare_dictation_builtin_start")
+        .expect("execute_dictation_builtin_action boundary must exist");
+    let dictation_fn = &dictation_tail[..dictation_end];
+
+    assert!(
+        dictation_fn.contains("DictationTarget::ExternalApp")
+            && dictation_fn.contains("self.close_and_reset_window(cx);")
+            && dictation_fn.find("self.close_and_reset_window(cx);")
+                < dictation_fn.find("self.handle_dictation_started(action, dictation_target, cx);"),
+        "external-app dictation starts from the launcher must reset/hide after capture starts but before opening the overlay"
+    );
+}
+
+#[test]
 fn chat_transcript_actions_use_named_plan_states() {
     let content = fs::read_to_string("src/actions/builders/chat.rs")
         .expect("Failed to read chat action builder");
@@ -2451,6 +2514,11 @@ fn webcam_utility_view_uses_named_failure_state() {
             && content.contains("webcam_action.start_failure_log(&err)")
             && content.contains("format!(\"Failed to start webcam: {error}\")"),
         "webcam startup failure log copy should derive from the named action state"
+    );
+    assert!(
+        content.contains("WebcamStartError::PermissionDenied")
+            && content.contains("System Settings → Privacy & Security → Camera"),
+        "webcam permission-denied startup errors should tell users where to enable camera access"
     );
 }
 

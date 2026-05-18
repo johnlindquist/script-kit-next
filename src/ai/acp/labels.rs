@@ -1,5 +1,5 @@
-pub(crate) const AGENT_CHAT_LABEL: &str = "Agent Chat";
-pub(crate) const AGENT_CHAT_CMD_ENTER_HINT: &str = "⌘↵ Agent Chat";
+pub(crate) const AGENT_CHAT_LABEL: &str = "Agent";
+pub(crate) const AGENT_CHAT_CMD_ENTER_HINT: &str = "⌘↵ Agent";
 pub(crate) const AGENT_CHAT_OPEN_ACTION: &str = "Open Agent Chat";
 pub(crate) const AGENT_CHAT_CHANGE_AGENT: &str = "Change Agent";
 pub(crate) const AGENT_CHAT_CHANGE_MODEL: &str = "Change Model";

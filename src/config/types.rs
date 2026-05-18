@@ -1055,6 +1055,14 @@ impl HotkeyConfig {
         }
     }
 
+    /// Create the default dictation toggle hotkey (Cmd+Shift+;).
+    pub fn default_dictation_hotkey() -> Self {
+        HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "Semicolon".to_string(),
+        }
+    }
+
     /// Convert to a human-readable display string using macOS symbols (e.g., "⌘⇧K").
     ///
     /// Uses standard macOS modifier symbols in order: ⌃ (Control), ⌥ (Option), ⇧ (Shift), ⌘ (Command)
@@ -1171,6 +1179,89 @@ fn default_dictation_hotkey_enabled() -> bool {
 }
 
 // ============================================
+// DESIGNS CONFIG
+// ============================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DesignsConfig {
+    pub active_id: Option<String>,
+    pub cmd1_behavior: Option<Cmd1Behavior>,
+    pub overrides: Option<HashMap<String, DesignOverrides>>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum Cmd1Behavior {
+    Picker,
+    Cycle,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DesignOverrides {
+    pub accent: Option<String>,
+    pub density: Option<DesignDensityChoice>,
+    pub font_family: Option<FontFamilyChoice>,
+    pub font_scale: Option<i8>,
+    pub vibrancy: Option<VibrancyChoice>,
+    pub chrome_opacity: Option<ChromeOpacityChoice>,
+    pub icon_style: Option<IconStyleChoice>,
+    pub separator_style: Option<SeparatorStyleChoice>,
+    pub row_height_nudge: Option<i8>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum DesignDensityChoice {
+    Compact,
+    Comfortable,
+    Spacious,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum FontFamilyChoice {
+    System,
+    Monospace,
+    Serif,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum VibrancyChoice {
+    None,
+    Light,
+    Medium,
+    Heavy,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum ChromeOpacityChoice {
+    Low,
+    Med,
+    High,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum IconStyleChoice {
+    Mono,
+    Color,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum SeparatorStyleChoice {
+    None,
+    Hairline,
+    Rule,
+    Grid,
+}
+
+// ============================================
 // MAIN CONFIG
 // ============================================
 
@@ -1260,7 +1351,7 @@ pub struct Config {
         rename = "logsHotkeyEnabled"
     )]
     pub logs_hotkey_enabled: Option<bool>,
-    /// Hotkey for toggling dictation (user-configured; no default shortcut)
+    /// Hotkey for toggling dictation (default: Cmd+Shift+;)
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -1283,6 +1374,9 @@ pub struct Config {
     /// Theme preset selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<ThemeSelectionPreferences>,
+    /// Design picker preferences and per-design token overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub designs: Option<DesignsConfig>,
     /// Dictation runtime preferences, including microphone selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dictation: Option<DictationPreferences>,
@@ -1343,18 +1437,19 @@ impl Default for Config {
             ai_hotkey_enabled: None,  // Defaults to true via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
             logs_hotkey_enabled: None, // Defaults to true via getter
-            dictation_hotkey: None,   // No default shortcut; must be explicitly configured
+            dictation_hotkey: None, // Will use HotkeyConfig::default_dictation_hotkey() via getter
             dictation_hotkey_enabled: None, // Defaults to true via getter
-            watcher: None,            // Will use WatcherConfig::default() via getter
-            layout: None,             // Will use LayoutConfig::default() via getter
-            theme: None,              // Will use ThemeSelectionPreferences::default() via getter
-            dictation: None,          // Will use DictationPreferences::default() via getter
-            ai: None,                 // Will use AiPreferences::default() via getter
-            window_management: None,  // Will use WindowManagementPreferences::default() via getter
-            commands: None,           // No per-command overrides by default
-            claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
-            mcp: None,                // External MCP servers are opt-in via config.ts
-            hidden_commands: None,    // No commands hidden by default
+            watcher: None,          // Will use WatcherConfig::default() via getter
+            layout: None,           // Will use LayoutConfig::default() via getter
+            theme: None,            // Will use ThemeSelectionPreferences::default() via getter
+            designs: None,          // No design overrides by default
+            dictation: None,        // Will use DictationPreferences::default() via getter
+            ai: None,               // Will use AiPreferences::default() via getter
+            window_management: None, // Will use WindowManagementPreferences::default() via getter
+            commands: None,         // No per-command overrides by default
+            claude_code: None,      // Will use ClaudeCodeConfig::default() via getter
+            mcp: None,              // External MCP servers are opt-in via config.ts
+            hidden_commands: None,  // No commands hidden by default
         }
     }
 }
@@ -1507,13 +1602,17 @@ impl Config {
     }
 
     /// Returns the dictation hotkey configuration when enabled.
-    /// No default shortcut is provided - users must explicitly configure one.
+    /// Falls back to default (Cmd+Shift+;) when enabled but not configured.
     #[allow(dead_code)]
     pub fn get_dictation_hotkey(&self) -> Option<HotkeyConfig> {
         if !self.is_dictation_hotkey_enabled() {
             return None;
         }
-        self.dictation_hotkey.clone()
+        Some(
+            self.dictation_hotkey
+                .clone()
+                .unwrap_or_else(HotkeyConfig::default_dictation_hotkey),
+        )
     }
 
     /// Returns watcher tuning config, or defaults.
@@ -1797,9 +1896,12 @@ mod tests {
     }
 
     #[test]
-    fn test_get_dictation_hotkey_returns_none_when_unset() {
+    fn test_get_dictation_hotkey_returns_default_when_unset() {
         let config = Config::default();
-        assert_eq!(config.get_dictation_hotkey(), None);
+        assert_eq!(
+            config.get_dictation_hotkey(),
+            Some(HotkeyConfig::default_dictation_hotkey())
+        );
     }
 
     #[test]

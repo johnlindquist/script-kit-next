@@ -1671,7 +1671,15 @@ fn root_file_search_handoff_result(
 
     Some(SearchResult::Fallback(
         FallbackMatch::new(crate::fallbacks::FallbackItem::Builtin(fallback), 0)
-            .with_display_overrides(title, subtitle),
+            .with_display_overrides(title, subtitle)
+            .with_stable_selection_key(match mode {
+                crate::file_search::RootFileSectionMode::GlobalQuery => {
+                    "fallback/root-file-search-handoff/global"
+                }
+                crate::file_search::RootFileSectionMode::DirectoryBrowse => {
+                    "fallback/root-file-search-handoff/directory"
+                }
+            }),
     ))
 }
 
