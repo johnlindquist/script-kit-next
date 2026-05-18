@@ -1,0 +1,2174 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.actions",
+  "command": "actions.inspect",
+  "classification": "ok",
+  "session": "dt034-1779077911",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 325,
+      "y": 215,
+      "width": 320,
+      "height": 128
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 128,
+      "targetBoundsInScreenshot": {
+        "x": 215,
+        "y": 44,
+        "width": 320,
+        "height": 128
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "parentTarget": {
+    "index": 0,
+    "automationId": "main",
+    "windowKind": "Main",
+    "title": "Script Kit",
+    "visible": true,
+    "focused": true,
+    "bounds": {
+      "x": 110,
+      "y": 171,
+      "width": 750,
+      "height": 500
+    },
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "parentAutomationId": null,
+    "parentKind": null
+  },
+  "startReceipt": null,
+  "parentOpenReceipt": null,
+  "openReceipt": null,
+  "targetReadiness": null,
+  "popupState": {
+    "open": true,
+    "host": null,
+    "contextTitle": null,
+    "contextStableKey": null,
+    "contextSource": null,
+    "selectedActionId": "reload_scripts"
+  },
+  "attachedPopup": {
+    "schemaVersion": 1,
+    "generation": 1,
+    "updatedStage": "open",
+    "stale": false,
+    "host": "main.actions",
+    "parentAutomationId": "main",
+    "parentKind": "Main",
+    "position": "TopCenter",
+    "displayId": "None",
+    "geometry": {
+      "popupRect": {
+        "x": 325,
+        "y": 215,
+        "width": 320,
+        "height": 128
+      },
+      "parentRect": {
+        "x": 110,
+        "y": 171,
+        "width": 750,
+        "height": 500
+      },
+      "anchorRect": {
+        "x": 485,
+        "y": 215,
+        "width": 0,
+        "height": 0
+      },
+      "position": "TopCenter",
+      "pinnedEdge": "top",
+      "displayId": "None"
+    }
+  },
+  "routeStack": [],
+  "routeId": null,
+  "rowGeometry": {
+    "schemaVersion": 1,
+    "available": true,
+    "source": "runtime.actionsDialog.render",
+    "generation": 1,
+    "attachedPopupGeneration": 1,
+    "stale": false,
+    "measurementSource": "runtime.actionsDialog.render",
+    "coordinateSpace": "popupLogicalPx",
+    "units": "logicalPx",
+    "ownerWindowId": "actions-dialog",
+    "stopReason": null,
+    "quality": "model",
+    "popupWidth": 320,
+    "listViewportRect": {
+      "x": 0,
+      "y": 36,
+      "width": 320,
+      "height": 90
+    },
+    "viewport": {
+      "containerBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 126
+      },
+      "searchBounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 36
+      },
+      "contextHeaderBounds": null,
+      "listBounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 90
+      },
+      "visibleRange": {
+        "firstGroupedIndex": 0,
+        "lastGroupedIndex": 2
+      },
+      "scroll": {
+        "topGroupedIndex": 0,
+        "pixelOffsetAvailable": false,
+        "pixelOffset": null
+      }
+    },
+    "contentHeight": 90,
+    "scrollTopItemIndex": 0,
+    "scrollTopContentY": 0,
+    "sectionBoundsAvailable": true,
+    "rowBoundsAvailable": true,
+    "selectedRowBoundsAvailable": true,
+    "hoverRowAvailable": true,
+    "hoveredRow": {
+      "available": true,
+      "state": "none",
+      "row": null
+    },
+    "shortcutBoundsAvailable": true,
+    "disabledReasonBoundsAvailable": false,
+    "shortcutLayout": {
+      "boundsAvailable": true,
+      "rowCount": 0,
+      "rows": [],
+      "stopReason": null,
+      "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel"
+    },
+    "disabledReasonLayout": {
+      "status": "no-visible-disabled-reasons",
+      "boundsAvailable": false,
+      "rowCount": 0,
+      "rows": []
+    },
+    "warnings": [],
+    "counts": {
+      "rows": 3,
+      "actions": 3,
+      "sections": 0
+    },
+    "selectedRow": {
+      "semanticId": "choice:0:reload_scripts",
+      "visualIndex": 0,
+      "groupedIndex": 0,
+      "kind": "action",
+      "labelLength": 14,
+      "labelFingerprint": "fnv1a64:6d39999af0d53304",
+      "actionId": "reload_scripts",
+      "selected": true,
+      "hovered": false,
+      "visible": true,
+      "clipped": false,
+      "contentY": 0,
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 30
+      },
+      "rect": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 30
+      },
+      "innerBounds": {
+        "x": 4,
+        "y": 38,
+        "width": 312,
+        "height": 26
+      },
+      "innerRect": {
+        "x": 4,
+        "y": 38,
+        "width": 312,
+        "height": 26
+      },
+      "shortcut": null,
+      "shortcutTokens": [],
+      "shortcutBoundsAvailable": false,
+      "shortcutBounds": null,
+      "shortcutLayout": null,
+      "disabledReasonBoundsAvailable": false
+    },
+    "sections": [],
+    "rows": [
+      {
+        "semanticId": "choice:0:reload_scripts",
+        "visualIndex": 0,
+        "groupedIndex": 0,
+        "kind": "action",
+        "labelLength": 14,
+        "labelFingerprint": "fnv1a64:6d39999af0d53304",
+        "actionId": "reload_scripts",
+        "selected": true,
+        "hovered": false,
+        "visible": true,
+        "clipped": false,
+        "contentY": 0,
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 30
+        },
+        "rect": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 30
+        },
+        "innerBounds": {
+          "x": 4,
+          "y": 38,
+          "width": 312,
+          "height": 26
+        },
+        "innerRect": {
+          "x": 4,
+          "y": 38,
+          "width": 312,
+          "height": 26
+        },
+        "shortcut": null,
+        "shortcutTokens": [],
+        "shortcutBoundsAvailable": false,
+        "shortcutBounds": null,
+        "shortcutLayout": null,
+        "disabledReasonBoundsAvailable": false
+      },
+      {
+        "semanticId": "choice:1:settings",
+        "visualIndex": 1,
+        "groupedIndex": 1,
+        "kind": "action",
+        "labelLength": 13,
+        "labelFingerprint": "fnv1a64:70178e04a3b691b6",
+        "actionId": "settings",
+        "selected": false,
+        "hovered": false,
+        "visible": true,
+        "clipped": false,
+        "contentY": 30,
+        "bounds": {
+          "x": 0,
+          "y": 66,
+          "width": 320,
+          "height": 30
+        },
+        "rect": {
+          "x": 0,
+          "y": 66,
+          "width": 320,
+          "height": 30
+        },
+        "innerBounds": {
+          "x": 4,
+          "y": 68,
+          "width": 312,
+          "height": 26
+        },
+        "innerRect": {
+          "x": 4,
+          "y": 68,
+          "width": 312,
+          "height": 26
+        },
+        "shortcut": null,
+        "shortcutTokens": [],
+        "shortcutBoundsAvailable": false,
+        "shortcutBounds": null,
+        "shortcutLayout": null,
+        "disabledReasonBoundsAvailable": false
+      },
+      {
+        "semanticId": "choice:2:view_logs",
+        "visualIndex": 2,
+        "groupedIndex": 2,
+        "kind": "action",
+        "labelLength": 9,
+        "labelFingerprint": "fnv1a64:9caf5e3237f4fbef",
+        "actionId": "view_logs",
+        "selected": false,
+        "hovered": false,
+        "visible": true,
+        "clipped": false,
+        "contentY": 60,
+        "bounds": {
+          "x": 0,
+          "y": 96,
+          "width": 320,
+          "height": 30
+        },
+        "rect": {
+          "x": 0,
+          "y": 96,
+          "width": 320,
+          "height": 30
+        },
+        "innerBounds": {
+          "x": 4,
+          "y": 98,
+          "width": 312,
+          "height": 26
+        },
+        "innerRect": {
+          "x": 4,
+          "y": 98,
+          "width": 312,
+          "height": 26
+        },
+        "shortcut": null,
+        "shortcutTokens": [],
+        "shortcutBoundsAvailable": false,
+        "shortcutBounds": null,
+        "shortcutLayout": null,
+        "disabledReasonBoundsAvailable": false
+      }
+    ]
+  },
+  "geometry": {
+    "layoutPrimitive": "getLayoutInfo(actionsDialog)",
+    "popupRect": {
+      "x": 325,
+      "y": 215,
+      "width": 320,
+      "height": 128
+    },
+    "parentRect": {
+      "x": 110,
+      "y": 171,
+      "width": 750,
+      "height": 500
+    },
+    "anchorRect": {
+      "x": 485,
+      "y": 215,
+      "width": 0,
+      "height": 0
+    },
+    "clippingEdges": {
+      "available": true,
+      "top": false,
+      "right": false,
+      "bottom": false,
+      "left": false
+    },
+    "placement": {
+      "parentAutomationId": "main",
+      "parentWindowId": "main",
+      "openerAutomationId": null,
+      "screenId": "None",
+      "pinnedEdge": "top",
+      "position": "TopCenter",
+      "generation": 1,
+      "stale": false
+    },
+    "layoutPressure": {
+      "windowCanGrow": null,
+      "overflowY": false,
+      "desiredContentHeight": 128,
+      "measuredContentHeight": 128,
+      "clippedNodeCount": 0,
+      "overlapCount": 0,
+      "pressureScore": 0
+    },
+    "overlapPairs": []
+  },
+  "sections": {
+    "count": 0,
+    "rows": [],
+    "boundsAvailable": true
+  },
+  "actions": {
+    "visibleCount": 3,
+    "rows": [
+      {
+        "index": 0,
+        "id": "reload_scripts",
+        "label": null,
+        "section": null,
+        "shortcut": null,
+        "shortcutTokens": [],
+        "destructive": false,
+        "enabled": null,
+        "disabledReason": null
+      },
+      {
+        "index": 1,
+        "id": "settings",
+        "label": null,
+        "section": null,
+        "shortcut": null,
+        "shortcutTokens": [],
+        "destructive": false,
+        "enabled": null,
+        "disabledReason": null
+      },
+      {
+        "index": 2,
+        "id": "view_logs",
+        "label": null,
+        "section": null,
+        "shortcut": null,
+        "shortcutTokens": [],
+        "destructive": false,
+        "enabled": null,
+        "disabledReason": null
+      }
+    ],
+    "destructiveRows": [],
+    "disabledRows": []
+  },
+  "shortcutLayout": {
+    "primitive": "runtime shortcut layout bounds",
+    "rowCount": 0,
+    "rows": [],
+    "boundsAvailable": true,
+    "runtimeBoundsAvailable": true,
+    "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel",
+    "stopReason": null
+  },
+  "receipts": {
+    "target": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "session": "dt034-1779077911",
+      "classification": "ok",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ActionsDialog"
+      },
+      "resolvedTarget": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 320,
+          "height": 128,
+          "targetBoundsInScreenshot": {
+            "x": 215,
+            "y": 44,
+            "width": 320,
+            "height": 128
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windows": [
+        {
+          "index": 0,
+          "automationId": "main",
+          "windowKind": "Main",
+          "title": "Script Kit",
+          "visible": true,
+          "focused": true,
+          "bounds": {
+            "x": 110,
+            "y": 171,
+            "width": 750,
+            "height": 500
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": null,
+          "parentKind": null
+        },
+        {
+          "index": 1,
+          "automationId": "actions-dialog",
+          "windowKind": "ActionsDialog",
+          "title": "Actions",
+          "visible": true,
+          "focused": false,
+          "bounds": {
+            "x": 325,
+            "y": 215,
+            "width": 320,
+            "height": 128
+          },
+          "surfaceKind": null,
+          "appViewVariant": null,
+          "parentAutomationId": "main",
+          "parentKind": "main"
+        }
+      ],
+      "rawInspect": {
+        "type": "automationInspectResult",
+        "requestId": "devtools-targets-inspect-1779077945569-2f8ab3",
+        "schemaVersion": 3,
+        "windowId": "actions-dialog",
+        "windowKind": "ActionsDialog",
+        "title": "Actions",
+        "resolvedBounds": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "targetBoundsInScreenshot": {
+          "x": 215,
+          "y": 44,
+          "width": 320,
+          "height": 128
+        },
+        "surfaceHitPoint": {
+          "x": 375,
+          "y": 108
+        },
+        "suggestedHitPoints": [
+          {
+            "semanticId": "panel:actions-dialog",
+            "x": 375,
+            "y": 108,
+            "reason": "surface_center"
+          }
+        ],
+        "elements": [
+          {
+            "semanticId": "input:actions-search",
+            "type": "input",
+            "value": "",
+            "focused": true
+          },
+          {
+            "semanticId": "list:actions",
+            "type": "list",
+            "text": "3 actions"
+          },
+          {
+            "semanticId": "choice:0:reload_scripts",
+            "type": "choice",
+            "text": "Reload Scripts",
+            "value": "reload_scripts",
+            "selected": true,
+            "index": 0
+          },
+          {
+            "semanticId": "choice:1:settings",
+            "type": "choice",
+            "text": "Open Settings",
+            "value": "settings",
+            "selected": false,
+            "index": 1
+          },
+          {
+            "semanticId": "choice:2:view_logs",
+            "type": "choice",
+            "text": "Show Logs",
+            "value": "view_logs",
+            "selected": false,
+            "index": 2
+          }
+        ],
+        "totalCount": 5,
+        "focusedSemanticId": "input:actions-search",
+        "selectedSemanticId": "choice:0:reload_scripts",
+        "screenshotWidth": 320,
+        "screenshotHeight": 128,
+        "osWindowId": 227046,
+        "semanticQuality": "full"
+      },
+      "sessionLifecycle": [],
+      "errors": []
+    },
+    "state": {
+      "schemaVersion": 1,
+      "status": "ok",
+      "session": "dt034-1779077911",
+      "requestId": "devtools-actions-state-1779077946970-772c89",
+      "responseType": "stateResult",
+      "response": {
+        "type": "stateResult",
+        "requestId": "devtools-actions-state-1779077946970-772c89",
+        "promptType": "actionsDialog",
+        "promptId": "target:ActionsDialog:actions-dialog",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true,
+        "actionsDialog": {
+          "schemaVersion": 1,
+          "surface": "actionsDialog",
+          "redacted": true,
+          "search": {
+            "textLength": 0,
+            "textFingerprint": "fnv1a64:cbf29ce484222325",
+            "placeholderLength": 7,
+            "placeholderFingerprint": "fnv1a64:8af61807443f32a4",
+            "hidden": false,
+            "position": "top"
+          },
+          "selection": {
+            "groupedIndex": 0,
+            "filteredIndex": 0,
+            "actionId": "reload_scripts",
+            "actionTitleLength": 14,
+            "actionTitleFingerprint": "fnv1a64:6d39999af0d53304",
+            "shouldClose": true
+          },
+          "actions": {
+            "totalCount": 3,
+            "filteredCount": 3,
+            "groupedRowCount": 3,
+            "sectionHeaderCount": 0,
+            "sections": {
+              "Unsectioned": 3
+            },
+            "visibleSampleLimit": 3,
+            "visibleSample": [
+              {
+                "id": "reload_scripts",
+                "titleLength": 14,
+                "titleFingerprint": "fnv1a64:6d39999af0d53304",
+                "descriptionLength": 49,
+                "descriptionFingerprint": "fnv1a64:42f12f2f0620455a",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              },
+              {
+                "id": "settings",
+                "titleLength": 13,
+                "titleFingerprint": "fnv1a64:70178e04a3b691b6",
+                "descriptionLength": 42,
+                "descriptionFingerprint": "fnv1a64:c021d5950f7bebcc",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              },
+              {
+                "id": "view_logs",
+                "titleLength": 9,
+                "titleFingerprint": "fnv1a64:9caf5e3237f4fbef",
+                "descriptionLength": 32,
+                "descriptionFingerprint": "fnv1a64:d5dddc94a85ba808",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              }
+            ],
+            "shortcutCount": 0,
+            "sdkActionsActive": false
+          },
+          "route": {
+            "currentRouteId": null,
+            "depth": 0,
+            "canPop": false,
+            "hintLabel": "Esc Close",
+            "stack": [],
+            "registeredDrillDownRouteCount": 0
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          },
+          "attachedPopup": {
+            "schemaVersion": 1,
+            "generation": 1,
+            "updatedStage": "open",
+            "stale": false,
+            "host": "main.actions",
+            "parentAutomationId": "main",
+            "parentKind": "Main",
+            "position": "TopCenter",
+            "displayId": "None",
+            "geometry": {
+              "popupRect": {
+                "x": 325,
+                "y": 215,
+                "width": 320,
+                "height": 128
+              },
+              "parentRect": {
+                "x": 110,
+                "y": 171,
+                "width": 750,
+                "height": 500
+              },
+              "anchorRect": {
+                "x": 485,
+                "y": 215,
+                "width": 0,
+                "height": 0
+              },
+              "position": "TopCenter",
+              "pinnedEdge": "top",
+              "displayId": "None"
+            }
+          },
+          "rowGeometry": {
+            "schemaVersion": 1,
+            "available": true,
+            "source": "runtime.actionsDialog.render",
+            "generation": 1,
+            "attachedPopupGeneration": 1,
+            "stale": false,
+            "measurementSource": "runtime.actionsDialog.render",
+            "coordinateSpace": "popupLogicalPx",
+            "units": "logicalPx",
+            "ownerWindowId": "actions-dialog",
+            "stopReason": null,
+            "quality": "model",
+            "popupWidth": 320,
+            "listViewportRect": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 90
+            },
+            "viewport": {
+              "containerBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 320,
+                "height": 126
+              },
+              "searchBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 320,
+                "height": 36
+              },
+              "contextHeaderBounds": null,
+              "listBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 90
+              },
+              "visibleRange": {
+                "firstGroupedIndex": 0,
+                "lastGroupedIndex": 2
+              },
+              "scroll": {
+                "topGroupedIndex": 0,
+                "pixelOffsetAvailable": false,
+                "pixelOffset": null
+              }
+            },
+            "contentHeight": 90,
+            "scrollTopItemIndex": 0,
+            "scrollTopContentY": 0,
+            "sectionBoundsAvailable": true,
+            "rowBoundsAvailable": true,
+            "selectedRowBoundsAvailable": true,
+            "hoverRowAvailable": true,
+            "hoveredRow": {
+              "available": true,
+              "state": "none",
+              "row": null
+            },
+            "shortcutBoundsAvailable": true,
+            "disabledReasonBoundsAvailable": false,
+            "shortcutLayout": {
+              "boundsAvailable": true,
+              "rowCount": 0,
+              "rows": [],
+              "stopReason": null,
+              "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel"
+            },
+            "disabledReasonLayout": {
+              "status": "no-visible-disabled-reasons",
+              "boundsAvailable": false,
+              "rowCount": 0,
+              "rows": []
+            },
+            "warnings": [],
+            "counts": {
+              "rows": 3,
+              "actions": 3,
+              "sections": 0
+            },
+            "selectedRow": {
+              "semanticId": "choice:0:reload_scripts",
+              "visualIndex": 0,
+              "groupedIndex": 0,
+              "kind": "action",
+              "labelLength": 14,
+              "labelFingerprint": "fnv1a64:6d39999af0d53304",
+              "actionId": "reload_scripts",
+              "selected": true,
+              "hovered": false,
+              "visible": true,
+              "clipped": false,
+              "contentY": 0,
+              "bounds": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 30
+              },
+              "rect": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 30
+              },
+              "innerBounds": {
+                "x": 4,
+                "y": 38,
+                "width": 312,
+                "height": 26
+              },
+              "innerRect": {
+                "x": 4,
+                "y": 38,
+                "width": 312,
+                "height": 26
+              },
+              "shortcut": null,
+              "shortcutTokens": [],
+              "shortcutBoundsAvailable": false,
+              "shortcutBounds": null,
+              "shortcutLayout": null,
+              "disabledReasonBoundsAvailable": false
+            },
+            "sections": [],
+            "rows": [
+              {
+                "semanticId": "choice:0:reload_scripts",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "action",
+                "labelLength": 14,
+                "labelFingerprint": "fnv1a64:6d39999af0d53304",
+                "actionId": "reload_scripts",
+                "selected": true,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 36,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 36,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 38,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 38,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:1:settings",
+                "visualIndex": 1,
+                "groupedIndex": 1,
+                "kind": "action",
+                "labelLength": 13,
+                "labelFingerprint": "fnv1a64:70178e04a3b691b6",
+                "actionId": "settings",
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 30,
+                "bounds": {
+                  "x": 0,
+                  "y": 66,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 66,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 68,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 68,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:2:view_logs",
+                "visualIndex": 2,
+                "groupedIndex": 2,
+                "kind": "action",
+                "labelLength": 9,
+                "labelFingerprint": "fnv1a64:9caf5e3237f4fbef",
+                "actionId": "view_logs",
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 60,
+                "bounds": {
+                  "x": 0,
+                  "y": 96,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 96,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 98,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 98,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    "elements": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "classification": "ok",
+      "session": "dt034-1779077911",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ActionsDialog"
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 320,
+          "height": 128,
+          "targetBoundsInScreenshot": {
+            "x": 215,
+            "y": 44,
+            "width": 320,
+            "height": 128
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "semanticSurface": {
+        "surfaceKind": null,
+        "appViewVariant": null
+      },
+      "totalCount": 5,
+      "returnedCount": 5,
+      "truncated": false,
+      "focusedSemanticId": "input:actions-search",
+      "selectedSemanticId": "choice:0:reload_scripts",
+      "duplicateSemanticIds": [],
+      "missingPrimitives": [
+        "elementBounds"
+      ],
+      "nodes": [
+        {
+          "semanticId": "input:actions-search",
+          "role": "input",
+          "type": "input",
+          "label": "",
+          "text": null,
+          "value": "",
+          "selected": null,
+          "focused": true,
+          "index": null,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "input:actions-search",
+            "type": "input",
+            "value": "",
+            "focused": true
+          }
+        },
+        {
+          "semanticId": "list:actions",
+          "role": "list",
+          "type": "list",
+          "label": "3 actions",
+          "text": "3 actions",
+          "value": null,
+          "selected": null,
+          "focused": null,
+          "index": null,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "list:actions",
+            "type": "list",
+            "text": "3 actions"
+          }
+        },
+        {
+          "semanticId": "choice:0:reload_scripts",
+          "role": "choice",
+          "type": "choice",
+          "label": "Reload Scripts",
+          "text": "Reload Scripts",
+          "value": "reload_scripts",
+          "selected": true,
+          "focused": null,
+          "index": 0,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "choice:0:reload_scripts",
+            "type": "choice",
+            "text": "Reload Scripts",
+            "value": "reload_scripts",
+            "selected": true,
+            "index": 0
+          }
+        },
+        {
+          "semanticId": "choice:1:settings",
+          "role": "choice",
+          "type": "choice",
+          "label": "Open Settings",
+          "text": "Open Settings",
+          "value": "settings",
+          "selected": false,
+          "focused": null,
+          "index": 1,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "choice:1:settings",
+            "type": "choice",
+            "text": "Open Settings",
+            "value": "settings",
+            "selected": false,
+            "index": 1
+          }
+        },
+        {
+          "semanticId": "choice:2:view_logs",
+          "role": "choice",
+          "type": "choice",
+          "label": "Show Logs",
+          "text": "Show Logs",
+          "value": "view_logs",
+          "selected": false,
+          "focused": null,
+          "index": 2,
+          "owner": null,
+          "actions": [],
+          "bounds": null,
+          "raw": {
+            "semanticId": "choice:2:view_logs",
+            "type": "choice",
+            "text": "Show Logs",
+            "value": "view_logs",
+            "selected": false,
+            "index": 2
+          }
+        }
+      ],
+      "warnings": [
+        "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+      ],
+      "errors": []
+    },
+    "layout": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "classification": "ok",
+      "session": "dt034-1779077911",
+      "include": [
+        "nodes",
+        "regions",
+        "scroll",
+        "anchors",
+        "resize",
+        "overlaps"
+      ],
+      "limit": 200,
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ActionsDialog"
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 320,
+          "height": 128,
+          "targetBoundsInScreenshot": {
+            "x": 215,
+            "y": 44,
+            "width": 320,
+            "height": 128
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "promptType": "actionsDialog",
+      "timestamp": "2026-05-18T04:19:10.855601+00:00",
+      "componentCount": 6,
+      "window": {
+        "rect": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "visible": null,
+        "focused": null
+      },
+      "viewport": {
+        "clientWidth": 320,
+        "clientHeight": 128,
+        "contentWidth": 320,
+        "contentHeight": 128,
+        "scrollWidth": 320,
+        "scrollHeight": 128,
+        "canScrollX": false,
+        "canScrollY": false,
+        "scrollTop": null,
+        "maxScrollTop": 0,
+        "overflowPolicyY": "hidden"
+      },
+      "pressure": {
+        "overflowY": false,
+        "hiddenContentHeight": 0,
+        "clippedNodeCount": 0,
+        "overlapCount": 0,
+        "footerOverlapCount": 0,
+        "inputOverlapCount": 0,
+        "pressureScore": 0
+      },
+      "viewportRect": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 128
+      },
+      "windowRect": {
+        "x": 325,
+        "y": 215,
+        "width": 320,
+        "height": 128
+      },
+      "regions": [
+        {
+          "name": "ActionsDialog",
+          "type": "container",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 128
+          }
+        },
+        {
+          "name": "ActionsSearchInput",
+          "type": "input",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 36
+          }
+        },
+        {
+          "name": "ActionsList",
+          "type": "list",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 320,
+            "height": 90
+          }
+        },
+        {
+          "name": "ActionsRow[0]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 320,
+            "height": 30
+          }
+        },
+        {
+          "name": "ActionsRow[1]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 66,
+            "width": 320,
+            "height": 30
+          }
+        },
+        {
+          "name": "ActionsRow[2]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 96,
+            "width": 320,
+            "height": 30
+          }
+        }
+      ],
+      "nodes": [
+        {
+          "name": "ActionsDialog",
+          "type": "container",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 128
+          },
+          "depth": 0,
+          "parent": null,
+          "children": [],
+          "explanation": "Actions dialog popup root measured from the registered automation target bounds.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsDialog",
+            "type": "container",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 128
+            },
+            "flex": {
+              "direction": "column"
+            },
+            "depth": 0,
+            "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+          }
+        },
+        {
+          "name": "ActionsSearchInput",
+          "type": "input",
+          "bounds": {
+            "x": 0,
+            "y": 0,
+            "width": 320,
+            "height": 36
+          },
+          "depth": 1,
+          "parent": "ActionsDialog",
+          "children": [],
+          "explanation": "Search/filter input owned by the ActionsDialog route.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsSearchInput",
+            "type": "input",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 36
+            },
+            "depth": 1,
+            "parent": "ActionsDialog",
+            "explanation": "Search/filter input owned by the ActionsDialog route."
+          }
+        },
+        {
+          "name": "ActionsList",
+          "type": "list",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 320,
+            "height": 90
+          },
+          "depth": 1,
+          "parent": "ActionsDialog",
+          "children": [],
+          "explanation": "Scrollable grouped actions list viewport.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsList",
+            "type": "list",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 90
+            },
+            "depth": 1,
+            "parent": "ActionsDialog",
+            "explanation": "Scrollable grouped actions list viewport."
+          }
+        },
+        {
+          "name": "ActionsRow[0]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 36,
+            "width": 320,
+            "height": 30
+          },
+          "depth": 2,
+          "parent": "ActionsList",
+          "children": [],
+          "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsRow[0]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          }
+        },
+        {
+          "name": "ActionsRow[1]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 66,
+            "width": 320,
+            "height": 30
+          },
+          "depth": 2,
+          "parent": "ActionsList",
+          "children": [],
+          "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsRow[1]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 66,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          }
+        },
+        {
+          "name": "ActionsRow[2]",
+          "type": "listItem",
+          "bounds": {
+            "x": 0,
+            "y": 96,
+            "width": 320,
+            "height": 30
+          },
+          "depth": 2,
+          "parent": "ActionsList",
+          "children": [],
+          "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+          "clipped": false,
+          "raw": {
+            "name": "ActionsRow[2]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 96,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          }
+        }
+      ],
+      "overlaps": [],
+      "resizePressure": {
+        "windowCanGrow": null,
+        "overflowY": false,
+        "desiredContentHeight": 128,
+        "measuredContentHeight": 128,
+        "clippedNodeCount": 0,
+        "overlapCount": 0,
+        "pressureScore": 0
+      },
+      "missingPrimitives": [],
+      "warnings": [],
+      "errors": [],
+      "rawLayout": {
+        "type": "layoutInfoResult",
+        "requestId": "devtools-layout-measure-1779077950829-503857",
+        "windowWidth": 320,
+        "windowHeight": 128,
+        "promptType": "actionsDialog",
+        "components": [
+          {
+            "name": "ActionsDialog",
+            "type": "container",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 128
+            },
+            "flex": {
+              "direction": "column"
+            },
+            "depth": 0,
+            "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+          },
+          {
+            "name": "ActionsSearchInput",
+            "type": "input",
+            "bounds": {
+              "x": 0,
+              "y": 0,
+              "width": 320,
+              "height": 36
+            },
+            "depth": 1,
+            "parent": "ActionsDialog",
+            "explanation": "Search/filter input owned by the ActionsDialog route."
+          },
+          {
+            "name": "ActionsList",
+            "type": "list",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 90
+            },
+            "depth": 1,
+            "parent": "ActionsDialog",
+            "explanation": "Scrollable grouped actions list viewport."
+          },
+          {
+            "name": "ActionsRow[0]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          },
+          {
+            "name": "ActionsRow[1]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 66,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          },
+          {
+            "name": "ActionsRow[2]",
+            "type": "listItem",
+            "bounds": {
+              "x": 0,
+              "y": 96,
+              "width": 320,
+              "height": 30
+            },
+            "depth": 2,
+            "parent": "ActionsList",
+            "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+          }
+        ],
+        "timestamp": "2026-05-18T04:19:10.855601+00:00"
+      }
+    },
+    "keyboard": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.keyboard",
+      "command": "keyboard.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "dt034-1779077911",
+      "requestedTarget": {
+        "selector": {
+          "type": "kind",
+          "kind": "actionsDialog"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ActionsDialog"
+      },
+      "target": {
+        "automationId": "actions-dialog",
+        "stableTargetId": "actions-dialog",
+        "targetKind": "ActionsDialog",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 325,
+          "y": 215,
+          "width": 320,
+          "height": 128
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 320,
+          "height": 128,
+          "targetBoundsInScreenshot": {
+            "x": 215,
+            "y": 44,
+            "width": 320,
+            "height": 128
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "keyboardPolicy": null,
+      "inputOwnership": null,
+      "focusPolicy": null,
+      "activeFooter": {
+        "owner": null,
+        "activeSurface": null,
+        "expectedSurface": null,
+        "nativeFooterHostInstalled": null,
+        "buttonCount": 0
+      },
+      "activePopup": null,
+      "bindings": [],
+      "duplicateKeys": [],
+      "missingPrimitives": [
+        "keyboardBindings"
+      ],
+      "warnings": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-keyboard-state-1779077949575-73c8f2",
+        "promptType": "actionsDialog",
+        "promptId": "target:ActionsDialog:actions-dialog",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true,
+        "actionsDialog": {
+          "schemaVersion": 1,
+          "surface": "actionsDialog",
+          "redacted": true,
+          "search": {
+            "textLength": 0,
+            "textFingerprint": "fnv1a64:cbf29ce484222325",
+            "placeholderLength": 7,
+            "placeholderFingerprint": "fnv1a64:8af61807443f32a4",
+            "hidden": false,
+            "position": "top"
+          },
+          "selection": {
+            "groupedIndex": 0,
+            "filteredIndex": 0,
+            "actionId": "reload_scripts",
+            "actionTitleLength": 14,
+            "actionTitleFingerprint": "fnv1a64:6d39999af0d53304",
+            "shouldClose": true
+          },
+          "actions": {
+            "totalCount": 3,
+            "filteredCount": 3,
+            "groupedRowCount": 3,
+            "sectionHeaderCount": 0,
+            "sections": {
+              "Unsectioned": 3
+            },
+            "visibleSampleLimit": 3,
+            "visibleSample": [
+              {
+                "id": "reload_scripts",
+                "titleLength": 14,
+                "titleFingerprint": "fnv1a64:6d39999af0d53304",
+                "descriptionLength": 49,
+                "descriptionFingerprint": "fnv1a64:42f12f2f0620455a",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              },
+              {
+                "id": "settings",
+                "titleLength": 13,
+                "titleFingerprint": "fnv1a64:70178e04a3b691b6",
+                "descriptionLength": 42,
+                "descriptionFingerprint": "fnv1a64:c021d5950f7bebcc",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              },
+              {
+                "id": "view_logs",
+                "titleLength": 9,
+                "titleFingerprint": "fnv1a64:9caf5e3237f4fbef",
+                "descriptionLength": 32,
+                "descriptionFingerprint": "fnv1a64:d5dddc94a85ba808",
+                "section": null,
+                "category": "GlobalOps",
+                "hasShortcut": false,
+                "shortcut": null,
+                "hasAction": false
+              }
+            ],
+            "shortcutCount": 0,
+            "sdkActionsActive": false
+          },
+          "route": {
+            "currentRouteId": null,
+            "depth": 0,
+            "canPop": false,
+            "hintLabel": "Esc Close",
+            "stack": [],
+            "registeredDrillDownRouteCount": 0
+          },
+          "config": {
+            "searchPosition": "top",
+            "sectionMode": "headers",
+            "anchor": "top",
+            "showIcons": true,
+            "showFooter": false,
+            "maxHeight": 400
+          },
+          "attachedPopup": {
+            "schemaVersion": 1,
+            "generation": 1,
+            "updatedStage": "open",
+            "stale": false,
+            "host": "main.actions",
+            "parentAutomationId": "main",
+            "parentKind": "Main",
+            "position": "TopCenter",
+            "displayId": "None",
+            "geometry": {
+              "popupRect": {
+                "x": 325,
+                "y": 215,
+                "width": 320,
+                "height": 128
+              },
+              "parentRect": {
+                "x": 110,
+                "y": 171,
+                "width": 750,
+                "height": 500
+              },
+              "anchorRect": {
+                "x": 485,
+                "y": 215,
+                "width": 0,
+                "height": 0
+              },
+              "position": "TopCenter",
+              "pinnedEdge": "top",
+              "displayId": "None"
+            }
+          },
+          "rowGeometry": {
+            "schemaVersion": 1,
+            "available": true,
+            "source": "runtime.actionsDialog.render",
+            "generation": 1,
+            "attachedPopupGeneration": 1,
+            "stale": false,
+            "measurementSource": "runtime.actionsDialog.render",
+            "coordinateSpace": "popupLogicalPx",
+            "units": "logicalPx",
+            "ownerWindowId": "actions-dialog",
+            "stopReason": null,
+            "quality": "model",
+            "popupWidth": 320,
+            "listViewportRect": {
+              "x": 0,
+              "y": 36,
+              "width": 320,
+              "height": 90
+            },
+            "viewport": {
+              "containerBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 320,
+                "height": 126
+              },
+              "searchBounds": {
+                "x": 0,
+                "y": 0,
+                "width": 320,
+                "height": 36
+              },
+              "contextHeaderBounds": null,
+              "listBounds": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 90
+              },
+              "visibleRange": {
+                "firstGroupedIndex": 0,
+                "lastGroupedIndex": 2
+              },
+              "scroll": {
+                "topGroupedIndex": 0,
+                "pixelOffsetAvailable": false,
+                "pixelOffset": null
+              }
+            },
+            "contentHeight": 90,
+            "scrollTopItemIndex": 0,
+            "scrollTopContentY": 0,
+            "sectionBoundsAvailable": true,
+            "rowBoundsAvailable": true,
+            "selectedRowBoundsAvailable": true,
+            "hoverRowAvailable": true,
+            "hoveredRow": {
+              "available": true,
+              "state": "none",
+              "row": null
+            },
+            "shortcutBoundsAvailable": true,
+            "disabledReasonBoundsAvailable": false,
+            "shortcutLayout": {
+              "boundsAvailable": true,
+              "rowCount": 0,
+              "rows": [],
+              "stopReason": null,
+              "measurementSource": "runtime.hintStrip.inlineShortcutLayoutModel"
+            },
+            "disabledReasonLayout": {
+              "status": "no-visible-disabled-reasons",
+              "boundsAvailable": false,
+              "rowCount": 0,
+              "rows": []
+            },
+            "warnings": [],
+            "counts": {
+              "rows": 3,
+              "actions": 3,
+              "sections": 0
+            },
+            "selectedRow": {
+              "semanticId": "choice:0:reload_scripts",
+              "visualIndex": 0,
+              "groupedIndex": 0,
+              "kind": "action",
+              "labelLength": 14,
+              "labelFingerprint": "fnv1a64:6d39999af0d53304",
+              "actionId": "reload_scripts",
+              "selected": true,
+              "hovered": false,
+              "visible": true,
+              "clipped": false,
+              "contentY": 0,
+              "bounds": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 30
+              },
+              "rect": {
+                "x": 0,
+                "y": 36,
+                "width": 320,
+                "height": 30
+              },
+              "innerBounds": {
+                "x": 4,
+                "y": 38,
+                "width": 312,
+                "height": 26
+              },
+              "innerRect": {
+                "x": 4,
+                "y": 38,
+                "width": 312,
+                "height": 26
+              },
+              "shortcut": null,
+              "shortcutTokens": [],
+              "shortcutBoundsAvailable": false,
+              "shortcutBounds": null,
+              "shortcutLayout": null,
+              "disabledReasonBoundsAvailable": false
+            },
+            "sections": [],
+            "rows": [
+              {
+                "semanticId": "choice:0:reload_scripts",
+                "visualIndex": 0,
+                "groupedIndex": 0,
+                "kind": "action",
+                "labelLength": 14,
+                "labelFingerprint": "fnv1a64:6d39999af0d53304",
+                "actionId": "reload_scripts",
+                "selected": true,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 0,
+                "bounds": {
+                  "x": 0,
+                  "y": 36,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 36,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 38,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 38,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:1:settings",
+                "visualIndex": 1,
+                "groupedIndex": 1,
+                "kind": "action",
+                "labelLength": 13,
+                "labelFingerprint": "fnv1a64:70178e04a3b691b6",
+                "actionId": "settings",
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 30,
+                "bounds": {
+                  "x": 0,
+                  "y": 66,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 66,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 68,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 68,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              },
+              {
+                "semanticId": "choice:2:view_logs",
+                "visualIndex": 2,
+                "groupedIndex": 2,
+                "kind": "action",
+                "labelLength": 9,
+                "labelFingerprint": "fnv1a64:9caf5e3237f4fbef",
+                "actionId": "view_logs",
+                "selected": false,
+                "hovered": false,
+                "visible": true,
+                "clipped": false,
+                "contentY": 60,
+                "bounds": {
+                  "x": 0,
+                  "y": 96,
+                  "width": 320,
+                  "height": 30
+                },
+                "rect": {
+                  "x": 0,
+                  "y": 96,
+                  "width": 320,
+                  "height": 30
+                },
+                "innerBounds": {
+                  "x": 4,
+                  "y": 98,
+                  "width": 312,
+                  "height": 26
+                },
+                "innerRect": {
+                  "x": 4,
+                  "y": 98,
+                  "width": 312,
+                  "height": 26
+                },
+                "shortcut": null,
+                "shortcutTokens": [],
+                "shortcutBoundsAvailable": false,
+                "shortcutBounds": null,
+                "shortcutLayout": null,
+                "disabledReasonBoundsAvailable": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "missingPrimitives": [],
+  "recommendedNext": [
+    "Add safe click/hover receipts for action rows before native pointer escalation."
+  ],
+  "proofMode": {
+    "keepOpen": false,
+    "keepOpenEnv": null,
+    "openTarget": null
+  },
+  "warnings": [],
+  "errors": []
+}

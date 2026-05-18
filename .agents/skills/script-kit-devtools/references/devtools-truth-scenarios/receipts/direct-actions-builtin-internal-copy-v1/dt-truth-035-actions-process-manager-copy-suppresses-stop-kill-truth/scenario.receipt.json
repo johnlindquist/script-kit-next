@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-035-actions-process-manager-copy-suppresses-stop-kill-truth",
+  "oracleSession": "actions-batch-four-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      { "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:60:process-manager"], "receiptRef": "02-main-select-parent.json" },
+      { "argv": ["bun", "scripts/devtools/actions.ts", "inspect", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"], "receiptRef": "12-actions-recover.inspect.json" },
+      { "argv": ["bun", "scripts/devtools/act.ts", "key", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "Enter"], "receiptRef": "16-enter-gated.json" }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Process Manager",
+    "footerIntent": "actions-dialog",
+    "actionId": "run_script",
+    "handlerId": "builtin-process-manager",
+    "sideEffectClass": "inspection-only-open",
+    "disabledReason": "submit requires --allow-submit",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:60:process-manager",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "userPath": [
+    { "step": "Select Process Manager from the launcher", "controlChannel": "direct-primitive", "receiptRef": "02-main-select-parent.json" },
+    { "step": "Filter Kill and Stop copy out of actions", "controlChannel": "direct-primitive", "receiptRef": "10-actions-stale2.inspect.json" },
+    { "step": "Recover Process copy and gate Enter", "controlChannel": "direct-primitive", "receiptRef": "16-enter-gated.json" }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.select", "receiptRef": "02-main-select-parent.json" },
+    { "command": "elements.snapshot", "receiptRef": "03-main-elements-selected.json" },
+    { "command": "text.measure", "receiptRef": "04-main-text.json" },
+    { "command": "act.open-actions", "receiptRef": "05-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "06-actions-open.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "07-actions-filter-stale1.json" },
+    { "command": "actions.inspect", "receiptRef": "08-actions-stale1.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "09-actions-filter-stale2.json" },
+    { "command": "actions.inspect", "receiptRef": "10-actions-stale2.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "11-actions-filter-recover.json" },
+    { "command": "actions.inspect", "receiptRef": "12-actions-recover.inspect.json" },
+    { "command": "text.measure", "receiptRef": "13-actions-text-recover.json" },
+    { "command": "focus.inspect", "receiptRef": "14-actions-focus.json" },
+    { "command": "layout.measure", "receiptRef": "15-actions-layout.json" },
+    { "command": "act.key", "receiptRef": "16-enter-gated.json" },
+    { "command": "targets.inspect", "receiptRef": "17-main-post-enter.inspect.json" },
+    { "command": "act.key", "receiptRef": "18-actions-escape-cleanup.json" }
+  ],
+  "truthChecks": [
+    { "name": "processManagerParentSelectionStable", "status": "pass" },
+    { "name": "processManagerCopyNamesInspectionOnly", "status": "pass" },
+    { "name": "processManagerKillFilterHasNoExecutableAction", "status": "pass" },
+    { "name": "processManagerStopFilterHasNoExecutableAction", "status": "pass" },
+    { "name": "processManagerSubmitBlockedWithoutAllowSubmit", "status": "pass" }
+  ]
+}

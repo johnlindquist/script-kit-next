@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-034-actions-file-search-empty-context-global-fallback-truth",
+  "oracleSession": "actions-batch-four-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      { "argv": ["bun", "scripts/devtools/act.ts", "key", "--main", "--key", "Enter", "--allow-submit"], "receiptRef": "03-main-enter-open-file-search.json" },
+      { "argv": ["bun", "scripts/devtools/act.ts", "open-actions", "--main", "--strict", "--surface", "FileSearchFull"], "receiptRef": "07-open-actions.json" },
+      { "argv": ["bun", "scripts/devtools/act.ts", "key", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "Enter"], "receiptRef": "17-enter-gated.json" }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-file-search-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:view_logs",
+    "visibleLabel": "Show Logs",
+    "footerIntent": "actions-dialog",
+    "actionId": "view_logs",
+    "handlerId": "file-search-empty-context-global-fallback",
+    "sideEffectClass": "global-safe-fallback",
+    "disabledReason": "submit requires --allow-submit",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:8:search-files",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "userPath": [
+    { "step": "Launch Search Files through non-destructive launcher submit", "controlChannel": "direct-primitive", "receiptRef": "03-main-enter-open-file-search.json" },
+    { "step": "Open actions from empty File Search surface", "controlChannel": "direct-primitive", "receiptRef": "08-actions-open.inspect.json" },
+    { "step": "Suppress file-only actions and recover Show Logs fallback", "controlChannel": "direct-primitive", "receiptRef": "14-actions-show-logs.inspect.json" }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.select", "receiptRef": "02-main-select-parent.json" },
+    { "command": "act.key", "receiptRef": "03-main-enter-open-file-search.json" },
+    { "command": "targets.inspect", "receiptRef": "04-file-search.inspect.json" },
+    { "command": "elements.snapshot", "receiptRef": "05-file-search-elements-empty.json" },
+    { "command": "act.set-input", "receiptRef": "06-file-search-set-empty-input.json" },
+    { "command": "act.open-actions", "receiptRef": "07-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "08-actions-open.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "09-actions-filter-copy-path.json" },
+    { "command": "actions.inspect", "receiptRef": "10-actions-copy-path.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "11-actions-filter-reveal.json" },
+    { "command": "actions.inspect", "receiptRef": "12-actions-reveal.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "13-actions-filter-show-logs.json" },
+    { "command": "actions.inspect", "receiptRef": "14-actions-show-logs.inspect.json" },
+    { "command": "focus.inspect", "receiptRef": "15-actions-focus.json" },
+    { "command": "layout.measure", "receiptRef": "16-actions-layout.json" },
+    { "command": "act.key", "receiptRef": "17-enter-gated.json" },
+    { "command": "targets.inspect", "receiptRef": "18-file-search-post-enter.inspect.json" },
+    { "command": "act.key", "receiptRef": "19-actions-escape-cleanup.json" }
+  ],
+  "truthChecks": [
+    { "name": "fileSearchEmptyContextShowsGlobalFallback", "status": "pass" },
+    { "name": "fileSearchEmptyContextSuppressesFileActions", "status": "pass" },
+    { "name": "copyPathFilterHasNoExecutableAction", "status": "pass" },
+    { "name": "revealFilterHasNoExecutableAction", "status": "pass" },
+    { "name": "fileSearchEmptyFallbackSubmitBlockedWithoutAllowSubmit", "status": "pass" }
+  ]
+}
