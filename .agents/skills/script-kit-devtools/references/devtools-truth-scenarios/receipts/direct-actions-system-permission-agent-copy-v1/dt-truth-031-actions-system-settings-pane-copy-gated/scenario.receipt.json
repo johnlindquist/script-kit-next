@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-031-actions-system-settings-pane-copy-gated",
+  "oracleSession": "actions-batch-three-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--main", "--strict", "--surface", "ScriptList"],
+        "receiptRef": "01-main.inspect.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:58:privacy-security-set"],
+        "receiptRef": "03-main-select-privacy.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "key", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "Enter"],
+        "receiptRef": "12-enter-gated.json"
+      }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Privacy & Security Settings",
+    "footerIntent": "actions-dialog",
+    "actionId": "run_script",
+    "handlerId": "builtin-privacy-security-settings",
+    "sideEffectClass": "system-settings-pane-open",
+    "disabledReason": "submit requires --allow-submit",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:58:privacy-security-set",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "userPath": [
+    {
+      "step": "Select Privacy & Security Settings from the main launcher",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "03-main-select-privacy.json"
+    },
+    {
+      "step": "Verify System Preferences copy is absent",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "09-actions-system-preferences.inspect.json"
+    },
+    {
+      "step": "Recover Privacy pane copy and gate Enter",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "12-enter-gated.json"
+    }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "02-main-filter-privacy.json" },
+    { "command": "act.select", "receiptRef": "03-main-select-privacy.json" },
+    { "command": "elements.snapshot", "receiptRef": "04-main-elements-selected.json" },
+    { "command": "act.open-actions", "receiptRef": "05-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "06-actions-open.inspect.json" },
+    { "command": "text.measure", "receiptRef": "07-actions-text-open.json" },
+    { "command": "act.set-input", "receiptRef": "08-actions-filter-system-preferences.json" },
+    { "command": "actions.inspect", "receiptRef": "09-actions-system-preferences.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "10-actions-filter-privacy.json" },
+    { "command": "actions.inspect", "receiptRef": "11-actions-privacy.inspect.json" },
+    { "command": "act.key", "receiptRef": "12-enter-gated.json" },
+    { "command": "targets.inspect", "receiptRef": "13-main-post-enter.inspect.json" },
+    { "command": "act.key", "receiptRef": "14-actions-escape-cleanup.json" }
+  ],
+  "truthChecks": [
+    { "name": "privacySettingsParentSelectionStable", "status": "pass" },
+    { "name": "privacySettingsCopyNamesPane", "status": "pass" },
+    { "name": "systemPreferencesTextAbsent", "status": "pass" },
+    { "name": "privacyFilterRecoveryRestoresPaneAction", "status": "pass" },
+    { "name": "privacySettingsSubmitBlockedWithoutExternalActivation", "status": "pass" }
+  ]
+}

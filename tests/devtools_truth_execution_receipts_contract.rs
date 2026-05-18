@@ -18,6 +18,9 @@ const GLOBAL_BUILTINS_MANIFEST: &str = include_str!(
 const BUILTINS_PREFERENCES_GLOBAL_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/slice.manifest.json"
 );
+const SYSTEM_PERMISSION_AGENT_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -68,6 +71,18 @@ const DT_027_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
 );
 const DT_028_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-028-actions-global-show-logs-copy-gated/scenario.receipt.json"
+);
+const DT_029_SYSTEM_PERMISSION_AGENT: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-029-actions-acp-history-agent-chat-copy-truth/scenario.receipt.json"
+);
+const DT_030_SYSTEM_PERMISSION_AGENT: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-030-actions-permission-assistant-accessibility-copy-gated/scenario.receipt.json"
+);
+const DT_031_SYSTEM_PERMISSION_AGENT: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-031-actions-system-settings-pane-copy-gated/scenario.receipt.json"
+);
+const DT_032_SYSTEM_PERMISSION_AGENT: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -1136,4 +1151,272 @@ fn direct_actions_builtins_preferences_global_records_copy_and_submit_truth() {
     assert_eq!(logs["truthModel"]["actionId"], "view_logs");
     assert_eq!(logs["truthModel"]["sideEffectClass"], "ui-toggle");
     assert_eq!(logs["safety"]["submitAttempted"], false);
+}
+
+#[test]
+fn direct_actions_system_permission_agent_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(SYSTEM_PERMISSION_AGENT_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(
+        manifest["sliceId"],
+        "direct-actions-system-permission-agent-copy-v1"
+    );
+    assert_eq!(manifest["oracleSession"], "actions-batch-three-plan");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-029-actions-acp-history-agent-chat-copy-truth",
+            "dt-truth-030-actions-permission-assistant-accessibility-copy-gated",
+            "dt-truth-031-actions-system-settings-pane-copy-gated",
+            "dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated",
+        ]
+    );
+
+    for forbidden in FORBIDDEN_EXECUTORS {
+        assert!(
+            !SYSTEM_PERMISSION_AGENT_MANIFEST.contains(forbidden),
+            "manifest must not reference forbidden executor {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_system_permission_agent_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-029-actions-acp-history-agent-chat-copy-truth",
+            DT_029_SYSTEM_PERMISSION_AGENT,
+        ),
+        (
+            "dt-truth-030-actions-permission-assistant-accessibility-copy-gated",
+            DT_030_SYSTEM_PERMISSION_AGENT,
+        ),
+        (
+            "dt-truth-031-actions-system-settings-pane-copy-gated",
+            DT_031_SYSTEM_PERMISSION_AGENT,
+        ),
+        (
+            "dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated",
+            DT_032_SYSTEM_PERMISSION_AGENT,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["oracleSession"], "actions-batch-three-plan");
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "systemPasteboardChanged",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+
+        let primitive_commands = receipt["primitiveReceipts"]
+            .as_array()
+            .expect("primitiveReceipts must be array")
+            .iter()
+            .filter_map(|entry| entry["command"].as_str())
+            .collect::<Vec<_>>();
+        for expected in [
+            "targets.inspect",
+            "act.set-input",
+            "act.select",
+            "act.open-actions",
+            "actions.inspect",
+        ] {
+            assert!(
+                primitive_commands.contains(&expected),
+                "{expected_id} missing primitive command coverage {expected}; got {primitive_commands:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_system_permission_agent_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_029_SYSTEM_PERMISSION_AGENT,
+            vec![
+                "acpHistoryParentSelectionStable",
+                "acpHistoryVisibleCopyNamesAgentChat",
+                "acpHistoryCopyRejectsAiConversations",
+                "genericAssistantFilterDoesNotExposeStaleAction",
+                "historyFilterRecoveryRestoresAction",
+            ],
+        ),
+        (
+            DT_030_SYSTEM_PERMISSION_AGENT,
+            vec![
+                "accessibilityPermissionAssistantParentSelectionStable",
+                "accessibilityAssistantCopyDoesNotClaimGrant",
+                "grantFilterHasNoExecutableAction",
+                "openFilterRecoveryRestoresAssistantAction",
+                "accessibilityAssistantSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_031_SYSTEM_PERMISSION_AGENT,
+            vec![
+                "privacySettingsParentSelectionStable",
+                "privacySettingsCopyNamesPane",
+                "systemPreferencesTextAbsent",
+                "privacyFilterRecoveryRestoresPaneAction",
+                "privacySettingsSubmitBlockedWithoutExternalActivation",
+            ],
+        ),
+        (
+            DT_032_SYSTEM_PERMISSION_AGENT,
+            vec![
+                "generateScriptParentSelectionStable",
+                "generateScriptCopyNamesAgentChatHandoff",
+                "currentAppGenerateScriptCopyNamesAgentChatHandoff",
+                "aiAssistantFilterDoesNotExposeStaleCopy",
+                "agentChatFilterRecoveryRestoresHandoffAction",
+                "generateScriptSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_system_permission_agent_records_copy_and_submit_truth() {
+    let history = parse(DT_029_SYSTEM_PERMISSION_AGENT);
+    assert_eq!(
+        history["truthModel"]["visibleLabel"],
+        "Open Agent Chat History"
+    );
+    assert_eq!(
+        history["truthModel"]["parentSubjectId"],
+        "choice:23:agent-chat-history"
+    );
+    assert_eq!(history["safety"]["submitAttempted"], false);
+
+    let accessibility = parse(DT_030_SYSTEM_PERMISSION_AGENT);
+    assert_eq!(
+        accessibility["truthModel"]["visibleLabel"],
+        "Open Accessibility Assistant"
+    );
+    assert_eq!(
+        accessibility["truthModel"]["sideEffectClass"],
+        "permission-assistant-open"
+    );
+    assert_eq!(
+        accessibility["safety"]["blockedClassification"],
+        "blocked-by-unsafe-operation"
+    );
+
+    let privacy = parse(DT_031_SYSTEM_PERMISSION_AGENT);
+    assert_eq!(
+        privacy["truthModel"]["visibleLabel"],
+        "Open Privacy & Security Settings"
+    );
+    assert_eq!(
+        privacy["truthModel"]["sideEffectClass"],
+        "system-settings-pane-open"
+    );
+    assert_eq!(privacy["safety"]["externalActivation"], false);
+
+    let generate = parse(DT_032_SYSTEM_PERMISSION_AGENT);
+    assert_eq!(
+        generate["truthModel"]["visibleLabel"],
+        "Open Agent Chat to Generate Script"
+    );
+    assert_eq!(
+        generate["truthModel"]["sideEffectClass"],
+        "agent-chat-handoff"
+    );
+    assert_eq!(
+        generate["truthModel"]["parentSubjectId"],
+        "choice:39:generate-script-with"
+    );
+    assert_eq!(generate["safety"]["submitAttempted"], false);
+}
+
+#[test]
+fn direct_devtools_script_list_selection_uses_named_state_machine() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    for expected in [
+        "enum DevtoolsSelectionState",
+        "DevtoolsSelectionState::MainMenuScriptList",
+        "DevtoolsSelectionState::ChoiceBackedPrompt",
+        "fn devtools_selection_state",
+        "fn select_main_menu_choice_by_semantic_id",
+        "fn select_prompt_choice_by_semantic_id",
+        "fn apply_main_menu_selection",
+    ] {
+        assert!(
+            source.contains(expected),
+            "direct DevTools selection should keep ScriptList support behind named state/action {expected}"
+        );
+    }
 }
