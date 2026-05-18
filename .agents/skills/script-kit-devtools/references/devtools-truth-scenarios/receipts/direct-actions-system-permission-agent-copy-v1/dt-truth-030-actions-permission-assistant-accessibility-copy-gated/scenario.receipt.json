@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-030-actions-permission-assistant-accessibility-copy-gated",
+  "oracleSession": "actions-batch-three-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--main", "--strict", "--surface", "ScriptList"],
+        "receiptRef": "01-main.inspect.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:21:accessibility-permis"],
+        "receiptRef": "03-main-select-accessibility.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "key", "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog", "--key", "Enter"],
+        "receiptRef": "12-enter-gated.json"
+      }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Accessibility Assistant",
+    "footerIntent": "actions-dialog",
+    "actionId": "run_script",
+    "handlerId": "builtin-accessibility-assistant",
+    "sideEffectClass": "permission-assistant-open",
+    "disabledReason": "submit requires --allow-submit",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:21:accessibility-permis",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "userPath": [
+    {
+      "step": "Select Accessibility Assistant from the main launcher",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "03-main-select-accessibility.json"
+    },
+    {
+      "step": "Verify Grant does not expose executable copy",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "09-actions-grant.inspect.json"
+    },
+    {
+      "step": "Press Enter without allow-submit and keep parent inspectable",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "12-enter-gated.json"
+    }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "02-main-filter-accessibility.json" },
+    { "command": "act.select", "receiptRef": "03-main-select-accessibility.json" },
+    { "command": "elements.snapshot", "receiptRef": "04-main-elements-selected.json" },
+    { "command": "act.open-actions", "receiptRef": "05-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "06-actions-open.inspect.json" },
+    { "command": "text.measure", "receiptRef": "07-actions-text-open.json" },
+    { "command": "act.set-input", "receiptRef": "08-actions-filter-grant.json" },
+    { "command": "actions.inspect", "receiptRef": "09-actions-grant.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "10-actions-filter-open.json" },
+    { "command": "layout.measure", "receiptRef": "11-actions-layout-recovered.json" },
+    { "command": "act.key", "receiptRef": "12-enter-gated.json" },
+    { "command": "targets.inspect", "receiptRef": "13-main-post-enter.inspect.json" },
+    { "command": "act.key", "receiptRef": "14-actions-escape-cleanup.json" }
+  ],
+  "truthChecks": [
+    { "name": "accessibilityPermissionAssistantParentSelectionStable", "status": "pass" },
+    { "name": "accessibilityAssistantCopyDoesNotClaimGrant", "status": "pass" },
+    { "name": "grantFilterHasNoExecutableAction", "status": "pass" },
+    { "name": "openFilterRecoveryRestoresAssistantAction", "status": "pass" },
+    { "name": "accessibilityAssistantSubmitBlockedWithoutAllowSubmit", "status": "pass" }
+  ]
+}

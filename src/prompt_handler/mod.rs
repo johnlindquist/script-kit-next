@@ -1300,6 +1300,13 @@ fn prompt_message_from_protocol_message(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DevtoolsSelectionState {
+    MainMenuScriptList,
+    ChoiceBackedPrompt,
+    UnsupportedPrompt,
+}
+
 // --- merged from part_001.rs ---
 impl ScriptListApp {
     pub(crate) fn build_automation_inspect_snapshot(
@@ -8699,28 +8706,17 @@ impl ScriptListApp {
         submit: bool,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
-        let choices = match &self.current_view {
-            AppView::ArgPrompt { choices, .. }
-            | AppView::MiniPrompt { choices, .. }
-            | AppView::MicroPrompt { choices, .. } => choices.clone(),
-            _ => anyhow::bail!("selectByValue only supports choice-backed prompts"),
-        };
-
-        let filtered = self.get_filtered_arg_choices(&choices);
-        let Some(index) = filtered.iter().position(|choice| choice.value == value) else {
-            anyhow::bail!("No visible choice matched value '{value}'");
-        };
-
-        self.arg_selected_index = index;
-        cx.notify();
-
-        let selected = filtered[index].value.clone();
-
-        if submit {
-            self.submit_current_value(cx);
+        match self.devtools_selection_state() {
+            DevtoolsSelectionState::MainMenuScriptList => {
+                self.select_main_menu_choice_by_value(value, submit, cx)
+            }
+            DevtoolsSelectionState::ChoiceBackedPrompt => {
+                self.select_prompt_choice_by_value(value, submit, cx)
+            }
+            DevtoolsSelectionState::UnsupportedPrompt => {
+                anyhow::bail!("selectByValue only supports visible choice surfaces")
+            }
         }
-
-        Ok(selected)
     }
 
     /// Select a choice by semantic ID, optionally submitting.
@@ -8757,6 +8753,188 @@ impl ScriptListApp {
             anyhow::bail!("No form field matched semantic ID '{semantic_id}'");
         }
 
+        match self.devtools_selection_state() {
+            DevtoolsSelectionState::MainMenuScriptList => {
+                self.select_main_menu_choice_by_semantic_id(semantic_id, submit, cx)
+            }
+            DevtoolsSelectionState::ChoiceBackedPrompt => {
+                self.select_prompt_choice_by_semantic_id(semantic_id, submit, cx)
+            }
+            DevtoolsSelectionState::UnsupportedPrompt => {
+                anyhow::bail!("selectBySemanticId only supports visible choice surfaces")
+            }
+        }
+    }
+
+    /// Select the first choice in the filtered list.
+    fn select_first_choice(
+        &mut self,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Option<String>> {
+        match self.devtools_selection_state() {
+            DevtoolsSelectionState::MainMenuScriptList => {
+                self.select_first_main_menu_choice(submit, cx)
+            }
+            DevtoolsSelectionState::ChoiceBackedPrompt => {
+                self.select_first_prompt_choice(submit, cx)
+            }
+            DevtoolsSelectionState::UnsupportedPrompt => {
+                anyhow::bail!("selectFirst only supports visible choice surfaces")
+            }
+        }
+    }
+
+    fn devtools_selection_state(&self) -> DevtoolsSelectionState {
+        match &self.current_view {
+            AppView::ScriptList => DevtoolsSelectionState::MainMenuScriptList,
+            AppView::ArgPrompt { .. } | AppView::MiniPrompt { .. } | AppView::MicroPrompt { .. } => {
+                DevtoolsSelectionState::ChoiceBackedPrompt
+            }
+            _ => DevtoolsSelectionState::UnsupportedPrompt,
+        }
+    }
+
+    fn select_main_menu_choice_by_value(
+        &mut self,
+        value: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        self.get_grouped_results_cached();
+        let Some(grouped_index) = self.main_menu_result_caches.grouped_items().iter().enumerate().find_map(
+            |(grouped_index, item)| {
+                let crate::list_item::GroupedListItem::Item(result_idx) = item else {
+                    return None;
+                };
+                let result = self
+                    .main_menu_result_caches
+                    .search_result_for_flat_index(*result_idx)?;
+                let command_id_matches = result
+                    .launcher_command_id()
+                    .as_deref()
+                    .is_some_and(|id| id == value);
+                (result.launcher_command_name() == value || command_id_matches).then_some(grouped_index)
+            },
+        ) else {
+            anyhow::bail!("No visible main-menu choice matched value '{value}'");
+        };
+
+        self.apply_main_menu_selection(grouped_index, submit, cx);
+        Ok(value.to_string())
+    }
+
+    fn select_main_menu_choice_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        let visible_choice_index = semantic_id
+            .split(':')
+            .nth(1)
+            .and_then(|index| index.parse::<usize>().ok())
+            .ok_or_else(|| anyhow::anyhow!("Invalid main-menu semantic ID '{semantic_id}'"))?;
+
+        self.get_grouped_results_cached();
+        let Some((grouped_index, selected)) = self
+            .main_menu_result_caches
+            .grouped_items()
+            .iter()
+            .enumerate()
+            .filter_map(|(candidate_grouped_index, item)| {
+                let crate::list_item::GroupedListItem::Item(result_idx) = item else {
+                    return None;
+                };
+                self.main_menu_result_caches
+                    .search_result_for_flat_index(*result_idx)
+                    .map(|result| (candidate_grouped_index, result))
+            })
+            .nth(visible_choice_index)
+            .map(|(candidate_grouped_index, result)| {
+                (candidate_grouped_index, result.launcher_command_name())
+            })
+        else {
+            anyhow::bail!("No visible main-menu choice matched semantic ID '{semantic_id}'");
+        };
+
+        self.apply_main_menu_selection(grouped_index, submit, cx);
+        Ok(selected)
+    }
+
+    fn select_first_main_menu_choice(
+        &mut self,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<Option<String>> {
+        self.get_grouped_results_cached();
+        let Some(grouped_index) =
+            self.main_menu_result_caches
+                .grouped_items()
+                .iter()
+                .enumerate()
+                .find_map(|(grouped_index, item)| {
+                    matches!(item, crate::list_item::GroupedListItem::Item(_)).then_some(grouped_index)
+                })
+        else {
+            anyhow::bail!("No visible main-menu choices to select");
+        };
+        let selected = self
+            .main_menu_result_caches
+            .search_result_for_grouped_item(grouped_index)
+            .map(|result| result.launcher_command_name());
+
+        self.apply_main_menu_selection(grouped_index, submit, cx);
+        Ok(selected)
+    }
+
+    fn apply_main_menu_selection(&mut self, grouped_index: usize, submit: bool, cx: &mut Context<Self>) {
+        self.selected_index = grouped_index;
+        self.hovered_index = None;
+        self.last_scrolled_index = None;
+        cx.notify();
+
+        if submit {
+            self.submit_current_value(cx);
+        }
+    }
+
+    fn select_prompt_choice_by_value(
+        &mut self,
+        value: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices.clone(),
+            _ => anyhow::bail!("selectByValue only supports choice-backed prompts"),
+        };
+
+        let filtered = self.get_filtered_arg_choices(&choices);
+        let Some(index) = filtered.iter().position(|choice| choice.value == value) else {
+            anyhow::bail!("No visible choice matched value '{value}'");
+        };
+
+        self.arg_selected_index = index;
+        cx.notify();
+
+        let selected = filtered[index].value.clone();
+
+        if submit {
+            self.submit_current_value(cx);
+        }
+
+        Ok(selected)
+    }
+
+    fn select_prompt_choice_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
         let choices = match &self.current_view {
             AppView::ArgPrompt { choices, .. }
             | AppView::MiniPrompt { choices, .. }
@@ -8785,8 +8963,7 @@ impl ScriptListApp {
         Ok(selected)
     }
 
-    /// Select the first choice in the filtered list.
-    fn select_first_choice(
+    fn select_first_prompt_choice(
         &mut self,
         submit: bool,
         cx: &mut Context<Self>,

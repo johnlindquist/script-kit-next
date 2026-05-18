@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated",
+  "oracleSession": "actions-batch-three-plan",
+  "executor": "direct-devtools-primitives",
+  "result": "pass",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": ["bun", "scripts/devtools/targets.ts", "inspect", "--main", "--strict", "--surface", "ScriptList"],
+        "receiptRef": "01-main.inspect.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:39:generate-script-with"],
+        "receiptRef": "03-main-select-generate-script-agent-chat.json"
+      },
+      {
+        "argv": ["bun", "scripts/devtools/act.ts", "select", "--main", "--strict", "--surface", "ScriptList", "--semantic-id", "choice:38:generate-script-from"],
+        "receiptRef": "17-current-app-select.json"
+      }
+    ]
+  },
+  "truthModel": {
+    "routeGeneration": "script-list-to-actions-dialog",
+    "focusOwner": "actionsDialog",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Agent Chat to Generate Script",
+    "footerIntent": "actions-dialog",
+    "actionId": "run_script",
+    "handlerId": "builtin-generate-script-agent-chat",
+    "sideEffectClass": "agent-chat-handoff",
+    "disabledReason": "submit requires --allow-submit",
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:39:generate-script-with",
+    "layoutGeneration": "actions-dialog-filtered"
+  },
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "userPath": [
+    {
+      "step": "Select Generate Script with Agent Chat",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "03-main-select-generate-script-agent-chat.json"
+    },
+    {
+      "step": "Reject stale AI Assistant copy and recover Agent Chat copy",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "11-actions-agent-chat.inspect.json"
+    },
+    {
+      "step": "Verify Current App variant also names Agent Chat handoff",
+      "controlChannel": "direct-primitive",
+      "receiptRef": "20-current-app-actions-open.inspect.json"
+    }
+  ],
+  "primitiveReceipts": [
+    { "command": "targets.inspect", "receiptRef": "01-main.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "02-main-filter-generate-script.json" },
+    { "command": "act.select", "receiptRef": "03-main-select-generate-script-agent-chat.json" },
+    { "command": "elements.snapshot", "receiptRef": "04-main-elements-selected-agent-chat.json" },
+    { "command": "act.open-actions", "receiptRef": "05-open-actions-agent-chat.json" },
+    { "command": "actions.inspect", "receiptRef": "06-actions-open-agent-chat.inspect.json" },
+    { "command": "text.measure", "receiptRef": "07-actions-text-open-agent-chat.json" },
+    { "command": "act.set-input", "receiptRef": "08-actions-filter-ai-assistant.json" },
+    { "command": "actions.inspect", "receiptRef": "09-actions-ai-assistant.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "10-actions-filter-agent-chat.json" },
+    { "command": "actions.inspect", "receiptRef": "11-actions-agent-chat.inspect.json" },
+    { "command": "act.key", "receiptRef": "12-enter-gated-agent-chat.json" },
+    { "command": "targets.inspect", "receiptRef": "13-main-post-enter-agent-chat.inspect.json" },
+    { "command": "act.key", "receiptRef": "14-actions-escape-agent-chat.json" },
+    { "command": "targets.inspect", "receiptRef": "15-current-app-main.inspect.json" },
+    { "command": "act.set-input", "receiptRef": "16-current-app-filter-generate-script.json" },
+    { "command": "act.select", "receiptRef": "17-current-app-select.json" },
+    { "command": "elements.snapshot", "receiptRef": "18-current-app-elements-selected.json" },
+    { "command": "act.open-actions", "receiptRef": "19-current-app-open-actions.json" },
+    { "command": "actions.inspect", "receiptRef": "20-current-app-actions-open.inspect.json" },
+    { "command": "text.measure", "receiptRef": "21-current-app-actions-text.json" },
+    { "command": "act.key", "receiptRef": "22-current-app-actions-escape.json" }
+  ],
+  "truthChecks": [
+    { "name": "generateScriptParentSelectionStable", "status": "pass" },
+    { "name": "generateScriptCopyNamesAgentChatHandoff", "status": "pass" },
+    { "name": "currentAppGenerateScriptCopyNamesAgentChatHandoff", "status": "pass" },
+    { "name": "aiAssistantFilterDoesNotExposeStaleCopy", "status": "pass" },
+    { "name": "agentChatFilterRecoveryRestoresHandoffAction", "status": "pass" },
+    { "name": "generateScriptSubmitBlockedWithoutAllowSubmit", "status": "pass" }
+  ]
+}
