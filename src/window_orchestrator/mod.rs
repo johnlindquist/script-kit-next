@@ -428,6 +428,11 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                         make_key: true,
                     });
                     cmds.push(WindowCommand::FocusMain(FocusToken::ChatComposer));
+                } else if target == DictationTarget::ExternalApp {
+                    next.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
+                    if next.key_surface == Some(SurfaceId::DictationOverlay) {
+                        next.key_surface = next_visible_surface(&next);
+                    }
                 } else {
                     if restore_main_visibility {
                         next.main.visibility = MainVisibility::Visible;
@@ -489,8 +494,15 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                 cmds.push(WindowCommand::CloseDictationOverlay);
                 next.dictation = DictationSurfaceState::Hidden;
 
-                let should_restore_main =
-                    restore_main_visibility && target != DictationTarget::TabAiHarness;
+                let should_restore_main = restore_main_visibility
+                    && !matches!(
+                        target,
+                        DictationTarget::TabAiHarness | DictationTarget::ExternalApp
+                    );
+
+                if target == DictationTarget::ExternalApp {
+                    next.main.visibility = MainVisibility::Hidden(HiddenReason::Dismissed);
+                }
 
                 if should_restore_main {
                     next.main.visibility = MainVisibility::Visible;

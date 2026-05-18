@@ -4,10 +4,9 @@ import { join } from "node:path";
 export const metadata = {
   name: "Power Syntax Refine Fixture",
   description:
-    "Metadata-rich fixture for : tags, alias, shortcut, has, and meta path demos",
+    "Metadata-rich fixture for : tags, alias, has, and meta path demos",
   icon: "filter",
   alias: "ps-refine",
-  shortcut: "cmd+shift+;",
   tags: ["menu-syntax", "demo", "power-syntax", "script-kit"],
   category: "menu-syntax-demo",
   domain: {

@@ -375,6 +375,7 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
         theme: parse_optional_field(object, "theme", correlation_id),
+        designs: parse_optional_field(object, "designs", correlation_id),
         dictation: parse_optional_field(object, "dictation", correlation_id),
         ai: parse_optional_field(object, "ai", correlation_id),
         window_management: parse_optional_field(object, "windowManagement", correlation_id),

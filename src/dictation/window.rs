@@ -357,8 +357,8 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 
 /// Single-word action label for stopping/submitting the current recording.
 const ACTION_STOP_LABEL: &str = "Stop";
-/// Single-word action label for cycling the dictation microphone.
-const ACTION_MIC_LABEL: &str = "Mic";
+/// Changes the preference used by the next capture; the live session keeps its opened mic.
+const ACTION_MIC_LABEL: &str = "Next Mic";
 /// Single-word action label for discarding the current recording.
 const ACTION_CANCEL_LABEL: &str = "Cancel";
 /// Single-word action label for resuming from confirmation.
@@ -580,7 +580,7 @@ impl DictationOverlay {
         tracing::info!(
             category = "DICTATION",
             microphone = %next_item.title,
-            "Overlay microphone selector updated preference"
+            "Overlay microphone selector updated preference for next recording"
         );
         cx.notify();
     }
@@ -1326,21 +1326,12 @@ fn dictation_stop_keycap() -> SharedString {
         .get_dictation_hotkey()
         .map(|hotkey| dictation_hotkey_keycap(&hotkey))
         .filter(|key| !key.trim().is_empty())
-        .unwrap_or_else(default_dictation_stop_keycap)
+        .unwrap_or_else(|| "click".to_string())
         .into()
 }
 
 fn dictation_hotkey_keycap(hotkey: &crate::config::HotkeyConfig) -> String {
     hotkey.to_display_string().replace("Semicolon", ";")
-}
-
-fn default_dictation_stop_keycap() -> String {
-    crate::config::HotkeyConfig {
-        modifiers: vec!["meta".to_string(), "shift".to_string()],
-        key: "Semicolon".to_string(),
-    }
-    .to_display_string()
-    .replace("Semicolon", ";")
 }
 
 fn current_microphone_keycap() -> SharedString {
@@ -1386,7 +1377,7 @@ fn microphone_keycap_label(title: &str) -> String {
 fn action_chip_width(label: &str) -> f32 {
     match label {
         ACTION_CONTINUE_LABEL => 112.0,
-        ACTION_MIC_LABEL => 136.0,
+        ACTION_MIC_LABEL => 152.0,
         ACTION_CLOSE_LABEL => 72.0,
         _ => 96.0,
     }

@@ -245,6 +245,7 @@ interface Config {
   watcher?: WatcherConfig;
   layout?: LayoutConfig;
   theme?: ThemeSelectionPreferences;
+  designs?: DesignsConfig;
   dictation?: DictationPreferences;
   ai?: AiPreferences;
   windowManagement?: WindowManagementPreferences;
@@ -255,6 +256,32 @@ interface Config {
   powerSyntax?: PowerSyntaxConfig;
   tray?: TrayConfig;
   updates?: UpdatesConfig;
+}
+
+type Cmd1Behavior = "picker" | "cycle";
+type DesignDensityChoice = "compact" | "comfortable" | "spacious";
+type FontFamilyChoice = "system" | "monospace" | "serif";
+type VibrancyChoice = "none" | "light" | "medium" | "heavy";
+type ChromeOpacityChoice = "low" | "med" | "high";
+type IconStyleChoice = "mono" | "color" | "hidden";
+type SeparatorStyleChoice = "none" | "hairline" | "rule" | "grid";
+
+interface DesignOverrides {
+  accent?: string;
+  density?: DesignDensityChoice;
+  fontFamily?: FontFamilyChoice;
+  fontScale?: number;
+  vibrancy?: VibrancyChoice;
+  chromeOpacity?: ChromeOpacityChoice;
+  iconStyle?: IconStyleChoice;
+  separatorStyle?: SeparatorStyleChoice;
+  rowHeightNudge?: number;
+}
+
+interface DesignsConfig {
+  activeId?: string;
+  cmd1Behavior?: Cmd1Behavior;
+  overrides?: Record<string, DesignOverrides>;
 }
 
 // =============================================================================
@@ -297,6 +324,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
   },
   aiHotkeyEnabled: true,
   logsHotkeyEnabled: true,
+  dictationHotkey: { modifiers: ["meta", "shift"], key: "Semicolon" },
   dictationHotkeyEnabled: true,
   watcher: {
     debounceMs: 500,
@@ -479,14 +507,14 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   {
     key: "dictationHotkey",
     type: "HotkeyConfig",
-    default: undefined,
-    description: "Hotkey for toggling dictation (no default; set explicitly)"
+    default: { modifiers: ["meta", "shift"], key: "Semicolon" },
+    description: "Hotkey for toggling dictation (defaults to Cmd+Shift+; when enabled)"
   },
   {
     key: "dictationHotkeyEnabled",
     type: "boolean",
     default: true,
-    description: "Whether the dictation hotkey is registered (only when dictationHotkey is set)"
+    description: "Whether the dictation hotkey is registered"
   },
   // --- Suggested ---
   {

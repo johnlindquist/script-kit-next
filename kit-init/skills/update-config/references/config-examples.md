@@ -25,7 +25,7 @@ export default {
 
   dictationHotkey: {
     modifiers: ["meta", "shift"],
-    key: "KeyD",
+    key: "Semicolon",
   },
   dictationHotkeyEnabled: true,
 

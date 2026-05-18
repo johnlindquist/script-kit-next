@@ -95,8 +95,14 @@ fn root_launcher_renames_current_app_commands_row_from_frontmost_app_snapshot() 
         "dynamic current-app relabeling must preserve the stable builtin/do-in-current-app id"
     );
     assert!(
-        compacted.contains("entry.name=label;"),
+        compacted.contains("entry.name=commands_label;"),
         "dynamic current-app relabeling should affect only the visible row name"
+    );
+    assert!(
+        compacted.contains("entry.id==\"builtin/dictation\"")
+            && compacted.contains("entry.name=format!(\"Dictateto{app_name}\");")
+            && compacted.contains("entry.description=format!(\"Voicedictationfor{app_name}\");"),
+        "root launcher filtering should derive the visible dictation row from the same tracked app"
     );
 }
 

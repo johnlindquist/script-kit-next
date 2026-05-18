@@ -656,7 +656,12 @@ impl ScriptListApp {
                 tracing::error!(message = %webcam_action.start_failure_log(&err));
                 // Still show the prompt with an error
                 let entity_weak2 = entity.downgrade();
-                let err_msg = err.to_string();
+                let err_msg = match err {
+                    crate::camera::WebcamStartError::PermissionDenied { .. } => {
+                        "Camera access is denied. Enable Script Kit in System Settings → Privacy & Security → Camera".to_string()
+                    }
+                    _ => err.to_string(),
+                };
                 cx.spawn(async move |_this, cx| {
                     cx.update(|cx| {
                         if let Some(entity) = entity_weak2.upgrade() {

@@ -19,7 +19,7 @@ use crate::components::text_input::{
     render_text_input_cursor_selection, TextHighlightRange, TextInputRenderConfig,
 };
 use crate::prompts::markdown::render_markdown_with_scope;
-use crate::theme::{self, PromptColors};
+use crate::theme::{self, AppChromeColors, PromptColors};
 
 use super::composer_state::{
     reduce_acp_composer_picker, AcpComposerPickerDismissReason, AcpComposerPickerEvent,
@@ -7607,7 +7607,9 @@ impl Render for AcpChatView {
         let history_popup_open = self.history_menu.is_some();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
-        let mention_accent = theme::get_cached_theme().colors.accent.selected;
+        let chrome = AppChromeColors::from_theme(&theme);
+        let placeholder_text = rgba(chrome.placeholder_text_rgba);
+        let mention_accent = theme.colors.accent.selected;
         let mut mention_highlights = Self::attached_inline_mention_highlight_ranges(
             &input_text,
             &attached_parts,
@@ -7694,7 +7696,7 @@ impl Render for AcpChatView {
                             .text_size(px(Self::ACP_INPUT_FONT_SIZE))
                             .line_height(px(22.0))
                             .text_color(if input_text.is_empty() {
-                                rgb(theme.colors.text.muted)
+                                placeholder_text
                             } else {
                                 rgb(theme.colors.text.primary)
                             })
@@ -7709,7 +7711,7 @@ impl Render for AcpChatView {
                                     .child(
                                         div()
                                             .ml(px(-2.0))
-                                            .text_color(rgb(theme.colors.text.muted))
+                                            .text_color(placeholder_text)
                                             .child(if is_empty {
                                                 "Ask anything\u{2026}"
                                             } else {

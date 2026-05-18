@@ -129,9 +129,10 @@ export default {
   // logsHotkey: { modifiers: ["meta", "shift"], key: "KeyL" },
   // logsHotkeyEnabled: true,
 
-  // Dictation has no default shortcut; set it explicitly if you want one.
-  // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
-  // dictationHotkeyEnabled: true, // only registers when dictationHotkey is set
+  // Dictation defaults to Cmd+Shift+; when enabled.
+  // Change this value to customize the global dictation shortcut.
+  dictationHotkey: { modifiers: ["meta", "shift"], key: "Semicolon" },
+  dictationHotkeyEnabled: true,
   //
   // Runtime preferences also live here:
   // theme: { presetId: "nord" },

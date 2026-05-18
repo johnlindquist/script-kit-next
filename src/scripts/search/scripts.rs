@@ -368,7 +368,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     matches
 }
 
-/// Candidate for the best fuzzy-matching line within a script body.
+/// Candidate for the best matching line within a script body.
 #[derive(Debug)]
 struct ContentLineCandidate {
     score: u32,
@@ -378,11 +378,16 @@ struct ContentLineCandidate {
     byte_range: Range<usize>,
 }
 
-/// Scan body text line-by-line with nucleo fuzzy matching.
+/// Scan body text line-by-line.
+///
+/// Single-token queries keep fuzzy matching for code identifiers and imports.
+/// Multi-word queries require an exact phrase so natural-language prompts do
+/// not sparsely match arbitrary source lines and outrank launcher fallbacks.
 /// Returns the best-scoring line with its 1-based line number and match indices.
 fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContentMatch> {
     let mut best: Option<ContentLineCandidate> = None;
-    let mut ctx = NucleoCtx::new(query_lower);
+    let use_fuzzy_content_search = should_use_fuzzy_content_search(query_lower);
+    let mut ctx = use_fuzzy_content_search.then(|| NucleoCtx::new(query_lower));
     let mut byte_offset = 0usize;
 
     for (idx, segment) in body.split_inclusive('\n').enumerate() {
@@ -397,32 +402,46 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
             continue;
         }
 
-        let Some(score) = ctx.score(trimmed) else {
-            byte_offset += segment.len();
-            continue;
-        };
-
-        let Some(line_match_indices) = ctx.indices(trimmed) else {
-            byte_offset += segment.len();
-            continue;
-        };
-
-        let byte_range = match matched_span_byte_range(line, trimmed, &line_match_indices) {
-            Some(line_relative_range) => {
-                (byte_offset + line_relative_range.start)..(byte_offset + line_relative_range.end)
-            }
-            None => {
+        let candidate = if use_fuzzy_content_search {
+            let ctx = ctx
+                .as_mut()
+                .expect("fuzzy content search requires a Nucleo context");
+            let Some(score) = ctx.score(trimmed) else {
                 byte_offset += segment.len();
                 continue;
-            }
-        };
+            };
 
-        let candidate = ContentLineCandidate {
-            score,
-            line_number: idx + 1,
-            line_text: trimmed.to_string(),
-            line_match_indices,
-            byte_range,
+            let Some(line_match_indices) = ctx.indices(trimmed) else {
+                byte_offset += segment.len();
+                continue;
+            };
+
+            let byte_range = match matched_span_byte_range(line, trimmed, &line_match_indices) {
+                Some(line_relative_range) => {
+                    (byte_offset + line_relative_range.start)
+                        ..(byte_offset + line_relative_range.end)
+                }
+                None => {
+                    byte_offset += segment.len();
+                    continue;
+                }
+            };
+
+            ContentLineCandidate {
+                score,
+                line_number: idx + 1,
+                line_text: trimmed.to_string(),
+                line_match_indices,
+                byte_range,
+            }
+        } else {
+            let Some(exact) =
+                exact_content_line_match(line, trimmed, query_lower, byte_offset, idx + 1)
+            else {
+                byte_offset += segment.len();
+                continue;
+            };
+            exact
         };
 
         let replace = match &best {
@@ -445,6 +464,37 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
         line_text: c.line_text,
         line_match_indices: c.line_match_indices,
         byte_range: c.byte_range,
+    })
+}
+
+fn should_use_fuzzy_content_search(query_lower: &str) -> bool {
+    !query_lower.chars().any(char::is_whitespace)
+}
+
+fn exact_content_line_match(
+    raw_line: &str,
+    trimmed_line: &str,
+    query_lower: &str,
+    body_byte_offset: usize,
+    line_number: usize,
+) -> Option<ContentLineCandidate> {
+    let trimmed_start = raw_line.find(trimmed_line)?;
+    let query_len = query_lower.len();
+    let match_start = if trimmed_line.is_ascii() && query_lower.is_ascii() {
+        find_ignore_ascii_case(trimmed_line, query_lower)?
+    } else {
+        trimmed_line.to_lowercase().find(query_lower)?
+    };
+    let match_end = match_start.checked_add(query_len)?;
+    let line_match_indices = (match_start..match_end).collect();
+
+    Some(ContentLineCandidate {
+        score: query_len as u32,
+        line_number,
+        line_text: trimmed_line.to_string(),
+        line_match_indices,
+        byte_range: (body_byte_offset + trimmed_start + match_start)
+            ..(body_byte_offset + trimmed_start + match_end),
     })
 }
 

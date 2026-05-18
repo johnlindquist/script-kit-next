@@ -255,7 +255,7 @@ fn resolve_default_acp_launch_with_codex_probe(
 ///
 /// Selection priority:
 /// 1. Preferred agent ID (if provided and found in catalog)
-/// 2. Implicit Codex default when local Codex CLI exists and no preference exists
+/// 2. Implicit Codex default when no preference exists
 /// 3. Best ranked launchable agent that satisfies requirements
 /// 4. Best ranked launchable agent (capability mismatch blocker)
 /// 5. First agent in catalog (will have a blocker)
@@ -285,8 +285,8 @@ fn resolve_acp_launch_with_requirements_and_codex_probe(
 
     let selected = preferred
         .cloned()
-        // Implicit Codex default: if local Codex CLI is present and there is no
-        // explicit preference, keep Codex selected even when setup blocks it.
+        // Implicit Codex default: without an explicit preference, keep Codex
+        // selected even when setup blocks it.
         .or_else(|| {
             implicit_codex_default_candidate(agents, preferred_agent_id, implicit_codex_default)
         })
@@ -945,7 +945,7 @@ mod tests {
     }
 
     #[test]
-    fn default_resolution_uses_existing_ranking_when_codex_cli_absent() {
+    fn default_resolution_prefers_codex_even_when_probe_is_not_ready() {
         let agents = vec![
             make_entry(
                 "opencode",
@@ -965,10 +965,10 @@ mod tests {
             &agents,
             None,
             AcpLaunchRequirements::default(),
-            false,
+            true,
         );
 
-        assert_eq!(result.selected_agent_id(), Some("opencode"));
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
     }
 
     #[test]

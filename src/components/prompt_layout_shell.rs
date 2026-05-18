@@ -688,7 +688,7 @@ pub(crate) fn render_hint_strip_leading_text(
         .into_any_element()
 }
 
-/// Number of footer hints the design spec mandates: `↵ Run`, Agent Chat, `⌘K Actions`.
+/// Number of footer hints the design spec mandates: `↵ Run`, Agent, `⌘K Actions`.
 pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 
 /// The canonical three-key footer hints from `.impeccable.md`.

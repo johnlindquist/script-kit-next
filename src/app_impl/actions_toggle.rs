@@ -737,7 +737,9 @@ impl ScriptListApp {
                                 .selected_agent
                                 .as_ref()
                                 .map(|agent| agent.id.to_string()),
-                            state.catalog_entries.clone(),
+                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                                &state.catalog_entries,
+                            ),
                             None,
                             Vec::new(),
                         ),
@@ -745,7 +747,9 @@ impl ScriptListApp {
                             let thread = thread.read(cx);
                             (
                                 thread.selected_agent_id().map(str::to_string),
-                                thread.available_agents().to_vec(),
+                                crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                                    thread.available_agents(),
+                                ),
                                 thread.selected_model_id().map(str::to_string),
                                 thread.available_models().to_vec(),
                             )

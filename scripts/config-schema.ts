@@ -915,6 +915,44 @@ export interface CommandConfig {
  */
 export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
 
+export type Cmd1Behavior = "picker" | "cycle";
+export type DesignDensityChoice = "compact" | "comfortable" | "spacious";
+export type FontFamilyChoice = "system" | "monospace" | "serif";
+export type VibrancyChoice = "none" | "light" | "medium" | "heavy";
+export type ChromeOpacityChoice = "low" | "med" | "high";
+export type IconStyleChoice = "mono" | "color" | "hidden";
+export type SeparatorStyleChoice = "none" | "hairline" | "rule" | "grid";
+
+export interface DesignOverrides {
+  /** Hex accent color override, e.g. "#ff8800". */
+  accent?: string;
+  /** Row density override for this design. */
+  density?: DesignDensityChoice;
+  /** Font family class override for this design. */
+  fontFamily?: FontFamilyChoice;
+  /** Small signed font scale nudge. */
+  fontScale?: number;
+  /** Window/background vibrancy intensity. */
+  vibrancy?: VibrancyChoice;
+  /** Chrome opacity preset. */
+  chromeOpacity?: ChromeOpacityChoice;
+  /** Icon rendering style. */
+  iconStyle?: IconStyleChoice;
+  /** Separator rendering style. */
+  separatorStyle?: SeparatorStyleChoice;
+  /** Small signed row height nudge. */
+  rowHeightNudge?: number;
+}
+
+export interface DesignsConfig {
+  /** Stable catalog id for the active design. */
+  activeId?: string;
+  /** Cmd+1 behavior: open the picker or cycle designs. */
+  cmd1Behavior?: Cmd1Behavior;
+  /** Per-design overrides keyed by stable catalog id. */
+  overrides?: Record<string, DesignOverrides>;
+}
+
 // =============================================================================
 // MCP CONFIGURATION TYPES
 // =============================================================================
@@ -1418,6 +1456,26 @@ export interface Config extends BaseConfig {
    * ```
    */
   ai?: AiPreferences;
+
+  /**
+   * Design picker preferences and per-design token overrides.
+   *
+   * @default undefined (use Script Kit Classic with no overrides)
+   * @example
+   * ```typescript
+   * designs: {
+   *   activeId: "script-kit-classic",
+   *   cmd1Behavior: "picker",
+   *   overrides: {
+   *     "script-kit-classic": {
+   *       density: "comfortable",
+   *       iconStyle: "mono"
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  designs?: DesignsConfig;
 
   /**
    * Window vibrancy material and show/hide animation preferences.

@@ -832,8 +832,8 @@ export default {
   // logsHotkey: { modifiers: ["meta", "shift"], key: "KeyL" },
   logsHotkeyEnabled: true,
 
-  // No default dictation shortcut — set one only if you want it.
-  // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
+  // Defaults to Cmd+Shift+; when enabled and unset.
+  dictationHotkey: { modifiers: ["meta", "shift"], key: "Semicolon" },
   dictationHotkeyEnabled: true,
 
   watcher: {

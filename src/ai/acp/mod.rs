@@ -58,8 +58,9 @@ pub(crate) use config::{
     load_acp_agent_catalog_entries, load_acp_agent_configs, load_acp_agent_runtime_states,
     load_preferred_acp_agent_id, open_acp_agents_catalog_in_editor,
     persist_acp_agent_runtime_state, persist_preferred_acp_agent_id,
-    persist_preferred_acp_agent_id_sync, prewarm_agent_config, AcpAgentConfig,
-    AcpAgentRuntimeState, AcpAgentRuntimeStateFile,
+    persist_preferred_acp_agent_id_sync, prewarm_agent_config,
+    refresh_acp_agent_catalog_entries_with_snapshot, AcpAgentConfig, AcpAgentRuntimeState,
+    AcpAgentRuntimeStateFile,
 };
 #[allow(deprecated)]
 pub(crate) use context::{

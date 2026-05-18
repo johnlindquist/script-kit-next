@@ -233,8 +233,8 @@ mod tests {
             .expect("Failed to read src/app_impl/ui_window.rs");
 
         assert!(
-            content.contains("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\")"),
-            "native footer should advertise AI with ⌘↵"
+            content.contains("FooterAction::Ai,\n                \"⌘↵\",\n                crate::ai::acp::labels::AGENT_CHAT_LABEL,"),
+            "native footer should advertise Agent with ⌘↵ via AGENT_CHAT_LABEL"
         );
         assert!(
             !content.contains("FooterButtonConfig::new(FooterAction::Ai, \"⇥\", \"AI\")"),
@@ -242,14 +242,14 @@ mod tests {
         );
 
         let ai_pos = content
-            .find("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\")")
+            .find("FooterAction::Ai,\n                \"⌘↵\",\n                crate::ai::acp::labels::AGENT_CHAT_LABEL,")
             .expect("native footer AI button must exist");
         let run_pos = content
             .find("FooterButtonConfig::new(FooterAction::Run, \"↵\", run_label)")
             .expect("native footer Run button must exist");
         assert!(
             run_pos < ai_pos,
-            "native footer should list ↵ Run before ⌘↵ AI"
+            "native footer should list ↵ Run before ⌘↵ Agent"
         );
     }
 

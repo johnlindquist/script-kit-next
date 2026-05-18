@@ -63,10 +63,21 @@ impl ScriptListApp {
         );
         if self.computed_filter_text != value {
             let update_start = std::time::Instant::now();
+            let selection_before = if matches!(self.current_view, AppView::ScriptList) {
+                Some(self.main_menu_selection_snapshot())
+            } else {
+                None
+            };
             self.filter_coalescer.reset();
             self.computed_filter_text = value.clone();
             self.maybe_start_root_file_search(&value, cx);
             self.reconcile_script_list_after_filter_change("filter_immediate", cx);
+            if let Some(snapshot) = selection_before.as_ref() {
+                if self.restore_root_file_handoff_selection_from_snapshot(snapshot) {
+                    self.scroll_to_selected_if_needed("filter_immediate_restore_root_file_handoff");
+                    self.rebuild_main_window_preflight_if_needed();
+                }
+            }
             self.update_window_size();
             let update_elapsed = update_start.elapsed();
             logging::log(

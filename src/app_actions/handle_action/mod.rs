@@ -1329,13 +1329,17 @@ impl ScriptListApp {
                             .selected_agent
                             .as_ref()
                             .map(|agent| agent.id.to_string()),
-                        state.catalog_entries.clone(),
+                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                            &state.catalog_entries,
+                        ),
                     ),
                     crate::ai::acp::AcpChatSession::Live(thread) => {
                         let thread = thread.read(cx);
                         (
                             thread.selected_agent_id().map(str::to_string),
-                            thread.available_agents().to_vec(),
+                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                                thread.available_agents(),
+                            ),
                         )
                     }
                 }
@@ -1450,13 +1454,17 @@ impl ScriptListApp {
                             .selected_agent
                             .as_ref()
                             .map(|agent| agent.id.to_string()),
-                        state.catalog_entries.clone(),
+                        crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                            &state.catalog_entries,
+                        ),
                     ),
                     crate::ai::acp::AcpChatSession::Live(thread) => {
                         let thread = thread.read(cx);
                         (
                             thread.selected_agent_id().map(str::to_string),
-                            thread.available_agents().to_vec(),
+                            crate::ai::acp::refresh_acp_agent_catalog_entries_with_snapshot(
+                                thread.available_agents(),
+                            ),
                         )
                     }
                 }

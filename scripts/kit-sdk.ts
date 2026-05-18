@@ -828,6 +828,44 @@ export interface ContentPadding {
   right?: number;
 }
 
+export type Cmd1Behavior = "picker" | "cycle";
+export type DesignDensityChoice = "compact" | "comfortable" | "spacious";
+export type FontFamilyChoice = "system" | "monospace" | "serif";
+export type VibrancyChoice = "none" | "light" | "medium" | "heavy";
+export type ChromeOpacityChoice = "low" | "med" | "high";
+export type IconStyleChoice = "mono" | "color" | "hidden";
+export type SeparatorStyleChoice = "none" | "hairline" | "rule" | "grid";
+
+export interface DesignOverrides {
+  /** Hex accent color override, e.g. "#ff8800". */
+  accent?: string;
+  /** Row density override for this design. */
+  density?: DesignDensityChoice;
+  /** Font family class override for this design. */
+  fontFamily?: FontFamilyChoice;
+  /** Small signed font scale nudge. */
+  fontScale?: number;
+  /** Window/background vibrancy intensity. */
+  vibrancy?: VibrancyChoice;
+  /** Chrome opacity preset. */
+  chromeOpacity?: ChromeOpacityChoice;
+  /** Icon rendering style. */
+  iconStyle?: IconStyleChoice;
+  /** Separator rendering style. */
+  separatorStyle?: SeparatorStyleChoice;
+  /** Small signed row height nudge. */
+  rowHeightNudge?: number;
+}
+
+export interface DesignsConfig {
+  /** Stable catalog id for the active design. */
+  activeId?: string;
+  /** Cmd+1 behavior: open the picker or cycle designs. */
+  cmd1Behavior?: Cmd1Behavior;
+  /** Per-design overrides keyed by stable catalog id. */
+  overrides?: Record<string, DesignOverrides>;
+}
+
 /**
  * Configuration for built-in features (clipboard history, app launcher, window switcher).
  * These are optional features that can be enabled or disabled.
@@ -1598,15 +1636,14 @@ export interface Config {
 
   /**
    * Hotkey for toggling dictation.
-   * No default shortcut is registered; set this explicitly if you want one.
+   * Falls back to Cmd+Shift+; when enabled and not explicitly set.
    *
-   * @default undefined
+   * @default { modifiers: ["meta", "shift"], key: "Semicolon" }
    */
   dictationHotkey?: HotkeyConfig;
 
   /**
    * Whether dictation hotkey registration is enabled.
-   * This does not create a shortcut by itself; set `dictationHotkey` too.
    *
    * @default true
    */
@@ -1641,6 +1678,26 @@ export interface Config {
    * @default undefined
    */
   theme?: ThemeSelectionPreferences;
+
+  /**
+   * Design picker preferences and per-design token overrides.
+   *
+   * @default undefined
+   * @example
+   * ```typescript
+   * designs: {
+   *   activeId: "script-kit-classic",
+   *   cmd1Behavior: "picker",
+   *   overrides: {
+   *     "script-kit-classic": {
+   *       density: "comfortable",
+   *       iconStyle: "mono"
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  designs?: DesignsConfig;
 
   /**
    * Dictation runtime preferences, including the selected microphone device.

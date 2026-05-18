@@ -101,7 +101,13 @@ pub(crate) struct CodexAcpDefaultProbeState {
 
 pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
     if codex_acp_disabled_by_env() {
-        return codex_acp_default_probe_state_from_parts(false, false, false);
+        return CodexAcpDefaultProbeState {
+            codex_cli_ready: false,
+            npx_ready: false,
+            codex_acp_binary_ready: false,
+            adapter_ready: false,
+            should_be_implicit_codex_default: false,
+        };
     }
     codex_acp_default_probe_state_from_parts(
         command_exists("codex"),
@@ -120,7 +126,7 @@ fn codex_acp_default_probe_state_from_parts(
         npx_ready,
         codex_acp_binary_ready,
         adapter_ready: npx_ready || codex_acp_binary_ready,
-        should_be_implicit_codex_default: codex_cli_ready,
+        should_be_implicit_codex_default: true,
     }
 }
 
@@ -970,6 +976,40 @@ pub(crate) fn load_acp_agent_catalog_entries(
     Ok(entries)
 }
 
+fn merge_acp_agent_catalog_entries_with_snapshot(
+    mut fresh_entries: Vec<super::catalog::AcpAgentCatalogEntry>,
+    snapshot_entries: &[super::catalog::AcpAgentCatalogEntry],
+) -> Vec<super::catalog::AcpAgentCatalogEntry> {
+    for snapshot in snapshot_entries {
+        if !fresh_entries.iter().any(|entry| entry.id == snapshot.id) {
+            fresh_entries.push(snapshot.clone());
+        }
+    }
+    fresh_entries
+}
+
+/// Reload the ACP agent catalog for UI pickers while preserving any live-session
+/// snapshot entries that are not present in the current catalog.
+pub(crate) fn refresh_acp_agent_catalog_entries_with_snapshot(
+    snapshot_entries: &[super::catalog::AcpAgentCatalogEntry],
+) -> Vec<super::catalog::AcpAgentCatalogEntry> {
+    match load_acp_agent_catalog_entries() {
+        Ok(fresh_entries) if !fresh_entries.is_empty() => {
+            merge_acp_agent_catalog_entries_with_snapshot(fresh_entries, snapshot_entries)
+        }
+        Ok(_) => snapshot_entries.to_vec(),
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_agent_catalog_refresh_failed",
+                error = %error,
+                snapshot_count = snapshot_entries.len(),
+            );
+            snapshot_entries.to_vec()
+        }
+    }
+}
+
 /// Classify an agent by its well-known ID into a catalog source.
 fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     match agent_id {
@@ -1239,7 +1279,28 @@ pub(crate) fn persist_acp_agent_runtime_state(agent_id: String, next: AcpAgentRu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::acp::catalog::{
+        AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentConfigState, AcpAgentInstallState,
+        AcpAgentSource,
+    };
     use tempfile::tempdir;
+
+    fn catalog_entry(id: &str, display_name: &str) -> AcpAgentCatalogEntry {
+        AcpAgentCatalogEntry {
+            id: id.to_string().into(),
+            display_name: display_name.to_string().into(),
+            source: AcpAgentSource::BuiltIn,
+            install_state: AcpAgentInstallState::Ready,
+            auth_state: AcpAgentAuthState::Unknown,
+            config_state: AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
+            config: None,
+        }
+    }
 
     #[test]
     fn round_trip_minimal_config() {
@@ -1353,6 +1414,27 @@ mod tests {
     }
 
     #[test]
+    fn acp_catalog_refresh_merge_keeps_fresh_codex_and_snapshot_selection() {
+        let fresh = vec![
+            catalog_entry("opencode", "OpenCode"),
+            catalog_entry("codex-acp", "Codex"),
+        ];
+        let snapshot = vec![
+            catalog_entry("gemini-cli", "Gemini CLI"),
+            catalog_entry("opencode", "Stale OpenCode"),
+        ];
+
+        let merged = merge_acp_agent_catalog_entries_with_snapshot(fresh, &snapshot);
+        let ids = merged
+            .iter()
+            .map(|entry| entry.id.as_ref())
+            .collect::<Vec<_>>();
+
+        assert_eq!(ids, vec!["opencode", "codex-acp", "gemini-cli"]);
+        assert_eq!(merged[0].display_name.as_ref(), "OpenCode");
+    }
+
+    #[test]
     fn legacy_codex_acp_command_normalizes_to_npx_adapter() {
         let mut codex = codex_acp_agent_config();
         codex.command = "codex-acp".into();
@@ -1418,8 +1500,11 @@ mod tests {
             "local codex should still own default setup even when adapter install is blocked"
         );
 
-        let no_codex = codex_acp_default_probe_state_from_parts(false, true, false);
-        assert!(!no_codex.should_be_implicit_codex_default);
+        let no_codex_cli = codex_acp_default_probe_state_from_parts(false, true, false);
+        assert!(
+            no_codex_cli.should_be_implicit_codex_default,
+            "Codex should remain the default ACP agent even before the local CLI is ready"
+        );
     }
 
     #[test]

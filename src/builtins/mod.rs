@@ -569,7 +569,7 @@ impl BuiltInEntry {
             },
             BuiltInFeature::FileSearch => "Search Files",
             BuiltInFeature::Webcam => "Open Webcam",
-            BuiltInFeature::Dictation => "Start Dictation Here",
+            BuiltInFeature::Dictation => "Start Dictation to Current App",
             BuiltInFeature::DictationToAiHarness => "Start Dictation to Agent Chat",
             BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
@@ -594,7 +594,7 @@ impl BuiltInEntry {
             BuiltInFeature::DesignGallery => "Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
-            BuiltInFeature::AiChat => "Agent Chat",
+            BuiltInFeature::AiChat => "Agent",
             BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Emoji",
             BuiltInFeature::SyncToGithub => "Sync",
@@ -638,7 +638,7 @@ impl BuiltInEntry {
                 NotesCommandType::QuickCapture => "Quick Capture",
             },
             BuiltInFeature::AiCommand(action) => match action {
-                AiCommandType::OpenAi | AiCommandType::MiniAi => "Agent Chat",
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Agent",
                 AiCommandType::NewConversation => "New Chat",
                 AiCommandType::ClearConversation => "Clear Chat",
                 AiCommandType::GenerateScript => "New Script",
@@ -700,7 +700,7 @@ impl BuiltInEntry {
             },
             BuiltInFeature::FileSearch => "Files",
             BuiltInFeature::Webcam => "Webcam",
-            BuiltInFeature::Dictation => "Dictate Here",
+            BuiltInFeature::Dictation => "Dictate App",
             BuiltInFeature::DictationToAiHarness => "Dictate Chat",
             BuiltInFeature::DictationToFrontmostApp => "Dictate App",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
@@ -712,6 +712,32 @@ impl BuiltInEntry {
             BuiltInFeature::NewScriptFromTemplate => "Templates",
         }
     }
+}
+
+fn tracked_frontmost_app_name() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        crate::frontmost_app_tracker::get_last_real_app()
+            .map(|app| app.name.trim().to_string())
+            .filter(|name| !name.is_empty())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
+}
+
+fn current_dictation_entry_name() -> String {
+    tracked_frontmost_app_name()
+        .map(|name| format!("Dictate to {name}"))
+        .unwrap_or_else(|| "Dictate to Current App".to_string())
+}
+
+fn current_dictation_entry_description() -> String {
+    tracked_frontmost_app_name()
+        .map(|name| format!("Voice dictation for {name}"))
+        .unwrap_or_else(|| "Voice dictation for the tracked frontmost app".to_string())
 }
 // --- merged from part_001.rs ---
 /// Get the list of enabled built-in entries based on configuration
@@ -2065,8 +2091,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation",
-            "Dictate Here",
-            "Voice dictation for the current destination",
+            current_dictation_entry_name(),
+            current_dictation_entry_description(),
             vec![
                 "dictation",
                 "voice",
@@ -2074,6 +2100,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "microphone",
                 "transcribe",
                 "whisper",
+                "here",
+                "current app",
+                "frontmost app",
             ],
             BuiltInFeature::Dictation,
             "mic",
