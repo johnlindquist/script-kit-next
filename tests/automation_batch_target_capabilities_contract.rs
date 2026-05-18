@@ -47,6 +47,19 @@ fn supported_command_lists_are_named_by_target_kind() {
 
     for (kind, commands) in [
         (
+            "AutomationBatchTargetKind::Main",
+            &[
+                "\"setInput\"",
+                "\"forceSubmit\"",
+                "\"waitFor\"",
+                "\"openActions\"",
+                "\"selectByValue\"",
+                "\"selectBySemanticId\"",
+                "\"filterAndSelect\"",
+                "\"typeAndSubmit\"",
+            ][..],
+        ),
+        (
             "AutomationBatchTargetKind::AcpDetached",
             &[
                 "\"setInput\"",
@@ -81,6 +94,40 @@ fn supported_command_lists_are_named_by_target_kind() {
             );
         }
     }
+}
+
+#[test]
+fn main_batch_open_actions_uses_shared_actions_dispatcher() {
+    let main_batch_body = source_between(
+        PROMPT_HANDLER,
+        "// ── Main-window batch path (existing)",
+        "let success = !failed;",
+    );
+
+    for required in [
+        "protocol::BatchCommand::OpenActions =>",
+        "crate::get_main_window_handle()",
+        "this.dispatch_actions_toggle_for_current_view(",
+        "\"devtools_batch_open_actions\"",
+        "command: \"openActions\".to_string()",
+        "Current main view does not expose actions",
+    ] {
+        assert!(
+            main_batch_body.contains(required),
+            "Main batch openActions must route through the shared actions dispatcher: {required}"
+        );
+    }
+
+    let open_actions_arm = source_between(
+        main_batch_body,
+        "protocol::BatchCommand::OpenActions =>",
+        "protocol::BatchCommand::TogglePreview =>",
+    );
+
+    assert!(
+        !open_actions_arm.contains("simulateKey"),
+        "Main batch openActions must not synthesize Cmd+K"
+    );
 }
 
 #[test]
