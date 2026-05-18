@@ -1,0 +1,1112 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "r37b",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": null
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 190,
+      "y": 215,
+      "width": 320,
+      "height": 338
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 338,
+      "targetBoundsInScreenshot": {
+        "x": 80,
+        "y": 44,
+        "width": 320,
+        "height": 338
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "actionsDialog",
+  "timestamp": "2026-05-18T05:05:39.210034+00:00",
+  "componentCount": 19,
+  "window": {
+    "rect": {
+      "x": 190,
+      "y": 215,
+      "width": 320,
+      "height": 338
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 320,
+    "clientHeight": 338,
+    "contentWidth": 320,
+    "contentHeight": 338,
+    "scrollWidth": 320,
+    "scrollHeight": 338,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 320,
+    "height": 338
+  },
+  "windowRect": {
+    "x": 190,
+    "y": 215,
+    "width": 320,
+    "height": 338
+  },
+  "regions": [
+    {
+      "name": "ActionsDialog",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 338
+      }
+    },
+    {
+      "name": "ActionsSearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 36
+      }
+    },
+    {
+      "name": "ActionsList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 300
+      }
+    },
+    {
+      "name": "ActionsRow[0]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 20
+      }
+    },
+    {
+      "name": "ActionsRow[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 56,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsShortcut[1]",
+      "type": "other",
+      "bounds": {
+        "x": 304,
+        "y": 64.5,
+        "width": 12,
+        "height": 13
+      }
+    },
+    {
+      "name": "ActionsRow[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 86,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsShortcut[2]",
+      "type": "other",
+      "bounds": {
+        "x": 294.5,
+        "y": 94.5,
+        "width": 21.5,
+        "height": 13
+      }
+    },
+    {
+      "name": "ActionsRow[3]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 116,
+        "width": 320,
+        "height": 20
+      }
+    },
+    {
+      "name": "ActionsRow[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 136,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsShortcut[4]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 144.5,
+        "width": 36.5,
+        "height": 13
+      }
+    },
+    {
+      "name": "ActionsRow[5]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 166,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsShortcut[5]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 174.5,
+        "width": 36.5,
+        "height": 13
+      }
+    },
+    {
+      "name": "ActionsRow[6]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 196,
+        "width": 320,
+        "height": 20
+      }
+    },
+    {
+      "name": "ActionsRow[7]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 216,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsShortcut[7]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 224.5,
+        "width": 36.5,
+        "height": 13
+      }
+    },
+    {
+      "name": "ActionsRow[8]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 246,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsRow[9]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 276,
+        "width": 320,
+        "height": 30
+      }
+    },
+    {
+      "name": "ActionsRow[10]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 306,
+        "width": 320,
+        "height": 30
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "ActionsDialog",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 338
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Actions dialog popup root measured from the registered automation target bounds.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsDialog",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 338
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+      }
+    },
+    {
+      "name": "ActionsSearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 36
+      },
+      "depth": 1,
+      "parent": "ActionsDialog",
+      "children": [],
+      "explanation": "Search/filter input owned by the ActionsDialog route.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsSearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 36
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Search/filter input owned by the ActionsDialog route."
+      }
+    },
+    {
+      "name": "ActionsList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 300
+      },
+      "depth": 1,
+      "parent": "ActionsDialog",
+      "children": [],
+      "explanation": "Scrollable grouped actions list viewport.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 300
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Scrollable grouped actions list viewport."
+      }
+    },
+    {
+      "name": "ActionsRow[0]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 20
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[0]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsRow[1]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 56,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 56,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsShortcut[1]",
+      "type": "other",
+      "bounds": {
+        "x": 304,
+        "y": 64.5,
+        "width": 12,
+        "height": 13
+      },
+      "depth": 3,
+      "parent": "ActionsRow[1]",
+      "children": [],
+      "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsShortcut[1]",
+        "type": "other",
+        "bounds": {
+          "x": 304,
+          "y": 64.5,
+          "width": 12,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[1]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      }
+    },
+    {
+      "name": "ActionsRow[2]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 86,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 86,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsShortcut[2]",
+      "type": "other",
+      "bounds": {
+        "x": 294.5,
+        "y": 94.5,
+        "width": 21.5,
+        "height": 13
+      },
+      "depth": 3,
+      "parent": "ActionsRow[2]",
+      "children": [],
+      "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsShortcut[2]",
+        "type": "other",
+        "bounds": {
+          "x": 294.5,
+          "y": 94.5,
+          "width": 21.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[2]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      }
+    },
+    {
+      "name": "ActionsRow[3]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 116,
+        "width": 320,
+        "height": 20
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[3]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 116,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsRow[4]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 136,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 136,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsShortcut[4]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 144.5,
+        "width": 36.5,
+        "height": 13
+      },
+      "depth": 3,
+      "parent": "ActionsRow[4]",
+      "children": [],
+      "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsShortcut[4]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 144.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[4]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      }
+    },
+    {
+      "name": "ActionsRow[5]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 166,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[5]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 166,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsShortcut[5]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 174.5,
+        "width": 36.5,
+        "height": 13
+      },
+      "depth": 3,
+      "parent": "ActionsRow[5]",
+      "children": [],
+      "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsShortcut[5]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 174.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[5]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      }
+    },
+    {
+      "name": "ActionsRow[6]",
+      "type": "header",
+      "bounds": {
+        "x": 0,
+        "y": 196,
+        "width": 320,
+        "height": 20
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[6]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 196,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsRow[7]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 216,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[7]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 216,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsShortcut[7]",
+      "type": "other",
+      "bounds": {
+        "x": 279.5,
+        "y": 224.5,
+        "width": 36.5,
+        "height": 13
+      },
+      "depth": 3,
+      "parent": "ActionsRow[7]",
+      "children": [],
+      "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsShortcut[7]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 224.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[7]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      }
+    },
+    {
+      "name": "ActionsRow[8]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 246,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[8]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 246,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsRow[9]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 276,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[9]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 276,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    },
+    {
+      "name": "ActionsRow[10]",
+      "type": "listItem",
+      "bounds": {
+        "x": 0,
+        "y": 306,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 2,
+      "parent": "ActionsList",
+      "children": [],
+      "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsRow[10]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 306,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 338,
+    "measuredContentHeight": 338,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1779080739192-b5c0f9",
+    "windowWidth": 320,
+    "windowHeight": 338,
+    "promptType": "actionsDialog",
+    "components": [
+      {
+        "name": "ActionsDialog",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 338
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+      },
+      {
+        "name": "ActionsSearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 36
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Search/filter input owned by the ActionsDialog route."
+      },
+      {
+        "name": "ActionsList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 300
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Scrollable grouped actions list viewport."
+      },
+      {
+        "name": "ActionsRow[0]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsRow[1]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 56,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsShortcut[1]",
+        "type": "other",
+        "bounds": {
+          "x": 304,
+          "y": 64.5,
+          "width": 12,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[1]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      },
+      {
+        "name": "ActionsRow[2]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 86,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsShortcut[2]",
+        "type": "other",
+        "bounds": {
+          "x": 294.5,
+          "y": 94.5,
+          "width": 21.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[2]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      },
+      {
+        "name": "ActionsRow[3]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 116,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsRow[4]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 136,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsShortcut[4]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 144.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[4]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      },
+      {
+        "name": "ActionsRow[5]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 166,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsShortcut[5]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 174.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[5]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      },
+      {
+        "name": "ActionsRow[6]",
+        "type": "header",
+        "bounds": {
+          "x": 0,
+          "y": 196,
+          "width": 320,
+          "height": 20
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsRow[7]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 216,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsShortcut[7]",
+        "type": "other",
+        "bounds": {
+          "x": 279.5,
+          "y": 224.5,
+          "width": 36.5,
+          "height": 13
+        },
+        "depth": 3,
+        "parent": "ActionsRow[7]",
+        "explanation": "Right-aligned shortcut hint bounds measured by the shared hint-strip layout model."
+      },
+      {
+        "name": "ActionsRow[8]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 246,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsRow[9]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 276,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      },
+      {
+        "name": "ActionsRow[10]",
+        "type": "listItem",
+        "bounds": {
+          "x": 0,
+          "y": 306,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 2,
+        "parent": "ActionsList",
+        "explanation": "Visible grouped action row measured from runtime ActionsDialog row geometry."
+      }
+    ],
+    "timestamp": "2026-05-18T05:05:39.210034+00:00"
+  }
+}
