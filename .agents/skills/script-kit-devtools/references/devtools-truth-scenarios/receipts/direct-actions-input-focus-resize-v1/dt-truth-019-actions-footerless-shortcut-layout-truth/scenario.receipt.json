@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-019-actions-footerless-shortcut-layout-truth",
+  "oracleSession": "actions-input-focus-resize",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "264039de796182fa17e7dfd2fe08eed83a894e98",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T01:42:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt019-1779068402",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt019-1779068402",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "o",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-actions-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-layout-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-focus-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-text-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt019-1779068402",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-elements-filter-o.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter to action rows containing o",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "actions remain visible with inline shortcut layout",
+      "receiptRef": "03-actions-filter-o.json"
+    },
+    {
+      "step": 2,
+      "intent": "measure layout nodes for shortcut components",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "layout measure",
+      "visibleResult": "6 ActionsShortcut nodes",
+      "receiptRef": "04-layout-filter-o.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-act-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-actions-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-layout-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-focus-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-text-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-elements-filter-o.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": 1,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:1:run_script",
+    "visibleLabel": "Do in Current App",
+    "footerIntent": null,
+    "actionId": "run_script",
+    "handlerId": null,
+    "sideEffectClass": "layout-only",
+    "disabledReason": null,
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": 1
+  },
+  "truthChecks": [
+    {
+      "name": "actionsDialogFooterlessAtRuntime",
+      "expected": "focus activeFooter is null",
+      "actual": "activeFooter=null",
+      "status": "pass"
+    },
+    {
+      "name": "shortcutRowsHaveRuntimeBounds",
+      "expected": "shortcutLayout runtime bounds are available",
+      "actual": "runtimeBoundsAvailable=true",
+      "status": "pass"
+    },
+    {
+      "name": "shortcutLayoutRowsMatchVisibleShortcutActions",
+      "expected": "shortcut layout rows exist for visible shortcut actions",
+      "actual": "rowCount=7",
+      "status": "pass"
+    },
+    {
+      "name": "layoutContainsShortcutComponents",
+      "expected": "layout nodes include ActionsShortcut components",
+      "actual": "ActionsShortcut nodes=6",
+      "status": "pass"
+    },
+    {
+      "name": "focusReceiptHasNoActiveFooter",
+      "expected": "focus receipt has no active footer",
+      "actual": "activeFooter=null",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false
+  }
+}

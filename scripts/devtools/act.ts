@@ -29,6 +29,15 @@ type SubmitLifecycleState =
   | { state: "source-closed-parent-live"; actionId?: string | null; parentTarget?: JsonObject | null }
   | { state: "failed"; reason: string; actionId?: string | null; sourceAfter?: JsonObject | null; parentAfter?: JsonObject | null };
 
+type PostActionLifecycleState =
+  | { state: "not-lifecycle-sensitive"; reason: string }
+  | { state: "blocked-before-dispatch"; reason: string; selectedSemanticId?: string | null }
+  | { state: "dispatched"; actionId?: string | null }
+  | { state: "dismissed"; reason: "escape" | "cmd-k" | "cmd-w" }
+  | { state: "source-live"; actionId?: string | null }
+  | { state: "source-closed-parent-live"; actionId?: string | null; parentTarget?: JsonObject | null }
+  | { state: "failed"; reason: string; actionId?: string | null; sourceAfter?: JsonObject | null; parentAfter?: JsonObject | null };
+
 const blockedSubmitKeys = new Set(["enter", "return"]);
 const allowedKeys = new Set([
   "arrowup",
@@ -353,6 +362,15 @@ function isSubmitLike(args: Args) {
   );
 }
 
+function isDismissLike(args: Args) {
+  const normalizedKey = args.key.toLowerCase();
+  if (args.actionKind !== "key") return false;
+  if (normalizedKey === "escape" || normalizedKey === "esc") return true;
+  if (normalizedKey === "k" && args.modifiers.includes("cmd")) return true;
+  if (normalizedKey === "w" && args.modifiers.includes("cmd")) return true;
+  return false;
+}
+
 function selectedActionIdFromSemanticId(value: unknown) {
   if (typeof value !== "string") return null;
   const match = value.match(/^choice:\d+:(.+)$/);
@@ -382,6 +400,10 @@ function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObje
 }
 
 async function inspectParentAfterSubmit(args: Args, targetReceipt: JsonObject) {
+  return inspectParentAfterAction(args, targetReceipt);
+}
+
+async function inspectParentAfterAction(args: Args, targetReceipt: JsonObject) {
   const resolved = targetReceipt.resolvedTarget as JsonObject | undefined;
   const parentAutomationId = resolved?.parentAutomationId;
   const parentArgs = parentAutomationId
@@ -427,12 +449,56 @@ function resolveSubmitLifecycleAfterAction(
   };
 }
 
+function dismissReason(args: Args): "escape" | "cmd-k" | "cmd-w" {
+  const normalizedKey = args.key.toLowerCase();
+  if (normalizedKey === "k" && args.modifiers.includes("cmd")) return "cmd-k";
+  if (normalizedKey === "w" && args.modifiers.includes("cmd")) return "cmd-w";
+  return "escape";
+}
+
+function resolvePostActionLifecycle(
+  args: Args,
+  submitLifecycle: SubmitLifecycleState,
+  sourceAfter: JsonObject,
+  parentAfter: JsonObject | null,
+): PostActionLifecycleState {
+  if (isSubmitLike(args)) {
+    return submitLifecycle;
+  }
+  if (!isDismissLike(args)) {
+    return { state: "not-lifecycle-sensitive", reason: "action keeps source target inspectable" };
+  }
+  if (sourceAfter.classification === "ok") {
+    return { state: "source-live", actionId: null };
+  }
+  if (parentAfter?.classification === "ok") {
+    return {
+      state: "source-closed-parent-live",
+      actionId: null,
+      parentTarget: parentAfter.resolvedTarget as JsonObject | undefined ?? null,
+    };
+  }
+  const sourceLifecycle = isLifecycleClassification(sourceAfter);
+  const parentLifecycle = parentAfter ? isLifecycleClassification(parentAfter) : false;
+  if (sourceLifecycle || parentLifecycle) {
+    return { state: "failed", reason: "blocked-by-session-lifecycle", actionId: null, sourceAfter, parentAfter };
+  }
+  return {
+    state: "failed",
+    reason: `dismissed source target but parent was not inspectable after ${dismissReason(args)}`,
+    actionId: null,
+    sourceAfter,
+    parentAfter,
+  };
+}
+
 function classify(
   targetReceipt: JsonObject,
   guard: ReturnType<typeof safety>,
   actionReceipt: JsonObject,
   after: JsonObject,
   submitLifecycle: SubmitLifecycleState,
+  postActionLifecycle: PostActionLifecycleState,
 ) {
   if (guard.errors.length > 0) {
     return "blocked-by-unsafe-operation";
@@ -445,6 +511,12 @@ function classify(
   }
   if (submitLifecycle.state === "source-live" || submitLifecycle.state === "source-closed-parent-live") {
     return "ok";
+  }
+  if (postActionLifecycle.state === "source-live" || postActionLifecycle.state === "source-closed-parent-live") {
+    return "ok";
+  }
+  if (postActionLifecycle.state === "failed" && postActionLifecycle.reason === "blocked-by-session-lifecycle") {
+    return "blocked-by-session-lifecycle";
   }
   if (submitLifecycle.state === "failed" && submitLifecycle.reason === "blocked-by-session-lifecycle") {
     return "blocked-by-session-lifecycle";
@@ -492,8 +564,10 @@ async function main() {
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
   const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
+  const parentAfterAction = isDismissLike(args) ? await inspectParentAfterAction(args, targetReceipt) : parentAfterSubmit;
   const submitLifecycle = resolveSubmitLifecycleAfterAction(preflight, after, parentAfterSubmit);
-  const classification = classify(targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle);
+  const postActionLifecycle = resolvePostActionLifecycle(args, submitLifecycle, after, parentAfterAction);
+  const classification = classify(targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle, postActionLifecycle);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -515,6 +589,8 @@ async function main() {
     },
     safety: guardWithPreflight,
     submitLifecycle,
+    postActionLifecycle,
+    dismissLifecycle: isDismissLike(args) ? postActionLifecycle : null,
     expected: {
       protocolResponse: expectedResponse(args),
       submitAllowed: args.allowSubmit,

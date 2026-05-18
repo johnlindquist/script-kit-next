@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-018-actions-filter-resize-shrink-grow",
+  "oracleSession": "actions-input-focus-resize",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "264039de796182fa17e7dfd2fe08eed83a894e98",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T01:42:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt018-1779068388",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt018-1779068388",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-layout-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "__no_match_zzzz__",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-act-filter-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-actions-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-layout-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "o",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-act-filter-recover-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-actions-recovered-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt018-1779068388",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-layout-recovered-o.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "measure ActionsDialog at full filtered list height",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "open actions",
+      "visibleResult": "height 402",
+      "receiptRef": "01-actions-open.json"
+    },
+    {
+      "step": 2,
+      "intent": "filter down to no matching rows and measure shrink",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "__no_match_zzzz__",
+      "visibleResult": "height 68",
+      "receiptRef": "04-actions-no-match.json"
+    },
+    {
+      "step": 3,
+      "intent": "recover matching rows and measure grow",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "height 402",
+      "receiptRef": "07-actions-recovered-o.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-layout-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-act-filter-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-actions-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-layout-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-act-filter-recover-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-actions-recovered-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "08-layout-recovered-o.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": 2,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": null,
+    "visibleLabel": "empty-no-match-state",
+    "footerIntent": null,
+    "actionId": null,
+    "handlerId": null,
+    "sideEffectClass": "layout-resize",
+    "disabledReason": null,
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": 2
+  },
+  "truthChecks": [
+    {
+      "name": "filterToEmptyUpdatesLayoutTruth",
+      "expected": "empty filter popup is shorter than open popup",
+      "actual": "open=402, empty=68",
+      "status": "pass"
+    },
+    {
+      "name": "filterRecoveryRestoresRows",
+      "expected": "recovered filter restores visible actions",
+      "actual": "visibleCount=10",
+      "status": "pass"
+    },
+    {
+      "name": "popupParentIdentityStableAcrossFilter",
+      "expected": "parentAutomationId stays main",
+      "actual": "main -> main -> main",
+      "status": "pass"
+    },
+    {
+      "name": "popupDoesNotClipAfterShrinkOrGrow",
+      "expected": "clipping edges false",
+      "actual": "{\"available\":true,\"top\":false,\"right\":false,\"bottom\":false,\"left\":false}",
+      "status": "pass"
+    },
+    {
+      "name": "layoutReceiptsHaveNoOverlapPressure",
+      "expected": "layout overlap count remains zero",
+      "actual": "empty=0, recovered=0",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false
+  }
+}
