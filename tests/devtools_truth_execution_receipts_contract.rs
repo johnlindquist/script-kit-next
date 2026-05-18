@@ -6,6 +6,9 @@ const MANIFEST: &str = include_str!(
 const TARGET_LIFECYCLE_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v1/slice.manifest.json"
 );
+const TARGET_LIFECYCLE_V2_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v2/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -17,6 +20,9 @@ const DT_015: &str = include_str!(
 );
 const DT_013_TARGET_LIFECYCLE: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v1/dt-truth-013-actions-section-heading-not-action-target/scenario.receipt.json"
+);
+const DT_013_TARGET_LIFECYCLE_V2: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v2/dt-truth-013-actions-section-heading-not-action-target/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -448,6 +454,74 @@ fn direct_actions_target_lifecycle_uses_only_direct_devtools_primitives() {
         assert!(
             primitive_commands.contains(&expected),
             "target lifecycle slice missing primitive command coverage {expected}; got {primitive_commands:?}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_target_lifecycle_v2_records_submit_lifecycle_green() {
+    let manifest = parse(TARGET_LIFECYCLE_V2_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(manifest["sliceId"], "direct-actions-target-lifecycle-v2");
+    assert_eq!(manifest["oracleSession"], "actions-submit-lifecycle");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["summary"]["pass"], 1);
+    assert_eq!(manifest["summary"]["fail"], 0);
+
+    let receipt = parse(DT_013_TARGET_LIFECYCLE_V2);
+    assert_eq!(receipt["result"], "pass");
+    assert_eq!(
+        receipt["truthModel"]["selectedSemanticId"],
+        "choice:2:toggle_info"
+    );
+    assert_eq!(receipt["truthModel"]["actionId"], "toggle_info");
+    assert_eq!(receipt["safety"]["submitAttempted"], true);
+    assert_eq!(
+        receipt["safety"]["submitPreflightSelectedSemanticId"],
+        "choice:2:toggle_info"
+    );
+    assert_eq!(
+        receipt["safety"]["submitLifecycleState"],
+        "source-closed-parent-live"
+    );
+
+    for field in REQUIRED_TRUTH_MODEL_FIELDS {
+        assert!(
+            receipt["truthModel"]
+                .as_object()
+                .expect("truthModel must be object")
+                .contains_key(*field),
+            "target lifecycle v2 receipt missing truthModel.{field}"
+        );
+    }
+
+    let checks = receipt["truthChecks"]
+        .as_array()
+        .expect("truthChecks must be array");
+    for expected_pass in [
+        "selectedSemanticIdExcludesHeadings",
+        "safeSubmitLeavesParentInspectable",
+        "postSubmitMainTargetLive",
+    ] {
+        assert!(
+            checks
+                .iter()
+                .any(|check| check["name"] == expected_pass && check["status"] == "pass"),
+            "expected v2 pass check {expected_pass}"
+        );
+    }
+
+    let commands = receipt["executorProvenance"]["topLevelCommands"]
+        .as_array()
+        .expect("executorProvenance.topLevelCommands must be array");
+    assert_eq!(commands.len(), 16);
+    for command in commands {
+        let script =
+            command_script(&command["argv"]).expect("each command argv must include a script path");
+        assert!(
+            ALLOWED_PRIMITIVES.contains(&script),
+            "target lifecycle v2 used non-allowed command path {script}"
         );
     }
 }

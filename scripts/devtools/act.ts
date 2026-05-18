@@ -21,6 +21,14 @@ type Args = {
   forwarded: string[];
 };
 
+type SubmitLifecycleState =
+  | { state: "not-submit"; reason: string }
+  | { state: "blocked-before-dispatch"; reason: string; selectedSemanticId?: string | null }
+  | { state: "dispatched"; actionId?: string | null }
+  | { state: "source-live"; actionId?: string | null }
+  | { state: "source-closed-parent-live"; actionId?: string | null; parentTarget?: JsonObject | null }
+  | { state: "failed"; reason: string; actionId?: string | null; sourceAfter?: JsonObject | null; parentAfter?: JsonObject | null };
+
 const blockedSubmitKeys = new Set(["enter", "return"]);
 const allowedKeys = new Set([
   "arrowup",
@@ -154,14 +162,27 @@ async function run(command: string[], label: string): Promise<JsonObject> {
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
-  if (exitCode !== 0) {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
-  }
+  let parsed: JsonObject | null = null;
   try {
-    return JSON.parse(stdout);
+    parsed = JSON.parse(stdout);
   } catch {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
+    parsed = null;
   }
+  if (exitCode !== 0) {
+    return {
+      status: "error",
+      label,
+      exitCode,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+      parsedError: parsed,
+      lifecycle: parsed?.lifecycle ?? null,
+    };
+  }
+  if (parsed) {
+    return parsed;
+  }
+  return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
 }
 
 function requestId(prefix: string) {
@@ -229,6 +250,8 @@ function safety(args: Args) {
     nativeEscalation: false,
     errors,
     warnings,
+    submitAttempted: false,
+    submitPreflightSelectedSemanticId: null as string | null,
   };
 }
 
@@ -290,6 +313,8 @@ function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: Json
 function actionFailed(actionReceipt: JsonObject) {
   if (actionReceipt.status === "error") return true;
   if (actionReceipt.success === false) return true;
+  if (actionReceipt.parseOutcome === "timeout") return true;
+  if (actionReceipt.parseOutcome === "parseError") return true;
   if (Array.isArray(actionReceipt.results)) {
     return actionReceipt.results.some((result) => {
       return typeof result === "object" && result !== null && (result as JsonObject).success === false;
@@ -298,12 +323,134 @@ function actionFailed(actionReceipt: JsonObject) {
   return false;
 }
 
-function classify(targetReceipt: JsonObject, guard: ReturnType<typeof safety>, actionReceipt: JsonObject, after: JsonObject) {
+const lifecycleCodes = new Set([
+  "session_dead",
+  "forwarder_dead",
+  "no_session",
+  "app_process_dead_before_send",
+  "app_process_dead_before_rpc",
+  "forwarder_dead_before_send",
+  "forwarder_dead_before_rpc",
+]);
+
+function receiptErrorCode(receipt: JsonObject): string {
+  const direct = (receipt.error as JsonObject | undefined)?.code;
+  if (typeof direct === "string") return direct;
+  const parsed = receipt.parsedError as JsonObject | undefined | null;
+  const parsedCode = (parsed?.error as JsonObject | undefined)?.code;
+  return typeof parsedCode === "string" ? parsedCode : "";
+}
+
+function isLifecycleClassification(receipt: JsonObject) {
+  return receipt.classification === "blocked-by-session-lifecycle" || lifecycleCodes.has(receiptErrorCode(receipt));
+}
+
+function isSubmitLike(args: Args) {
+  const normalizedKey = args.key.toLowerCase();
+  return args.allowSubmit && (
+    (args.actionKind === "key" && blockedSubmitKeys.has(normalizedKey))
+    || (args.actionKind === "select")
+  );
+}
+
+function selectedActionIdFromSemanticId(value: unknown) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^choice:\d+:(.+)$/);
+  return match?.[1] ?? null;
+}
+
+function isActionsDialogTargetReceipt(receipt: JsonObject) {
+  const resolved = receipt.resolvedTarget as JsonObject | undefined;
+  return resolved?.targetKind === "ActionsDialog"
+    || resolved?.surfaceKind === "ActionsDialog"
+    || resolved?.appViewVariant === "ActionsDialog";
+}
+
+function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObject): SubmitLifecycleState {
+  if (!isSubmitLike(args)) {
+    return { state: "not-submit", reason: "action is not submit-like" };
+  }
+  const selectedSemanticId = before.selectedSemanticId ?? null;
+  if (!isActionsDialogTargetReceipt(targetReceipt)) {
+    return { state: "blocked-before-dispatch", reason: "submit requires ActionsDialog target", selectedSemanticId: selectedSemanticId as string | null };
+  }
+  const actionId = selectedActionIdFromSemanticId(selectedSemanticId);
+  if (!actionId) {
+    return { state: "blocked-before-dispatch", reason: "submit requires selected ActionsDialog choice:* row", selectedSemanticId: selectedSemanticId as string | null };
+  }
+  return { state: "dispatched", actionId };
+}
+
+async function inspectParentAfterSubmit(args: Args, targetReceipt: JsonObject) {
+  const resolved = targetReceipt.resolvedTarget as JsonObject | undefined;
+  const parentAutomationId = resolved?.parentAutomationId;
+  const parentArgs = parentAutomationId
+    ? ["--target-id", String(parentAutomationId)]
+    : ["--main", "--surface", "ScriptList"];
+  return run([
+    "bun",
+    "scripts/devtools/targets.ts",
+    "inspect",
+    "--session",
+    args.session,
+    "--strict",
+    "--timeout",
+    String(args.timeoutMs),
+    ...parentArgs,
+  ], "targets.inspect.parent-after-submit");
+}
+
+function resolveSubmitLifecycleAfterAction(
+  preflight: SubmitLifecycleState,
+  sourceAfter: JsonObject,
+  parentAfter: JsonObject | null,
+): SubmitLifecycleState {
+  if (preflight.state !== "dispatched") return preflight;
+  if (sourceAfter.classification === "ok") {
+    return { state: "source-live", actionId: preflight.actionId };
+  }
+  if (parentAfter?.classification === "ok") {
+    return {
+      state: "source-closed-parent-live",
+      actionId: preflight.actionId,
+      parentTarget: parentAfter.resolvedTarget as JsonObject | undefined ?? null,
+    };
+  }
+  const sourceLifecycle = isLifecycleClassification(sourceAfter);
+  const parentLifecycle = parentAfter ? isLifecycleClassification(parentAfter) : false;
+  return {
+    state: "failed",
+    reason: sourceLifecycle || parentLifecycle ? "blocked-by-session-lifecycle" : "post-submit target not inspectable",
+    actionId: preflight.actionId,
+    sourceAfter,
+    parentAfter,
+  };
+}
+
+function classify(
+  targetReceipt: JsonObject,
+  guard: ReturnType<typeof safety>,
+  actionReceipt: JsonObject,
+  after: JsonObject,
+  submitLifecycle: SubmitLifecycleState,
+) {
   if (guard.errors.length > 0) {
     return "blocked-by-unsafe-operation";
   }
   if (targetReceipt.classification !== "ok") {
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
+  }
+  if (submitLifecycle.state === "blocked-before-dispatch") {
+    return "blocked-by-unsafe-operation";
+  }
+  if (submitLifecycle.state === "source-live" || submitLifecycle.state === "source-closed-parent-live") {
+    return "ok";
+  }
+  if (submitLifecycle.state === "failed" && submitLifecycle.reason === "blocked-by-session-lifecycle") {
+    return "blocked-by-session-lifecycle";
+  }
+  if (isLifecycleClassification(actionReceipt) || isLifecycleClassification(after)) {
+    return "blocked-by-session-lifecycle";
   }
   if (actionFailed(actionReceipt)) {
     return "blocked-by-timeout";
@@ -323,9 +470,18 @@ async function main() {
   const before = await focusReceipt(args, "focus.before");
   const beforeScroll = await scrollReceipt(args, "scroll.before");
   const startedAt = new Date().toISOString();
+  const preflight = submitPreflight(args, targetReceipt, before);
+  const guardWithPreflight = {
+    ...guard,
+    submitAttempted: isSubmitLike(args) && preflight.state !== "blocked-before-dispatch",
+    submitPreflightSelectedSemanticId: (before.selectedSemanticId as string | undefined) ?? null,
+    errors: preflight.state === "blocked-before-dispatch"
+      ? [...guard.errors, preflight.reason]
+      : guard.errors,
+  };
 
   let actionEnvelope: JsonObject = { status: "blocked", reason: "blocked-by-unsafe-operation" };
-  if (guard.errors.length === 0 && targetReceipt.classification === "ok") {
+  if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
     actionEnvelope = args.actionKind === "key"
       ? await send(args.session, actionPayload(args, selector), args.timeoutMs)
       : await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs);
@@ -335,7 +491,9 @@ async function main() {
   const afterScroll = await scrollReceipt(args, "scroll.after");
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
-  const classification = classify(targetReceipt, guard, actionReceipt, after);
+  const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
+  const submitLifecycle = resolveSubmitLifecycleAfterAction(preflight, after, parentAfterSubmit);
+  const classification = classify(targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -355,7 +513,8 @@ async function main() {
       key: args.actionKind === "key" ? args.key : null,
       modifiers: args.actionKind === "key" ? args.modifiers : [],
     },
-    safety: guard,
+    safety: guardWithPreflight,
+    submitLifecycle,
     expected: {
       protocolResponse: expectedResponse(args),
       submitAllowed: args.allowSubmit,
@@ -368,12 +527,12 @@ async function main() {
     before: { focus: before, scroll: beforeScroll },
     after: { focus: after, scroll: afterScroll },
     warnings: [
-      ...guard.warnings,
+      ...guardWithPreflight.warnings,
       ...(Array.isArray(before.warnings) ? before.warnings : []),
       ...(Array.isArray(after.warnings) ? after.warnings : []),
     ],
     errors: [
-      ...guard.errors.map((error) => ({ error })),
+      ...guardWithPreflight.errors.map((error) => ({ error })),
       targetReceipt.classification !== "ok" ? targetReceipt : null,
       actionFailed(actionReceipt) ? actionReceipt : null,
     ].filter(Boolean),

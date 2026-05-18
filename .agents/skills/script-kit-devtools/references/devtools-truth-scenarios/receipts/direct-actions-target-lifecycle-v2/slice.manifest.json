@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "direct-actions-target-lifecycle-v2",
+  "oracleSession": "actions-submit-lifecycle",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "recordedAt": "2026-05-18T18:34:00Z",
+  "gitSha": "9b7acbfd66571e00878b027189ea64f1df7efa84",
+  "executor": "direct-devtools-primitives",
+  "hasRunner": false,
+  "scenarioIds": [
+    "dt-truth-013-actions-section-heading-not-action-target"
+  ],
+  "allowedTopLevelCommands": [
+    "scripts/devtools/targets.ts",
+    "scripts/devtools/elements.ts",
+    "scripts/devtools/focus.ts",
+    "scripts/devtools/layout.ts",
+    "scripts/devtools/act.ts",
+    "scripts/devtools/actions.ts"
+  ],
+  "forbiddenExecutorsUsed": false,
+  "summary": {
+    "pass": 1,
+    "fail": 0,
+    "blockedByMissingPrimitive": 0,
+    "blockedByUnsafeOperation": 0,
+    "needsOracleReview": 0
+  },
+  "receiptPaths": [
+    "dt-truth-013-actions-section-heading-not-action-target/scenario.receipt.json"
+  ]
+}

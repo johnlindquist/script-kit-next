@@ -1,0 +1,490 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-013-actions-section-heading-not-action-target",
+  "oracleSession": "actions-submit-lifecycle",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "9b7acbfd66571e00878b027189ea64f1df7efa84",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T18:34:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt-truth-013-actions-lifecycle-1779066851",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "list",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-targets-list-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "o",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-act-filter-actions-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-actions-after-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-elements-after-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-focus-after-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-act-arrowdown-1.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-act-arrowdown-2.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "arrowup",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "09-act-arrowup-1.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "10-actions-after-navigation.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "11-elements-after-navigation.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "12-focus-after-navigation.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "13-layout-after-navigation.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "enter",
+          "--allow-submit",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "14-act-enter-toggle-info.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "list",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "15-targets-after-enter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt-truth-013-actions-lifecycle-1779066851",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "16-target-main-after-enter.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open the actions dialog and filter for actions containing o",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "actions dialog target resolved with strict ActionsDialog identity",
+      "receiptRef": "04-actions-after-filter.json"
+    },
+    {
+      "step": 2,
+      "intent": "navigate down, down, up across mixed action and section rows",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "arrowdown, arrowdown, arrowup",
+      "visibleResult": "selectedSemanticId was choice:2:toggle_info; no section row became the target",
+      "receiptRef": "11-elements-after-navigation.json"
+    },
+    {
+      "step": 3,
+      "intent": "submit only after proving the selected row is a real non-section action",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "enter on choice:2:toggle_info with --allow-submit",
+      "visibleResult": "submit parsed, closed the source actions target, and left the parent ScriptList target live",
+      "receiptRef": "14-act-enter-toggle-info.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": "all",
+      "receiptRef": "02-targets-list-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-act-filter-actions-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-actions-after-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-elements-after-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-focus-after-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-act-arrowdown-1.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "08-act-arrowdown-2.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "09-act-arrowup-1.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "10-actions-after-navigation.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "11-elements-after-navigation.json",
+      "classification": "ok"
+    },
+    {
+      "step": 12,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "12-focus-after-navigation.json",
+      "classification": "ok"
+    },
+    {
+      "step": 13,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "13-layout-after-navigation.json",
+      "classification": "ok"
+    },
+    {
+      "step": 14,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "14-act-enter-toggle-info.json",
+      "classification": "ok"
+    },
+    {
+      "step": 15,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": "all",
+      "receiptRef": "15-targets-after-enter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 16,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "main",
+      "receiptRef": "16-target-main-after-enter.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:2:toggle_info",
+    "visibleLabel": "Show Info",
+    "footerIntent": null,
+    "actionId": "toggle_info",
+    "handlerId": "app_actions.handle_action.scripts.toggle_info",
+    "sideEffectClass": "safe-ui-toggle",
+    "disabledReason": null,
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": 1
+  },
+  "truthChecks": [
+    {
+      "name": "selectedSemanticIdExcludesHeadings",
+      "expected": "keyboard navigation selects a choice:* action row, not a section:* header row",
+      "actual": "11-elements-after-navigation.json selectedSemanticId was choice:2:toggle_info",
+      "status": "pass"
+    },
+    {
+      "name": "safeSubmitLeavesParentInspectable",
+      "expected": "after proving choice:2:toggle_info, Enter with --allow-submit either keeps source live or closes it with parent live",
+      "actual": "14-act-enter-toggle-info.json classified ok with submitLifecycle.state source-closed-parent-live and actionId toggle_info",
+      "status": "pass"
+    },
+    {
+      "name": "postSubmitMainTargetLive",
+      "expected": "targets list and strict main ScriptList inspect remain ok after submit",
+      "actual": "15-targets-after-enter.json and 16-target-main-after-enter.json classified ok with no sessionLifecycle errors",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAttempted": true,
+    "submitPreflightSelectedSemanticId": "choice:2:toggle_info",
+    "submitLifecycleState": "source-closed-parent-live"
+  }
+}
