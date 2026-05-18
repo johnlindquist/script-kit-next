@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "direct-actions-builtins-preferences-global-v1",
+  "oracleSession": "actions-next-builtins-batch-2",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "recordedAt": "2026-05-18T03:08:46.211Z",
+  "gitSha": "b8b79ee43fbc0a769965e25da48d66336a36789a",
+  "executor": "direct-devtools-primitives",
+  "hasRunner": false,
+  "scenarioIds": [
+    "dt-truth-025-actions-agent-chat-copy-deeplink-truth",
+    "dt-truth-026-actions-agent-chat-preference-plan-truth",
+    "dt-truth-027-actions-clipboard-history-copy-deeplink-truth",
+    "dt-truth-028-actions-global-show-logs-copy-gated"
+  ],
+  "allowedTopLevelCommands": [
+    "scripts/devtools/targets.ts",
+    "scripts/devtools/elements.ts",
+    "scripts/devtools/focus.ts",
+    "scripts/devtools/text.ts",
+    "scripts/devtools/layout.ts",
+    "scripts/devtools/act.ts",
+    "scripts/devtools/actions.ts"
+  ],
+  "forbiddenExecutorsUsed": false,
+  "summary": {
+    "pass": 4,
+    "fail": 0,
+    "blockedByMissingPrimitive": 0,
+    "blockedByUnsafeOperation": 0,
+    "needsOracleReview": 0
+  },
+  "receiptPaths": [
+    "dt-truth-025-actions-agent-chat-copy-deeplink-truth/scenario.receipt.json",
+    "dt-truth-026-actions-agent-chat-preference-plan-truth/scenario.receipt.json",
+    "dt-truth-027-actions-clipboard-history-copy-deeplink-truth/scenario.receipt.json",
+    "dt-truth-028-actions-global-show-logs-copy-gated/scenario.receipt.json"
+  ],
+  "notes": [
+    "Parent rows are selected through direct ScriptList keyboard navigation before act.open-actions; actions.ts --open is intentionally not used for built-in row scenarios.",
+    "This slice found and fixed stale ActionsDialog automation lifecycle cleanup before recording green receipts."
+  ]
+}

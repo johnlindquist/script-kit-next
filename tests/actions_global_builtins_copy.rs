@@ -55,3 +55,33 @@ fn main_actions_path_appends_global_actions() {
         );
     }
 }
+
+#[test]
+fn builtin_deeplink_copy_and_preference_plan_copy_stay_explicit() {
+    let source = read_source("src/actions/builders/script_context.rs");
+
+    for expected in [
+        "enum ScriptContextShareActionPlan",
+        "DirectRunDeepLink",
+        "\"Copy Deep Link\"",
+        "format!(\"Copy scriptkit://run/{} URL to clipboard\", deeplink_name)",
+        "enum ScriptContextPreferenceActionPlan",
+        "\"Add Keyboard Shortcut\"",
+        "\"Set a keyboard shortcut for this item\"",
+        "\"Edit Keyboard Shortcut\"",
+        "\"Change the keyboard shortcut for this item\"",
+        "\"Delete Keyboard Shortcut\"",
+        "\"Remove the keyboard shortcut from this item\"",
+        "\"Add Alias\"",
+        "\"Set an alias trigger for this item (type alias + space to run)\"",
+        "\"Edit Alias\"",
+        "\"Change the alias trigger for this item\"",
+        "\"Delete Alias\"",
+        "\"Remove the alias trigger from this item\"",
+    ] {
+        assert!(
+            source.contains(expected),
+            "built-in/preference action copy source must keep public text/token: {expected}"
+        );
+    }
+}

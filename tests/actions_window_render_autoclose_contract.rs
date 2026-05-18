@@ -65,9 +65,12 @@ fn actions_window_tracks_parent_identity_for_focus_lifecycle() {
 
     let parent_focus = source_between(
         ACTIONS_WINDOW,
-        "fn actions_parent_window_focused(",
+        "enum ActionsParentFocusState",
         "/// Actions window width",
     );
+    assert!(parent_focus.contains("ActionsParentFocusState"));
+    assert!(parent_focus.contains("focused_automation_window_id()"));
+    assert!(parent_focus.contains("AutomationRegistryFocused"));
     assert!(parent_focus.contains("AutomationWindowKind::Main"));
     assert!(parent_focus.contains("platform::is_main_window_focused()"));
     assert!(parent_focus.contains("AutomationWindowKind::Notes"));
@@ -83,4 +86,14 @@ fn actions_window_tracks_parent_identity_for_focus_lifecycle() {
             .contains("activate_main_window && self.parent_kind == AutomationWindowKind::Main"),
         "actions close may activate main only for main-hosted popups"
     );
+}
+
+#[test]
+fn deferred_actions_window_close_clears_automation_target() {
+    let defer_close = source_between(ACTIONS_WINDOW, "fn defer_close(", "fn request_close(");
+
+    assert!(defer_close.contains("clear_actions_popup_automation_snapshot()"));
+    assert!(defer_close.contains("automation_surface_collector::remove_actions_dialog_snapshot"));
+    assert!(defer_close.contains("remove_automation_window(\"actions-dialog\")"));
+    assert!(defer_close.contains("clear_actions_window_handle(reason)"));
 }

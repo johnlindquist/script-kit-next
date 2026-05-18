@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.text",
+  "command": "text.measure",
+  "classification": "ok",
+  "session": "dt026-actions-agent-chat-preference-1779073250",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 595,
+      "y": 215,
+      "width": 320,
+      "height": 88
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 88,
+      "targetBoundsInScreenshot": {
+        "x": 80,
+        "y": 44,
+        "width": 320,
+        "height": 88
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "textSummary": {
+    "inputValue": "",
+    "inputLength": 0,
+    "inputFingerprint": "811c9dc5",
+    "selectedValue": "",
+    "selectedLength": 0,
+    "selectedFingerprint": "811c9dc5",
+    "textNodeCount": 3,
+    "longestTextLength": 9
+  },
+  "rows": [
+    {
+      "semanticId": "input:actions-search",
+      "role": "input",
+      "text": "alias",
+      "textLength": 5,
+      "lineCount": 1,
+      "selected": null,
+      "focused": true,
+      "fingerprint": "7d268157"
+    },
+    {
+      "semanticId": "list:actions",
+      "role": "list",
+      "text": "1 actions",
+      "textLength": 9,
+      "lineCount": 1,
+      "selected": null,
+      "focused": null,
+      "fingerprint": "2351867f"
+    },
+    {
+      "semanticId": "choice:0:add_alias",
+      "role": "choice",
+      "text": "Add Alias",
+      "textLength": 9,
+      "lineCount": 1,
+      "selected": true,
+      "focused": null,
+      "fingerprint": "33c1eb08"
+    }
+  ],
+  "footerTexts": [],
+  "missingPrimitives": [
+    "textBounds"
+  ],
+  "warnings": [
+    "Text bounds are not exposed by getElements yet; pair this with devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}

@@ -1,0 +1,1110 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-028-actions-global-show-logs-copy-gated",
+  "oracleSession": "actions-next-builtins-batch-2",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "b8b79ee43fbc0a769965e25da48d66336a36789a",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T03:08:46.211Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt028-actions-show-logs-1779073468",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "targets.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--start",
+          "--show"
+        ],
+        "receiptRef": "00-main-start-show.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--text",
+          "Agent Chat"
+        ],
+        "receiptRef": "01-act-main-filter-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-01.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-02.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-03.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-04.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-05.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-06.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-07.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-08.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-09.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-10.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-11.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-12.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-13.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-14.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-15.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-16.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-17.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-18.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-19.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-20.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-21.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-22.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "elements.snapshot",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "03-elements-main-agent-chat-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "focus.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "04-focus-main-agent-chat-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "05-layout-main-agent-chat-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.open-actions",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "06-act-open-actions-agent-chat-parent.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "targets.list",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "07-targets-list-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "08-actions-agent-chat-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "logs"
+        ],
+        "receiptRef": "09-act-filter-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "10-actions-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "elements.snapshot",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "11-elements-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "focus.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "12-focus-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "text.measure",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "13-text-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "14-layout-logs.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "enter"
+        ],
+        "receiptRef": "15-act-enter-without-allow-submit.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "16-actions-after-blocked-enter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "escape"
+        ],
+        "receiptRef": "17-act-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "targets.list",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "18-targets-after-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "focus.inspect",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "19-focus-main-after-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt028-actions-show-logs-1779073468",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "20-layout-main-after-escape.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter main launcher to Agent Chat",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "Agent Chat",
+      "visibleResult": "Agent Chat row visible and selected",
+      "receiptRef": "03-elements-main-agent-chat-selected.json"
+    },
+    {
+      "step": 2,
+      "intent": "filter global action to logs",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ActionsDialog",
+      "inputSummary": "logs",
+      "visibleResult": "Show Logs selected",
+      "receiptRef": "11-elements-logs.json"
+    },
+    {
+      "step": 3,
+      "intent": "prove unsafe Enter does not toggle logs",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ActionsDialog",
+      "inputSummary": "Enter without allow-submit",
+      "visibleResult": "blocked before dispatch",
+      "receiptRef": "15-act-enter-without-allow-submit.json"
+    },
+    {
+      "step": 4,
+      "intent": "dismiss actions and inspect parent",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ActionsDialog",
+      "inputSummary": "Escape",
+      "visibleResult": "ActionsDialog gone; main remains inspectable",
+      "receiptRef": "18-targets-after-escape.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "ScriptList",
+      "receiptRef": "00-main-start-show.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ScriptList",
+      "receiptRef": "01-act-main-filter-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-01.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-02.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-03.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-04.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-05.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-06.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-07.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-08.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-09.json",
+      "classification": "ok"
+    },
+    {
+      "step": 12,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-10.json",
+      "classification": "ok"
+    },
+    {
+      "step": 13,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-11.json",
+      "classification": "ok"
+    },
+    {
+      "step": 14,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-12.json",
+      "classification": "ok"
+    },
+    {
+      "step": 15,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-13.json",
+      "classification": "ok"
+    },
+    {
+      "step": 16,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-14.json",
+      "classification": "ok"
+    },
+    {
+      "step": 17,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-15.json",
+      "classification": "ok"
+    },
+    {
+      "step": 18,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-16.json",
+      "classification": "ok"
+    },
+    {
+      "step": 19,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-17.json",
+      "classification": "ok"
+    },
+    {
+      "step": 20,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-18.json",
+      "classification": "ok"
+    },
+    {
+      "step": 21,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-19.json",
+      "classification": "ok"
+    },
+    {
+      "step": 22,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-20.json",
+      "classification": "ok"
+    },
+    {
+      "step": 23,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-21.json",
+      "classification": "ok"
+    },
+    {
+      "step": 24,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-22.json",
+      "classification": "ok"
+    },
+    {
+      "step": 25,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "03-elements-main-agent-chat-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 26,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "ScriptList",
+      "receiptRef": "04-focus-main-agent-chat-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 27,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "05-layout-main-agent-chat-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 28,
+      "tool": "script-kit-devtools.act",
+      "command": "act.open-actions",
+      "targetSurface": "ScriptList",
+      "receiptRef": "06-act-open-actions-agent-chat-parent.json",
+      "classification": "ok"
+    },
+    {
+      "step": 29,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": null,
+      "receiptRef": "07-targets-list-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 30,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "08-actions-agent-chat-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 31,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "09-act-filter-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 32,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "10-actions-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 33,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "11-elements-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 34,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "12-focus-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 35,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "13-text-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 36,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "14-layout-logs.json",
+      "classification": "ok"
+    },
+    {
+      "step": 37,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "15-act-enter-without-allow-submit.json",
+      "classification": "blocked-by-unsafe-operation"
+    },
+    {
+      "step": 38,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "16-actions-after-blocked-enter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 39,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "17-act-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 40,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": null,
+      "receiptRef": "18-targets-after-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 41,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "ScriptList",
+      "receiptRef": "19-focus-main-after-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 42,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "20-layout-main-after-escape.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:0:view_logs",
+    "visibleLabel": "Show Logs",
+    "actionId": "view_logs",
+    "handlerId": "global_ops.view_logs",
+    "sideEffectClass": "ui-toggle",
+    "parentSubjectId": "choice:22:agent-chat",
+    "footerIntent": null,
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "showLogsGlobalActionVisible",
+      "expected": "visible label is Show Logs",
+      "actual": "choice:0:view_logs label=Show Logs",
+      "status": "pass"
+    },
+    {
+      "name": "showLogsDescriptionMatchesGlobalCopy",
+      "expected": "description is Toggle the in-launcher log panel",
+      "actual": "source get_global_actions view_logs copy",
+      "status": "pass"
+    },
+    {
+      "name": "showLogsActionIdMatchesHandler",
+      "expected": "action id is view_logs; handler is global/log-panel path",
+      "actual": "selectedActionId=view_logs",
+      "status": "pass"
+    },
+    {
+      "name": "showLogsSubmitBlockedWithoutAllowSubmit",
+      "expected": "Enter without --allow-submit is blocked before dispatch",
+      "actual": "blocked-by-unsafe-operation submitAttempted=false",
+      "status": "pass"
+    },
+    {
+      "name": "escapeDismissLeavesParentInspectable",
+      "expected": "Escape closes ActionsDialog and leaves main ScriptList inspectable",
+      "actual": "targets after escape contains only main",
+      "status": "pass"
+    },
+    {
+      "name": "layoutNoClipAfterDismiss",
+      "expected": "parent layout remains measurable after dismiss",
+      "actual": "20-layout-main-after-escape.json recorded",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; action submissions were intentionally blocked without --allow-submit.",
+    "Runtime action descriptions are redacted to fingerprints, so copy text expectations are backed by focused source-contract tests plus visible runtime labels/action ids."
+  ]
+}
