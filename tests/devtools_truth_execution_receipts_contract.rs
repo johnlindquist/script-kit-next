@@ -21,6 +21,9 @@ const BUILTINS_PREFERENCES_GLOBAL_MANIFEST: &str = include_str!(
 const SYSTEM_PERMISSION_AGENT_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/slice.manifest.json"
 );
+const BUILTIN_INTERNAL_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -83,6 +86,18 @@ const DT_031_SYSTEM_PERMISSION_AGENT: &str = include_str!(
 );
 const DT_032_SYSTEM_PERMISSION_AGENT: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-system-permission-agent-copy-v1/dt-truth-032-actions-generate-script-agent-chat-handoff-copy-gated/scenario.receipt.json"
+);
+const DT_033_BUILTIN_INTERNAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/dt-truth-033-actions-file-search-main-row-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_034_BUILTIN_INTERNAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/dt-truth-034-actions-file-search-empty-context-global-fallback-truth/scenario.receipt.json"
+);
+const DT_035_BUILTIN_INTERNAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/dt-truth-035-actions-process-manager-copy-suppresses-stop-kill-truth/scenario.receipt.json"
+);
+const DT_036_BUILTIN_INTERNAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtin-internal-copy-v1/dt-truth-036-actions-do-current-app-collapsed-alias-copy-truth/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -1417,6 +1432,250 @@ fn direct_devtools_script_list_selection_uses_named_state_machine() {
         assert!(
             source.contains(expected),
             "direct DevTools selection should keep ScriptList support behind named state/action {expected}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_builtin_internal_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(BUILTIN_INTERNAL_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(
+        manifest["sliceId"],
+        "direct-actions-builtin-internal-copy-v1"
+    );
+    assert_eq!(manifest["oracleSession"], "actions-batch-four-plan");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-033-actions-file-search-main-row-copy-deeplink-truth",
+            "dt-truth-034-actions-file-search-empty-context-global-fallback-truth",
+            "dt-truth-035-actions-process-manager-copy-suppresses-stop-kill-truth",
+            "dt-truth-036-actions-do-current-app-collapsed-alias-copy-truth",
+        ]
+    );
+}
+
+#[test]
+fn direct_actions_builtin_internal_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-033-actions-file-search-main-row-copy-deeplink-truth",
+            DT_033_BUILTIN_INTERNAL,
+        ),
+        (
+            "dt-truth-034-actions-file-search-empty-context-global-fallback-truth",
+            DT_034_BUILTIN_INTERNAL,
+        ),
+        (
+            "dt-truth-035-actions-process-manager-copy-suppresses-stop-kill-truth",
+            DT_035_BUILTIN_INTERNAL,
+        ),
+        (
+            "dt-truth-036-actions-do-current-app-collapsed-alias-copy-truth",
+            DT_036_BUILTIN_INTERNAL,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["oracleSession"], "actions-batch-four-plan");
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "systemPasteboardChanged",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+
+        let primitive_commands = receipt["primitiveReceipts"]
+            .as_array()
+            .expect("primitiveReceipts must be array")
+            .iter()
+            .filter_map(|entry| entry["command"].as_str())
+            .collect::<Vec<_>>();
+        for expected in [
+            "targets.inspect",
+            "act.select",
+            "act.open-actions",
+            "actions.inspect",
+            "act.set-input",
+            "act.key",
+        ] {
+            assert!(
+                primitive_commands.contains(&expected),
+                "{expected_id} missing primitive command coverage {expected}; got {primitive_commands:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_builtin_internal_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_033_BUILTIN_INTERNAL,
+            vec![
+                "fileSearchParentSelectionStable",
+                "fileSearchDeepLinkCopyNamesSearchFiles",
+                "fileSearchRejectsRevealAndAgentChatStaleCopy",
+                "copyDeepFilterRecoveryRestoresDeepLinkAction",
+                "fileSearchDeepLinkSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_034_BUILTIN_INTERNAL,
+            vec![
+                "fileSearchEmptyContextShowsGlobalFallback",
+                "fileSearchEmptyContextSuppressesFileActions",
+                "copyPathFilterHasNoExecutableAction",
+                "revealFilterHasNoExecutableAction",
+                "fileSearchEmptyFallbackSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_035_BUILTIN_INTERNAL,
+            vec![
+                "processManagerParentSelectionStable",
+                "processManagerCopyNamesInspectionOnly",
+                "processManagerKillFilterHasNoExecutableAction",
+                "processManagerStopFilterHasNoExecutableAction",
+                "processManagerSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_036_BUILTIN_INTERNAL,
+            vec![
+                "doInCurrentAppCollapsedAliasVisible",
+                "currentAppCommandsAndTurnIntoCommandNotShownAsSeparateActions",
+                "appCommandsFilterHasNoExecutableAction",
+                "turnThisFilterHasNoExecutableAction",
+                "doInCurrentAppSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_builtin_internal_records_copy_submit_and_allowlist_truth() {
+    let file_search = parse(DT_033_BUILTIN_INTERNAL);
+    assert_eq!(file_search["truthModel"]["visibleLabel"], "Copy Deep Link");
+    assert_eq!(file_search["truthModel"]["actionId"], "copy_deeplink");
+    assert_eq!(
+        file_search["truthModel"]["parentSubjectId"],
+        "choice:8:search-files"
+    );
+
+    let empty_file_search = parse(DT_034_BUILTIN_INTERNAL);
+    assert_eq!(empty_file_search["truthModel"]["visibleLabel"], "Show Logs");
+    assert_eq!(empty_file_search["truthModel"]["actionId"], "view_logs");
+    assert_eq!(
+        empty_file_search["truthModel"]["sideEffectClass"],
+        "global-safe-fallback"
+    );
+
+    let process = parse(DT_035_BUILTIN_INTERNAL);
+    assert_eq!(
+        process["truthModel"]["visibleLabel"],
+        "Open Process Manager"
+    );
+    assert_eq!(
+        process["truthModel"]["sideEffectClass"],
+        "inspection-only-open"
+    );
+
+    let current_app = parse(DT_036_BUILTIN_INTERNAL);
+    assert_eq!(
+        current_app["truthModel"]["visibleLabel"],
+        "Do in Current App"
+    );
+    assert_eq!(
+        current_app["truthModel"]["handlerId"],
+        "builtin-do-in-current-app"
+    );
+}
+
+#[test]
+fn direct_devtools_non_destructive_launcher_submit_uses_named_allowlist() {
+    let source = include_str!("../scripts/devtools/act.ts");
+    for expected in [
+        "nonDestructiveLauncherSubmitIds",
+        "\"search-files\"",
+        "isNonDestructiveLauncherSubmit",
+        "isScriptListTargetReceipt",
+        "submit requires ActionsDialog target or non-destructive launcher allowlist",
+    ] {
+        assert!(
+            source.contains(expected),
+            "direct DevTools submit safety should expose named launcher allowlist state {expected}"
         );
     }
 }

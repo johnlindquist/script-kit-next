@@ -342,6 +342,10 @@ const lifecycleCodes = new Set([
   "forwarder_dead_before_rpc",
 ]);
 
+const nonDestructiveLauncherSubmitIds = new Set([
+  "search-files",
+]);
+
 function receiptErrorCode(receipt: JsonObject): string {
   const direct = (receipt.error as JsonObject | undefined)?.code;
   if (typeof direct === "string") return direct;
@@ -384,15 +388,29 @@ function isActionsDialogTargetReceipt(receipt: JsonObject) {
     || resolved?.appViewVariant === "ActionsDialog";
 }
 
+function isScriptListTargetReceipt(receipt: JsonObject) {
+  const resolved = receipt.resolvedTarget as JsonObject | undefined;
+  return resolved?.targetKind === "Main"
+    || resolved?.surfaceKind === "ScriptList"
+    || resolved?.appViewVariant === "ScriptList";
+}
+
+function isNonDestructiveLauncherSubmit(actionId: string | null) {
+  return actionId !== null && nonDestructiveLauncherSubmitIds.has(actionId);
+}
+
 function submitPreflight(args: Args, targetReceipt: JsonObject, before: JsonObject): SubmitLifecycleState {
   if (!isSubmitLike(args)) {
     return { state: "not-submit", reason: "action is not submit-like" };
   }
   const selectedSemanticId = before.selectedSemanticId ?? null;
-  if (!isActionsDialogTargetReceipt(targetReceipt)) {
-    return { state: "blocked-before-dispatch", reason: "submit requires ActionsDialog target", selectedSemanticId: selectedSemanticId as string | null };
-  }
   const actionId = selectedActionIdFromSemanticId(selectedSemanticId);
+  if (!isActionsDialogTargetReceipt(targetReceipt)) {
+    if (isScriptListTargetReceipt(targetReceipt) && isNonDestructiveLauncherSubmit(actionId)) {
+      return { state: "dispatched", actionId };
+    }
+    return { state: "blocked-before-dispatch", reason: "submit requires ActionsDialog target or non-destructive launcher allowlist", selectedSemanticId: selectedSemanticId as string | null };
+  }
   if (!actionId) {
     return { state: "blocked-before-dispatch", reason: "submit requires selected ActionsDialog choice:* row", selectedSemanticId: selectedSemanticId as string | null };
   }
@@ -408,7 +426,7 @@ async function inspectParentAfterAction(args: Args, targetReceipt: JsonObject) {
   const parentAutomationId = resolved?.parentAutomationId;
   const parentArgs = parentAutomationId
     ? ["--target-id", String(parentAutomationId)]
-    : ["--main", "--surface", "ScriptList"];
+    : ["--main"];
   return run([
     "bun",
     "scripts/devtools/targets.ts",
@@ -543,8 +561,11 @@ async function main() {
   const beforeScroll = await scrollReceipt(args, "scroll.before");
   const startedAt = new Date().toISOString();
   const preflight = submitPreflight(args, targetReceipt, before);
+  const preflightNonDestructiveSubmit =
+    preflight.state === "dispatched" && isNonDestructiveLauncherSubmit(preflight.actionId ?? null);
   const guardWithPreflight = {
     ...guard,
+    destructive: guard.destructive && !preflightNonDestructiveSubmit,
     submitAttempted: isSubmitLike(args) && preflight.state !== "blocked-before-dispatch",
     submitPreflightSelectedSemanticId: (before.selectedSemanticId as string | undefined) ?? null,
     errors: preflight.state === "blocked-before-dispatch"

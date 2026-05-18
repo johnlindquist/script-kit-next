@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "direct-actions-builtin-internal-copy-v1",
+  "oracleSession": "actions-batch-four-plan",
+  "executor": "direct-devtools-primitives",
+  "hasRunner": false,
+  "forbiddenExecutorsUsed": false,
+  "summary": {
+    "pass": 4,
+    "fail": 0,
+    "blockedByMissingPrimitive": 0,
+    "blockedByUnsafeOperation": 0
+  },
+  "scenarioIds": [
+    "dt-truth-033-actions-file-search-main-row-copy-deeplink-truth",
+    "dt-truth-034-actions-file-search-empty-context-global-fallback-truth",
+    "dt-truth-035-actions-process-manager-copy-suppresses-stop-kill-truth",
+    "dt-truth-036-actions-do-current-app-collapsed-alias-copy-truth"
+  ]
+}
