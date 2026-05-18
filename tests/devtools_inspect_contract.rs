@@ -123,6 +123,21 @@ fn targets_cli_promotes_strict_target_identity_to_first_class_receipt() {
 }
 
 #[test]
+fn targets_cli_normalizes_list_window_kind_to_inspect_identity() {
+    for needle in [
+        "function stableWindowKind",
+        "value === \"actionsDialog\"",
+        "\"ActionsDialog\"",
+        "windowKind: stableWindowKind(window.kind ?? window.windowKind)",
+    ] {
+        assert!(
+            TARGETS.contains(needle),
+            "targets.list must report the same stable window kind spelling as targets.inspect: {needle}"
+        );
+    }
+}
+
+#[test]
 fn surface_cli_combines_strict_target_identity_with_surface_contract() {
     for needle in [
         "script-kit-devtools.surface",
@@ -514,6 +529,44 @@ fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
         assert!(
             ACTIONS_DIALOG.contains(needle),
             "ActionsDialog state must expose runtime row geometry field: {needle}"
+        );
+    }
+}
+
+#[test]
+fn actions_cli_session_arg_does_not_suppress_actions_dialog_default_target() {
+    for needle in [
+        "hasExplicitInspectTarget",
+        "inspectTargetForwarded",
+        "DEFAULT_INSPECT_TARGET",
+        "\"--target-kind\", \"actionsDialog\"",
+        "\"--surface\", \"ActionsDialog\"",
+        "inspectForwarded(args)",
+    ] {
+        assert!(
+            ACTIONS.contains(needle),
+            "actions.inspect must distinguish transport args from explicit inspect targets: {needle}"
+        );
+    }
+
+    assert!(
+        !ACTIONS.contains("args.forwarded.length > 0"),
+        "session/timeout forwarding must not suppress the ActionsDialog default target"
+    );
+}
+
+#[test]
+fn actions_cli_waits_for_actions_dialog_target_after_protocol_open() {
+    for needle in [
+        "waitForActionsDialogTarget",
+        "targets.inspect.actionsDialog.ready",
+        "automationId === \"actions-dialog\"",
+        "targetKind === \"ActionsDialog\"",
+        "targetReadiness",
+    ] {
+        assert!(
+            ACTIONS.contains(needle),
+            "actions.inspect must prove ActionsDialog target readiness after openActions: {needle}"
         );
     }
 }

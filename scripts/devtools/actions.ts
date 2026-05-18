@@ -11,9 +11,14 @@ type Args = {
   open: boolean;
   start: boolean;
   keepOpen: boolean;
-  forwarded: string[];
-  openForwarded: string[];
+  inspectTargetForwarded: string[];
+  hasExplicitInspectTarget: boolean;
+  openTargetForwarded: string[];
+  hasExplicitOpenTarget: boolean;
 };
+
+const DEFAULT_INSPECT_TARGET = ["--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"];
+const DEFAULT_OPEN_TARGET = ["--show", "--main", "--strict", "--surface", "ScriptList"];
 
 function usage() {
   return [
@@ -40,15 +45,15 @@ function parseArgs(argv: string[]): Args {
     open: false,
     start: false,
     keepOpen: false,
-    forwarded: [],
-    openForwarded: [],
+    inspectTargetForwarded: [],
+    hasExplicitInspectTarget: false,
+    openTargetForwarded: [],
+    hasExplicitOpenTarget: false,
   };
   for (let index = 1; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === "--session") {
       args.session = argv[++index] ?? args.session;
-      args.forwarded.push("--session", args.session);
-      args.openForwarded.push("--session", args.session);
     } else if (arg === "--open") {
       args.open = true;
     } else if (arg === "--start") {
@@ -57,55 +62,93 @@ function parseArgs(argv: string[]): Args {
       args.keepOpen = true;
     } else if (arg === "--open-target-id") {
       args.openTarget = { type: "id", id: argv[++index] ?? "" };
-      args.openForwarded.push("--target-id", String(args.openTarget.id ?? ""));
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--target-id", String(args.openTarget.id ?? ""));
     } else if (arg === "--open-target-kind") {
       const kind = argv[++index] ?? "main";
       args.openTarget = { type: "kind", kind };
-      args.openForwarded.push("--target-kind", kind);
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--target-kind", kind);
     } else if (arg === "--open-target-index") {
       const value = Number(argv[++index] ?? 0);
       if (!args.openTarget || args.openTarget.type !== "kind") {
         throw new Error("--open-target-index requires --open-target-kind first");
       }
       args.openTarget.index = value;
-      args.openForwarded.push("--target-index", String(value));
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--target-index", String(value));
     } else if (arg === "--open-target-title") {
       args.openTarget = { type: "titleContains", text: argv[++index] ?? "" };
-      args.openForwarded.push("--target-title", String(args.openTarget.text ?? ""));
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--target-title", String(args.openTarget.text ?? ""));
     } else if (arg === "--open-focused") {
       args.openTarget = { type: "focused" };
-      args.openForwarded.push("--focused");
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--focused");
     } else if (arg === "--open-main") {
       args.openTarget = { type: "main" };
-      args.openForwarded.push("--main");
+      args.hasExplicitOpenTarget = true;
+      args.openTargetForwarded.push("--main");
     } else if (arg === "--target-id") {
       args.target = { type: "id", id: argv[++index] ?? "" };
-      args.forwarded.push("--target-id", String(args.target.id ?? ""));
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--target-id", String(args.target.id ?? ""));
     } else if (arg === "--target-kind") {
       const kind = argv[++index] ?? "actionsDialog";
       args.target = { type: "kind", kind };
-      args.forwarded.push("--target-kind", kind);
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--target-kind", kind);
     } else if (arg === "--target-index") {
       const value = Number(argv[++index] ?? 0);
       if (!args.target || args.target.type !== "kind") {
         throw new Error("--target-index requires --target-kind first");
       }
       args.target.index = value;
-      args.forwarded.push("--target-index", String(value));
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--target-index", String(value));
     } else if (arg === "--target-title") {
       args.target = { type: "titleContains", text: argv[++index] ?? "" };
-      args.forwarded.push("--target-title", String(args.target.text ?? ""));
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--target-title", String(args.target.text ?? ""));
     } else if (arg === "--focused") {
       args.target = { type: "focused" };
-      args.forwarded.push("--focused");
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--focused");
     } else if (arg === "--main") {
       args.target = { type: "main" };
-      args.forwarded.push("--main");
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--main");
+    } else if (arg === "--strict") {
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--strict");
+    } else if (arg === "--surface") {
+      args.hasExplicitInspectTarget = true;
+      args.inspectTargetForwarded.push("--surface", argv[++index] ?? "");
     } else if (arg === "--timeout") {
       args.timeoutMs = Number(argv[++index] ?? args.timeoutMs);
     }
   }
   return args;
+}
+
+function inspectForwarded(args: Args): string[] {
+  return [
+    "--session",
+    args.session,
+    ...(args.hasExplicitInspectTarget ? args.inspectTargetForwarded : DEFAULT_INSPECT_TARGET),
+    "--timeout",
+    String(args.timeoutMs),
+  ];
+}
+
+function openForwarded(args: Args): string[] {
+  return [
+    "--session",
+    args.session,
+    ...(args.hasExplicitOpenTarget ? args.openTargetForwarded : DEFAULT_OPEN_TARGET),
+    "--timeout",
+    String(args.timeoutMs),
+  ];
 }
 
 async function run(command: string[], label: string, env?: Record<string, string>): Promise<JsonObject> {
@@ -244,20 +287,53 @@ function findParentTarget(target: JsonObject, windows: JsonObject[]) {
 
 async function maybeOpenActions(args: Args) {
   if (!args.open) return null;
-  const openForwarded = args.openTarget
-    ? args.openForwarded
-    : ["--session", args.session, "--show", "--main", "--strict", "--surface", "ScriptList"];
   const openCommand = [
       "bun",
       "scripts/devtools/act.ts",
       "open-actions",
-      ...openForwarded,
-      "--timeout",
-      String(args.timeoutMs),
+      ...openForwarded(args),
     ];
   return run([
     ...openCommand,
   ], "actions.open");
+}
+
+function isActionsDialogTarget(receipt: JsonObject) {
+  const target = receipt.resolvedTarget as JsonObject | undefined;
+  return receipt.classification === "ok"
+    && target?.automationId === "actions-dialog"
+    && target?.targetKind === "ActionsDialog";
+}
+
+async function waitForActionsDialogTarget(args: Args, forwarded: string[]) {
+  const startedAt = Date.now();
+  const deadline = startedAt + args.timeoutMs;
+  const attempts: JsonObject[] = [];
+
+  while (Date.now() < deadline) {
+    const receipt = await run(
+      ["bun", "scripts/devtools/targets.ts", "inspect", ...forwarded],
+      "targets.inspect.actionsDialog.ready",
+    );
+    attempts.push({
+      elapsedMs: Date.now() - startedAt,
+      classification: receipt.classification ?? null,
+      requestedTarget: receipt.requestedTarget ?? null,
+      resolvedTarget: receipt.resolvedTarget ?? null,
+      errors: receipt.errors ?? [],
+    });
+    if (isActionsDialogTarget(receipt)) {
+      return { status: "ok", receipt, attempts };
+    }
+    await Bun.sleep(50);
+  }
+
+  return {
+    status: "error",
+    classification: "blocked-by-target-ambiguity",
+    reason: "actionsDialog target did not become observable after openActions",
+    attempts,
+  };
 }
 
 function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, missing: string[]) {
@@ -275,17 +351,21 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, missing:
 
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
+  const forwarded = inspectForwarded(args);
   const startReceipt = await maybeStartSession(args);
   const parentOpenReceipt = await maybeOpenParentTarget(args);
   const openReceipt = await maybeOpenActions(args);
-  const forwarded = args.forwarded.length > 0
-    ? args.forwarded
-    : ["--session", args.session, "--target-kind", "actionsDialog", "--strict", "--surface", "ActionsDialog"];
+  const targetReadiness = args.open
+    ? await waitForActionsDialogTarget(args, forwarded)
+    : null;
+  const targetReceipt = targetReadiness?.status === "ok"
+    ? (targetReadiness.receipt as JsonObject)
+    : await run(["bun", "scripts/devtools/targets.ts", "inspect", ...forwarded], "targets.inspect");
 
-  const [targetsList, targetReceipt] = await Promise.all([
-    run(["bun", "scripts/devtools/targets.ts", "list", "--session", args.session], "targets.list"),
-    run(["bun", "scripts/devtools/targets.ts", "inspect", ...forwarded], "targets.inspect"),
-  ]);
+  const targetsList = await run(
+    ["bun", "scripts/devtools/targets.ts", "list", "--session", args.session, "--timeout", String(args.timeoutMs)],
+    "targets.list",
+  );
   const selector = (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? args.target ?? { type: "kind", kind: "actionsDialog" };
   const [stateEnvelope, elements, layout, keyboard] = await Promise.all([
     rpc(args.session, { type: "getState", requestId: requestId("state"), target: selector, summaryOnly: true }, "stateResult", args.timeoutMs),
@@ -346,6 +426,7 @@ async function main() {
     startReceipt,
     parentOpenReceipt,
     openReceipt,
+    targetReadiness,
     popupState: {
       open: Boolean(actionsDialog),
       host: actionsDialog?.host ?? null,

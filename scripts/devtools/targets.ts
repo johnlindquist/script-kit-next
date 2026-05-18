@@ -124,11 +124,20 @@ function arrayOf(value: unknown): JsonObject[] {
   return Array.isArray(value) ? value.filter((entry): entry is JsonObject => typeof entry === "object" && entry !== null) : [];
 }
 
+function stableWindowKind(value: unknown) {
+  if (value === "actionsDialog") return "ActionsDialog";
+  if (value === "promptPopup") return "PromptPopup";
+  if (value === "acpDetached") return "AcpDetached";
+  if (value === "main") return "Main";
+  if (value === "notes") return "Notes";
+  return value ?? null;
+}
+
 function pickWindows(windows: JsonObject) {
   return arrayOf(windows.windows ?? windows.automationWindows ?? windows.targets).map((window, index) => ({
     index,
     automationId: window.id ?? window.windowId ?? window.automationId ?? null,
-    windowKind: window.kind ?? window.windowKind ?? null,
+    windowKind: stableWindowKind(window.kind ?? window.windowKind),
     title: window.title ?? null,
     visible: window.visible ?? null,
     focused: window.focused ?? null,
