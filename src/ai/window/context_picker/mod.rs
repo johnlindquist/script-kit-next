@@ -14,12 +14,16 @@ mod tests;
 use super::*;
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 use crate::ai::message_parts::AiContextPart;
-use types::{ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
+use types::{
+    ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
+    InlinePortalAttachment, InlinePortalResultPayload, PortalKind, PortalPrefixPayload,
+};
 
 use std::sync::OnceLock;
 
 /// Maximum number of file/folder results to include.
 const FILE_RESULTS_LIMIT: usize = 10;
+const INLINE_PORTAL_RESULTS_LIMIT: usize = 10;
 
 /// Parsed trigger + query extracted from the composer input.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -317,18 +321,71 @@ fn builtin_seed(kind: ContextAttachmentKind) -> &'static BuiltinPickerSeed {
         .unwrap_or_else(|| unreachable!("missing BuiltinPickerSeed"))
 }
 
-fn file_search_query(trigger: ContextPickerTrigger, query: &str) -> Option<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct InlinePortalQuery {
+    kind: PortalKind,
+    prefix: &'static str,
+    query: String,
+}
+
+fn portal_prefix_for_kind(kind: PortalKind) -> &'static str {
+    match kind {
+        PortalKind::FileSearch => "file",
+        PortalKind::BrowserHistory => "browser-history",
+        PortalKind::ClipboardHistory => "clipboard",
+        PortalKind::DictationHistory => "dictation",
+        PortalKind::ScriptSearch => "script",
+        PortalKind::ScriptletSearch => "scriptlet",
+        PortalKind::SkillSearch => "skill",
+        PortalKind::NotesBrowse => "note",
+        PortalKind::AcpHistory => "history",
+    }
+}
+
+fn portal_kind_from_prefix(prefix: &str) -> Option<PortalKind> {
+    match prefix {
+        "file" => Some(PortalKind::FileSearch),
+        "browser-history" => Some(PortalKind::BrowserHistory),
+        "clipboard" => Some(PortalKind::ClipboardHistory),
+        "dictation" => Some(PortalKind::DictationHistory),
+        "script" => Some(PortalKind::ScriptSearch),
+        "scriptlet" => Some(PortalKind::ScriptletSearch),
+        "skill" => Some(PortalKind::SkillSearch),
+        "note" => Some(PortalKind::NotesBrowse),
+        "history" => Some(PortalKind::AcpHistory),
+        _ => None,
+    }
+}
+
+fn inline_portal_query(trigger: ContextPickerTrigger, query: &str) -> Option<InlinePortalQuery> {
     if trigger != ContextPickerTrigger::Mention {
         return None;
     }
-    let lower = query.trim().to_lowercase();
-    if lower == "file" || lower == "file:" {
-        return Some(String::new());
-    }
-    if lower.starts_with("file:") {
-        return Some(query.trim().get(5..).unwrap_or_default().to_string());
+    let trimmed = query.trim();
+    let lower = trimmed.to_lowercase();
+    let (prefix, search_query) = match lower.split_once(':') {
+        Some((prefix, _)) => {
+            let query_offset = prefix.len() + 1;
+            (prefix, trimmed.get(query_offset..).unwrap_or_default())
+        }
+        None => (lower.as_str(), ""),
+    };
+    let kind = portal_kind_from_prefix(prefix)?;
+    let exact_prefix_opens_inline = kind == PortalKind::FileSearch && lower == prefix;
+    if exact_prefix_opens_inline || lower.starts_with(&format!("{prefix}:")) {
+        return Some(InlinePortalQuery {
+            kind,
+            prefix: portal_prefix_for_kind(kind),
+            query: search_query.to_string(),
+        });
     }
     None
+}
+
+fn file_search_query(trigger: ContextPickerTrigger, query: &str) -> Option<String> {
+    inline_portal_query(trigger, query)
+        .filter(|inline| inline.kind == PortalKind::FileSearch)
+        .map(|inline| inline.query)
 }
 
 fn split_file_query(base_dir: &std::path::Path, raw_query: &str) -> (std::path::PathBuf, String) {
@@ -572,10 +629,11 @@ impl AiApp {
                 },
                 ContextPickerItemKind::SlashCommand(_)
                 | ContextPickerItemKind::Portal(_)
+                | ContextPickerItemKind::PortalPrefix(_)
+                | ContextPickerItemKind::PortalResult(_)
                 | ContextPickerItemKind::Inert => {
-                    // SlashCommand, Portal, and Inert items are ACP-only; the
-                    // window picker should never encounter them, but handle
-                    // gracefully.
+                    // Portal and slash items are ACP-only; the window picker
+                    // should never encounter them, but handle gracefully.
                     return;
                 }
             };
@@ -791,12 +849,12 @@ fn extend_builtin_picker_items(
         });
     }
 
-    // File/folder results only when the user explicitly types @file: intent
-    if let Some(file_query) = file_search_query(trigger, query) {
-        if let Ok(cwd) = std::env::current_dir() {
-            collect_file_items(&cwd, &file_query, items);
-        }
-    } else {
+    // Portal-prefixed results stay inline after `@file:`, `@clipboard:`, etc.
+    if let Some(inline_query) = inline_portal_query(trigger, query) {
+        collect_inline_portal_items(&inline_query, items);
+        inject_full_portal_fallback(&inline_query, items);
+        return;
+    } else if file_search_query(trigger, query).is_none() {
         tracing::debug!(
             target: "ai",
             ?trigger,
@@ -815,8 +873,6 @@ fn extend_builtin_picker_items(
 /// Inject portal items for rich browsing. These open a temporary browse
 /// surface and attach the selected result back to ACP.
 fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
-    use types::PortalKind;
-
     struct PortalDef {
         kind: PortalKind,
         id: &'static str,
@@ -931,12 +987,163 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             label: SharedString::from(*label),
             description: SharedString::from(*description),
             meta: SharedString::from(*meta),
-            kind: ContextPickerItemKind::Portal(*kind),
+            kind: ContextPickerItemKind::PortalPrefix(PortalPrefixPayload {
+                portal_kind: *kind,
+                prefix: portal_prefix_for_kind(*kind),
+            }),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
         });
     }
+}
+
+fn portal_kind_detail_label(kind: PortalKind) -> &'static str {
+    match kind {
+        PortalKind::FileSearch => "file search",
+        PortalKind::BrowserHistory => "browser history",
+        PortalKind::ClipboardHistory => "clipboard history",
+        PortalKind::DictationHistory => "dictation history",
+        PortalKind::ScriptSearch => "script search",
+        PortalKind::ScriptletSearch => "scriptlet search",
+        PortalKind::SkillSearch => "skill search",
+        PortalKind::NotesBrowse => "notes",
+        PortalKind::AcpHistory => "Agent Chat history",
+    }
+}
+
+fn inject_full_portal_fallback(
+    inline_query: &InlinePortalQuery,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let label = format!("Open full {}", portal_kind_detail_label(inline_query.kind));
+    items.push(ContextPickerItem {
+        id: SharedString::from(format!("portal-full:{}", inline_query.prefix)),
+        label: SharedString::from(label.clone()),
+        description: SharedString::from(format!(
+            "Open the full {} browser",
+            portal_kind_detail_label(inline_query.kind)
+        )),
+        meta: SharedString::from("Portal"),
+        kind: ContextPickerItemKind::Portal(inline_query.kind),
+        score: 10,
+        label_highlight_indices: match_query_chars(&inline_query.query.to_lowercase(), &label)
+            .unwrap_or_default(),
+        meta_highlight_indices: Vec::new(),
+    });
+}
+
+fn collect_inline_portal_items(
+    inline_query: &InlinePortalQuery,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    match inline_query.kind {
+        PortalKind::FileSearch => {
+            if let Ok(cwd) = std::env::current_dir() {
+                collect_file_items(&cwd, &inline_query.query, items);
+            }
+        }
+        PortalKind::BrowserHistory => {
+            collect_browser_history_inline_items(&inline_query.query, items)
+        }
+        PortalKind::ClipboardHistory => collect_clipboard_inline_items(&inline_query.query, items),
+        _ => {}
+    }
+}
+
+fn collect_browser_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let Ok(entries) = crate::browser_history::list_recent_history(200) else {
+        return;
+    };
+    collect_browser_history_inline_items_from_entries(query, entries, items);
+}
+
+fn collect_browser_history_inline_items_from_entries(
+    query: &str,
+    entries: Vec<crate::browser_history::BrowserHistoryEntry>,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let query_lower = query.trim().to_lowercase();
+    let matches = crate::browser_history::fuzzy_search_browser_history(&entries, query);
+    for matched in matches.into_iter().take(INLINE_PORTAL_RESULTS_LIMIT) {
+        let entry = matched.entry;
+        let label = entry.display_title().to_string();
+        let meta = format!("@browser-history:{}", entry.host);
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!(
+                "portal-result:browser-history:{}",
+                entry.history_key()
+            )),
+            label: SharedString::from(label.clone()),
+            description: SharedString::from(entry.url.clone()),
+            meta: SharedString::from(meta),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::BrowserHistory,
+                attachment: InlinePortalAttachment::FocusedTarget {
+                    source: "BrowserHistory".to_string(),
+                    kind: "browser_history_entry".to_string(),
+                    semantic_id: entry.history_key(),
+                    label: label.clone(),
+                    metadata: Some(serde_json::json!({
+                        "browserName": entry.browser_name,
+                        "browserBundleId": entry.browser_bundle_id,
+                        "title": entry.title,
+                        "url": entry.url,
+                        "host": entry.host,
+                        "profile": entry.profile,
+                        "lastVisitedAtMs": entry.last_visited_at_ms,
+                        "visitCount": entry.visit_count,
+                    })),
+                },
+            }),
+            score: (300 + matched.score.max(0) as u32).max(300),
+            label_highlight_indices: match_query_chars(&query_lower, &label).unwrap_or_default(),
+            meta_highlight_indices: Vec::new(),
+        });
+    }
+}
+
+fn collect_clipboard_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let entries = crate::clipboard_history::get_cached_entries(200);
+    collect_clipboard_inline_items_from_entries(query, entries, items);
+}
+
+fn collect_clipboard_inline_items_from_entries(
+    query: &str,
+    entries: Vec<crate::clipboard_history::ClipboardEntryMeta>,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let query_lower = query.trim().to_lowercase();
+    entries
+        .into_iter()
+        .filter(crate::clipboard_history::root_clipboard_entry_is_eligible)
+        .filter(|entry| {
+            query_lower.is_empty() || entry.text_preview.to_lowercase().contains(&query_lower)
+        })
+        .take(INLINE_PORTAL_RESULTS_LIMIT)
+        .for_each(|entry| {
+            let label = entry.display_preview();
+            items.push(ContextPickerItem {
+                id: SharedString::from(format!("portal-result:clipboard:{}", entry.id)),
+                label: SharedString::from(label.clone()),
+                description: SharedString::from(format!(
+                    "{} clipboard entry",
+                    entry.content_type.as_str()
+                )),
+                meta: SharedString::from(format!("@clipboard:{}", entry.id)),
+                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                    portal_kind: PortalKind::ClipboardHistory,
+                    attachment: InlinePortalAttachment::ResourceUri {
+                        uri: format!("kit://clipboard-history?id={}", entry.id),
+                        label: format!("Clipboard: {label}"),
+                    },
+                }),
+                score: if query_lower.is_empty() { 300 } else { 420 },
+                label_highlight_indices: match_query_chars(&query_lower, &label)
+                    .unwrap_or_default(),
+                meta_highlight_indices: Vec::new(),
+            });
+        });
 }
 
 /// Populate `items` with agent slash command entries (e.g. `/compact`,
@@ -1297,7 +1504,9 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
         ContextPickerItemKind::SlashCommand(_) => 1,
         ContextPickerItemKind::File(_) => 2,
         ContextPickerItemKind::Folder(_) => 3,
-        ContextPickerItemKind::Portal(_) => 0,
+        ContextPickerItemKind::Portal(_)
+        | ContextPickerItemKind::PortalPrefix(_)
+        | ContextPickerItemKind::PortalResult(_) => 0,
         // Inert rows (loading / empty state) sort last so live results
         // always appear above them.
         ContextPickerItemKind::Inert => 255,

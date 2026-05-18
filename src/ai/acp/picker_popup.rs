@@ -23,6 +23,7 @@ use crate::components::inline_picker::{
 use super::view::AcpChatView;
 
 const ACP_MENTION_POPUP_AUTOMATION_ID: &str = "acp-mention-popup";
+const ACP_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO: f32 = 0.90;
 
 pub(crate) fn acp_context_picker_item_to_inline_picker_row(
     item: &ContextPickerItem,
@@ -203,15 +204,54 @@ pub(crate) fn batch_select_mention_item_by_semantic_id(
     Some(semantic_id.to_string())
 }
 
-fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
-    if snapshot.items.is_empty() {
+fn popup_has_synopsis(snapshot: &AcpMentionPopupSnapshot) -> bool {
+    snapshot
+        .items
+        .get(snapshot.selected_index)
+        .is_some_and(|item| !item.description.is_empty())
+}
+
+fn popup_content_height(row_count: usize, has_synopsis: bool) -> f32 {
+    if row_count == 0 {
         return super::popup_window::dense_picker_height(0);
     }
 
+    let synopsis = if has_synopsis {
+        CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    } else {
+        0.0
+    };
+
     super::popup_window::dense_picker_height_for_row_height(
-        snapshot.items.len(),
+        row_count,
         SOFT_COMPACT_PICKER_ROW_HEIGHT,
-    ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    ) + synopsis
+}
+
+fn popup_visible_row_limit(snapshot: &AcpMentionPopupSnapshot, parent_height: f32) -> usize {
+    let item_count = snapshot.items.len();
+    if item_count == 0 {
+        return 0;
+    }
+
+    let max_height = (parent_height * ACP_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO).max(1.0);
+    let has_synopsis = popup_has_synopsis(snapshot);
+    let hard_limit = item_count.min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS);
+
+    (1..=hard_limit)
+        .rev()
+        .find(|rows| popup_content_height(*rows, has_synopsis) <= max_height)
+        .unwrap_or(1)
+}
+
+fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
+    popup_content_height(snapshot.items.len(), popup_has_synopsis(snapshot))
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AcpMentionPopupLayout {
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) visible_row_limit: usize,
 }
 
 fn register_mention_popup_automation_window(
@@ -238,6 +278,37 @@ pub(crate) fn popup_bounds(
     super::popup_window::popup_bounds(parent_bounds, left, top, width, height)
 }
 
+pub(crate) fn popup_bounds_left_drawer(
+    parent_bounds: Bounds<Pixels>,
+    width: f32,
+) -> Bounds<Pixels> {
+    Bounds {
+        origin: gpui::point(parent_bounds.origin.x - px(width), parent_bounds.origin.y),
+        size: gpui::size(px(width), parent_bounds.size.height),
+    }
+}
+
+pub(crate) fn popup_layout_left_drawer(
+    parent_bounds: Bounds<Pixels>,
+    snapshot: &AcpMentionPopupSnapshot,
+) -> AcpMentionPopupLayout {
+    let parent_height = f32::from(parent_bounds.size.height);
+    let max_height = parent_height * ACP_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO;
+    let visible_row_limit = popup_visible_row_limit(snapshot, parent_height);
+    let desired_height =
+        popup_content_height(visible_row_limit, popup_has_synopsis(snapshot)).min(max_height);
+    AcpMentionPopupLayout {
+        bounds: Bounds {
+            origin: gpui::point(
+                parent_bounds.origin.x - px(snapshot.width),
+                parent_bounds.origin.y,
+            ),
+            size: gpui::size(px(snapshot.width), px(desired_height)),
+        },
+        visible_row_limit,
+    }
+}
+
 pub(crate) fn sync_mention_popup_window(
     cx: &mut App,
     request: AcpMentionPopupRequest,
@@ -248,17 +319,12 @@ pub(crate) fn sync_mention_popup_window(
         display_id,
         source_view,
         snapshot,
-        left,
-        top,
+        left: _left,
+        top: _top,
     } = request;
 
-    let bounds = popup_bounds(
-        parent_bounds,
-        left,
-        top,
-        snapshot.width,
-        popup_height(&snapshot),
-    );
+    let layout = popup_layout_left_drawer(parent_bounds, &snapshot);
+    let bounds = layout.bounds;
 
     let storage = ACP_MENTION_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
@@ -266,6 +332,7 @@ pub(crate) fn sync_mention_popup_window(
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
+                    popup.set_visible_row_limit(layout.visible_row_limit);
                     super::popup_window::set_popup_window_bounds(window, bounds, cx);
                     cx.notify();
                 });
@@ -301,7 +368,14 @@ pub(crate) fn sync_mention_popup_window(
     let window_options = super::popup_window::popup_window_options(bounds, display_id);
 
     let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| AcpMentionPopupWindow::new(snapshot.clone(), source_view.clone(), cx))
+        cx.new(|cx| {
+            AcpMentionPopupWindow::new(
+                snapshot.clone(),
+                layout.visible_row_limit,
+                source_view.clone(),
+                cx,
+            )
+        })
     })?;
 
     if let Err(error) =
@@ -341,6 +415,7 @@ pub(crate) fn sync_mention_popup_window(
 
 pub(crate) struct AcpMentionPopupWindow {
     snapshot: AcpMentionPopupSnapshot,
+    visible_row_limit: usize,
     source_view: WeakEntity<AcpChatView>,
     focus_handle: FocusHandle,
     mouse_armed_row: Option<(usize, String)>,
@@ -349,11 +424,13 @@ pub(crate) struct AcpMentionPopupWindow {
 impl AcpMentionPopupWindow {
     fn new(
         snapshot: AcpMentionPopupSnapshot,
+        visible_row_limit: usize,
         source_view: WeakEntity<AcpChatView>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             snapshot,
+            visible_row_limit,
             source_view,
             focus_handle: cx.focus_handle(),
             mouse_armed_row: None,
@@ -373,12 +450,18 @@ impl AcpMentionPopupWindow {
         self.snapshot = snapshot;
     }
 
+    fn set_visible_row_limit(&mut self, visible_row_limit: usize) {
+        self.visible_row_limit = visible_row_limit;
+    }
+
     fn visible_range(&self) -> std::ops::Range<usize> {
         inline_dropdown_visible_range_from_start(
             self.snapshot.visible_start,
             self.snapshot.selected_index,
             self.snapshot.items.len(),
-            super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+            self.visible_row_limit
+                .max(1)
+                .min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
         )
     }
 
@@ -407,7 +490,9 @@ impl AcpMentionPopupWindow {
                     self.snapshot.visible_start,
                     self.snapshot.selected_index,
                     self.snapshot.items.len(),
-                    super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+                    self.visible_row_limit
+                        .max(1)
+                        .min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
                 );
                 self.snapshot.visible_start = visible.start;
             }
@@ -654,7 +739,8 @@ impl Render for AcpMentionPopupWindow {
 #[cfg(test)]
 mod tests {
     use super::{
-        popup_bounds, popup_height, should_submit_acp_picker_row_click, AcpMentionPopupSnapshot,
+        popup_bounds, popup_bounds_left_drawer, popup_height, popup_layout_left_drawer,
+        popup_visible_row_limit, should_submit_acp_picker_row_click, AcpMentionPopupSnapshot,
     };
     use crate::ai::window::context_picker::types::{
         ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
@@ -742,6 +828,89 @@ mod tests {
         assert_eq!(f32::from(bounds.origin.y), 100.0);
         assert_eq!(f32::from(bounds.size.width), 320.0);
         assert_eq!(f32::from(bounds.size.height), 84.0);
+    }
+
+    #[test]
+    fn popup_bounds_left_drawer_aligns_to_parent_height_and_left_edge() {
+        let parent = gpui::Bounds {
+            origin: gpui::point(gpui::px(100.0), gpui::px(240.0)),
+            size: gpui::size(gpui::px(700.0), gpui::px(500.0)),
+        };
+        let bounds = popup_bounds_left_drawer(parent, 320.0);
+
+        assert_eq!(
+            f32::from(bounds.origin.x),
+            f32::from(parent.origin.x) - 320.0
+        );
+        assert_eq!(f32::from(bounds.origin.y), f32::from(parent.origin.y));
+        assert_eq!(f32::from(bounds.size.width), 320.0);
+        assert_eq!(bounds.size.height, parent.size.height);
+    }
+
+    #[test]
+    fn popup_layout_left_drawer_is_flush_and_caps_height_to_parent_ratio() {
+        let parent = gpui::Bounds {
+            origin: gpui::point(gpui::px(500.0), gpui::px(120.0)),
+            size: gpui::size(gpui::px(700.0), gpui::px(400.0)),
+        };
+        let snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Mention,
+            selected_index: 0,
+            visible_start: 0,
+            items: (0..20)
+                .map(|ix| ContextPickerItem {
+                    id: SharedString::from(format!("item-{ix}")),
+                    label: SharedString::from(format!("Item {ix}")),
+                    description: SharedString::from(format!("Description {ix}")),
+                    meta: SharedString::from("@item"),
+                    kind: ContextPickerItemKind::Inert,
+                    score: 0,
+                    label_highlight_indices: Vec::new(),
+                    meta_highlight_indices: Vec::new(),
+                })
+                .collect(),
+            width: 320.0,
+        };
+
+        let layout = popup_layout_left_drawer(parent, &snapshot);
+        assert_eq!(f32::from(layout.bounds.origin.x), 180.0);
+        assert_eq!(layout.bounds.origin.y, parent.origin.y);
+        assert_eq!(f32::from(layout.bounds.size.width), 320.0);
+        assert!(f32::from(layout.bounds.size.height) <= 360.0);
+        assert!(
+            layout.visible_row_limit <= super::super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS
+        );
+    }
+
+    #[test]
+    fn popup_layout_left_drawer_shrinks_to_short_item_list() {
+        let parent = gpui::Bounds {
+            origin: gpui::point(gpui::px(500.0), gpui::px(120.0)),
+            size: gpui::size(gpui::px(700.0), gpui::px(600.0)),
+        };
+        let snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Mention,
+            selected_index: 0,
+            visible_start: 0,
+            items: (0..3)
+                .map(|ix| ContextPickerItem {
+                    id: SharedString::from(format!("item-{ix}")),
+                    label: SharedString::from(format!("Item {ix}")),
+                    description: SharedString::from(""),
+                    meta: SharedString::from("@item"),
+                    kind: ContextPickerItemKind::Inert,
+                    score: 0,
+                    label_highlight_indices: Vec::new(),
+                    meta_highlight_indices: Vec::new(),
+                })
+                .collect(),
+            width: 320.0,
+        };
+
+        let layout = popup_layout_left_drawer(parent, &snapshot);
+        let expected_height = super::popup_content_height(3, false);
+        assert_eq!(f32::from(layout.bounds.size.height), expected_height);
+        assert_eq!(popup_visible_row_limit(&snapshot, 600.0), 3);
     }
 
     #[test]

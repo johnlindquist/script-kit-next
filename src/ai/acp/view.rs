@@ -668,7 +668,10 @@ impl AcpChatView {
             }
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
-            ContextPickerItemKind::Portal(_) | ContextPickerItemKind::Inert => item.id.to_string(),
+            ContextPickerItemKind::Portal(_)
+            | ContextPickerItemKind::PortalPrefix(_)
+            | ContextPickerItemKind::PortalResult(_)
+            | ContextPickerItemKind::Inert => item.id.to_string(),
         }
     }
 
@@ -5473,6 +5476,35 @@ impl AcpChatView {
 
         // ── Build context part; decide if inline-mention sync applies ──
         let (part, inline_text, allow_inline_sync) = match &item.kind {
+            ContextPickerItemKind::PortalPrefix(payload) => {
+                let current_text = self.live_thread().read(cx).input.text().to_string();
+                let prefix_text = format!("@{}:", payload.prefix);
+                let next_text = Self::replace_text_in_char_range(
+                    &current_text,
+                    session.trigger_range.clone(),
+                    &prefix_text,
+                );
+                let next_cursor =
+                    Self::caret_after_replacement(&session.trigger_range, &prefix_text);
+                if let Some(ref mut accepted) = self.last_accepted_item {
+                    accepted.cursor_after = next_cursor;
+                }
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(next_cursor);
+                    cx.notify();
+                });
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_inline_portal_prefix_inserted",
+                    portal_kind = ?payload.portal_kind,
+                    prefix = %payload.prefix,
+                    cursor_after = next_cursor,
+                );
+                self.refresh_mention_session(cx);
+                self.sync_mention_popup_window_from_cached_parent(cx);
+                return;
+            }
             ContextPickerItemKind::BuiltIn(kind) => {
                 if *kind == crate::ai::context_contract::ContextAttachmentKind::Dictation {
                     let portal_kind =
@@ -5516,6 +5548,69 @@ impl AcpChatView {
                 )
             }
             ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Inert => return,
+            ContextPickerItemKind::PortalResult(payload) => {
+                let part = match &payload.attachment {
+                    crate::ai::window::context_picker::types::InlinePortalAttachment::ResourceUri {
+                        uri,
+                        label,
+                    } => AiContextPart::ResourceUri {
+                        uri: uri.clone(),
+                        label: label.clone(),
+                    },
+                    crate::ai::window::context_picker::types::InlinePortalAttachment::FocusedTarget {
+                        source,
+                        kind,
+                        semantic_id,
+                        label,
+                        metadata,
+                    } => AiContextPart::FocusedTarget {
+                        target: crate::ai::TabAiTargetContext {
+                            source: source.clone(),
+                            kind: kind.clone(),
+                            semantic_id: semantic_id.clone(),
+                            label: label.clone(),
+                            metadata: metadata.clone(),
+                        },
+                        label: label.clone(),
+                    },
+                };
+                let fallback_prefix = match payload.portal_kind {
+                    crate::ai::window::context_picker::types::PortalKind::FileSearch => "file",
+                    crate::ai::window::context_picker::types::PortalKind::BrowserHistory => {
+                        "browser-history"
+                    }
+                    crate::ai::window::context_picker::types::PortalKind::ClipboardHistory => {
+                        "clipboard"
+                    }
+                    crate::ai::window::context_picker::types::PortalKind::DictationHistory => {
+                        "dictation"
+                    }
+                    crate::ai::window::context_picker::types::PortalKind::ScriptSearch => "script",
+                    crate::ai::window::context_picker::types::PortalKind::ScriptletSearch => {
+                        "scriptlet"
+                    }
+                    crate::ai::window::context_picker::types::PortalKind::SkillSearch => "skill",
+                    crate::ai::window::context_picker::types::PortalKind::NotesBrowse => "note",
+                    crate::ai::window::context_picker::types::PortalKind::AcpHistory => "history",
+                };
+                let inline_text = part_to_inline_token(&part).unwrap_or_else(|| {
+                    crate::ai::context_mentions::format_typed_label_mention_token(
+                        fallback_prefix,
+                        item.label.as_ref(),
+                    )
+                });
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_inline_portal_result_inserted",
+                    portal_kind = ?payload.portal_kind,
+                    inline_text = %inline_text,
+                );
+                (
+                    part,
+                    inline_text,
+                    session.trigger == ContextPickerTrigger::Mention,
+                )
+            }
             ContextPickerItemKind::Portal(portal_kind) => {
                 self.open_picker_portal(
                     *portal_kind,
@@ -5573,10 +5668,15 @@ impl AcpChatView {
         // resolve typed @type:name tokens back to the full AiContextPart.
         if matches!(
             item.kind,
-            ContextPickerItemKind::File(_) | ContextPickerItemKind::Folder(_)
+            ContextPickerItemKind::File(_)
+                | ContextPickerItemKind::Folder(_)
+                | ContextPickerItemKind::PortalResult(_)
         ) {
             if let Some(token) = part_to_inline_token(&part) {
                 self.typed_mention_aliases.insert(token, part.clone());
+            } else {
+                self.typed_mention_aliases
+                    .insert(inline_text.clone(), part.clone());
             }
         }
 

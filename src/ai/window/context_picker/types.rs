@@ -31,6 +31,33 @@ pub enum PortalKind {
     AcpHistory,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PortalPrefixPayload {
+    pub portal_kind: PortalKind,
+    pub prefix: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InlinePortalAttachment {
+    ResourceUri {
+        uri: String,
+        label: String,
+    },
+    FocusedTarget {
+        source: String,
+        kind: String,
+        semantic_id: String,
+        label: String,
+        metadata: Option<serde_json::Value>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlinePortalResultPayload {
+    pub portal_kind: PortalKind,
+    pub attachment: InlinePortalAttachment,
+}
+
 /// Source-aware identity for a slash command in the ACP picker.
 ///
 /// Carries enough information to distinguish duplicate slash slugs from
@@ -121,6 +148,11 @@ pub enum ContextPickerItemKind {
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the ACP chat.
     Portal(PortalKind),
+    /// Inserts a portal prefix such as `@browser-history:` and keeps the
+    /// inline picker open for provider-backed results.
+    PortalPrefix(PortalPrefixPayload),
+    /// A concrete provider-backed result from an inline portal query.
+    PortalResult(InlinePortalResultPayload),
     /// A non-actionable placeholder row (loading spinner, empty state).
     /// Acceptance is a no-op; the row exists only for visual feedback.
     Inert,
@@ -197,6 +229,8 @@ impl ContextPickerState {
                         ContextPickerItemKind::Folder(_) => "folder",
                         ContextPickerItemKind::SlashCommand(_) => "slash_command",
                         ContextPickerItemKind::Portal(_) => "portal",
+                        ContextPickerItemKind::PortalPrefix(_) => "portal_prefix",
+                        ContextPickerItemKind::PortalResult(_) => "portal_result",
                         ContextPickerItemKind::Inert => "inert",
                     },
                     score: item.score,
