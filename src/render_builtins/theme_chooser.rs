@@ -3,7 +3,6 @@ use crate::theme::gpui_integration::{
 };
 
 const THEME_LIST_PAGE_SIZE: usize = 5;
-const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
 const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
 
 /// Unified theme chooser preview sync: applies both gpui-component colors and
@@ -411,17 +410,20 @@ impl ScriptListApp {
 
     /// Find the closest opacity preset index for a given opacity value
     fn find_opacity_preset_index(opacity: f32) -> usize {
-        Self::OPACITY_PRESETS
-            .iter()
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                (a.0 - opacity)
-                    .abs()
-                    .partial_cmp(&(b.0 - opacity).abs())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(i, _)| i)
-            .unwrap_or(0)
+        Self::closest_float_preset_index(Self::OPACITY_PRESETS, opacity)
+    }
+
+    fn closest_float_preset_index(presets: &[(f32, &'static str)], current: f32) -> usize {
+        let mut best_index = 0;
+        let mut best_distance = f32::INFINITY;
+        for (index, &(value, _)) in presets.iter().enumerate() {
+            let distance = (value - current).abs();
+            if distance < best_distance {
+                best_distance = distance;
+                best_index = index;
+            }
+        }
+        best_index
     }
 
     /// Three-item footer hint strip for the theme chooser
@@ -1357,12 +1359,15 @@ impl ScriptListApp {
             })
             .collect();
 
+        let current_text_opacity_index = Self::closest_float_preset_index(
+            Self::TEXT_OPACITY_PRESETS,
+            current_text_placeholder_opacity,
+        );
         let text_opacity_buttons: Vec<gpui::AnyElement> = Self::TEXT_OPACITY_PRESETS
             .iter()
             .enumerate()
             .map(|(i, &(value, label))| {
-                let is_current =
-                    (value - current_text_placeholder_opacity).abs() < OPACITY_MATCH_TOLERANCE;
+                let is_current = i == current_text_opacity_index;
                 let click_entity = entity_handle_for_customize.clone();
                 let tooltip_label =
                     format!("Set placeholder/hint/description opacity to {}", label);
@@ -1411,13 +1416,16 @@ impl ScriptListApp {
             })
             .collect();
 
+        let current_focused_background_opacity_index = Self::closest_float_preset_index(
+            Self::FOCUSED_BACKGROUND_OPACITY_PRESETS,
+            current_focused_background_opacity,
+        );
         let focused_background_opacity_buttons: Vec<gpui::AnyElement> =
             Self::FOCUSED_BACKGROUND_OPACITY_PRESETS
                 .iter()
                 .enumerate()
                 .map(|(i, &(value, label))| {
-                    let is_current = (value - current_focused_background_opacity).abs()
-                        < OPACITY_MATCH_TOLERANCE;
+                    let is_current = i == current_focused_background_opacity_index;
                     let click_entity = entity_handle_for_customize.clone();
                     let tooltip_label = format!("Set focused row background opacity to {}", label);
                     div()
@@ -1472,11 +1480,12 @@ impl ScriptListApp {
                 .collect();
 
         // Build opacity preset buttons (clickable)
+        let current_opacity_index = Self::find_opacity_preset_index(current_opacity_main);
         let opacity_buttons: Vec<gpui::AnyElement> = Self::OPACITY_PRESETS
             .iter()
             .enumerate()
             .map(|(i, &(value, label))| {
-                let is_current = (value - current_opacity_main).abs() < OPACITY_MATCH_TOLERANCE;
+                let is_current = i == current_opacity_index;
                 let click_entity = entity_handle_for_customize.clone();
                 let tooltip_label = format!("Set opacity to {}", label);
                 div()

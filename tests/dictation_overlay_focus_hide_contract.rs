@@ -80,6 +80,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW.contains("const ACTION_STOP_LABEL: &str = \"Stop\";")
+            && DICTATION_WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Mic\";")
             && DICTATION_WINDOW.contains("const ACTION_CANCEL_LABEL: &str = \"Cancel\";")
             && DICTATION_WINDOW.contains("const ACTION_CONTINUE_LABEL: &str = \"Continue\";")
             && DICTATION_WINDOW.contains("const ACTION_CLOSE_LABEL: &str = \"Close\";")
@@ -97,10 +98,19 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW.contains("\"dictation-stop-button\"")
+            && DICTATION_WINDOW.contains("\"dictation-mic-button\"")
             && DICTATION_WINDOW.contains("\"dictation-cancel-button\"")
             && DICTATION_WINDOW.contains("this.submit_overlay_session(window, cx)")
+            && DICTATION_WINDOW.contains("this.cycle_microphone(cx)")
             && DICTATION_WINDOW.contains("this.abort_overlay_session(window, cx)"),
-        "recording Stop and Cancel controls must be clickable from the overlay"
+        "recording Stop, Mic, and Cancel controls must be clickable from the overlay"
+    );
+    assert!(
+        DICTATION_WINDOW.contains("fn current_microphone_keycap()")
+            && DICTATION_WINDOW.contains("list_input_device_menu_items(selected_device_id)")
+            && DICTATION_WINDOW
+                .contains("crate::dictation::apply_device_selection(&next_item.action)"),
+        "overlay Mic selector must use the shared microphone menu items and persistence helper"
     );
     assert!(
         DICTATION_WINDOW.contains("fn default_dictation_stop_keycap()")

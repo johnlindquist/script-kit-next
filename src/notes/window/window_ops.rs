@@ -10,6 +10,15 @@ const NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE: u64 = 1 << 6;
 #[cfg(target_os = "macos")]
 const NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY: u64 = 1 << 8;
 
+#[cfg(target_os = "macos")]
+const fn notes_window_collection_behavior(current: u64) -> u64 {
+    (current
+        & !NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES
+        & !NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE)
+        | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+        | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
+}
+
 /// Sync Script Kit theme with gpui-component theme
 /// NOTE: Do NOT call gpui_component::init here - it's already called in main.rs
 /// and calling it again resets the theme to system defaults (opaque backgrounds),
@@ -719,24 +728,10 @@ fn configure_notes_as_floating_panel() {
                         // Get current collection behavior to preserve existing flags
                         let current: u64 = msg_send![window, collectionBehavior];
 
-                        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
-                        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-                        let has_can_join_all_spaces =
-                            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
-
                         // OR in FullScreenAuxiliary (256) + IgnoresCycle (64)
                         // IgnoresCycle excludes Notes from Cmd+Tab - it's a utility window
-                        // MoveToActiveSpace (2) only if not already CanJoinAllSpaces
-                        let desired: u64 = if has_can_join_all_spaces {
-                            current
-                                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-                                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
-                        } else {
-                            current
-                                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-                                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-                                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
-                        };
+                        // Strip Space-hopping flags so Notes stays on its opening Space
+                        let desired: u64 = notes_window_collection_behavior(current);
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
                         // Ensure window content is shareable for captureScreenshot()

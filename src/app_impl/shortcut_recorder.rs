@@ -608,14 +608,20 @@ export default {
             );
             self.shortcut_recorder_state = None;
             self.shortcut_recorder_entity = None;
-            cx.spawn(async move |_this, cx| {
+            self.pending_focus = Some(FocusTarget::MainFilter);
+            self.focused_input = FocusedInput::MainFilter;
+            cx.spawn(async move |this, cx| {
                 cx.update(|cx| {
                     close_shortcut_recorder_window(cx);
+                    crate::platform::show_main_window_without_activation();
+                });
+                let _ = this.update(cx, |app, cx| {
+                    app.pending_focus = Some(FocusTarget::MainFilter);
+                    app.focused_input = FocusedInput::MainFilter;
+                    cx.notify();
                 });
             })
             .detach();
-            // Return focus to the main filter input
-            self.pending_focus = Some(FocusTarget::MainFilter);
             cx.notify();
         }
     }

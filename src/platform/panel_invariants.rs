@@ -21,9 +21,10 @@
 // - The main window level is 101 (GPUI PopUp / `NSPopUpMenuWindowLevel`),
 //   not `NSFloatingWindowLevel = 3`. `configure_as_floating_panel` explicitly
 //   does NOT override the level; GPUI owns it through `WindowKind::PopUp`.
-// - Collection behavior must assert required bits plus a forbidden combination,
-//   not exact equality. `CanJoinAllSpaces` and `MoveToActiveSpace` are mutually
-//   exclusive, and GPUI/AppKit may layer additional unrelated bits.
+// - Collection behavior must assert required bits plus forbidden all-spaces
+//   behavior, not exact equality. `MoveToActiveSpace` is required,
+//   `CanJoinAllSpaces` is rejected, and GPUI/AppKit may layer additional
+//   unrelated bits.
 // - `styleMask` only needs the `NonactivatingPanel` bit. Do not assert
 //   equality — AppKit layers extra bits (titled, resizable, etc.).
 // - `PANEL_CONFIGURED` is NOT an invariant. It is a caller-owned one-shot
@@ -164,9 +165,8 @@ impl PanelInvariantReport {
 /// Pure predicate for the collection-behavior shape the launcher requires.
 ///
 /// Exported for table-driven unit tests that run on every platform. The
-/// assertion is: `FullScreenAuxiliary` and `IgnoresCycle` are required;
-/// `CanJoinAllSpaces` and `MoveToActiveSpace` are mutually exclusive; and
-/// if `CanJoinAllSpaces` is absent, `MoveToActiveSpace` must be present.
+/// assertion is: `FullScreenAuxiliary`, `IgnoresCycle`, and
+/// `MoveToActiveSpace` are required; `CanJoinAllSpaces` is rejected.
 ///
 /// Oracle-Session `window-activation-invariants-guard` explicitly warned
 /// against re-simplifying this back to exact equality.
@@ -177,7 +177,7 @@ pub(crate) const fn collection_behavior_ok(bits: u64) -> bool {
     let has_full_screen_aux = bits & (1 << 8) != 0; // FullScreenAuxiliary
 
     let required = has_full_screen_aux && has_ignores_cycle;
-    let spaces_ok = (has_can_join || has_move_to_active) && !(has_can_join && has_move_to_active);
+    let spaces_ok = has_move_to_active && !has_can_join;
     required && spaces_ok
 }
 
@@ -262,7 +262,7 @@ pub(crate) fn assert_main_panel_invariants(
             collection_behavior_ok(behavior),
             "collection_behavior",
             "[window collectionBehavior]",
-            "FullScreenAuxiliary|IgnoresCycle plus MoveToActiveSpace xor CanJoinAllSpaces",
+            "FullScreenAuxiliary|IgnoresCycle plus MoveToActiveSpace and not CanJoinAllSpaces",
             format!("0x{behavior:x}"),
         );
 
@@ -447,8 +447,8 @@ mod panel_invariant_unit_tests {
     const FULL_SCREEN_AUX: u64 = 1 << 8;
 
     #[test]
-    fn popup_shape_is_ok_with_can_join_and_required_bits() {
-        assert!(collection_behavior_ok(
+    fn all_spaces_is_rejected_for_main_panel() {
+        assert!(!collection_behavior_ok(
             CAN_JOIN | IGNORES_CYCLE | FULL_SCREEN_AUX
         ));
     }
@@ -488,7 +488,7 @@ mod panel_invariant_unit_tests {
     fn extra_unknown_bits_do_not_break_the_shape() {
         let extra = 1 << 20;
         assert!(collection_behavior_ok(
-            CAN_JOIN | IGNORES_CYCLE | FULL_SCREEN_AUX | extra
+            MOVE_TO_ACTIVE | IGNORES_CYCLE | FULL_SCREEN_AUX | extra
         ));
     }
 }

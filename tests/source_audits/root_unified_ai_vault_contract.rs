@@ -48,12 +48,19 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("fn local_vault_index("));
     assert!(ai_vault.contains("fn ai_vault_index_cache_key("));
     assert!(ai_vault.contains("local_vault_index(options.clone())"));
-    assert!(ai_vault.contains("provider_enabled(&options, \"claude\")"));
-    assert!(ai_vault.contains("provider_enabled(&options, \"codex\")"));
+    assert!(ai_vault.contains("provider_enabled(options, \"claude\")"));
+    assert!(ai_vault.contains("provider_enabled(options, \"codex\")"));
     assert!(ai_vault.contains("hits.extend(read_claude_vault_hits()?);"));
-    assert!(ai_vault.contains("hits.extend(read_codex_vault_hits(&options)?);"));
+    assert!(
+        ai_vault.contains("hits.extend(read_codex_vault_hits(options, codex_row_limit(mode))?);")
+    );
+    assert!(ai_vault.contains("spawn_warm_ai_vault_index"));
+    assert!(ai_vault.contains("FAST_CODEX_ROW_LIMIT"));
+    assert!(ai_vault.contains("SYNC_CONTENT_SCAN_LIMIT"));
+    assert!(ai_vault.contains("append_bounded_content_matches"));
+    assert!(ai_vault.contains("search_haystack"));
     assert!(ai_vault.contains("fn read_claude_vault_hits("));
-    assert!(ai_vault.contains("fn read_codex_vault_hits(options: &RootAiVaultSectionOptions)"));
+    assert!(ai_vault.contains("fn read_codex_vault_hits("));
     assert!(ai_vault.contains("fn read_codex_vault_hits_via_state_db("));
     assert!(ai_vault.contains("fn read_codex_vault_hits_from_session_index("));
     assert!(ai_vault.contains("state_5.sqlite"));
