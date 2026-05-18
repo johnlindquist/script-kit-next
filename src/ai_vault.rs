@@ -446,12 +446,8 @@ fn search_local_vault(query: &str, options: RootAiVaultSectionOptions) -> Result
             })
             .collect();
         if options.search_content && hits.len() < options.max_results {
-            append_bounded_content_matches(
-                &mut hits,
-                &normalized_query,
-                &options,
-                options.max_results.saturating_sub(hits.len()),
-            );
+            let remaining = options.max_results.saturating_sub(hits.len());
+            append_bounded_content_matches(&mut hits, &normalized_query, &options, remaining);
         }
     } else {
         for hit in &mut hits {
