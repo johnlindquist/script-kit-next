@@ -5557,6 +5557,26 @@ impl AcpChatView {
                         uri: uri.clone(),
                         label: label.clone(),
                     },
+                    crate::ai::window::context_picker::types::InlinePortalAttachment::FilePath {
+                        path,
+                        label,
+                    } => AiContextPart::FilePath {
+                        path: path.clone(),
+                        label: label.clone(),
+                    },
+                    crate::ai::window::context_picker::types::InlinePortalAttachment::SkillFile {
+                        path,
+                        label,
+                        skill_name,
+                        owner_label,
+                        slash_name,
+                    } => AiContextPart::SkillFile {
+                        path: path.clone(),
+                        label: label.clone(),
+                        skill_name: skill_name.clone(),
+                        owner_label: owner_label.clone(),
+                        slash_name: slash_name.clone(),
+                    },
                     crate::ai::window::context_picker::types::InlinePortalAttachment::FocusedTarget {
                         source,
                         kind,
