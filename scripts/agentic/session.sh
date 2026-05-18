@@ -62,6 +62,53 @@ json_error() {
     "$SCHEMA_VERSION" "$code" "$msg"
 }
 
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+append_lifecycle_event() {
+  local name="$1" event="$2" code="$3" message="$4"
+  local sdir lifecycle_path keep_actions_window_open escaped_message
+  sdir="$(session_dir "$name")"
+  lifecycle_path="${sdir}/lifecycle.ndjson"
+  keep_actions_window_open="false"
+  if [ -f "${sdir}/keep_actions_window_open" ]; then
+    keep_actions_window_open="$(cat "${sdir}/keep_actions_window_open")"
+  fi
+  escaped_message="$(json_escape "$message")"
+  mkdir -p "$sdir"
+  printf '{"schemaVersion":%d,"event":"%s","code":"%s","message":"%s","keepActionsWindowOpen":%s,"timestamp":"%s"}\n' \
+    "$SCHEMA_VERSION" "$event" "$code" "$escaped_message" "$keep_actions_window_open" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    >> "$lifecycle_path" 2>/dev/null || true
+}
+
+last_lifecycle_event_json() {
+  local name="$1"
+  local lifecycle_path
+  lifecycle_path="$(session_dir "$name")/lifecycle.ndjson"
+  if [ -f "$lifecycle_path" ]; then
+    tail -n 1 "$lifecycle_path" 2>/dev/null || true
+  fi
+}
+
+json_lifecycle_error() {
+  local name="$1" code="$2" msg="$3"
+  local lifecycle_path keep_actions_window_open escaped_msg last_event
+  lifecycle_path="$(session_dir "$name")/lifecycle.ndjson"
+  keep_actions_window_open="false"
+  if [ -f "$(session_dir "$name")/keep_actions_window_open" ]; then
+    keep_actions_window_open="$(cat "$(session_dir "$name")/keep_actions_window_open")"
+  fi
+  append_lifecycle_event "$name" "session_lifecycle_error" "$code" "$msg"
+  escaped_msg="$(json_escape "$msg")"
+  last_event="$(last_lifecycle_event_json "$name")"
+  if [ -z "$last_event" ]; then
+    last_event="null"
+  fi
+  printf '{"schemaVersion":%d,"status":"error","session":"%s","keepActionsWindowOpen":%s,"lifecycle":"%s","sessionLifecycle":%s,"error":{"code":"%s","message":"%s"}}\n' \
+    "$SCHEMA_VERSION" "$name" "$keep_actions_window_open" "$lifecycle_path" "$last_event" "$code" "$escaped_msg"
+}
+
 session_dir() { echo "${SESSION_DIR}/$1"; }
 
 # Detect which readiness marker is present in the log file.
@@ -195,6 +242,7 @@ cmd_start() {
   local input_fifo="${sdir}/input"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
+  local lifecycle_path="${sdir}/lifecycle.ndjson"
   local keep_actions_window_open_requested=false
   if [ "${SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN:-}" = "1" ]; then
     keep_actions_window_open_requested=true
@@ -245,6 +293,7 @@ cmd_start() {
         "pipe:\"${input_fifo}\"" \
         "log:\"${log_path}\"" \
         "responses:\"${responses_path}\"" \
+        "lifecycle:\"${lifecycle_path}\"" \
         "resumed:true" \
         "ready:true" \
         "readyWaitMs:0" \
@@ -289,6 +338,7 @@ cmd_start() {
 
   # Create the responses artifact file
   : > "$responses_path"
+  : > "$lifecycle_path"
 
   # Background forwarder: reads from input_fifo and writes to pipe.
   # It is started before the app so the app's read-open on the primary FIFO
@@ -359,6 +409,7 @@ cmd_start() {
     "pipe:\"${input_fifo}\"" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \
+    "lifecycle:\"${lifecycle_path}\"" \
     "resumed:false" \
     "ready:${ready}" \
     "readyWaitMs:${ready_wait_ms}" \
@@ -431,7 +482,7 @@ cmd_send() {
     local pid
     pid="$(cat "${sdir}/pid")"
     if ! kill -0 "$pid" 2>/dev/null; then
-      json_error "session_dead" "Session '${name}' app process (pid ${pid}) is not running."
+      json_lifecycle_error "$name" "app_process_dead_before_send" "Session '${name}' app process (pid ${pid}) is not running."
       return 1
     fi
   fi
@@ -441,11 +492,11 @@ cmd_send() {
     local fwd_pid
     fwd_pid="$(cat "${sdir}/fwd_pid")"
     if ! kill -0 "$fwd_pid" 2>/dev/null; then
-      json_error "forwarder_dead" "Session '${name}' input forwarder is not running."
+      json_lifecycle_error "$name" "forwarder_dead_before_send" "Session '${name}' input forwarder is not running."
       return 1
     fi
   else
-    json_error "forwarder_dead" "Session '${name}' input forwarder PID file missing."
+    json_lifecycle_error "$name" "forwarder_dead_before_send" "Session '${name}' input forwarder PID file missing."
     return 1
   fi
 
@@ -636,7 +687,7 @@ cmd_rpc() {
     local pid
     pid="$(cat "${sdir}/pid")"
     if ! kill -0 "$pid" 2>/dev/null; then
-      json_error "session_dead" "Session '${name}' app process (pid ${pid}) is not running."
+      json_lifecycle_error "$name" "app_process_dead_before_rpc" "Session '${name}' app process (pid ${pid}) is not running."
       return 1
     fi
   fi
@@ -646,11 +697,11 @@ cmd_rpc() {
     local fwd_pid
     fwd_pid="$(cat "${sdir}/fwd_pid")"
     if ! kill -0 "$fwd_pid" 2>/dev/null; then
-      json_error "forwarder_dead" "Session '${name}' input forwarder is not running."
+      json_lifecycle_error "$name" "forwarder_dead_before_rpc" "Session '${name}' input forwarder is not running."
       return 1
     fi
   else
-    json_error "forwarder_dead" "Session '${name}' input forwarder PID file missing."
+    json_lifecycle_error "$name" "forwarder_dead_before_rpc" "Session '${name}' input forwarder PID file missing."
     return 1
   fi
 
@@ -760,6 +811,7 @@ cmd_status() {
   local primary_pipe="${sdir}/pipe"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
+  local lifecycle_path="${sdir}/lifecycle.ndjson"
   local pipe_writable="false"
   local forwarder_alive="false"
   local fwd_pid="0"
@@ -825,7 +877,8 @@ cmd_status() {
     "pipeWritable:${pipe_writable}" \
     "keepActionsWindowOpen:${keep_actions_window_open}" \
     "log:\"${log_path}\"" \
-    "responses:\"${responses_path}\""
+    "responses:\"${responses_path}\"" \
+    "lifecycle:\"${lifecycle_path}\""
 }
 
 # --- stop -------------------------------------------------------------------

@@ -84,15 +84,29 @@ async function run(command: string[], label: string): Promise<JsonObject> {
     proc.exited,
   ]);
 
-  if (exitCode !== 0) {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
+  let parsed: JsonObject | null = null;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    parsed = null;
   }
 
-  try {
-    return JSON.parse(stdout);
-  } catch {
-    return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
+  if (exitCode !== 0) {
+    return {
+      status: "error",
+      label,
+      exitCode,
+      stdout: stdout.trim(),
+      stderr: stderr.trim(),
+      parsedError: parsed,
+      lifecycle: parsed?.lifecycle ?? null,
+    };
   }
+
+  if (parsed) {
+    return parsed;
+  }
+  return { status: "error", label, exitCode, stdout: stdout.trim(), stderr: stderr.trim(), error: "invalid_json_output" };
 }
 
 function requestId(prefix: string) {
@@ -213,7 +227,50 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
   };
 }
 
+const lifecycleCodes = new Set([
+  "session_dead",
+  "forwarder_dead",
+  "no_session",
+  "app_process_dead_before_send",
+  "app_process_dead_before_rpc",
+  "forwarder_dead_before_send",
+  "forwarder_dead_before_rpc",
+]);
+
+function errorCode(error: JsonObject): string {
+  const direct = (error.error as JsonObject | undefined)?.code;
+  if (typeof direct === "string") return direct;
+  const parsed = error.parsedError as JsonObject | undefined | null;
+  const parsedCode = (parsed?.error as JsonObject | undefined)?.code;
+  return typeof parsedCode === "string" ? parsedCode : "";
+}
+
+function hasSessionLifecycleError(errors: JsonObject[]) {
+  return errors.some((error) => lifecycleCodes.has(errorCode(error)));
+}
+
+function lifecycleDetails(errors: JsonObject[]) {
+  return errors
+    .map((error) => {
+      const parsed = (error.parsedError as JsonObject | undefined | null) ?? error;
+      const code = errorCode(error);
+      if (!lifecycleCodes.has(code)) return null;
+      return {
+        label: error.label ?? null,
+        code,
+        lifecycle: parsed.lifecycle ?? error.lifecycle ?? null,
+        keepActionsWindowOpen: parsed.keepActionsWindowOpen ?? null,
+        sessionLifecycle: parsed.sessionLifecycle ?? null,
+        message: (parsed.error as JsonObject | undefined)?.message ?? (error.error as JsonObject | undefined)?.message ?? null,
+      };
+    })
+    .filter(Boolean);
+}
+
 function classification(args: Args, identity: ReturnType<typeof targetIdentity>, errors: JsonObject[]) {
+  if (hasSessionLifecycleError(errors)) {
+    return "blocked-by-session-lifecycle";
+  }
   if (errors.length > 0) {
     return "blocked-by-timeout";
   }
@@ -261,9 +318,10 @@ async function main() {
       tool: "script-kit-devtools.targets",
       command: "targets.list",
       session: args.session,
-      classification: errors.length ? "blocked-by-timeout" : "ok",
+      classification: hasSessionLifecycleError(errors) ? "blocked-by-session-lifecycle" : errors.length ? "blocked-by-timeout" : "ok",
       targetCount: pickWindows(windows).length,
       targets: pickWindows(windows),
+      sessionLifecycle: lifecycleDetails(errors),
       errors,
     }, null, 2));
     return;
@@ -290,6 +348,7 @@ async function main() {
     ...identity,
     windows: pickWindows(windows),
     rawInspect: inspect,
+    sessionLifecycle: lifecycleDetails(inspectErrors),
     errors: inspectErrors,
   }, null, 2));
 }

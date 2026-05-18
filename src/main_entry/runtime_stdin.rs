@@ -7,6 +7,69 @@ let app_entity_for_stdin = app_entity.clone();
 static STDIN_RECEIVED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+#[derive(Clone, Copy)]
+enum DevtoolsSessionLifecycleAction {
+    None,
+    Touch {
+        command_type: &'static str,
+        reason: &'static str,
+    },
+    ExplicitClose {
+        command_type: &'static str,
+        reason: &'static str,
+    },
+}
+
+fn devtools_keep_actions_window_open_enabled() -> bool {
+    std::env::var("SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN").ok().as_deref() == Some("1")
+}
+
+fn devtools_lifecycle_action_for_stdin(cmd: &StdinCommand) -> DevtoolsSessionLifecycleAction {
+    let command_type = cmd.command_type();
+    match cmd {
+        StdinCommand::External(ExternalCommand::Hide { .. }) => {
+            DevtoolsSessionLifecycleAction::ExplicitClose {
+                command_type,
+                reason: "explicit_hide",
+            }
+        }
+        _ if devtools_keep_actions_window_open_enabled() => DevtoolsSessionLifecycleAction::Touch {
+            command_type,
+            reason: "stdin_devtools_activity",
+        },
+        _ => DevtoolsSessionLifecycleAction::None,
+    }
+}
+
+fn apply_devtools_lifecycle_action(action: DevtoolsSessionLifecycleAction) {
+    match action {
+        DevtoolsSessionLifecycleAction::None => {}
+        DevtoolsSessionLifecycleAction::Touch {
+            command_type,
+            reason,
+        } => {
+            script_kit_gpui::mark_window_shown();
+            tracing::info!(
+                event = "devtools_session_activity",
+                keep_actions_window_open = true,
+                command_type,
+                reason
+            );
+        }
+        DevtoolsSessionLifecycleAction::ExplicitClose {
+            command_type,
+            reason,
+        } => {
+            tracing::info!(
+                event = "devtools_session_explicit_close",
+                keep_actions_window_open = devtools_keep_actions_window_open_enabled(),
+                command_type,
+                reason
+            );
+        }
+    }
+}
+
 // Spawn a timeout warning task - helps AI agents detect when they forgot to use stdin protocol
 cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
     Timer::after(std::time::Duration::from_secs(2)).await;
@@ -70,8 +133,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             &format!("Processing external command type={}", cmd.command_type()),
         );
 
+        let lifecycle_action = devtools_lifecycle_action_for_stdin(&cmd);
         let app_entity_inner = app_entity_for_stdin.clone();
         let _ = cx.update(|cx| {
+            apply_devtools_lifecycle_action(lifecycle_action);
             // Use the Root window to get Window reference, then update the app entity
             let _ = window_for_stdin.update(cx, |_root, window, root_cx| {
                 app_entity_inner.update(root_cx, |view, ctx| {

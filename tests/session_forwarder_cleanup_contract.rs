@@ -138,6 +138,24 @@ fn start_and_stop_call_forwarder_cleanup_at_ownership_boundaries() {
 }
 
 #[test]
+fn session_errors_include_lifecycle_reason_and_keep_open_metadata() {
+    for needle in [
+        "lifecycle.ndjson",
+        "json_lifecycle_error",
+        "app_process_dead_before_send",
+        "app_process_dead_before_rpc",
+        "forwarder_dead_before_send",
+        "forwarder_dead_before_rpc",
+        "keepActionsWindowOpen",
+    ] {
+        assert!(
+            SESSION_SH.contains(needle),
+            "session.sh lifecycle errors must include {needle}"
+        );
+    }
+}
+
+#[test]
 fn start_sends_startup_keepalive_before_waiting_for_ready() {
     assert!(
         SESSION_SH.contains("send_startup_keepalive()"),
