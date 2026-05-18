@@ -357,6 +357,8 @@ static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 
 /// Single-word action label for stopping/submitting the current recording.
 const ACTION_STOP_LABEL: &str = "Stop";
+/// Single-word action label for cycling the dictation microphone.
+const ACTION_MIC_LABEL: &str = "Mic";
 /// Single-word action label for discarding the current recording.
 const ACTION_CANCEL_LABEL: &str = "Cancel";
 /// Single-word action label for resuming from confirmation.
@@ -531,6 +533,55 @@ impl DictationOverlay {
         };
 
         self.state.target = next_target;
+        cx.notify();
+    }
+
+    /// Cycle the configured dictation microphone through the shared picker items.
+    ///
+    /// The current recording keeps using the device it opened with; this updates
+    /// the persisted preference used by the next dictation capture.
+    fn cycle_microphone(&mut self, cx: &mut Context<Self>) {
+        let prefs = crate::config::load_user_preferences();
+        let selected_device_id = prefs.dictation.selected_device_id.as_deref();
+        let menu_items = match crate::dictation::list_input_device_menu_items(selected_device_id) {
+            Ok(items) if !items.is_empty() => items,
+            Ok(_) => {
+                tracing::warn!(
+                    category = "DICTATION",
+                    "Microphone selector found no input devices"
+                );
+                return;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to list microphones from overlay selector"
+                );
+                return;
+            }
+        };
+
+        let selected_index = menu_items
+            .iter()
+            .position(|item| item.is_selected)
+            .unwrap_or(0);
+        let next_index = (selected_index + 1) % menu_items.len();
+        let next_item = &menu_items[next_index];
+        if let Err(error) = crate::dictation::apply_device_selection(&next_item.action) {
+            tracing::warn!(
+                category = "DICTATION",
+                error = %error,
+                "Failed to persist microphone selection from overlay"
+            );
+            return;
+        }
+
+        tracing::info!(
+            category = "DICTATION",
+            microphone = %next_item.title,
+            "Overlay microphone selector updated preference"
+        );
         cx.notify();
     }
 
@@ -781,7 +832,7 @@ impl DictationOverlay {
         render_clickable_action_rail([
             render_clickable_action_chip(
                 "dictation-stop-button",
-                ACTION_STOP_LABEL,
+                ACTION_STOP_LABEL.into(),
                 dictation_stop_keycap(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.submit_overlay_session(window, cx);
@@ -789,8 +840,17 @@ impl DictationOverlay {
             )
             .into_any_element(),
             render_clickable_action_chip(
+                "dictation-mic-button",
+                ACTION_MIC_LABEL.into(),
+                current_microphone_keycap(),
+                cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                    this.cycle_microphone(cx);
+                }),
+            )
+            .into_any_element(),
+            render_clickable_action_chip(
                 "dictation-cancel-button",
-                ACTION_CANCEL_LABEL,
+                ACTION_CANCEL_LABEL.into(),
                 ESC_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.abort_overlay_session(window, cx);
@@ -805,7 +865,7 @@ impl DictationOverlay {
         render_clickable_action_rail([
             render_clickable_action_chip(
                 "dictation-stop-button",
-                ACTION_STOP_LABEL,
+                ACTION_STOP_LABEL.into(),
                 ENTER_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.abort_overlay_session(window, cx);
@@ -814,7 +874,7 @@ impl DictationOverlay {
             .into_any_element(),
             render_clickable_action_chip(
                 "dictation-continue-button",
-                ACTION_CONTINUE_LABEL,
+                ACTION_CONTINUE_LABEL.into(),
                 ESC_KEYCAP.into(),
                 cx.listener(|this, _event: &MouseDownEvent, window, cx| {
                     this.resume_recording(window, cx);
@@ -828,7 +888,7 @@ impl DictationOverlay {
     fn render_close_action(&self, cx: &mut Context<Self>) -> AnyElement {
         render_clickable_action_rail([render_clickable_action_chip(
             "dictation-close-button",
-            ACTION_CLOSE_LABEL,
+            ACTION_CLOSE_LABEL.into(),
             ESC_KEYCAP.into(),
             cx.listener(|this, _event: &MouseDownEvent, window, _cx| {
                 this.close_overlay_from_within(window);
@@ -1283,9 +1343,50 @@ fn default_dictation_stop_keycap() -> String {
     .replace("Semicolon", ";")
 }
 
+fn current_microphone_keycap() -> SharedString {
+    let prefs = crate::config::load_user_preferences();
+    let selected_device_id = prefs.dictation.selected_device_id.as_deref();
+    let label = crate::dictation::list_input_device_menu_items(selected_device_id)
+        .ok()
+        .and_then(|items| items.into_iter().find(|item| item.is_selected))
+        .map(|item| microphone_keycap_label(&item.title))
+        .unwrap_or_else(|| "mic".to_string());
+    label.into()
+}
+
+fn microphone_keycap_label(title: &str) -> String {
+    let title = title
+        .replace(" \u{00b7} default", "")
+        .replace(" (current)", "");
+    let title = title.trim();
+    if title.eq_ignore_ascii_case("system default") {
+        return "default".to_string();
+    }
+
+    const MAX_CHARS: usize = 8;
+    let mut chars = title.chars();
+    let mut compact = String::new();
+    for _ in 0..MAX_CHARS {
+        if let Some(ch) = chars.next() {
+            compact.push(ch);
+        } else {
+            break;
+        }
+    }
+    if chars.next().is_some() {
+        compact.push('…');
+    }
+    if compact.is_empty() {
+        "mic".to_string()
+    } else {
+        compact
+    }
+}
+
 fn action_chip_width(label: &str) -> f32 {
     match label {
         ACTION_CONTINUE_LABEL => 112.0,
+        ACTION_MIC_LABEL => 136.0,
         ACTION_CLOSE_LABEL => 72.0,
         _ => 96.0,
     }
@@ -1316,7 +1417,7 @@ fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
         .child(body)
 }
 
-fn render_action_chip_content(label: &'static str, key: SharedString) -> impl IntoElement {
+fn render_action_chip_content(label: SharedString, key: SharedString) -> impl IntoElement {
     let theme = get_cached_theme();
     let footer_text = theme
         .colors
@@ -1360,22 +1461,24 @@ fn render_action_chip(label: &'static str, key: SharedString) -> impl IntoElemen
         .flex_row()
         .items_center()
         .justify_center()
-        .child(render_action_chip_content(label, key))
+        .child(render_action_chip_content(label.into(), key))
 }
 
 fn render_clickable_action_chip(
     id: &'static str,
-    label: &'static str,
+    label: SharedString,
     key: SharedString,
     listener: impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
     let theme = get_cached_theme();
-    let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SUBTLE);
-    let active_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
+    let chrome = AppChromeColors::from_theme(&theme);
+    let hover_bg = rgba(chrome.hover_rgba);
+    let active_bg = rgba(chrome.selection_rgba);
+    let width = action_chip_width(label.as_ref());
 
     div()
         .id(id)
-        .w(px(action_chip_width(label)))
+        .w(px(width))
         .h_full()
         .flex()
         .flex_row()
@@ -1399,12 +1502,13 @@ fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -
         .min_h(px(24.0))
         .border_t_1()
         .border_color(rgba(chrome.divider_rgba))
+        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
         .pt(px(4.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(4.0));
+        .gap(px(12.0));
 
     for action in actions {
         rail = rail.child(action);
@@ -1425,12 +1529,13 @@ fn render_static_action_rail(
         .min_h(px(24.0))
         .border_t_1()
         .border_color(rgba(chrome.divider_rgba))
+        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
         .pt(px(4.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(4.0));
+        .gap(px(12.0));
 
     for (label, key) in actions {
         rail = rail.child(render_action_chip(label, key));
@@ -1508,6 +1613,7 @@ pub(crate) fn render_dictation_overlay_state_preview(
                 ))
                 .child(render_static_action_rail([
                     (ACTION_STOP_LABEL, dictation_stop_keycap()),
+                    (ACTION_MIC_LABEL, current_microphone_keycap()),
                     (ACTION_CANCEL_LABEL, ESC_KEYCAP.into()),
                 ]))
         }

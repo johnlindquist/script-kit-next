@@ -3001,9 +3001,23 @@ fn overlay_uses_glass_bar_styling() {
         window_src.contains("chrome.window_surface_rgba"),
         "glass bar surface must match main menu window surface chrome"
     );
+    let rail_start = window_src
+        .find("fn render_clickable_action_rail")
+        .expect("clickable action rail renderer must exist");
+    let rail_src = &window_src[rail_start..rail_start + 900.min(window_src.len() - rail_start)];
+    assert!(
+        !rail_src.contains(".bg(rgba(chrome.window_surface_rgba))"),
+        "action rail must inherit the overlay surface instead of stacking a darker background"
+    );
     assert!(
         window_src.contains("row_selected_background_rgba"),
         "glass bar signal band must match main menu selected-row background opacity"
+    );
+    assert!(
+        window_src.contains("let hover_bg = rgba(chrome.hover_rgba);")
+            && window_src.contains("let active_bg = rgba(chrome.selection_rgba);")
+            && window_src.contains("render_inline_shortcut_keys"),
+        "dictation action buttons must match main menu footer hover, active, font, and shortcut rendering"
     );
 }
 

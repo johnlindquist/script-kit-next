@@ -23,6 +23,14 @@ const NS_APPLICATION_ACTIVATION_POLICY_ACCESSORY: i64 = 1;
 #[cfg(target_os = "macos")]
 const NS_WINDOW_ANIMATION_BEHAVIOR_NONE: i64 = 2;
 
+#[cfg(target_os = "macos")]
+const fn main_panel_collection_behavior(current: u64) -> u64 {
+    (current & !NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES)
+        | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
+        | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
+        | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
+}
+
 // ============================================================================
 // Thread Safety
 // ============================================================================
@@ -285,28 +293,17 @@ pub fn ensure_move_to_active_space() {
         // Get current collection behavior to preserve existing flags
         let current: u64 = msg_send![window, collectionBehavior];
 
-        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
-        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-        let has_can_join_all_spaces =
-            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
-
-        let desired = if has_can_join_all_spaces {
-            // PopUp window - only add FullScreenAuxiliary (no MoveToActiveSpace)
-            current | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-        } else {
-            // Normal window - add both MoveToActiveSpace and FullScreenAuxiliary
-            current
-                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-        };
+        // Strip CanJoinAllSpaces before adding MoveToActiveSpace; those
+        // flags are mutually exclusive and all-spaces leaks across Spaces.
+        let desired = main_panel_collection_behavior(current);
 
         let _: () = msg_send![window, setCollectionBehavior:desired];
 
         logging::log(
             "PANEL",
             &format!(
-                "Set collection behavior: {} -> {} (CanJoinAllSpaces={}, FullScreenAuxiliary)",
-                current, desired, has_can_join_all_spaces
+                "Set collection behavior: {} -> {} (CanJoinAllSpaces=false, MoveToActiveSpace=true, FullScreenAuxiliary=true)",
+                current, desired
             ),
         );
     }
@@ -370,27 +367,11 @@ pub fn configure_as_floating_panel() {
         // Get current collection behavior to preserve existing flags set by GPUI/AppKit
         let current: u64 = msg_send![window, collectionBehavior];
 
-        // Check if window has CanJoinAllSpaces (set by GPUI for PopUp windows)
-        // If so, we can't add MoveToActiveSpace (they're mutually exclusive)
-        let has_can_join_all_spaces =
-            (current & NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES) != 0;
-
-        // OR in our desired flags instead of replacing:
+        // OR in our desired flags after stripping CanJoinAllSpaces:
         // - FullScreenAuxiliary: window can show over fullscreen apps without disrupting
         // - IgnoresCycle: exclude from Cmd+Tab app switcher (main window is a utility)
-        // - MoveToActiveSpace: ONLY if CanJoinAllSpaces is not set (they're mutually exclusive)
-        let desired = if has_can_join_all_spaces {
-            // PopUp window - don't add MoveToActiveSpace
-            current
-                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
-        } else {
-            // Normal window - add MoveToActiveSpace
-            current
-                | NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE
-                | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_AUXILIARY
-                | NS_WINDOW_COLLECTION_BEHAVIOR_IGNORES_CYCLE
-        };
+        // - MoveToActiveSpace: summon the launcher into the active Space when shown
+        let desired = main_panel_collection_behavior(current);
 
         let _: () = msg_send![window, setCollectionBehavior:desired];
 
@@ -459,6 +440,9 @@ pub fn ensure_main_panel_configured(context: &'static str) -> bool {
     // The PANEL_CONFIGURED static lives at the crate root (see
     // `src/main.rs:279`). It is a caller-owned one-shot that must only flip
     // to `true` after a successful post-configure invariant report.
+    #[cfg(target_os = "macos")]
+    install_main_window_space_change_hide_observer();
+
     if crate::PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
         return true;
     }

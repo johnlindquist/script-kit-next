@@ -61,6 +61,77 @@ fn hide_main_window() {
     // No-op on non-macOS platforms
 }
 
+#[cfg(target_os = "macos")]
+static MAIN_SPACE_CHANGE_OBSERVER: std::sync::LazyLock<std::sync::Mutex<Option<usize>>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+
+#[cfg(target_os = "macos")]
+pub fn install_main_window_space_change_hide_observer() {
+    if require_main_thread("install_main_window_space_change_hide_observer") {
+        return;
+    }
+
+    let Ok(mut observer_slot) = MAIN_SPACE_CHANGE_OBSERVER.lock() else {
+        logging::log(
+            "PANEL",
+            "Failed to lock main Space-change observer slot",
+        );
+        return;
+    };
+    if observer_slot.is_some() {
+        return;
+    }
+
+    unsafe {
+        let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let center: id = msg_send![workspace, notificationCenter];
+        let name = CocoaNSString::alloc(nil).init_str("NSWorkspaceActiveSpaceDidChangeNotification");
+        let queue: id = msg_send![class!(NSOperationQueue), mainQueue];
+        let block = block::ConcreteBlock::new(|_notification: id| {
+            hide_main_window_for_active_space_change();
+        });
+        let block = block.copy();
+        let observer: id = msg_send![
+            center,
+            addObserverForName: name
+            object: nil
+            queue: queue
+            usingBlock: &*block
+        ];
+
+        if observer == nil {
+            logging::log(
+                "PANEL",
+                "Failed to install main-window active Space change hide observer",
+            );
+            return;
+        }
+
+        *observer_slot = Some(observer as usize);
+        logging::log(
+            "PANEL",
+            "Installed main-window active Space change hide observer",
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn hide_main_window_for_active_space_change() {
+    if require_main_thread("hide_main_window_for_active_space_change") {
+        return;
+    }
+    if !crate::is_main_window_visible() {
+        return;
+    }
+
+    crate::set_main_window_visible(false);
+    hide_main_window();
+    logging::log(
+        "PANEL",
+        "Main window hidden because active macOS Space changed",
+    );
+}
+
 /// Hide the main window, deferring the ObjC call to the next event-loop tick.
 ///
 /// This is the **only safe way** to hide the main window from inside any GPUI
