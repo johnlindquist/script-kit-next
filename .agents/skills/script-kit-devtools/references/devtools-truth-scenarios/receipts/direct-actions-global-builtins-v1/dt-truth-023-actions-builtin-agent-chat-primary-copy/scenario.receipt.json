@@ -1,0 +1,974 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-023-actions-builtin-agent-chat-primary-copy",
+  "oracleSession": "actions-next-builtins-batch",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "09352f80b42eec0dcc9826fdc459025c3e721792",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T02:20:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt023-actions-builtin-agent-chat-1779070509",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--start",
+          "--show",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "00-main-start-show.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--text",
+          "Agent Chat",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-act-main-filter-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-01.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-02.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-03.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-04.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-05.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-06.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-07.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-08.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-09.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-10.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-11.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-12.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-13.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-14.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-15.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-16.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-17.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-18.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-19.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-20.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-21.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-22.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-elements-main-agent-chat-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-text-main-agent-chat-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "open-actions",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-act-open-actions-agent-chat-parent.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-actions-agent-chat-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-elements-agent-chat-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "Open Agent Chat",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-act-filter-open-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "09-actions-open-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "10-elements-open-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "11-text-open-agent-chat.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt023-actions-builtin-agent-chat-1779070509",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "12-focus-open-agent-chat.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter main launcher to Agent Chat",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "Agent Chat",
+      "visibleResult": "Agent Chat row visible",
+      "receiptRef": "03-elements-main-agent-chat-selected.json"
+    },
+    {
+      "step": 2,
+      "intent": "move selection to Agent Chat built-in row",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "arrowdown x22",
+      "visibleResult": "selectedSemanticId=choice:22:agent-chat",
+      "receiptRef": "03-elements-main-agent-chat-selected.json"
+    },
+    {
+      "step": 3,
+      "intent": "open actions from selected Agent Chat row and filter primary copy",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "Open Agent Chat",
+      "visibleResult": "Open Agent Chat remains the primary run_script label",
+      "receiptRef": "10-elements-open-agent-chat.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "00-main-start-show.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ScriptList",
+      "receiptRef": "01-act-main-filter-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-01.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-02.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-03.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-04.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-05.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-06.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-07.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-08.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-09.json",
+      "classification": "ok"
+    },
+    {
+      "step": 12,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-10.json",
+      "classification": "ok"
+    },
+    {
+      "step": 13,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-11.json",
+      "classification": "ok"
+    },
+    {
+      "step": 14,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-12.json",
+      "classification": "ok"
+    },
+    {
+      "step": 15,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-13.json",
+      "classification": "ok"
+    },
+    {
+      "step": 16,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-14.json",
+      "classification": "ok"
+    },
+    {
+      "step": 17,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-15.json",
+      "classification": "ok"
+    },
+    {
+      "step": 18,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-16.json",
+      "classification": "ok"
+    },
+    {
+      "step": 19,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-17.json",
+      "classification": "ok"
+    },
+    {
+      "step": 20,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-18.json",
+      "classification": "ok"
+    },
+    {
+      "step": 21,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-19.json",
+      "classification": "ok"
+    },
+    {
+      "step": 22,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-20.json",
+      "classification": "ok"
+    },
+    {
+      "step": 23,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-21.json",
+      "classification": "ok"
+    },
+    {
+      "step": 24,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-22.json",
+      "classification": "ok"
+    },
+    {
+      "step": 25,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "03-elements-main-agent-chat-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 26,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "04-text-main-agent-chat-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 27,
+      "tool": "script-kit-devtools.act",
+      "command": "act.open-actions",
+      "targetSurface": "ScriptList",
+      "receiptRef": "05-act-open-actions-agent-chat-parent.json",
+      "classification": "ok"
+    },
+    {
+      "step": 28,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-actions-agent-chat-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 29,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-elements-agent-chat-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 30,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "08-act-filter-open-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 31,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "09-actions-open-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 32,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "10-elements-open-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 33,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "11-text-open-agent-chat.json",
+      "classification": "ok"
+    },
+    {
+      "step": 34,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "12-focus-open-agent-chat.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:0:run_script",
+    "visibleLabel": "Open Agent Chat",
+    "footerIntent": null,
+    "actionId": "run_script",
+    "handlerId": "script_context.run_script",
+    "sideEffectClass": "selection-only",
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:22:agent-chat",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "mainSelectionIsAgentChatBuiltin",
+      "expected": "selected main row is Agent Chat",
+      "actual": "choice:22:agent-chat selected=true",
+      "status": "pass"
+    },
+    {
+      "name": "agentChatPrimaryCopyPreserved",
+      "expected": "Open Agent Chat visible",
+      "actual": "choice:0:run_script text=Open Agent Chat",
+      "status": "pass"
+    },
+    {
+      "name": "agentChatPrimaryActionIdMatchesRunScript",
+      "expected": "run_script selected",
+      "actual": "selectedActionId=run_script",
+      "status": "pass"
+    },
+    {
+      "name": "agentChatPrimaryCopyIsNotGenericOpenOrRun",
+      "expected": "not only Open or Run",
+      "actual": "visibleLabel=Open Agent Chat",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; cleanup used scripts/agentic/session.sh stop and is intentionally excluded from executor provenance."
+  ]
+}

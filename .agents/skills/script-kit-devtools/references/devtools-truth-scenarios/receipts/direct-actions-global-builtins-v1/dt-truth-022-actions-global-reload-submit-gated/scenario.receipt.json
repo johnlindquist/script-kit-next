@@ -1,0 +1,280 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-022-actions-global-reload-submit-gated",
+  "oracleSession": "actions-next-builtins-batch",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "09352f80b42eec0dcc9826fdc459025c3e721792",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T02:20:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt022-actions-global-reload-1779069951",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "reload",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-filter-reload.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-actions-reload.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-text-reload.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "enter",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-act-enter-without-allow-submit.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-target-actions-after-blocked-enter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt022-actions-global-reload-1779069951",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-focus-actions-after-blocked-enter.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter for reload global action",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "reload",
+      "visibleResult": "Reload Scripts is selected and visible",
+      "receiptRef": "03-actions-reload.json"
+    },
+    {
+      "step": 2,
+      "intent": "press Enter without allow-submit",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "enter without --allow-submit",
+      "visibleResult": "blocked before dispatch",
+      "receiptRef": "05-act-enter-without-allow-submit.json"
+    },
+    {
+      "step": 3,
+      "intent": "prove actions target remains inspectable after blocked submit",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "post-block inspect",
+      "visibleResult": "ActionsDialog target remains live",
+      "receiptRef": "06-target-actions-after-blocked-enter.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-act-filter-reload.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-actions-reload.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-text-reload.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-act-enter-without-allow-submit.json",
+      "classification": "blocked-by-unsafe-operation"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-target-actions-after-blocked-enter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-focus-actions-after-blocked-enter.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:0:reload_scripts",
+    "visibleLabel": "Reload Scripts",
+    "footerIntent": null,
+    "actionId": "reload_scripts",
+    "handlerId": "global.reload_scripts",
+    "sideEffectClass": "blocked-submit-gate",
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "reloadGlobalActionVisible",
+      "expected": "Reload Scripts visible",
+      "actual": "choice:0:reload_scripts text=Reload Scripts",
+      "status": "pass"
+    },
+    {
+      "name": "reloadSubmitWithoutAllowSubmitBlocked",
+      "expected": "blocked-by-unsafe-operation",
+      "actual": "classification=blocked-by-unsafe-operation",
+      "status": "pass"
+    },
+    {
+      "name": "reloadSubmitDidNotDispatch",
+      "expected": "submitAttempted=false nativeEscalation=false",
+      "actual": "submitAttempted=false nativeEscalation=false",
+      "status": "pass"
+    },
+    {
+      "name": "blockedEnterLeavesActionsTargetLive",
+      "expected": "ActionsDialog remains inspectable",
+      "actual": "classification=ok",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "submitPreflightSelectedSemanticId": "choice:0:reload_scripts",
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; cleanup used scripts/agentic/session.sh stop and is intentionally excluded from executor provenance."
+  ]
+}

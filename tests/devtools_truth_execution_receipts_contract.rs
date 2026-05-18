@@ -12,6 +12,9 @@ const TARGET_LIFECYCLE_V2_MANIFEST: &str = include_str!(
 const INPUT_FOCUS_RESIZE_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/slice.manifest.json"
 );
+const GLOBAL_BUILTINS_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -38,6 +41,18 @@ const DT_019_INPUT_FOCUS_RESIZE: &str = include_str!(
 );
 const DT_020_INPUT_FOCUS_RESIZE: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/dt-truth-020-actions-escape-dismiss-parent-focus-return/scenario.receipt.json"
+);
+const DT_021_GLOBAL_BUILTINS: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/dt-truth-021-actions-global-settings-copy-visible/scenario.receipt.json"
+);
+const DT_022_GLOBAL_BUILTINS: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/dt-truth-022-actions-global-reload-submit-gated/scenario.receipt.json"
+);
+const DT_023_GLOBAL_BUILTINS: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/dt-truth-023-actions-builtin-agent-chat-primary-copy/scenario.receipt.json"
+);
+const DT_024_GLOBAL_BUILTINS: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/dt-truth-024-actions-builtin-clipboard-history-no-favorite/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -703,4 +718,200 @@ fn direct_actions_input_focus_resize_records_expected_truth_checks() {
             );
         }
     }
+}
+
+#[test]
+fn direct_actions_global_builtins_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(GLOBAL_BUILTINS_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(manifest["sliceId"], "direct-actions-global-builtins-v1");
+    assert_eq!(manifest["oracleSession"], "actions-next-builtins-batch");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-021-actions-global-settings-copy-visible",
+            "dt-truth-022-actions-global-reload-submit-gated",
+            "dt-truth-023-actions-builtin-agent-chat-primary-copy",
+            "dt-truth-024-actions-builtin-clipboard-history-no-favorite",
+        ]
+    );
+
+    for forbidden in FORBIDDEN_EXECUTORS {
+        assert!(
+            !GLOBAL_BUILTINS_MANIFEST.contains(forbidden),
+            "manifest must not reference forbidden executor {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_global_builtins_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-021-actions-global-settings-copy-visible",
+            DT_021_GLOBAL_BUILTINS,
+        ),
+        (
+            "dt-truth-022-actions-global-reload-submit-gated",
+            DT_022_GLOBAL_BUILTINS,
+        ),
+        (
+            "dt-truth-023-actions-builtin-agent-chat-primary-copy",
+            DT_023_GLOBAL_BUILTINS,
+        ),
+        (
+            "dt-truth-024-actions-builtin-clipboard-history-no-favorite",
+            DT_024_GLOBAL_BUILTINS,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "systemPasteboardChanged",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_global_builtins_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_021_GLOBAL_BUILTINS,
+            vec![
+                "settingsGlobalActionVisible",
+                "settingsActionIdMatchesHandler",
+                "settingsInspectionDidNotLaunchEditor",
+                "settingsDialogFooterless",
+            ],
+        ),
+        (
+            DT_022_GLOBAL_BUILTINS,
+            vec![
+                "reloadGlobalActionVisible",
+                "reloadSubmitWithoutAllowSubmitBlocked",
+                "reloadSubmitDidNotDispatch",
+                "blockedEnterLeavesActionsTargetLive",
+            ],
+        ),
+        (
+            DT_023_GLOBAL_BUILTINS,
+            vec![
+                "mainSelectionIsAgentChatBuiltin",
+                "agentChatPrimaryCopyPreserved",
+                "agentChatPrimaryActionIdMatchesRunScript",
+                "agentChatPrimaryCopyIsNotGenericOpenOrRun",
+            ],
+        ),
+        (
+            DT_024_GLOBAL_BUILTINS,
+            vec![
+                "mainSelectionIsClipboardHistoryBuiltin",
+                "clipboardHistoryUnfilteredHasNoFavoriteAction",
+                "favoriteFilterHasNoVisibleActions",
+                "favoriteFilterHasNoSelectedAction",
+                "favoriteFilterReportsEmptyList",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_global_builtins_records_submit_gate_and_selection_copy() {
+    let reload = parse(DT_022_GLOBAL_BUILTINS);
+    assert_eq!(reload["truthModel"]["actionId"], "reload_scripts");
+    assert_eq!(
+        reload["safety"]["blockedClassification"],
+        "blocked-by-unsafe-operation"
+    );
+    assert_eq!(reload["safety"]["submitAttempted"], false);
+    assert_eq!(reload["safety"]["nativeEscalation"], false);
+
+    let agent_chat = parse(DT_023_GLOBAL_BUILTINS);
+    assert_eq!(agent_chat["truthModel"]["visibleLabel"], "Open Agent Chat");
+    assert_eq!(agent_chat["truthModel"]["actionId"], "run_script");
+    assert_eq!(
+        agent_chat["truthModel"]["parentSubjectId"],
+        "choice:22:agent-chat"
+    );
+
+    let clipboard = parse(DT_024_GLOBAL_BUILTINS);
+    assert_eq!(clipboard["truthModel"]["actionId"], Value::Null);
+    assert_eq!(clipboard["truthModel"]["visibleLabel"], "0 actions");
+    assert_eq!(
+        clipboard["truthModel"]["sideEffectClass"],
+        "copy-suppression"
+    );
 }

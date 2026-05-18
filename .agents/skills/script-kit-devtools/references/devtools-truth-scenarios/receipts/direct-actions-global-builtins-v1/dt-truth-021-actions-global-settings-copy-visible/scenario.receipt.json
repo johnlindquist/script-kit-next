@@ -1,0 +1,242 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-021-actions-global-settings-copy-visible",
+  "oracleSession": "actions-next-builtins-batch",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "09352f80b42eec0dcc9826fdc459025c3e721792",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T02:20:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt021-actions-global-settings-1779069928",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "settings",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-filter-settings.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-actions-settings.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-elements-settings.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-text-settings.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt021-actions-global-settings-1779069928",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-focus-settings.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open Actions from main launcher",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "open actions",
+      "visibleResult": "ActionsDialog target live",
+      "receiptRef": "01-actions-open.json"
+    },
+    {
+      "step": 2,
+      "intent": "filter for settings global action copy",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "settings",
+      "visibleResult": "Open Settings is selected and visible",
+      "receiptRef": "04-elements-settings.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-act-filter-settings.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-actions-settings.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-elements-settings.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-text-settings.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-focus-settings.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:0:settings",
+    "visibleLabel": "Open Settings",
+    "footerIntent": null,
+    "actionId": "settings",
+    "handlerId": "global.settings",
+    "sideEffectClass": "selection-only",
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "settingsGlobalActionVisible",
+      "expected": "Open Settings visible",
+      "actual": "choice:0:settings text=Open Settings",
+      "status": "pass"
+    },
+    {
+      "name": "settingsActionIdMatchesHandler",
+      "expected": "settings action maps to global settings handler",
+      "actual": "actionId=settings handlerId=global.settings",
+      "status": "pass"
+    },
+    {
+      "name": "settingsInspectionDidNotLaunchEditor",
+      "expected": "selection-only inspection",
+      "actual": "no submit command and safety mutations false",
+      "status": "pass"
+    },
+    {
+      "name": "settingsDialogFooterless",
+      "expected": "activeFooter null",
+      "actual": "activeFooter=null",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; cleanup used scripts/agentic/session.sh stop and is intentionally excluded from executor provenance."
+  ]
+}

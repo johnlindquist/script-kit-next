@@ -1,0 +1,589 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-024-actions-builtin-clipboard-history-no-favorite",
+  "oracleSession": "actions-next-builtins-batch",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "09352f80b42eec0dcc9826fdc459025c3e721792",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T02:20:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt024-actions-builtin-clipboard-history-1779070634",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--start",
+          "--show",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "00-main-start-show.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--text",
+          "Clipboard History",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-act-main-filter-clipboard-history.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-1.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-2.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-3.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-4.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-5.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-arrowdown-6.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-elements-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-text-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "open-actions",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-act-open-actions-clipboard-history-parent.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-actions-clipboard-history-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-elements-clipboard-history-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-text-clipboard-history-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "favorite",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "09-act-filter-favorite.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "10-actions-favorite-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "11-elements-favorite-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "12-text-favorite-filter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt024-actions-builtin-clipboard-history-1779070634",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "13-focus-favorite-filter.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter main launcher to Clipboard History",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "Clipboard History",
+      "visibleResult": "Clipboard History row visible",
+      "receiptRef": "03-elements-main-clipboard-history-selected.json"
+    },
+    {
+      "step": 2,
+      "intent": "open actions from selected Clipboard History built-in row",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "open-actions",
+      "visibleResult": "built-in actions visible without favorite actions",
+      "receiptRef": "07-elements-clipboard-history-unfiltered.json"
+    },
+    {
+      "step": 3,
+      "intent": "filter actions for favorite copy",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "favorite",
+      "visibleResult": "0 actions and no selected action",
+      "receiptRef": "10-actions-favorite-filter.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "00-main-start-show.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ScriptList",
+      "receiptRef": "01-act-main-filter-clipboard-history.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-1.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-2.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-3.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-4.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-5.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-6.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "03-elements-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "04-text-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.act",
+      "command": "act.open-actions",
+      "targetSurface": "ScriptList",
+      "receiptRef": "05-act-open-actions-clipboard-history-parent.json",
+      "classification": "ok"
+    },
+    {
+      "step": 12,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-actions-clipboard-history-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 13,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-elements-clipboard-history-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 14,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "08-text-clipboard-history-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 15,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "09-act-filter-favorite.json",
+      "classification": "ok"
+    },
+    {
+      "step": 16,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "10-actions-favorite-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 17,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "11-elements-favorite-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 18,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "12-text-favorite-filter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 19,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "13-focus-favorite-filter.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": null,
+    "visibleLabel": "0 actions",
+    "footerIntent": null,
+    "actionId": null,
+    "handlerId": null,
+    "sideEffectClass": "copy-suppression",
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "parentSubjectId": "choice:6:clipboard-history",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "mainSelectionIsClipboardHistoryBuiltin",
+      "expected": "selected main row is Clipboard History",
+      "actual": "choice:6:clipboard-history selected=true",
+      "status": "pass"
+    },
+    {
+      "name": "clipboardHistoryUnfilteredHasNoFavoriteAction",
+      "expected": "no Add/Remove Favorites in built-in actions",
+      "actual": "visible actions exclude toggle_favorite/add/remove favorite labels",
+      "status": "pass"
+    },
+    {
+      "name": "favoriteFilterHasNoVisibleActions",
+      "expected": "visibleCount=0",
+      "actual": "visibleCount=0",
+      "status": "pass"
+    },
+    {
+      "name": "favoriteFilterHasNoSelectedAction",
+      "expected": "selectedActionId=null",
+      "actual": "selectedActionId=null",
+      "status": "pass"
+    },
+    {
+      "name": "favoriteFilterReportsEmptyList",
+      "expected": "runtime empty-list copy is 0 actions",
+      "actual": "list:actions text=0 actions",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; cleanup used scripts/agentic/session.sh stop and is intentionally excluded from executor provenance."
+  ]
+}
