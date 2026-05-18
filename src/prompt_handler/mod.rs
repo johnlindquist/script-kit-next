@@ -401,6 +401,7 @@ impl BatchTargetCapabilities {
                     "setInput",
                     "forceSubmit",
                     "waitFor",
+                    "openActions",
                     "selectByValue",
                     "selectBySemanticId",
                     "filterAndSelect",
@@ -6635,7 +6636,70 @@ impl ScriptListApp {
                                     }
                                 }
                             }
-                            protocol::BatchCommand::OpenActions | protocol::BatchCommand::TogglePreview => {
+                            protocol::BatchCommand::OpenActions => {
+                                let result = if let Some(window_handle) =
+                                    crate::get_main_window_handle()
+                                {
+                                    window_handle.update(cx, |_, window, cx| {
+                                        this.update(cx, |this, cx| {
+                                            this.dispatch_actions_toggle_for_current_view(
+                                                window,
+                                                cx,
+                                                "devtools_batch_open_actions",
+                                            )
+                                        })
+                                    })
+                                } else {
+                                    Err(anyhow::anyhow!("Main window handle is not available"))
+                                };
+
+                                match result {
+                                    Ok(Ok(true)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "openActions", "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "openActions".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Ok(false)) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "openActions".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(
+                                                "Current main view does not expose actions",
+                                            )),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error {
+                                            break;
+                                        }
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "openActions".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(
+                                                format!("{e}"),
+                                            )),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::TogglePreview => {
                                 let command = batch_command_name(cmd);
                                 results.push(protocol::BatchResultEntry {
                                     index,
