@@ -1,0 +1,348 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-020-actions-escape-dismiss-parent-focus-return",
+  "oracleSession": "actions-input-focus-resize",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "264039de796182fa17e7dfd2fe08eed83a894e98",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T01:42:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt020-1779068320",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt020-1779068320",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "o",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-filter-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-actions-before-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-focus-before-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-target-main-before-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt020-1779068320",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "escape",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-act-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "list",
+          "--session",
+          "dt020-1779068320",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-targets-after-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-target-main-after-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "09-focus-main-after-escape.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt020-1779068320",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "10-target-actions-after-escape.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "open and filter ActionsDialog before dismiss",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "actions dialog live before escape",
+      "receiptRef": "03-actions-before-escape.json"
+    },
+    {
+      "step": 2,
+      "intent": "press Escape to dismiss without dispatch",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "escape",
+      "visibleResult": "source closed and parent ScriptList stayed live",
+      "receiptRef": "06-act-escape.json"
+    },
+    {
+      "step": 3,
+      "intent": "prove parent focus and source absence after dismiss",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "post-dismiss inspect",
+      "visibleResult": "main target ok and actions target unavailable",
+      "receiptRef": "08-target-main-after-escape.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-act-filter-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-actions-before-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-focus-before-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "main",
+      "receiptRef": "05-target-main-before-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-act-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": "all",
+      "receiptRef": "07-targets-after-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "main",
+      "receiptRef": "08-target-main-after-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "main",
+      "receiptRef": "09-focus-main-after-escape.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "10-target-actions-after-escape.json",
+      "classification": "blocked-by-target-ambiguity"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": 1,
+    "focusOwner": "input:actions-search -> input:filter",
+    "selectedSemanticId": "choice:1:run_script",
+    "visibleLabel": "selected-action-before-escape",
+    "footerIntent": null,
+    "actionId": null,
+    "handlerId": "actions.window.handle_escape/request_close",
+    "sideEffectClass": "dismiss-popup",
+    "disabledReason": null,
+    "targetSurface": "actionsDialog -> ScriptList",
+    "parentSubjectId": "main",
+    "layoutGeneration": 1
+  },
+  "truthChecks": [
+    {
+      "name": "escapeDismissLeavesParentInspectable",
+      "expected": "parent main target remains inspectable",
+      "actual": "classification=ok",
+      "status": "pass"
+    },
+    {
+      "name": "escapeDoesNotSubmitAction",
+      "expected": "Escape has no submit attempt and parsed simulateKey",
+      "actual": "submitAttempted=false, parseOutcome=parsed",
+      "status": "pass"
+    },
+    {
+      "name": "actionsDialogTargetGoneAfterDismiss",
+      "expected": "ActionsDialog inspect is target ambiguity after dismiss",
+      "actual": "classification=blocked-by-target-ambiguity",
+      "status": "pass"
+    },
+    {
+      "name": "parentFocusInspectableAfterDismiss",
+      "expected": "main focus inspect is ok",
+      "actual": "classification=ok",
+      "status": "pass"
+    },
+    {
+      "name": "dismissLifecycleSourceClosedParentLive",
+      "expected": "act.ts recognizes source close with parent live",
+      "actual": "state=source-closed-parent-live",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAttempted": false,
+    "dismissLifecycleState": "source-closed-parent-live",
+    "postActionLifecycleState": "source-closed-parent-live"
+  }
+}

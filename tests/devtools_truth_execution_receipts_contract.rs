@@ -9,6 +9,9 @@ const TARGET_LIFECYCLE_MANIFEST: &str = include_str!(
 const TARGET_LIFECYCLE_V2_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v2/slice.manifest.json"
 );
+const INPUT_FOCUS_RESIZE_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -23,6 +26,18 @@ const DT_013_TARGET_LIFECYCLE: &str = include_str!(
 );
 const DT_013_TARGET_LIFECYCLE_V2: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-target-lifecycle-v2/dt-truth-013-actions-section-heading-not-action-target/scenario.receipt.json"
+);
+const DT_017_INPUT_FOCUS_RESIZE: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/dt-truth-017-actions-empty-filter-no-submit/scenario.receipt.json"
+);
+const DT_018_INPUT_FOCUS_RESIZE: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/dt-truth-018-actions-filter-resize-shrink-grow/scenario.receipt.json"
+);
+const DT_019_INPUT_FOCUS_RESIZE: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/dt-truth-019-actions-footerless-shortcut-layout-truth/scenario.receipt.json"
+);
+const DT_020_INPUT_FOCUS_RESIZE: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-input-focus-resize-v1/dt-truth-020-actions-escape-dismiss-parent-focus-return/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -523,5 +538,169 @@ fn direct_actions_target_lifecycle_v2_records_submit_lifecycle_green() {
             ALLOWED_PRIMITIVES.contains(&script),
             "target lifecycle v2 used non-allowed command path {script}"
         );
+    }
+}
+
+#[test]
+fn direct_actions_input_focus_resize_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(INPUT_FOCUS_RESIZE_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(manifest["sliceId"], "direct-actions-input-focus-resize-v1");
+    assert_eq!(manifest["oracleSession"], "actions-input-focus-resize");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-017-actions-empty-filter-no-submit",
+            "dt-truth-018-actions-filter-resize-shrink-grow",
+            "dt-truth-019-actions-footerless-shortcut-layout-truth",
+            "dt-truth-020-actions-escape-dismiss-parent-focus-return",
+        ]
+    );
+}
+
+#[test]
+fn direct_actions_input_focus_resize_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-017-actions-empty-filter-no-submit",
+            DT_017_INPUT_FOCUS_RESIZE,
+        ),
+        (
+            "dt-truth-018-actions-filter-resize-shrink-grow",
+            DT_018_INPUT_FOCUS_RESIZE,
+        ),
+        (
+            "dt-truth-019-actions-footerless-shortcut-layout-truth",
+            DT_019_INPUT_FOCUS_RESIZE,
+        ),
+        (
+            "dt-truth-020-actions-escape-dismiss-parent-focus-return",
+            DT_020_INPUT_FOCUS_RESIZE,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "systemPasteboardChanged",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_input_focus_resize_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_017_INPUT_FOCUS_RESIZE,
+            vec![
+                "emptyFilterHasNoVisibleActions",
+                "emptyFilterHasNoSelectedAction",
+                "emptySubmitBlockedBeforeDispatch",
+                "blockedEnterLeavesActionsTargetLive",
+                "filterRecoveryRestoresVisibleActions",
+            ],
+        ),
+        (
+            DT_018_INPUT_FOCUS_RESIZE,
+            vec![
+                "filterToEmptyUpdatesLayoutTruth",
+                "filterRecoveryRestoresRows",
+                "popupParentIdentityStableAcrossFilter",
+                "popupDoesNotClipAfterShrinkOrGrow",
+                "layoutReceiptsHaveNoOverlapPressure",
+            ],
+        ),
+        (
+            DT_019_INPUT_FOCUS_RESIZE,
+            vec![
+                "actionsDialogFooterlessAtRuntime",
+                "shortcutRowsHaveRuntimeBounds",
+                "shortcutLayoutRowsMatchVisibleShortcutActions",
+                "layoutContainsShortcutComponents",
+                "focusReceiptHasNoActiveFooter",
+            ],
+        ),
+        (
+            DT_020_INPUT_FOCUS_RESIZE,
+            vec![
+                "escapeDismissLeavesParentInspectable",
+                "escapeDoesNotSubmitAction",
+                "actionsDialogTargetGoneAfterDismiss",
+                "parentFocusInspectableAfterDismiss",
+                "dismissLifecycleSourceClosedParentLive",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
     }
 }

@@ -1,0 +1,384 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-017-actions-empty-filter-no-submit",
+  "oracleSession": "actions-input-focus-resize",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "264039de796182fa17e7dfd2fe08eed83a894e98",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T01:42:00Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt017-1779068372",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt017-1779068372",
+          "--start",
+          "--open",
+          "--keep-open",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "01-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "__no_match_zzzz__",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "02-act-filter-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "03-actions-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "snapshot",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "04-elements-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "inspect",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "05-focus-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "measure",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "06-text-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "measure",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "07-layout-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "key",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "enter",
+          "--allow-submit",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "08-act-enter-no-selection.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "inspect",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "09-target-actions-after-blocked-enter.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "set-input",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "o",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "10-act-filter-recover-o.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "inspect",
+          "--session",
+          "dt017-1779068372",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--timeout",
+          "5000"
+        ],
+        "receiptRef": "11-actions-recovered-o.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter ActionsDialog to no matches",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "__no_match_zzzz__",
+      "visibleResult": "visibleCount is zero and selectedActionId is null",
+      "receiptRef": "03-actions-no-match.json"
+    },
+    {
+      "step": 2,
+      "intent": "press Enter with no selected executable action",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "enter with --allow-submit",
+      "visibleResult": "submit preflight blocks before dispatch and target stays live",
+      "receiptRef": "08-act-enter-no-selection.json"
+    },
+    {
+      "step": 3,
+      "intent": "recover by filtering back to matching actions",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "actionsDialog",
+      "inputSummary": "o",
+      "visibleResult": "visible actions and selected action return",
+      "receiptRef": "11-actions-recovered-o.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "01-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "02-act-filter-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "03-actions-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "04-elements-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "05-focus-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "06-text-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "07-layout-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "08-act-enter-no-selection.json",
+      "classification": "blocked-by-unsafe-operation"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "09-target-actions-after-blocked-enter.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "10-act-filter-recover-o.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "actionsDialog",
+      "receiptRef": "11-actions-recovered-o.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": 2,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": null,
+    "visibleLabel": "empty-no-match-state",
+    "footerIntent": null,
+    "actionId": null,
+    "handlerId": null,
+    "sideEffectClass": "blocked-no-selection",
+    "disabledReason": "no-visible-actions",
+    "targetSurface": "actionsDialog",
+    "parentSubjectId": "main",
+    "layoutGeneration": 2
+  },
+  "truthChecks": [
+    {
+      "name": "emptyFilterHasNoVisibleActions",
+      "expected": "visible actions count is zero",
+      "actual": "visibleCount=0",
+      "status": "pass"
+    },
+    {
+      "name": "emptyFilterHasNoSelectedAction",
+      "expected": "selectedActionId is null",
+      "actual": "selectedActionId=null",
+      "status": "pass"
+    },
+    {
+      "name": "emptySubmitBlockedBeforeDispatch",
+      "expected": "Enter blocks before dispatch without a choice row",
+      "actual": "classification=blocked-by-unsafe-operation, state=blocked-before-dispatch",
+      "status": "pass"
+    },
+    {
+      "name": "blockedEnterLeavesActionsTargetLive",
+      "expected": "ActionsDialog remains inspectable",
+      "actual": "classification=ok",
+      "status": "pass"
+    },
+    {
+      "name": "filterRecoveryRestoresVisibleActions",
+      "expected": "filtering to o restores actions",
+      "actual": "visibleCount=10, selected=settings",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": null,
+    "submitLifecycleState": "blocked-before-dispatch"
+  }
+}

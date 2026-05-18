@@ -35,6 +35,23 @@ fn actions_dialog_submit_requires_selected_choice_row() {
 }
 
 #[test]
+fn act_models_post_action_lifecycle_as_named_states() {
+    for needle in [
+        "type PostActionLifecycleState",
+        "\"not-lifecycle-sensitive\"",
+        "\"dismissed\"",
+        "\"source-closed-parent-live\"",
+        "postActionLifecycle",
+        "dismissLifecycle",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts must include post-action lifecycle marker {needle}"
+        );
+    }
+}
+
+#[test]
 fn submit_after_state_inspects_parent_when_source_closes() {
     for needle in [
         "inspectParentAfterSubmit",
@@ -45,6 +62,38 @@ fn submit_after_state_inspects_parent_when_source_closes() {
         assert!(
             ACT_TS.contains(needle),
             "act.ts must resolve post-submit parent lifecycle with {needle}"
+        );
+    }
+}
+
+#[test]
+fn escape_and_cmd_keys_are_dismiss_like_without_submit_preflight() {
+    for needle in [
+        "function isDismissLike",
+        "normalizedKey === \"escape\"",
+        "normalizedKey === \"esc\"",
+        "normalizedKey === \"k\" && args.modifiers.includes(\"cmd\")",
+        "normalizedKey === \"w\" && args.modifiers.includes(\"cmd\")",
+        "resolvePostActionLifecycle",
+        "inspectParentAfterAction",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts dismiss lifecycle must include {needle}"
+        );
+    }
+}
+
+#[test]
+fn closed_source_parent_live_is_ok_for_dismiss_not_target_ambiguity() {
+    for needle in [
+        "postActionLifecycle.state === \"source-live\"",
+        "postActionLifecycle.state === \"source-closed-parent-live\"",
+        "return \"ok\";",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts classify must accept dismiss source close with parent live: {needle}"
         );
     }
 }

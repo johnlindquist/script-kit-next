@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "sliceId": "direct-actions-input-focus-resize-v1",
+  "oracleSession": "actions-input-focus-resize",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "recordedAt": "2026-05-18T01:42:00Z",
+  "gitSha": "264039de796182fa17e7dfd2fe08eed83a894e98",
+  "executor": "direct-devtools-primitives",
+  "hasRunner": false,
+  "scenarioIds": [
+    "dt-truth-017-actions-empty-filter-no-submit",
+    "dt-truth-018-actions-filter-resize-shrink-grow",
+    "dt-truth-019-actions-footerless-shortcut-layout-truth",
+    "dt-truth-020-actions-escape-dismiss-parent-focus-return"
+  ],
+  "allowedTopLevelCommands": [
+    "scripts/devtools/targets.ts",
+    "scripts/devtools/elements.ts",
+    "scripts/devtools/focus.ts",
+    "scripts/devtools/text.ts",
+    "scripts/devtools/layout.ts",
+    "scripts/devtools/act.ts",
+    "scripts/devtools/actions.ts"
+  ],
+  "forbiddenExecutorsUsed": false,
+  "summary": {
+    "pass": 4,
+    "fail": 0,
+    "blockedByMissingPrimitive": 0,
+    "blockedByUnsafeOperation": 0,
+    "needsOracleReview": 0
+  },
+  "receiptPaths": [
+    "dt-truth-017-actions-empty-filter-no-submit/scenario.receipt.json",
+    "dt-truth-018-actions-filter-resize-shrink-grow/scenario.receipt.json",
+    "dt-truth-019-actions-footerless-shortcut-layout-truth/scenario.receipt.json",
+    "dt-truth-020-actions-escape-dismiss-parent-focus-return/scenario.receipt.json"
+  ]
+}
