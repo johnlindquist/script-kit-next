@@ -3,6 +3,8 @@
 //! This module handles AI SDK protocol messages from scripts.
 //! It converts between protocol types and storage/window operations.
 
+#![allow(clippy::result_large_err)]
+
 use tracing::{debug, error, info};
 
 use crate::protocol::{AiChatInfo, AiContextPartInput, AiMessageInfo, Message};

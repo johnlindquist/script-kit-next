@@ -1,7 +1,8 @@
 //! Runtime subscription registry for SDK-visible Agent Chat events.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::sync::{mpsc, Mutex};
+use std::sync::{MutexGuard, OnceLock};
 
 use uuid::Uuid;
 
@@ -61,6 +62,12 @@ fn registry() -> &'static Mutex<AiSubscriptionRegistry> {
     REGISTRY.get_or_init(|| Mutex::new(AiSubscriptionRegistry::default()))
 }
 
+fn registry_guard() -> MutexGuard<'static, AiSubscriptionRegistry> {
+    registry()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn normalize_events(events: Vec<String>) -> Result<HashSet<AiSubscriptionEvent>, String> {
     if events.is_empty() {
         return Err("aiSubscribe requires at least one event".to_string());
@@ -108,9 +115,7 @@ pub(crate) fn handle_subscribe(
         sender,
     };
 
-    registry()
-        .lock()
-        .unwrap()
+    registry_guard()
         .subscriptions
         .insert(subscription_id.clone(), subscription);
 
@@ -126,7 +131,7 @@ pub(crate) fn handle_unsubscribe(
     request_id: String,
     subscription_id: String,
 ) -> Message {
-    let mut guard = registry().lock().unwrap();
+    let mut guard = registry_guard();
     let (success, error) = match guard.subscriptions.get(&subscription_id) {
         Some(subscription) if subscription.owner_id == owner_id => {
             guard.subscriptions.remove(&subscription_id);
@@ -145,7 +150,7 @@ pub(crate) fn handle_unsubscribe(
 }
 
 pub(crate) fn cleanup_owner(owner_id: &str) -> usize {
-    let mut guard = registry().lock().unwrap();
+    let mut guard = registry_guard();
     let before = guard.subscriptions.len();
     guard
         .subscriptions
@@ -154,7 +159,7 @@ pub(crate) fn cleanup_owner(owner_id: &str) -> usize {
 }
 
 fn delivery_targets(event: AiSubscriptionEvent, chat_id: Option<&str>) -> Vec<DeliveryTarget> {
-    let guard = registry().lock().unwrap();
+    let guard = registry_guard();
     guard
         .subscriptions
         .iter()
@@ -192,9 +197,7 @@ where
 
     if !disconnected.is_empty() {
         let disconnected: HashSet<String> = disconnected.into_iter().collect();
-        registry()
-            .lock()
-            .unwrap()
+        registry_guard()
             .subscriptions
             .retain(|subscription_id, _| !disconnected.contains(subscription_id));
     }

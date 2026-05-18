@@ -1461,7 +1461,7 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn surface_prompt_hint_audit_allows_three_non_universal_hints() {
-        let hints: Vec<SharedString> = vec![
+        let hints: Vec<gpui::SharedString> = vec![
             "↵ Copy Markdown".into(),
             "⌘C Copy".into(),
             "Esc Back".into(),
@@ -1471,7 +1471,7 @@ mod prompt_layout_shell_tests {
             hint_count: hints.len(),
             hints_joined: hints
                 .iter()
-                .map(|hint| hint.to_string())
+                .map(|hint: &gpui::SharedString| hint.to_string())
                 .collect::<Vec<_>>()
                 .join(" | "),
             is_universal: super::is_universal_prompt_hints(&hints),

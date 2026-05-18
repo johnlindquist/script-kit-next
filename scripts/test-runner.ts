@@ -119,10 +119,16 @@ const PARALLEL = process.argv.includes('--parallel');
 const INCLUDE_SYSTEM = process.argv.includes('--include-system');
 const CONCURRENCY = parseInt(process.env.SDK_TEST_CONCURRENCY || '4', 10);
 
-// Tests that send real keystrokes/clipboard writes to the OS.
-// Excluded by default to avoid interfering with the user's desktop.
+// Tests that send real keystrokes/clipboard writes to the OS or exercise
+// GPUI-unsupported SDK helpers.
+// Excluded by default to avoid interfering with the user's desktop and to keep
+// CI aligned with the supported GPUI runtime surface.
 // Pass --include-system to run them.
-const SYSTEM_INPUT_TESTS = new Set(['test-system.ts']);
+const SYSTEM_INPUT_TESTS = new Set([
+  'test-system.ts',
+  'test-clipboard-image.ts',
+  'test-scroll-perf.ts',
+]);
 
 // Parse --filter pattern
 function getFilterPattern(): RegExp | null {

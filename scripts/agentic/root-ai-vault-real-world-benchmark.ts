@@ -19,6 +19,11 @@ const homeDir = resolve(argValue("--home", process.env.HOME ?? "."));
 const maxCodexRows = Number(argValue("--codex-limit", "10000"));
 const maxClaudeSessions = Number(argValue("--claude-limit", "300"));
 const includeContent = argValue("--content", "true") !== "false";
+const discoverClaude = argValue("--discover-claude", "true") !== "false";
+const receiptName = argValue(
+  "--receipt",
+  `ai-vault-real-world-${includeContent ? "content" : "metadata"}.json`,
+);
 
 function argValue(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);
@@ -179,8 +184,10 @@ const codexHydrateMs = elapsedMs(codexHydrateStart);
 
 const claudeDiscoverStart = process.hrtime.bigint();
 const claudeFiles: { path: string; modifiedMs: number; size: number }[] = [];
-walkJsonl(join(homeDir, ".claude", "projects"), claudeFiles);
-claudeFiles.sort((a, b) => b.modifiedMs - a.modifiedMs);
+if (discoverClaude) {
+  walkJsonl(join(homeDir, ".claude", "projects"), claudeFiles);
+  claudeFiles.sort((a, b) => b.modifiedMs - a.modifiedMs);
+}
 const claudeDiscoveryMs = elapsedMs(claudeDiscoverStart);
 
 const claudeReadStart = process.hrtime.bigint();
@@ -203,18 +210,23 @@ for (const file of claudeFiles.slice(0, maxClaudeSessions)) {
 }
 const claudeReadMs = elapsedMs(claudeReadStart);
 
-const hits = [...codexHits, ...claudeHits];
+const hits = [...codexHits, ...claudeHits].map((hit) => ({
+  ...hit,
+  haystack: [hit.title, hit.cwd, hit.model, hit.sessionId, ...hit.terms]
+    .join("\u001f")
+    .toLowerCase(),
+}));
 const queries = ["codex", "script-kit", "vault", "window", "oracle", "nonexistent-needle"];
 const searchSamples = queries.map((query) => {
   const needle = query.toLowerCase();
   const start = process.hrtime.bigint();
-  const found = hits
-    .filter((hit) =>
-      [hit.title, hit.cwd, hit.model, hit.sessionId, ...hit.terms].some((field) =>
-        String(field).toLowerCase().includes(needle),
-      ),
-    )
-    .slice(0, 5).length;
+  let found = 0;
+  for (const hit of hits) {
+    if (hit.haystack.includes(needle)) {
+      found += 1;
+      if (found >= 5) break;
+    }
+  }
   return { query, found, ms: round(elapsedMs(start)) };
 });
 
@@ -226,6 +238,7 @@ Object.assign(receipt, {
     codexRolloutsExisting: rolloutExisting,
     codexRolloutPrefixMBRead: round(rolloutBytesRead / 1024 / 1024),
     claudeJsonlDiscovered: claudeFiles.length,
+    claudeDiscoverySkipped: !discoverClaude,
     claudeRecentRead: claudeHits.length,
     claudeMBRead: round(claudeBytesRead / 1024 / 1024),
     claudeParsedLines,
@@ -249,6 +262,6 @@ Object.assign(receipt, {
 });
 
 mkdirSync(outDir, { recursive: true });
-const outPath = join(outDir, `ai-vault-real-world-${includeContent ? "content" : "metadata"}.json`);
+const outPath = join(outDir, receiptName);
 writeFileSync(outPath, `${JSON.stringify(receipt, null, 2)}\n`);
 process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);

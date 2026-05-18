@@ -927,7 +927,7 @@ mod tests {
             false,
             false,
             false,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
         let single_row_height = actions_window_dynamic_height(
             1,
@@ -935,7 +935,7 @@ mod tests {
             false,
             false,
             false,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
         assert!(
@@ -952,7 +952,7 @@ mod tests {
             false,
             true,
             false,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
         let with_footer = actions_window_dynamic_height(
             3,
@@ -960,7 +960,7 @@ mod tests {
             false,
             true,
             true,
-            super::constants::POPUP_MAX_HEIGHT,
+            crate::actions::constants::POPUP_MAX_HEIGHT,
         );
 
         assert!(

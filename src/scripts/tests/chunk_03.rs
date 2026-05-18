@@ -354,6 +354,7 @@ fn test_fuzzy_search_unified_scripts_first() {
         SearchResult::Skill(_) => panic!("Script should be first"),
         SearchResult::Fallback(_) => panic!("Script should be first"),
         SearchResult::ScriptIssue(_) => panic!("Script should be first"),
+        _ => panic!("Script should be first"),
     }
 }
 
@@ -445,4 +446,3 @@ fn test_extract_metadata_case_insensitive_description() {
     };
     assert_eq!(script.name, "test");
 }
-

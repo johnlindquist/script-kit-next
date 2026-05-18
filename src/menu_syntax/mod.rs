@@ -36,8 +36,10 @@ pub mod templates;
 pub mod trigger_picker;
 pub mod trigger_picker_keys;
 
+#[allow(unused_imports)]
 pub use actions::{
-    current_actions as current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionState,
+    current_actions as current_menu_syntax_actions, MenuSyntaxAction, MenuSyntaxActionKind,
+    MenuSyntaxActionState,
 };
 #[allow(unused_imports)]
 pub use artifacts::{
@@ -102,11 +104,15 @@ pub use mode::{
     free_text_for_search, input_spans_for_input_with_targets, prefix_span_for_input, MenuSyntaxMode,
 };
 #[allow(unused_imports)]
+pub use parse::{parse, MenuSyntaxParse};
+#[allow(unused_imports)]
 pub use payload::{
     source_for_head, AdvancedQuery, ArgvInvocation, CaptureInvocation, FilterIndicator,
     FilterIndicatorTone, MenuSyntaxHandlerSpec, RootUnifiedSourceFilter,
     RootUnifiedSourceFilterSet, SourceHeadSpec, SOURCE_HEAD_SPECS,
 };
+#[allow(unused_imports)]
+pub use query::parse_advanced_query;
 pub use quote::quote_for_filter_value;
 #[allow(unused_imports)]
 pub use retention::{
@@ -119,10 +125,11 @@ pub use schema_overrides::{
 };
 #[allow(unused_imports)]
 pub use skill::{skill_specs_from_value, SkillSpec};
+#[allow(unused_imports)]
 pub use trigger_picker::{
     build_trigger_picker_snapshot, create_capture_handler_scaffold, CaptureHandlerScaffoldEffects,
-    TriggerPickerContext, TriggerPickerMode, TriggerPickerRow, TriggerPickerRowKind,
-    TriggerPickerSnapshot,
+    TriggerPickerAction, TriggerPickerContext, TriggerPickerMode, TriggerPickerRow,
+    TriggerPickerRowKind, TriggerPickerSnapshot,
 };
 #[allow(unused_imports)]
 pub use trigger_picker_keys::{

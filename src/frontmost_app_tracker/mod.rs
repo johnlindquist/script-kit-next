@@ -1382,7 +1382,10 @@ mod tests {
         let cached_items = vec![MenuBarItem {
             title: "File".to_string(),
             enabled: true,
-            shortcut: Some("⌘F".to_string()),
+            shortcut: Some(crate::menu_bar::KeyboardShortcut::new(
+                "F".to_string(),
+                crate::menu_bar::ModifierFlags::COMMAND,
+            )),
             children: vec![],
             ax_element_path: vec![0],
         }];

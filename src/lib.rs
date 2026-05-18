@@ -64,7 +64,6 @@ pub mod test_support;
 pub mod theme;
 pub mod toast_manager;
 
-#[cfg(not(test))]
 pub mod tray;
 pub mod ui;
 pub mod updates;

@@ -1301,10 +1301,13 @@ fn agent_context_has_deeplink_and_shortcut() {
         "Agent should have copy_deeplink"
     );
     assert!(
-        ids.contains(&"add_shortcut"),
-        "Agent should have add_shortcut"
+        !ids.contains(&"add_shortcut"),
+        "Agent should not advertise unsupported add_shortcut"
     );
-    assert!(ids.contains(&"add_alias"), "Agent should have add_alias");
+    assert!(
+        !ids.contains(&"add_alias"),
+        "Agent should not advertise unsupported add_alias"
+    );
 }
 
 #[test]

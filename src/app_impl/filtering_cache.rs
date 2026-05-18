@@ -41,6 +41,7 @@ impl ScriptListApp {
         browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
         browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
     ) -> crate::RootPassiveFrame {
+        let ai_vault_status = crate::ai_vault::root_ai_vault_snapshot_status();
         let key = crate::RootPassiveFrameKey {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
@@ -50,6 +51,7 @@ impl ScriptListApp {
             dictation_history_options,
             acp_history_options,
             ai_vault_options: ai_vault_options.clone(),
+            ai_vault_snapshot_generation: ai_vault_status.generation,
             browser_tabs_options: browser_tabs_options.clone(),
             browser_history_options: browser_history_options.clone(),
         };
@@ -225,6 +227,7 @@ impl ScriptListApp {
             ai_vault_hits,
             browser_tab_hits,
             browser_history_hits,
+            ai_vault_snapshot_generation: ai_vault_status.generation,
             browser_tabs_snapshot_generation: browser_tabs_status.generation,
             browser_history_snapshot_generation: browser_history_status.generation,
         };
@@ -520,9 +523,16 @@ impl ScriptListApp {
         #[cfg(not(target_os = "macos"))]
         let current_app_commands_app_name: Option<String> = None;
 
+        let ai_vault_generation = crate::ai_vault::root_ai_vault_snapshot_status().generation;
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
-            Some(app_name) => format!("{}\x1Fcurrent-app={app_name}", self.computed_filter_text),
-            None => self.computed_filter_text.clone(),
+            Some(app_name) => format!(
+                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}",
+                self.computed_filter_text
+            ),
+            None => format!(
+                "{}\x1Fai-vault-gen={ai_vault_generation}",
+                self.computed_filter_text
+            ),
         };
 
         // P3: Key off computed_filter_text for two-stage filtering

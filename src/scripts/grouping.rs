@@ -2188,6 +2188,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             false,
             &root_files,
@@ -2212,6 +2213,8 @@ mod advanced_query_tests {
             },
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &[],
+            crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
             crate::browser_tabs::RootBrowserTabsSectionOptions {
                 enabled: true,
@@ -2264,7 +2267,9 @@ mod advanced_query_tests {
             .iter()
             .filter_map(|item| match item {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
-                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+                GroupedListItem::SectionHeader(_, Some(_))
+                | GroupedListItem::Item(_)
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(
@@ -2334,6 +2339,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             false,
             &root_files,
@@ -2358,6 +2364,8 @@ mod advanced_query_tests {
             },
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &[],
+            crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
             crate::browser_tabs::RootBrowserTabsSectionOptions {
                 enabled: true,
@@ -2403,7 +2411,9 @@ mod advanced_query_tests {
             .iter()
             .filter_map(|item| match item {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
-                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+                GroupedListItem::SectionHeader(_, Some(_))
+                | GroupedListItem::Item(_)
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(
@@ -2497,6 +2507,7 @@ mod advanced_query_tests {
                     None,
                     None,
                     None,
+                    &source_filters,
                     None,
                     false,
                     &[],
@@ -2521,6 +2532,8 @@ mod advanced_query_tests {
                     },
                     &acp,
                     crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                    &[],
+                    crate::ai_vault::RootAiVaultSectionOptions::default(),
                     &browser_tabs,
                     crate::browser_tabs::RootBrowserTabsSectionOptions {
                         enabled: true,
@@ -2540,7 +2553,9 @@ mod advanced_query_tests {
                 .iter()
                 .filter_map(|item| match item {
                     GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
-                    GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+                    GroupedListItem::SectionHeader(_, Some(_))
+                    | GroupedListItem::Item(_)
+                    | GroupedListItem::Status(_) => None,
                 })
                 .collect::<Vec<_>>();
             assert_eq!(section_labels, vec![expected_section], "{source:?}");
@@ -2602,6 +2617,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
             Some(crate::file_search::RootFileSectionMode::GlobalQuery),
             false,
             &root_files,
@@ -2632,6 +2648,8 @@ mod advanced_query_tests {
                 max_results: 3,
                 min_query_chars: 3,
             },
+            &[],
+            crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
             crate::browser_tabs::RootBrowserTabsSectionOptions {
                 enabled: true,
@@ -2712,6 +2730,7 @@ mod advanced_query_tests {
             None,
             None,
             None,
+            &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
             None,
             false,
             &[],
@@ -2742,6 +2761,8 @@ mod advanced_query_tests {
                 max_results: 3,
                 min_query_chars: 3,
             },
+            &[],
+            crate::ai_vault::RootAiVaultSectionOptions::default(),
             &browser_tabs,
             crate::browser_tabs::RootBrowserTabsSectionOptions {
                 enabled: true,
@@ -2768,7 +2789,9 @@ mod advanced_query_tests {
             .iter()
             .filter_map(|item| match item {
                 GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
-                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+                GroupedListItem::SectionHeader(_, Some(_))
+                | GroupedListItem::Item(_)
+                | GroupedListItem::Status(_) => None,
             })
             .collect::<Vec<_>>();
         assert_eq!(
@@ -2812,6 +2835,7 @@ mod advanced_query_tests {
                 None,
                 None,
                 None,
+                &crate::menu_syntax::RootUnifiedSourceFilterSet::default(),
                 Some(crate::file_search::RootFileSectionMode::GlobalQuery),
                 false,
                 &root_files,
@@ -2836,6 +2860,8 @@ mod advanced_query_tests {
                 },
                 &[],
                 crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+                &[],
+                crate::ai_vault::RootAiVaultSectionOptions::default(),
                 &[],
                 crate::browser_tabs::RootBrowserTabsSectionOptions {
                     enabled: true,
@@ -2890,6 +2916,7 @@ mod advanced_query_tests {
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
 
         assert!(
@@ -2918,6 +2945,7 @@ mod advanced_query_tests {
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2931,6 +2959,7 @@ mod advanced_query_tests {
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -2953,6 +2982,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
 
         assert!(grouped.is_empty());
@@ -2992,6 +3022,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         append_root_acp_history_section(
             &mut grouped,
@@ -3001,6 +3032,7 @@ mod advanced_query_tests {
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
 
         assert!(
@@ -3057,6 +3089,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         append_root_clipboard_history_section(
             &mut grouped,
@@ -3069,6 +3102,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         append_root_acp_history_section(
             &mut grouped,
@@ -3078,6 +3112,7 @@ mod advanced_query_tests {
             &acp,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
 
         assert!(
@@ -3117,6 +3152,7 @@ mod advanced_query_tests {
             &notes,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3129,6 +3165,7 @@ mod advanced_query_tests {
             &notes,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3144,6 +3181,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3157,6 +3195,7 @@ mod advanced_query_tests {
             &notes,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3184,6 +3223,7 @@ mod advanced_query_tests {
             &clips,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3196,6 +3236,7 @@ mod advanced_query_tests {
             &clips,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3211,6 +3252,7 @@ mod advanced_query_tests {
                 ..Default::default()
             },
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3224,6 +3266,7 @@ mod advanced_query_tests {
             &clips,
             enabled_options,
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
         assert!(grouped.is_empty());
         assert!(flat.is_empty());
@@ -3266,6 +3309,7 @@ mod advanced_query_tests {
             &hits,
             crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
             &mut RootPassiveResultBudget::unbounded(),
+            false,
         );
 
         assert!(
@@ -3572,6 +3616,7 @@ mod advanced_query_tests {
         assert!(root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design-notes",
             &file_matches,
             &[],
@@ -3593,6 +3638,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::DirectoryBrowse,
+            false,
             "design",
             &files,
             &[],
@@ -3612,6 +3658,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design",
             &files,
             &[],
@@ -3631,6 +3678,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design",
             &files,
             &[],
@@ -3745,6 +3793,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design notes",
             &files,
             &[],
@@ -3764,6 +3813,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design notes",
             &files,
             &[],
@@ -3780,6 +3830,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "script kit readme",
             &files,
             &[],
@@ -3840,6 +3891,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "q2",
             &files,
             &[],
@@ -3856,6 +3908,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "ai",
             &files,
             &[],
@@ -3875,6 +3928,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design",
             &files,
             &[],
@@ -3895,6 +3949,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "spelling",
             &files,
             &launcher_results,
@@ -3912,6 +3967,7 @@ mod advanced_query_tests {
         assert!(!root_file_section_should_promote(
             crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
+            false,
             "design",
             &files,
             &launcher_results,
@@ -4694,6 +4750,8 @@ mod advanced_query_tests {
                     enabled: false,
                     ..Default::default()
                 },
+                &[],
+                crate::ai_vault::RootAiVaultSectionOptions::default(),
                 &[],
                 crate::browser_tabs::RootBrowserTabsSectionOptions {
                     enabled: false,

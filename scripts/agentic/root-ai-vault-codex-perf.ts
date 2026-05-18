@@ -294,11 +294,11 @@ async function main() {
     });
     writeReceipt("ai-vault-source-vault-codex.json", selectionReceipt("vault: codex-sql-title", codex.selected, "title"));
 
-    const rollout = await assertSelection("v: rollout-only-needle", {
-      computedSearchText: "rollout-only-needle",
+    const shortHead = await assertSelection("v: codex-sql-title", {
+      computedSearchText: "codex-sql-title",
       stableKey: "ai-vault/codex/cli/codex-sql-title-match",
     });
-    writeReceipt("ai-vault-source-v-short-codex.json", selectionReceipt("v: rollout-only-needle", rollout.selected, "transcript"));
+    writeReceipt("ai-vault-source-v-short-codex.json", selectionReceipt("v: codex-sql-title", shortHead.selected, "title"));
 
     const claude = await assertSelection("vault: claude", {
       computedSearchText: "claude",

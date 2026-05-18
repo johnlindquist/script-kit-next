@@ -4,7 +4,7 @@
 //! and reads them back for inspection by agents and diagnostic tooling.
 
 use crate::protocol::types::batch_wait::{TransactionTrace, TransactionTraceMode};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
@@ -41,7 +41,9 @@ pub fn default_transaction_log_path() -> PathBuf {
 ///
 /// Creates parent directories if they don't exist. Returns the path written to.
 pub fn append_transaction_trace(path: Option<&Path>, trace: &TransactionTrace) -> Result<PathBuf> {
-    let _guard = trace_log_mutex().lock().expect("trace log mutex poisoned");
+    let _guard = trace_log_mutex()
+        .lock()
+        .map_err(|_| anyhow!("trace log mutex poisoned"))?;
     let path = path
         .map(PathBuf::from)
         .unwrap_or_else(default_transaction_log_path);
@@ -142,7 +144,9 @@ pub fn read_latest_transaction_trace(
     path: Option<&Path>,
     request_id: Option<&str>,
 ) -> Result<Option<TransactionTrace>> {
-    let _guard = trace_log_mutex().lock().expect("trace log mutex poisoned");
+    let _guard = trace_log_mutex()
+        .lock()
+        .map_err(|_| anyhow!("trace log mutex poisoned"))?;
     let path = path
         .map(PathBuf::from)
         .unwrap_or_else(default_transaction_log_path);

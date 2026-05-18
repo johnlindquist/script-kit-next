@@ -129,13 +129,12 @@ impl From<SecretEntry> for SecretInfo {
 
 /// In-memory cache of decrypted secrets with metadata.
 /// Avoids repeated scrypt decryption which takes ~1.3s per call.
-static SECRETS_CACHE: LazyLock<
-    Mutex<Option<Result<HashMap<String, SecretEntry>, SecretStoreError>>>,
-> = LazyLock::new(|| Mutex::new(None));
+type SecretsCache = Option<Result<HashMap<String, SecretEntry>, SecretStoreError>>;
+
+static SECRETS_CACHE: LazyLock<Mutex<SecretsCache>> = LazyLock::new(|| Mutex::new(None));
 
 /// Get the secrets cache mutex.
-fn secrets_cache() -> &'static Mutex<Option<Result<HashMap<String, SecretEntry>, SecretStoreError>>>
-{
+fn secrets_cache() -> &'static Mutex<SecretsCache> {
     &SECRETS_CACHE
 }
 
@@ -228,7 +227,7 @@ fn load_secrets_from_path(
         return Ok(HashMap::new());
     }
 
-    let encrypted_data = match fs::read(&path) {
+    let encrypted_data = match fs::read(path) {
         Ok(data) => data,
         Err(e) => {
             return Err(SecretStoreError::new(
