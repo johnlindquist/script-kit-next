@@ -1,0 +1,938 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.act",
+  "command": "act.key",
+  "classification": "ok",
+  "session": "dt026-actions-agent-chat-preference-1779073250",
+  "startedAt": "2026-05-18T03:02:05.218Z",
+  "endedAt": "2026-05-18T03:02:06.701Z",
+  "actionId": "devtools-act-key-1779073326701-87658e",
+  "actionKind": "key",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptList"
+  },
+  "targetBefore": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 515,
+      "y": 171,
+      "width": 480,
+      "height": 440
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 480,
+      "height": 440,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 440
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "input": {
+    "text": null,
+    "semanticId": null,
+    "key": "arrowdown",
+    "modifiers": []
+  },
+  "safety": {
+    "channel": "simulateKey",
+    "destructive": false,
+    "submitAllowed": false,
+    "nativeEscalation": false,
+    "errors": [],
+    "warnings": [],
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": "choice:7:quick-terminal"
+  },
+  "submitLifecycle": {
+    "state": "not-submit",
+    "reason": "action is not submit-like"
+  },
+  "postActionLifecycle": {
+    "state": "not-lifecycle-sensitive",
+    "reason": "action keeps source target inspectable"
+  },
+  "dismissLifecycle": null,
+  "expected": {
+    "protocolResponse": "stdin_command_parsed",
+    "submitAllowed": false,
+    "noNativeEscalation": true,
+    "prePostReceipts": [
+      "focus.inspect",
+      "scroll.inspect"
+    ]
+  },
+  "actionReceipt": {
+    "schemaVersion": 1,
+    "status": "ok",
+    "session": "dt026-actions-agent-chat-preference-1779073250",
+    "sent": true,
+    "parseOutcome": "parsed",
+    "commandType": "simulateKey"
+  },
+  "targetAfter": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 515,
+      "y": 171,
+      "width": 480,
+      "height": 440
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 480,
+      "height": 440,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 440
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "visibleResult": {
+    "focusChanged": false,
+    "selectionChanged": true,
+    "inputChanged": false,
+    "windowVisibleBefore": true,
+    "windowVisibleAfter": true,
+    "scrollChanged": true
+  },
+  "before": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "dt026-actions-agent-chat-preference-1779073250",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 515,
+          "y": 171,
+          "width": 480,
+          "height": 440
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 480,
+          "height": 440,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 480,
+            "height": 440
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:filter",
+      "selectedSemanticId": "choice:7:quick-terminal",
+      "focusedNode": {
+        "semanticId": "input:filter",
+        "type": "input",
+        "value": "Agent Chat",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:7:quick-terminal",
+        "type": "choice",
+        "text": "Quick Terminal",
+        "value": "Quick Terminal",
+        "selected": true,
+        "index": 7,
+        "role": "row",
+        "kind": "built-in",
+        "source": "commands",
+        "selectable": true
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "buttonCount": 3,
+        "buttons": [
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Open Quick Terminal",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "ai",
+            "key": "⌘↵",
+            "label": "Agent Chat",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "keyboardOwner": {
+        "inputValue": "Agent Chat",
+        "promptType": "none",
+        "surfaceKind": "ScriptList",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "ok",
+      "session": "dt026-actions-agent-chat-preference-1779073250",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 515,
+          "y": 171,
+          "width": 480,
+          "height": 440
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 480,
+          "height": 440,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 480,
+            "height": 440
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": 0,
+        "scrollTopItem": 0,
+        "contentHeight": 20144,
+        "viewportHeight": 393,
+        "safeViewportHeight": 355,
+        "footerHeight": 38,
+        "maxScrollTop": 19789,
+        "canScrollY": true,
+        "selectedIndex": 8,
+        "selectedRowTop": 312,
+        "selectedRowBottom": 352,
+        "selectedRowVisible": true,
+        "selectedRowAboveFooter": true,
+        "itemCount": 506
+      },
+      "resizePressure": {
+        "overflowY": true,
+        "hiddenContentHeight": 19751,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1779073325168-995fca",
+        "promptType": "none",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "ScriptList",
+          "family": "MainMenu",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "OptionalInfoPanel",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "MainMenuActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "scriptList",
+          "nativeFooterSurface": "script_list"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "script_list",
+          "requestedSurface": "script_list",
+          "activeSurface": "script_list",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "buttonCount": 3,
+          "buttons": [
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Open Quick Terminal",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "ai",
+              "key": "⌘↵",
+              "label": "Agent Chat",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "Agent Chat",
+        "choiceCount": 489,
+        "visibleChoiceCount": 494,
+        "selectedIndex": 8,
+        "selectedValue": "Quick Terminal",
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "",
+          "chips": []
+        },
+        "rootFileSearch": {
+          "query": "",
+          "mode": null,
+          "loading": false,
+          "visibleLoading": false,
+          "generation": 0,
+          "visibleResultCount": 0,
+          "cacheEntryCount": 0,
+          "cacheResultCount": 0
+        },
+        "mainListScroll": {
+          "scrollTop": 0,
+          "scrollTopItem": 0,
+          "scrollTopOffset": 0,
+          "contentHeight": 20144,
+          "viewportHeight": 393,
+          "footerHeight": 38,
+          "safeViewportHeight": 355,
+          "maxScrollTop": 19789,
+          "selectedIndex": 8,
+          "selectedRowTop": 312,
+          "selectedRowBottom": 352,
+          "selectedRowVisible": true,
+          "selectedRowAboveFooter": true,
+          "itemCount": 506
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 3,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": false,
+                  "idFingerprint": null,
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": false,
+              "display": null,
+              "status": "NotConfigured",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13710,
+              "modifiedMs": 1779061296497
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "cleanup": {
+            "captureActive": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "after": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "ok",
+      "session": "dt026-actions-agent-chat-preference-1779073250",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 515,
+          "y": 171,
+          "width": 480,
+          "height": 440
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 480,
+          "height": 440,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 480,
+            "height": 440
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "windowFocused": true,
+      "windowVisible": true,
+      "focusedSemanticId": "input:filter",
+      "selectedSemanticId": "choice:8:dictate-here",
+      "focusedNode": {
+        "semanticId": "input:filter",
+        "type": "input",
+        "value": "Agent Chat",
+        "focused": true
+      },
+      "selectedNode": {
+        "semanticId": "choice:8:dictate-here",
+        "type": "choice",
+        "text": "Dictate Here",
+        "value": "Dictate Here",
+        "selected": true,
+        "index": 8,
+        "role": "row",
+        "kind": "built-in",
+        "source": "commands",
+        "selectable": true
+      },
+      "activeFooter": {
+        "schemaVersion": 1,
+        "owner": "native",
+        "expectedSurface": "script_list",
+        "requestedSurface": "script_list",
+        "activeSurface": "script_list",
+        "nativeFooterHostInstalled": true,
+        "gpuiFallbackVisible": false,
+        "buttonCount": 3,
+        "buttons": [
+          {
+            "action": "run",
+            "key": "↵",
+            "label": "Start Dictation Here",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "ai",
+            "key": "⌘↵",
+            "label": "Agent Chat",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          },
+          {
+            "action": "actions",
+            "key": "⌘K",
+            "label": "Actions",
+            "enabled": true,
+            "selected": false,
+            "actionDisabled": null
+          }
+        ],
+        "mismatch": null
+      },
+      "keyboardOwner": {
+        "inputValue": "Agent Chat",
+        "promptType": "none",
+        "surfaceKind": "ScriptList",
+        "inputOwnership": "LauncherFilter",
+        "keyboardPolicy": "LauncherListKeyboard"
+      },
+      "missingPrimitives": [],
+      "warnings": [],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "ok",
+      "session": "dt026-actions-agent-chat-preference-1779073250",
+      "requestedTarget": {
+        "selector": {
+          "type": "main"
+        },
+        "strict": true,
+        "expectedSurfaceKind": "ScriptList"
+      },
+      "target": {
+        "automationId": "main",
+        "stableTargetId": "main",
+        "targetKind": "Main",
+        "hostKind": null,
+        "parentAutomationId": null,
+        "openerAutomationId": null,
+        "surfaceKind": "ScriptList",
+        "appViewVariant": "ScriptList",
+        "nativeFooterSurface": "script_list",
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": {
+          "x": 515,
+          "y": 171,
+          "width": 480,
+          "height": 440
+        },
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": 480,
+          "height": 440,
+          "targetBoundsInScreenshot": {
+            "x": 0,
+            "y": 0,
+            "width": 480,
+            "height": 440
+          },
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": true,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": 37,
+        "scrollTopItem": 1,
+        "contentHeight": 20144,
+        "viewportHeight": 393,
+        "safeViewportHeight": 355,
+        "footerHeight": 38,
+        "maxScrollTop": 19789,
+        "canScrollY": true,
+        "selectedIndex": 9,
+        "selectedRowTop": 315,
+        "selectedRowBottom": 355,
+        "selectedRowVisible": true,
+        "selectedRowAboveFooter": true,
+        "itemCount": 506
+      },
+      "resizePressure": {
+        "overflowY": true,
+        "hiddenContentHeight": 19751,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1779073326661-89c703",
+        "promptType": "none",
+        "surfaceContract": {
+          "schemaVersion": 1,
+          "surfaceKind": "ScriptList",
+          "family": "MainMenu",
+          "inputOwnership": "LauncherFilter",
+          "previewRole": "OptionalInfoPanel",
+          "focusPolicy": "LauncherFilterFocus",
+          "keyboardPolicy": "LauncherListKeyboard",
+          "actionsPolicy": "MainMenuActions",
+          "proofPolicy": "StateAndElementsProof",
+          "visualPolicy": "CompactLauncherVisual",
+          "automationSemanticSurface": "scriptList",
+          "nativeFooterSurface": "script_list"
+        },
+        "activeFooter": {
+          "schemaVersion": 1,
+          "owner": "native",
+          "expectedSurface": "script_list",
+          "requestedSurface": "script_list",
+          "activeSurface": "script_list",
+          "nativeFooterHostInstalled": true,
+          "gpuiFallbackVisible": false,
+          "buttonCount": 3,
+          "buttons": [
+            {
+              "action": "run",
+              "key": "↵",
+              "label": "Start Dictation Here",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "ai",
+              "key": "⌘↵",
+              "label": "Agent Chat",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            },
+            {
+              "action": "actions",
+              "key": "⌘K",
+              "label": "Actions",
+              "enabled": true,
+              "selected": false,
+              "actionDisabled": null
+            }
+          ],
+          "mismatch": null
+        },
+        "inputValue": "Agent Chat",
+        "choiceCount": 489,
+        "visibleChoiceCount": 494,
+        "selectedIndex": 9,
+        "selectedValue": "Dictate Here",
+        "isFocused": true,
+        "windowVisible": true,
+        "miniAi": {
+          "visible": false,
+          "promptId": null,
+          "mainWindowMode": "mini",
+          "draftLen": 0,
+          "pendingSubmit": false,
+          "handoffSource": "mini_ai_launcher",
+          "returnOrigin": "scriptList",
+          "lastCloseSource": null
+        },
+        "filterInputDecorations": {
+          "text": "",
+          "chips": []
+        },
+        "rootFileSearch": {
+          "query": "",
+          "mode": null,
+          "loading": false,
+          "visibleLoading": false,
+          "generation": 0,
+          "visibleResultCount": 0,
+          "cacheEntryCount": 0,
+          "cacheResultCount": 0
+        },
+        "mainListScroll": {
+          "scrollTop": 37,
+          "scrollTopItem": 1,
+          "scrollTopOffset": 5,
+          "contentHeight": 20144,
+          "viewportHeight": 393,
+          "footerHeight": 38,
+          "safeViewportHeight": 355,
+          "maxScrollTop": 19789,
+          "selectedIndex": 9,
+          "selectedRowTop": 315,
+          "selectedRowBottom": 355,
+          "selectedRowVisible": true,
+          "selectedRowAboveFooter": true,
+          "itemCount": 506
+        },
+        "dictation": {
+          "schemaVersion": 1,
+          "source": "runtime.dictation.automationState",
+          "passive": true,
+          "redacted": true,
+          "generation": 1,
+          "recordingStateGeneration": 1,
+          "isRecording": false,
+          "phase": "idle",
+          "target": null,
+          "targetLabel": null,
+          "elapsedMs": null,
+          "audioLevels": {
+            "available": false,
+            "bars": [],
+            "barCount": 0,
+            "source": "runtime.session.lastBars",
+            "stopReason": "not recording"
+          },
+          "setup": {
+            "ready": true,
+            "model": {
+              "status": "available",
+              "generation": 1,
+              "source": "parakeetModelAvailability"
+            },
+            "microphone": {
+              "permissionStatus": "Granted",
+              "status": "ready",
+              "deviceSnapshot": {
+                "available": true,
+                "deviceCount": 3,
+                "defaultDevice": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual"
+                },
+                "selected": {
+                  "labelFingerprint": "fnv1a64:d132e98fb83bff35",
+                  "idFingerprint": "fnv1a64:0ea48593437fd49d",
+                  "transport": "Virtual",
+                  "fellBack": false
+                },
+                "savedPreference": {
+                  "configured": false,
+                  "idFingerprint": null,
+                  "resolved": true
+                },
+                "rawDeviceIdsRedacted": true,
+                "deviceLabelsReturned": false
+              },
+              "generation": 1,
+              "source": "passiveAVFoundationEnumeration",
+              "noPermissionPrompt": true
+            },
+            "hotkey": {
+              "enabled": true,
+              "configured": false,
+              "display": null,
+              "status": "NotConfigured",
+              "generation": 1,
+              "source": "config.dictationHotkey"
+            },
+            "configFingerprint": {
+              "pathFingerprint": "fnv1a64:2937adb9e9e825ed",
+              "len": 13710,
+              "modifiedMs": 1779061296497
+            }
+          },
+          "lastDelivery": null,
+          "deliveryReceiptAvailable": false,
+          "cleanup": {
+            "captureActive": false,
+            "transcriberCached": false,
+            "generation": 1,
+            "source": "runtime.dictation.cleanupState"
+          },
+          "safety": {
+            "noMicrophoneCaptureStarted": true,
+            "noSystemSettingsOpened": true,
+            "noTccMutation": true,
+            "noTranscriptContent": true,
+            "rawDeviceIdsRedacted": true,
+            "deviceLabelsReturned": false
+          }
+        }
+      }
+    }
+  },
+  "warnings": [],
+  "errors": []
+}

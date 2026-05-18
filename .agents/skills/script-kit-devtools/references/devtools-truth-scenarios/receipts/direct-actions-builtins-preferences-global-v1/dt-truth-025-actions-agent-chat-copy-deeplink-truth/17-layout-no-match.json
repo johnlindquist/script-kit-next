@@ -1,0 +1,296 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.layout",
+  "command": "layout.measure",
+  "classification": "ok",
+  "session": "dt025-actions-agent-chat-deeplink-1779072944",
+  "include": [
+    "nodes",
+    "regions",
+    "scroll",
+    "anchors",
+    "resize",
+    "overlaps"
+  ],
+  "limit": 200,
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 595,
+      "y": 215,
+      "width": 320,
+      "height": 68
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 68,
+      "targetBoundsInScreenshot": {
+        "x": 80,
+        "y": 44,
+        "width": 320,
+        "height": 68
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "promptType": "actionsDialog",
+  "timestamp": "2026-05-18T02:59:58.006235+00:00",
+  "componentCount": 3,
+  "window": {
+    "rect": {
+      "x": 595,
+      "y": 215,
+      "width": 320,
+      "height": 68
+    },
+    "visible": null,
+    "focused": null
+  },
+  "viewport": {
+    "clientWidth": 320,
+    "clientHeight": 68,
+    "contentWidth": 320,
+    "contentHeight": 68,
+    "scrollWidth": 320,
+    "scrollHeight": 68,
+    "canScrollX": false,
+    "canScrollY": false,
+    "scrollTop": null,
+    "maxScrollTop": 0,
+    "overflowPolicyY": "hidden"
+  },
+  "pressure": {
+    "overflowY": false,
+    "hiddenContentHeight": 0,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "footerOverlapCount": 0,
+    "inputOverlapCount": 0,
+    "pressureScore": 0
+  },
+  "viewportRect": {
+    "x": 0,
+    "y": 0,
+    "width": 320,
+    "height": 68
+  },
+  "windowRect": {
+    "x": 595,
+    "y": 215,
+    "width": 320,
+    "height": 68
+  },
+  "regions": [
+    {
+      "name": "ActionsDialog",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 68
+      }
+    },
+    {
+      "name": "ActionsSearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 36
+      }
+    },
+    {
+      "name": "ActionsList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 30
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "name": "ActionsDialog",
+      "type": "container",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 68
+      },
+      "depth": 0,
+      "parent": null,
+      "children": [],
+      "explanation": "Actions dialog popup root measured from the registered automation target bounds.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsDialog",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 68
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+      }
+    },
+    {
+      "name": "ActionsSearchInput",
+      "type": "input",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "width": 320,
+        "height": 36
+      },
+      "depth": 1,
+      "parent": "ActionsDialog",
+      "children": [],
+      "explanation": "Search/filter input owned by the ActionsDialog route.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsSearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 36
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Search/filter input owned by the ActionsDialog route."
+      }
+    },
+    {
+      "name": "ActionsList",
+      "type": "list",
+      "bounds": {
+        "x": 0,
+        "y": 36,
+        "width": 320,
+        "height": 30
+      },
+      "depth": 1,
+      "parent": "ActionsDialog",
+      "children": [],
+      "explanation": "Scrollable grouped actions list viewport.",
+      "clipped": false,
+      "raw": {
+        "name": "ActionsList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Scrollable grouped actions list viewport."
+      }
+    }
+  ],
+  "overlaps": [],
+  "resizePressure": {
+    "windowCanGrow": null,
+    "overflowY": false,
+    "desiredContentHeight": 68,
+    "measuredContentHeight": 68,
+    "clippedNodeCount": 0,
+    "overlapCount": 0,
+    "pressureScore": 0
+  },
+  "missingPrimitives": [],
+  "warnings": [],
+  "errors": [],
+  "rawLayout": {
+    "type": "layoutInfoResult",
+    "requestId": "devtools-layout-measure-1779073197969-6f9534",
+    "windowWidth": 320,
+    "windowHeight": 68,
+    "promptType": "actionsDialog",
+    "components": [
+      {
+        "name": "ActionsDialog",
+        "type": "container",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 68
+        },
+        "flex": {
+          "direction": "column"
+        },
+        "depth": 0,
+        "explanation": "Actions dialog popup root measured from the registered automation target bounds."
+      },
+      {
+        "name": "ActionsSearchInput",
+        "type": "input",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 36
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Search/filter input owned by the ActionsDialog route."
+      },
+      {
+        "name": "ActionsList",
+        "type": "list",
+        "bounds": {
+          "x": 0,
+          "y": 36,
+          "width": 320,
+          "height": 30
+        },
+        "depth": 1,
+        "parent": "ActionsDialog",
+        "explanation": "Scrollable grouped actions list viewport."
+      }
+    ],
+    "timestamp": "2026-05-18T02:59:58.006235+00:00"
+  }
+}

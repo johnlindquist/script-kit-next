@@ -15,6 +15,9 @@ const INPUT_FOCUS_RESIZE_MANIFEST: &str = include_str!(
 const GLOBAL_BUILTINS_MANIFEST: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/slice.manifest.json"
 );
+const BUILTINS_PREFERENCES_GLOBAL_MANIFEST: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/slice.manifest.json"
+);
 const DT_011: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-binding-v1/dt-truth-011-actions-parent-filter-mutates-while-open/scenario.receipt.json"
 );
@@ -53,6 +56,18 @@ const DT_023_GLOBAL_BUILTINS: &str = include_str!(
 );
 const DT_024_GLOBAL_BUILTINS: &str = include_str!(
     "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-global-builtins-v1/dt-truth-024-actions-builtin-clipboard-history-no-favorite/scenario.receipt.json"
+);
+const DT_025_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-025-actions-agent-chat-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_026_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-026-actions-agent-chat-preference-plan-truth/scenario.receipt.json"
+);
+const DT_027_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-027-actions-clipboard-history-copy-deeplink-truth/scenario.receipt.json"
+);
+const DT_028_BUILTINS_PREFERENCES_GLOBAL: &str = include_str!(
+    "../.agents/skills/script-kit-devtools/references/devtools-truth-scenarios/receipts/direct-actions-builtins-preferences-global-v1/dt-truth-028-actions-global-show-logs-copy-gated/scenario.receipt.json"
 );
 
 const ALLOWED_PRIMITIVES: &[&str] = &[
@@ -914,4 +929,211 @@ fn direct_actions_global_builtins_records_submit_gate_and_selection_copy() {
         clipboard["truthModel"]["sideEffectClass"],
         "copy-suppression"
     );
+}
+
+#[test]
+fn direct_actions_builtins_preferences_global_slice_has_exact_scenarios_and_no_runner() {
+    let manifest = parse(BUILTINS_PREFERENCES_GLOBAL_MANIFEST);
+    assert_eq!(manifest["schemaVersion"], 1);
+    assert_eq!(
+        manifest["sliceId"],
+        "direct-actions-builtins-preferences-global-v1"
+    );
+    assert_eq!(manifest["oracleSession"], "actions-next-builtins-batch-2");
+    assert_eq!(manifest["executor"], "direct-devtools-primitives");
+    assert_eq!(manifest["hasRunner"], false);
+    assert_eq!(manifest["forbiddenExecutorsUsed"], false);
+    assert_eq!(manifest["summary"]["pass"], 4);
+    assert_eq!(manifest["summary"]["fail"], 0);
+    assert_eq!(manifest["summary"]["blockedByMissingPrimitive"], 0);
+    assert_eq!(manifest["summary"]["blockedByUnsafeOperation"], 0);
+
+    let scenario_ids = manifest["scenarioIds"]
+        .as_array()
+        .expect("scenarioIds must be an array")
+        .iter()
+        .map(|value| value.as_str().expect("scenario id must be string"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        scenario_ids,
+        vec![
+            "dt-truth-025-actions-agent-chat-copy-deeplink-truth",
+            "dt-truth-026-actions-agent-chat-preference-plan-truth",
+            "dt-truth-027-actions-clipboard-history-copy-deeplink-truth",
+            "dt-truth-028-actions-global-show-logs-copy-gated",
+        ]
+    );
+
+    for forbidden in FORBIDDEN_EXECUTORS {
+        assert!(
+            !BUILTINS_PREFERENCES_GLOBAL_MANIFEST.contains(forbidden),
+            "manifest must not reference forbidden executor {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn direct_actions_builtins_preferences_global_receipts_have_truth_schema_safety_and_primitives() {
+    for (expected_id, raw) in [
+        (
+            "dt-truth-025-actions-agent-chat-copy-deeplink-truth",
+            DT_025_BUILTINS_PREFERENCES_GLOBAL,
+        ),
+        (
+            "dt-truth-026-actions-agent-chat-preference-plan-truth",
+            DT_026_BUILTINS_PREFERENCES_GLOBAL,
+        ),
+        (
+            "dt-truth-027-actions-clipboard-history-copy-deeplink-truth",
+            DT_027_BUILTINS_PREFERENCES_GLOBAL,
+        ),
+        (
+            "dt-truth-028-actions-global-show-logs-copy-gated",
+            DT_028_BUILTINS_PREFERENCES_GLOBAL,
+        ),
+    ] {
+        for forbidden in FORBIDDEN_EXECUTORS {
+            assert!(
+                !raw.contains(forbidden),
+                "{expected_id} must not reference forbidden executor {forbidden}"
+            );
+        }
+
+        let receipt = parse(raw);
+        assert_eq!(receipt["schemaVersion"], 1);
+        assert_eq!(receipt["scenarioId"], expected_id);
+        assert_eq!(receipt["result"], "pass");
+        assert_eq!(receipt["executor"], "direct-devtools-primitives");
+        assert_eq!(receipt["executorProvenance"]["hasRunner"], false);
+
+        let truth_model = receipt["truthModel"]
+            .as_object()
+            .expect("truthModel must be object");
+        for field in REQUIRED_TRUTH_MODEL_FIELDS {
+            assert!(
+                truth_model.contains_key(*field),
+                "{expected_id} missing truthModel.{field}"
+            );
+        }
+
+        for safety_field in [
+            "destructiveOperationObserved",
+            "systemPasteboardChanged",
+            "filesystemMutationOutsideSandbox",
+            "externalActivation",
+        ] {
+            assert_eq!(
+                receipt["safety"][safety_field], false,
+                "{expected_id} must preserve non-destructive safety field {safety_field}"
+            );
+        }
+
+        let commands = receipt["executorProvenance"]["topLevelCommands"]
+            .as_array()
+            .expect("executorProvenance.topLevelCommands must be array");
+        assert!(!commands.is_empty(), "{expected_id} must record commands");
+        for command in commands {
+            let script = command_script(&command["argv"])
+                .expect("each command argv must include a script path");
+            assert!(
+                ALLOWED_PRIMITIVES.contains(&script),
+                "{expected_id} used non-allowed command path {script}"
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_builtins_preferences_global_records_expected_truth_checks() {
+    let expected = [
+        (
+            DT_025_BUILTINS_PREFERENCES_GLOBAL,
+            vec![
+                "agentChatParentSelectionStable",
+                "copyDeeplinkActionVisible",
+                "copyDeeplinkDescriptionMatchesBuiltInName",
+                "copyDeeplinkSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_026_BUILTINS_PREFERENCES_GLOBAL,
+            vec![
+                "aliasPlanIsMutuallyExclusive",
+                "shortcutPlanIsMutuallyExclusive",
+                "aliasCopyMatchesPlan",
+                "shortcutCopyMatchesPlan",
+                "preferenceSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_027_BUILTINS_PREFERENCES_GLOBAL,
+            vec![
+                "clipboardHistoryParentSelectionStable",
+                "clipboardHistoryDeepLinkVisible",
+                "clipboardHistoryDeepLinkDescriptionMatchesName",
+                "deepLinkSubmitBlockedWithoutAllowSubmit",
+            ],
+        ),
+        (
+            DT_028_BUILTINS_PREFERENCES_GLOBAL,
+            vec![
+                "showLogsGlobalActionVisible",
+                "showLogsDescriptionMatchesGlobalCopy",
+                "showLogsSubmitBlockedWithoutAllowSubmit",
+                "escapeDismissLeavesParentInspectable",
+            ],
+        ),
+    ];
+
+    for (raw, names) in expected {
+        let receipt = parse(raw);
+        let checks = receipt["truthChecks"]
+            .as_array()
+            .expect("truthChecks must be array");
+        for name in names {
+            assert!(
+                checks
+                    .iter()
+                    .any(|check| check["name"] == name && check["status"] == "pass"),
+                "{} missing passing truth check {name}",
+                receipt["scenarioId"]
+            );
+        }
+    }
+}
+
+#[test]
+fn direct_actions_builtins_preferences_global_records_copy_and_submit_truth() {
+    let agent_chat_deep = parse(DT_025_BUILTINS_PREFERENCES_GLOBAL);
+    assert_eq!(
+        agent_chat_deep["truthModel"]["visibleLabel"],
+        "Copy Deep Link"
+    );
+    assert_eq!(agent_chat_deep["truthModel"]["actionId"], "copy_deeplink");
+    assert_eq!(
+        agent_chat_deep["truthModel"]["parentSubjectId"],
+        "choice:22:agent-chat"
+    );
+    assert_eq!(agent_chat_deep["safety"]["submitAttempted"], false);
+
+    let preference = parse(DT_026_BUILTINS_PREFERENCES_GLOBAL);
+    assert_eq!(preference["truthModel"]["actionId"], "add_shortcut");
+    assert_eq!(preference["truthModel"]["handlerId"], "shortcut_alias");
+    assert_eq!(
+        preference["truthModel"]["sideEffectClass"],
+        "preference-mutation"
+    );
+
+    let clipboard = parse(DT_027_BUILTINS_PREFERENCES_GLOBAL);
+    assert_eq!(clipboard["truthModel"]["visibleLabel"], "Copy Deep Link");
+    assert_eq!(
+        clipboard["truthModel"]["parentSubjectId"],
+        "choice:6:clipboard-history"
+    );
+
+    let logs = parse(DT_028_BUILTINS_PREFERENCES_GLOBAL);
+    assert_eq!(logs["truthModel"]["visibleLabel"], "Show Logs");
+    assert_eq!(logs["truthModel"]["actionId"], "view_logs");
+    assert_eq!(logs["truthModel"]["sideEffectClass"], "ui-toggle");
+    assert_eq!(logs["safety"]["submitAttempted"], false);
 }

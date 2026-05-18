@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.focus",
+  "command": "focus.inspect",
+  "classification": "ok",
+  "session": "dt026-actions-agent-chat-preference-1779073250",
+  "requestedTarget": {
+    "selector": {
+      "type": "main"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ScriptList"
+  },
+  "target": {
+    "automationId": "main",
+    "stableTargetId": "main",
+    "targetKind": "Main",
+    "hostKind": null,
+    "parentAutomationId": null,
+    "openerAutomationId": null,
+    "surfaceKind": "ScriptList",
+    "appViewVariant": "ScriptList",
+    "nativeFooterSurface": "script_list",
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 515,
+      "y": 171,
+      "width": 480,
+      "height": 440
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": {
+        "x": 0,
+        "y": 0,
+        "width": 480,
+        "height": 440
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windowFocused": false,
+  "windowVisible": false,
+  "focusedSemanticId": "input:filter",
+  "selectedSemanticId": "choice:22:agent-chat",
+  "focusedNode": {
+    "semanticId": "input:filter",
+    "type": "input",
+    "value": "Agent Chat",
+    "focused": true
+  },
+  "selectedNode": {
+    "semanticId": "choice:22:agent-chat",
+    "type": "choice",
+    "text": "Agent Chat",
+    "value": "Agent Chat",
+    "selected": true,
+    "index": 22,
+    "role": "row",
+    "kind": "built-in",
+    "source": "commands",
+    "selectable": true
+  },
+  "activeFooter": {
+    "schemaVersion": 1,
+    "owner": "prompt",
+    "expectedSurface": "script_list",
+    "requestedSurface": null,
+    "activeSurface": null,
+    "nativeFooterHostInstalled": false,
+    "gpuiFallbackVisible": true,
+    "buttonCount": 3,
+    "buttons": [
+      {
+        "action": "run",
+        "key": "↵",
+        "label": "Open Agent Chat",
+        "enabled": true,
+        "selected": false,
+        "actionDisabled": null
+      },
+      {
+        "action": "ai",
+        "key": "⌘↵",
+        "label": "Agent Chat",
+        "enabled": true,
+        "selected": false,
+        "actionDisabled": null
+      },
+      {
+        "action": "actions",
+        "key": "⌘K",
+        "label": "Actions",
+        "enabled": true,
+        "selected": false,
+        "actionDisabled": null
+      }
+    ],
+    "mismatch": null
+  },
+  "keyboardOwner": {
+    "inputValue": "Agent Chat",
+    "promptType": "none",
+    "surfaceKind": "ScriptList",
+    "inputOwnership": "LauncherFilter",
+    "keyboardPolicy": "LauncherListKeyboard"
+  },
+  "missingPrimitives": [],
+  "warnings": [
+    "window is visible but not focused"
+  ],
+  "errors": []
+}

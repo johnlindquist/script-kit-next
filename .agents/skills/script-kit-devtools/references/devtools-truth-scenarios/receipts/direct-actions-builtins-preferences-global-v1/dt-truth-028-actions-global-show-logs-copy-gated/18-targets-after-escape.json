@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.targets",
+  "command": "targets.list",
+  "session": "dt028-actions-show-logs-1779073468",
+  "classification": "ok",
+  "targetCount": 1,
+  "targets": [
+    {
+      "index": 0,
+      "automationId": "main",
+      "windowKind": "Main",
+      "title": "Script Kit",
+      "visible": true,
+      "focused": true,
+      "bounds": {
+        "x": 515,
+        "y": 171,
+        "width": 480,
+        "height": 440
+      },
+      "surfaceKind": null,
+      "appViewVariant": null,
+      "parentAutomationId": null,
+      "parentKind": null
+    }
+  ],
+  "sessionLifecycle": [],
+  "errors": []
+}

@@ -1,0 +1,749 @@
+{
+  "schemaVersion": 1,
+  "scenarioId": "dt-truth-027-actions-clipboard-history-copy-deeplink-truth",
+  "oracleSession": "actions-next-builtins-batch-2",
+  "scenarioLedgerOracleSession": "new-devtools-scenarios-plan",
+  "gitSha": "b8b79ee43fbc0a769965e25da48d66336a36789a",
+  "appBuild": "local-devtools-session",
+  "recordedAt": "2026-05-18T03:08:46.211Z",
+  "result": "pass",
+  "executor": "direct-devtools-primitives",
+  "session": "dt027-actions-clipboard-deeplink-1779073395",
+  "executorProvenance": {
+    "hasRunner": false,
+    "topLevelCommands": [
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "targets.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--start",
+          "--show"
+        ],
+        "receiptRef": "00-main-start-show.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--text",
+          "Clipboard History"
+        ],
+        "receiptRef": "01-act-main-filter-clipboard-history.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-1.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-2.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-3.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-4.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-5.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList",
+          "--key",
+          "arrowdown"
+        ],
+        "receiptRef": "02-act-arrowdown-6.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "elements.snapshot",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "03-elements-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "focus.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "04-focus-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "text.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "05-text-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "06-layout-main-clipboard-history-selected.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.open-actions",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--main",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ScriptList"
+        ],
+        "receiptRef": "07-act-open-actions-clipboard-history-parent.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/targets.ts",
+          "targets.list",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "08-targets-list-actions-open.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "09-actions-clipboard-history-unfiltered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "deep"
+        ],
+        "receiptRef": "10-act-filter-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "11-actions-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/elements.ts",
+          "elements.snapshot",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "12-elements-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/focus.ts",
+          "focus.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "13-focus-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/text.ts",
+          "text.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "14-text-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "15-layout-deep.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "zzzz-clipboard-deep-no-match"
+        ],
+        "receiptRef": "16-act-filter-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "17-layout-no-match.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.set-input",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--text",
+          "deep"
+        ],
+        "receiptRef": "18-act-filter-deep-recover.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/layout.ts",
+          "layout.measure",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "19-layout-deep-recovered.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/act.ts",
+          "act.key",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--strict",
+          "--surface",
+          "ActionsDialog",
+          "--key",
+          "enter"
+        ],
+        "receiptRef": "20-act-enter-without-allow-submit.json"
+      },
+      {
+        "argv": [
+          "bun",
+          "scripts/devtools/actions.ts",
+          "actions.inspect",
+          "--session",
+          "dt027-actions-clipboard-deeplink-1779073395",
+          "--target-kind",
+          "actionsDialog",
+          "--strict",
+          "--surface",
+          "ActionsDialog"
+        ],
+        "receiptRef": "21-actions-after-blocked-enter.json"
+      }
+    ],
+    "forbiddenExecutorMatches": []
+  },
+  "userPath": [
+    {
+      "step": 1,
+      "intent": "filter main launcher to Clipboard History",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ScriptList",
+      "inputSummary": "Clipboard History",
+      "visibleResult": "Clipboard History row visible and selected",
+      "receiptRef": "03-elements-main-clipboard-history-selected.json"
+    },
+    {
+      "step": 2,
+      "intent": "open actions and filter deep-link copy",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ActionsDialog",
+      "inputSummary": "deep",
+      "visibleResult": "Copy Deep Link selected",
+      "receiptRef": "12-elements-deep.json"
+    },
+    {
+      "step": 3,
+      "intent": "prove unsafe Enter does not copy",
+      "controlChannel": "direct-primitive",
+      "targetSurface": "ActionsDialog",
+      "inputSummary": "Enter without allow-submit",
+      "visibleResult": "blocked before dispatch",
+      "receiptRef": "20-act-enter-without-allow-submit.json"
+    }
+  ],
+  "primitiveReceipts": [
+    {
+      "step": 1,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.inspect",
+      "targetSurface": "ScriptList",
+      "receiptRef": "00-main-start-show.json",
+      "classification": "ok"
+    },
+    {
+      "step": 2,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ScriptList",
+      "receiptRef": "01-act-main-filter-clipboard-history.json",
+      "classification": "ok"
+    },
+    {
+      "step": 3,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-1.json",
+      "classification": "ok"
+    },
+    {
+      "step": 4,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-2.json",
+      "classification": "ok"
+    },
+    {
+      "step": 5,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-3.json",
+      "classification": "ok"
+    },
+    {
+      "step": 6,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-4.json",
+      "classification": "ok"
+    },
+    {
+      "step": 7,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-5.json",
+      "classification": "ok"
+    },
+    {
+      "step": 8,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ScriptList",
+      "receiptRef": "02-act-arrowdown-6.json",
+      "classification": "ok"
+    },
+    {
+      "step": 9,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ScriptList",
+      "receiptRef": "03-elements-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 10,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "ScriptList",
+      "receiptRef": "04-focus-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 11,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "05-text-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 12,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ScriptList",
+      "receiptRef": "06-layout-main-clipboard-history-selected.json",
+      "classification": "ok"
+    },
+    {
+      "step": 13,
+      "tool": "script-kit-devtools.act",
+      "command": "act.open-actions",
+      "targetSurface": "ScriptList",
+      "receiptRef": "07-act-open-actions-clipboard-history-parent.json",
+      "classification": "ok"
+    },
+    {
+      "step": 14,
+      "tool": "script-kit-devtools.targets",
+      "command": "targets.list",
+      "targetSurface": null,
+      "receiptRef": "08-targets-list-actions-open.json",
+      "classification": "ok"
+    },
+    {
+      "step": 15,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "09-actions-clipboard-history-unfiltered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 16,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "10-act-filter-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 17,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "11-actions-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 18,
+      "tool": "script-kit-devtools.elements",
+      "command": "elements.snapshot",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "12-elements-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 19,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "13-focus-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 20,
+      "tool": "script-kit-devtools.text",
+      "command": "text.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "14-text-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 21,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "15-layout-deep.json",
+      "classification": "ok"
+    },
+    {
+      "step": 22,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "16-act-filter-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 23,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "17-layout-no-match.json",
+      "classification": "ok"
+    },
+    {
+      "step": 24,
+      "tool": "script-kit-devtools.act",
+      "command": "act.set-input",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "18-act-filter-deep-recover.json",
+      "classification": "ok"
+    },
+    {
+      "step": 25,
+      "tool": "script-kit-devtools.layout",
+      "command": "layout.measure",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "19-layout-deep-recovered.json",
+      "classification": "ok"
+    },
+    {
+      "step": 26,
+      "tool": "script-kit-devtools.act",
+      "command": "act.key",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "20-act-enter-without-allow-submit.json",
+      "classification": "blocked-by-unsafe-operation"
+    },
+    {
+      "step": 27,
+      "tool": "script-kit-devtools.actions",
+      "command": "actions.inspect",
+      "targetSurface": "ActionsDialog",
+      "receiptRef": "21-actions-after-blocked-enter.json",
+      "classification": "ok"
+    }
+  ],
+  "truthModel": {
+    "routeGeneration": null,
+    "focusOwner": "input:actions-search",
+    "selectedSemanticId": "choice:0:copy_deeplink",
+    "visibleLabel": "Copy Deep Link",
+    "actionId": "copy_deeplink",
+    "handlerId": "file.copy_deeplink",
+    "sideEffectClass": "pasteboard-copy",
+    "parentSubjectId": "choice:6:clipboard-history",
+    "footerIntent": null,
+    "disabledReason": null,
+    "targetSurface": "ActionsDialog",
+    "layoutGeneration": null
+  },
+  "truthChecks": [
+    {
+      "name": "clipboardHistoryParentSelectionStable",
+      "expected": "parent row label is Clipboard History",
+      "actual": "choice:6:clipboard-history selected=true",
+      "status": "pass"
+    },
+    {
+      "name": "clipboardHistoryDeepLinkVisible",
+      "expected": "visible row label is Copy Deep Link",
+      "actual": "choice:0:copy_deeplink label=Copy Deep Link",
+      "status": "pass"
+    },
+    {
+      "name": "clipboardHistoryDeepLinkDescriptionMatchesName",
+      "expected": "description is Copy scriptkit://run/clipboard-history URL to clipboard",
+      "actual": "source share_action_copy DirectRunDeepLink plus runtime action id copy_deeplink",
+      "status": "pass"
+    },
+    {
+      "name": "clipboardHistoryDeepLinkNotAgentChat",
+      "expected": "description does not contain agent-chat",
+      "actual": "parentSubjectId=choice:6:clipboard-history",
+      "status": "pass"
+    },
+    {
+      "name": "clipboardHistoryDeepLinkNotGenericShare",
+      "expected": "visible label is not Share",
+      "actual": "Copy Deep Link",
+      "status": "pass"
+    },
+    {
+      "name": "deepLinkSubmitBlockedWithoutAllowSubmit",
+      "expected": "Enter without --allow-submit is blocked before dispatch",
+      "actual": "blocked-by-unsafe-operation submitAttempted=false",
+      "status": "pass"
+    },
+    {
+      "name": "filterShrinkRecoveryKeepsParentIdentity",
+      "expected": "no-match then restore does not change parent target",
+      "actual": "actions-dialog parent=main before/after recovery",
+      "status": "pass"
+    }
+  ],
+  "safety": {
+    "destructiveOperationObserved": false,
+    "systemPasteboardChanged": false,
+    "filesystemMutationOutsideSandbox": false,
+    "externalActivation": false,
+    "submitAllowed": false,
+    "submitAttempted": false,
+    "nativeEscalation": false,
+    "blockedClassification": "blocked-by-unsafe-operation"
+  },
+  "notes": [
+    "Recorded with direct DevTools primitives only; action submissions were intentionally blocked without --allow-submit.",
+    "Runtime action descriptions are redacted to fingerprints, so copy text expectations are backed by focused source-contract tests plus visible runtime labels/action ids."
+  ]
+}

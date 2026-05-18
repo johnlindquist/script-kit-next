@@ -206,15 +206,47 @@ fn should_auto_close_actions_window(
     !parent_window_focused && !actions_window_active
 }
 
-fn actions_parent_window_focused(parent_automation_id: &str) -> bool {
-    match crate::windows::automation_window_by_id(parent_automation_id).map(|info| info.kind) {
-        Some(AutomationWindowKind::Main) => platform::is_main_window_focused(),
-        Some(AutomationWindowKind::Notes) => platform::is_notes_window_focused(),
-        Some(_) => crate::windows::focused_automation_window_id()
-            .as_deref()
-            .is_some_and(|focused_id| focused_id == parent_automation_id),
-        None => false,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActionsParentFocusState {
+    AutomationRegistryFocused,
+    PlatformFocused,
+    Unfocused,
+}
+
+impl ActionsParentFocusState {
+    fn is_focused(self) -> bool {
+        matches!(
+            self,
+            ActionsParentFocusState::AutomationRegistryFocused
+                | ActionsParentFocusState::PlatformFocused
+        )
     }
+}
+
+fn actions_parent_window_focus_state(parent_automation_id: &str) -> ActionsParentFocusState {
+    if crate::windows::focused_automation_window_id()
+        .as_deref()
+        .is_some_and(|focused_id| focused_id == parent_automation_id)
+    {
+        return ActionsParentFocusState::AutomationRegistryFocused;
+    }
+
+    let platform_focused =
+        match crate::windows::automation_window_by_id(parent_automation_id).map(|info| info.kind) {
+            Some(AutomationWindowKind::Main) => platform::is_main_window_focused(),
+            Some(AutomationWindowKind::Notes) => platform::is_notes_window_focused(),
+            Some(_) | None => false,
+        };
+
+    if platform_focused {
+        ActionsParentFocusState::PlatformFocused
+    } else {
+        ActionsParentFocusState::Unfocused
+    }
+}
+
+fn actions_parent_window_focused(parent_automation_id: &str) -> bool {
+    actions_parent_window_focus_state(parent_automation_id).is_focused()
 }
 
 #[inline]
@@ -323,6 +355,11 @@ impl ActionsWindow {
                 "ACTIONS",
                 &format!("ACTIONS_WINDOW_LIFECYCLE defer_close_executing: reason={reason}"),
             );
+            clear_actions_popup_automation_snapshot();
+            crate::windows::automation_surface_collector::remove_actions_dialog_snapshot(
+                "actions-dialog",
+            );
+            crate::windows::remove_automation_window("actions-dialog");
             clear_actions_window_handle(reason);
             window.remove_window();
         });
