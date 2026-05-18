@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.focus",
+  "command": "focus.inspect",
+  "classification": "ok",
+  "session": "dt-truth-013-target-lifecycle-1779065154",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 214,
+      "y": 213,
+      "width": 320,
+      "height": 402
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 402,
+      "targetBoundsInScreenshot": {
+        "x": 80,
+        "y": 44,
+        "width": 320,
+        "height": 402
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "windowFocused": false,
+  "windowVisible": true,
+  "focusedSemanticId": "input:actions-search",
+  "selectedSemanticId": "choice:1:run_script",
+  "focusedNode": {
+    "semanticId": "input:actions-search",
+    "type": "input",
+    "value": "o",
+    "focused": true
+  },
+  "selectedNode": {
+    "semanticId": "choice:1:run_script",
+    "type": "choice",
+    "text": "Do in Current App",
+    "value": "run_script",
+    "selected": true,
+    "index": 1
+  },
+  "activeFooter": null,
+  "keyboardOwner": {
+    "inputValue": "",
+    "promptType": "actionsDialog",
+    "surfaceKind": null,
+    "inputOwnership": null,
+    "keyboardPolicy": null
+  },
+  "missingPrimitives": [],
+  "warnings": [
+    "window is visible but not focused"
+  ],
+  "errors": []
+}
