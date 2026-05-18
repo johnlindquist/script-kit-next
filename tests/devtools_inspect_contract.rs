@@ -407,6 +407,7 @@ fn actions_cli_reports_popup_route_geometry_shortcuts_and_gaps() {
         "openNotes",
         "parentOpenReceipt",
         "open-actions",
+        "--show",
         "actionsDialog",
         "state.actionsDialog",
         "attachedPopup",
