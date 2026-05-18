@@ -174,3 +174,18 @@ fn start_sends_startup_keepalive_before_waiting_for_ready() {
          succeeded so failed startup races are visible in receipts."
     );
 }
+
+#[test]
+fn session_start_reports_keep_actions_window_open_lifecycle() {
+    for needle in [
+        "SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN",
+        "keep_actions_window_open",
+        "keepActionsWindowOpen",
+        "session_env_mismatch",
+    ] {
+        assert!(
+            SESSION_SH.contains(needle),
+            "session lifecycle must expose keep-open state: {needle}"
+        );
+    }
+}

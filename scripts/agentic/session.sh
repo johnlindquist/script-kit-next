@@ -195,6 +195,10 @@ cmd_start() {
   local input_fifo="${sdir}/input"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
+  local keep_actions_window_open_requested=false
+  if [ "${SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN:-}" = "1" ]; then
+    keep_actions_window_open_requested=true
+  fi
 
   # Resume only if ALL components are healthy: app PID, forwarder PID, input FIFO, primary pipe
   if [ -f "${sdir}/pid" ]; then
@@ -224,6 +228,15 @@ cmd_start() {
     fi
 
     if [ "$can_resume" = true ]; then
+      local existing_keep_actions_window_open=false
+      if [ -f "${sdir}/keep_actions_window_open" ]; then
+        existing_keep_actions_window_open="$(cat "${sdir}/keep_actions_window_open")"
+      fi
+      if [ "$keep_actions_window_open_requested" = true ] \
+         && [ "$existing_keep_actions_window_open" != true ]; then
+        json_error "session_env_mismatch" "Session '${name}' exists but was not launched with SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN=1. Use a fresh session name or stop it explicitly."
+        return 1
+      fi
       cleanup_orphan_session_forwarders "$primary_pipe" "$input_fifo" "$old_fwd_pid"
       log "Resuming existing session '${name}' (pid ${old_pid})"
       json_envelope "ok" \
@@ -235,7 +248,8 @@ cmd_start() {
         "resumed:true" \
         "ready:true" \
         "readyWaitMs:0" \
-        "readyMarker:\"existing_session\""
+        "readyMarker:\"existing_session\"" \
+        "keepActionsWindowOpen:${existing_keep_actions_window_open}"
       return 0
     else
       log "Stale session '${name}': ${reason}. Cleaning up."
@@ -259,6 +273,7 @@ cmd_start() {
 
   # Create session directory and pipe
   mkdir -p "${sdir}"
+  printf '%s\n' "$keep_actions_window_open_requested" > "${sdir}/keep_actions_window_open"
   local pipe_path="${sdir}/pipe"
   local pid_path="${sdir}/pid"
 
@@ -348,7 +363,8 @@ cmd_start() {
     "ready:${ready}" \
     "readyWaitMs:${ready_wait_ms}" \
     "readyMarker:\"${ready_marker}\"" \
-    "startupKeepalive:${startup_keepalive}"
+    "startupKeepalive:${startup_keepalive}" \
+    "keepActionsWindowOpen:${keep_actions_window_open_requested}"
 }
 
 # --- send -------------------------------------------------------------------
@@ -747,6 +763,11 @@ cmd_status() {
   local pipe_writable="false"
   local forwarder_alive="false"
   local fwd_pid="0"
+  local keep_actions_window_open="false"
+
+  if [ -f "${sdir}/keep_actions_window_open" ]; then
+    keep_actions_window_open="$(cat "${sdir}/keep_actions_window_open")"
+  fi
 
   if [ -f "${sdir}/pid" ]; then
     pid="$(cat "${sdir}/pid")"
@@ -802,6 +823,7 @@ cmd_status() {
     "issues:${issues}" \
     "pipe:\"${pipe_path}\"" \
     "pipeWritable:${pipe_writable}" \
+    "keepActionsWindowOpen:${keep_actions_window_open}" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\""
 }
