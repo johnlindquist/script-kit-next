@@ -1,0 +1,290 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.elements",
+  "command": "elements.snapshot",
+  "classification": "ok",
+  "session": "dt023-actions-builtin-agent-chat-1779070509",
+  "requestedTarget": {
+    "selector": {
+      "type": "kind",
+      "kind": "actionsDialog"
+    },
+    "strict": true,
+    "expectedSurfaceKind": "ActionsDialog"
+  },
+  "target": {
+    "automationId": "actions-dialog",
+    "stableTargetId": "actions-dialog",
+    "targetKind": "ActionsDialog",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": {
+      "x": 595,
+      "y": 215,
+      "width": 320,
+      "height": 338
+    },
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": 320,
+      "height": 338,
+      "targetBoundsInScreenshot": {
+        "x": 80,
+        "y": 44,
+        "width": 320,
+        "height": 338
+      },
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": true,
+    "ambiguity": []
+  },
+  "semanticSurface": {
+    "surfaceKind": null,
+    "appViewVariant": null
+  },
+  "totalCount": 10,
+  "returnedCount": 10,
+  "truncated": false,
+  "focusedSemanticId": "input:actions-search",
+  "selectedSemanticId": "choice:0:run_script",
+  "duplicateSemanticIds": [],
+  "missingPrimitives": [
+    "elementBounds"
+  ],
+  "nodes": [
+    {
+      "semanticId": "input:actions-search",
+      "role": "input",
+      "type": "input",
+      "label": "",
+      "text": null,
+      "value": "",
+      "selected": null,
+      "focused": true,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "input:actions-search",
+        "type": "input",
+        "value": "",
+        "focused": true
+      }
+    },
+    {
+      "semanticId": "list:actions",
+      "role": "list",
+      "type": "list",
+      "label": "8 actions",
+      "text": "8 actions",
+      "value": null,
+      "selected": null,
+      "focused": null,
+      "index": null,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "list:actions",
+        "type": "list",
+        "text": "8 actions"
+      }
+    },
+    {
+      "semanticId": "choice:0:run_script",
+      "role": "choice",
+      "type": "choice",
+      "label": "Open Agent Chat",
+      "text": "Open Agent Chat",
+      "value": "run_script",
+      "selected": true,
+      "focused": null,
+      "index": 0,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:0:run_script",
+        "type": "choice",
+        "text": "Open Agent Chat",
+        "value": "run_script",
+        "selected": true,
+        "index": 0
+      }
+    },
+    {
+      "semanticId": "choice:1:toggle_info",
+      "role": "choice",
+      "type": "choice",
+      "label": "Show Info",
+      "text": "Show Info",
+      "value": "toggle_info",
+      "selected": false,
+      "focused": null,
+      "index": 1,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:1:toggle_info",
+        "type": "choice",
+        "text": "Show Info",
+        "value": "toggle_info",
+        "selected": false,
+        "index": 1
+      }
+    },
+    {
+      "semanticId": "choice:2:add_shortcut",
+      "role": "choice",
+      "type": "choice",
+      "label": "Add Keyboard Shortcut",
+      "text": "Add Keyboard Shortcut",
+      "value": "add_shortcut",
+      "selected": false,
+      "focused": null,
+      "index": 2,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:2:add_shortcut",
+        "type": "choice",
+        "text": "Add Keyboard Shortcut",
+        "value": "add_shortcut",
+        "selected": false,
+        "index": 2
+      }
+    },
+    {
+      "semanticId": "choice:3:add_alias",
+      "role": "choice",
+      "type": "choice",
+      "label": "Add Alias",
+      "text": "Add Alias",
+      "value": "add_alias",
+      "selected": false,
+      "focused": null,
+      "index": 3,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:3:add_alias",
+        "type": "choice",
+        "text": "Add Alias",
+        "value": "add_alias",
+        "selected": false,
+        "index": 3
+      }
+    },
+    {
+      "semanticId": "choice:4:copy_deeplink",
+      "role": "choice",
+      "type": "choice",
+      "label": "Copy Deep Link",
+      "text": "Copy Deep Link",
+      "value": "copy_deeplink",
+      "selected": false,
+      "focused": null,
+      "index": 4,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:4:copy_deeplink",
+        "type": "choice",
+        "text": "Copy Deep Link",
+        "value": "copy_deeplink",
+        "selected": false,
+        "index": 4
+      }
+    },
+    {
+      "semanticId": "choice:5:reload_scripts",
+      "role": "choice",
+      "type": "choice",
+      "label": "Reload Scripts",
+      "text": "Reload Scripts",
+      "value": "reload_scripts",
+      "selected": false,
+      "focused": null,
+      "index": 5,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:5:reload_scripts",
+        "type": "choice",
+        "text": "Reload Scripts",
+        "value": "reload_scripts",
+        "selected": false,
+        "index": 5
+      }
+    },
+    {
+      "semanticId": "choice:6:settings",
+      "role": "choice",
+      "type": "choice",
+      "label": "Open Settings",
+      "text": "Open Settings",
+      "value": "settings",
+      "selected": false,
+      "focused": null,
+      "index": 6,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:6:settings",
+        "type": "choice",
+        "text": "Open Settings",
+        "value": "settings",
+        "selected": false,
+        "index": 6
+      }
+    },
+    {
+      "semanticId": "choice:7:view_logs",
+      "role": "choice",
+      "type": "choice",
+      "label": "Show Logs",
+      "text": "Show Logs",
+      "value": "view_logs",
+      "selected": false,
+      "focused": null,
+      "index": 7,
+      "owner": null,
+      "actions": [],
+      "bounds": null,
+      "raw": {
+        "semanticId": "choice:7:view_logs",
+        "type": "choice",
+        "text": "Show Logs",
+        "value": "view_logs",
+        "selected": false,
+        "index": 7
+      }
+    }
+  ],
+  "warnings": [
+    "getElements does not expose bounds yet; use devtools.layout.measure for geometry."
+  ],
+  "errors": []
+}
