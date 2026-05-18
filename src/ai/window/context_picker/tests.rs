@@ -233,6 +233,92 @@ fn browser_history_colon_query_keeps_inline_fallback_in_picker() {
 }
 
 #[test]
+fn every_portal_colon_query_enters_inline_search_mode_with_fallback() {
+    for (query, fallback_id) in [
+        ("file:", "portal-full:file"),
+        ("browser-history:", "portal-full:browser-history"),
+        ("clipboard:", "portal-full:clipboard"),
+        ("dictation:", "portal-full:dictation"),
+        ("script:", "portal-full:script"),
+        ("scriptlet:", "portal-full:scriptlet"),
+        ("skill:", "portal-full:skill"),
+        ("note:", "portal-full:note"),
+        ("history:", "portal-full:history"),
+    ] {
+        let items = build_picker_items(ContextPickerTrigger::Mention, query);
+        assert!(
+            items.iter().any(|item| item.id.as_ref() == fallback_id),
+            "{query:?} should enter inline portal mode and keep fallback {fallback_id:?}"
+        );
+        assert!(
+            items
+                .iter()
+                .all(|item| !matches!(item.kind, ContextPickerItemKind::PortalPrefix(_))),
+            "{query:?} should search inside the tray, not offer another prefix row"
+        );
+    }
+}
+
+#[test]
+fn inline_script_list_portal_results_attach_like_full_portal_selection() {
+    use std::sync::Arc;
+
+    let script = crate::scripts::Script {
+        name: "Build Release".to_string(),
+        path: std::path::PathBuf::from("/tmp/build-release.ts"),
+        description: Some("Builds the release".to_string()),
+        ..Default::default()
+    };
+    let script_item = super::inline_portal_item_from_search_result(
+        PortalKind::ScriptSearch,
+        crate::scripts::SearchResult::Script(crate::scripts::ScriptMatch {
+            script: Arc::new(script),
+            score: 42,
+            filename: "build-release.ts".to_string(),
+            match_indices: crate::scripts::MatchIndices {
+                name_indices: vec![0, 1],
+                ..Default::default()
+            },
+            match_kind: crate::scripts::ScriptMatchKind::Name,
+            content_match: None,
+        }),
+    )
+    .expect("script result should map to inline item");
+    assert!(matches!(
+        script_item.kind,
+        ContextPickerItemKind::PortalResult(super::types::InlinePortalResultPayload {
+            attachment: super::types::InlinePortalAttachment::FilePath { .. },
+            ..
+        })
+    ));
+
+    let skill = crate::plugins::PluginSkill {
+        plugin_id: "scriptkit".to_string(),
+        plugin_title: "Script Kit".to_string(),
+        skill_id: "new-script".to_string(),
+        path: std::path::PathBuf::from("/tmp/SKILL.md"),
+        title: "New Script".to_string(),
+        description: "Create scripts".to_string(),
+    };
+    let skill_item = super::inline_portal_item_from_search_result(
+        PortalKind::SkillSearch,
+        crate::scripts::SearchResult::Skill(crate::scripts::SkillMatch {
+            skill: Arc::new(skill),
+            score: 99,
+            match_indices: crate::scripts::MatchIndices::default(),
+        }),
+    )
+    .expect("skill result should map to inline item");
+    assert!(matches!(
+        skill_item.kind,
+        ContextPickerItemKind::PortalResult(super::types::InlinePortalResultPayload {
+            attachment: super::types::InlinePortalAttachment::SkillFile { .. },
+            ..
+        })
+    ));
+}
+
+#[test]
 fn portal_prefix_rows_insert_colon_instead_of_opening_full_portal() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "browser");
     let row = items

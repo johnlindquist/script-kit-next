@@ -19,7 +19,7 @@ use types::{
     InlinePortalAttachment, InlinePortalResultPayload, PortalKind, PortalPrefixPayload,
 };
 
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 /// Maximum number of file/folder results to include.
 const FILE_RESULTS_LIMIT: usize = 10;
@@ -1047,7 +1047,180 @@ fn collect_inline_portal_items(
             collect_browser_history_inline_items(&inline_query.query, items)
         }
         PortalKind::ClipboardHistory => collect_clipboard_inline_items(&inline_query.query, items),
-        _ => {}
+        PortalKind::DictationHistory => collect_dictation_inline_items(&inline_query.query, items),
+        PortalKind::ScriptSearch | PortalKind::ScriptletSearch | PortalKind::SkillSearch => {
+            collect_script_list_inline_items(inline_query, items)
+        }
+        PortalKind::NotesBrowse => collect_notes_inline_items(&inline_query.query, items),
+        PortalKind::AcpHistory => collect_acp_history_inline_items(&inline_query.query, items),
+    }
+}
+
+fn inline_portal_scripts() -> &'static [Arc<crate::scripts::Script>] {
+    static CACHE: OnceLock<Vec<Arc<crate::scripts::Script>>> = OnceLock::new();
+    CACHE.get_or_init(crate::scripts::read_scripts).as_slice()
+}
+
+fn inline_portal_scriptlets() -> &'static [Arc<crate::scripts::Scriptlet>] {
+    static CACHE: OnceLock<Vec<Arc<crate::scripts::Scriptlet>>> = OnceLock::new();
+    CACHE
+        .get_or_init(crate::scripts::load_scriptlets)
+        .as_slice()
+}
+
+fn inline_portal_skills() -> &'static [Arc<crate::plugins::PluginSkill>] {
+    static CACHE: OnceLock<Vec<Arc<crate::plugins::PluginSkill>>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            crate::plugins::discover_plugins()
+                .ok()
+                .and_then(|index| crate::plugins::discover_plugin_skills(&index).ok())
+                .unwrap_or_default()
+                .into_iter()
+                .map(Arc::new)
+                .collect()
+        })
+        .as_slice()
+}
+
+fn collect_script_list_inline_items(
+    inline_query: &InlinePortalQuery,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let results = crate::scripts::fuzzy_search_unified_all_with_skills(
+        inline_portal_scripts(),
+        inline_portal_scriptlets(),
+        &[],
+        &[],
+        inline_portal_skills(),
+        &inline_query.query,
+    );
+
+    for result in results
+        .into_iter()
+        .filter(|result| script_list_result_matches_portal_kind(inline_query.kind, result))
+        .take(INLINE_PORTAL_RESULTS_LIMIT)
+    {
+        if let Some(item) = inline_portal_item_from_search_result(inline_query.kind, result) {
+            items.push(item);
+        }
+    }
+}
+
+fn script_list_result_matches_portal_kind(
+    kind: PortalKind,
+    result: &crate::scripts::SearchResult,
+) -> bool {
+    matches!(
+        (kind, result),
+        (
+            PortalKind::ScriptSearch,
+            crate::scripts::SearchResult::Script(_)
+        ) | (
+            PortalKind::ScriptletSearch,
+            crate::scripts::SearchResult::Scriptlet(_)
+        ) | (
+            PortalKind::SkillSearch,
+            crate::scripts::SearchResult::Skill(_)
+        )
+    )
+}
+
+fn inline_portal_item_from_search_result(
+    portal_kind: PortalKind,
+    result: crate::scripts::SearchResult,
+) -> Option<ContextPickerItem> {
+    let query_prefix = portal_prefix_for_kind(portal_kind);
+    match result {
+        crate::scripts::SearchResult::Script(script_match) => {
+            let path = script_match.script.path.to_string_lossy().to_string();
+            let label = script_match.script.name.clone();
+            let description = script_match
+                .script
+                .description
+                .clone()
+                .unwrap_or_else(|| path.clone());
+            Some(ContextPickerItem {
+                id: SharedString::from(format!("portal-result:script:{path}")),
+                label: SharedString::from(label.clone()),
+                description: SharedString::from(description),
+                meta: SharedString::from(format!("@{query_prefix}:{}", label)),
+                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                    portal_kind,
+                    attachment: InlinePortalAttachment::FilePath { path, label },
+                }),
+                score: (300 + script_match.score.max(0) as u32).max(300),
+                label_highlight_indices: script_match.match_indices.name_indices,
+                meta_highlight_indices: Vec::new(),
+            })
+        }
+        crate::scripts::SearchResult::Scriptlet(scriptlet_match) => {
+            let label = scriptlet_match.scriptlet.name.clone();
+            let semantic_id = scriptlet_match.scriptlet.launcher_command_id();
+            Some(ContextPickerItem {
+                id: SharedString::from(format!("portal-result:scriptlet:{semantic_id}")),
+                label: SharedString::from(label.clone()),
+                description: SharedString::from(
+                    scriptlet_match
+                        .scriptlet
+                        .description
+                        .clone()
+                        .unwrap_or_else(|| "Scriptlet".to_string()),
+                ),
+                meta: SharedString::from(format!("@{query_prefix}:{}", label)),
+                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                    portal_kind,
+                    attachment: InlinePortalAttachment::FocusedTarget {
+                        source: "ScriptList".to_string(),
+                        kind: "scriptlet".to_string(),
+                        semantic_id,
+                        label: label.clone(),
+                        metadata: Some(serde_json::json!({
+                            "name": scriptlet_match.scriptlet.name,
+                            "description": scriptlet_match.scriptlet.description,
+                            "tool": scriptlet_match.scriptlet.tool,
+                            "code": scriptlet_match.scriptlet.code,
+                            "filePath": scriptlet_match.scriptlet.file_path,
+                            "pluginId": scriptlet_match.scriptlet.plugin_id,
+                            "pluginTitle": scriptlet_match.scriptlet.plugin_title,
+                        })),
+                    },
+                }),
+                score: (300 + scriptlet_match.score.max(0) as u32).max(300),
+                label_highlight_indices: scriptlet_match.match_indices.name_indices,
+                meta_highlight_indices: Vec::new(),
+            })
+        }
+        crate::scripts::SearchResult::Skill(skill_match) => {
+            let owner = if skill_match.skill.plugin_title.is_empty() {
+                skill_match.skill.plugin_id.clone()
+            } else {
+                skill_match.skill.plugin_title.clone()
+            };
+            Some(ContextPickerItem {
+                id: SharedString::from(format!(
+                    "portal-result:skill:{}:{}",
+                    skill_match.skill.plugin_id, skill_match.skill.skill_id
+                )),
+                label: SharedString::from(skill_match.skill.title.clone()),
+                description: SharedString::from(skill_match.skill.description.clone()),
+                meta: SharedString::from(format!("@{query_prefix}:{}", skill_match.skill.title)),
+                kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                    portal_kind,
+                    attachment: InlinePortalAttachment::SkillFile {
+                        path: skill_match.skill.path.to_string_lossy().to_string(),
+                        label: skill_match.skill.title.clone(),
+                        skill_name: skill_match.skill.title.clone(),
+                        owner_label: owner,
+                        slash_name: skill_match.skill.skill_id.clone(),
+                    },
+                }),
+                score: (300 + skill_match.score.max(0) as u32).max(300),
+                label_highlight_indices: skill_match.match_indices.name_indices,
+                meta_highlight_indices: Vec::new(),
+            })
+        }
+        _ => None,
     }
 }
 
@@ -1144,6 +1317,111 @@ fn collect_clipboard_inline_items_from_entries(
                 meta_highlight_indices: Vec::new(),
             });
         });
+}
+
+fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let query_lower = query.trim().to_lowercase();
+    for hit in crate::dictation::search_history(query, INLINE_PORTAL_RESULTS_LIMIT) {
+        let label = hit.entry.preview.clone();
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("portal-result:dictation:{}", hit.entry.id)),
+            label: SharedString::from(label.clone()),
+            description: SharedString::from(format!("Dictation to {}", hit.entry.target)),
+            meta: SharedString::from(format!("@dictation:{}", hit.entry.id)),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::DictationHistory,
+                attachment: InlinePortalAttachment::ResourceUri {
+                    uri: format!("kit://dictation-history?id={}", hit.entry.id),
+                    label: format!("Dictation: {label}"),
+                },
+            }),
+            score: (300 + hit.score).max(300),
+            label_highlight_indices: match_query_chars(&query_lower, &label).unwrap_or_default(),
+            meta_highlight_indices: Vec::new(),
+        });
+    }
+}
+
+fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let Ok(notes) = crate::notes::search_notes(query) else {
+        return;
+    };
+    let query_lower = query.trim().to_lowercase();
+    for note in notes.into_iter().take(INLINE_PORTAL_RESULTS_LIMIT) {
+        let title = if note.title.trim().is_empty() {
+            "Untitled Note".to_string()
+        } else {
+            note.title.clone()
+        };
+        let semantic_id = note.id.clone();
+        let note_title = note.title;
+        let content = note.content;
+        let updated_at = note.updated_at.to_rfc3339();
+        let is_pinned = note.is_pinned;
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("portal-result:note:{semantic_id}")),
+            label: SharedString::from(title.clone()),
+            description: SharedString::from(format!("{} chars", content.chars().count())),
+            meta: SharedString::from(format!("@note:{title}")),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::NotesBrowse,
+                attachment: InlinePortalAttachment::FocusedTarget {
+                    source: "NotesBrowse".to_string(),
+                    kind: "note".to_string(),
+                    semantic_id: semantic_id.to_string(),
+                    label: title.clone(),
+                    metadata: Some(serde_json::json!({
+                        "id": semantic_id,
+                        "title": note_title,
+                        "content": content,
+                        "updatedAt": updated_at,
+                        "isPinned": is_pinned,
+                    })),
+                },
+            }),
+            score: 300,
+            label_highlight_indices: match_query_chars(&query_lower, &title).unwrap_or_default(),
+            meta_highlight_indices: Vec::new(),
+        });
+    }
+}
+
+fn collect_acp_history_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
+    let query_lower = query.trim().to_lowercase();
+    for hit in crate::ai::acp::history::search_history(query, INLINE_PORTAL_RESULTS_LIMIT) {
+        let title = hit.entry.title_display().to_string();
+        let preview = hit.entry.preview_display().to_string();
+        let session_id = hit.entry.session_id.clone();
+        let first_message = hit.entry.first_message;
+        let message_count = hit.entry.message_count;
+        let timestamp = hit.entry.timestamp;
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("portal-result:history:{session_id}")),
+            label: SharedString::from(title.clone()),
+            description: SharedString::from(preview.clone()),
+            meta: SharedString::from(format!("@history:{session_id}")),
+            kind: ContextPickerItemKind::PortalResult(InlinePortalResultPayload {
+                portal_kind: PortalKind::AcpHistory,
+                attachment: InlinePortalAttachment::FocusedTarget {
+                    source: "AcpHistory".to_string(),
+                    kind: "acpHistory".to_string(),
+                    semantic_id: session_id.clone(),
+                    label: title.clone(),
+                    metadata: Some(serde_json::json!({
+                        "sessionId": session_id,
+                        "title": title.clone(),
+                        "preview": preview.clone(),
+                        "firstMessage": first_message,
+                        "messageCount": message_count,
+                        "timestamp": timestamp,
+                    })),
+                },
+            }),
+            score: (300 + hit.score).max(300),
+            label_highlight_indices: match_query_chars(&query_lower, &title).unwrap_or_default(),
+            meta_highlight_indices: match_query_chars(&query_lower, &preview).unwrap_or_default(),
+        });
+    }
 }
 
 /// Populate `items` with agent slash command entries (e.g. `/compact`,

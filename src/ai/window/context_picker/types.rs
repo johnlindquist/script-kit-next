@@ -43,6 +43,17 @@ pub enum InlinePortalAttachment {
         uri: String,
         label: String,
     },
+    FilePath {
+        path: String,
+        label: String,
+    },
+    SkillFile {
+        path: String,
+        label: String,
+        skill_name: String,
+        owner_label: String,
+        slash_name: String,
+    },
     FocusedTarget {
         source: String,
         kind: String,
