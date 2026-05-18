@@ -3023,6 +3023,14 @@ fn overlay_uses_glass_bar_styling() {
         "glass bar signal band must match main menu selected-row background opacity"
     );
     assert!(
+        window_src.contains("wrap_dictation_overlay_action_rail"),
+        "action rail must sit on window surface without stacking under the signal band"
+    );
+    assert!(
+        !window_src.contains("FONT_MONO"),
+        "dictation overlay chrome must use the system UI font, not monospace"
+    );
+    assert!(
         window_src.contains("let hover_bg = rgba(chrome.hover_rgba);")
             && window_src.contains("let active_bg = rgba(chrome.selection_rgba);")
             && window_src.contains("render_inline_shortcut_keys"),
