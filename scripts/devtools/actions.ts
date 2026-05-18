@@ -246,28 +246,12 @@ async function maybeOpenActions(args: Args) {
   if (!args.open) return null;
   const openForwarded = args.openTarget
     ? args.openForwarded
-    : ["--session", args.session, "--main", "--strict", "--surface", "ScriptList"];
-  const normalizedOpenKind =
-    typeof args.openTarget?.kind === "string" ? args.openTarget.kind.toLowerCase() : "";
-  const command = normalizedOpenKind === "notes" ? "open-actions" : "key";
-  const openCommand = command === "open-actions"
-    ? [
+    : ["--session", args.session, "--show", "--main", "--strict", "--surface", "ScriptList"];
+  const openCommand = [
       "bun",
       "scripts/devtools/act.ts",
       "open-actions",
       ...openForwarded,
-      "--timeout",
-      String(args.timeoutMs),
-    ]
-    : [
-      "bun",
-      "scripts/devtools/act.ts",
-      "key",
-      ...openForwarded,
-      "--key",
-      "k",
-      "--modifiers",
-      "cmd",
       "--timeout",
       String(args.timeoutMs),
     ];
