@@ -87,6 +87,7 @@ echo "   Agentic session: ${SCRIPT_KIT_DEV_SESSION_NAME}"
 echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
 echo "   Quick Terminal warm PTY: disabled"
 echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
+echo "   Build target: script-kit-gpui only (skips smoke-test, vibrancy-poc, menu-syntax-doctor)"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
 echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"
 echo "   Press Ctrl+C to stop"
@@ -103,7 +104,7 @@ fi
 # not just Rust startup time. Build first, then relaunch the reusable agentic
 # session only when the build succeeds.
 cargo watch "${cargo_watch_args[@]}" \
-    -s "cargo build --quiet && bash scripts/agentic/dev-relaunch.sh" \
+    -s "cargo build --quiet --bin script-kit-gpui && bash scripts/agentic/dev-relaunch.sh" \
     -w src/ \
     -w scripts/kit-sdk.ts \
     -w Cargo.toml \
