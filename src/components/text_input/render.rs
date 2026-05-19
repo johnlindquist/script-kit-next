@@ -325,7 +325,7 @@ fn render_multiline_text_input_cursor_selection(config: &TextInputRenderConfig<'
         .flex()
         .flex_row()
         .flex_wrap()
-        .items_start()
+        .items_center()
         .w_full()
         .min_h(px(line_height))
         .line_height(px(line_height));
@@ -359,7 +359,7 @@ fn render_multiline_text_input_cursor_selection(config: &TextInputRenderConfig<'
             .flex()
             .flex_row()
             .flex_wrap()
-            .items_start()
+            .items_center()
             .w_full()
             .min_h(px(line_height))
             .line_height(px(line_height));
@@ -538,7 +538,7 @@ fn render_multiline_token_runs(
     selection_range: Option<(usize, usize)>,
     config: &TextInputRenderConfig<'_>,
 ) -> Div {
-    let mut token_node = div().flex().flex_row().items_start();
+    let mut token_node = div().flex().flex_row().items_center();
     let mut run_text = String::new();
     let mut run_selected = false;
     let mut run_color = config.text_color;
@@ -928,6 +928,27 @@ mod tests {
         config.cursor = 5;
 
         let _ = render_multiline_text_input_cursor_selection(&config);
+    }
+
+    #[test]
+    fn test_multiline_line_rows_center_cursor_with_text() {
+        let source = include_str!("render.rs");
+        let body = source
+            .split("fn render_multiline_text_input_cursor_selection")
+            .nth(1)
+            .expect("multiline renderer");
+        let body = body.split("\nfn ").next().expect("multiline renderer body");
+
+        assert!(
+            !body.contains(".flex_wrap()\n        .items_start()")
+                && !body.contains(".flex_wrap()\n            .items_start()"),
+            "wrapped line rows must not top-align the caret while glyphs sit in the line-height box"
+        );
+        assert!(
+            body.contains(".flex_wrap()\n        .items_center()")
+                || body.contains(".flex_wrap()\n            .items_center()"),
+            "wrapped line rows should vertically center the caret with glyphs"
+        );
     }
 
     #[test]
