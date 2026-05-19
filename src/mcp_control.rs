@@ -1,4 +1,5 @@
 use crate::mcp_clipboard_tools;
+use crate::mcp_config_tools;
 use crate::mcp_kit_tools::{ToolDefinition, ToolResult};
 use crate::mcp_notes_tools::{
     self, McpNotesMutationBridge, NotesMutationError, NotesMutationErrorCode, NotesMutationRequest,
@@ -126,6 +127,14 @@ pub fn build_default_mutation_registry() -> MutationRegistry {
     registry.register(ClipboardUnpinTool);
     registry.register(ClipboardDeleteTool);
     registry.register(ClipboardClearUnpinnedTool);
+    registry.register(ConfigGetTool);
+    registry.register(ConfigListTool);
+    registry.register(ConfigValidateTool);
+    registry.register(ConfigValidateChangeTool);
+    registry.register(ConfigSetTool);
+    registry.register(ConfigResetTool);
+    registry.register(ConfigSetCommandShortcutTool);
+    registry.register(ConfigRemoveCommandShortcutTool);
     registry
 }
 
@@ -189,6 +198,14 @@ struct ClipboardPinTool;
 struct ClipboardUnpinTool;
 struct ClipboardDeleteTool;
 struct ClipboardClearUnpinnedTool;
+struct ConfigGetTool;
+struct ConfigListTool;
+struct ConfigValidateTool;
+struct ConfigValidateChangeTool;
+struct ConfigSetTool;
+struct ConfigResetTool;
+struct ConfigSetCommandShortcutTool;
+struct ConfigRemoveCommandShortcutTool;
 
 impl DynMutationTool for NotesCreateTool {
     fn meta(&self) -> MutationToolMeta {
@@ -485,6 +502,182 @@ impl DynMutationTool for ClipboardClearUnpinnedTool {
     }
 }
 
+fn config_tool_definition(name: &str) -> ToolDefinition {
+    mcp_config_tools::get_config_tool_definitions()
+        .into_iter()
+        .find(|tool| tool.name == name)
+        .unwrap_or_else(|| panic!("config tool definition missing: {name}"))
+}
+
+impl DynMutationTool for ConfigGetTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_GET_TOOL,
+            description: "Read Script Kit config",
+            risk: RiskClass::Safe,
+            required_scope: "config:read",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_GET_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_GET_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ConfigListTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_LIST_TOOL,
+            description: "List Script Kit config keys",
+            risk: RiskClass::Safe,
+            required_scope: "config:read",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_LIST_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_LIST_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ConfigValidateTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_VALIDATE_TOOL,
+            description: "Validate Script Kit config",
+            risk: RiskClass::Safe,
+            required_scope: "config:read",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_VALIDATE_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_VALIDATE_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ConfigValidateChangeTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_VALIDATE_CHANGE_TOOL,
+            description: "Validate a proposed Script Kit config change",
+            risk: RiskClass::Safe,
+            required_scope: "config:read",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_VALIDATE_CHANGE_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(
+            mcp_config_tools::CONFIG_VALIDATE_CHANGE_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ConfigSetTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_SET_TOOL,
+            description: "Set a Script Kit config value",
+            risk: RiskClass::StateMutating,
+            required_scope: "config:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_SET_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_SET_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ConfigResetTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_RESET_TOOL,
+            description: "Reset Script Kit config",
+            risk: RiskClass::Destructive,
+            required_scope: "config:write",
+            requires_confirm: true,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_RESET_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_RESET_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ConfigSetCommandShortcutTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_SET_COMMAND_SHORTCUT_TOOL,
+            description: "Set a Script Kit command shortcut",
+            risk: RiskClass::StateMutating,
+            required_scope: "config:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_SET_COMMAND_SHORTCUT_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(
+            mcp_config_tools::CONFIG_SET_COMMAND_SHORTCUT_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ConfigRemoveCommandShortcutTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_config_tools::CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL,
+            description: "Remove a Script Kit command shortcut",
+            risk: RiskClass::Destructive,
+            required_scope: "config:write",
+            requires_confirm: true,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        config_tool_definition(mcp_config_tools::CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_config_tools::handle_config_tool_call(
+            mcp_config_tools::CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL,
+            args,
+        )
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct McpAuditEvent {
@@ -508,6 +701,7 @@ pub(crate) fn scope_allows(scopes: &[String], required: &str) -> bool {
             || scope == "mcp:*"
             || scope == "dev:*"
             || (required.starts_with("clipboard:") && scope == "clipboard:*")
+            || (required.starts_with("config:") && scope == "config:*")
             || (required.starts_with("notes:") && scope == "notes:*")
             || (required.starts_with("scripts:") && scope == "scripts:*")
     })

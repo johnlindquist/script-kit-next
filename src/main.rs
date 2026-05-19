@@ -215,6 +215,7 @@ mod main_window_preflight;
 mod computer_use;
 mod mcp_clipboard_tools;
 mod mcp_computer_use_tools;
+mod mcp_config_tools;
 mod mcp_control;
 mod mcp_kit_tools;
 mod mcp_notes_tools;
