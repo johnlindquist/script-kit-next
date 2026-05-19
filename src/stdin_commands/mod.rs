@@ -912,6 +912,7 @@ pub fn create_stdout_response_sender() -> mpsc::SyncSender<crate::protocol::Mess
             };
 
             logging::log_protocol_send(1, &json);
+            crate::agentic_protocol_bus::append_from_json_line(&json);
 
             if let Err(error) = writeln!(handle, "{}", json) {
                 tracing::warn!(

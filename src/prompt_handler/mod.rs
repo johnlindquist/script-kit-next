@@ -516,6 +516,14 @@ fn is_acp_wait_condition(condition: &protocol::WaitCondition) -> bool {
     )
 }
 
+/// Return the live ACP chat entity for automation, preferring the detached window
+/// when it is open and falling back to the embedded main-window view.
+fn active_acp_chat_entity(
+    embedded: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| embedded.cloned())
+}
+
 /// Resolve an automation target that accepts Main, AcpDetached, Notes, and ActionsDialog.
 ///
 /// Used by `batch` and `waitFor` to route commands to the correct window.
@@ -523,6 +531,7 @@ fn resolve_automation_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
+    embedded_acp: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
     cx: &gpui::App,
 ) -> Result<AutomationReadTarget, crate::protocol::TransactionError> {
     let Some(target) = target else {
@@ -547,7 +556,7 @@ fn resolve_automation_read_target(
             info: Some(resolved),
         }),
         crate::protocol::AutomationWindowKind::AcpDetached => {
-            match crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+            match active_acp_chat_entity(embedded_acp) {
                 Some(entity) => {
                     tracing::info!(
                         target: "script_kit::automation",
@@ -564,6 +573,28 @@ fn resolve_automation_read_target(
                 }
                 None => Err(crate::protocol::TransactionError::action_failed(format!(
                     "{op} resolved detached ACP target {} but no live view entity is available",
+                    resolved.id
+                ))),
+            }
+        }
+        crate::protocol::AutomationWindowKind::Ai => {
+            match active_acp_chat_entity(embedded_acp) {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.target.ai_routed_to_acp_entity"
+                    );
+                    Ok(AutomationReadTarget::AcpDetached {
+                        info: resolved,
+                        entity,
+                    })
+                }
+                None => Err(crate::protocol::TransactionError::action_failed(format!(
+                    "{op} resolved Ai target {} but no live ACP chat view is available",
                     resolved.id
                 ))),
             }
@@ -648,7 +679,7 @@ fn resolve_automation_read_target(
                 "automation.target.unsupported_kind"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved {} ({:?})",
+                "{op} supports Main, Ai, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
@@ -664,6 +695,7 @@ fn resolve_acp_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
+    embedded_acp: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
     cx: &gpui::App,
 ) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
     // No explicit target → default to main window (preserves existing behavior).
@@ -698,8 +730,7 @@ fn resolve_acp_read_target(
             })
         }
         crate::protocol::AutomationWindowKind::AcpDetached => {
-            // Try to get the live entity from the detached window.
-            match crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+            match active_acp_chat_entity(embedded_acp) {
                 Some(entity) => {
                     tracing::info!(
                         target: "script_kit::automation",
@@ -763,23 +794,35 @@ fn resolve_acp_read_target(
                 }
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => {
-            // The embedded AI surface is a subview of the main window — its ACP
-            // state IS main's ACP state. Route to the Main collector. This entry
-            // is registered by `ensure_embedded_ai_window(true)` whenever the
-            // ACP chat view is the active subview of main (see Pass #7).
-            tracing::info!(
-                target: "script_kit::automation",
-                request_id = %request_id,
-                op = op,
-                window_id = %resolved.id,
-                kind = ?resolved.kind,
-                "automation.acp_target.embedded_ai_routed_to_main"
-            );
-            Ok(AcpReadTarget::Main {
-                info: Some(resolved),
-            })
-        }
+        crate::protocol::AutomationWindowKind::Ai => match active_acp_chat_entity(embedded_acp) {
+            Some(entity) => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    op = op,
+                    window_id = %resolved.id,
+                    kind = ?resolved.kind,
+                    "automation.acp_target.ai_resolved_to_entity"
+                );
+                Ok(AcpReadTarget::Detached {
+                    info: resolved,
+                    entity,
+                })
+            }
+            None => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    op = op,
+                    window_id = %resolved.id,
+                    kind = ?resolved.kind,
+                    "automation.acp_target.ai_fallback_main_collector"
+                );
+                Ok(AcpReadTarget::Main {
+                    info: Some(resolved),
+                })
+            }
+        },
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -790,7 +833,7 @@ fn resolve_acp_read_target(
                 "automation.acp_target.non_acp_rejected"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports only Main, AcpDetached, and Notes targets; resolved {} ({:?})",
+                "{op} supports only Main, Ai, AcpDetached, and Notes targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
@@ -1830,14 +1873,16 @@ impl ScriptListApp {
         }
     }
 
-    fn script_error_acp_view_entity(&self) -> Option<gpui::Entity<crate::ai::acp::AcpChatView>> {
-        crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| {
-            if let AppView::AcpChatView { entity } = &self.current_view {
-                Some(entity.clone())
-            } else {
-                None
-            }
-        })
+    fn script_error_acp_view_entity(&self) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+        crate::ai::acp::chat_window::get_detached_acp_view_entity()
+            .or_else(|| self.embedded_acp_automation_entity())
+    }
+
+    fn embedded_acp_automation_entity(&self) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+        match &self.current_view {
+            AppView::AcpChatView { entity } => Some(entity.clone()),
+            _ => None,
+        }
     }
 
     fn ensure_script_error_acp_view(
@@ -3962,6 +4007,7 @@ impl ScriptListApp {
                     &request_id,
                     "getAcpState",
                     target.as_ref(),
+                    self.embedded_acp_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
@@ -4053,6 +4099,7 @@ impl ScriptListApp {
                     &request_id,
                     "performAcpSetupAction",
                     target.as_ref(),
+                    self.embedded_acp_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
@@ -4167,6 +4214,7 @@ impl ScriptListApp {
                     &request_id,
                     "resetAcpTestProbe",
                     target.as_ref(),
+                    self.embedded_acp_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
@@ -4260,6 +4308,7 @@ impl ScriptListApp {
                     &request_id,
                     "getAcpTestProbe",
                     target.as_ref(),
+                    self.embedded_acp_automation_entity().as_ref(),
                     cx,
                 ) {
                     Ok(t) => t,
@@ -4623,7 +4672,13 @@ impl ScriptListApp {
                 // conditions accept Main, AcpDetached, and Notes.
                 let resolved_target: AutomationReadTarget = if target.is_some() {
                     if is_acp_condition {
-                        match resolve_acp_read_target(&rid, "waitFor", target.as_ref(), cx) {
+                        match resolve_acp_read_target(
+                            &rid,
+                            "waitFor",
+                            target.as_ref(),
+                            self.embedded_acp_automation_entity().as_ref(),
+                            cx,
+                        ) {
                             Ok(AcpReadTarget::Detached { entity, info }) => {
                                 AutomationReadTarget::AcpDetached { entity, info }
                             }
@@ -4644,7 +4699,13 @@ impl ScriptListApp {
                             }
                         }
                     } else {
-                        match resolve_automation_read_target(&rid, "waitFor", target.as_ref(), cx) {
+                        match resolve_automation_read_target(
+                            &rid,
+                            "waitFor",
+                            target.as_ref(),
+                            self.embedded_acp_automation_entity().as_ref(),
+                            cx,
+                        ) {
                             Ok(resolved) => resolved,
                             Err(error) => {
                                 if let Some(ref sender) = self.response_sender {
@@ -5105,7 +5166,13 @@ impl ScriptListApp {
 
                 // Resolve target: accept Main, AcpDetached, and Notes.
                 let batch_target: AutomationReadTarget = if target.is_some() {
-                    match resolve_automation_read_target(&rid, "batch", target.as_ref(), cx) {
+                    match resolve_automation_read_target(
+                        &rid,
+                        "batch",
+                        target.as_ref(),
+                        self.embedded_acp_automation_entity().as_ref(),
+                        cx,
+                    ) {
                         Ok(resolved) => resolved,
                         Err(error) => {
                             if let Some(ref sender) = self.response_sender {

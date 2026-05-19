@@ -210,3 +210,18 @@ fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
         .contains("let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);"));
     assert!(body.contains("batch_target_kind == AutomationBatchTargetKind::PromptPopup"));
 }
+
+#[test]
+fn automation_ai_target_routes_to_live_acp_entity_for_batch_and_reads() {
+    for marker in [
+        "fn active_acp_chat_entity(",
+        "automation.target.ai_routed_to_acp_entity",
+        "automation.acp_target.ai_resolved_to_entity",
+        "fn embedded_acp_automation_entity(",
+    ] {
+        assert!(
+            PROMPT_HANDLER.contains(marker),
+            "prompt_handler must include Ai→ACP routing marker: {marker}"
+        );
+    }
+}

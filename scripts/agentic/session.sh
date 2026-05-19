@@ -111,6 +111,58 @@ json_lifecycle_error() {
 
 session_dir() { echo "${SESSION_DIR}/$1"; }
 
+session_now_ms() {
+  if [ -n "${EPOCHREALTIME:-}" ]; then
+    printf '%s' "$EPOCHREALTIME" | awk -F. '{printf "%d", $1*1000 + int(substr($2"000000",1,3))}'
+  else
+    echo $(( $(date +%s) * 1000 ))
+  fi
+}
+
+session_lock_dir() {
+  echo "$(session_dir "$1")/command.lock"
+}
+
+acquire_session_lock() {
+  local sdir="$1"
+  local timeout_ms="${2:-5000}"
+  local lock_dir="${sdir}/command.lock"
+  local waited=0
+  local step_ms=25
+
+  mkdir -p "$sdir"
+  while [ "$waited" -lt "$timeout_ms" ]; do
+    if mkdir "$lock_dir" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.025
+    waited=$((waited + step_ms))
+  done
+  return 1
+}
+
+release_session_lock() {
+  local sdir="$1"
+  rmdir "${sdir}/command.lock" 2>/dev/null || true
+}
+
+ensure_session_protocol_bus() {
+  local sdir="$1"
+  local protocol_responses_path="${sdir}/protocol-responses.ndjson"
+  local generation_path="${sdir}/generation"
+  mkdir -p "$sdir"
+  if [ ! -f "$protocol_responses_path" ]; then
+    : > "$protocol_responses_path"
+  fi
+  if [ ! -f "$generation_path" ]; then
+    if command -v uuidgen >/dev/null 2>&1; then
+      uuidgen > "$generation_path"
+    else
+      printf '%s-%s\n' "$(date +%s)" "$$" > "$generation_path"
+    fi
+  fi
+}
+
 # Detect which readiness marker is present in the log file.
 # Prints the marker name ("startup_ready" or "app_ready") and returns 0 if found.
 detect_ready_marker() {
@@ -242,6 +294,8 @@ cmd_start() {
   local input_fifo="${sdir}/input"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
+  local protocol_responses_path="${sdir}/protocol-responses.ndjson"
+  local generation_path="${sdir}/generation"
   local lifecycle_path="${sdir}/lifecycle.ndjson"
   local keep_actions_window_open_requested=false
   if [ "${SCRIPT_KIT_AGENTIC_KEEP_ACTIONS_WINDOW_OPEN:-}" = "1" ]; then
@@ -336,8 +390,14 @@ cmd_start() {
   mkfifo "$input_fifo"
   cleanup_orphan_session_forwarders "$pipe_path" "$input_fifo"
 
-  # Create the responses artifact file
+  # Create the responses artifact files
   : > "$responses_path"
+  : > "$protocol_responses_path"
+  if command -v uuidgen >/dev/null 2>&1; then
+    uuidgen > "$generation_path"
+  else
+    printf '%s-%s\n' "$(date +%s)" "$$" > "$generation_path"
+  fi
   : > "$lifecycle_path"
 
   # Background forwarder: reads from input_fifo and writes to pipe.
@@ -361,8 +421,14 @@ cmd_start() {
 
   # Launch the app reading from the pipe after the forwarder has opened the
   # write end, otherwise the shell can deadlock opening the read end.
-  export SCRIPT_KIT_AI_LOG=1
-  nohup "$BINARY" < "$pipe_path" > "$log_path" 2>&1 &
+  local session_generation
+  session_generation="$(tr -d '\n' < "$generation_path")"
+  nohup env \
+    SCRIPT_KIT_AI_LOG=1 \
+    SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH="$protocol_responses_path" \
+    SCRIPT_KIT_AGENTIC_SESSION_NAME="$name" \
+    SCRIPT_KIT_AGENTIC_SESSION_GENERATION="$session_generation" \
+    "$BINARY" < "$pipe_path" > "$log_path" 2>&1 &
   local app_pid=$!
   echo "$app_pid" > "$pid_path"
   local startup_keepalive=false
@@ -409,6 +475,8 @@ cmd_start() {
     "pipe:\"${input_fifo}\"" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \
+    "protocolResponses:\"${protocol_responses_path}\"" \
+    "sessionGeneration:\"${session_generation}\"" \
     "lifecycle:\"${lifecycle_path}\"" \
     "resumed:false" \
     "ready:${ready}" \
@@ -500,6 +568,14 @@ cmd_send() {
     return 1
   fi
 
+  if [ -n "$await_parse" ]; then
+    ensure_session_protocol_bus "$sdir"
+    if ! acquire_session_lock "$sdir" "$timeout_ms"; then
+      json_error "queue_timeout" "Timed out waiting for session '${name}' command queue after ${timeout_ms}ms."
+      return 1
+    fi
+  fi
+
   # Record app.log offset BEFORE sending so we only scan the event emitted
   # for THIS send. stdin is line-serialized in the app, so the next
   # stdin_command_parsed or stdin_parse_failed after this offset
@@ -511,6 +587,9 @@ cmd_send() {
 
   # Write command to the input FIFO (non-blocking via timeout)
   if ! printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
+    if [ -n "$await_parse" ]; then
+      release_session_lock "$sdir"
+    fi
     json_error "send_failed" "Failed to write to session '${name}' input FIFO."
     return 1
   fi
@@ -578,6 +657,7 @@ cmd_send() {
           "sent:true" \
           "parseOutcome:\"parsed\"" \
           "commandType:\"${command_type:-unknown}\""
+        release_session_lock "$sdir"
         return 0
       fi
       # stdin_parse_failed — sad path. Symmetric with the happy-path
@@ -611,6 +691,7 @@ cmd_send() {
           "sent:true" \
           "parseOutcome:\"parseError\"" \
           "error:\"${err_msg}\""
+        release_session_lock "$sdir"
         return 0
       fi
     fi
@@ -626,6 +707,7 @@ cmd_send() {
         "sent:true" \
         "parseOutcome:\"timeout\"" \
         "timeoutMs:${timeout_ms}"
+      release_session_lock "$sdir"
       return 0
     fi
     sleep 0.05
@@ -676,11 +758,14 @@ cmd_rpc() {
   local input_fifo="${sdir}/input"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
+  local protocol_responses_path="${sdir}/protocol-responses.ndjson"
 
   if [ ! -p "$input_fifo" ]; then
     json_error "no_session" "Session '${name}' not found or input FIFO missing."
     return 1
   fi
+
+  ensure_session_protocol_bus "$sdir"
 
   # Verify app is alive
   if [ -f "${sdir}/pid" ]; then
@@ -716,13 +801,19 @@ cmd_rpc() {
     esac
   done
 
+  if ! acquire_session_lock "$sdir" "$timeout_ms"; then
+    json_error "queue_timeout" "Timed out waiting for session '${name}' command queue after ${timeout_ms}ms."
+    return 1
+  fi
+
   local start_offset="0"
-  if [ -f "$log_path" ]; then
-    start_offset="$(wc -c < "$log_path" | tr -d '[:space:]')"
+  if [ -f "$protocol_responses_path" ]; then
+    start_offset="$(wc -c < "$protocol_responses_path" | tr -d '[:space:]')"
   fi
 
   # Send the command (fire-and-forget to the pipe)
   if ! printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
+    release_session_lock "$sdir"
     json_error "send_failed" "Failed to write to session '${name}' input FIFO."
     return 1
   fi
@@ -733,6 +824,7 @@ cmd_rpc() {
     --request-id "$request_id"
     --timeout "$timeout_ms"
     --start-offset "$start_offset"
+    --responses-path "$protocol_responses_path"
   )
   if [ -n "$expect_type" ]; then
     await_args+=(--expect "$expect_type")
@@ -788,6 +880,8 @@ cmd_rpc() {
   if [ -n "$result" ]; then
     printf '%s\n' "$result" >> "$responses_path" 2>/dev/null || true
   fi
+
+  release_session_lock "$sdir"
 
   printf '%s\n' "$result"
   return $exit_code

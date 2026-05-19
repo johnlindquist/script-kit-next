@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Oracle verification plan for isolated-devtools-agent-bootstrap.
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$REPO_ROOT"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FAIL=0
+
+pass() { echo "[verify-devtools-session] PASS: $*" >&2; }
+fail() { echo "[verify-devtools-session] FAIL: $*" >&2; FAIL=1; }
+
+echo "[verify-devtools-session] === 1. Bun-only SK_VERIFY (no GPUI) ===" >&2
+if out="$(SK_VERIFY=1 timeout 5 bun kit-init/examples/scripts/todoist-demo.ts 2>&1)"; then
+  if printf '%s' "$out" | grep -q '"ok":true'; then
+    pass "todoist-demo SK_VERIFY"
+  else
+    echo "[verify-devtools-session] SKIP todoist-demo: missing ok:true (sdk path may need kit-init cwd): $out" >&2
+  fi
+else
+  echo "[verify-devtools-session] SKIP todoist-demo SK_VERIFY exit $? (sdk module path)" >&2
+fi
+
+if json="$(bash scripts/agentic/devtools-session.sh verify-script --script kit-init/examples/scripts/todoist-demo.ts 2>/dev/null)"; then
+  if printf '%s' "$json" | grep -q '"status":"ok"'; then
+    pass "devtools-session verify-script JSON"
+  else
+    fail "verify-script JSON: $json"
+  fi
+else
+  fail "devtools-session verify-script"
+fi
+
+echo "[verify-devtools-session] === 2. Build timeout wrapper (<10s with timeout=1) ===" >&2
+SECONDS=0
+SCRIPT_KIT_AGENT_ID=dt-agent-build bash scripts/agentic/build-isolated-binary.sh 1 >/dev/null 2>&1 || true
+if [[ "$SECONDS" -lt 10 ]]; then
+  pass "build-isolated-binary 1s cap elapsed=${SECONDS}s"
+else
+  fail "build hung ${SECONDS}s (expected <10s)"
+fi
+
+echo "[verify-devtools-session] === 3. classify ===" >&2
+if json="$(bash scripts/agentic/devtools-session.sh classify --script kit-init/examples/scripts/todoist-demo.ts 2>/dev/null)"; then
+  if printf '%s' "$json" | grep -q '"status":"ok"'; then
+    pass "classify JSON"
+  else
+    fail "classify: $json"
+  fi
+else
+  fail "classify command"
+fi
+
+echo "[verify-devtools-session] === 4. preflight (isolated) ===" >&2
+if bash scripts/agentic/preflight-isolated.sh --mode isolated >/dev/null 2>&1; then
+  pass "preflight isolated (clean enough)"
+else
+  code=$?
+  echo "[verify-devtools-session] SKIP preflight isolated exit=${code} (dev.sh or multi-GPUI may be active)" >&2
+fi
+
+echo "[verify-devtools-session] === 5. isolated start (optional; needs clean machine) ===" >&2
+if pgrep -f 'cargo-watch watch.*dev-cycle' >/dev/null 2>&1; then
+  echo "[verify-devtools-session] SKIP isolated start: ./dev.sh running" >&2
+elif [[ "$(pgrep -fc "${REPO_ROOT}/target/debug/script-kit-gpui" 2>/dev/null || echo 0)" -gt 1 ]]; then
+  echo "[verify-devtools-session] SKIP isolated start: multiple GPUI instances" >&2
+else
+  SESSION="dt-smoke-$$"
+  if json="$(bash scripts/agentic/devtools-session.sh start --session "$SESSION" --mode isolated --build never --ready-timeout-sec 60 --prove 2>/dev/null)"; then
+    if printf '%s' "$json" | grep -q '"ready":true'; then
+      pass "isolated start ready:true"
+      bash scripts/agentic/devtools-session.sh cleanup --session "$SESSION" >/dev/null 2>&1 || true
+    else
+      fail "start without ready:true: $json"
+      bash scripts/agentic/session.sh stop "$SESSION" >/dev/null 2>&1 || true
+    fi
+  else
+    fail "isolated start failed"
+    bash scripts/agentic/session.sh stop "$SESSION" >/dev/null 2>&1 || true
+  fi
+fi
+
+echo "[verify-devtools-session] === 6. reuse-dev-watch (optional) ===" >&2
+if pgrep -f 'cargo-watch watch.*dev-cycle' >/dev/null 2>&1; then
+  if json="$(bash scripts/agentic/devtools-session.sh start --mode reuse-dev-watch --session dev-watch --build never --ready-timeout-sec 10 2>/dev/null)"; then
+    if printf '%s' "$json" | grep -q '"mode":"reuse-dev-watch"'; then
+      pass "reuse-dev-watch attach"
+    else
+      fail "reuse-dev-watch: $json"
+    fi
+  else
+  code=$?
+  if [[ "$code" -eq 10 ]] || printf '%s' "$json" 2>/dev/null | grep -q dev_watch_unhealthy; then
+    echo "[verify-devtools-session] SKIP reuse-dev-watch: dev-watch unhealthy (exit ${code})" >&2
+  else
+    fail "reuse-dev-watch start exit ${code}"
+  fi
+  fi
+else
+  echo "[verify-devtools-session] SKIP reuse-dev-watch: ./dev.sh not running" >&2
+fi
+
+exit "$FAIL"

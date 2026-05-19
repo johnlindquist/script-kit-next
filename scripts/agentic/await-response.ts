@@ -2,15 +2,16 @@
 /**
  * scripts/agentic/await-response.ts
  *
- * Tail the session log for a JSON response matching a given requestId
- * and optional response type. Returns structured JSON on stdout.
+ * Await a stdin protocol response for a given requestId.
+ * Prefers the dedicated protocol-responses.ndjson bus; optionally
+ * falls back to app.log scraping when SCRIPT_KIT_ALLOW_LOG_RPC_FALLBACK=1.
  *
  * Usage:
  *   bun await-response.ts --session default --request-id acp1 --expect acpStateResult --timeout 3000
  *
  * Exit codes:
  *   0 = response found
- *   1 = timeout
+ *   1 = response timeout
  *   2 = infrastructure error (missing session, bad args)
  *   3 = parse error detected preemptively (stdin_parse_failed for this requestId)
  */
@@ -22,16 +23,10 @@ const SCHEMA_VERSION = 1;
 const SESSION_DIR =
   process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
 const DEFAULT_TIMEOUT = 5000;
-const POLL_INTERVAL = 50; // ms between log scans
+const POLL_INTERVAL = 50; // ms between scans
+const ALLOW_LOG_FALLBACK =
+  process.env.SCRIPT_KIT_ALLOW_LOG_RPC_FALLBACK === "1";
 
-// Preemptive parse-failure detection. Mirrors the shell-side post-hoc
-// scan in session.sh cmd_rpc (lines ~579-608) but runs in parallel with
-// the typed-response wait, short-circuiting before the full --timeout
-// elapses. Charset and cid format are shared with the Rust-side
-// extract_request_id_lenient (src/stdin_commands/mod.rs); charset-unsafe
-// requestIds (e.g. `a+b`, `a\b`) fall through to the shell post-hoc
-// unscoped-grep fallback. Exit code 3 signals "parse error detected
-// preemptively" so cmd_rpc callers can distinguish from generic timeout.
 const PARSE_ERROR_EXIT_CODE = 3;
 const REQUEST_ID_CHARSET = /^[A-Za-z0-9_.:/-]+$/;
 const ERROR_MSG_MAX_CHARS = 200;
@@ -56,6 +51,13 @@ interface RpcError {
 }
 
 type RpcResult = RpcResponse | RpcError;
+
+interface ProtocolBusEnvelope {
+  kind?: string;
+  requestId?: string;
+  responseType?: string;
+  response?: unknown;
+}
 
 function printResult(result: RpcResult): void {
   process.stdout.write(`${JSON.stringify(result)}\n`);
@@ -129,11 +131,59 @@ function parseJsonResponseLine(trimmed: string): unknown | null {
   }
 }
 
-/**
- * Scan the log file from `startOffset` for a JSON line containing the
- * given requestId and optionally the expected response type.
- * Returns [parsed JSON, new file offset] or [null, new offset].
- */
+function scanProtocolBus(
+  responsesPath: string,
+  requestId: string,
+  expect: string | null,
+  startOffset: number,
+): [unknown | null, string | null, number] {
+  if (!existsSync(responsesPath)) {
+    return [null, null, startOffset];
+  }
+
+  let size: number;
+  try {
+    size = statSync(responsesPath).size;
+  } catch {
+    return [null, null, startOffset];
+  }
+
+  if (size < startOffset) {
+    startOffset = 0;
+  }
+  if (size <= startOffset) {
+    return [null, null, startOffset];
+  }
+
+  const buf = readFileSync(responsesPath);
+  const newBytes = buf.subarray(startOffset);
+  const lastNewline = newBytes.lastIndexOf(0x0a);
+  if (lastNewline < 0) {
+    return [null, null, startOffset];
+  }
+
+  const completeContent = newBytes.subarray(0, lastNewline + 1).toString("utf8");
+  const newOffset = startOffset + lastNewline + 1;
+
+  for (const line of completeContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const parsed = parseJsonResponseLine(trimmed) as ProtocolBusEnvelope | null;
+    if (parsed == null || typeof parsed !== "object") continue;
+    if (parsed.kind !== "protocolResponse") continue;
+    if (parsed.requestId !== requestId) continue;
+
+    const responseType = parsed.responseType ?? null;
+    if (expect && responseType !== expect) continue;
+
+    const response = parsed.response ?? parsed;
+    return [response, responseType, newOffset];
+  }
+
+  return [null, null, newOffset];
+}
+
 function scanLog(
   logPath: string,
   requestId: string,
@@ -183,18 +233,6 @@ function scanLog(
   return [null, null, newOffset];
 }
 
-/**
- * Scan the log file for a `stdin_parse_failed` tracing line scoped to
- * the given requestId. Returns [extracted error message, new offset] or
- * [null, new offset]. The caller gates this on REQUEST_ID_CHARSET so
- * charset-unsafe ids (which Rust routes to `cid=stdin:parse:<uuid>`) are
- * handled by the shell post-hoc fallback instead of racing unscoped here.
- *
- * Mirrors session.sh cmd_rpc's scoped grep (line ~599): the trailing
- * space after requestId prevents prefix matches (e.g. `p17-get` must not
- * match `p17-get-foo`). The error= suffix is trimmed of the serde
- * `at line N column M` tail and capped at ERROR_MSG_MAX_CHARS.
- */
 function scanForParseFailure(
   logPath: string,
   requestId: string,
@@ -263,6 +301,7 @@ const requestId = getArg("--request-id");
 const expect = getArg("--expect");
 const timeout = parseNonNegativeInt(getArg("--timeout"), DEFAULT_TIMEOUT);
 const startOffset = parseNonNegativeInt(getArg("--start-offset"), 0);
+const responsesPathArg = getArg("--responses-path");
 
 if (!requestId) {
   const result = errorResult(
@@ -277,6 +316,8 @@ if (!requestId) {
 
 const sdir = join(SESSION_DIR, sessionName);
 const logPath = join(sdir, "app.log");
+const responsesPath =
+  responsesPathArg ?? join(sdir, "protocol-responses.ndjson");
 
 if (!existsSync(sdir)) {
   const result = errorResult(
@@ -289,21 +330,14 @@ if (!existsSync(sdir)) {
   process.exit(2);
 }
 
-// Poll for new content
 const deadline = Date.now() + timeout;
-let scanOffset = startOffset;
+let busOffset = startOffset;
+let logOffset = startOffset;
 let parseFailScanOffset = startOffset;
 const charsetSafeRequestId = REQUEST_ID_CHARSET.test(requestId);
 
 while (Date.now() < deadline) {
-  // Preemptive parse-failure check: if the Rust listener rejected this
-  // send at parse time, short-circuit with a parse_error envelope
-  // instead of waiting the full --timeout for a typed response that
-  // will never arrive. Gated on charset-safe requestIds because Rust
-  // routes charset-unsafe ids to `cid=stdin:parse:<uuid>` which the
-  // scoped grep cannot match — those fall through to the shell
-  // cmd_rpc post-hoc unscoped-grep fallback (session.sh lines ~600-602).
-  if (charsetSafeRequestId) {
+  if (charsetSafeRequestId && ALLOW_LOG_FALLBACK) {
     const [errMsg, newFailOffset] = scanForParseFailure(
       logPath,
       requestId,
@@ -322,35 +356,57 @@ while (Date.now() < deadline) {
     }
   }
 
-  const [found, responseType, newOffset] = scanLog(
-    logPath,
+  const [busFound, busType, newBusOffset] = scanProtocolBus(
+    responsesPath,
     requestId,
     expect,
-    scanOffset,
+    busOffset,
   );
-  scanOffset = newOffset;
+  busOffset = newBusOffset;
 
-  if (found) {
+  if (busFound) {
     const result: RpcResponse = {
       schemaVersion: SCHEMA_VERSION,
       status: "ok",
       session: sessionName,
       requestId,
-      responseType: responseType ?? "unknown",
-      response: found,
+      responseType: busType ?? "unknown",
+      response: busFound,
     };
     printResult(result);
     process.exit(0);
   }
 
+  if (ALLOW_LOG_FALLBACK) {
+    const [found, responseType, newLogOffset] = scanLog(
+      logPath,
+      requestId,
+      expect,
+      logOffset,
+    );
+    logOffset = newLogOffset;
+
+    if (found) {
+      const result: RpcResponse = {
+        schemaVersion: SCHEMA_VERSION,
+        status: "ok",
+        session: sessionName,
+        requestId,
+        responseType: responseType ?? "unknown",
+        response: found,
+      };
+      printResult(result);
+      process.exit(0);
+    }
+  }
+
   await Bun.sleep(POLL_INTERVAL);
 }
 
-// Timeout
 const result = errorResult(
   sessionName,
   requestId,
-  "timeout",
+  "response_timeout",
   `No response matching requestId '${requestId}'${expect ? ` and type '${expect}'` : ""} within ${timeout}ms`,
 );
 printResult(result);
