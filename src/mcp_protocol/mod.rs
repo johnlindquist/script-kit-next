@@ -18,6 +18,7 @@
 // --- merged from part_000.rs ---
 use crate::mcp_clipboard_tools;
 use crate::mcp_computer_use_tools;
+use crate::mcp_config_tools;
 use crate::mcp_control;
 use crate::mcp_kit_tools;
 use crate::mcp_notes_tools;
@@ -154,6 +155,8 @@ pub fn legacy_all_scopes() -> Vec<String> {
     vec![
         "mcp:read".to_string(),
         "clipboard:write".to_string(),
+        "config:read".to_string(),
+        "config:write".to_string(),
         "notes:write".to_string(),
         "ui:control".to_string(),
         "scripts:run".to_string(),
@@ -525,6 +528,7 @@ fn handle_tools_call_with_runtime_parts(
     if mcp_notes_tools::is_notes_tool(tool_name)
         || mcp_scripts_tools::is_scripts_tool(tool_name)
         || mcp_clipboard_tools::is_clipboard_tool(tool_name)
+        || mcp_config_tools::is_config_tool(tool_name)
     {
         let mutation_context = mcp_control::MutationContext {
             trace_id: trace_id.clone(),

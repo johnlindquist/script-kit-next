@@ -280,6 +280,9 @@ pub mod mcp_kit_tools;
 // MCP Clipboard Tools - clipboard history mutation tools
 pub mod mcp_clipboard_tools;
 
+// MCP Config Tools - config.ts read/write tools backed by config-cli.ts
+pub mod mcp_config_tools;
+
 // MCP Notes Tools - notes mutation tools for the full-control plane
 pub mod mcp_notes_tools;
 
