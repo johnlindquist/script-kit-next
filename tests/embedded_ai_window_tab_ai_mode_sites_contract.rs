@@ -128,7 +128,9 @@ fn shared_entry_owner_preserves_transition_order() {
         "self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);",
         "self.focused_input = FocusedInput::None;",
         "self.clear_actions_popup_state();",
-        "self.pending_focus = Some(FocusTarget::ChatPrompt);",
+        "self.focus_coordinator",
+        ".request(crate::focus_coordinator::FocusRequest::acp_chat());",
+        "self.sync_coordinator_to_legacy();",
     ];
     let mut last = 0usize;
     for pattern in ordered_patterns {

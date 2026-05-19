@@ -46,6 +46,7 @@ interface TransitionContractMetadata {
   semanticSurface?: string;
   mainAutomationRekey?: boolean;
   focusTarget?: string;
+  focusCoordinatorRequest?: string;
   focusedInput?: string;
   focusedInputMap?: Record<string, string>;
   resize?: string;
@@ -79,7 +80,7 @@ const TRANSITION_HELPERS: Record<string, TransitionHelperContract> = {
     inferredTarget: "AppView::AcpChatView",
     requiresManualReview: false,
     rekeysMainAutomationSurface: true,
-    focusTarget: "ChatPrompt",
+    focusTarget: "AcpChat",
     embeddedAiWindowUpsert: true,
     clearsActionsPopupState: true,
     transitionContract: {
@@ -90,7 +91,8 @@ const TRANSITION_HELPERS: Record<string, TransitionHelperContract> = {
       mainAutomationRekey: true,
       acpSurfaceEvent: "EmbeddedOpened",
       actionsCleanup: "clearActionsPopupState",
-      focusTarget: "ChatPrompt",
+      focusTarget: "AcpChat",
+      focusCoordinatorRequest: "FocusRequest::acp_chat",
       focusedInput: "None",
       resize: "callerOwned",
       stateSnapshot: "getState.surfaceContract",

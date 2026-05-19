@@ -418,7 +418,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::Notes => Self {
                 display_name: "Notes",
                 unsupported_target_name: "Notes",
-                    supported_commands: &["setInput", "openActions", "togglePreview", "waitFor"],
+                supported_commands: &["setInput", "openActions", "togglePreview", "waitFor"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::ActionsDialog => Self {
@@ -577,28 +577,26 @@ fn resolve_automation_read_target(
                 ))),
             }
         }
-        crate::protocol::AutomationWindowKind::Ai => {
-            match active_acp_chat_entity(embedded_acp) {
-                Some(entity) => {
-                    tracing::info!(
-                        target: "script_kit::automation",
-                        request_id = %request_id,
-                        op = op,
-                        window_id = %resolved.id,
-                        kind = ?resolved.kind,
-                        "automation.target.ai_routed_to_acp_entity"
-                    );
-                    Ok(AutomationReadTarget::AcpDetached {
-                        info: resolved,
-                        entity,
-                    })
-                }
-                None => Err(crate::protocol::TransactionError::action_failed(format!(
-                    "{op} resolved Ai target {} but no live ACP chat view is available",
-                    resolved.id
-                ))),
+        crate::protocol::AutomationWindowKind::Ai => match active_acp_chat_entity(embedded_acp) {
+            Some(entity) => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    op = op,
+                    window_id = %resolved.id,
+                    kind = ?resolved.kind,
+                    "automation.target.ai_routed_to_acp_entity"
+                );
+                Ok(AutomationReadTarget::AcpDetached {
+                    info: resolved,
+                    entity,
+                })
             }
-        }
+            None => Err(crate::protocol::TransactionError::action_failed(format!(
+                "{op} resolved Ai target {} but no live ACP chat view is available",
+                resolved.id
+            ))),
+        },
         crate::protocol::AutomationWindowKind::Notes => {
             match crate::notes::get_notes_app_entity_and_handle() {
                 Some((entity, handle)) => {
@@ -651,7 +649,8 @@ fn resolve_automation_read_target(
             let any_open = crate::ai::acp::picker_popup::is_mention_popup_window_open()
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
-                || crate::confirm::is_confirm_popup_window_open();
+                || crate::confirm::is_confirm_popup_window_open()
+                || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
             if any_open {
                 tracing::info!(
                     target: "script_kit::automation",
@@ -1873,12 +1872,16 @@ impl ScriptListApp {
         }
     }
 
-    fn script_error_acp_view_entity(&self) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    fn script_error_acp_view_entity(
+        &self,
+    ) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
         crate::ai::acp::chat_window::get_detached_acp_view_entity()
             .or_else(|| self.embedded_acp_automation_entity())
     }
 
-    fn embedded_acp_automation_entity(&self) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
+    fn embedded_acp_automation_entity(
+        &self,
+    ) -> Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> {
         match &self.current_view {
             AppView::AcpChatView { entity } => Some(entity.clone()),
             _ => None,
@@ -4524,8 +4527,7 @@ impl ScriptListApp {
                                 == crate::protocol::AutomationWindowKind::ActionsDialog =>
                         {
                             if let Some(entity) = crate::actions::get_actions_dialog_entity(cx) {
-                                let layout_info =
-                                    entity.read(cx).automation_layout_info(&resolved);
+                                let layout_info = entity.read(cx).automation_layout_info(&resolved);
                                 let response =
                                     Message::layout_info_result(request_id.clone(), layout_info);
                                 if let Some(ref sender) = self.response_sender {
@@ -6271,6 +6273,9 @@ impl ScriptListApp {
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_value(&value) {
                                             return Some(v);
                                         }
+                                        if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_value(&value, cx) {
+                                            return Some(v);
+                                        }
                                         None
                                     });
                                     match selected {
@@ -6319,6 +6324,9 @@ impl ScriptListApp {
                                             return Some(v);
                                         }
                                         if let Some(v) = crate::confirm::batch_select_confirm_button_by_semantic_id(&semantic_id) {
+                                            return Some(v);
+                                        }
+                                        if let Some(v) = _this.batch_select_menu_syntax_trigger_popup_row_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
                                         None
@@ -8857,9 +8865,9 @@ impl ScriptListApp {
     fn devtools_selection_state(&self) -> DevtoolsSelectionState {
         match &self.current_view {
             AppView::ScriptList => DevtoolsSelectionState::MainMenuScriptList,
-            AppView::ArgPrompt { .. } | AppView::MiniPrompt { .. } | AppView::MicroPrompt { .. } => {
-                DevtoolsSelectionState::ChoiceBackedPrompt
-            }
+            AppView::ArgPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. } => DevtoolsSelectionState::ChoiceBackedPrompt,
             _ => DevtoolsSelectionState::UnsupportedPrompt,
         }
     }
@@ -8871,8 +8879,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> anyhow::Result<String> {
         self.get_grouped_results_cached();
-        let Some(grouped_index) = self.main_menu_result_caches.grouped_items().iter().enumerate().find_map(
-            |(grouped_index, item)| {
+        let Some(grouped_index) = self
+            .main_menu_result_caches
+            .grouped_items()
+            .iter()
+            .enumerate()
+            .find_map(|(grouped_index, item)| {
                 let crate::list_item::GroupedListItem::Item(result_idx) = item else {
                     return None;
                 };
@@ -8883,9 +8895,10 @@ impl ScriptListApp {
                     .launcher_command_id()
                     .as_deref()
                     .is_some_and(|id| id == value);
-                (result.launcher_command_name() == value || command_id_matches).then_some(grouped_index)
-            },
-        ) else {
+                (result.launcher_command_name() == value || command_id_matches)
+                    .then_some(grouped_index)
+            })
+        else {
             anyhow::bail!("No visible main-menu choice matched value '{value}'");
         };
 
@@ -8937,14 +8950,14 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> anyhow::Result<Option<String>> {
         self.get_grouped_results_cached();
-        let Some(grouped_index) =
-            self.main_menu_result_caches
-                .grouped_items()
-                .iter()
-                .enumerate()
-                .find_map(|(grouped_index, item)| {
-                    matches!(item, crate::list_item::GroupedListItem::Item(_)).then_some(grouped_index)
-                })
+        let Some(grouped_index) = self
+            .main_menu_result_caches
+            .grouped_items()
+            .iter()
+            .enumerate()
+            .find_map(|(grouped_index, item)| {
+                matches!(item, crate::list_item::GroupedListItem::Item(_)).then_some(grouped_index)
+            })
         else {
             anyhow::bail!("No visible main-menu choices to select");
         };
@@ -8957,7 +8970,12 @@ impl ScriptListApp {
         Ok(selected)
     }
 
-    fn apply_main_menu_selection(&mut self, grouped_index: usize, submit: bool, cx: &mut Context<Self>) {
+    fn apply_main_menu_selection(
+        &mut self,
+        grouped_index: usize,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.selected_index = grouped_index;
         self.hovered_index = None;
         self.last_scrolled_index = None;
