@@ -2,6 +2,7 @@
 
 const POPUP_SOURCE: &str = include_str!("../src/app_impl/menu_syntax_trigger_popup_window.rs");
 const STATE_SOURCE: &str = include_str!("../src/app_impl/menu_syntax_trigger_popup.rs");
+const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
 
 fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature should exist");
@@ -63,7 +64,8 @@ fn selected_index_is_optional_not_row_zero_fallback() {
 fn footer_rows_are_pinned_below_paged_normal_rows() {
     for needle in [
         "fn trigger_popup_normal_row_capacity",
-        "INLINE_POPUP_MAX_VISIBLE_ROWS\n        .saturating_sub(trigger_popup_footer_count(snapshot))\n        .max(1)",
+        "visible_row_limit\n        .min(INLINE_POPUP_MAX_VISIBLE_ROWS)",
+        ".saturating_sub(trigger_popup_footer_count(snapshot))\n        .max(1)",
         ".filter(|(_, row)| !is_trigger_popup_footer_row(row))",
         ".filter(|(_, row)| is_trigger_popup_footer_row(row))",
         ".chain(footer_rows.iter().copied())",
@@ -102,18 +104,20 @@ fn main_input_trigger_popup_uses_left_drawer_layout() {
     );
     assert!(
         POPUP_SOURCE.contains("pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer")
-            && POPUP_SOURCE.contains("parent_bounds.origin.x - gpui::px(snapshot.width)")
+            && POPUP_SOURCE.contains("let preferred_left = parent_bounds.origin.x.as_f32() - width;")
+            && POPUP_SOURCE.contains("right_fallback + width <= display_right")
+            && POPUP_SOURCE.contains("(display_right - width).max(display_left)")
             && POPUP_SOURCE.contains("parent_bounds.origin.y")
             && POPUP_SOURCE.contains("MENU_SYNTAX_TRIGGER_POPUP_MAX_PARENT_HEIGHT_RATIO"),
-        "main-input trigger popups should share the ACP @ left-drawer geometry instead of sitting under the input"
+        "main-input trigger popups should prefer ACP @ left-drawer geometry while staying inside display bounds"
     );
     assert!(
         sync.contains(
-            "let layout = menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, &snapshot);"
+            "menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, display_bounds, &snapshot);"
         ) && sync.contains("snapshot.visible_row_limit = layout.visible_row_limit;")
             && sync.contains("let bounds = layout.bounds;")
             && !sync.contains("inline_popup_bounds("),
-        "sync should derive bounds from the left-drawer layout and ignore legacy left/top offsets"
+        "sync should derive bounds from the display-aware left-drawer layout"
     );
 
     let request_builder = function_body(
@@ -122,8 +126,81 @@ fn main_input_trigger_popup_uses_left_drawer_layout() {
     );
     assert!(
         request_builder.contains("visible_row_limit: INLINE_POPUP_MAX_VISIBLE_ROWS")
-            && request_builder.contains("left: 0.0")
-            && request_builder.contains("top: 0.0"),
-        "request construction should seed the row cap and avoid legacy below-input offsets"
+            && request_builder.contains("let display_bounds = display.as_ref().map(|display| display.visible_bounds());")
+            && request_builder.contains("display_bounds,")
+            && !POPUP_SOURCE.contains("pub(crate) left: f32")
+            && !POPUP_SOURCE.contains("pub(crate) top: f32"),
+        "request construction should seed the row cap, pass display bounds, and remove legacy below-input offsets"
+    );
+}
+
+#[test]
+fn mouse_accept_preserves_keep_open_rows_through_parent_window() {
+    let popup_struct = function_body(
+        POPUP_SOURCE,
+        "pub(crate) struct MenuSyntaxTriggerPopupWindow",
+    );
+    assert!(
+        popup_struct.contains("parent_window_handle: AnyWindowHandle"),
+        "popup entity must retain the parent main-window handle for click keep-open resync"
+    );
+
+    let accept_row = function_body(POPUP_SOURCE, "fn accept_row(&self");
+    assert!(
+        accept_row.contains("-> bool")
+            && accept_row.contains("cx.update_window(self.parent_window_handle")
+            && accept_row.contains("Some(parent_window)")
+            && accept_row.contains("app.accept_menu_syntax_trigger_popup_row(&row_id, None, cx)")
+            && accept_row.contains("keep_open"),
+        "mouse accept should dispatch through the parent window and report keep_open"
+    );
+
+    let click = function_body(POPUP_SOURCE, "fn handle_row_click");
+    assert!(
+        click.contains("if self.accept_row(index, cx) {\n                return;\n            }")
+            && click.contains("window.remove_window();"),
+        "keep-open click rows must not fall through to popup teardown"
+    );
+
+    let app_accept = function_body(
+        POPUP_SOURCE,
+        "pub(crate) fn accept_menu_syntax_trigger_popup_row",
+    );
+    assert!(
+        app_accept.contains("window: Option<&mut Window>")
+            && app_accept.contains("TriggerPickerIntentOutcome::ReplaceInput")
+            && app_accept.contains("keep_open: true")
+            && app_accept
+                .contains("self.dispatch_menu_syntax_trigger_popup_outcome(outcome, window, cx);"),
+        "app accept should pass the parent window into the existing keep-open dispatcher"
+    );
+}
+
+#[test]
+fn prompt_popup_batch_targets_can_act_on_menu_syntax_drawer() {
+    assert!(
+        POPUP_SOURCE.contains(
+            "pub(crate) fn batch_select_menu_syntax_trigger_popup_row_by_value"
+        ) && POPUP_SOURCE.contains(
+            "pub(crate) fn batch_select_menu_syntax_trigger_popup_row_by_semantic_id"
+        ) && POPUP_SOURCE.contains("self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);"),
+        "menu-syntax drawer should expose entity batch selection helpers that reuse the real accept path"
+    );
+
+    let target_resolution =
+        function_body(PROMPT_HANDLER_SOURCE, "fn resolve_automation_read_target");
+    assert!(
+        target_resolution
+            .contains("menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open"),
+        "PromptPopup target resolution must treat menu-syntax trigger popup as an open popup"
+    );
+
+    assert!(
+        PROMPT_HANDLER_SOURCE
+            .contains("_this.batch_select_menu_syntax_trigger_popup_row_by_value(&value, cx)")
+            && PROMPT_HANDLER_SOURCE.contains(
+                "_this.batch_select_menu_syntax_trigger_popup_row_by_semantic_id(&semantic_id, cx)"
+            ),
+        "PromptPopup batch selectByValue/selectBySemanticId should route to menu-syntax drawer rows"
     );
 }

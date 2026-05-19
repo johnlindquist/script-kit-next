@@ -125,7 +125,8 @@ fn expected_transition_contract(helper: &str) -> serde_json::Value {
             "mainAutomationRekey": true,
             "acpSurfaceEvent": "EmbeddedOpened",
             "actionsCleanup": "clearActionsPopupState",
-            "focusTarget": "ChatPrompt",
+            "focusTarget": "AcpChat",
+            "focusCoordinatorRequest": "FocusRequest::acp_chat",
             "focusedInput": "None",
             "resize": "callerOwned",
             "stateSnapshot": "getState.surfaceContract"
@@ -245,7 +246,7 @@ fn inventory_captures_known_transition_classes() {
         ),
         (
             "src/app_execute/builtin_execution.rs",
-            "execute_builtin_inner",
+            "execute_kit_store_builtin",
             "AppView::BrowseKitsView",
         ),
         (
@@ -393,7 +394,8 @@ fn inventory_transition_helper_entries_expose_checked_transition_contracts() {
     assert_eq!(acp["mainAutomationRekey"], true);
     assert_eq!(acp["acpSurfaceEvent"], "EmbeddedOpened");
     assert_eq!(acp["actionsCleanup"], "clearActionsPopupState");
-    assert_eq!(acp["focusTarget"], "ChatPrompt");
+    assert_eq!(acp["focusTarget"], "AcpChat");
+    assert_eq!(acp["focusCoordinatorRequest"], "FocusRequest::acp_chat");
     assert_eq!(acp["focusedInput"], "None");
     assert_eq!(acp["resize"], "callerOwned");
     assert_eq!(acp["stateSnapshot"], "getState.surfaceContract");
@@ -463,7 +465,7 @@ fn transition_helper_bodies_match_declared_transition_contracts() {
     assert_before(
         acp,
         "self.clear_actions_popup_state();",
-        "self.pending_focus = Some(FocusTarget::ChatPrompt);",
+        "self.focus_coordinator",
     );
     assert_before(
         acp,
@@ -473,7 +475,12 @@ fn transition_helper_bodies_match_declared_transition_contracts() {
     assert_before(
         acp,
         "self.focused_input = FocusedInput::None;",
-        "self.pending_focus = Some(FocusTarget::ChatPrompt);",
+        "self.focus_coordinator",
+    );
+    assert_before(
+        acp,
+        ".request(crate::focus_coordinator::FocusRequest::acp_chat());",
+        "self.sync_coordinator_to_legacy();",
     );
 }
 

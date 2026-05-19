@@ -105,11 +105,10 @@ impl MenuSyntaxTriggerPopupSnapshot {
 pub(crate) struct MenuSyntaxTriggerPopupRequest {
     pub(crate) parent_window_handle: AnyWindowHandle,
     pub(crate) parent_bounds: Bounds<Pixels>,
+    pub(crate) display_bounds: Option<Bounds<Pixels>>,
     pub(crate) display_id: Option<DisplayId>,
     pub(crate) source_view: WeakEntity<ScriptListApp>,
     pub(crate) snapshot: MenuSyntaxTriggerPopupSnapshot,
-    pub(crate) left: f32,
-    pub(crate) top: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -188,6 +187,14 @@ pub(crate) fn is_menu_syntax_trigger_popup_window_open() -> bool {
     false
 }
 
+fn menu_syntax_trigger_popup_index_from_semantic_id(semantic_id: &str) -> Option<usize> {
+    let mut parts = semantic_id.splitn(3, ':');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some("choice"), Some(index), Some(_)) => index.parse::<usize>().ok(),
+        _ => None,
+    }
+}
+
 fn selected_row_has_synopsis(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> bool {
     trigger_popup_footer_count(snapshot) == 0
         && snapshot
@@ -239,19 +246,36 @@ fn popup_visible_row_limit(snapshot: &MenuSyntaxTriggerPopupSnapshot, parent_hei
 
 pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer(
     parent_bounds: Bounds<Pixels>,
+    display_bounds: Option<Bounds<Pixels>>,
     snapshot: &MenuSyntaxTriggerPopupSnapshot,
 ) -> MenuSyntaxTriggerPopupLayout {
     let mut snapshot = snapshot.clone();
     let visible_row_limit =
         popup_visible_row_limit(&snapshot, f32::from(parent_bounds.size.height));
     snapshot.visible_row_limit = visible_row_limit;
+    let width = snapshot.width;
+    let preferred_left = parent_bounds.origin.x.as_f32() - width;
+    let left = display_bounds
+        .map(|display_bounds| {
+            let display_left = display_bounds.origin.x.as_f32();
+            let display_right = display_left + display_bounds.size.width.as_f32();
+            if preferred_left >= display_left {
+                preferred_left
+            } else {
+                let right_fallback =
+                    parent_bounds.origin.x.as_f32() + parent_bounds.size.width.as_f32();
+                if right_fallback + width <= display_right {
+                    right_fallback
+                } else {
+                    (display_right - width).max(display_left)
+                }
+            }
+        })
+        .unwrap_or(preferred_left);
     MenuSyntaxTriggerPopupLayout {
         bounds: Bounds {
-            origin: gpui::point(
-                parent_bounds.origin.x - gpui::px(snapshot.width),
-                parent_bounds.origin.y,
-            ),
-            size: gpui::size(gpui::px(snapshot.width), gpui::px(popup_height(&snapshot))),
+            origin: gpui::point(gpui::px(left), parent_bounds.origin.y),
+            size: gpui::size(gpui::px(width), gpui::px(popup_height(&snapshot))),
         },
         visible_row_limit,
     }
@@ -265,14 +289,14 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
     let MenuSyntaxTriggerPopupRequest {
         parent_window_handle,
         parent_bounds,
+        display_bounds,
         display_id,
         source_view,
         mut snapshot,
-        left: _left,
-        top: _top,
     } = request;
 
-    let layout = menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, &snapshot);
+    let layout =
+        menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, display_bounds, &snapshot);
     snapshot.visible_row_limit = layout.visible_row_limit;
     let bounds = layout.bounds;
 
@@ -325,7 +349,14 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
     let window_options = inline_popup_window_options(bounds, display_id);
 
     let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| MenuSyntaxTriggerPopupWindow::new(snapshot.clone(), source_view.clone(), cx))
+        cx.new(|cx| {
+            MenuSyntaxTriggerPopupWindow::new(
+                snapshot.clone(),
+                source_view.clone(),
+                parent_window_handle,
+                cx,
+            )
+        })
     })?;
 
     if let Err(error) = configure_inline_popup_window(&handle, cx, parent_window_handle) {
@@ -375,6 +406,7 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
 pub(crate) struct MenuSyntaxTriggerPopupWindow {
     snapshot: MenuSyntaxTriggerPopupSnapshot,
     source_view: WeakEntity<ScriptListApp>,
+    parent_window_handle: AnyWindowHandle,
     focus_handle: FocusHandle,
     mouse_armed_row: Option<(usize, String)>,
 }
@@ -383,11 +415,13 @@ impl MenuSyntaxTriggerPopupWindow {
     fn new(
         snapshot: MenuSyntaxTriggerPopupSnapshot,
         source_view: WeakEntity<ScriptListApp>,
+        parent_window_handle: AnyWindowHandle,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             snapshot,
             source_view,
+            parent_window_handle,
             focus_handle: cx.focus_handle(),
             mouse_armed_row: None,
         }
@@ -447,18 +481,33 @@ impl MenuSyntaxTriggerPopupWindow {
         None
     }
 
-    fn accept_row(&self, row_index: usize, cx: &mut App) {
+    fn accept_row(&self, row_index: usize, cx: &mut App) -> bool {
         let Some(row) = self.snapshot.snapshot.rows.get(row_index) else {
-            return;
+            return false;
         };
         let row_id = row.id.clone();
 
         if let Some(view) = self.source_view.upgrade() {
-            view.update(cx, |app, cx| {
-                app.accept_menu_syntax_trigger_popup_row(&row_id, cx);
-            });
+            let mut keep_open = false;
+            let updated_with_parent =
+                cx.update_window(self.parent_window_handle, |_, parent_window, cx| {
+                    let _ = view.update(cx, |app, cx| {
+                        keep_open = app.accept_menu_syntax_trigger_popup_row(
+                            &row_id,
+                            Some(parent_window),
+                            cx,
+                        );
+                    });
+                });
+            if updated_with_parent.is_err() {
+                let _ = view.update(cx, |app, cx| {
+                    keep_open = app.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);
+                });
+            }
+            keep_open
         } else {
             close_menu_syntax_trigger_popup_window(cx);
+            false
         }
     }
 
@@ -511,7 +560,9 @@ impl MenuSyntaxTriggerPopupWindow {
 
         if should_accept {
             self.mouse_armed_row = None;
-            self.accept_row(index, cx);
+            if self.accept_row(index, cx) {
+                return;
+            }
             clear_menu_syntax_trigger_popup_slot();
             crate::windows::automation_surface_collector::remove_menu_syntax_prompt_popup_snapshot(
                 MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
@@ -683,7 +734,9 @@ impl ScriptListApp {
 
         let parent_bounds = window.bounds();
         let parent_window_handle = window.window_handle();
-        let display_id = window.display(cx).map(|display| display.id());
+        let display = window.display(cx);
+        let display_id = display.as_ref().map(|display| display.id());
+        let display_bounds = display.as_ref().map(|display| display.visible_bounds());
         let width = inline_popup_width_for_window(parent_bounds.size.width.as_f32());
         let popup_snapshot = MenuSyntaxTriggerPopupSnapshot {
             snapshot,
@@ -697,11 +750,10 @@ impl ScriptListApp {
         let request = MenuSyntaxTriggerPopupRequest {
             parent_window_handle,
             parent_bounds,
+            display_bounds,
             display_id,
             source_view: cx.entity().downgrade(),
             snapshot: popup_snapshot,
-            left: 0.0,
-            top: 0.0,
         };
 
         if let Err(error) = sync_menu_syntax_trigger_popup_window(cx, request) {
@@ -729,18 +781,19 @@ impl ScriptListApp {
     pub(crate) fn accept_menu_syntax_trigger_popup_row(
         &mut self,
         row_id: &str,
+        window: Option<&mut Window>,
         cx: &mut Context<Self>,
-    ) {
+    ) -> bool {
         let Some(snapshot) = self
             .menu_syntax_trigger_popup_state
             .snapshot
             .as_ref()
             .cloned()
         else {
-            return;
+            return false;
         };
         let Some(selected_index) = snapshot.rows.iter().position(|row| row.id == row_id) else {
-            return;
+            return false;
         };
         let raw_filter_text = self.filter_text.clone();
         let outcome = crate::menu_syntax::apply_intent(
@@ -749,8 +802,46 @@ impl ScriptListApp {
             Some(selected_index),
             &raw_filter_text,
         );
+        let keep_open = matches!(
+            outcome,
+            crate::menu_syntax::TriggerPickerIntentOutcome::ReplaceInput {
+                keep_open: true,
+                ..
+            }
+        );
 
-        self.dispatch_menu_syntax_trigger_popup_outcome(outcome, None, cx);
+        self.dispatch_menu_syntax_trigger_popup_outcome(outcome, window, cx);
+        keep_open
+    }
+
+    pub(crate) fn batch_select_menu_syntax_trigger_popup_row_by_value(
+        &mut self,
+        value: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let snapshot = self.menu_syntax_trigger_popup_state.snapshot.as_ref()?;
+        let row = snapshot
+            .rows
+            .iter()
+            .find(|row| row.token.as_deref() == Some(value) || row.id == value)?;
+        let row_id = row.id.clone();
+        let accepted_value = row.token.clone().unwrap_or_else(|| value.to_string());
+        self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);
+        Some(accepted_value)
+    }
+
+    pub(crate) fn batch_select_menu_syntax_trigger_popup_row_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        let row_index = menu_syntax_trigger_popup_index_from_semantic_id(semantic_id)?;
+        let snapshot = self.menu_syntax_trigger_popup_state.snapshot.as_ref()?;
+        let row = snapshot.rows.get(row_index)?;
+        let row_id = row.id.clone();
+        let accepted_value = row.token.clone().unwrap_or_else(|| row.id.clone());
+        self.accept_menu_syntax_trigger_popup_row(&row_id, None, cx);
+        Some(accepted_value)
     }
 
     fn dispatch_menu_syntax_trigger_popup_outcome(
