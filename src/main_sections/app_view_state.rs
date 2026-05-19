@@ -827,6 +827,7 @@ impl AppView {
             AppView::WebcamView { .. } => Some("webcam_prompt"),
             AppView::NamingPrompt { .. } => Some("naming_prompt"),
             AppView::CreationFeedback { .. } => Some("creation_feedback"),
+            AppView::ScriptIssuesView { .. } => Some("script_issues"),
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::AcpHistoryView { .. } => Some("acp_history"),
@@ -854,7 +855,6 @@ impl AppView {
             | AppView::ActionsDialog
             | AppView::TermPrompt { .. }
             | AppView::MicroPrompt { .. }
-            | AppView::ScriptIssuesView { .. }
             | AppView::SdkReferenceView { .. }
             | AppView::ScriptTemplateCatalogView { .. }
             | AppView::CreateAiPresetView { .. }

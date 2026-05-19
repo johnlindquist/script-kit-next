@@ -219,7 +219,11 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if self.dispatch_design_gallery_select_footer_action(cx) {
+                if let AppView::ScriptIssuesView { report } = &self.current_view {
+                    let report = report.clone();
+                    self.fix_script_issues_in_agent(&report, cx);
+                    return;
+                } else if self.dispatch_design_gallery_select_footer_action(cx) {
                     return;
                 } else if self.dispatch_kit_store_primary_footer_action(cx) {
                     return;
@@ -572,6 +576,24 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved HotkeyPrompt footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::ScriptIssuesView { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let enabled = !footer_disabled;
+            let buttons =
+                vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Fix in Agent")
+                    .enabled(enabled)];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Script Issues footer buttons"
             );
             return buttons;
         }
