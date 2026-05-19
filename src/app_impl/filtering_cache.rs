@@ -1,3 +1,4 @@
+use gpui::WeakEntity;
 use super::*;
 
 const INLINE_CALCULATOR_SECTION_LABEL: &str = "Calculator";

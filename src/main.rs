@@ -150,6 +150,7 @@ mod browser_history;
 mod browser_tabs;
 mod builtins;
 mod fallbacks;
+mod favicons;
 mod favorites;
 mod menu_bar;
 

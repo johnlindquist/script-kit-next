@@ -1044,7 +1044,9 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                     chat.live_thread().update(cx, |thread, cx| {
                         thread.clear_messages(cx);
                     });
-                    chat.collapsed_ids.clear();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+                    }
                     cx.notify();
                 });
                 tracing::info!(event = "detached_action_new_conversation");
@@ -1066,10 +1068,12 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         "acp_scroll_to_top" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
-                    chat.list_state.scroll_to(gpui::ListOffset {
-                        item_ix: 0,
-                        offset_in_item: px(0.),
-                    });
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.read(cx).scroll_to(gpui::ListOffset {
+                            item_ix: 0,
+                            offset_in_item: px(0.),
+                        });
+                    }
                     cx.notify();
                 });
             }
@@ -1077,7 +1081,9 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         "acp_scroll_to_bottom" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
-                    chat.list_state.scroll_to_end();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.read(cx).scroll_to_end();
+                    }
                     cx.notify();
                 });
             }
@@ -1099,9 +1105,8 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                         })
                         .map(|m| m.id)
                         .collect();
-                    for id in ids {
-                        chat.collapsed_ids.insert(id);
-                    }
+                    // TODO: Re-implement collapse-all via transcript entity.
+                    // The collapsed_ids field has moved to AcpTranscript.
                     cx.notify();
                 });
             }
@@ -1109,7 +1114,9 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         "acp_collapse_all" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
-                    chat.collapsed_ids.clear();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+                    }
                     cx.notify();
                 });
             }

@@ -371,13 +371,8 @@ fn calculate_resized_frame_with_width(
     let height_delta = target_height - current_frame.height;
     let new_origin_y = current_frame.y - height_delta;
     let new_width = target_width.unwrap_or(current_frame.width);
-    // Center horizontally when width changes
-    let new_origin_x = if target_width.is_some() {
-        let width_delta = new_width - current_frame.width;
-        current_frame.x - (width_delta / 2.0)
-    } else {
-        current_frame.x
-    };
+    // Preserve origin X when width changes (expand/shrink to the right)
+    let new_origin_x = current_frame.x;
     let mut resized = FrameGeometry::new(new_origin_x, new_origin_y, new_width, target_height);
 
     if let Some(backing_scale) = sanitize_backing_scale(backing_scale) {
@@ -793,7 +788,7 @@ pub fn get_first_window_height() -> Option<Pixels> {
     None
 }
 /// Resize the main window to a new height and optionally a new width, keeping the top edge fixed.
-/// When width changes, the window is re-centered horizontally around its midpoint.
+/// When width changes, the window preserves its original x position and expands/shrinks to the right.
 #[cfg(target_os = "macos")]
 pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f32>) {
     let height_f64: f64 = f32::from(target_height) as f64;
@@ -1162,7 +1157,7 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_calculate_resized_frame_with_width_centers_horizontally() {
+    fn test_calculate_resized_frame_with_width_preserves_x() {
         let current = FrameGeometry::new(100.0, 200.0, 750.0, 500.0);
         let resized = calculate_resized_frame_with_width(current, 400.0, Some(480.0), None, None);
 
@@ -1170,8 +1165,8 @@ mod resize_tests {
         assert!((resized.width - 480.0).abs() < 0.001);
         // Height should be 400
         assert!((resized.height - 400.0).abs() < 0.001);
-        // X should be centered: 100 - (480 - 750) / 2 = 100 + 135 = 235
-        assert!((resized.x - 235.0).abs() < 0.001);
+        // X should be preserved, not centered
+        assert!((resized.x - 100.0).abs() < 0.001);
     }
 
     #[test]

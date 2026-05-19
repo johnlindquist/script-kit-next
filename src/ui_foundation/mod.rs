@@ -190,17 +190,37 @@ pub fn get_vibrancy_background(theme: &Theme) -> Option<Rgba> {
     }
 }
 
-/// Resolve the optional theme background gradient as a GPUI fill.
-pub fn get_theme_background_gradient(theme: &Theme) -> Option<Background> {
-    let gradient = theme.active_background_gradient()?;
-    let alpha = crate::theme::types::opacity_to_alpha(gradient.opacity);
-    let from = rgba((gradient.from << 8) | alpha);
-    let to = rgba((gradient.to << 8) | alpha);
-    Some(linear_gradient(
-        gradient.angle,
-        linear_color_stop(from, 0.0),
-        linear_color_stop(to, 1.0),
-    ))
+/// Resolve the optional theme background gradient layers as GPUI fills.
+pub fn get_theme_background_gradients(theme: &Theme) -> Vec<Background> {
+    let mut backgrounds = Vec::new();
+    if let Some(gradient) = theme.active_background_gradient() {
+        // Base layer
+        let alpha = crate::theme::types::opacity_to_alpha(gradient.opacity);
+        let from = rgba((gradient.from << 8) | alpha);
+        let to = rgba((gradient.to << 8) | alpha);
+        backgrounds.push(linear_gradient(
+            gradient.angle,
+            linear_color_stop(from, 0.0),
+            linear_color_stop(to, 1.0),
+        ));
+
+        // Overlapping layers
+        for layer in gradient
+            .layers
+            .iter()
+            .filter(|l| l.enabled && l.opacity > 0.0)
+        {
+            let alpha = crate::theme::types::opacity_to_alpha(layer.opacity);
+            let from = rgba((layer.from << 8) | alpha);
+            let to = rgba((layer.to << 8) | alpha);
+            backgrounds.push(linear_gradient(
+                layer.angle,
+                linear_color_stop(from, 0.0),
+                linear_color_stop(to, 1.0),
+            ));
+        }
+    }
+    backgrounds
 }
 /// Get container background with optional opacity for semi-transparent areas.
 ///

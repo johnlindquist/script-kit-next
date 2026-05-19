@@ -1,3 +1,5 @@
+use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
+
 /// Maps a Script Kit UI session to the ACP session ID returned by `session/new`.
 #[derive(Debug, Clone)]
 pub(crate) struct AcpSessionBinding {
@@ -38,6 +40,54 @@ pub(crate) fn build_prompt_blocks(
         }
     }
     blocks
+}
+
+// ── Extracted ACP view types ────────────────────────────────────────────
+
+/// Active @-mention session state for the ACP inline context picker.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpMentionSession {
+    /// Which trigger character opened this session (`@` or `/`).
+    pub(crate) trigger: ContextPickerTrigger,
+    /// Character range of the trigger+query in the input text.
+    pub(crate) trigger_range: std::ops::Range<usize>,
+    /// Query text typed after the trigger.
+    pub(crate) query: String,
+    /// Currently highlighted row index.
+    pub(crate) selected_index: usize,
+    /// First visible row in the popup list.
+    pub(crate) visible_start: usize,
+    /// Ranked picker items for the current query.
+    pub(crate) items: Vec<ContextPickerItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AcpDismissedMentionTrigger {
+    pub(crate) trigger: ContextPickerTrigger,
+    pub(crate) trigger_range: std::ops::Range<usize>,
+    pub(crate) query: String,
+    pub(crate) cursor: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AcpMentionPopupParentWindow {
+    pub(crate) handle: gpui::AnyWindowHandle,
+    pub(crate) bounds: gpui::Bounds<gpui::Pixels>,
+    pub(crate) display_id: Option<gpui::DisplayId>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AcpFocusedMentionPreview {
+    pub(crate) token: String,
+    pub(crate) detail: String,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct AcpPendingPortalSession {
+    pub(crate) contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
+    pub(crate) composer_text: String,
+    pub(crate) composer_cursor: usize,
+    pub(crate) state: crate::ai::acp::portal_contract::AcpPortalSessionState,
 }
 
 #[cfg(test)]
