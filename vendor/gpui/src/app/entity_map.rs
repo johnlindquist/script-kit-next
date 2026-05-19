@@ -205,6 +205,14 @@ impl EntityMap {
 
 #[track_caller]
 fn double_lease_panic<T>(operation: &str) -> ! {
+    log::error!(
+        target: "gpui::entity_map",
+        "event=gpui_entity_double_lease operation={} entity_type={} caller={} backtrace={}",
+        operation,
+        std::any::type_name::<T>(),
+        std::panic::Location::caller(),
+        std::backtrace::Backtrace::force_capture()
+    );
     panic!(
         "cannot {operation} {} while it is already being updated",
         std::any::type_name::<T>()

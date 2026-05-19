@@ -58,13 +58,20 @@ const allowedKeys = new Set([
   "w",
 ]);
 
+function isPrintableTextKey(args: Args) {
+  return args.actionKind === "key"
+    && args.key.length === 1
+    && args.modifiers.length === 0
+    && !/[\r\n\t]/.test(args.key);
+}
+
 function usage() {
   return [
     "Usage:",
     "  bun scripts/devtools/act.ts set-input --text <value> [target args]",
     "  bun scripts/devtools/act.ts set-input --value <value> [target args]  # alias for --text",
     "  bun scripts/devtools/act.ts select --semantic-id <id> [--allow-submit] [target args]",
-    "  bun scripts/devtools/act.ts key --key <name> [--modifiers cmd,shift] [--allow-submit] [target args]",
+    "  bun scripts/devtools/act.ts key --key <name-or-character> [--modifiers cmd,shift] [--allow-submit] [target args]",
     "  bun scripts/devtools/act.ts open-actions [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect, e.g. --session <name> --main --strict --surface ScriptList.",
@@ -222,6 +229,22 @@ async function scrollReceipt(args: Args, label: string) {
   return run(["bun", "scripts/devtools/scroll.ts", "inspect", ...args.forwarded], label);
 }
 
+function withoutExpectedSurface(args: Args): Args {
+  const forwarded: string[] = [];
+  for (let index = 0; index < args.forwarded.length; index += 1) {
+    if (args.forwarded[index] === "--surface") {
+      index += 1;
+      continue;
+    }
+    forwarded.push(args.forwarded[index]);
+  }
+  return { ...args, expectedSurfaceKind: "", forwarded };
+}
+
+function postActionReceiptArgs(args: Args): Args {
+  return isPrintableTextKey(args) ? withoutExpectedSurface(args) : args;
+}
+
 function safety(args: Args) {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -236,7 +259,7 @@ function safety(args: Args) {
   if (args.actionKind === "key" && !args.key) {
     errors.push("key requires --key");
   }
-  if (args.actionKind === "key" && !allowedKeys.has(normalizedKey)) {
+  if (args.actionKind === "key" && !allowedKeys.has(normalizedKey) && !isPrintableTextKey(args)) {
     errors.push(`key '${args.key}' is not in the safe DevTools key allowlist`);
   }
   if (args.actionKind === "key" && blockedSubmitKeys.has(normalizedKey) && !args.allowSubmit) {
@@ -253,7 +276,9 @@ function safety(args: Args) {
   }
 
   return {
-    channel: args.actionKind === "key" ? "simulateKey" : "batch",
+    channel: isPrintableTextKey(args)
+      ? "setFilterTextInput"
+      : args.actionKind === "key" ? "simulateKey" : "batch",
     destructive: args.allowSubmit,
     submitAllowed: args.allowSubmit,
     nativeEscalation: false,
@@ -305,7 +330,20 @@ function actionPayload(args: Args, selector: JsonObject) {
 }
 
 function expectedResponse(args: Args) {
+  if (isPrintableTextKey(args)) return "stdin_command_parsed";
   return args.actionKind === "key" ? "stdin_command_parsed" : "batchResult";
+}
+
+async function printableTextKeyAction(args: Args, before: JsonObject) {
+  const currentInput =
+    typeof (before.keyboardOwner as JsonObject | undefined)?.inputValue === "string"
+      ? String((before.keyboardOwner as JsonObject).inputValue)
+      : "";
+  return send(args.session, {
+    type: "setFilter",
+    requestId: requestId("printable-key"),
+    text: `${currentInput}${args.key}`,
+  }, args.timeoutMs);
 }
 
 function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: JsonObject, afterScroll: JsonObject) {
@@ -494,7 +532,7 @@ async function inspectParentAfterAction(args: Args, targetReceipt: JsonObject) {
   const parentAutomationId = resolved?.parentAutomationId;
   const parentArgs = parentAutomationId
     ? ["--target-id", String(parentAutomationId)]
-    : ["--main"];
+    : ["--main", "--surface", "ScriptList"];
   return run([
     "bun",
     "scripts/devtools/targets.ts",
@@ -586,6 +624,7 @@ function resolvePostActionLifecycle(
 }
 
 function classify(
+  args: Args,
   targetReceipt: JsonObject,
   guard: ReturnType<typeof safety>,
   actionReceipt: JsonObject,
@@ -620,6 +659,9 @@ function classify(
   if (actionFailed(actionReceipt)) {
     return "blocked-by-timeout";
   }
+  if (isPrintableTextKey(args) && after.target && after.classification === "blocked-by-missing-primitive") {
+    return "ok";
+  }
   if (after.classification && after.classification !== "ok") {
     return after.classification;
   }
@@ -648,20 +690,23 @@ async function main() {
 
   let actionEnvelope: JsonObject = { status: "blocked", reason: "blocked-by-unsafe-operation" };
   if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
-    actionEnvelope = args.actionKind === "key"
+    actionEnvelope = isPrintableTextKey(args)
+      ? await printableTextKeyAction(args, before)
+      : args.actionKind === "key"
       ? await send(args.session, actionPayload(args, selector), args.timeoutMs)
       : await rpc(args.session, actionPayload(args, selector), expectedResponse(args), args.timeoutMs);
   }
 
-  const after = await focusReceipt(args, "focus.after");
-  const afterScroll = await scrollReceipt(args, "scroll.after");
+  const afterArgs = postActionReceiptArgs(args);
+  const after = await focusReceipt(afterArgs, "focus.after");
+  const afterScroll = await scrollReceipt(afterArgs, "scroll.after");
   const endedAt = new Date().toISOString();
   const actionReceipt = responseOf(actionEnvelope);
   const parentAfterSubmit = isSubmitLike(args) ? await inspectParentAfterSubmit(args, targetReceipt) : null;
   const parentAfterAction = isDismissLike(args) ? await inspectParentAfterAction(args, targetReceipt) : parentAfterSubmit;
   const submitLifecycle = resolveSubmitLifecycleAfterAction(preflight, after, parentAfterSubmit);
   const postActionLifecycle = resolvePostActionLifecycle(args, submitLifecycle, after, parentAfterAction);
-  const classification = classify(targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle, postActionLifecycle);
+  const classification = classify(args, targetReceipt, guardWithPreflight, actionReceipt, after, submitLifecycle, postActionLifecycle);
 
   console.log(JSON.stringify({
     schemaVersion: 1,
@@ -688,7 +733,7 @@ async function main() {
     expected: {
       protocolResponse: expectedResponse(args),
       submitAllowed: args.allowSubmit,
-      noNativeEscalation: true,
+      noNativeEscalation: !guardWithPreflight.nativeEscalation,
       prePostReceipts: ["focus.inspect", "scroll.inspect"],
     },
     actionReceipt,

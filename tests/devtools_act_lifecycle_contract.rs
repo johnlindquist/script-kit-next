@@ -110,3 +110,26 @@ fn parse_timeouts_and_errors_are_failed_actions() {
         );
     }
 }
+
+#[test]
+fn printable_text_keys_use_input_ladder_not_simulatekey_allowlist_block() {
+    for needle in [
+        "function isPrintableTextKey",
+        "setFilterTextInput",
+        "type: \"setFilter\"",
+        "currentInput",
+        "function postActionReceiptArgs",
+        "return isPrintableTextKey(args) ? withoutExpectedSurface(args) : args",
+        "const afterArgs = postActionReceiptArgs(args);",
+        "isPrintableTextKey(args) && after.target && after.classification === \"blocked-by-missing-primitive\"",
+        "if (args.actionKind === \"key\" && !allowedKeys.has(normalizedKey) && !isPrintableTextKey(args))",
+        "if (isPrintableTextKey(args)) return \"stdin_command_parsed\";",
+        "nativeEscalation: false",
+        "noNativeEscalation: !guardWithPreflight.nativeEscalation",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts must route printable text keys like @ through the input ladder: {needle}"
+        );
+    }
+}

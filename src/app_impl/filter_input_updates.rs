@@ -159,6 +159,24 @@ impl ScriptListApp {
             self.main_menu_fallback_state.clear();
         }
 
+        if !handled_by_subview
+            && matches!(self.current_view, AppView::ScriptList)
+            && matches!(
+                Self::special_entry_from_script_list_filter(&text),
+                Some(crate::filter_input_core::ScriptListSpecialEntry::AcpMentionPicker)
+            )
+        {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "script_list_special_entry_routed",
+                filter_text = %text,
+                entry_kind = "acp_mention_picker",
+                current_view = ?self.current_view,
+            );
+            self.open_tab_ai_acp_with_mention_picker(window, cx);
+            return;
+        }
+
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
         self.maybe_start_root_file_search(&text, cx);

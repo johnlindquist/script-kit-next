@@ -12,6 +12,9 @@ use source_classification::{
 };
 pub(crate) use types::*;
 
+static ACP_OBSERVED_STATE_SYNC_GENERATION: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
 #[allow(dead_code)]
 const ACP_ONBOARDING_SOURCE_AUDIT_ANCHORS: &str = r#"
 load_acp_agent_catalog_entries
@@ -86,44 +89,86 @@ impl ScriptListApp {
         });
 
         // Observe the ACP view for ready-script state and footer-status changes
-        // owned by the child view. The native footer is owned by ScriptListApp,
-        // so visible ACP footer transitions need to repaint the parent too.
-        // GPUI hands us `&mut ScriptListApp` directly — calling `update` on the
-        // same entity here would re-enter and panic with
-        // "cannot update ... while it is already being updated".
+        // owned by the child view. The child notification can fire while the
+        // AcpChatView entity is still being updated. The mention/slash picker
+        // can also emit a burst of child notifications while rebuilding, so
+        // debounce and keep only the latest parent sync before reading from the
+        // child entity.
         cx.observe(view_entity, move |this, view_entity, cx| {
-            let view = view_entity.read(cx);
-            let new_path = view.ready_script_path();
-            let ready_script_path_changed = this.acp_ready_script_path != new_path;
-            let visible_acp_view_changed = matches!(
-                &this.current_view,
-                AppView::AcpChatView { entity } if entity == &view_entity
-            );
-            let footer_status_changed = if visible_acp_view_changed && !view.is_setup_mode() {
-                let dot_status = view.footer_dot_status(cx);
-                let model_display = view
-                    .live_thread()
-                    .read(cx)
-                    .selected_model_display()
-                    .to_string();
-                let changed = this.acp_footer_dot_status != Some(dot_status)
-                    || this.acp_footer_model_display.as_deref() != Some(model_display.as_str());
-                if changed {
-                    this.acp_footer_dot_status = Some(dot_status);
-                    this.acp_footer_model_display = Some(model_display);
-                }
-                changed
-            } else {
-                false
-            };
-            if ready_script_path_changed {
-                this.acp_ready_script_path = new_path;
-            }
-            if ready_script_path_changed || footer_status_changed {
-                cx.notify();
-            }
+            this.schedule_embedded_acp_observed_state_sync(view_entity, cx);
         })
         .detach();
+    }
+
+    fn schedule_embedded_acp_observed_state_sync(
+        &mut self,
+        view_entity: Entity<crate::ai::acp::AcpChatView>,
+        cx: &mut Context<Self>,
+    ) {
+        let view_weak = view_entity.downgrade();
+        let generation =
+            ACP_OBSERVED_STATE_SYNC_GENERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                + 1;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(50))
+                .await;
+
+            let _ = cx.update(|cx| {
+                if ACP_OBSERVED_STATE_SYNC_GENERATION.load(std::sync::atomic::Ordering::Relaxed)
+                    != generation
+                {
+                    return;
+                }
+                let Some(app) = this.upgrade() else {
+                    return;
+                };
+                let Some(view_entity) = view_weak.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| {
+                    this.sync_embedded_acp_observed_state(&view_entity, cx);
+                });
+            });
+        })
+        .detach();
+    }
+
+    fn sync_embedded_acp_observed_state(
+        &mut self,
+        view_entity: &Entity<crate::ai::acp::AcpChatView>,
+        cx: &mut Context<Self>,
+    ) {
+        let view = view_entity.read(cx);
+        let new_path = view.ready_script_path();
+        let ready_script_path_changed = self.acp_ready_script_path != new_path;
+        let visible_acp_view_changed = matches!(
+            &self.current_view,
+            AppView::AcpChatView { entity } if entity == view_entity
+        );
+        let footer_status_changed = if visible_acp_view_changed && !view.is_setup_mode() {
+            let dot_status = view.footer_dot_status(cx);
+            let model_display = view
+                .live_thread()
+                .read(cx)
+                .selected_model_display()
+                .to_string();
+            let changed = self.acp_footer_dot_status != Some(dot_status)
+                || self.acp_footer_model_display.as_deref() != Some(model_display.as_str());
+            if changed {
+                self.acp_footer_dot_status = Some(dot_status);
+                self.acp_footer_model_display = Some(model_display);
+            }
+            changed
+        } else {
+            false
+        };
+        if ready_script_path_changed {
+            self.acp_ready_script_path = new_path;
+        }
+        if ready_script_path_changed || footer_status_changed {
+            cx.notify();
+        }
     }
 
     /// Open the Tab AI surface (zero-intent).
@@ -782,7 +827,7 @@ impl ScriptListApp {
 
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.enter_embedded_acp_chat_surface(entity.clone());
+        self.enter_embedded_acp_chat_surface(entity.clone(), cx);
 
         if let Some(intent) = normalized_intent.clone().filter(|_| !is_setup_mode) {
             entity.update(cx, |chat, cx| {

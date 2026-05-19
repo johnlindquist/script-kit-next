@@ -359,7 +359,7 @@ impl ScriptListApp {
             FocusTarget::ChatPrompt => {
                 let entity = match &self.current_view {
                     AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
-                    AppView::AcpChatView { entity } => Some(entity.read(cx).focus_handle(cx)),
+                    AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone(),
                     _ => None,
                 };
                 if let Some(fh) = entity {
@@ -368,8 +368,10 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::AcpChat => {
-                if let AppView::AcpChatView { entity } = &self.current_view {
-                    let fh = entity.read(cx).focus_handle(cx);
+                if matches!(self.current_view, AppView::AcpChatView { .. }) {
+                    let Some(fh) = self.embedded_acp_focus_handle.clone() else {
+                        return false;
+                    };
                     window.focus(&fh, cx);
                     self.focused_input = FocusedInput::None;
                 }
@@ -408,15 +410,15 @@ mod focus_restore_regression_tests {
             "coordinator sync should preserve the AcpChat target through the legacy bridge"
         );
         assert!(
-            source.contains("AppView::AcpChatView { entity } => Some(entity.read(cx).focus_handle(cx))")
+            source.contains("AppView::AcpChatView { .. } => self.embedded_acp_focus_handle.clone()")
                 && source.contains("FocusTarget::AcpChat => {")
-                && source.contains("if let AppView::AcpChatView { entity } = &self.current_view {"),
-            "launcher ACP focus should work through both the legacy ChatPrompt compatibility path and the dedicated AcpChat target"
+                && source.contains("matches!(self.current_view, AppView::AcpChatView { .. })"),
+            "launcher ACP focus should work through cached focus handles for both the legacy ChatPrompt compatibility path and the dedicated AcpChat target"
         );
         assert!(
             source.contains("FocusTarget::AcpChat => {")
-                && source.contains("if let AppView::AcpChatView { entity } = &self.current_view {"),
-            "apply_pending_focus should restore launcher ACP via the AcpChatView focus handle"
+                && source.contains("self.embedded_acp_focus_handle.clone()"),
+            "apply_pending_focus should restore launcher ACP via the cached AcpChatView focus handle"
         );
     }
 }

@@ -892,7 +892,7 @@ impl ScriptListApp {
 
         // Enrich with ACP streaming/model info when on the ACP chat view.
         if let Some(ref mut cfg) = config {
-            self.enrich_footer_config_with_acp_info(cfg, cx);
+            self.enrich_footer_config_with_acp_info(cfg);
         }
 
         tracing::info!(
@@ -911,18 +911,20 @@ impl ScriptListApp {
     pub(crate) fn enrich_footer_config_with_acp_info(
         &self,
         config: &mut crate::footer_popup::MainWindowFooterConfig,
-        cx: &gpui::App,
     ) {
-        if let AppView::AcpChatView { entity } = &self.current_view {
-            let view = entity.read(cx);
-            if !view.is_setup_mode() {
-                let thread = view.live_thread().read(cx);
-                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                    dot_status: view.footer_dot_status(cx),
-                    model_name: thread.selected_model_display().to_string(),
-                    prefer_accent_for_active_states: true,
-                });
-            }
+        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            let (Some(dot_status), Some(model_name)) = (
+                self.acp_footer_dot_status,
+                self.acp_footer_model_display.as_ref(),
+            ) else {
+                return;
+            };
+
+            config.left_info = Some(crate::footer_popup::FooterLeftInfo {
+                dot_status,
+                model_name: model_name.clone(),
+                prefer_accent_for_active_states: true,
+            });
         }
     }
 

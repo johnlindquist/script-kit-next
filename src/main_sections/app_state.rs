@@ -927,6 +927,10 @@ struct ScriptListApp {
     /// Persistent embedded ACP chat entity so repeated Tab opens can reuse
     /// the same live ACP connection instead of cold-starting a new one.
     pub(crate) embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    /// Cached focus handle for the embedded ACP chat. Focus restoration happens
+    /// from parent render paths, so it must not read the child while ACP is
+    /// updating its picker/composer state.
+    pub(crate) embedded_acp_focus_handle: Option<gpui::FocusHandle>,
     /// Hidden, never-shown ACP chat entity warmed at startup. It is consumed
     /// by the first compatible ACP open so prompt submit avoids initialization.
     pub(crate) prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,

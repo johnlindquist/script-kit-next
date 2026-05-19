@@ -47,8 +47,19 @@ fn reattach_method_exists_and_reuses_cached_embedded_view_first() {
 // doc-anchor-removed: [[removed-docs Chat#Detached window behavior]]
 #[test]
 fn handle_action_reattach_arm_routes_to_the_preserving_helper() {
+    let Some(arm_start) = HANDLE_ACTION_SOURCE.find("\"acp_reattach_panel\" => {") else {
+        panic!("handle_action must keep an acp_reattach_panel arm");
+    };
+    let arm = &HANDLE_ACTION_SOURCE[arm_start..];
+    let close_pos = arm
+        .find("crate::ai::acp::chat_window::close_chat_window(cx);")
+        .expect("acp_reattach_panel must close the detached chat window");
+    let reattach_pos = arm
+        .find("self.reattach_embedded_acp_from_detached(cx);")
+        .expect("acp_reattach_panel must route through the preserving reattach helper");
+
     assert!(
-        HANDLE_ACTION_SOURCE.contains("\"acp_reattach_panel\" => {\n                crate::ai::acp::chat_window::close_chat_window(cx);\n                self.reattach_embedded_acp_from_detached(cx);"),
+        close_pos < reattach_pos,
         "handle_action's acp_reattach_panel arm must close the detached window then \
          route to the preserving reattach helper, not to open_tab_ai_acp_with_entry_intent \
          directly (which would fall through the reuse gate with entry_intent=None and \
@@ -80,7 +91,7 @@ fn try_reuse_embedded_acp_view_handles_none_intent_without_submit() {
          the cached thread state untouched"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("self.enter_embedded_acp_chat_surface(entity.clone());"),
+        TAB_AI_MODE_SOURCE.contains("self.enter_embedded_acp_chat_surface(entity.clone(), cx);"),
         "try_reuse_embedded_acp_view must enter AcpChatView with \
          the CACHED entity — not a freshly constructed one — so the preserved thread \
          entity inside the entity becomes the visible, addressable chat again"
