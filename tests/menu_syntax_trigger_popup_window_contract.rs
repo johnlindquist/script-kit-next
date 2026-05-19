@@ -93,3 +93,37 @@ fn stale_popup_slot_discards_clear_automation_registration() {
         "every sync discard path should clear the attached automation window"
     );
 }
+
+#[test]
+fn main_input_trigger_popup_uses_left_drawer_layout() {
+    let sync = function_body(
+        POPUP_SOURCE,
+        "pub(crate) fn sync_menu_syntax_trigger_popup_window",
+    );
+    assert!(
+        POPUP_SOURCE.contains("pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer")
+            && POPUP_SOURCE.contains("parent_bounds.origin.x - gpui::px(snapshot.width)")
+            && POPUP_SOURCE.contains("parent_bounds.origin.y")
+            && POPUP_SOURCE.contains("MENU_SYNTAX_TRIGGER_POPUP_MAX_PARENT_HEIGHT_RATIO"),
+        "main-input trigger popups should share the ACP @ left-drawer geometry instead of sitting under the input"
+    );
+    assert!(
+        sync.contains(
+            "let layout = menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, &snapshot);"
+        ) && sync.contains("snapshot.visible_row_limit = layout.visible_row_limit;")
+            && sync.contains("let bounds = layout.bounds;")
+            && !sync.contains("inline_popup_bounds("),
+        "sync should derive bounds from the left-drawer layout and ignore legacy left/top offsets"
+    );
+
+    let request_builder = function_body(
+        POPUP_SOURCE,
+        "pub(crate) fn sync_menu_syntax_trigger_popup_window_for_filter",
+    );
+    assert!(
+        request_builder.contains("visible_row_limit: INLINE_POPUP_MAX_VISIBLE_ROWS")
+            && request_builder.contains("left: 0.0")
+            && request_builder.contains("top: 0.0"),
+        "request construction should seed the row cap and avoid legacy below-input offsets"
+    );
+}

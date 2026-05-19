@@ -33,9 +33,8 @@ use crate::components::inline_dropdown::{
     SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 use crate::components::inline_popup_window::{
-    configure_inline_popup_window, inline_popup_bounds, inline_popup_height_for_row_height,
+    configure_inline_popup_window, inline_popup_height_for_row_height,
     inline_popup_width_for_window, inline_popup_window_options, set_inline_popup_window_bounds,
-    INLINE_POPUP_LEFT_MARGIN,
 };
 use crate::components::inline_popup_window::{
     INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
@@ -73,11 +72,7 @@ impl crate::menu_syntax::CaptureHandlerScaffoldEffects for AppCaptureHandlerScaf
     }
 }
 
-/// Top offset applied to the popup, measured from the parent main-window
-/// origin. The main filter input sits in a ~44px tall header strip; 52px
-/// leaves a small air gap below the cursor caret so the popup feels
-/// anchored but not touching.
-const MENU_SYNTAX_TRIGGER_POPUP_TOP: f32 = 52.0;
+const MENU_SYNTAX_TRIGGER_POPUP_MAX_PARENT_HEIGHT_RATIO: f32 = 0.90;
 
 /// Snapshot handed to the GPUI window entity. Clone-cheap (rows are
 /// `Vec<TriggerPickerRow>` which is what `build_trigger_picker_snapshot`
@@ -88,6 +83,7 @@ pub(crate) struct MenuSyntaxTriggerPopupSnapshot {
     pub(crate) selected_row_id: Option<String>,
     pub(crate) raw_filter_text: String,
     pub(crate) visible_start: usize,
+    pub(crate) visible_row_limit: usize,
     pub(crate) width: f32,
 }
 
@@ -141,7 +137,9 @@ fn trigger_popup_footer_count(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> usiz
 }
 
 fn trigger_popup_normal_row_capacity(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> usize {
-    INLINE_POPUP_MAX_VISIBLE_ROWS
+    snapshot
+        .visible_row_limit
+        .min(INLINE_POPUP_MAX_VISIBLE_ROWS)
         .saturating_sub(trigger_popup_footer_count(snapshot))
         .max(1)
 }
@@ -190,6 +188,14 @@ pub(crate) fn is_menu_syntax_trigger_popup_window_open() -> bool {
     false
 }
 
+fn selected_row_has_synopsis(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> bool {
+    trigger_popup_footer_count(snapshot) == 0
+        && snapshot
+            .selected_index()
+            .and_then(|idx| snapshot.snapshot.rows.get(idx))
+            .is_some_and(|row| row.detail.is_some() || row.example.is_some())
+}
+
 fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
     if snapshot.snapshot.rows.is_empty() {
         return inline_popup_height_for_row_height(0, SOFT_COMPACT_PICKER_ROW_HEIGHT);
@@ -197,18 +203,58 @@ fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
 
     let row_count = trigger_popup_visible_row_count(snapshot);
     let row_height = inline_popup_height_for_row_height(row_count, SOFT_COMPACT_PICKER_ROW_HEIGHT);
-    let selected_row_has_synopsis = trigger_popup_footer_count(snapshot) == 0
-        && snapshot
-            .selected_index()
-            .and_then(|idx| snapshot.snapshot.rows.get(idx))
-            .is_some_and(|row| row.detail.is_some() || row.example.is_some());
 
     row_height
-        + if selected_row_has_synopsis {
+        + if selected_row_has_synopsis(snapshot) {
             CONTEXT_PICKER_SYNOPSIS_HEIGHT
         } else {
             0.0
         }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct MenuSyntaxTriggerPopupLayout {
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) visible_row_limit: usize,
+}
+
+fn popup_visible_row_limit(snapshot: &MenuSyntaxTriggerPopupSnapshot, parent_height: f32) -> usize {
+    let row_count = snapshot.snapshot.rows.len();
+    if row_count == 0 {
+        return 0;
+    }
+
+    let max_height = (parent_height * MENU_SYNTAX_TRIGGER_POPUP_MAX_PARENT_HEIGHT_RATIO).max(1.0);
+    let hard_limit = row_count.min(INLINE_POPUP_MAX_VISIBLE_ROWS);
+
+    (1..=hard_limit)
+        .rev()
+        .find(|rows| {
+            let mut candidate = snapshot.clone();
+            candidate.visible_row_limit = *rows;
+            popup_height(&candidate) <= max_height
+        })
+        .unwrap_or(1)
+}
+
+pub(crate) fn menu_syntax_trigger_popup_layout_left_drawer(
+    parent_bounds: Bounds<Pixels>,
+    snapshot: &MenuSyntaxTriggerPopupSnapshot,
+) -> MenuSyntaxTriggerPopupLayout {
+    let mut snapshot = snapshot.clone();
+    let visible_row_limit =
+        popup_visible_row_limit(&snapshot, f32::from(parent_bounds.size.height));
+    snapshot.visible_row_limit = visible_row_limit;
+    MenuSyntaxTriggerPopupLayout {
+        bounds: Bounds {
+            origin: gpui::point(
+                parent_bounds.origin.x - gpui::px(snapshot.width),
+                parent_bounds.origin.y,
+            ),
+            size: gpui::size(gpui::px(snapshot.width), gpui::px(popup_height(&snapshot))),
+        },
+        visible_row_limit,
+    }
 }
 
 /// Open or update the menu-syntax trigger popup window.
@@ -221,18 +267,14 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
         parent_bounds,
         display_id,
         source_view,
-        snapshot,
-        left,
-        top,
+        mut snapshot,
+        left: _left,
+        top: _top,
     } = request;
 
-    let bounds = inline_popup_bounds(
-        parent_bounds,
-        left,
-        top,
-        snapshot.width,
-        popup_height(&snapshot),
-    );
+    let layout = menu_syntax_trigger_popup_layout_left_drawer(parent_bounds, &snapshot);
+    snapshot.visible_row_limit = layout.visible_row_limit;
+    let bounds = layout.bounds;
 
     let storage = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut guard) = storage.lock() {
@@ -648,6 +690,7 @@ impl ScriptListApp {
             selected_row_id: self.menu_syntax_trigger_popup_state.selected_row_id.clone(),
             raw_filter_text,
             visible_start: self.menu_syntax_trigger_popup_state.visible_start,
+            visible_row_limit: INLINE_POPUP_MAX_VISIBLE_ROWS,
             width,
         };
 
@@ -657,8 +700,8 @@ impl ScriptListApp {
             display_id,
             source_view: cx.entity().downgrade(),
             snapshot: popup_snapshot,
-            left: INLINE_POPUP_LEFT_MARGIN,
-            top: MENU_SYNTAX_TRIGGER_POPUP_TOP,
+            left: 0.0,
+            top: 0.0,
         };
 
         if let Err(error) = sync_menu_syntax_trigger_popup_window(cx, request) {
@@ -763,7 +806,10 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_popup_state = Default::default();
                 close_menu_syntax_trigger_popup_window(cx);
                 self.invalidate_grouped_cache();
-                self.reconcile_script_list_after_filter_change("menu_syntax_trigger_popup_close", cx);
+                self.reconcile_script_list_after_filter_change(
+                    "menu_syntax_trigger_popup_close",
+                    cx,
+                );
                 cx.notify();
             }
             TriggerPickerIntentOutcome::OpenCaptures { .. }
@@ -774,7 +820,10 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_popup_state = Default::default();
                 close_menu_syntax_trigger_popup_window(cx);
                 self.invalidate_grouped_cache();
-                self.reconcile_script_list_after_filter_change("menu_syntax_trigger_popup_close_deferred", cx);
+                self.reconcile_script_list_after_filter_change(
+                    "menu_syntax_trigger_popup_close_deferred",
+                    cx,
+                );
                 cx.notify();
             }
             TriggerPickerIntentOutcome::CreateHandler { target } => {
