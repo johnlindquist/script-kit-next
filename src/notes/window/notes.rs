@@ -154,8 +154,6 @@ impl NotesApp {
         {
             self.view_mode = NotesViewMode::AllNotes;
             self.select_note(changed_note_id, window, cx);
-        } else if self.selected_note_id == Some(changed_note_id) {
-            self.sync_search_selection(window, cx);
         } else {
             self.sync_search_selection(window, cx);
         }

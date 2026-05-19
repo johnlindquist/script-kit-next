@@ -302,6 +302,14 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
 /// Configure a HUD overlay with the same native background and material path as
 /// the main window while preserving HUD-specific level and input behavior in the
 /// caller.
+///
+/// # Safety
+///
+/// - `window` must be a valid, non-null NSWindow pointer obtained from GPUI
+///   window creation. The pointer is checked for null at entry.
+/// - Must be called on the main thread because AppKit property setters are not
+///   thread-safe.
+/// - NSAppearance and content view pointers are nil-checked before use.
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool) {
     if window.is_null() {
