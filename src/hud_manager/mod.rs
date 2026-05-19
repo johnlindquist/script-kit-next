@@ -13,8 +13,8 @@ use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme::get_cached_theme;
 use gpui::{
-    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Render, SharedString, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+    div, point, prelude::*, px, rgb, rgba, size, App, Context, ElementId, Render, SharedString,
+    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
 };
 use gpui_component::tooltip::Tooltip;
 use parking_lot::Mutex;
@@ -31,8 +31,10 @@ use std::time::{Duration, Instant};
 /// This struct is Copy so it can be safely used in closures without borrow issues.
 #[derive(Clone, Copy, Debug)]
 struct HudColors {
-    /// Background color for the HUD pill
+    /// Background color for hover calculations
     background: u32,
+    /// Main-window-matched background color and opacity for the HUD pill
+    background_rgba: u32,
     /// Primary text color
     text_primary: u32,
     /// Accent color for action buttons
@@ -48,6 +50,12 @@ impl HudColors {
     fn from_theme() -> Self {
         let theme = get_cached_theme();
         let colors = &theme.colors;
+        let opacity = theme.get_opacity();
+        let background_alpha = if theme.is_vibrancy_enabled() {
+            opacity.vibrancy_background.unwrap_or(opacity.main)
+        } else {
+            1.0
+        };
 
         // Calculate hover/active variants from accent
         // For hover: lighten by ~10%
@@ -58,6 +66,10 @@ impl HudColors {
 
         Self {
             background: colors.background.main,
+            background_rgba: crate::ui_foundation::hex_to_rgba_with_opacity(
+                colors.background.main,
+                background_alpha,
+            ),
             text_primary: colors.text.primary,
             accent,
             accent_hover,
@@ -70,6 +82,7 @@ impl HudColors {
     fn dark_default() -> Self {
         Self {
             background: 0x1e1e1e,
+            background_rgba: 0x1e1e1e80,
             text_primary: 0xffffff,
             accent: 0x3b82f6,        // blue-500
             accent_hover: 0x60a5fa,  // blue-400
@@ -82,6 +95,7 @@ impl HudColors {
     fn light_default() -> Self {
         Self {
             background: 0xfafafa,
+            background_rgba: 0xfafafa80,
             text_primary: 0x000000,
             accent: 0x2563eb,        // blue-600 (darker for light mode)
             accent_hover: 0x3b82f6,  // blue-500
@@ -288,8 +302,8 @@ impl Render for HudView {
             .px(px(16.))
             .py(px(8.))
             .gap(px(12.))
-            // Use theme background color
-            .bg(rgb(colors.background))
+            // Use the same theme background and opacity as the main window.
+            .bg(rgba(colors.background_rgba))
             .rounded(px(8.)) // Rounded corners matching main window
             // Text styling - system font, smaller size, theme text color, centered
             .child(
@@ -798,6 +812,11 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
 
             if width_matches && height_matches {
                 // Found it! Configure as HUD overlay
+                let theme = crate::theme::get_cached_theme();
+                crate::platform::configure_hud_window_vibrancy(
+                    window,
+                    theme.should_use_dark_vibrancy(),
+                );
 
                 // Set window level very high (NSPopUpMenuWindowLevel = 101)
                 let hud_level: i64 = 101;
@@ -1115,6 +1134,7 @@ mod tests {
             "HUD window config should disable app-hide participation and order the overlay front"
         );
     }
+
     #[test]
     fn test_select_hud_display_prefers_main_window_display_over_mouse_display() {
         let displays = vec![
@@ -1354,6 +1374,7 @@ mod tests {
         // Test that HudView can be created with custom colors
         let custom_colors = HudColors {
             background: 0x2a2a2a,
+            background_rgba: 0x2a2a2a80,
             text_primary: 0xeeeeee,
             accent: 0x00ff00,
             accent_hover: 0x33ff33,
@@ -1362,6 +1383,7 @@ mod tests {
 
         let view = HudView::with_colors("Custom themed HUD".to_string(), custom_colors);
         assert_eq!(view.colors.background, 0x2a2a2a);
+        assert_eq!(view.colors.background_rgba, 0x2a2a2a80);
         assert_eq!(view.colors.text_primary, 0xeeeeee);
         assert_eq!(view.colors.accent, 0x00ff00);
     }
@@ -1550,6 +1572,7 @@ mod tests {
         let another_copy = colors;
 
         assert_eq!(colors_copy.background, another_copy.background);
+        assert_eq!(colors_copy.background_rgba, another_copy.background_rgba);
         assert_eq!(colors_copy.text_primary, another_copy.text_primary);
     }
     #[test]

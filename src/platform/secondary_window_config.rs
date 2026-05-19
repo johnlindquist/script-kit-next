@@ -299,12 +299,30 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
     configure_window_vibrancy_common(window, "PANEL", window_name, is_dark);
 }
 
+/// Configure a HUD overlay with the same native background and material path as
+/// the main window while preserving HUD-specific level and input behavior in the
+/// caller.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_hud_window_vibrancy(window: id, is_dark: bool) {
+    if window.is_null() {
+        logging::log("HUD", "WARNING: Cannot configure null HUD window vibrancy");
+        return;
+    }
+
+    configure_window_vibrancy_common(window, "HUD", "HUD", is_dark);
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn configure_secondary_window_vibrancy(
     _window: *mut std::ffi::c_void,
     _window_name: &str,
     _is_dark: bool,
 ) {
+    // No-op on non-macOS platforms
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_hud_window_vibrancy(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
 
@@ -326,6 +344,29 @@ mod secondary_window_config_tests {
             source.contains("NS_WINDOW_STYLE_MASK_RESIZABLE")
                 && source.contains("setStyleMask: non_resizable_mask"),
             "content-sized child popups must not keep AppKit edge-resize affordances"
+        );
+    }
+
+    #[test]
+    fn hud_window_vibrancy_reuses_main_window_material_source() {
+        let source = include_str!("secondary_window_config.rs");
+        let start = source
+            .find("pub unsafe fn configure_hud_window_vibrancy")
+            .expect("HUD vibrancy function exists");
+        let body = &source[start..];
+        let body = body
+            .split("#[cfg(not(target_os = \"macos\"))]")
+            .next()
+            .expect("HUD vibrancy function body");
+
+        assert!(
+            body.contains("configure_window_vibrancy_common(window, \"HUD\", \"HUD\", is_dark)"),
+            "HUD window vibrancy must reuse the shared native background/material configuration"
+        );
+        assert!(
+            source.contains("fn current_window_material()")
+                && source.contains("get_cached_theme().get_vibrancy().material"),
+            "shared native window configuration must source material from the cached theme"
         );
     }
 }
