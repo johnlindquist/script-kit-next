@@ -193,13 +193,20 @@
     let mcp_computer_runtime_for_server: std::sync::Arc<
         dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync,
     > = mcp_computer_runtime.clone();
+    let (mcp_notes_ui_tx, mcp_notes_ui_rx) = async_channel::bounded(16);
+    let mcp_notes_bridge: std::sync::Arc<dyn crate::mcp_notes_tools::McpNotesMutationBridge> =
+        std::sync::Arc::new(crate::mcp_control::GpuiNotesMcpBridge::with_default_timeout(
+            mcp_notes_ui_tx,
+        ));
 
     // Start MCP server for AI agent integration
     // Server runs on localhost:43210 with Bearer token authentication
     // Discovery file written to ~/.scriptkit/server.json
     match mcp_server::McpServer::with_defaults() {
         Ok(server) => {
-            let server = server.with_computer_runtime(mcp_computer_runtime_for_server);
+            let server = server
+                .with_computer_runtime(mcp_computer_runtime_for_server)
+                .with_notes_mutation_bridge(mcp_notes_bridge);
             let server_url = server.url();
 
             match server.start() {
@@ -513,6 +520,16 @@ app.run(move |cx: &mut App| {
 
         let (mcp_computer_ui_tx, mcp_computer_ui_rx) = async_channel::bounded(16);
         mcp_computer_runtime.install(mcp_computer_ui_tx);
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            while let Ok(command) = mcp_notes_ui_rx.recv().await {
+                let result = cx.update(|cx| {
+                    crate::notes::apply_mcp_notes_mutation_on_main_thread(command.request, cx)
+                });
+                let _ = command.response_tx.send(result);
+            }
+        })
+        .detach();
+
         let app_entity_for_mcp_computer = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             while let Ok(request) = mcp_computer_ui_rx.recv().await {

@@ -12,7 +12,8 @@
 
 // --- merged from part_000.rs ---
 use crate::logging;
-use crate::mcp_protocol::{self, JsonRpcResponse};
+use crate::mcp_notes_tools::SharedNotesMutationBridge;
+use crate::mcp_protocol::{self, JsonRpcResponse, McpRuntimeContext};
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -61,7 +62,7 @@ pub struct McpServer {
     token: String,
     running: Arc<AtomicBool>,
     kit_path: PathBuf,
-    computer_runtime: Option<SharedComputerRuntime>,
+    runtime_context: McpRuntimeContext,
 }
 impl McpServer {
     /// Create a new MCP server instance
@@ -77,7 +78,23 @@ impl McpServer {
             token,
             running: Arc::new(AtomicBool::new(false)),
             kit_path,
-            computer_runtime: None,
+            runtime_context: McpRuntimeContext::default(),
+        })
+    }
+
+    pub fn new_with_runtime_context(
+        port: u16,
+        kit_path: PathBuf,
+        runtime_context: McpRuntimeContext,
+    ) -> Result<Self> {
+        let token = Self::load_or_create_token(&kit_path)?;
+
+        Ok(Self {
+            port,
+            token,
+            running: Arc::new(AtomicBool::new(false)),
+            kit_path,
+            runtime_context,
         })
     }
 
@@ -95,8 +112,26 @@ impl McpServer {
         Self::new(port, kit_path)
     }
 
+    pub fn with_defaults_and_runtime_context(runtime_context: McpRuntimeContext) -> Result<Self> {
+        let kit_path = dirs::home_dir()
+            .context("Failed to get home directory")?
+            .join(".scriptkit");
+
+        let port = std::env::var("MCP_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(DEFAULT_PORT);
+
+        Self::new_with_runtime_context(port, kit_path, runtime_context)
+    }
+
     pub(crate) fn with_computer_runtime(mut self, runtime: SharedComputerRuntime) -> Self {
-        self.computer_runtime = Some(runtime);
+        self.runtime_context.computer = Some(runtime);
+        self
+    }
+
+    pub(crate) fn with_notes_mutation_bridge(mut self, bridge: SharedNotesMutationBridge) -> Self {
+        self.runtime_context.notes_mutation_bridge = Some(bridge);
         self
     }
 
@@ -243,7 +278,7 @@ impl McpServer {
         let token = self.token.clone();
         let kit_path = self.kit_path.clone();
         let port = self.port;
-        let computer_runtime = self.computer_runtime.clone();
+        let runtime_context = self.runtime_context.clone();
 
         let handle = thread::spawn(move || {
             info!("MCP server started on port {}", port);
@@ -253,9 +288,12 @@ impl McpServer {
                     Ok((stream, addr)) => {
                         debug!("Connection from {}", addr);
                         let token = token.clone();
-                        let computer_runtime = computer_runtime.clone();
+                        let kit_path = kit_path.clone();
+                        let runtime_context = runtime_context.clone();
                         thread::spawn(move || {
-                            if let Err(e) = handle_connection(stream, &token, computer_runtime) {
+                            if let Err(e) =
+                                handle_connection(stream, &token, &kit_path, runtime_context)
+                            {
                                 error!("Error handling connection: {}", e);
                             }
                         });
@@ -332,7 +370,8 @@ impl Drop for ServerHandle {
 fn handle_connection(
     mut stream: TcpStream,
     expected_token: &str,
-    computer_runtime: Option<SharedComputerRuntime>,
+    kit_path: &std::path::Path,
+    mut runtime_context: McpRuntimeContext,
 ) -> Result<()> {
     stream
         .set_nonblocking(false)
@@ -388,20 +427,21 @@ fn handle_connection(
     }
 
     // Check authorization for non-health endpoints
+    let mut token_scopes = mcp_protocol::legacy_all_scopes();
     if path != "/health" {
-        let auth_valid = headers
+        let auth_scopes = headers
             .get("authorization")
-            .map(|auth| {
-                auth.strip_prefix("Bearer ")
-                    .map(|token| token == expected_token)
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false);
+            .and_then(|auth| auth.strip_prefix("Bearer "))
+            .and_then(|token| authorize_bearer_token(token, expected_token, kit_path).ok())
+            .flatten();
 
-        if !auth_valid {
+        let Some(scopes) = auth_scopes else {
             return send_response(&mut stream, 401, "Unauthorized", "Invalid or missing token");
-        }
+        };
+        token_scopes = scopes;
     }
+    runtime_context.token_scopes = token_scopes;
+    runtime_context.trace_id = correlation_id.clone();
 
     // Route request
     match (method, path) {
@@ -416,14 +456,7 @@ fn handle_connection(
         }
         ("POST", "/rpc") => {
             // Handle JSON-RPC request
-            handle_rpc_request(
-                &mut reader,
-                &mut stream,
-                &headers,
-                computer_runtime.as_deref().map(|runtime| {
-                    runtime as &dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge
-                }),
-            )
+            handle_rpc_request(&mut reader, &mut stream, &headers, runtime_context)
         }
         _ => send_response(&mut stream, 404, "Not Found", "Endpoint not found"),
     }
@@ -433,7 +466,7 @@ fn handle_rpc_request(
     reader: &mut BufReader<TcpStream>,
     stream: &mut TcpStream,
     headers: &std::collections::HashMap<String, String>,
-    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
+    runtime_context: McpRuntimeContext,
 ) -> Result<()> {
     // Get Content-Length
     let content_length: usize = headers
@@ -476,13 +509,62 @@ fn handle_rpc_request(
             &scripts,
             &scriptlets,
             None,
-            computer_runtime,
+            Some(&runtime_context),
         ),
         Err(error_response) => error_response,
     };
 
     let response_body = serde_json::to_string(&response)?;
     send_response(stream, 200, "OK", &response_body)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentTokenConfig {
+    token_hash: String,
+    scopes: Vec<String>,
+}
+
+fn authorize_bearer_token(
+    token: &str,
+    legacy_token: &str,
+    kit_path: &std::path::Path,
+) -> Result<Option<Vec<String>>> {
+    if token == legacy_token {
+        return Ok(Some(mcp_protocol::legacy_all_scopes()));
+    }
+
+    let agents_dir = kit_path.join("agents");
+    if !agents_dir.is_dir() {
+        return Ok(None);
+    }
+
+    let token_hash = hash_token(token);
+    for entry in fs::read_dir(&agents_dir)
+        .with_context(|| format!("Failed to read {}", agents_dir.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(text) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(config) = serde_json::from_str::<AgentTokenConfig>(&text) else {
+            continue;
+        };
+        if config.token_hash == token_hash {
+            return Ok(Some(config.scopes));
+        }
+    }
+
+    Ok(None)
+}
+
+fn hash_token(token: &str) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(token.as_bytes()))
 }
 /// Send an HTTP response
 fn send_response(stream: &mut TcpStream, status: u16, reason: &str, body: &str) -> Result<()> {
