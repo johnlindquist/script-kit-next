@@ -1923,6 +1923,11 @@ impl AcpThread {
         self.context_bootstrap_state
     }
 
+    /// Whether deferred ambient context capture is still expected.
+    pub(crate) fn pending_ambient_context_enabled(&self) -> bool {
+        self.pending_ambient_context_enabled
+    }
+
     /// Whether a submit is queued waiting for context bootstrap.
     pub(crate) fn queued_submit_while_bootstrapping(&self) -> bool {
         self.queued_submit_while_bootstrapping

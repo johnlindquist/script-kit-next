@@ -1,5 +1,6 @@
 use super::source_classification::{build_tab_ai_apply_back_hint, detect_tab_ai_source_type};
 use super::*;
+use crate::ai::acp::AcpContextBootstrapState;
 
 fn should_stage_focused_part_for_retry_draft_restore(has_retry_draft_state: bool) -> bool {
     // A retry-draft restore is authoritative: it already contains the user's
@@ -7,6 +8,25 @@ fn should_stage_focused_part_for_retry_draft_restore(has_retry_draft_state: bool
     // aliases, and inline-owned tokens. Do not mix in a freshly focused host
     // target during an agent-switch relaunch.
     !has_retry_draft_state
+}
+
+fn clear_stale_acp_ambient_bootstrap(
+    thread_entity: &gpui::Entity<crate::ai::acp::AcpThread>,
+    cx: &mut gpui::App,
+) {
+    thread_entity.update(cx, |thread, cx| {
+        if thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing {
+            return;
+        }
+        if thread.pending_ambient_context_enabled() {
+            thread.mark_context_bootstrap_failed(
+                "Desktop context capture was interrupted. You can still send.",
+                cx,
+            );
+        } else {
+            thread.mark_context_bootstrap_ready(cx);
+        }
+    });
 }
 
 impl ScriptListApp {
@@ -187,11 +207,31 @@ impl ScriptListApp {
                 total_ms = open_started_at.elapsed().as_millis() as u64,
             );
 
-            // Wait for deferred capture
+            // Wait for deferred capture (bounded — OS providers can hang without a timeout).
             let capture_wait_started_at = std::time::Instant::now();
-            let capture_result = match capture_rx.recv().await {
-                Ok(result) => result,
-                Err(_) => Err("deferred capture channel closed".to_string()),
+            let capture_timeout = std::time::Duration::from_secs(
+                ScriptListApp::TAB_AI_DEFERRED_CAPTURE_TIMEOUT_SEC,
+            );
+            let capture_result = loop {
+                match capture_rx.try_recv() {
+                    Ok(result) => break result,
+                    Err(async_channel::TryRecvError::Closed) => {
+                        break Err("deferred capture channel closed".to_string());
+                    }
+                    Err(async_channel::TryRecvError::Empty) => {
+                        if capture_wait_started_at.elapsed() >= capture_timeout {
+                            tracing::warn!(
+                                target: "script_kit::tab_ai",
+                                event = "tab_ai_acp_deferred_capture_timeout",
+                                timeout_ms = capture_timeout.as_millis() as u64,
+                            );
+                            break Err("deferred capture timed out".to_string());
+                        }
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(100))
+                            .await;
+                    }
+                }
             };
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -236,6 +276,7 @@ impl ScriptListApp {
                             expected = capture_gen,
                             current = this.tab_ai_harness_capture_generation,
                         );
+                        clear_stale_acp_ambient_bootstrap(&thread_entity, cx);
                         return;
                     }
 
