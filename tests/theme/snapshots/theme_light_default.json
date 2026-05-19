@@ -52,7 +52,7 @@
     "log_panel": 0.5,
     "selected": 0.07,
     "hover": 0.04,
-    "preview": 0.0,
+    "preview": 0.5,
     "dialog": 0.5,
     "input": 0.5,
     "panel": 0.5,

@@ -105,7 +105,7 @@ pub struct BackgroundOpacity {
     /// Hovered list item background opacity.
     #[serde(default = "default_hover_opacity")]
     pub hover: f32,
-    /// Preview panel background opacity (default: 0.0)
+    /// Preview panel background opacity (default: 0.50)
     #[serde(default = "default_preview_opacity")]
     pub preview: f32,
     /// Dialog/popup background opacity (default: 0.50)
@@ -173,7 +173,7 @@ fn default_hover_opacity() -> f32 {
 }
 
 fn default_preview_opacity() -> f32 {
-    0.0
+    0.50
 }
 
 fn default_dialog_opacity() -> f32 {
@@ -250,7 +250,7 @@ impl BackgroundOpacity {
             log_panel: 0.50,                     // Match main
             selected: DARK_ROW_SELECTED_OPACITY, // Focused list item, strongest visible row highlight
             hover: DARK_ROW_HOVER_OPACITY, // Hovered list item, ghost-tier tint below focused state
-            preview: 0.0,                  // Preview panel (0 = fully transparent)
+            preview: 0.50,                 // Preview panel matches main
             dialog: 0.50,                  // Dialogs match main
             input: 0.50,                   // Match main
             panel: 0.50,                   // Panels/containers
@@ -283,7 +283,7 @@ impl BackgroundOpacity {
             log_panel: 0.50,                      // Match main
             selected: LIGHT_ROW_SELECTED_OPACITY, // Light mode focus, down to the old hover strength
             hover: LIGHT_ROW_HOVER_OPACITY,       // Light mode hover, about half the focus strength
-            preview: 0.0,                         // Preview panel (0 = fully transparent)
+            preview: 0.50,                        // Preview panel matches main
             dialog: 0.50,                         // Dialogs match main
             input: 0.50,                          // Match main
             panel: 0.50,                          // Panels match main

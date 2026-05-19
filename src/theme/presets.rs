@@ -4578,6 +4578,43 @@ mod tests {
     }
 
     #[test]
+    fn test_all_presets_default_surface_opacity_is_fifty_percent() {
+        let presets = all_presets();
+
+        for preset in &presets {
+            let theme = preset.create_theme();
+            let opacity = theme.get_opacity();
+
+            let surface_opacities = [
+                ("main", opacity.main),
+                ("title_bar", opacity.title_bar),
+                ("search_box", opacity.search_box),
+                ("log_panel", opacity.log_panel),
+                ("preview", opacity.preview),
+                ("dialog", opacity.dialog),
+                ("input", opacity.input),
+                ("panel", opacity.panel),
+                ("input_inactive", opacity.input_inactive),
+                ("input_active", opacity.input_active),
+                (
+                    "vibrancy_background",
+                    opacity.vibrancy_background.unwrap_or(0.50),
+                ),
+            ];
+
+            for (field, value) in surface_opacities {
+                assert!(
+                    (value - 0.50).abs() < f32::EPSILON,
+                    "Preset '{}' should default opacity.{} to 50%, got {}",
+                    preset.name,
+                    field,
+                    value
+                );
+            }
+        }
+    }
+
+    #[test]
     fn test_preset_ids_are_unique() {
         let presets = all_presets();
         let ids: Vec<&str> = presets.iter().map(|p| p.id).collect();
