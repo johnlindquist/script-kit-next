@@ -94,6 +94,20 @@ pub fn get_cached_apps() -> Vec<AppInfo> {
     APP_CACHE.lock().map(|g| g.clone()).unwrap_or_default()
 }
 
+/// Look up a pre-decoded app icon from the in-memory cache by bundle ID.
+pub fn cached_app_icon_for_bundle(bundle_id: &str) -> Option<DecodedIcon> {
+    let bundle_id = bundle_id.trim();
+    if bundle_id.is_empty() {
+        return None;
+    }
+
+    let cache = APP_CACHE.lock().ok()?;
+    cache
+        .iter()
+        .find(|app| app.bundle_id.as_deref() == Some(bundle_id))
+        .and_then(|app| app.icon.clone())
+}
+
 /// Get modification time for a path as Unix timestamp
 fn get_mtime(path: &Path) -> Option<i64> {
     path.metadata()

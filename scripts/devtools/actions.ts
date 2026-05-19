@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { classifyTransportError } from "./lib/transport-errors.ts";
+
 type JsonObject = Record<string, unknown>;
 type Rect = { x: number; y: number; width: number; height: number };
 
@@ -341,7 +343,7 @@ function classify(targetReceipt: JsonObject, stateEnvelope: JsonObject, missing:
     return targetReceipt.classification ?? "blocked-by-target-ambiguity";
   }
   if (stateEnvelope.status === "error") {
-    return "blocked-by-timeout";
+    return classifyTransportError(stateEnvelope);
   }
   if (missing.length > 0) {
     return "blocked-by-missing-primitive";
@@ -367,12 +369,15 @@ async function main() {
     "targets.list",
   );
   const selector = (targetReceipt.requestedTarget as JsonObject | undefined)?.selector ?? args.target ?? { type: "kind", kind: "actionsDialog" };
-  const [stateEnvelope, elements, layout, keyboard] = await Promise.all([
-    rpc(args.session, { type: "getState", requestId: requestId("state"), target: selector, summaryOnly: true }, "stateResult", args.timeoutMs),
-    run(["bun", "scripts/devtools/elements.ts", "snapshot", ...forwarded], "elements.snapshot"),
-    run(["bun", "scripts/devtools/layout.ts", "measure", ...forwarded], "layout.measure"),
-    run(["bun", "scripts/devtools/keyboard.ts", "inspect", ...forwarded], "keyboard.inspect"),
-  ]);
+  const stateEnvelope = await rpc(
+    args.session,
+    { type: "getState", requestId: requestId("state"), target: selector, summaryOnly: true },
+    "stateResult",
+    args.timeoutMs,
+  );
+  const elements = await run(["bun", "scripts/devtools/elements.ts", "snapshot", ...forwarded], "elements.snapshot");
+  const layout = await run(["bun", "scripts/devtools/layout.ts", "measure", ...forwarded], "layout.measure");
+  const keyboard = await run(["bun", "scripts/devtools/keyboard.ts", "inspect", ...forwarded], "keyboard.inspect");
 
   const state = responseOf(stateEnvelope);
   const actionsDialog = (state.actionsDialog as JsonObject | undefined) ?? null;

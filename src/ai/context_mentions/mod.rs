@@ -174,54 +174,11 @@ pub(crate) fn format_inline_file_token(path: &str) -> String {
     }
 }
 
-/// Maximum display name length for typed mention tokens.
-const TYPED_MENTION_NAME_MAX_LEN: usize = 7;
-const TYPED_MENTION_LABEL_MAX_LEN: usize = 14;
-
-/// Map a file extension to a short type prefix for typed mentions.
-pub(crate) fn typed_mention_prefix(path: &str) -> &'static str {
-    let p = Path::new(path);
-
-    // Directories first.
-    if p.extension().is_none() && !path.contains('.') {
-        // Heuristic: no extension and no dots = likely a directory or binary.
-        // For actual directory detection, the caller would need to check fs.
-        // We default to "file" and let the caller override for known dirs.
-        return "file";
-    }
-
-    match p
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_lowercase()
-        .as_str()
-    {
-        "rs" => "rs",
-        "ts" | "tsx" => "ts",
-        "js" | "jsx" | "mjs" | "cjs" => "js",
-        "py" => "py",
-        "rb" => "rb",
-        "go" => "go",
-        "java" => "java",
-        "swift" => "swift",
-        "c" | "h" => "c",
-        "cpp" | "cc" | "cxx" | "hpp" => "cpp",
-        "md" | "mdx" => "md",
-        "json" => "json",
-        "toml" => "toml",
-        "yaml" | "yml" => "yaml",
-        "xml" => "xml",
-        "html" | "htm" => "html",
-        "css" | "scss" | "less" => "css",
-        "sh" | "bash" | "zsh" | "fish" => "sh",
-        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" | "bmp" | "tiff" => "img",
-        "mp4" | "mov" | "avi" | "mkv" | "webm" => "vid",
-        "mp3" | "wav" | "flac" | "ogg" | "aac" => "audio",
-        "sql" => "sql",
-        "txt" | "log" => "txt",
-        _ => "file",
-    }
+/// All path-shaped mentions use the canonical `@file:` prefix — the
+/// extension stays in the inline name instead of being projected into a
+/// short type prefix.
+pub(crate) fn typed_mention_prefix(_path: &str) -> &'static str {
+    "file"
 }
 
 /// Map a file path to a "dir" prefix if it looks like a directory.
@@ -250,20 +207,15 @@ pub(crate) fn typed_mention_prefix_for_target_kind(kind: &str) -> &'static str {
     }
 }
 
-/// Extract a short display name from a file path: filename without extension,
-/// truncated to `TYPED_MENTION_NAME_MAX_LEN` characters.
+/// The inline display name for a path-shaped mention: the full basename
+/// including its extension so `@file:power-syntax.ts` stays readable instead
+/// of collapsing to `@ts:power-s…`.
 pub(crate) fn typed_mention_display_name(path: &str) -> String {
     let p = Path::new(path);
-    let stem = p
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or_else(|| p.file_name().and_then(|n| n.to_str()).unwrap_or("file"));
-
-    let mut name: String = stem.chars().take(TYPED_MENTION_NAME_MAX_LEN).collect();
-    if stem.len() > TYPED_MENTION_NAME_MAX_LEN {
-        name.push('\u{2026}'); // ellipsis
-    }
-    name
+    p.file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| "file".to_string())
 }
 
 /// Format a typed mention token: `@type:name` or `@type:"name with spaces"`.
@@ -312,13 +264,7 @@ fn strip_typed_mention_label_prefix(label: &str) -> &str {
 }
 
 fn typed_mention_label_name(label: &str) -> String {
-    let display = strip_typed_mention_label_prefix(label);
-    let display_len = display.chars().count();
-    let mut name: String = display.chars().take(TYPED_MENTION_LABEL_MAX_LEN).collect();
-    if display_len > TYPED_MENTION_LABEL_MAX_LEN {
-        name.push('\u{2026}');
-    }
-    name
+    strip_typed_mention_label_prefix(label).to_string()
 }
 
 /// Format a typed mention token using the label-truncation rules used by
@@ -549,7 +495,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
         AiContextPart::FocusedTarget {
             target, label: _, ..
         } => {
-            // File/directory targets use typed file prefixes (@rs:, @dir:, etc.)
+            // File/directory targets use canonical @file: / @dir: prefixes with the full basename.
             if let Some(path) = (target.kind == "file" || target.kind == "directory")
                 .then_some(target.metadata.as_ref())
                 .flatten()

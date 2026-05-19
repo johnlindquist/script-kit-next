@@ -1,5 +1,7 @@
 #!/usr/bin/env bun
 
+import { classifyTransportError } from "./lib/transport-errors.ts";
+
 type JsonObject = Record<string, unknown>;
 
 type InspectArgs = {
@@ -367,7 +369,13 @@ function recommendedNext(missing: string[]) {
 
 function classification(errors: JsonObject[], missing: string[]) {
   if (errors.length > 0) {
-    return "blocked-by-timeout";
+    const transportCodes = errors
+      .map((entry) => classifyTransportError(entry))
+      .filter((value) => value !== "ok");
+    if (transportCodes.length > 0) {
+      return transportCodes[0];
+    }
+    return "blocked-by-response-timeout";
   }
   if (missing.length > 0) {
     return "blocked-by-missing-primitive";
@@ -380,7 +388,7 @@ function primitiveStack(entries: Array<{ name: string; command: string; envelope
     name: entry.name,
     command: entry.command,
     status: entry.envelope.status === "error" ? "blocked" : "ok",
-    classification: entry.classification ?? (entry.envelope.status === "error" ? "blocked-by-timeout" : "ok"),
+    classification: entry.classification ?? classifyTransportError(entry.envelope),
     receiptId: (entry.envelope.response as JsonObject | undefined)?.requestId ?? null,
     error: entry.envelope.status === "error" ? String(entry.envelope.error ?? entry.envelope.stderr ?? "error") : null,
   }));

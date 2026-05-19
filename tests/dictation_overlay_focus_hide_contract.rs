@@ -80,7 +80,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         DICTATION_WINDOW.contains("const ACTION_STOP_LABEL: &str = \"Stop\";")
-            && DICTATION_WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Mic\";")
+            && DICTATION_WINDOW.contains("const ACTION_MIC_LABEL: &str = \"Next Mic\";")
             && DICTATION_WINDOW.contains("const ACTION_CANCEL_LABEL: &str = \"Cancel\";")
             && DICTATION_WINDOW.contains("const ACTION_CONTINUE_LABEL: &str = \"Continue\";")
             && DICTATION_WINDOW.contains("const ACTION_CLOSE_LABEL: &str = \"Close\";")
@@ -92,9 +92,16 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         DICTATION_WINDOW.contains("fn render_action_chip")
             && DICTATION_WINDOW.contains("fn render_clickable_action_chip")
             && DICTATION_WINDOW.contains(".id(\"dictation-action-rail\")")
-            && DICTATION_WINDOW.contains(".child(self.render_recording_actions(cx))")
-            && DICTATION_WINDOW.contains(".child(render_static_action_rail(["),
+            && DICTATION_WINDOW.contains("self.render_recording_actions(cx)")
+            && DICTATION_WINDOW.contains("render_static_action_rail(["),
         "runtime and preview renders must both include the visible compact action rail"
+    );
+    assert!(
+        DICTATION_WINDOW.contains(
+            "crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"
+        ) && DICTATION_WINDOW.contains("rgba(chrome.divider_rgba)")
+            && DICTATION_WINDOW.contains("HINT_STRIP_PADDING_X"),
+        "dictation action rail must share the native main-window footer height, divider, and inset tokens"
     );
     assert!(
         DICTATION_WINDOW.contains("\"dictation-stop-button\"")
@@ -113,10 +120,12 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
         "overlay Mic selector must use the shared microphone menu items and persistence helper"
     );
     assert!(
-        DICTATION_WINDOW.contains("fn default_dictation_stop_keycap()")
-            && DICTATION_WINDOW.contains("key: \"Semicolon\".to_string()")
+        DICTATION_WINDOW.contains("fn dictation_stop_keycap()")
+            && DICTATION_WINDOW.contains("fn dictation_hotkey_keycap(")
+            && DICTATION_WINDOW.contains(".get_dictation_hotkey()")
+            && DICTATION_WINDOW.contains(".replace(\"Semicolon\", \";\")")
             && !DICTATION_WINDOW.contains("unwrap_or_else(|| \"again\".to_string())"),
-        "recording Stop must show the configured dictation hotkey, falling back to Cmd+Shift+; instead of the stale Again label"
+        "recording Stop must show the configured dictation hotkey instead of the stale Again label"
     );
 
     let runtime_render = section_between(
@@ -131,7 +140,7 @@ fn dictation_overlay_renders_visible_shortcut_rail() {
     );
     assert!(
         runtime_render.contains("DictationSessionPhase::Delivering")
-            && runtime_render.contains(".child(self.render_close_action(cx))"),
+            && runtime_render.contains("self.render_close_action(cx)"),
         "runtime Delivering state must render the compact Close + esc action"
     );
     assert!(

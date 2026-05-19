@@ -14,17 +14,17 @@ pub(crate) const OVERLAY_WIDTH_PX: f32 = 520.0;
 pub(crate) const OVERLAY_HEIGHT_PX: f32 = 72.0;
 /// Confirming phase uses the same bar height so content swaps inline.
 /// Rounded corner radius for the standalone glass bar.
-pub(crate) const OVERLAY_RADIUS_PX: f32 = 22.0;
-/// Horizontal padding inside the glass bar.
+pub(crate) const OVERLAY_RADIUS_PX: f32 = 12.0;
+/// Horizontal padding inside the signal band content.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
-/// Gap between inner content columns.
-pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 8.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
 pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 108.0;
+/// App icon size in the external-app destination badge.
+pub(crate) const TARGET_BADGE_ICON_SIZE_PX: f32 = 16.0;
 
 /// Number of waveform bars in the compact capsule visualizer.
 pub(crate) const WAVEFORM_BAR_COUNT: usize = 9;
@@ -49,17 +49,6 @@ const SOUND_THRESHOLD: f32 = 0.10;
 
 /// Bottom offset from the screen edge for dock clearance.
 const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0;
-
-// ---------------------------------------------------------------------------
-// Glass bar surface constants
-// ---------------------------------------------------------------------------
-
-/// Subtle inner border opacity for the selected signal band.
-const GLASS_SIGNAL_BORDER_OPACITY: f32 = 0.10;
-/// Neutral rim opacity, similar to the main menu window edge.
-const GLASS_BAR_RIM_OPACITY: f32 = 0.16;
-/// Glass bar shadow opacity.
-const GLASS_BAR_SHADOW_OPACITY: f32 = 0.22;
 
 // ---------------------------------------------------------------------------
 // Overlay helper functions
@@ -109,6 +98,36 @@ pub(crate) fn target_badge_label(target: crate::dictation::DictationTarget) -> S
     }
 
     target.overlay_label().into()
+}
+
+/// Resolve the tracked frontmost app's pre-decoded icon from the app launcher cache.
+pub(crate) fn target_badge_frontmost_app_icon() -> Option<crate::app_launcher::DecodedIcon> {
+    let bundle_id = crate::frontmost_app_tracker::get_last_real_app()?.bundle_id;
+    let bundle_id = bundle_id.trim();
+    if bundle_id.is_empty() {
+        return None;
+    }
+    crate::app_launcher::cached_app_icon_for_bundle(bundle_id)
+}
+
+fn render_target_badge_content(target: crate::dictation::DictationTarget) -> AnyElement {
+    if matches!(target, crate::dictation::DictationTarget::ExternalApp) {
+        if let Some(icon) = target_badge_frontmost_app_icon() {
+            return crate::icons::render_image(icon, TARGET_BADGE_ICON_SIZE_PX, 1.0);
+        }
+    }
+
+    let theme = get_cached_theme();
+    div()
+        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+        .font_family(FONT_SYSTEM_UI)
+        .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
+        .max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .child(target_badge_label(target))
+        .into_any_element()
 }
 
 /// Pulse cycle duration in seconds (matches vercel-voice 1.4s).
@@ -781,18 +800,7 @@ impl DictationOverlay {
         let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
         let active_bg = theme.colors.background.main.with_opacity(OPACITY_ACTIVE);
 
-        let mut label = div()
-            .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
-            .font_family(FONT_SYSTEM_UI)
-            .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
-            .max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))
-            .overflow_hidden()
-            .text_ellipsis()
-            .whitespace_nowrap()
-            .child(target_badge_label(self.state.target));
-        if interactive {
-            label = label.cursor_pointer();
-        }
+        let badge_content = render_target_badge_content(self.state.target);
 
         let mut badge = div()
             .id("dictation-target-badge")
@@ -803,7 +811,7 @@ impl DictationOverlay {
             .border_1()
             .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
             .cursor_default()
-            .child(label);
+            .child(badge_content);
 
         if interactive {
             badge = badge
@@ -1003,12 +1011,11 @@ impl Focusable for DictationOverlay {
 impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
-        let chrome = AppChromeColors::from_theme(&theme);
-
-        // Glass bar surface: same theme-backed window surface and neutral rim
-        // language as the launcher/main menu chrome.
-        let surface_bg = rgba(chrome.window_surface_rgba);
-        let border_color = theme.colors.ui.border.with_opacity(GLASS_BAR_RIM_OPACITY);
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
+        let surface_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
+            crate::components::prompt_footer::PromptFooterColors::from_theme(&theme),
+        ));
+        let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
 
         let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
         let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
@@ -1238,21 +1245,10 @@ impl Render for DictationOverlay {
             .w_full()
             .h_full()
             .overflow_hidden()
-            .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
-            .gap(px(OVERLAY_CONTENT_GAP_PX))
             .rounded(px(radius))
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
             .border_1()
             .border_color(border_color)
-            .shadow(vec![gpui::BoxShadow {
-                color: theme
-                    .colors
-                    .ui
-                    .border
-                    .with_opacity(GLASS_BAR_SHADOW_OPACITY),
-                offset: gpui::point(px(0.0), px(8.0)),
-                blur_radius: px(20.0),
-                spread_radius: px(0.0),
-            }])
             .child(inner);
 
         // Outer root claims the full popup content bounds so no GPUI inset
@@ -1402,27 +1398,13 @@ fn action_chip_width(label: &str) -> f32 {
 }
 
 fn render_glass_signal_band(body: AnyElement) -> impl IntoElement {
-    let theme = get_cached_theme();
-    let list_item_colors = crate::list_item::ListItemColors::from_theme(&theme);
-    let selected_row_bg = crate::list_item::row_selected_background_rgba(&list_item_colors);
-
     div()
         .w_full()
         .flex()
         .items_center()
         .justify_center()
-        .px(px(10.0))
+        .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
         .py(px(6.0))
-        .bg(rgba(selected_row_bg))
-        .border_1()
-        .border_color(
-            theme
-                .colors
-                .ui
-                .border
-                .with_opacity(GLASS_SIGNAL_BORDER_OPACITY),
-        )
-        .rounded(px(9.0))
         .child(body)
 }
 
@@ -1501,13 +1483,12 @@ fn render_clickable_action_chip(
         .child(render_action_chip_content(label, key))
 }
 
-/// Paint the bottom action rail on the launcher window surface without stacking
-/// that fill under the selected-row signal band above it.
+/// Paint the bottom action rail with the same footer surface tint used by PromptFooter.
 fn wrap_dictation_overlay_action_rail(
     rail: impl IntoElement,
     surface_bg: gpui::Rgba,
 ) -> impl IntoElement {
-    div().w_full().pt(px(3.0)).bg(surface_bg).child(rail)
+    div().w_full().bg(surface_bg).child(rail)
 }
 
 fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -> AnyElement {
@@ -1517,16 +1498,20 @@ fn render_clickable_action_rail(actions: impl IntoIterator<Item = AnyElement>) -
     let mut rail = div()
         .id("dictation-action-rail")
         .w_full()
-        .min_h(px(24.0))
+        .h(px(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        ))
+        .min_h(px(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        ))
         .border_t_1()
         .border_color(rgba(chrome.divider_rgba))
         .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-        .pt(px(4.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(12.0));
+        .gap(px(4.0));
 
     for action in actions {
         rail = rail.child(action);
@@ -1544,16 +1529,20 @@ fn render_static_action_rail(
     let mut rail = div()
         .id("dictation-action-rail")
         .w_full()
-        .min_h(px(24.0))
+        .h(px(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        ))
+        .min_h(px(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        ))
         .border_t_1()
         .border_color(rgba(chrome.divider_rgba))
         .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-        .pt(px(4.0))
         .flex()
         .flex_row()
         .items_center()
         .justify_center()
-        .gap(px(12.0));
+        .gap(px(4.0));
 
     for (label, key) in actions {
         rail = rail.child(render_action_chip(label, key));
@@ -1571,9 +1560,11 @@ pub(crate) fn render_dictation_overlay_state_preview(
     state: &DictationOverlayState,
 ) -> gpui::AnyElement {
     let theme = get_cached_theme();
-    let chrome = AppChromeColors::from_theme(&theme);
-    let surface_bg = rgba(chrome.window_surface_rgba);
-    let border_color = theme.colors.ui.border.with_opacity(GLASS_BAR_RIM_OPACITY);
+    let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
+    let surface_bg = rgba(crate::components::prompt_footer::footer_surface_rgba(
+        crate::components::prompt_footer::PromptFooterColors::from_theme(&theme),
+    ));
+    let border_color = rgba((theme.colors.ui.border << 8) | 0x40);
     let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
     let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
     let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
@@ -1787,37 +1778,16 @@ pub(crate) fn render_dictation_overlay_state_preview(
         .items_center()
         .justify_center()
         .overflow_hidden()
-        .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
-        .gap(px(OVERLAY_CONTENT_GAP_PX))
         .rounded(px(OVERLAY_RADIUS_PX))
+        .when_some(vibrancy_bg, |d, bg| d.bg(bg))
         .border_1()
         .border_color(border_color)
-        .shadow(vec![gpui::BoxShadow {
-            color: theme
-                .colors
-                .ui
-                .border
-                .with_opacity(GLASS_BAR_SHADOW_OPACITY),
-            offset: gpui::point(px(0.0), px(8.0)),
-            blur_radius: px(20.0),
-            spread_radius: px(0.0),
-        }])
         .child(inner)
         .into_any_element()
 }
 
 fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) -> impl IntoElement {
     let theme = get_cached_theme();
-    let label = div()
-        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
-        .font_family(FONT_SYSTEM_UI)
-        .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
-        .max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))
-        .overflow_hidden()
-        .text_ellipsis()
-        .whitespace_nowrap()
-        .child(target_badge_label(target));
-
     let badge = div()
         .id("dictation-target-badge")
         .px(px(8.))
@@ -1827,7 +1797,7 @@ fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) ->
         .border_1()
         .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
         .cursor_default()
-        .child(label);
+        .child(render_target_badge_content(target));
 
     div()
         .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
@@ -1915,9 +1885,16 @@ fn configure_overlay_window_surface(window: &mut Window) {
                 if ns_window.is_null() {
                     return;
                 }
-                let clear: id = msg_send![class!(NSColor), clearColor];
                 let () = msg_send![ns_window, setOpaque: NO];
-                let () = msg_send![ns_window, setBackgroundColor: clear];
+                // Match the main/notes/AI windows: paint the system
+                // windowBackgroundColor on the NSWindow itself so vibrancy and
+                // the ~1px native rim render the same way across all Script
+                // Kit windows. The rounded outer shape is clipped via the
+                // contentView's layer mask below.
+                let window_bg_color: id = msg_send![class!(NSColor), windowBackgroundColor];
+                if !window_bg_color.is_null() {
+                    let () = msg_send![ns_window, setBackgroundColor: window_bg_color];
+                }
 
                 let content_view: id = msg_send![ns_window, contentView];
                 if content_view.is_null() {
