@@ -67,15 +67,18 @@ Use `kit://trigger-builtins` to discover canonical `builtin/...` IDs before call
 
 ## CLI Access
 
-Agents can use the same live MCP control plane from a shell with `scripts/mcp-cli.ts`. The CLI reads `~/.scriptkit/server.json` by default and also accepts `SCRIPT_KIT_MCP_ENDPOINT` plus `SCRIPT_KIT_MCP_TOKEN`.
+Agents can use the same live MCP control plane from a shell with the app-managed `scriptkit` command. Script Kit refreshes the command shim at `~/.scriptkit/bin/scriptkit` on startup. Add `~/.scriptkit/bin` to your `PATH`, or run that file directly.
 
 ```bash
-bun scripts/mcp-cli.ts tools
-bun scripts/mcp-cli.ts resources
-bun scripts/mcp-cli.ts read kit://trigger-builtins
-bun scripts/mcp-cli.ts call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
-bun scripts/mcp-cli.ts call kit/config_get '{"key":"editorFontSize"}'
+~/.scriptkit/bin/scriptkit --help
+~/.scriptkit/bin/scriptkit mcp tools
+~/.scriptkit/bin/scriptkit mcp resources
+~/.scriptkit/bin/scriptkit mcp read kit://trigger-builtins
+~/.scriptkit/bin/scriptkit mcp call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
+~/.scriptkit/bin/scriptkit mcp call kit/config_get '{"key":"editorFontSize"}'
 ```
+
+The CLI reads `~/.scriptkit/server.json` by default and also accepts `SCRIPT_KIT_MCP_ENDPOINT` plus `SCRIPT_KIT_MCP_TOKEN`. `server.json` exists only while Script Kit is running and contains sensitive bearer-token material.
 
 ## Agent Chat Context
 

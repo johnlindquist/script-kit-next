@@ -9,9 +9,18 @@
  *   SCRIPT_KIT_MCP_TOKEN
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 type DiscoveryInfo = {
   url: string;
@@ -28,16 +37,43 @@ class CliFailure extends Error {}
 
 function usage() {
   return [
+    "Script Kit command line",
+    "",
     "Usage:",
-    "  bun scripts/mcp-cli.ts tools",
-    "  bun scripts/mcp-cli.ts resources",
-    "  bun scripts/mcp-cli.ts call <tool-name> [json-arguments]",
-    "  bun scripts/mcp-cli.ts read <resource-uri>",
-    "  bun scripts/mcp-cli.ts rpc <method> [json-params]",
+    "  scriptkit --help",
+    "  scriptkit mcp tools",
+    "  scriptkit mcp resources",
+    "  scriptkit mcp call <tool-name> [json-arguments]",
+    "  scriptkit mcp read <resource-uri>",
+    "  scriptkit mcp rpc <method> [json-params]",
+    "  scriptkit install-command [target-path]",
     "",
     "Examples:",
-    "  bun scripts/mcp-cli.ts call kit/trigger_builtin '{\"builtinId\":\"builtin/clipboard-history\"}'",
-    "  bun scripts/mcp-cli.ts read kit://trigger-builtins",
+    "  scriptkit mcp tools",
+    "  scriptkit mcp read kit://trigger-builtins",
+    "  scriptkit mcp call kit/trigger_builtin '{\"builtinId\":\"builtin/clipboard-history\"}'",
+    "  scriptkit install-command ~/.local/bin/scriptkit",
+    "",
+    "MCP commands require Script Kit to be running so ~/.scriptkit/server.json exists.",
+    "The discovery file contains a bearer token; do not paste it into logs or docs.",
+  ].join("\n");
+}
+
+function mcpUsage() {
+  return [
+    "Script Kit MCP commands",
+    "",
+    "Usage:",
+    "  scriptkit mcp tools",
+    "  scriptkit mcp resources",
+    "  scriptkit mcp call <tool-name> [json-arguments]",
+    "  scriptkit mcp read <resource-uri>",
+    "  scriptkit mcp rpc <method> [json-params]",
+    "",
+    "Environment overrides:",
+    "  SCRIPT_KIT_MCP_SERVER_JSON  Path to server.json",
+    "  SCRIPT_KIT_MCP_ENDPOINT     Base URL or /rpc endpoint",
+    "  SCRIPT_KIT_MCP_TOKEN        Bearer token",
   ].join("\n");
 }
 
@@ -106,6 +142,54 @@ function resolveEndpointAndToken(): { endpoint: string; token: string } {
   return { endpoint, token };
 }
 
+function defaultCommandTarget(): string {
+  return join(homedir(), ".local", "bin", "scriptkit");
+}
+
+function currentScriptPath(): string {
+  const url = new URL(import.meta.url);
+  if (url.protocol !== "file:") {
+    fail("Cannot install command because the current CLI is not running from a file path.");
+  }
+  return url.pathname;
+}
+
+function installCommand(targetArg: string | undefined): CliResult {
+  const source = currentScriptPath();
+  const target = resolve(targetArg?.trim() || defaultCommandTarget());
+  mkdirSync(dirname(target), { recursive: true });
+
+  if (existsSync(target)) {
+    const stat = lstatSync(target);
+    if (stat.isSymbolicLink()) {
+      const existing = readlinkSync(target);
+      if (resolve(dirname(target), existing) !== source) {
+        rmSync(target);
+      }
+    } else {
+      fail(
+        `Refusing to replace non-symlink at ${target}. Remove it or pass a different target path.`,
+      );
+    }
+  }
+
+  if (!existsSync(target)) {
+    symlinkSync(source, target);
+  }
+  chmodSync(source, 0o755);
+
+  return {
+    success: true,
+    data: {
+      command: "scriptkit",
+      target,
+      source,
+      note:
+        "Add the target directory to PATH if `scriptkit --help` is not found in new shells.",
+    },
+  };
+}
+
 export async function rpc(method: string, params: unknown): Promise<unknown> {
   const { endpoint, token } = resolveEndpointAndToken();
   const response = await fetch(endpoint, {
@@ -138,11 +222,27 @@ export async function rpc(method: string, params: unknown): Promise<unknown> {
 }
 
 export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
-  const [command, first, second] = argv;
-  if (!command || command === "--help" || command === "-h") {
+  const [rawCommand, ...rest] = argv;
+  if (!rawCommand || rawCommand === "--help" || rawCommand === "-h") {
     return usage();
   }
 
+  if (rawCommand === "install-command") {
+    return installCommand(rest[0]);
+  }
+
+  let command = rawCommand;
+  let args = rest;
+  if (rawCommand === "mcp") {
+    const [mcpCommand, ...mcpArgs] = rest;
+    if (!mcpCommand || mcpCommand === "--help" || mcpCommand === "-h") {
+      return mcpUsage();
+    }
+    command = mcpCommand;
+    args = mcpArgs;
+  }
+
+  const [first, second] = args;
   let data: unknown;
   if (command === "tools" || command === "list-tools") {
     data = await rpc("tools/list", {});
@@ -167,7 +267,7 @@ export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
     }
     data = await rpc(first, parseJsonArg(second, {}));
   } else {
-    fail(`Unknown command: ${command}. Use --help for usage.`);
+    fail(`Unknown command: ${rawCommand}. Use --help for usage.`);
   }
 
   return { success: true, data };
