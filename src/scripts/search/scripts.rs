@@ -403,9 +403,10 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
         }
 
         let candidate = if use_fuzzy_content_search {
-            let ctx = ctx
-                .as_mut()
-                .expect("fuzzy content search requires a Nucleo context");
+            let ctx = match ctx.as_mut() {
+                Some(ctx) => ctx,
+                None => panic!("fuzzy content search requires a Nucleo context"),
+            };
             let Some(score) = ctx.score(trimmed) else {
                 byte_offset += segment.len();
                 continue;

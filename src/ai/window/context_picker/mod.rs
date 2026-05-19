@@ -1363,7 +1363,7 @@ fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
         } else {
             note.title.clone()
         };
-        let semantic_id = note.id.clone();
+        let semantic_id = note.id;
         let note_title = note.title;
         let content = note.content;
         let updated_at = note.updated_at.to_rfc3339();
