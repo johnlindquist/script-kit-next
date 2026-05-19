@@ -10,6 +10,7 @@
 // Actions - Reusable action dialog component
 // Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
 pub mod actions;
+pub mod agentic_protocol_bus;
 
 pub mod about;
 pub mod branding;
