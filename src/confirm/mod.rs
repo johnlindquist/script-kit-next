@@ -27,7 +27,8 @@ mod window;
 // warning for the non-lifecycle variant.
 #[allow(unused_imports)]
 pub(crate) use parent_dialog::{
-    confirm_with_parent_dialog, open_parent_confirm_dialog, open_parent_confirm_dialog_for_entity,
+    confirm_with_parent_dialog, open_parent_confirm_dialog,
+    open_parent_confirm_dialog_for_automation_parent, open_parent_confirm_dialog_for_entity,
     open_parent_confirm_dialog_with_lifecycle, ParentConfirmOptions,
 };
 

@@ -99,6 +99,30 @@ pub(crate) fn open_parent_confirm_dialog(
     open_parent_confirm_dialog_with_lifecycle(window, cx, options, || true, on_confirm, on_cancel);
 }
 
+/// Open a confirm popup whose parent window is identified explicitly by
+/// automation id (e.g. `"notes"`). Use this for non-main parent windows so the
+/// popup is pinned and AppKit-attached to the *intended* window even when
+/// focus has drifted.
+#[allow(dead_code)]
+pub(crate) fn open_parent_confirm_dialog_for_automation_parent(
+    window: &mut Window,
+    cx: &mut App,
+    parent_automation_id: impl Into<String>,
+    options: ParentConfirmOptions,
+    on_confirm: impl Fn(&mut Window, &mut App) + 'static,
+    on_cancel: impl Fn(&mut Window, &mut App) + 'static,
+) {
+    open_parent_confirm_dialog_with_lifecycle_and_parent(
+        window,
+        cx,
+        options,
+        Some(parent_automation_id.into()),
+        || true,
+        on_confirm,
+        on_cancel,
+    );
+}
+
 #[allow(dead_code)]
 pub(crate) fn open_parent_confirm_dialog_for_entity<T: 'static>(
     window: &mut Window,
@@ -123,6 +147,26 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
     window: &mut Window,
     cx: &mut App,
     options: ParentConfirmOptions,
+    keep_open_while: impl Fn() -> bool + 'static,
+    on_confirm: impl Fn(&mut Window, &mut App) + 'static,
+    on_cancel: impl Fn(&mut Window, &mut App) + 'static,
+) {
+    open_parent_confirm_dialog_with_lifecycle_and_parent(
+        window,
+        cx,
+        options,
+        None,
+        keep_open_while,
+        on_confirm,
+        on_cancel,
+    );
+}
+
+fn open_parent_confirm_dialog_with_lifecycle_and_parent(
+    window: &mut Window,
+    cx: &mut App,
+    options: ParentConfirmOptions,
+    explicit_parent_automation_id: Option<String>,
     keep_open_while: impl Fn() -> bool + 'static,
     on_confirm: impl Fn(&mut Window, &mut App) + 'static,
     on_cancel: impl Fn(&mut Window, &mut App) + 'static,
@@ -218,7 +262,8 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
         width: options.width,
     };
 
-    let parent_automation_id = crate::windows::focused_automation_window_id();
+    let parent_automation_id =
+        explicit_parent_automation_id.or_else(crate::windows::focused_automation_window_id);
     match open_confirm_popup_window(
         cx,
         ConfirmPopupParentWindow {

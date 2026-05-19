@@ -421,6 +421,37 @@ pub(crate) struct ConfirmPopupParentWindow {
     pub(crate) automation_id: Option<String>,
 }
 
+/// Read an NSWindow's `title` as a Rust String, or `None` if the title is nil
+/// or not valid UTF-8. Safe to call on the AppKit main thread inside the
+/// confirm-popup defer block where we already hold raw NSWindow pointers.
+#[cfg(target_os = "macos")]
+unsafe fn nswindow_title_string(window: cocoa::base::id) -> Option<String> {
+    use cocoa::base::nil;
+    use objc::{msg_send, sel, sel_impl};
+    use std::ffi::CStr;
+    if window == nil {
+        return None;
+    }
+    let title: cocoa::base::id = msg_send![window, title];
+    if title == nil {
+        return None;
+    }
+    let title_cstr: *const std::os::raw::c_char = msg_send![title, UTF8String];
+    if title_cstr.is_null() {
+        return None;
+    }
+    Some(CStr::from_ptr(title_cstr).to_string_lossy().into_owned())
+}
+
+fn automation_bounds_from_gpui(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
 pub(crate) fn open_confirm_popup_window(
     cx: &mut App,
     parent_window: ConfirmPopupParentWindow,
@@ -505,6 +536,16 @@ pub(crate) fn open_confirm_popup_window(
     let expected_h: f32 = bounds.size.height.into();
     let expected_x: f32 = bounds.origin.x.into();
     let expected_y: f32 = bounds.origin.y.into();
+
+    // Capture intended parent identity + frame so the AppKit attach step can
+    // pick the *intended* parent NSWindow deterministically, instead of
+    // defaulting to whichever window happens to be `isKeyWindow` when the
+    // defer block runs (which is brittle when Notes / ACP / main coexist).
+    let parent_automation_id_for_nswindow = parent_automation_id.clone();
+    let parent_expected_w: f32 = parent_window.bounds.size.width.into();
+    let parent_expected_h: f32 = parent_window.bounds.size.height.into();
+    let parent_expected_title =
+        crate::windows::automation_window_by_id(&parent_automation_id).and_then(|info| info.title);
 
     #[cfg(target_os = "macos")]
     {
@@ -613,38 +654,90 @@ pub(crate) fn open_confirm_popup_window(
                         );
                         platform::configure_confirm_popup_window(confirm_ns_window, is_dark_vibrancy);
 
-                        // Attach confirm as child of the main window so AppKit
-                        // guarantees it stays above the parent across render cycles.
-                        // This is more robust than orderFrontRegardless alone at the
-                        // same window level (both are 101 for PopUp windows).
-                        // Find the main window: prefer the current key window,
-                        // fall back to the first visible window that isn't the confirm.
+                        // Attach confirm as child of the parent window so AppKit
+                        // keeps it above and moves it with the parent.
+                        //
+                        // Deterministic match first: prefer the NSWindow whose
+                        // frame size matches the parent we computed bounds from,
+                        // optionally cross-checked against the registered
+                        // automation title. This protects multi-window setups
+                        // (Notes / ACP / main coexist) where the key window may
+                        // not be the *intended* parent. Fall back to the legacy
+                        // isKeyWindow / first-visible heuristic only if the
+                        // deterministic match fails.
                         let mut main_ns_window: cocoa::base::id = nil;
-                        let mut fallback_ns_window: cocoa::base::id = nil;
                         for idx in 0..count {
                             let w: cocoa::base::id = msg_send![windows, objectAtIndex: idx];
-                            if w != nil && w != confirm_ns_window {
-                                let w_visible: bool = msg_send![w, isVisible];
-                                if w_visible {
-                                    let w_key: bool = msg_send![w, isKeyWindow];
-                                    if w_key {
-                                        main_ns_window = w;
-                                        break;
-                                    }
-                                    if fallback_ns_window == nil {
-                                        fallback_ns_window = w;
-                                    }
-                                }
+                            if w == nil || w == confirm_ns_window {
+                                continue;
+                            }
+                            let w_visible: bool = msg_send![w, isVisible];
+                            if !w_visible {
+                                continue;
+                            }
+                            let frame: cocoa::foundation::NSRect = msg_send![w, frame];
+                            let size_matches = (frame.size.width
+                                - parent_expected_w as f64)
+                                .abs()
+                                < 2.0
+                                && (frame.size.height - parent_expected_h as f64).abs() < 2.0;
+                            let title_opt = nswindow_title_string(w);
+                            let expected_title_matches = parent_expected_title
+                                .as_deref()
+                                .is_some_and(|expected| title_opt.as_deref() == Some(expected));
+                            let notes_title_matches = parent_automation_id_for_nswindow == "notes"
+                                && title_opt.as_deref() == Some("Notes");
+                            if (size_matches && expected_title_matches) || notes_title_matches {
+                                main_ns_window = w;
+                                tracing::info!(
+                                    target: "script_kit::confirm",
+                                    event = "confirm_window_parent_matched_by_automation_id",
+                                    parent_window_id = %parent_automation_id_for_nswindow,
+                                    parent_title = ?title_opt,
+                                    parent_w = frame.size.width,
+                                    parent_h = frame.size.height,
+                                    "Matched confirm popup parent NSWindow deterministically"
+                                );
+                                break;
                             }
                         }
                         if main_ns_window == nil {
-                            main_ns_window = fallback_ns_window;
+                            tracing::warn!(
+                                target: "script_kit::confirm",
+                                event = "confirm_window_parent_deterministic_match_failed",
+                                parent_window_id = %parent_automation_id_for_nswindow,
+                                expected_title = ?parent_expected_title,
+                                expected_w = parent_expected_w,
+                                expected_h = parent_expected_h,
+                                "Falling back to legacy key/visible-window parent search"
+                            );
+                            let mut fallback_ns_window: cocoa::base::id = nil;
+                            for idx in 0..count {
+                                let w: cocoa::base::id =
+                                    msg_send![windows, objectAtIndex: idx];
+                                if w != nil && w != confirm_ns_window {
+                                    let w_visible: bool = msg_send![w, isVisible];
+                                    if w_visible {
+                                        let w_key: bool = msg_send![w, isKeyWindow];
+                                        if w_key {
+                                            main_ns_window = w;
+                                            break;
+                                        }
+                                        if fallback_ns_window == nil {
+                                            fallback_ns_window = w;
+                                        }
+                                    }
+                                }
+                            }
                             if main_ns_window == nil {
-                                tracing::warn!(
-                                    target: "script_kit::confirm",
-                                    event = "confirm_window.no_parent_found",
-                                    "No visible parent window found for addChildWindow"
-                                );
+                                main_ns_window = fallback_ns_window;
+                                if main_ns_window == nil {
+                                    tracing::warn!(
+                                        target: "script_kit::confirm",
+                                        event = "confirm_window.no_parent_found",
+                                        "No visible parent window found for addChildWindow"
+                                    );
+                                }
                             }
                         }
                         if main_ns_window != nil {
@@ -653,6 +746,7 @@ pub(crate) fn open_confirm_popup_window(
                             tracing::info!(
                                 target: "script_kit::confirm",
                                 event = "confirm_window_attached_to_parent",
+                                parent_window_id = %parent_automation_id_for_nswindow,
                                 parent = format!("{:?}", main_ns_window),
                                 child = format!("{:?}", confirm_ns_window),
                                 "Attached confirm popup as native child window"
@@ -707,7 +801,7 @@ pub(crate) fn open_confirm_popup_window(
         crate::protocol::AutomationWindowKind::PromptPopup,
         Some(options.title.to_string()),
         Some("confirmDialog".to_string()),
-        None,
+        Some(automation_bounds_from_gpui(bounds)),
         Some(parent_automation_id.as_str()),
     ) {
         tracing::warn!(
@@ -729,6 +823,39 @@ pub(crate) fn open_confirm_popup_window(
     Ok(handle)
 }
 
+/// Validate an explicit `parent_automation_id` (e.g. `"notes"`) against the
+/// automation registry. Returns the id back on success; bails when the id is
+/// not registered so the popup fails closed instead of attaching to a
+/// surprise parent. Extracted from `resolve_confirm_popup_parent_automation_id`
+/// so it can be exercised without fabricating a GPUI `AnyWindowHandle` in
+/// unit tests.
+fn resolve_registered_parent_automation_id(
+    parent_automation_id: &str,
+    title: &str,
+) -> anyhow::Result<String> {
+    let Some(parent_info) = crate::windows::automation_window_by_id(parent_automation_id) else {
+        tracing::warn!(
+            target: "script_kit::confirm",
+            event = "confirm_popup_open_blocked_unknown_parent",
+            title,
+            parent_window_id = parent_automation_id,
+            "Confirm popup open blocked: explicit parent automation id is not registered"
+        );
+        anyhow::bail!(
+            "Cannot open confirm popup: parent automation id '{}' is not registered",
+            parent_automation_id
+        );
+    };
+    tracing::info!(
+        target: "script_kit::confirm",
+        event = "confirm_popup_resolved_explicit_parent",
+        parent_window_id = %parent_automation_id,
+        parent_kind = ?parent_info.kind,
+        "Resolved explicit confirm popup parent automation identity"
+    );
+    Ok(parent_automation_id.to_string())
+}
+
 fn resolve_confirm_popup_parent_automation_id(
     parent_window_handle: AnyWindowHandle,
     parent_window_bounds: Bounds<Pixels>,
@@ -736,7 +863,16 @@ fn resolve_confirm_popup_parent_automation_id(
     title: &str,
 ) -> anyhow::Result<String> {
     if let Some(id) = parent_automation_id {
-        return Ok(id.to_string());
+        let resolved = resolve_registered_parent_automation_id(id, title)?;
+        // Refresh the registered runtime handle + live bounds so downstream
+        // automation snapshots (and the AppKit child-window lookup) reflect the
+        // exact parent we are about to attach to.
+        crate::windows::upsert_runtime_window_handle(&resolved, parent_window_handle);
+        crate::windows::set_automation_bounds(
+            &resolved,
+            Some(automation_bounds_from_gpui(parent_window_bounds)),
+        );
+        return Ok(resolved);
     }
 
     let Some(main_window_handle) = crate::get_main_window_handle() else {
@@ -1321,6 +1457,100 @@ mod tests {
         assert!((actual_y - expected_y).abs() < 0.5);
         // Width matches parent
         assert!((actual_w - 750.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn confirm_window_bounds_bottom_aligned_notes_sized_parent() {
+        let parent_bounds = Bounds {
+            origin: Point {
+                x: px(960.),
+                y: px(80.),
+            },
+            size: Size {
+                width: px(350.),
+                height: px(280.),
+            },
+        };
+
+        let bounds = confirm_window_bounds(
+            parent_bounds,
+            px(326.),
+            "Move note to Trash",
+            "Move this note to Trash? You can restore it later with \u{2318}\u{21e7}T.",
+        );
+
+        let x: f32 = bounds.origin.x.into();
+        let y: f32 = bounds.origin.y.into();
+        let width: f32 = bounds.size.width.into();
+        let height: f32 = bounds.size.height.into();
+
+        assert!((x - 960.0).abs() < 0.5, "popup x must match parent x");
+        assert!(
+            (width - 350.0).abs() < 0.5,
+            "popup width must match parent width"
+        );
+        assert!(
+            ((y + height) - (80.0 + 280.0)).abs() < 0.5,
+            "popup must be flush with parent bottom edge"
+        );
+    }
+
+    #[test]
+    fn confirm_popup_parent_search_prefers_automation_id_before_key_window() {
+        let source = std::fs::read_to_string("src/confirm/window.rs")
+            .expect("Failed to read src/confirm/window.rs");
+
+        let attach_section = source
+            .split("Deterministic match first")
+            .nth(1)
+            .expect("expected AppKit deterministic-match attach section");
+
+        assert!(
+            attach_section.contains("parent_automation_id_for_nswindow")
+                && attach_section.contains("confirm_window_parent_matched_by_automation_id"),
+            "confirm popup parent NSWindow search should prefer the resolved automation id"
+        );
+
+        let automation_match_idx = attach_section
+            .find("confirm_window_parent_matched_by_automation_id")
+            .expect("expected deterministic parent match event");
+        let key_window_idx = attach_section
+            .find("msg_send![w, isKeyWindow]")
+            .expect("legacy fallback may still call msg_send![w, isKeyWindow]");
+
+        assert!(
+            automation_match_idx < key_window_idx,
+            "automation-id parent matching must happen before key-window fallback"
+        );
+    }
+
+    #[test]
+    fn resolve_registered_parent_accepts_notes_and_rejects_unknown_ids() {
+        use crate::protocol::{AutomationWindowInfo, AutomationWindowKind};
+
+        crate::windows::upsert_automation_window(AutomationWindowInfo {
+            id: "notes".to_string(),
+            kind: AutomationWindowKind::Notes,
+            title: Some("Notes".to_string()),
+            focused: true,
+            visible: true,
+            semantic_surface: Some("notes".to_string()),
+            bounds: None,
+            parent_window_id: None,
+            parent_kind: None,
+        });
+
+        let resolved = resolve_registered_parent_automation_id("notes", "Move note to Trash")
+            .expect("explicit Notes parent id must resolve");
+        assert_eq!(resolved, "notes");
+
+        let unknown = resolve_registered_parent_automation_id("nope-unknown-window-id", "x");
+        assert!(
+            unknown.is_err(),
+            "resolver must reject unregistered explicit parent ids"
+        );
+
+        crate::windows::remove_automation_window("notes");
     }
 
     #[test]
