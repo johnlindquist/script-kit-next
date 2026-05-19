@@ -95,6 +95,32 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
     );
 }
 
+#[test]
+fn set_filter_at_routes_script_list_to_acp_mention_picker() {
+    let receiver_pos = FILTER_INPUT_UPDATES
+        .find("fn set_filter_text_immediate(")
+        .expect("set_filter_text_immediate receiver must exist");
+    let body = &FILTER_INPUT_UPDATES[receiver_pos..];
+    let body_end = body
+        .find("\n    pub(crate) fn write_filter_to_current_subview(")
+        .or_else(|| body.find("\n    pub(crate) fn clear_filter("))
+        .unwrap_or(body.len());
+    let receiver_body = &body[..body_end];
+
+    for needle in [
+        "Self::special_entry_from_script_list_filter(&text)",
+        "ScriptListSpecialEntry::AcpMentionPicker",
+        "entry_kind = \"acp_mention_picker\"",
+        "self.open_tab_ai_acp_with_mention_picker(window, cx);",
+        "return;",
+    ] {
+        assert!(
+            receiver_body.contains(needle),
+            "stdin/devtools setFilter \"@\" must route through the same ACP mention picker entry path as typed launcher text: {needle}"
+        );
+    }
+}
+
 // doc-anchor-removed: [[removed-docs and introspection]]
 #[test]
 fn write_filter_to_current_subview_covers_all_shared_input_builtin_views() {

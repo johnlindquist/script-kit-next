@@ -48,15 +48,26 @@ fn acp_view_exposes_one_footer_dot_status_mapper_for_active_states() {
 }
 
 #[test]
-fn native_footer_uses_the_acp_view_status_mapper() {
+fn native_footer_uses_cached_acp_status_without_child_entity_reads() {
     let body = fn_body(
         UI_WINDOW_SOURCE,
         "pub(crate) fn enrich_footer_config_with_acp_info(",
     );
 
     assert!(
-        body.contains("dot_status: view.footer_dot_status(cx),"),
-        "native footer must reuse AcpChatView::footer_dot_status instead of drifting from the GPUI footer"
+        body.contains("self.acp_footer_dot_status")
+            && body.contains("self.acp_footer_model_display.as_ref()"),
+        "native footer must use the deferred parent cache populated from AcpChatView notifications"
+    );
+    assert!(
+        body.contains("FooterLeftInfo")
+            && body.contains("dot_status,")
+            && body.contains("model_name: model_name.clone()"),
+        "native footer must still publish ACP dot/model info from cached values"
+    );
+    assert!(
+        !body.contains("entity.read(") && !body.contains(".read(cx)"),
+        "native footer sync must not read AcpChatView while child notifications may still be inside an AcpChatView update"
     );
 }
 
@@ -149,26 +160,48 @@ fn active_dot_is_not_gated_by_model_label() {
 
 #[test]
 fn embedded_acp_observer_repaints_parent_for_visible_footer_status_transitions() {
-    let body = fn_body(TAB_AI_MODE_SOURCE, "fn wire_embedded_acp_footer_callbacks(");
+    let body = fn_body(TAB_AI_MODE_SOURCE, "fn sync_embedded_acp_observed_state(");
 
     assert!(
-        body.contains("let ready_script_path_changed = this.acp_ready_script_path != new_path;"),
-        "observer must still cache ready-script changes for footer button resolution"
+        body.contains("let ready_script_path_changed = self.acp_ready_script_path != new_path;"),
+        "deferred observer sync must still cache ready-script changes for footer button resolution"
     );
     assert!(
         body.contains("let visible_acp_view_changed = matches!(")
-            && body.contains("AppView::AcpChatView { entity } if entity == &view_entity"),
-        "observer must detect notifications from the currently visible embedded ACP view"
+            && body.contains("AppView::AcpChatView { entity } if entity == view_entity"),
+        "deferred observer sync must detect notifications from the currently visible embedded ACP view"
     );
     assert!(
         body.contains("let footer_status_changed = if visible_acp_view_changed")
-            && body.contains("this.acp_footer_dot_status = Some(dot_status);")
-            && body.contains("this.acp_footer_model_display = Some(model_display);"),
+            && body.contains("self.acp_footer_dot_status = Some(dot_status);")
+            && body.contains("self.acp_footer_model_display = Some(model_display);"),
         "observer must cache visible ACP footer state so token-by-token child updates do not restart the pulse animation"
     );
     assert!(
         body.contains("if ready_script_path_changed || footer_status_changed")
             && body.contains("cx.notify();"),
         "visible ACP footer status transitions must repaint ScriptListApp so the native footer dot can pulse during active turns"
+    );
+}
+
+#[test]
+fn embedded_acp_observer_defers_child_entity_reads() {
+    let observer_body = fn_body(TAB_AI_MODE_SOURCE, "fn wire_embedded_acp_footer_callbacks(");
+    assert!(
+        observer_body.contains("this.schedule_embedded_acp_observed_state_sync(view_entity, cx);")
+            && !observer_body.contains("let view = view_entity.read(cx);"),
+        "observer must not synchronously read AcpChatView while the child notify may still be inside an AcpChatView update"
+    );
+
+    let schedule_body = fn_body(
+        TAB_AI_MODE_SOURCE,
+        "fn schedule_embedded_acp_observed_state_sync(",
+    );
+    assert!(
+        schedule_body.contains("ACP_OBSERVED_STATE_SYNC_GENERATION.fetch_add")
+            && schedule_body.contains("timer(std::time::Duration::from_millis(50))")
+            && schedule_body.contains("ACP_OBSERVED_STATE_SYNC_GENERATION.load")
+            && schedule_body.contains("this.sync_embedded_acp_observed_state(&view_entity, cx);"),
+        "observer must debounce child-state reads until the AcpChatView notification burst settles"
     );
 }

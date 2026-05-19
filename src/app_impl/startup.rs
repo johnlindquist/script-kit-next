@@ -800,6 +800,7 @@ impl ScriptListApp {
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
             embedded_acp_chat: None,
+            embedded_acp_focus_handle: None,
             prewarmed_acp_chat: None,
             acp_ready_script_path: None,
             acp_footer_dot_status: None,

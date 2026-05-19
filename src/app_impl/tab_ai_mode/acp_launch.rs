@@ -384,7 +384,7 @@ impl ScriptListApp {
 
         // --- View switch FIRST: user sees the ACP chat surface immediately ---
         let view_entity_for_staging = view_entity.clone();
-        self.enter_embedded_acp_chat_surface(view_entity);
+        self.enter_embedded_acp_chat_surface(view_entity, cx);
         cx.notify();
 
         tracing::info!(

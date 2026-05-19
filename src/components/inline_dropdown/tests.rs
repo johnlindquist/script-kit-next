@@ -2,7 +2,10 @@ use super::component::{
     inline_dropdown_clamp_selected_index, inline_dropdown_select_next, inline_dropdown_select_prev,
     inline_dropdown_visible_range, inline_dropdown_visible_range_from_start,
 };
-use super::row::{CONTEXT_PICKER_ROW_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT};
+use super::row::{
+    compact_synopsis_height_for_description, CONTEXT_PICKER_ROW_HEIGHT,
+    CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+};
 
 #[test]
 fn inline_dropdown_navigation_wraps() {
@@ -58,6 +61,31 @@ fn soft_compact_meta_badge_uses_menu_tint_instead_of_dark_badge_surface() {
     assert!(
         !badge_source.contains("chrome.badge_bg_rgba"),
         "soft compact metadata badges must not use the darker global badge surface"
+    );
+}
+
+#[test]
+fn compact_synopsis_uses_footer_surface_tokens_and_grows_for_description() {
+    let row_source = include_str!("row.rs");
+    let synopsis_start = row_source
+        .find("pub(crate) fn render_compact_synopsis_strip")
+        .expect("compact synopsis renderer should exist");
+    let synopsis_source = &row_source[synopsis_start..];
+
+    assert!(
+        synopsis_source.contains("PromptFooterColors::from_theme")
+            && synopsis_source.contains("prompt_footer::footer_surface_rgba")
+            && synopsis_source.contains("HINT_STRIP_PADDING_X"),
+        "focused item synopsis must share the main/dictation footer surface and spacing tokens"
+    );
+    assert_eq!(
+        compact_synopsis_height_for_description("short"),
+        CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    );
+    assert!(
+        compact_synopsis_height_for_description(
+            "This description should wrap to more than one line in the sidebar picker footer."
+        ) > CONTEXT_PICKER_SYNOPSIS_HEIGHT
     );
 }
 

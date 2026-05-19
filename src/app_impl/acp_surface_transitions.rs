@@ -16,14 +16,18 @@ impl ScriptListApp {
     pub(crate) fn enter_embedded_acp_chat_surface(
         &mut self,
         entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        cx: &mut gpui::Context<Self>,
     ) {
+        self.embedded_acp_focus_handle = Some(entity.read(cx).focus_handle(cx));
         self.current_view = AppView::AcpChatView { entity };
         crate::windows::ensure_embedded_ai_window(true);
         self.rekey_main_automation_surface_from_current_view();
         self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);
         self.focused_input = FocusedInput::None;
         self.clear_actions_popup_state();
-        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        self.focus_coordinator
+            .request(crate::focus_coordinator::FocusRequest::acp_chat());
+        self.sync_coordinator_to_legacy();
     }
 
     /// Apply an [`AcpSurfaceEvent`]. No-op when the reduced next state

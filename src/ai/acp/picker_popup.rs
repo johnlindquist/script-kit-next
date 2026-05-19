@@ -12,9 +12,9 @@ use crate::ai::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
 };
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range_from_start, render_soft_compact_picker_row, InlineDropdown,
-    InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
-    CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    compact_synopsis_height_for_description, inline_dropdown_visible_range_from_start,
+    render_soft_compact_picker_row, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
+    InlineDropdownSynopsis, SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 use crate::components::inline_picker::{
     InlinePickerHighlights, InlinePickerRow, InlinePickerRowKind,
@@ -204,28 +204,24 @@ pub(crate) fn batch_select_mention_item_by_semantic_id(
     Some(semantic_id.to_string())
 }
 
-fn popup_has_synopsis(snapshot: &AcpMentionPopupSnapshot) -> bool {
+fn popup_synopsis_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     snapshot
         .items
         .get(snapshot.selected_index)
-        .is_some_and(|item| !item.description.is_empty())
+        .filter(|item| !item.description.is_empty())
+        .map(|item| compact_synopsis_height_for_description(item.description.as_ref()))
+        .unwrap_or(0.0)
 }
 
-fn popup_content_height(row_count: usize, has_synopsis: bool) -> f32 {
+fn popup_content_height(row_count: usize, synopsis_height: f32) -> f32 {
     if row_count == 0 {
         return super::popup_window::dense_picker_height(0);
     }
 
-    let synopsis = if has_synopsis {
-        CONTEXT_PICKER_SYNOPSIS_HEIGHT
-    } else {
-        0.0
-    };
-
     super::popup_window::dense_picker_height_for_row_height(
         row_count,
         SOFT_COMPACT_PICKER_ROW_HEIGHT,
-    ) + synopsis
+    ) + synopsis_height
 }
 
 fn popup_visible_row_limit(snapshot: &AcpMentionPopupSnapshot, parent_height: f32) -> usize {
@@ -235,17 +231,17 @@ fn popup_visible_row_limit(snapshot: &AcpMentionPopupSnapshot, parent_height: f3
     }
 
     let max_height = (parent_height * ACP_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO).max(1.0);
-    let has_synopsis = popup_has_synopsis(snapshot);
+    let synopsis_height = popup_synopsis_height(snapshot);
     let hard_limit = item_count.min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS);
 
     (1..=hard_limit)
         .rev()
-        .find(|rows| popup_content_height(*rows, has_synopsis) <= max_height)
+        .find(|rows| popup_content_height(*rows, synopsis_height) <= max_height)
         .unwrap_or(1)
 }
 
 fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
-    popup_content_height(snapshot.items.len(), popup_has_synopsis(snapshot))
+    popup_content_height(snapshot.items.len(), popup_synopsis_height(snapshot))
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -296,7 +292,7 @@ pub(crate) fn popup_layout_left_drawer(
     let max_height = parent_height * ACP_MENTION_POPUP_MAX_PARENT_HEIGHT_RATIO;
     let visible_row_limit = popup_visible_row_limit(snapshot, parent_height);
     let desired_height =
-        popup_content_height(visible_row_limit, popup_has_synopsis(snapshot)).min(max_height);
+        popup_content_height(visible_row_limit, popup_synopsis_height(snapshot)).min(max_height);
     AcpMentionPopupLayout {
         bounds: Bounds {
             origin: gpui::point(
@@ -460,8 +456,7 @@ impl AcpMentionPopupWindow {
             self.snapshot.selected_index,
             self.snapshot.items.len(),
             self.visible_row_limit
-                .max(1)
-                .min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
+                .clamp(1, super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
         )
     }
 
@@ -491,8 +486,7 @@ impl AcpMentionPopupWindow {
                     self.snapshot.selected_index,
                     self.snapshot.items.len(),
                     self.visible_row_limit
-                        .max(1)
-                        .min(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
+                        .clamp(1, super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS),
                 );
                 self.snapshot.visible_start = visible.start;
             }
@@ -724,19 +718,20 @@ impl Focusable for AcpMentionPopupWindow {
 }
 
 impl AcpMentionPopupWindow {
-    fn owner_is_live(&self, cx: &App) -> bool {
-        let Some(view) = self.source_view.upgrade() else {
-            return false;
-        };
-        view.read(cx).has_active_mention_session()
+    fn owner_is_live(&self) -> bool {
+        // Rendering this popup can happen while the owning AcpChatView is still
+        // inside the update that opened/refreshed it. The owner is responsible
+        // for syncing or closing the popup when the mention session changes, so
+        // render must only verify that the weak owner still upgrades.
+        self.source_view.upgrade().is_some()
     }
 }
 
 impl Render for AcpMentionPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if !self.owner_is_live(cx) {
-            // Owner ACP view either dropped or no longer has a live `@` trigger.
-            // Defer the close so we don't mutate window state mid-render.
+        if !self.owner_is_live() {
+            // Owner ACP view dropped; defer the close so we don't mutate window
+            // state mid-render.
             cx.defer(|cx| {
                 close_mention_popup_window(cx);
             });
@@ -764,7 +759,7 @@ mod tests {
         ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
     };
     use crate::components::inline_dropdown::{
-        CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+        compact_synopsis_height_for_description, SOFT_COMPACT_PICKER_ROW_HEIGHT,
     };
     use gpui::SharedString;
 
@@ -830,9 +825,58 @@ mod tests {
         let expected_height = super::super::popup_window::dense_picker_height_for_row_height(
             12,
             SOFT_COMPACT_PICKER_ROW_HEIGHT,
-        ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT;
+        ) + compact_synopsis_height_for_description("Description 0");
         assert_eq!(popup_height(&slash_snapshot), expected_height);
         assert_eq!(popup_height(&mention_snapshot), expected_height);
+    }
+
+    #[test]
+    fn mention_popup_height_grows_for_long_selected_descriptions() {
+        let short_item = ContextPickerItem {
+            id: SharedString::from("short"),
+            label: SharedString::from("@short"),
+            description: SharedString::from("Short description"),
+            meta: SharedString::from("Portal"),
+            kind: ContextPickerItemKind::Inert,
+            score: 0,
+            label_highlight_indices: Vec::new(),
+            meta_highlight_indices: Vec::new(),
+        };
+        let long_description = "This focused item description is deliberately long enough to wrap across multiple lines in the sidebar popup footer.";
+        let long_item = ContextPickerItem {
+            id: SharedString::from("long"),
+            label: SharedString::from("@long"),
+            description: SharedString::from(long_description),
+            meta: SharedString::from("Portal"),
+            kind: ContextPickerItemKind::Inert,
+            score: 0,
+            label_highlight_indices: Vec::new(),
+            meta_highlight_indices: Vec::new(),
+        };
+
+        let short_snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Mention,
+            selected_index: 0,
+            visible_start: 0,
+            items: vec![short_item],
+            width: 320.0,
+        };
+        let long_snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Mention,
+            selected_index: 0,
+            visible_start: 0,
+            items: vec![long_item],
+            width: 320.0,
+        };
+
+        assert!(popup_height(&long_snapshot) > popup_height(&short_snapshot));
+        assert_eq!(
+            popup_height(&long_snapshot),
+            super::super::popup_window::dense_picker_height_for_row_height(
+                1,
+                SOFT_COMPACT_PICKER_ROW_HEIGHT,
+            ) + compact_synopsis_height_for_description(long_description)
+        );
     }
 
     #[test]
@@ -926,7 +970,7 @@ mod tests {
         };
 
         let layout = popup_layout_left_drawer(parent, &snapshot);
-        let expected_height = super::popup_content_height(3, false);
+        let expected_height = super::popup_content_height(3, 0.0);
         assert_eq!(f32::from(layout.bounds.size.height), expected_height);
         assert_eq!(popup_visible_row_limit(&snapshot, 600.0), 3);
     }
@@ -941,5 +985,19 @@ mod tests {
     fn acp_picker_click_still_submits_on_native_double_click() {
         assert!(should_submit_acp_picker_row_click(false, 2));
         assert!(should_submit_acp_picker_row_click(false, 3));
+    }
+
+    #[test]
+    fn popup_render_liveness_does_not_read_owner_view() {
+        let source = include_str!("picker_popup.rs");
+        assert!(
+            source.contains("fn owner_is_live(&self) -> bool")
+                && source.contains("self.source_view.upgrade().is_some()"),
+            "popup render liveness must not read AcpChatView; opening the popup can render while the owner is still updating"
+        );
+        assert!(
+            !source.contains(&["view.read(cx)", ".has_active_mention_session()"].concat()),
+            "the popup render path must not read the owner AcpChatView"
+        );
     }
 }

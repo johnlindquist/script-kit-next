@@ -14,7 +14,7 @@ impl ScriptListApp {
         self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
         self.tab_ai_harness_return_view = Some(source_view);
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.enter_embedded_acp_chat_surface(view_entity);
+        self.enter_embedded_acp_chat_surface(view_entity, cx);
         cx.notify();
     }
 

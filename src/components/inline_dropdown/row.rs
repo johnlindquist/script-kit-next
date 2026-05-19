@@ -27,6 +27,25 @@ pub(crate) const COMMAND_OPACITY: f32 = 0.30;
 pub(crate) const CONTEXT_PICKER_ROW_HEIGHT: f32 = LIST_ITEM_HEIGHT;
 pub(crate) const SOFT_COMPACT_PICKER_ROW_HEIGHT: f32 = 36.0;
 pub(crate) const CONTEXT_PICKER_SYNOPSIS_HEIGHT: f32 = 64.0;
+const CONTEXT_PICKER_SYNOPSIS_MAX_LINES: usize = 4;
+const CONTEXT_PICKER_SYNOPSIS_LINE_CHARS: usize = 52;
+const CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT: f32 = 16.0;
+
+pub(crate) fn compact_synopsis_height_for_description(description: &str) -> f32 {
+    let explicit_lines = description.lines().count().max(1);
+    let wrapped_lines = description
+        .lines()
+        .map(|line| {
+            let char_count = line.chars().count().max(1);
+            char_count.div_ceil(CONTEXT_PICKER_SYNOPSIS_LINE_CHARS)
+        })
+        .sum::<usize>()
+        .max(explicit_lines)
+        .clamp(1, CONTEXT_PICKER_SYNOPSIS_MAX_LINES);
+
+    CONTEXT_PICKER_SYNOPSIS_HEIGHT
+        + (wrapped_lines.saturating_sub(1) as f32 * CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT)
+}
 
 /// Render a single dense-monoline picker row.
 ///
@@ -523,13 +542,31 @@ pub(crate) fn render_compact_synopsis_strip(
     foreground: Hsla,
     muted_foreground: Hsla,
 ) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let footer_colors = crate::components::prompt_footer::PromptFooterColors::from_theme(&theme);
+    let footer_bg = gpui::rgba(crate::components::prompt_footer::footer_surface_rgba(
+        footer_colors,
+    ));
+    let border = gpui::rgba((footer_colors.border << 8) | 0x50);
+    let description_height = compact_synopsis_height_for_description(description.as_ref());
+    let hint_opacity_byte =
+        (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
+    let hint_color = gpui::rgba((theme.colors.text.primary << 8) | hint_opacity_byte);
+    let meta_text = meta.clone();
+
     div()
-        .h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))
-        .px(px(8.0))
-        .py(px(5.0))
+        .h(px(description_height))
+        .min_h(px(CONTEXT_PICKER_SYNOPSIS_HEIGHT))
+        .flex_shrink_0()
+        .overflow_hidden()
+        .bg(footer_bg)
+        .border_t_1()
+        .border_color(border)
+        .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+        .py(px(8.0))
         .flex()
         .flex_col()
-        .gap(px(2.0))
+        .gap(px(5.0))
         .child(
             div()
                 .flex()
@@ -539,22 +576,26 @@ pub(crate) fn render_compact_synopsis_strip(
                 .child(
                     div()
                         .text_xs()
-                        .text_color(muted_foreground.opacity(HINT))
+                        .line_height(px(14.0))
+                        .text_color(hint_color)
                         .child(label),
                 )
-                .when(!meta.is_empty(), |d| {
+                .when(!meta_text.is_empty(), |d| {
                     d.child(
                         div()
                             .text_xs()
                             .font_family(FONT_MONO)
+                            .line_height(px(14.0))
                             .text_color(muted_foreground.opacity(COMMAND_OPACITY))
-                            .child(meta),
+                            .child(meta_text),
                     )
                 }),
         )
         .child(
             div()
                 .text_xs()
+                .line_height(px(CONTEXT_PICKER_SYNOPSIS_LINE_HEIGHT))
+                .line_clamp(CONTEXT_PICKER_SYNOPSIS_MAX_LINES)
                 .text_color(foreground.opacity(MUTED_OP))
                 .child(description),
         )
