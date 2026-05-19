@@ -645,6 +645,16 @@ pub fn row_icon_text_rgba(colors: &ListItemColors, selected: bool) -> u32 {
     }
 }
 
+#[inline]
+pub fn row_type_accessory_rgba(colors: &ListItemColors, selected: bool) -> u32 {
+    let alpha = if selected {
+        colors.alpha_strong
+    } else {
+        colors.alpha_icon
+    };
+    (colors.accent_selected << 8) | alpha
+}
+
 #[cfg(test)]
 mod icon_kind_tests {
     use super::IconKind;
@@ -704,6 +714,29 @@ mod list_item_colors_tests {
     #[test]
     fn test_alpha_divider_matches_ui_foundation_constant() {
         assert_eq!(ALPHA_DIVIDER, crate::ui_foundation::ALPHA_DIVIDER as u32);
+    }
+}
+
+#[cfg(test)]
+mod row_chrome_rgba_tests {
+    use super::{row_type_accessory_rgba, ListItemColors};
+
+    #[test]
+    fn test_row_type_accessory_rgba_uses_theme_icon_and_strong_alphas() {
+        let mut theme = crate::theme::Theme::dark_default();
+        theme.opacity = Some(crate::theme::types::BackgroundOpacity {
+            text_icon: 0.42,
+            text_strong: 0.88,
+            ..theme.get_opacity()
+        });
+        let colors = ListItemColors::from_theme(&theme);
+
+        let idle = row_type_accessory_rgba(&colors, false);
+        let selected = row_type_accessory_rgba(&colors, true);
+
+        assert_eq!(idle & 0xFF, colors.alpha_icon as u32);
+        assert_eq!(selected & 0xFF, colors.alpha_strong as u32);
+        assert_eq!(idle >> 8, colors.accent_selected);
     }
 }
 
@@ -1513,10 +1546,12 @@ impl RenderOnce for ListItem {
                     );
                     let glyph_color = if is_filtering {
                         rgba((colors.text_dimmed << 8) | ALPHA_HINT)
+                    } else if self.selected {
+                        rgba((colors.text_muted << 8) | colors.alpha_strong)
                     } else {
-                        rgba((colors.text_muted << 8) | ALPHA_READABLE)
+                        rgba((colors.text_muted << 8) | colors.alpha_icon)
                     };
-                    let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
+                    let chrome_color = rgba((colors.text_dimmed << 8) | colors.alpha_icon);
                     crate::components::hint_strip::render_inline_shortcut_keys(
                         shortcut_tokens.iter().map(String::as_str),
                         crate::components::hint_strip::whisper_inline_shortcut_colors(
@@ -1624,7 +1659,7 @@ impl RenderOnce for ListItem {
             if let Some(ref accessory) = self.type_accessory {
                 let tooltip_label = accessory.label.to_string();
                 let svg_path = resolve_svg_icon_path(accessory.icon_name);
-                let accent_color = rgb(colors.accent_selected);
+                let accent_color = rgba(row_type_accessory_rgba(&colors, self.selected));
                 accessories = accessories.child(
                     div()
                         .id(ElementId::Name(
