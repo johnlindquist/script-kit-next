@@ -1343,10 +1343,20 @@ fn collect_dictation_inline_items(query: &str, items: &mut Vec<ContextPickerItem
 }
 
 fn collect_notes_inline_items(query: &str, items: &mut Vec<ContextPickerItem>) {
-    let Ok(notes) = crate::notes::search_notes(query) else {
+    // Always read fresh from storage so the picker reflects creates, renames,
+    // and deletes that happened outside the ACP composer. For blank queries
+    // prefer `get_all_notes()` so the picker shows the current note list
+    // even if the FTS index is mid-rebuild.
+    let trimmed = query.trim();
+    let result = if trimmed.is_empty() {
+        crate::notes::get_all_notes()
+    } else {
+        crate::notes::search_notes(query)
+    };
+    let Ok(notes) = result else {
         return;
     };
-    let query_lower = query.trim().to_lowercase();
+    let query_lower = trimmed.to_lowercase();
     for note in notes.into_iter().take(INLINE_PORTAL_RESULTS_LIMIT) {
         let title = if note.title.trim().is_empty() {
             "Untitled Note".to_string()

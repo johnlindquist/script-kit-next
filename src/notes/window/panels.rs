@@ -354,21 +354,19 @@ impl NotesApp {
             note_switcher_actions.len(),
         );
 
-        let note_count = self.notes.len();
         self.note_switcher.set_actions(note_switcher_actions, cx);
 
         // Open the note switcher (CommandBar handles window creation internally)
         self.note_switcher.open_centered(window, cx);
 
-        // Set note count as context title header (after open, which creates the dialog)
+        // The recent-notes switcher should not show a context-title / count
+        // chip. Clear any stale title so reopens after a config change render
+        // a clean header. The search placeholder is owned by
+        // CommandBarConfig::notes_recent_style ("Search Notes").
         if let Some(dialog) = self.note_switcher.dialog() {
-            let title = format!(
-                "{} note{}",
-                note_count,
-                if note_count == 1 { "" } else { "s" }
-            );
-            dialog.update(cx, |d, _cx| {
-                d.set_context_title(Some(title));
+            dialog.update(cx, |d, cx| {
+                d.set_context_title(None);
+                cx.notify();
             });
         }
 
