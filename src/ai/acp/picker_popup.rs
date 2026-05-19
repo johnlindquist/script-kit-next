@@ -723,8 +723,25 @@ impl Focusable for AcpMentionPopupWindow {
     }
 }
 
+impl AcpMentionPopupWindow {
+    fn owner_is_live(&self, cx: &App) -> bool {
+        let Some(view) = self.source_view.upgrade() else {
+            return false;
+        };
+        view.read(cx).has_active_mention_session()
+    }
+}
+
 impl Render for AcpMentionPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if !self.owner_is_live(cx) {
+            // Owner ACP view either dropped or no longer has a live `@` trigger.
+            // Defer the close so we don't mutate window state mid-render.
+            cx.defer(|cx| {
+                close_mention_popup_window(cx);
+            });
+            return div().size_full().into_any_element();
+        }
         div()
             .size_full()
             .track_focus(&self.focus_handle)
@@ -733,6 +750,7 @@ impl Render for AcpMentionPopupWindow {
             } else {
                 self.render_picker(cx)
             })
+            .into_any_element()
     }
 }
 
