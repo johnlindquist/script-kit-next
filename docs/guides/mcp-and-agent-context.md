@@ -65,6 +65,18 @@ Mutation tools return structured JSON inside MCP text content and are audited to
 
 Use `kit://trigger-builtins` to discover canonical `builtin/...` IDs before calling `kit/trigger_builtin`.
 
+## CLI Access
+
+Agents can use the same live MCP control plane from a shell with `scripts/mcp-cli.ts`. The CLI reads `~/.scriptkit/server.json` by default and also accepts `SCRIPT_KIT_MCP_ENDPOINT` plus `SCRIPT_KIT_MCP_TOKEN`.
+
+```bash
+bun scripts/mcp-cli.ts tools
+bun scripts/mcp-cli.ts resources
+bun scripts/mcp-cli.ts read kit://trigger-builtins
+bun scripts/mcp-cli.ts call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
+bun scripts/mcp-cli.ts call kit/config_get '{"key":"editorFontSize"}'
+```
+
 ## Agent Chat Context
 
 Open Agent Chat with `Tab` from the launcher. Agent Chat can stage context from the current surface and attach additional context parts at submit time.

@@ -112,6 +112,14 @@ jq -e '.result.content[0].type=="text" and ((.result.content[0].text | fromjson)
 
 Use `kit/state` for setup proof because it is safe and read-only. Avoid `kit/show` or `kit/hide` unless you specifically want to change the app window visibility while testing.
 
+For shell workflows that should use the same server discovery and bearer-token behavior, use the repo CLI wrapper:
+
+```bash
+bun scripts/mcp-cli.ts tools
+bun scripts/mcp-cli.ts read kit://trigger-builtins
+bun scripts/mcp-cli.ts call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
+```
+
 ## Troubleshooting
 
 Missing `~/.scriptkit/server.json` means the app server is not running or has shut down. Start Script Kit GPUI again and reread the discovery file.
