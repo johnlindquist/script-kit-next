@@ -243,6 +243,7 @@ impl ScriptListApp {
             self.acp_ready_script_path = None;
             self.acp_footer_dot_status = None;
             self.acp_footer_model_display = None;
+            self.acp_footer_snapshot = None;
             self.tab_ai_harness_return_view = None;
             self.tab_ai_harness_return_focus_target = None;
             crate::windows::update_automation_semantic_surface(

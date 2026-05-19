@@ -8,6 +8,7 @@ fn inline_source_filters_parse_for_files_notes_and_clipboard() {
         ("f: project", "project", RootUnifiedSourceFilter::Files),
         ("n: meeting", "meeting", RootUnifiedSourceFilter::Notes),
         ("notes: meeting", "meeting", RootUnifiedSourceFilter::Notes),
+        ("todo: renew", "renew", RootUnifiedSourceFilter::Todo),
         (
             "invoice c:",
             "invoice",
@@ -94,6 +95,7 @@ fn source_filters_accept_attached_query_text() {
         ("files: sc", "sc", RootUnifiedSourceFilter::Files),
         ("n:meeting", "meeting", RootUnifiedSourceFilter::Notes),
         ("notes:meeting", "meeting", RootUnifiedSourceFilter::Notes),
+        ("todo:renew", "renew", RootUnifiedSourceFilter::Todo),
         ("t:docs", "docs", RootUnifiedSourceFilter::BrowserTabs),
         ("tabs:docs", "docs", RootUnifiedSourceFilter::BrowserTabs),
         ("ai:plan", "plan", RootUnifiedSourceFilter::Conversations),
@@ -157,6 +159,7 @@ fn source_only_filters_parse_as_empty_advanced_queries() {
         ("clipboard: ", RootUnifiedSourceFilter::ClipboardHistory),
         ("n: ", RootUnifiedSourceFilter::Notes),
         ("notes: ", RootUnifiedSourceFilter::Notes),
+        ("todo: ", RootUnifiedSourceFilter::Todo),
         ("t: ", RootUnifiedSourceFilter::BrowserTabs),
         ("h: ", RootUnifiedSourceFilter::BrowserHistory),
         ("ai: ", RootUnifiedSourceFilter::Conversations),

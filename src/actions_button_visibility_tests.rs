@@ -182,9 +182,10 @@ mod tests {
     }
 
     /// Fails if handle_main_footer_action stops dispatching through the
-    /// canonical dispatch_main_window_footer_action method.
+    /// canonical dispatch_main_window_footer_action method or the dispatcher
+    /// drops one of the native footer action contracts.
     #[test]
-    fn test_native_footer_dispatches_all_three_canonical_actions() {
+    fn test_native_footer_dispatches_canonical_actions() {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
             .expect("Failed to read src/app_impl/ui_window.rs");
 
@@ -200,11 +201,11 @@ mod tests {
             "handle_main_footer_action must route through dispatch_main_window_footer_action()"
         );
 
-        // dispatch_main_window_footer_action must dispatch all three actions
+        // dispatch_main_window_footer_action must dispatch the canonical actions
         let dispatcher_pos = content
             .find("fn dispatch_main_window_footer_action")
             .expect("dispatch_main_window_footer_action must exist in ui_window.rs");
-        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
+        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 6000)];
 
         assert!(
             dispatcher_section.contains("FooterAction::Run")
@@ -219,6 +220,16 @@ mod tests {
             dispatcher_section.contains("FooterAction::Actions")
                 && dispatcher_section.contains("dispatch_actions_toggle_for_current_view"),
             "FooterAction::Actions must dispatch through dispatch_actions_toggle_for_current_view()"
+        );
+        assert!(
+            dispatcher_section.contains("FooterAction::Stop")
+                && dispatcher_section.contains("cancel_streaming_from_escape"),
+            "FooterAction::Stop must dispatch through the ACP streaming cancellation path"
+        );
+        assert!(
+            dispatcher_section.contains("FooterAction::PasteResponse")
+                && dispatcher_section.contains("paste_latest_acp_response_to_frontmost"),
+            "FooterAction::PasteResponse must paste the latest ACP assistant response"
         );
         assert!(
             dispatcher_section.contains("FooterAction::Ai")
@@ -276,7 +287,7 @@ mod tests {
         let dispatcher_pos = content
             .find("fn dispatch_main_window_footer_action")
             .expect("dispatch_main_window_footer_action must exist");
-        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
+        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 6000)];
         let actions_pos = dispatcher_section
             .find("FooterAction::Actions")
             .expect("FooterAction::Actions arm must exist in dispatcher");

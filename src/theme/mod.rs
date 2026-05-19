@@ -40,7 +40,7 @@ pub use audit::{
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;
-pub use types::{ColorScheme, FontConfig, Theme, VibrancyMaterial};
+pub use types::{BackgroundGradient, ColorScheme, FontConfig, Theme, VibrancyMaterial};
 
 // Re-export helper types for lightweight color extraction
 pub use helpers::{

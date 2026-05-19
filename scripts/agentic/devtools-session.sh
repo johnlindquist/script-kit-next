@@ -78,6 +78,9 @@ should_skip_build() {
   [[ "$BUILD_POLICY" == "never" ]] && return 0
   [[ "$mode" == "script-only" ]] && return 0
   [[ "$mode" == "reuse-dev-watch" ]] && return 0
+  if [[ "$mode" == "isolated" && "$BUILD_POLICY" == "auto" && -z "${SCRIPT_KIT_GPUI_BINARY:-}" ]]; then
+    return 1
+  fi
   if [[ "$BUILD_POLICY" == "auto" ]] && ! rust_changed_since_head && [[ -x "$DEVTOOLS_SESSION_BINARY" ]]; then
     return 0
   fi
@@ -179,16 +182,21 @@ cmd_start() {
     exit 2
   fi
 
-  export SCRIPT_KIT_SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions-${SESSION}}"
+  export SCRIPT_KIT_SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
   local sdir
   sdir="$(session_sdir "$SESSION")"
   local app_log="${sdir}/app.log"
   local bus="${sdir}/protocol-responses.ndjson"
   local build_log="/tmp/sk-isolated-build-${SCRIPT_KIT_AGENT_ID:-dt-agent-build}.log"
+  local build_json=""
+  local binary_path="$DEVTOOLS_SESSION_BINARY"
 
   progress preflight "preflight mode=${MODE}"
   local preflight_args=(--mode "$MODE")
   [[ "$MODE" == "reuse-dev-watch" ]] && preflight_args+=(--allow-dev-sh)
+  if [[ "$MODE" == "isolated" ]] && ! should_skip_build "$MODE"; then
+    preflight_args+=(--skip-binary)
+  fi
   set +e
   bash "${SCRIPT_DIR}/preflight-isolated.sh" "${preflight_args[@]}"
   preflight_status=$?
@@ -197,7 +205,7 @@ cmd_start() {
     case "$preflight_status" in
       11) json_error preflight dev_sh_running "./dev.sh is running; isolated mode must not start a second GPUI instance." "Use --mode reuse-dev-watch or stop ./dev.sh."; exit 11 ;;
       12) json_error preflight multiple_gpui_instances "Multiple script-kit-gpui instances detected." "pkill orphans, then retry."; exit 12 ;;
-      13) json_error preflight binary_missing "target/debug/script-kit-gpui is missing." "Run build-isolated-binary.sh or --build always."; exit 13 ;;
+      13) json_error preflight binary_missing "DevTools binary is missing: ${DEVTOOLS_SESSION_BINARY}" "Run build-isolated-binary.sh or --build always."; exit 13 ;;
       10)
         if [[ "$MODE" == "reuse-dev-watch" ]]; then
           json_error preflight dev_watch_unhealthy "dev-watch session is not healthy" "Ensure ./dev.sh is running and dev-watch started."
@@ -252,17 +260,46 @@ cmd_start() {
 
   if ! should_skip_build "$MODE"; then
     if [[ "$BUILD_POLICY" == "always" ]] || [[ "$BUILD_POLICY" == "auto" ]]; then
-      progress build "building and promoting binary (timeout 120s)"
-      DEVTOOLS_SESSION_JSON=1
-      export DEVTOOLS_SESSION_JSON
-      if ! bash "${SCRIPT_DIR}/build-isolated-binary.sh" 120; then
-        build_status=$?
+      progress build "building and staging isolated binary (timeout 120s)"
+      set +e
+      build_json="$(
+        DEVTOOLS_SESSION_JSON=1 \
+        SCRIPT_KIT_DEVTOOLS_SESSION="$SESSION" \
+        SCRIPT_KIT_CARGO_TARGET_POOL="${SCRIPT_KIT_CARGO_TARGET_POOL:-agent-debug}" \
+        bash "${SCRIPT_DIR}/build-isolated-binary.sh" --json 120
+      )"
+      build_status=$?
+      set -e
+      if [[ "$build_status" -ne 0 ]]; then
         case "$build_status" in
-          11) json_error build dev_sh_running_build_conflict "./dev.sh is running; cannot promote target/debug." "Stop ./dev.sh or use reuse-dev-watch."; exit 11 ;;
           30) json_error build build_timeout "cargo build exceeded 120s" "Retry with warm target-agent cache."; exit 30 ;;
           31) json_error build build_failed "cargo build failed" "See build log."; exit 31 ;;
-          32) json_error build promote_failed "promote failed after build" "Check target-agent output."; exit 32 ;;
+          32) json_error build stage_failed "stage failed after build" "Check target-agent output."; exit 32 ;;
           *) json_error build build_failed "build failed (exit ${build_status})" ""; exit 31 ;;
+        esac
+      fi
+      binary_path="$(
+        BUILD_JSON="$build_json" python3 - <<'PY'
+import json
+import os
+
+data = json.loads(os.environ["BUILD_JSON"])
+print(data["binaryPath"])
+PY
+      )"
+      if [[ "$binary_path" != /* ]]; then
+        binary_path="${DEVTOOLS_SESSION_REPO_ROOT}/${binary_path}"
+      fi
+      export SCRIPT_KIT_GPUI_BINARY="$binary_path"
+      DEVTOOLS_SESSION_BINARY="$binary_path"
+      progress preflight "preflight staged binary"
+      if ! bash "${SCRIPT_DIR}/preflight-isolated.sh" --mode isolated; then
+        preflight_status=$?
+        case "$preflight_status" in
+          11) json_error preflight dev_sh_running "./dev.sh is running; isolated mode must not start a second GPUI instance." "Use --mode reuse-dev-watch or stop ./dev.sh."; exit 11 ;;
+          12) json_error preflight multiple_gpui_instances "Multiple script-kit-gpui instances detected." "pkill orphans, then retry."; exit 12 ;;
+          13) json_error preflight binary_missing "Staged DevTools binary is missing: ${DEVTOOLS_SESSION_BINARY}" "Re-run build-isolated-binary.sh."; exit 13 ;;
+          *) json_error preflight preflight_failed "preflight failed after staging (exit ${preflight_status})" "See stderr progress."; exit 10 ;;
         esac
       fi
     fi
@@ -311,10 +348,10 @@ cmd_start() {
   fi
 
   local cleanup_cmd="bash scripts/agentic/session.sh stop ${SESSION}"
-  json_emit "$(printf '{"schemaVersion":1,"tool":"devtools-session","status":"ok","phase":"complete","mode":"isolated","session":"%s","sessionDir":"%s","pid":%s,"ready":true,"readyMarker":"startup_ready","timeouts":{"verifySec":%s,"buildSec":120,"readySec":%s,"rpcMs":%s},"paths":{"appLog":"%s","protocolResponses":"%s","buildLog":"%s"},"proof":{"getState":"%s","responseType":"%s"},"cleanup":{"command":"%s"}}\n' \
+  json_emit "$(printf '{"schemaVersion":1,"tool":"devtools-session","status":"ok","phase":"complete","mode":"isolated","session":"%s","sessionDir":"%s","pid":%s,"ready":true,"readyMarker":"startup_ready","timeouts":{"verifySec":%s,"buildSec":120,"readySec":%s,"rpcMs":%s},"paths":{"appLog":"%s","protocolResponses":"%s","buildLog":"%s","binary":"%s"},"proof":{"getState":"%s","responseType":"%s"},"cleanup":{"command":"%s"}}\n' \
     "$(json_escape "$SESSION")" "$(json_escape "$sdir")" "${pid:-0}" \
     "$VERIFY_TIMEOUT_SEC" "$READY_TIMEOUT_SEC" "$RPC_TIMEOUT_MS" \
-    "$(json_escape "$app_log")" "$(json_escape "$bus")" "$(json_escape "$build_log")" \
+    "$(json_escape "$app_log")" "$(json_escape "$bus")" "$(json_escape "$build_log")" "$(json_escape "$DEVTOOLS_SESSION_BINARY")" \
     "$proof_get_state" "$proof_response_type" "$(json_escape "$cleanup_cmd")")"
 }
 

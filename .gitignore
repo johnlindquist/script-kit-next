@@ -89,3 +89,6 @@ TODOS.md
 vendor/**/.cache/
 .mcp.json
 .loop/
+
+# Local scratch directory
+scratch/

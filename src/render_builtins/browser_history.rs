@@ -54,12 +54,7 @@ impl ScriptListApp {
     }
 
     fn browser_history_meta(entry: &crate::browser_history::BrowserHistoryEntry) -> String {
-        format!(
-            "{} · {} visits · {}",
-            entry.browser_name,
-            entry.visit_count,
-            crate::browser_history::format_history_timestamp(entry.last_visited_at_ms)
-        )
+        crate::browser_history::format_browser_history_meta(entry)
     }
 
     fn render_browser_history(
@@ -207,7 +202,16 @@ impl ScriptListApp {
         );
 
         let list_colors = ListItemColors::from_theme(&self.theme);
-        let list_element: AnyElement = if filtered_len == 0 {
+        let list_element: AnyElement = if self.browser_history_loading {
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child("Loading browser history...")
+                .into_any_element()
+        } else if filtered_len == 0 {
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))

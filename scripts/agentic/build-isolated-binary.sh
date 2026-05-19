@@ -3,6 +3,7 @@
 #
 # Usage:
 #   build-isolated-binary.sh [TIMEOUT_SEC]
+#   build-isolated-binary.sh --json [TIMEOUT_SEC]
 #
 # stdout: final JSON envelope (when DEVTOOLS_SESSION_JSON=1 or --json)
 # stderr: progress heartbeats
@@ -14,14 +15,37 @@ source "${SCRIPT_DIR}/devtools-session-lib.sh"
 
 cd "$DEVTOOLS_SESSION_REPO_ROOT"
 
-TIMEOUT_SEC="${1:-120}"
 JSON_OUT="${DEVTOOLS_SESSION_JSON:-0}"
+TIMEOUT_SEC="${1:-120}"
 if [[ "${1:-}" == "--json" ]]; then
   JSON_OUT=1
   TIMEOUT_SEC="${2:-120}"
 fi
 
 export SCRIPT_KIT_AGENT_ID="${SCRIPT_KIT_AGENT_ID:-dt-agent-build}"
+sanitize_id() {
+  printf '%s' "$1" | tr -c 'a-zA-Z0-9._-' '-'
+}
+
+TARGET_MODE="${SCRIPT_KIT_AGENT_TARGET_MODE:-pool}"
+POOL="$(sanitize_id "${SCRIPT_KIT_CARGO_TARGET_POOL:-agent-debug}")"
+AGENT_ID="$(sanitize_id "$SCRIPT_KIT_AGENT_ID")"
+SESSION_NAME="$(sanitize_id "${SCRIPT_KIT_DEVTOOLS_SESSION:-$SCRIPT_KIT_AGENT_ID}")"
+export SCRIPT_KIT_CARGO_TARGET_POOL="$POOL"
+
+case "$TARGET_MODE" in
+  pool) TARGET_DIR="${DEVTOOLS_SESSION_REPO_ROOT}/target-agent/pools/${POOL}" ;;
+  exclusive) TARGET_DIR="${DEVTOOLS_SESSION_REPO_ROOT}/target-agent/agents/${AGENT_ID}" ;;
+  *)
+    echo "[build-isolated] fail: SCRIPT_KIT_AGENT_TARGET_MODE must be pool or exclusive; got ${TARGET_MODE}" >&2
+    exit 2
+    ;;
+esac
+
+SRC="${TARGET_DIR}/debug/script-kit-gpui"
+RUNTIME_DIR="${DEVTOOLS_SESSION_REPO_ROOT}/target-agent/runtime/${SESSION_NAME}"
+DST="${RUNTIME_DIR}/script-kit-gpui"
+MANIFEST="${RUNTIME_DIR}/manifest.json"
 LOG="/tmp/sk-isolated-build-${SCRIPT_KIT_AGENT_ID}.log"
 : > "$LOG"
 
@@ -33,25 +57,25 @@ emit_build_json() {
   local elapsed="${5:-0}"
   if [[ "$JSON_OUT" -eq 1 ]]; then
     if [[ "$status" == "ok" ]]; then
-      printf '{"schemaVersion":1,"tool":"build-isolated-binary","status":"ok","phase":"%s","agentId":"%s","targetDir":"target-agent/%s","promotedTo":"target/debug/script-kit-gpui","elapsedSec":%s,"log":"%s"}\n' \
-        "$phase" "$SCRIPT_KIT_AGENT_ID" "$SCRIPT_KIT_AGENT_ID" "$elapsed" "$LOG"
+      printf '{"schemaVersion":1,"tool":"build-isolated-binary","status":"ok","phase":"%s","agentId":"%s","pool":"%s","targetDir":"%s","binaryPath":"%s","manifest":"%s","elapsedSec":%s,"log":"%s"}\n' \
+        "$phase" "$SCRIPT_KIT_AGENT_ID" "$POOL" \
+        "$(json_escape "${TARGET_DIR#${DEVTOOLS_SESSION_REPO_ROOT}/}")" \
+        "$(json_escape "${DST#${DEVTOOLS_SESSION_REPO_ROOT}/}")" \
+        "$(json_escape "${MANIFEST#${DEVTOOLS_SESSION_REPO_ROOT}/}")" \
+        "$elapsed" "$LOG"
     else
-      printf '{"schemaVersion":1,"tool":"build-isolated-binary","status":"error","phase":"%s","agentId":"%s","elapsedSec":%s,"log":"%s","error":{"code":"%s","message":"%s"}}\n' \
-        "$phase" "$SCRIPT_KIT_AGENT_ID" "$elapsed" "$LOG" "$code" "$(json_escape "$message")"
+      printf '{"schemaVersion":1,"tool":"build-isolated-binary","status":"error","phase":"%s","agentId":"%s","pool":"%s","targetDir":"%s","elapsedSec":%s,"log":"%s","error":{"code":"%s","message":"%s"}}\n' \
+        "$phase" "$SCRIPT_KIT_AGENT_ID" "$POOL" \
+        "$(json_escape "${TARGET_DIR#${DEVTOOLS_SESSION_REPO_ROOT}/}")" \
+        "$elapsed" "$LOG" "$code" "$(json_escape "$message")"
     fi
   fi
 }
 
-if detect_dev_sh; then
-  echo "[build-isolated] fail: ./dev.sh running — will not promote over target/debug" >&2
-  emit_build_json error build dev_sh_running_build_conflict "./dev.sh is running; stop dev.sh before promoting target/debug." "$SECONDS"
-  exit 11
-fi
-
-echo "[build-isolated] agent_id=${SCRIPT_KIT_AGENT_ID} timeout=${TIMEOUT_SEC}s log=${LOG}" >&2
+echo "[build-isolated] agent_id=${SCRIPT_KIT_AGENT_ID} pool=${POOL} mode=${TARGET_MODE} timeout=${TIMEOUT_SEC}s log=${LOG}" >&2
 
 (
-  ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui --message-format=short 2>&1 | tee -a "$LOG"
+  ./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui --message-format=short 2>&1 | tee -a "$LOG" >&2
 ) &
 build_pid=$!
 
@@ -87,14 +111,28 @@ if [[ "$status" -ne 0 ]]; then
   exit 31
 fi
 
-SRC="${DEVTOOLS_SESSION_REPO_ROOT}/target-agent/${SCRIPT_KIT_AGENT_ID}/debug/script-kit-gpui"
 if [[ ! -f "$SRC" ]]; then
   echo "[build-isolated] fail: built binary missing at ${SRC}" >&2
-  emit_build_json error promote promote_failed "built binary missing at ${SRC}" "$elapsed"
+  emit_build_json error stage stage_failed "built binary missing at ${SRC}" "$elapsed"
   exit 32
 fi
 
-cp -f "$SRC" "$DEVTOOLS_SESSION_BINARY"
-echo "[build-isolated] promoted → target/debug/script-kit-gpui" >&2
-emit_build_json ok promote "" "" "$elapsed"
+mkdir -p "$RUNTIME_DIR"
+tmp="${DST}.tmp.$$"
+cp -f "$SRC" "$tmp"
+chmod +x "$tmp"
+mv -f "$tmp" "$DST"
+
+git_head="$(git rev-parse HEAD 2>/dev/null || true)"
+rust_dirty=false
+if git diff --name-only HEAD -- src Cargo.toml Cargo.lock build.rs 2>/dev/null | grep -q .; then
+  rust_dirty=true
+fi
+
+cat > "$MANIFEST" <<EOF
+{"schemaVersion":1,"pool":"${POOL}","source":"${SRC#${DEVTOOLS_SESSION_REPO_ROOT}/}","binaryPath":"${DST#${DEVTOOLS_SESSION_REPO_ROOT}/}","gitHead":"${git_head}","rustDirty":${rust_dirty},"builtAt":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+EOF
+
+echo "[build-isolated] staged → ${DST#${DEVTOOLS_SESSION_REPO_ROOT}/}" >&2
+emit_build_json ok stage "" "" "$elapsed"
 exit 0

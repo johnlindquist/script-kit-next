@@ -131,6 +131,7 @@ mod tests {
             bounds,
             parent_window_id: None,
             parent_kind: None,
+            pid: None,
         }
     }
 

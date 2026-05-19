@@ -33,6 +33,7 @@ impl ScriptListApp {
         search_text: &str,
         advanced_query_active: bool,
         source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
+        todo_options: crate::menu_syntax::RootTodoSectionOptions,
         notes_options: crate::notes::RootNotesSectionOptions,
         clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
         dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
@@ -46,6 +47,7 @@ impl ScriptListApp {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
             source_filters: source_filters.clone(),
+            todo_options,
             notes_options,
             clipboard_history_options,
             dictation_history_options,
@@ -64,6 +66,8 @@ impl ScriptListApp {
 
         let explicit_notes =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
+        let explicit_todos =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Todo);
         let explicit_clipboard =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory);
         let explicit_dictation =
@@ -72,10 +76,11 @@ impl ScriptListApp {
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations);
         let explicit_browser_tabs =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
-        let explicit_browser_history =
+        let _explicit_browser_history =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
         let allow_notes = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
+        let allow_todos = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Todo);
         let allow_clipboard =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory);
         let allow_dictation =
@@ -97,6 +102,19 @@ impl ScriptListApp {
                 crate::notes::search_root_notes_meta_direct(search_text, notes_options)
             } else {
                 crate::notes::search_root_notes_meta_cached(search_text, notes_options)
+            }
+        } else {
+            Vec::new()
+        };
+
+        let todo_hits = if (!advanced_query_active || explicit_todos)
+            && allow_todos
+            && crate::menu_syntax::root_todo_query_is_eligible(search_text, todo_options)
+        {
+            if explicit_todos {
+                crate::menu_syntax::search_root_todos_direct(search_text, todo_options)
+            } else {
+                Vec::new()
             }
         } else {
             Vec::new()
@@ -202,17 +220,17 @@ impl ScriptListApp {
                 search_text,
                 browser_history_options.clone(),
             ) {
-            if explicit_browser_history {
-                crate::browser_history::search_root_browser_history_meta_direct(
-                    search_text,
-                    browser_history_options.clone(),
-                )
-            } else {
-                crate::browser_history::search_root_browser_history_meta(
-                    search_text,
-                    browser_history_options.clone(),
-                )
-            }
+            // Always use cached snapshot in the unified search loop.
+            // Background refresh is handled by ScriptListApp::maybe_start_root_browser_history_refresh.
+            let candidates = crate::browser_history::cached_root_browser_history_snapshot(browser_history_options.cache_ttl_ms);
+            crate::browser_history::root_fuzzy_search_browser_history_hits(
+                &candidates,
+                search_text,
+                browser_history_options.search_urls,
+            )
+            .into_iter()
+            .take(browser_history_options.max_results)
+            .collect()
         } else {
             Vec::new()
         };
@@ -221,6 +239,7 @@ impl ScriptListApp {
         let frame = crate::RootPassiveFrame {
             key,
             note_hits,
+            todo_hits,
             clipboard_history_hits,
             dictation_history_hits,
             acp_history_hits,
@@ -648,6 +667,7 @@ impl ScriptListApp {
             let advanced_predicate_active = advanced_predicate_query.is_some();
             let unified_search = self.config.get_unified_search();
             let mut root_file_options = unified_search.root_file_section_options();
+            let mut todo_options = unified_search.todo_section_options();
             let mut notes_options = unified_search.notes_section_options();
             let mut acp_history_options = unified_search.acp_history_section_options();
             let mut ai_vault_options = unified_search.ai_vault_section_options();
@@ -683,6 +703,12 @@ impl ScriptListApp {
                 notes_options.min_query_chars = 0;
                 notes_options.max_results =
                     notes_options.max_results.max(explicit_source_result_target);
+            }
+            if source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Todo) {
+                todo_options.enabled = true;
+                todo_options.min_query_chars = 0;
+                todo_options.max_results =
+                    todo_options.max_results.max(explicit_source_result_target);
             }
             if source_filters
                 .includes(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)
@@ -733,6 +759,7 @@ impl ScriptListApp {
                 search_text,
                 advanced_predicate_active,
                 source_filters.clone(),
+                todo_options,
                 notes_options,
                 clipboard_history_options,
                 dictation_history_options,
@@ -816,6 +843,8 @@ impl ScriptListApp {
                 root_file_results_for_grouping,
                 root_recent_file_results_for_grouping,
                 root_file_options,
+                &root_passive_frame.todo_hits,
+                todo_options,
                 &root_passive_frame.note_hits,
                 notes_options,
                 &root_passive_frame.clipboard_history_hits,

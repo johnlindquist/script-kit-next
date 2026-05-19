@@ -85,13 +85,13 @@ When fixing resize behavior in a dirty worktree, inspect `git status --short`, p
 
 `./dev.sh` runs `cargo watch` on the shared `target/` dir continuously. Bare `cargo build/test/check/clippy` from an AI agent contends on `target/.cargo-lock` and stalls for minutes ("Blocking waiting for file lock on build directory").
 
-All agent-driven cargo invocations MUST go through `./scripts/agentic/agent-cargo.sh`, which sets `CARGO_TARGET_DIR=target-agent/<agent-id>/`. Examples:
+All agent-driven cargo invocations MUST go through `./scripts/agentic/agent-cargo.sh`, which defaults to the bounded shared `CARGO_TARGET_DIR=target-agent/pools/agent-debug` pool with a visible lock. Examples:
 
 - `./scripts/agentic/agent-cargo.sh test --lib context_picker`
 - `./scripts/agentic/agent-cargo.sh check --lib`
 - `./scripts/agentic/agent-cargo.sh build --bin script-kit-gpui`
 
-Set `SCRIPT_KIT_AGENT_ID` per session for a stable per-agent incremental cache. Do not run bare `cargo` against this repo while `./dev.sh` may be running.
+Use `SCRIPT_KIT_CARGO_TARGET_POOL=<name>` for an intentional shared pool, and set `SCRIPT_KIT_AGENT_TARGET_MODE=exclusive` only when a task truly needs a per-agent cache under `target-agent/agents/<agent-id>`. Do not run bare `cargo` against this repo while `./dev.sh` may be running.
 
 # Post-Task Checklist
 

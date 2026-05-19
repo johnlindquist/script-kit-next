@@ -12,7 +12,9 @@ pub(crate) struct NativeImage {
 impl NativeImage {
     pub(super) fn from_create_rule(image: CGImageRef) -> Result<Self> {
         if image.is_null() {
-            Err(ScreenshotError::CoreGraphics("capture returned a null CGImage".into()))
+            Err(ScreenshotError::CoreGraphics(
+                "capture returned a null CGImage".into(),
+            ))
         } else {
             Ok(Self { image })
         }
@@ -22,11 +24,17 @@ impl NativeImage {
         if bytes.is_empty() {
             return Err(ScreenshotError::Image("encoded image was empty".into()));
         }
-        let cf_data = unsafe { CFDataCreate(null_allocator(), bytes.as_ptr(), bytes.len() as CFIndex) };
-        let cf_data = OwnedCf::new_const(cf_data).ok_or_else(|| ScreenshotError::Image("CFDataCreate failed".into()))?;
-        let source = unsafe { CGImageSourceCreateWithData(cf_data.as_ptr() as CFDataRef, null_dict()) };
-        let source = OwnedCf::new_mut(source).ok_or_else(|| ScreenshotError::Image("CGImageSourceCreateWithData failed".into()))?;
-        let image = unsafe { CGImageSourceCreateImageAtIndex(source.as_mut_ptr() as CGImageSourceRef, 0, null_dict()) };
+        let cf_data =
+            unsafe { CFDataCreate(null_allocator(), bytes.as_ptr(), bytes.len() as CFIndex) };
+        let cf_data = OwnedCf::new_const(cf_data)
+            .ok_or_else(|| ScreenshotError::Image("CFDataCreate failed".into()))?;
+        let source =
+            unsafe { CGImageSourceCreateWithData(cf_data.as_ptr() as CFDataRef, null_dict()) };
+        let source = OwnedCf::new_mut(source)
+            .ok_or_else(|| ScreenshotError::Image("CGImageSourceCreateWithData failed".into()))?;
+        let image = unsafe {
+            CGImageSourceCreateImageAtIndex(source.as_mut_ptr() as CGImageSourceRef, 0, null_dict())
+        };
         Self::from_create_rule(image)
     }
 
@@ -40,19 +48,41 @@ impl NativeImage {
 
     pub fn to_bytes(&self, format: ImageFormat) -> Result<Vec<u8>> {
         let data = unsafe { CFDataCreateMutable(null_allocator(), 0) };
-        let data = OwnedCf::new_mut(data).ok_or_else(|| ScreenshotError::Image("CFDataCreateMutable failed".into()))?;
+        let data = OwnedCf::new_mut(data)
+            .ok_or_else(|| ScreenshotError::Image("CFDataCreateMutable failed".into()))?;
         let uti = cf_string(format.uti())?;
         let properties = image_properties(format)?;
-        let props_ptr = properties.as_ref().map(|p| p.as_ptr()).unwrap_or_else(null_dict);
-        let dest = unsafe { CGImageDestinationCreateWithData(data.as_mut_ptr() as CFMutableDataRef, uti.as_ptr() as CFStringRef, 1, null_dict()) };
-        let dest = OwnedCf::new_mut(dest)
-            .ok_or_else(|| ScreenshotError::Image(format!("CGImageDestinationCreateWithData failed for {}", format.uti())))?;
+        let props_ptr = properties
+            .as_ref()
+            .map(|p| p.as_ptr())
+            .unwrap_or_else(null_dict);
+        let dest = unsafe {
+            CGImageDestinationCreateWithData(
+                data.as_mut_ptr() as CFMutableDataRef,
+                uti.as_ptr() as CFStringRef,
+                1,
+                null_dict(),
+            )
+        };
+        let dest = OwnedCf::new_mut(dest).ok_or_else(|| {
+            ScreenshotError::Image(format!(
+                "CGImageDestinationCreateWithData failed for {}",
+                format.uti()
+            ))
+        })?;
         unsafe {
-            CGImageDestinationAddImage(dest.as_mut_ptr() as CGImageDestinationRef, self.image, props_ptr);
+            CGImageDestinationAddImage(
+                dest.as_mut_ptr() as CGImageDestinationRef,
+                self.image,
+                props_ptr,
+            );
         }
         let ok = unsafe { CGImageDestinationFinalize(dest.as_mut_ptr() as CGImageDestinationRef) };
         if !ok {
-            return Err(ScreenshotError::Image(format!("CGImageDestinationFinalize failed for {}", format.uti())));
+            return Err(ScreenshotError::Image(format!(
+                "CGImageDestinationFinalize failed for {}",
+                format.uti()
+            )));
         }
         Ok(data_to_vec(data.as_ptr() as CFDataRef))
     }
@@ -67,7 +97,9 @@ impl NativeImage {
         let width = self.width();
         let height = self.height();
         if width == 0 || height == 0 {
-            return Err(ScreenshotError::Image("image has zero width or height".into()));
+            return Err(ScreenshotError::Image(
+                "image has zero width or height".into(),
+            ));
         }
 
         let bytes_per_row = width
@@ -80,7 +112,9 @@ impl NativeImage {
 
         let color_space = unsafe { CGColorSpaceCreateDeviceRGB() };
         if color_space.is_null() {
-            return Err(ScreenshotError::Image("CGColorSpaceCreateDeviceRGB failed".into()));
+            return Err(ScreenshotError::Image(
+                "CGColorSpaceCreateDeviceRGB failed".into(),
+            ));
         }
 
         let bitmap_info = kCGBitmapByteOrder32Big | kCGImageAlphaPremultipliedLast;
@@ -97,7 +131,9 @@ impl NativeImage {
         };
         if ctx.is_null() {
             unsafe { CGColorSpaceRelease(color_space) };
-            return Err(ScreenshotError::Image("CGBitmapContextCreate failed".into()));
+            return Err(ScreenshotError::Image(
+                "CGBitmapContextCreate failed".into(),
+            ));
         }
 
         let rect = cg_rect(0.0, 0.0, width as f64, height as f64);
@@ -110,7 +146,12 @@ impl NativeImage {
             CGColorSpaceRelease(color_space);
         }
 
-        Ok(RgbaImage { width, height, bytes_per_row, data })
+        Ok(RgbaImage {
+            width,
+            height,
+            bytes_per_row,
+            data,
+        })
     }
 }
 
@@ -160,7 +201,11 @@ fn image_properties(format: ImageFormat) -> Result<Option<ImageProperties>> {
             ptr::null(),
         )
     };
-    let dict = OwnedCf::new_const(dict)
-        .ok_or_else(|| ScreenshotError::Image("CFDictionaryCreate for image properties failed".into()))?;
-    Ok(Some(ImageProperties { dict, _quality: quality }))
+    let dict = OwnedCf::new_const(dict).ok_or_else(|| {
+        ScreenshotError::Image("CFDictionaryCreate for image properties failed".into())
+    })?;
+    Ok(Some(ImageProperties {
+        dict,
+        _quality: quality,
+    }))
 }

@@ -44,6 +44,7 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) query: String,
     pub(crate) advanced_query: bool,
     pub(crate) source_filters: crate::menu_syntax::RootUnifiedSourceFilterSet,
+    pub(crate) todo_options: crate::menu_syntax::RootTodoSectionOptions,
     pub(crate) notes_options: crate::notes::RootNotesSectionOptions,
     pub(crate) clipboard_history_options:
         crate::clipboard_history::RootClipboardHistorySectionOptions,
@@ -59,6 +60,7 @@ pub(crate) struct RootPassiveFrameKey {
 pub(crate) struct RootPassiveFrame {
     pub(crate) key: RootPassiveFrameKey,
     pub(crate) note_hits: Vec<crate::notes::RootNoteSearchHit>,
+    pub(crate) todo_hits: Vec<crate::menu_syntax::RootTodoSearchHit>,
     pub(crate) clipboard_history_hits: Vec<crate::clipboard_history::ClipboardEntryMeta>,
     pub(crate) dictation_history_hits: Vec<crate::dictation::RootDictationHistorySearchHit>,
     pub(crate) acp_history_hits: Vec<crate::ai::acp::history::AcpHistorySearchHit>,
@@ -572,6 +574,8 @@ struct ScriptListApp {
     cached_browser_tabs: Vec<browser_tabs::BrowserTabInfo>,
     /// Cached browser history entries for BrowserHistoryView.
     cached_browser_history: Vec<browser_history::BrowserHistoryEntry>,
+    /// True while browser history is loading for the portal.
+    browser_history_loading: bool,
     /// Cached file results for FileSearchView (avoids cloning per frame)
     cached_file_results: Vec<file_search::FileResult>,
     /// Latest capped Spotlight results appended to eligible root launcher searches.
@@ -943,6 +947,9 @@ struct ScriptListApp {
     pub(crate) acp_footer_dot_status: Option<crate::footer_popup::FooterDotStatus>,
     /// Cached ACP model label paired with `acp_footer_dot_status`.
     pub(crate) acp_footer_model_display: Option<String>,
+    /// Cached ACP footer state so native footer labels refresh when composer
+    /// or response-derived actions change.
+    pub(crate) acp_footer_snapshot: Option<crate::ai::acp::view::AcpFooterSnapshot>,
     /// Snapshot of shared launcher host state while an attachment portal owns
     /// the main window.
     pub(crate) attachment_portal_host_snapshot: Option<AttachmentPortalHostSnapshot>,

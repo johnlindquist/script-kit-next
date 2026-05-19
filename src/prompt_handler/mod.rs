@@ -914,6 +914,7 @@ fn build_notes_ui_snapshot(
             semantic_surface: Some("notes".to_string()),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(std::process::id()),
         },
         200,
         cx,
@@ -1393,6 +1394,7 @@ impl ScriptListApp {
                     os_window_id: None,
                     semantic_quality: Some(protocol::SemanticQuality::Unavailable),
                     warnings: vec![format!("target_resolution_failed: {}", err)],
+                    pid: None,
                 };
             }
         };
@@ -1542,6 +1544,7 @@ impl ScriptListApp {
             os_window_id,
             semantic_quality: Some(semantic_quality),
             warnings,
+            pid: resolved.pid,
         };
 
         tracing::info!(
@@ -3450,16 +3453,28 @@ impl ScriptListApp {
                             .get(*selected_index)
                             .map(|f| f.name.clone()),
                     ),
-                    AppView::ThemeChooserView { selected_index, .. } => (
-                        "themeChooser".to_string(),
-                        Some("theme-chooser".to_string()),
-                        None,
-                        String::new(),
-                        0,
-                        0,
-                        *selected_index as i32,
-                        None,
-                    ),
+                    AppView::ThemeChooserView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let catalog = Self::theme_chooser_catalog();
+                        let filtered =
+                            Self::theme_chooser_catalog_filtered_indices(filter, &catalog);
+                        let selected_name = filtered
+                            .get(*selected_index)
+                            .and_then(|idx| catalog.get(*idx))
+                            .map(|entry| entry.name.clone());
+                        (
+                            "themeChooser".to_string(),
+                            Some("theme-chooser".to_string()),
+                            None,
+                            filter.clone(),
+                            filtered.len(),
+                            catalog.len(),
+                            *selected_index as i32,
+                            selected_name,
+                        )
+                    }
                     AppView::EmojiPickerView {
                         filter,
                         selected_index,
@@ -8467,6 +8482,8 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Ai => "ai",
             crate::footer_popup::FooterAction::Apply => "apply",
             crate::footer_popup::FooterAction::Close => "close",
+            crate::footer_popup::FooterAction::Stop => "stop",
+            crate::footer_popup::FooterAction::PasteResponse => "pasteResponse",
         }
         .to_string()
     }

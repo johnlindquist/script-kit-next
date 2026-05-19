@@ -1290,6 +1290,67 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::SetAcpTestFixture {
+                                ref phase,
+                                ref user_text,
+                                ref assistant_text,
+                                ref request_id,
+                            } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_acp_command_received",
+                                    command = "setAcpTestFixture",
+                                    request_id = ?request_id,
+                                    phase = %phase,
+                                    user_text_len = user_text.as_ref().map(|text| text.len()).unwrap_or(0),
+                                    assistant_text_len = assistant_text.as_ref().map(|text| text.len()).unwrap_or(0),
+                                    "STDIN ACP command received"
+                                );
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            chat.apply_test_fixture(
+                                                phase,
+                                                user_text.clone(),
+                                                assistant_text.clone(),
+                                                cx,
+                                            )
+                                        })
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "setAcpTestFixture",
+                                            request_id = ?request_id,
+                                            phase = %phase,
+                                            status = "success",
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to set ACP test fixture: {}", error),
+                                        );
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "setAcpTestFixture",
+                                            request_id = ?request_id,
+                                            phase = %phase,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::PasteClipboardIntoAcp { ref request_id } => {
                                 let request_id = request_id.as_ref().map(|id| id.as_str());
                                 tracing::info!(

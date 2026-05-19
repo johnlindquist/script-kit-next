@@ -234,6 +234,30 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        SearchResult::Todo(tm) => {
+            let mut indices = MatchIndices::default();
+
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&tm.hit.title);
+            if name_matched {
+                indices.name_indices = name_indices;
+            }
+
+            if indices.name_indices.is_empty() {
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&tm.hit.subtitle);
+                if desc_matched {
+                    indices.description_indices = desc_indices;
+                }
+            }
+
+            if indices.name_indices.is_empty() && indices.description_indices.is_empty() {
+                let (body_matched, body_indices) = highlight_ctx.indices_for(&tm.hit.body);
+                if body_matched {
+                    indices.filename_indices = body_indices;
+                }
+            }
+
+            indices
+        }
         SearchResult::AcpHistory(am) => {
             let mut indices = MatchIndices::default();
 

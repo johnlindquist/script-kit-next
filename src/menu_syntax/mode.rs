@@ -173,7 +173,7 @@ pub fn capture_body_boundary_has_started_with_targets(
 ///
 /// - `type:script git` → `0..11` (`type:script`)
 /// - `+todo Renew passport` → `0..5` (`+todo`)
-/// - `todo: Renew passport` → `0..5` (`todo:`)
+/// - `note: Renew passport` → `0..5` (`note:`)
 /// - `+` → `0..1`
 /// - plain text → `None`
 pub fn prefix_span_for_input(raw: &str) -> Option<Range<usize>> {
@@ -604,9 +604,9 @@ mod tests {
 
     #[test]
     fn keyword_capture_alias_is_composer_after_colon() {
-        assert!(MenuSyntaxMode::from_input("todo:").capture_composer_owns_input_for("todo:"));
-        assert!(MenuSyntaxMode::from_input("todo: Take out")
-            .capture_composer_owns_input_for("todo: Take out"));
+        assert!(MenuSyntaxMode::from_input("note:").capture_composer_owns_input_for("note:"));
+        assert!(MenuSyntaxMode::from_input("note: Take out")
+            .capture_composer_owns_input_for("note: Take out"));
     }
 
     #[test]
@@ -660,6 +660,7 @@ mod tests {
         assert_eq!(prefix_span_for_input("f: project"), Some(0..2));
         assert_eq!(prefix_span_for_input("files:project"), Some(0..6));
         assert_eq!(prefix_span_for_input("c:sub"), Some(0..2));
+        assert_eq!(prefix_span_for_input("todo: Renew passport"), Some(0..5));
     }
 
     #[test]
@@ -679,7 +680,6 @@ mod tests {
 
     #[test]
     fn prefix_span_highlights_keyword_capture() {
-        assert_eq!(prefix_span_for_input("todo: Renew passport"), Some(0..5));
         assert_eq!(prefix_span_for_input("note: stuff"), Some(0..5));
     }
 

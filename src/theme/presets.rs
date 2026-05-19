@@ -782,6 +782,7 @@ fn build_dark_theme(colors: ColorScheme) -> Theme {
         opacity: Some(opacity),
         drop_shadow: Some(DropShadow::default()),
         vibrancy: Some(VibrancySettings::default()),
+        background_gradient: None,
         fonts: Some(FontConfig::default()),
         appearance: AppearanceMode::Dark,
     }
@@ -799,6 +800,7 @@ fn build_light_theme(colors: ColorScheme) -> Theme {
             ..DropShadow::default()
         }),
         vibrancy: Some(VibrancySettings::default()),
+        background_gradient: None,
         fonts: Some(FontConfig::default()),
         appearance: AppearanceMode::Light,
     }

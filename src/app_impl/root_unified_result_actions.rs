@@ -346,7 +346,11 @@ pub(crate) fn root_unified_action_subject_from_result(
         SearchResult::ScriptIssue(issue) => {
             Some(RootUnifiedActionSubject::ScriptIssue(issue.clone()))
         }
-        SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) | SearchResult::Fallback(_) => None,
+        SearchResult::Script(_)
+        | SearchResult::Scriptlet(_)
+        | SearchResult::Todo(_)
+        | SearchResult::Agent(_)
+        | SearchResult::Fallback(_) => None,
     }
 }
 

@@ -460,17 +460,92 @@ impl ScriptListApp {
                 .into()
             }
 
-            AppView::ThemeChooserView { filter, .. } => {
-                let total_count = 2;
-                let elements: Vec<protocol::ElementInfo> = vec![
+            AppView::ThemeChooserView {
+                filter,
+                selected_index,
+            } => {
+                let catalog = Self::theme_chooser_catalog();
+                let filtered = Self::theme_chooser_catalog_filtered_indices(filter, &catalog);
+                let mut elements: Vec<protocol::ElementInfo> = vec![
                     protocol::ElementInfo::input("theme-filter", Some(filter.as_str()), true),
                     protocol::ElementInfo::panel("theme-chooser"),
-                ]
-                .into_iter()
-                .take(limit)
-                .collect();
+                    protocol::ElementInfo::list("theme-chooser-catalog", filtered.len()),
+                ];
+
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-save-as-user-theme".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Save As".to_string()),
+                    value: Some("theme_chooser_save_as_user_theme".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("save-as-user-theme".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-gradient-cycle".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Gradient".to_string()),
+                    value: Some("theme_chooser_gradient_cycle".to_string()),
+                    selected: self
+                        .theme
+                        .active_background_gradient()
+                        .is_some()
+                        .then_some(true),
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("gradient-cycle".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: None,
+                    action_disabled: None,
+                });
+
+                for (visible_index, catalog_index) in filtered.into_iter().enumerate() {
+                    let Some(entry) = catalog.get(catalog_index) else {
+                        continue;
+                    };
+                    let (semantic_id, source_kind, value) = match &entry.kind {
+                        ThemeChooserCatalogKind::BuiltIn(index) => (
+                            format!("theme-row-builtin:{index}"),
+                            "built-in".to_string(),
+                            index.to_string(),
+                        ),
+                        ThemeChooserCatalogKind::User { slug } => (
+                            format!("theme-row-user:{slug}"),
+                            "user".to_string(),
+                            slug.clone(),
+                        ),
+                    };
+                    elements.push(protocol::ElementInfo {
+                        semantic_id,
+                        element_type: protocol::ElementType::Choice,
+                        text: Some(entry.name.clone()),
+                        value: Some(value),
+                        selected: Some(visible_index == *selected_index),
+                        focused: None,
+                        index: Some(visible_index),
+                        role: Some("theme-row".to_string()),
+                        kind: Some(source_kind),
+                        source: None,
+                        source_name: None,
+                        selectable: Some(true),
+                        status_kind: None,
+                        action_disabled: None,
+                    });
+                }
+
+                let total_count = elements.len();
+                elements.truncate(limit);
                 ElementCollectionOutcome::new(elements, total_count)
-                    .with_warning("panel_only_theme_chooser")
             }
 
             AppView::ActionsDialog => {
@@ -1495,13 +1570,7 @@ impl ScriptListApp {
         Self::push_limited_element(
             &mut elements,
             limit,
-            Self::input_element(
-                "hotkey-shortcut",
-                "Shortcut",
-                Some(shortcut),
-                true,
-                Some(0),
-            ),
+            Self::input_element("hotkey-shortcut", "Shortcut", Some(shortcut), true, Some(0)),
         );
         Self::push_limited_element(
             &mut elements,
@@ -1626,6 +1695,7 @@ impl ScriptListApp {
             scripts::SearchResult::Window(m) => m.window.title.clone(),
             scripts::SearchResult::File(m) => m.file.name.clone(),
             scripts::SearchResult::Note(m) => m.title.clone(),
+            scripts::SearchResult::Todo(m) => m.hit.title.clone(),
             scripts::SearchResult::AcpHistory(m) => m.entry.title_display().to_string(),
             scripts::SearchResult::AiVault(m) => m.hit.safe_title.clone(),
             scripts::SearchResult::ClipboardHistory(m) => m.title.clone(),

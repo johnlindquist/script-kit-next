@@ -171,6 +171,7 @@ const KNOWN_TOP_LEVEL_KEYS: &[&str] = &[
     "drop_shadow",
     "vibrancy",
     "fonts",
+    "background_gradient",
 ];
 const KNOWN_COLOR_KEYS: &[&str] = &["background", "text", "accent", "ui", "terminal"];
 const KNOWN_FOCUS_AWARE_KEYS: &[&str] = &["focused", "unfocused"];
@@ -242,6 +243,7 @@ const KNOWN_DROP_SHADOW_KEYS: &[&str] = &[
     "opacity",
 ];
 const KNOWN_FONT_KEYS: &[&str] = &["mono_family", "mono_size", "ui_family", "ui_size"];
+const KNOWN_BACKGROUND_GRADIENT_KEYS: &[&str] = &["enabled", "from", "to", "angle", "opacity"];
 const VALID_MATERIALS: &[&str] = &["hud", "popover", "menu", "sidebar", "content"];
 
 /// Validate a theme JSON value and return diagnostics
@@ -275,6 +277,11 @@ pub fn validate_theme_json(json: &Value) -> ThemeDiagnostics {
         if let Some(fonts) = map.get("fonts") {
             if !fonts.is_null() {
                 validate_fonts(&mut diags, "/fonts", fonts);
+            }
+        }
+        if let Some(gradient) = map.get("background_gradient") {
+            if !gradient.is_null() {
+                validate_background_gradient(&mut diags, "/background_gradient", gradient);
             }
         }
     } else {
@@ -627,6 +634,32 @@ fn validate_fonts(diags: &mut ThemeDiagnostics, path: &str, fonts: &Value) {
         }
     } else {
         diags.error(path, "fonts must be an object");
+    }
+}
+
+fn validate_background_gradient(diags: &mut ThemeDiagnostics, path: &str, gradient: &Value) {
+    if let Value::Object(map) = gradient {
+        check_unknown_keys(diags, path, map.keys(), KNOWN_BACKGROUND_GRADIENT_KEYS);
+        if let Some(enabled) = map.get("enabled") {
+            if !enabled.is_boolean() {
+                diags.error(format!("{}/enabled", path), "enabled must be a boolean");
+            }
+        }
+        for key in ["from", "to"] {
+            if let Some(value) = map.get(key) {
+                validate_color_value(diags, &format!("{}/{}", path, key), value);
+            }
+        }
+        if let Some(angle) = map.get("angle") {
+            if !angle.is_number() {
+                diags.error(format!("{}/angle", path), "angle must be a number");
+            }
+        }
+        if let Some(opacity) = map.get("opacity") {
+            validate_opacity_value(diags, &format!("{}/opacity", path), opacity);
+        }
+    } else {
+        diags.error(path, "background_gradient must be an object");
     }
 }
 

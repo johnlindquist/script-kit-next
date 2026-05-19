@@ -18,6 +18,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::theme::Theme;
+
 /// Returns the directory that holds user-authored themes.
 ///
 /// The directory lives at `~/.scriptkit/themes/`. It is seeded at app
@@ -84,6 +86,14 @@ pub fn find_user_theme(slug: &str) -> Option<UserTheme> {
     list_user_themes().into_iter().find(|t| t.slug == slug)
 }
 
+/// Loads a user-authored theme by slug. Invalid files are ignored, matching
+/// list behavior so one broken custom theme cannot break Theme Designer.
+pub fn load_user_theme(slug: &str) -> Option<Theme> {
+    let path = user_themes_dir().join(format!("{slug}.json"));
+    let contents = fs::read_to_string(path).ok()?;
+    serde_json::from_str::<Theme>(&contents).ok()
+}
+
 /// Normalizes a display name into a filesystem-safe slug.
 pub fn slugify(name: &str) -> String {
     let mut slug = String::new();
@@ -138,6 +148,45 @@ pub fn save_user_theme(name: &str, payload: &Value) -> Result<UserTheme> {
     })
 }
 
+/// Saves a user theme without overwriting an existing slug.
+pub fn save_user_theme_unique(name: &str, payload: &Value) -> Result<UserTheme> {
+    ensure_user_themes_dir()?;
+    let base_slug = slugify(name);
+    let mut slug = base_slug.clone();
+    let mut suffix = 2usize;
+    while user_themes_dir().join(format!("{slug}.json")).exists() {
+        slug = format!("{base_slug}-{suffix}");
+        suffix += 1;
+    }
+    let display_name = if slug == base_slug {
+        name.to_string()
+    } else {
+        format!("{name} {}", suffix - 1)
+    };
+
+    validate_payload(payload).context("validating theme before save")?;
+    let path = user_themes_dir().join(format!("{slug}.json"));
+    let mut enriched = payload.clone();
+    if let Value::Object(map) = &mut enriched {
+        map.insert("name".to_string(), Value::String(display_name.clone()));
+    }
+    let serialized =
+        serde_json::to_string_pretty(&enriched).context("serializing user theme json")?;
+    atomic_write(&path, &serialized)?;
+
+    Ok(UserTheme {
+        slug,
+        name: display_name,
+        path,
+    })
+}
+
+/// Saves the current in-memory theme as a user-authored preset.
+pub fn save_theme_as_user_theme(name: &str, theme: &Theme) -> Result<UserTheme> {
+    let payload = serde_json::to_value(theme).context("serializing current theme")?;
+    save_user_theme_unique(name, &payload)
+}
+
 /// Deletes a user theme by slug. Missing files are treated as success so the
 /// caller does not need to guard against pre-existing deletion races.
 pub fn delete_user_theme(slug: &str) -> Result<()> {
@@ -179,11 +228,13 @@ fn validate_payload(payload: &Value) -> Result<()> {
     };
 
     let hover = opacity
-        .get("row_state_hover")
+        .get("hover")
+        .or_else(|| opacity.get("row_state_hover"))
         .or_else(|| opacity.get("rowStateHover"))
         .and_then(|v| v.as_f64());
     let selected = opacity
-        .get("row_state_selected")
+        .get("selected")
+        .or_else(|| opacity.get("row_state_selected"))
         .or_else(|| opacity.get("rowStateSelected"))
         .and_then(|v| v.as_f64());
 
@@ -224,5 +275,13 @@ mod tests {
             "opacity": { "row_state_hover": 0.06, "row_state_selected": 0.23 }
         });
         assert!(validate_payload(&good).is_ok());
+    }
+
+    #[test]
+    fn validate_payload_checks_current_hover_selected_shape() {
+        let bad = json!({
+            "opacity": { "hover": 0.25, "selected": 0.23 }
+        });
+        assert!(validate_payload(&bad).is_err());
     }
 }

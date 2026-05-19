@@ -124,10 +124,21 @@ pub(crate) enum AcpFooterHost {
     External,
 }
 
-#[derive(Clone, Debug)]
-struct AcpFooterSnapshot {
-    dot_status: crate::footer_popup::FooterDotStatus,
-    model_display: String,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AcpFooterButtonSpec {
+    pub(crate) action: crate::footer_popup::FooterAction,
+    pub(crate) key: &'static str,
+    pub(crate) label: &'static str,
+    pub(crate) selected: bool,
+    pub(crate) enabled: bool,
+    pub(crate) disabled_reason: Option<&'static str>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct AcpFooterSnapshot {
+    pub(crate) dot_status: crate::footer_popup::FooterDotStatus,
+    pub(crate) model_display: String,
+    pub(crate) buttons: Vec<AcpFooterButtonSpec>,
 }
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
@@ -448,6 +459,8 @@ pub(crate) struct AcpChatView {
     pub(crate) collapsed_ids: HashSet<u64>,
     /// Track message count for list splice updates.
     last_message_count: usize,
+    /// Track the virtual pre-text activity row for list state resets.
+    last_activity_row_visible: bool,
     /// Cursor blink state.
     cursor_visible: bool,
     /// Handle to the cursor blink task.
@@ -506,6 +519,8 @@ pub(crate) struct AcpChatView {
     on_close_window_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening the dedicated history command surface.
     on_open_history_command: Option<AcpFooterActionHandler>,
+    /// Host-owned callback for pasting the latest assistant response.
+    on_paste_response_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
     /// Transactional session for the currently staged attachment portal open.
@@ -793,11 +808,115 @@ impl AcpChatView {
         }
     }
 
-    fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
+    pub(crate) fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
         let thread = self.live_thread().read(cx);
         AcpFooterSnapshot {
             dot_status: self.footer_dot_status(cx),
             model_display: thread.selected_model_display().to_string(),
+            buttons: self.footer_buttons_for_thread(&thread),
+        }
+    }
+
+    fn footer_buttons_for_thread(&self, thread: &AcpThread) -> Vec<AcpFooterButtonSpec> {
+        use crate::footer_popup::FooterAction;
+
+        let actions_selected = crate::actions::is_actions_window_open();
+        let mut buttons = Vec::new();
+
+        match thread.status {
+            AcpThreadStatus::Streaming => {
+                buttons.push(AcpFooterButtonSpec {
+                    action: FooterAction::Stop,
+                    key: "Esc",
+                    label: "Stop",
+                    selected: false,
+                    enabled: true,
+                    disabled_reason: None,
+                });
+            }
+            AcpThreadStatus::WaitingForPermission => {}
+            AcpThreadStatus::Idle | AcpThreadStatus::Error => {
+                let input = thread.input.text();
+                let raw_empty = input.is_empty();
+                let blank = input.trim().is_empty();
+                if raw_empty && Self::has_pastable_assistant_response(thread) {
+                    buttons.push(AcpFooterButtonSpec {
+                        action: FooterAction::PasteResponse,
+                        key: "↵",
+                        label: "Paste Response",
+                        selected: false,
+                        enabled: true,
+                        disabled_reason: None,
+                    });
+                } else {
+                    buttons.push(AcpFooterButtonSpec {
+                        action: FooterAction::Run,
+                        key: "↵",
+                        label: "Send",
+                        selected: false,
+                        enabled: !blank && !self.context_capture_pending,
+                        disabled_reason: if blank {
+                            Some("type_message_first")
+                        } else if self.context_capture_pending {
+                            Some("context_capture_pending")
+                        } else {
+                            None
+                        },
+                    });
+                }
+            }
+        }
+
+        buttons.push(AcpFooterButtonSpec {
+            action: FooterAction::Actions,
+            key: "⌘K",
+            label: "Actions",
+            selected: actions_selected,
+            enabled: true,
+            disabled_reason: None,
+        });
+
+        buttons
+    }
+
+    fn has_pastable_assistant_response(thread: &AcpThread) -> bool {
+        thread.messages.iter().rev().any(|message| {
+            matches!(message.role, AcpThreadMessageRole::Assistant)
+                && !message.body.trim().is_empty()
+        })
+    }
+
+    fn footer_hint_label(button: &AcpFooterButtonSpec) -> &'static str {
+        use crate::footer_popup::FooterAction;
+
+        match button.action {
+            FooterAction::Run => "↵ Send",
+            FooterAction::PasteResponse => "↵ Paste Response",
+            FooterAction::Stop => "Esc Stop",
+            FooterAction::Actions => "⌘K Actions",
+            FooterAction::Ai => "⌘↵ Agent Chat",
+            FooterAction::Apply => "⌘↩ Apply",
+            FooterAction::Close => "⌘W Close",
+        }
+    }
+
+    fn dispatch_footer_button(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::footer_popup::FooterAction;
+
+        match action {
+            FooterAction::Run => self.submit_with_expanded_tokens(cx),
+            FooterAction::PasteResponse => self.trigger_paste_response_requested(window, cx),
+            FooterAction::Stop => {
+                let _ = self.cancel_streaming_from_escape(cx);
+            }
+            FooterAction::Actions => self.trigger_toggle_actions(window, cx),
+            FooterAction::Close => self.trigger_close_requested(window, cx),
+            FooterAction::Ai | FooterAction::Apply => {}
         }
     }
 
@@ -873,9 +992,48 @@ impl AcpChatView {
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
+        let mut hints = Vec::new();
+        for button in snapshot.buttons.iter().cloned() {
+            let button_view = weak_view.clone();
+            hints.push(crate::components::ClickableHint::new(
+                Self::footer_hint_label(&button),
+                move |_, window, cx| {
+                    if let Some(entity) = button_view.upgrade() {
+                        entity.update(cx, |chat, cx| {
+                            chat.dispatch_footer_button(button.action, window, cx);
+                        });
+                    }
+                },
+            ));
+        }
+
         let history_view = weak_view.clone();
-        let actions_view = weak_view.clone();
+        hints.push(crate::components::ClickableHint::new(
+            "⌘P History",
+            move |_, window, cx| {
+                if let Some(entity) = history_view.upgrade() {
+                    entity.update(cx, |chat, cx| {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_toolbar_history_clicked",
+                        );
+                        chat.trigger_open_history_command(window, cx);
+                    });
+                }
+            },
+        ));
+
         let close_view = weak_view.clone();
+        hints.push(crate::components::ClickableHint::new(
+            "⌘W Close",
+            move |_, window, cx| {
+                if let Some(entity) = close_view.upgrade() {
+                    entity.update(cx, |chat, cx| {
+                        chat.trigger_close_requested(window, cx);
+                    });
+                }
+            },
+        ));
 
         div()
             .w_full()
@@ -907,40 +1065,7 @@ impl AcpChatView {
                     ),
             )
             .child(crate::components::render_hint_icons_clickable(
-                vec![
-                    crate::components::ClickableHint::new("↩ Send", move |_, _window, cx| {
-                        if let Some(entity) = weak_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.submit_with_expanded_tokens(cx);
-                            });
-                        }
-                    }),
-                    crate::components::ClickableHint::new("⌘P History", move |_, window, cx| {
-                        if let Some(entity) = history_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                tracing::info!(
-                                    target: "script_kit::tab_ai",
-                                    event = "acp_toolbar_history_clicked",
-                                );
-                                chat.trigger_open_history_command(window, cx);
-                            });
-                        }
-                    }),
-                    crate::components::ClickableHint::new("⌘K Actions", move |_, window, cx| {
-                        if let Some(entity) = actions_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.trigger_toggle_actions(window, cx);
-                            });
-                        }
-                    }),
-                    crate::components::ClickableHint::new("⌘W Close", move |_, window, cx| {
-                        if let Some(entity) = close_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.trigger_close_requested(window, cx);
-                            });
-                        }
-                    }),
-                ],
+                hints,
                 hint_text_rgba,
             ))
             .into_any_element()
@@ -954,10 +1079,25 @@ impl AcpChatView {
         let hint_text_hex = theme.colors.text.primary;
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-        let actions_selected = crate::actions::is_actions_window_open();
-
-        let run_view = weak_view.clone();
-        let actions_view = weak_view.clone();
+        let hints = snapshot
+            .buttons
+            .iter()
+            .cloned()
+            .map(|button| {
+                let button_view = weak_view.clone();
+                crate::components::SelectableHint::new(
+                    Self::footer_hint_label(&button),
+                    move |_, window, cx| {
+                        if let Some(entity) = button_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.dispatch_footer_button(button.action, window, cx);
+                            });
+                        }
+                    },
+                )
+                .selected(button.selected)
+            })
+            .collect::<Vec<_>>();
 
         div()
             .w_full()
@@ -989,23 +1129,7 @@ impl AcpChatView {
                     ),
             )
             .child(crate::components::render_selectable_hint_icons(
-                vec![
-                    crate::components::SelectableHint::new("↵ Run", move |_, _window, cx| {
-                        if let Some(entity) = run_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.submit_with_expanded_tokens(cx);
-                            });
-                        }
-                    }),
-                    crate::components::SelectableHint::new("⌘K Actions", move |_, window, cx| {
-                        if let Some(entity) = actions_view.upgrade() {
-                            entity.update(cx, |chat, cx| {
-                                chat.trigger_toggle_actions(window, cx);
-                            });
-                        }
-                    })
-                    .selected(actions_selected),
-                ],
+                hints,
                 hint_text_rgba,
             ))
             .into_any_element()
@@ -1329,7 +1453,7 @@ impl AcpChatView {
     }
 
     /// Submit the current input, expanding typed display tokens to full paths first.
-    fn submit_with_expanded_tokens(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn submit_with_expanded_tokens(&mut self, cx: &mut Context<Self>) {
         self.expand_typed_tokens_for_submit(cx);
         let _ = self
             .live_thread()
@@ -1428,6 +1552,13 @@ impl AcpChatView {
         self.on_open_history_command = Some(std::sync::Arc::new(callback));
     }
 
+    pub(crate) fn set_on_paste_response_requested(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_paste_response_requested = Some(std::sync::Arc::new(callback));
+    }
+
     /// Prepare the embedded ACP view to be hidden behind another main-panel
     /// surface while keeping its live thread/session intact for reuse.
     pub(crate) fn prepare_for_host_hide(&mut self, cx: &mut Context<Self>) {
@@ -1492,6 +1623,18 @@ impl AcpChatView {
                 target: "script_kit::acp",
                 event = "acp_history_command_no_callback",
                 "Cmd+P history command request dropped — no host callback installed"
+            );
+        }
+    }
+
+    fn trigger_paste_response_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(callback) = self.on_paste_response_requested.clone() {
+            Self::spawn_footer_callback(callback, window, cx);
+        } else {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "acp_footer_paste_response_no_callback",
+                "ACP footer Paste Response request dropped because no host callback was installed"
             );
         }
     }
@@ -2459,6 +2602,7 @@ impl AcpChatView {
             has_selection,
             selection_range,
             message_count: thread.messages.len(),
+            awaiting_first_assistant_text: thread.awaiting_first_assistant_text(),
             picker: self.build_acp_picker_state_snapshot(),
             last_accepted_item: self.last_accepted_item.clone(),
             context_chip_count: pending_parts.len(),
@@ -2573,15 +2717,21 @@ impl AcpChatView {
         // Auto-scroll when thread state changes (new messages, streaming updates).
         cx.observe(&thread, |this: &mut Self, thread, cx| {
             let thread_ref = thread.read(cx);
-            let count = thread_ref.messages.len();
+            let activity_row_visible = thread_ref.awaiting_first_assistant_text();
+            let count = thread_ref.messages.len() + usize::from(activity_row_visible);
             let is_streaming = matches!(thread_ref.status, AcpThreadStatus::Streaming);
 
             // Splice new messages into the list state.
-            if count != this.last_message_count {
+            if count != this.last_message_count
+                || activity_row_visible != this.last_activity_row_visible
+            {
                 let old_count = this.last_message_count;
                 this.last_message_count = count;
                 let delta = count.saturating_sub(old_count);
-                if count > old_count && delta <= 3 {
+                if activity_row_visible == this.last_activity_row_visible
+                    && count > old_count
+                    && delta <= 3
+                {
                     // Small append (typical streaming: 1-2 new messages at a time).
                     this.list_state
                         .splice(old_count..old_count, count - old_count);
@@ -2590,6 +2740,7 @@ impl AcpChatView {
                     this.list_state.reset(count);
                     this.list_state.set_follow_tail(true);
                 }
+                this.last_activity_row_visible = activity_row_visible;
             }
 
             // Re-engage follow-tail when streaming starts so content stays at bottom.
@@ -2665,6 +2816,7 @@ impl AcpChatView {
             permission_options_open: false,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
+            last_activity_row_visible: false,
             cursor_visible: true,
             _blink_task: blink_task,
             history_menu: None,
@@ -2691,6 +2843,7 @@ impl AcpChatView {
             on_close_requested: None,
             on_close_window_requested: None,
             on_open_history_command: None,
+            on_paste_response_requested: None,
             on_open_portal: None,
             pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
@@ -2723,6 +2876,7 @@ impl AcpChatView {
             permission_options_open: false,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
+            last_activity_row_visible: false,
             cursor_visible: false,
             _blink_task: noop_blink,
             history_menu: None,
@@ -2749,6 +2903,7 @@ impl AcpChatView {
             on_close_requested: None,
             on_close_window_requested: None,
             on_open_history_command: None,
+            on_paste_response_requested: None,
             on_open_portal: None,
             pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
@@ -3620,6 +3775,22 @@ impl AcpChatView {
         self.set_input(value, cx);
     }
 
+    pub(crate) fn apply_test_fixture(
+        &mut self,
+        phase: &str,
+        user_text: Option<String>,
+        assistant_text: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let Some(thread) = self.thread() else {
+            return Err("Agent Chat view is not active".to_string());
+        };
+
+        thread.update(cx, |thread, cx| {
+            thread.apply_test_fixture(phase, user_text, assistant_text, cx)
+        })
+    }
+
     pub(crate) fn stage_inline_context_parts_from_host(
         &mut self,
         parts: Vec<crate::ai::message_parts::AiContextPart>,
@@ -4129,6 +4300,62 @@ impl AcpChatView {
                             .text_xs()
                             .text_color(rgb(fg_color))
                             .child(SharedString::from(note)),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Render a virtual assistant row before the first text delta arrives.
+    fn render_assistant_activity_row() -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+        let accent = rgb(theme.colors.accent.selected);
+        let pulse_duration = Duration::from_millis(1100);
+        let dot = div()
+            .size(px(6.0))
+            .rounded_full()
+            .bg(accent)
+            .with_animation(
+                "acp-assistant-activity-pulse",
+                Animation::new(pulse_duration).repeat(),
+                move |el, delta| {
+                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                    let a = 0.35 + 0.55 * (0.5 + 0.5 * sine);
+                    el.bg(gpui::Rgba {
+                        r: accent.r,
+                        g: accent.g,
+                        b: accent.b,
+                        a,
+                    })
+                },
+            );
+
+        div()
+            .id("acp-assistant-activity-row")
+            .w_full()
+            .px(px(8.0))
+            .pb(px(4.0))
+            .child(
+                div()
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgba((theme.colors.text.muted << 8) | 0x99))
+                            .child("Assistant"),
+                    )
+                    .child(
+                        div()
+                            .pt(px(4.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .text_sm()
+                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xCC))
+                            .child(dot)
+                            .child("Working..."),
                     ),
             )
             .into_any_element()
@@ -7564,6 +7791,31 @@ impl AcpChatView {
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
             let permission_active = self.live_thread().read(cx).pending_permission.is_some();
+            let should_paste_response = {
+                let thread = self.live_thread().read(cx);
+                thread.input.text().is_empty()
+                    && matches!(
+                        thread.status,
+                        AcpThreadStatus::Idle | AcpThreadStatus::Error
+                    )
+                    && Self::has_pastable_assistant_response(&thread)
+            };
+            if should_paste_response {
+                self.trigger_paste_response_requested(window, cx);
+                self.emit_key_route_telemetry(
+                    key,
+                    AcpKeyRouteTelemetryArgs {
+                        route: crate::protocol::AcpKeyRoute::Composer,
+                        cursor_before,
+                        cursor_after: cursor_before,
+                        caused_submit: false,
+                        consumed: true,
+                        permission_active,
+                    },
+                );
+                cx.stop_propagation();
+                return;
+            }
             let transition = reduce_acp_composer_picker(
                 self.composer_picker_state(),
                 AcpComposerPickerEvent::SubmitStarted,
@@ -7726,8 +7978,8 @@ impl Render for AcpChatView {
         }
 
         let thread = self.live_thread().read(cx);
-        let status = thread.status;
-        let is_empty = thread.messages.is_empty();
+        let show_activity_row = thread.awaiting_first_assistant_text();
+        let is_empty = thread.messages.is_empty() && !show_activity_row;
         let input_text = thread.input.text().to_string();
         let input_cursor = thread.input.cursor();
         let input_selection = thread.input.selection();
@@ -7993,7 +8245,7 @@ impl Render for AcpChatView {
                 let permission_options_open_snap = self.permission_options_open;
                 let colors_snap = colors;
                 let theme_snap = theme::get_cached_theme();
-                let _is_streaming = matches!(status, AcpThreadStatus::Streaming);
+                let show_activity_row_snap = show_activity_row;
 
                 d.child(
                     div()
@@ -8002,6 +8254,10 @@ impl Render for AcpChatView {
                         .min_h(px(0.))
                         .overflow_hidden()
                         .child(list(self.list_state.clone(), move |ix, _window, _cx| {
+                        if show_activity_row_snap && ix == messages_snapshot.len() {
+                            return Self::render_assistant_activity_row().into_any();
+                        }
+
                         let msg = &messages_snapshot[ix];
                         let msg_id = msg.id;
                         let is_collapsible = matches!(

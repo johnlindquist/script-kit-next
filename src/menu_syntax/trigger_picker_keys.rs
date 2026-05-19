@@ -304,7 +304,7 @@ fn rewrite_token_substring(raw_filter_text: &str, bad: &str, good: &str) -> Stri
 /// intact.
 fn apply_token_insertion(raw_filter_text: &str, token: &str) -> String {
     let trimmed = raw_filter_text.trim_start();
-    if trimmed.starts_with(':') && token.starts_with(':') {
+    if trimmed.starts_with(':') && (token.starts_with(':') || !token_is_root_source_head(token)) {
         return apply_advanced_query_token_insertion(raw_filter_text, token);
     }
     if (trimmed.starts_with(';') && token.starts_with(';'))
@@ -313,6 +313,12 @@ fn apply_token_insertion(raw_filter_text: &str, token: &str) -> String {
         return token.to_string();
     }
     token.to_string()
+}
+
+fn token_is_root_source_head(token: &str) -> bool {
+    crate::menu_syntax::SOURCE_HEAD_SPECS
+        .iter()
+        .any(|spec| spec.canonical == token)
 }
 
 fn apply_advanced_query_token_insertion(raw_filter_text: &str, token: &str) -> String {
@@ -396,19 +402,39 @@ mod tests {
     }
 
     #[test]
-    fn accept_intent_rewrites_input_with_insert_token() {
+    fn accept_source_head_from_exact_colon_inserts_root_filter_and_closes() {
         let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
-        // First row should be a qualifier (e.g. `type:script`).
+        let files_idx = snap
+            .rows
+            .iter()
+            .position(|r| r.token.as_deref() == Some("files:"))
+            .expect("files source head row");
         let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, None, ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert!(
-                    text.starts_with(':'),
-                    "accept on qualifier row must produce a :-prefixed token, got {text}"
-                );
-                assert!(!keep_open, "Accept should close the picker");
+                assert_eq!(files_idx, 0, "files: should be the first source head");
+                assert_eq!(text, "files:");
+                assert!(!keep_open, "Accept on source head should close the picker");
             }
             other => panic!("expected ReplaceInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accept_advanced_head_from_exact_colon_keeps_popup_open() {
+        let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
+        let type_idx = snap
+            .rows
+            .iter()
+            .position(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(type_idx), ":");
+        match outcome {
+            TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
+                assert_eq!(text, ":type:");
+                assert!(keep_open, "Accept on advanced head should keep picker open");
+            }
+            other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
         }
     }
 
@@ -461,15 +487,15 @@ mod tests {
     #[test]
     fn apply_intent_on_open_value_row_keeps_popup_open() {
         let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
-        let source_idx = snap
+        let type_idx = snap
             .rows
             .iter()
-            .position(|r| r.id == "qualifier:source:")
-            .expect("source row");
-        let outcome = apply_intent(InlinePickerKeyIntent::Apply, &snap, Some(source_idx), ":");
+            .position(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        let outcome = apply_intent(InlinePickerKeyIntent::Apply, &snap, Some(type_idx), ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
-                assert_eq!(text, ":source:");
+                assert_eq!(text, ":type:");
                 assert!(
                     keep_open,
                     "Apply on open-value qualifier must keep picker open"
@@ -505,12 +531,12 @@ mod tests {
     #[test]
     fn accept_on_open_value_row_keeps_picker_open() {
         let snap = build_trigger_picker_snapshot(":", &ctx()).expect("colon snapshot");
-        let source_idx = snap
+        let type_idx = snap
             .rows
             .iter()
-            .position(|r| r.id == "qualifier:source:")
-            .expect("source row");
-        let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(source_idx), ":");
+            .position(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(type_idx), ":");
         match outcome {
             TriggerPickerIntentOutcome::ReplaceInput { keep_open, .. } => {
                 assert!(
@@ -553,19 +579,23 @@ mod tests {
 
     #[test]
     fn accept_preserves_open_value_rows() {
-        for (input, row_id, expected) in [
-            (":", "qualifier:source:", ":source:"),
-            (":", "qualifier:tag:", ":tag:"),
-            (":", "qualifier:#", ":#"),
+        for (input, token, expected) in [
+            (":", "type:", ":type:"),
+            (":", "tag:", ":tag:"),
+            (":", "has:", ":has:"),
         ] {
             let snap = build_trigger_picker_snapshot(input, &ctx()).expect("snapshot");
-            let row_idx = snap.rows.iter().position(|r| r.id == row_id).expect(row_id);
+            let row_idx = snap
+                .rows
+                .iter()
+                .position(|r| r.token.as_deref() == Some(token))
+                .expect(token);
             let outcome = apply_intent(InlinePickerKeyIntent::Accept, &snap, Some(row_idx), input);
 
             match outcome {
                 TriggerPickerIntentOutcome::ReplaceInput { text, keep_open } => {
                     assert_eq!(text, expected);
-                    assert!(keep_open, "{row_id} should keep the picker open");
+                    assert!(keep_open, "{token} should keep the picker open");
                 }
                 other => panic!("expected ReplaceInput keep_open=true, got {other:?}"),
             }

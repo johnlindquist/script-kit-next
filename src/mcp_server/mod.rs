@@ -949,6 +949,7 @@ mod tests {
                     os_window_id: Some(123),
                     semantic_quality: Some(crate::protocol::SemanticQuality::Full),
                     warnings: Vec::new(),
+                    pid: Some(1234),
                 })
             }
 

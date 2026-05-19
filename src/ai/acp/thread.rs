@@ -528,6 +528,26 @@ impl AcpThread {
         true
     }
 
+    /// True while a user turn is streaming but no assistant text has landed yet.
+    pub(crate) fn awaiting_first_assistant_text(&self) -> bool {
+        if !matches!(self.status, AcpThreadStatus::Streaming) {
+            return false;
+        }
+
+        let Some(last_user_index) = self
+            .messages
+            .iter()
+            .rposition(|message| matches!(message.role, AcpThreadMessageRole::User))
+        else {
+            return false;
+        };
+
+        !self.messages[last_user_index + 1..].iter().any(|message| {
+            matches!(message.role, AcpThreadMessageRole::Assistant)
+                && !message.body.trim().is_empty()
+        })
+    }
+
     /// Submit the current input as a new user turn.
     ///
     /// If context is still bootstrapping (`Preparing`), the submit is queued
@@ -1808,6 +1828,72 @@ impl AcpThread {
         cx.notify();
     }
 
+    /// Install a synthetic transcript state for no-token Agent Chat UI proof.
+    pub(crate) fn apply_test_fixture(
+        &mut self,
+        phase: &str,
+        user_text: Option<String>,
+        assistant_text: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let user_text = user_text.unwrap_or_else(|| "No-token activity fixture".to_string());
+        let user_text = user_text.trim();
+        if user_text.is_empty() {
+            return Err("setAcpTestFixture requires non-empty userText".to_string());
+        }
+
+        self.stream_task = None;
+        self.pending_permission = None;
+        self.messages.clear();
+        self.active_plan_entries.clear();
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        self.active_mode_id = None;
+        self.available_commands.clear();
+        self.usage_tokens = None;
+        self.usage_cost_usd = None;
+        self.input.clear();
+        self.clear_all_pending_context("set_acp_test_fixture");
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+        self.queued_submit_while_bootstrapping = false;
+
+        self.push_message(AcpThreadMessageRole::User, user_text.to_string());
+        match phase {
+            "awaitingFirstAssistantText" | "awaiting-first-assistant-text" | "awaiting" => {
+                self.set_status(AcpThreadStatus::Streaming);
+            }
+            "assistantText" | "assistant-text" | "text" => {
+                self.push_message(
+                    AcpThreadMessageRole::Assistant,
+                    assistant_text.unwrap_or_else(|| "Fixture assistant text.".to_string()),
+                );
+                self.set_status(AcpThreadStatus::Streaming);
+            }
+            "idle" => {
+                if let Some(text) = assistant_text {
+                    self.push_message(AcpThreadMessageRole::Assistant, text);
+                }
+                self.set_status(AcpThreadStatus::Idle);
+            }
+            other => {
+                return Err(format!(
+                    "unknown setAcpTestFixture phase {other:?}; expected awaitingFirstAssistantText, assistantText, or idle"
+                ));
+            }
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_test_fixture_applied",
+            phase,
+            message_count = self.messages.len(),
+            awaiting_first_assistant_text = self.awaiting_first_assistant_text(),
+        );
+        cx.notify();
+        Ok(())
+    }
+
     /// Clear composer-attached context state before a fresh external entry
     /// intent reuses this thread.
     ///
@@ -2467,6 +2553,44 @@ mod tests {
 
         // Second turn: only user input = 1 block
         assert_eq!(second.len(), 1, "second turn should only include input");
+    }
+
+    #[test]
+    fn awaiting_first_assistant_text_tracks_pre_text_streaming_gap() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        thread.push_message(AcpThreadMessageRole::User, "Follow up");
+        thread.set_status(AcpThreadStatus::Streaming);
+
+        assert!(thread.awaiting_first_assistant_text());
+
+        thread.push_message(AcpThreadMessageRole::Thought, "Inspecting files");
+        thread.push_message(AcpThreadMessageRole::Tool, "Read file completed");
+
+        assert!(
+            thread.awaiting_first_assistant_text(),
+            "thought/tool events before text should keep the activity row visible"
+        );
+
+        thread.push_message(AcpThreadMessageRole::Assistant, "I found the issue.");
+
+        assert!(!thread.awaiting_first_assistant_text());
+    }
+
+    #[test]
+    fn awaiting_first_assistant_text_is_false_without_streaming_user_turn() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        assert!(!thread.awaiting_first_assistant_text());
+
+        thread.push_message(AcpThreadMessageRole::User, "Follow up");
+        assert!(!thread.awaiting_first_assistant_text());
+
+        thread.set_status(AcpThreadStatus::Streaming);
+        assert!(thread.awaiting_first_assistant_text());
+
+        thread.set_status(AcpThreadStatus::Idle);
+        assert!(!thread.awaiting_first_assistant_text());
     }
 
     #[test]

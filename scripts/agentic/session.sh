@@ -34,7 +34,7 @@ canonical_session_dir() {
 }
 SESSION_DIR="$(canonical_session_dir "$SESSION_DIR_RAW")"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-BINARY="${PROJECT_ROOT}/target/debug/script-kit-gpui"
+BINARY="${SCRIPT_KIT_GPUI_BINARY:-${PROJECT_ROOT}/target/debug/script-kit-gpui}"
 READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
 READY_LOG_MARKER_APP="APP_READY|main-window-ready show=false focus=false stdin-safe"
 READY_LOG_MARKER_STARTUP="STARTUP_READY "
@@ -345,6 +345,7 @@ cmd_start() {
         "session:\"${name}\"" \
         "pid:${old_pid}" \
         "pipe:\"${input_fifo}\"" \
+        "binary:\"${BINARY}\"" \
         "log:\"${log_path}\"" \
         "responses:\"${responses_path}\"" \
         "lifecycle:\"${lifecycle_path}\"" \
@@ -473,6 +474,7 @@ cmd_start() {
     "session:\"${name}\"" \
     "pid:${app_pid}" \
     "pipe:\"${input_fifo}\"" \
+    "binary:\"${BINARY}\"" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \
     "protocolResponses:\"${protocol_responses_path}\"" \
@@ -969,6 +971,7 @@ cmd_status() {
     "issues:${issues}" \
     "pipe:\"${pipe_path}\"" \
     "pipeWritable:${pipe_writable}" \
+    "binary:\"${BINARY}\"" \
     "keepActionsWindowOpen:${keep_actions_window_open}" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \

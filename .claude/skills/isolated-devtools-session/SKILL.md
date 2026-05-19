@@ -48,14 +48,15 @@ bash scripts/agentic/devtools-session.sh cleanup --session "$SESSION"
 | --- | --- | --- | --- |
 | `script-only` | `SK_VERIFY` script proof only | Skip | Skip |
 | `reuse-dev-watch` | `./dev.sh` running, healthy `dev-watch` | Skip | Attach only |
-| `isolated` | Parallel agent / post-Rust proof | Optional (`--build`) | New session |
+| `isolated` | Parallel agent / post-Rust proof | Optional (`--build`) through `target-agent/pools/<pool>` | New session from staged binary |
 
 **Rules:**
 
 - Never start `isolated` while `./dev.sh` cargo-watch is running (exit `11`).
 - Never accept `session.sh start` with `ready:false` as done — the front door runs `wait-session-ready.sh` (60s visible gate; internal start timeout 5s).
 - Never run unbounded `agent-cargo.sh build` — use `build-isolated-binary.sh` (120s default) or `--build auto|always|never` on `start`.
-- `agent-cargo.sh` writes `target-agent/<id>/`; sessions run `target/debug/script-kit-gpui` after **promote**.
+- `agent-cargo.sh` defaults to the bounded `target-agent/pools/agent-debug` pool with a visible lock; use `SCRIPT_KIT_AGENT_TARGET_MODE=exclusive` only when a task truly needs its own cache.
+- Isolated builds stage `target-agent/runtime/<session>/script-kit-gpui` and sessions launch that staged binary via `SCRIPT_KIT_GPUI_BINARY`; agents must not promote into `target/debug/script-kit-gpui`.
 
 ### Reuse dev-watch
 
@@ -88,8 +89,11 @@ bash scripts/agentic/verify-devtools-session.sh
 
 | Variable | Purpose |
 | --- | --- |
-| `SCRIPT_KIT_SESSION_DIR` | Isolated FIFO/state root (default per-session under `/tmp`) |
-| `SCRIPT_KIT_AGENT_ID` | Cargo cache dir for `agent-cargo.sh` / build promote |
+| `SCRIPT_KIT_SESSION_DIR` | FIFO/state root (default `/tmp/sk-agentic-sessions`) |
+| `SCRIPT_KIT_AGENT_ID` | Agent identity for logs and explicit exclusive targets |
+| `SCRIPT_KIT_CARGO_TARGET_POOL` | Named shared agent target pool (default `agent-debug`) |
+| `SCRIPT_KIT_AGENT_TARGET_MODE` | `pool` by default; set `exclusive` only for per-agent caches |
+| `SCRIPT_KIT_GPUI_BINARY` | Staged binary path for isolated session launch |
 | `SCRIPT_KIT_TEST_NOTES_DB_PATH` | Sandbox notes DB (`--notes-sandbox` on start) |
 
 ## Anti-Patterns

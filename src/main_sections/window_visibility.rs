@@ -71,6 +71,7 @@ fn sync_main_automation_window(
         bounds: bounds.or_else(current_main_automation_bounds),
         parent_window_id: None,
         parent_kind: None,
+        pid: Some(std::process::id()),
     });
 }
 

@@ -13,6 +13,7 @@ pub enum ArtifactKind {
     Window,
     File,
     Note,
+    Todo,
     AcpHistory,
     AiVault,
     ClipboardHistory,
@@ -35,6 +36,7 @@ impl ArtifactKind {
             "window" | "windows" => Some(Self::Window),
             "file" | "files" => Some(Self::File),
             "note" | "notes" => Some(Self::Note),
+            "todo" | "todos" => Some(Self::Todo),
             "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
                 Some(Self::AcpHistory)
             }
@@ -123,6 +125,7 @@ impl AdvancedQuery {
 pub enum RootUnifiedSourceFilter {
     Files,
     Notes,
+    Todo,
     ClipboardHistory,
     BrowserTabs,
     BrowserHistory,
@@ -141,6 +144,7 @@ impl RootUnifiedSourceFilter {
         match self {
             Self::Files => "files",
             Self::Notes => "notes",
+            Self::Todo => "todo",
             Self::ClipboardHistory => "clipboard",
             Self::BrowserTabs => "tabs",
             Self::BrowserHistory => "history",
@@ -159,6 +163,7 @@ impl RootUnifiedSourceFilter {
         match self {
             Self::Files => "Files",
             Self::Notes => "Notes",
+            Self::Todo => "Todos",
             Self::ClipboardHistory => "Clipboard",
             Self::BrowserTabs => "Browser Tabs",
             Self::BrowserHistory => "Browser History",
@@ -199,6 +204,14 @@ pub const SOURCE_HEAD_SPECS: &[SourceHeadSpec] = &[
         short: Some("n:"),
         label: "Notes",
         description: "Search note records",
+        planned: true,
+    },
+    SourceHeadSpec {
+        source: RootUnifiedSourceFilter::Todo,
+        canonical: "todo:",
+        short: None,
+        label: "Todos",
+        description: "Search local ;todo captures",
         planned: true,
     },
     SourceHeadSpec {

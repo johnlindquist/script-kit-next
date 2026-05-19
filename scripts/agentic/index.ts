@@ -20,6 +20,7 @@
  *   surface-navigate       Navigate known surfaces, safely interact, and capture image-library screenshots
  *   scenario               Run a replayable scenario with proof bundle (--scenario NAME --index N)
  *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
+ *   check-leaks            Check for memory leaks using xctrace Leaks template
  *   preflight              Check all prerequisites (session, window, permissions)
  *   permission-assistant-drag-preflight-stress
  *                         Fail-closed Permission Assistant drag/no-TCC proof
@@ -3125,6 +3126,43 @@ switch (recipe) {
       index: index ?? 0,
     });
     break;
+
+  case "check-leaks": {
+    const target = targetJson ?? { type: "main" };
+    // 1. Get PID
+    const targetReceipt = await step("resolve-pid", async () => {
+      return runTool(["bun", "scripts/devtools/targets.ts", "inspect", "--target-json", JSON.stringify(target)], "inspect");
+    });
+    const pid = (targetReceipt.output as any)?.resolvedTarget?.pid;
+    if (!pid) {
+      result = {
+        schemaVersion: SCHEMA_VERSION,
+        recipe: "check-leaks",
+        status: "error",
+        steps: [targetReceipt],
+        summary: "Could not resolve PID for target",
+      };
+      break;
+    }
+    // 2. Start recording Leaks
+    const traceFile = `leaks_${Date.now()}.trace`;
+    const recordReceipt = await step("record-leaks", async () => {
+      return runTool(["bun", "scripts/devtools/perf.ts", "record", "--pid", String(pid), "--template", "Leaks", "--output", traceFile, "--duration", "20"], "record");
+    });
+    // 3. Analyze
+    const analyzeReceipt = await step("analyze-leaks", async () => {
+      return runTool(["bun", "scripts/devtools/perf.ts", "analyze", "--input", traceFile], "analyze");
+    });
+    const leaks = (analyzeReceipt.output as any)?.summary?.leakCount ?? 0;
+    result = {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "check-leaks",
+      status: leaks === 0 ? "pass" : "fail",
+      steps: [targetReceipt, recordReceipt, analyzeReceipt],
+      summary: leaks === 0 ? "No leaks detected" : `${leaks} leaks detected`,
+    };
+    break;
+  }
 
   case "acp-detached-target-threading-stress": {
     const proofBundle = await runDetachedAcpTargetThreadingStressScenario({

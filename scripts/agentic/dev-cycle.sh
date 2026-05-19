@@ -136,7 +136,8 @@ PY
 }
 
 if [ -n "${CARGO_TARGET_DIR:-}" ]; then
-    echo "[dev.sh] warning: CARGO_TARGET_DIR=${CARGO_TARGET_DIR} is set, but session.sh expects target/debug/script-kit-gpui" >&2
+    echo "[dev.sh] warning: ignoring inherited CARGO_TARGET_DIR=${CARGO_TARGET_DIR}; dev.sh owns target/" >&2
+    unset CARGO_TARGET_DIR
 fi
 
 # --- Suggestion 1: stale launcher ------------------------------------------
@@ -155,7 +156,8 @@ suggest_restart_if_launcher_stale() {
         current="$(md5 -q dev.sh scripts/agentic/dev-cycle.sh scripts/agentic/dev-relaunch.sh 2>/dev/null | paste -sd, -)"
     fi
     if [ -n "$current" ] && [ "$current" != "$recorded" ]; then
-        echo "[dev.sh] SUGGEST launcher scripts changed since start — restart dev.sh (Ctrl+C, then ./dev.sh) to pick them up" >&2
+        echo "[dev.sh] SUGGEST launcher scripts changed since this cargo-watch started." >&2
+        echo "[dev.sh] ACTION: stop this dev.sh and restart it; current loop is using old launcher behavior." >&2
     fi
 }
 suggest_restart_if_launcher_stale

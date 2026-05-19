@@ -44,7 +44,12 @@ pub(crate) fn mouse_location() -> Result<Point> {
 }
 
 pub(crate) fn capture(target: CaptureTarget, options: CaptureOptions) -> Result<CapturedImage> {
-    if options.delay.as_millis() > 0 && !matches!(selected_backend(&target, &options), CaptureBackend::SystemScreencapture) {
+    if options.delay.as_millis() > 0
+        && !matches!(
+            selected_backend(&target, &options),
+            CaptureBackend::SystemScreencapture
+        )
+    {
         std::thread::sleep(options.delay);
     }
 
@@ -74,7 +79,17 @@ pub(crate) fn open_screen_recording_settings() -> Result<()> {
 fn selected_backend(target: &CaptureTarget, options: &CaptureOptions) -> CaptureBackend {
     match options.backend {
         CaptureBackend::Auto => {
-            if options.include_cursor || matches!(target, CaptureTarget::Interactive | CaptureTarget::InteractiveSelection | CaptureTarget::InteractiveWindow | CaptureTarget::InteractiveToolbar | CaptureTarget::TouchBar | CaptureTarget::DisplayOrdinal(_)) {
+            if options.include_cursor
+                || matches!(
+                    target,
+                    CaptureTarget::Interactive
+                        | CaptureTarget::InteractiveSelection
+                        | CaptureTarget::InteractiveWindow
+                        | CaptureTarget::InteractiveToolbar
+                        | CaptureTarget::TouchBar
+                        | CaptureTarget::DisplayOrdinal(_)
+                )
+            {
                 CaptureBackend::SystemScreencapture
             } else {
                 CaptureBackend::CoreGraphics

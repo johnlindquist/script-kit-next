@@ -1,22 +1,30 @@
 use super::image::NativeImage;
 use super::quartz;
 use crate::{
-    CaptureOptions, CaptureTarget, ImageFormat, Point, Rect, Result, ScreenshotError, WindowFrameMode,
+    CaptureOptions, CaptureTarget, ImageFormat, Point, Rect, Result, ScreenshotError,
+    WindowFrameMode,
 };
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) fn capture_system(target: CaptureTarget, options: &CaptureOptions) -> Result<(NativeImage, CaptureTarget)> {
+pub(super) fn capture_system(
+    target: CaptureTarget,
+    options: &CaptureOptions,
+) -> Result<(NativeImage, CaptureTarget)> {
     let (mut args, resolved_target) = args_for_target(target, options, false)?;
     let path = temp_path(options.format);
 
     args.push(path.as_os_str().to_os_string());
-    let output = Command::new("/usr/sbin/screencapture").args(&args).output()?;
+    let output = Command::new("/usr/sbin/screencapture")
+        .args(&args)
+        .output()?;
     if !output.status.success() {
         let _ = std::fs::remove_file(&path);
-        return Err(ScreenshotError::SystemCapture(format_command_error(output.stderr)));
+        return Err(ScreenshotError::SystemCapture(format_command_error(
+            output.stderr,
+        )));
     }
 
     let bytes = std::fs::read(&path)?;
@@ -28,9 +36,13 @@ pub(super) fn capture_system(target: CaptureTarget, options: &CaptureOptions) ->
 pub(super) fn capture_clipboard(target: CaptureTarget, options: &CaptureOptions) -> Result<()> {
     let (mut args, _) = args_for_target(target, options, true)?;
     args.push(OsString::from("-c"));
-    let output = Command::new("/usr/sbin/screencapture").args(&args).output()?;
+    let output = Command::new("/usr/sbin/screencapture")
+        .args(&args)
+        .output()?;
     if !output.status.success() {
-        return Err(ScreenshotError::SystemCapture(format_command_error(output.stderr)));
+        return Err(ScreenshotError::SystemCapture(format_command_error(
+            output.stderr,
+        )));
     }
     Ok(())
 }
@@ -48,17 +60,32 @@ pub(super) fn open_screen_recording_settings() -> Result<()> {
             if status.success() {
                 Ok(())
             } else {
-                Err(ScreenshotError::SystemCapture("failed to open System Settings".into()))
+                Err(ScreenshotError::SystemCapture(
+                    "failed to open System Settings".into(),
+                ))
             }
         }
     }
 }
 
-fn args_for_target(target: CaptureTarget, options: &CaptureOptions, clipboard: bool) -> Result<(Vec<OsString>, CaptureTarget)> {
+fn args_for_target(
+    target: CaptureTarget,
+    options: &CaptureOptions,
+    clipboard: bool,
+) -> Result<(Vec<OsString>, CaptureTarget)> {
     if options.include_cursor
-        && matches!(target, CaptureTarget::Interactive | CaptureTarget::InteractiveSelection | CaptureTarget::InteractiveWindow | CaptureTarget::InteractiveToolbar)
+        && matches!(
+            target,
+            CaptureTarget::Interactive
+                | CaptureTarget::InteractiveSelection
+                | CaptureTarget::InteractiveWindow
+                | CaptureTarget::InteractiveToolbar
+        )
     {
-        return Err(ScreenshotError::InvalidInput("the system screencapture tool only allows cursor capture in non-interactive modes".into()));
+        return Err(ScreenshotError::InvalidInput(
+            "the system screencapture tool only allows cursor capture in non-interactive modes"
+                .into(),
+        ));
     }
     if matches!(options.window_frame, WindowFrameMode::ShadowOnly) {
         return Err(ScreenshotError::UnsupportedBackend("the system screencapture backend cannot capture only a window shadow; use CoreGraphics"));
@@ -94,7 +121,9 @@ fn args_for_target(target: CaptureTarget, options: &CaptureOptions, clipboard: b
         }
         CaptureTarget::DisplayOrdinal(ordinal) => {
             if ordinal == 0 {
-                return Err(ScreenshotError::InvalidInput("display ordinal is 1-based".into()));
+                return Err(ScreenshotError::InvalidInput(
+                    "display ordinal is 1-based".into(),
+                ));
             }
             args.push(OsString::from("-D"));
             args.push(OsString::from(ordinal.to_string()));
@@ -168,7 +197,9 @@ fn args_for_target(target: CaptureTarget, options: &CaptureOptions, clipboard: b
         }
         CaptureTarget::TouchBar => {
             if options.include_cursor {
-                return Err(ScreenshotError::InvalidInput("Touch Bar captures cannot include the cursor".into()));
+                return Err(ScreenshotError::InvalidInput(
+                    "Touch Bar captures cannot include the cursor".into(),
+                ));
             }
             args.push(OsString::from("-b"));
             CaptureTarget::TouchBar
@@ -188,7 +219,9 @@ fn args_for_target(target: CaptureTarget, options: &CaptureOptions, clipboard: b
             }));
         }
         CaptureTarget::VisibleWindows { .. } => {
-            return Err(ScreenshotError::UnsupportedBackend("visible-window composites with exclusions are handled by the CoreGraphics backend"));
+            return Err(ScreenshotError::UnsupportedBackend(
+                "visible-window composites with exclusions are handled by the CoreGraphics backend",
+            ));
         }
     };
 
@@ -239,8 +272,15 @@ fn temp_path(format: ImageFormat) -> PathBuf {
 }
 
 fn validate_rect(rect: Rect) -> Result<()> {
-    if !rect.x.is_finite() || !rect.y.is_finite() || !rect.width.is_finite() || !rect.height.is_finite() || rect.is_empty() {
-        Err(ScreenshotError::InvalidInput(format!("invalid capture rectangle: {rect:?}")))
+    if !rect.x.is_finite()
+        || !rect.y.is_finite()
+        || !rect.width.is_finite()
+        || !rect.height.is_finite()
+        || rect.is_empty()
+    {
+        Err(ScreenshotError::InvalidInput(format!(
+            "invalid capture rectangle: {rect:?}"
+        )))
     } else {
         Ok(())
     }

@@ -436,6 +436,47 @@ impl DropShadow {
     }
 }
 
+/// Optional two-stop background gradient for the main Script Kit shell.
+///
+/// This stays deliberately small so user-authored themes can add visual
+/// texture without pulling CSS-style background complexity into theme.json.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct BackgroundGradient {
+    /// Whether the gradient should be rendered.
+    pub enabled: bool,
+    /// Starting color for the gradient.
+    #[serde(with = "hex_color_serde")]
+    pub from: HexColor,
+    /// Ending color for the gradient.
+    #[serde(with = "hex_color_serde")]
+    pub to: HexColor,
+    /// Angle in degrees. 0 is top-to-bottom; 90 is left-to-right.
+    pub angle: f32,
+    /// Alpha applied to both gradient stops.
+    pub opacity: f32,
+}
+
+impl Default for BackgroundGradient {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            from: 0x1e1e1e,
+            to: 0x2d2d30,
+            angle: 135.0,
+            opacity: 0.35,
+        }
+    }
+}
+
+impl BackgroundGradient {
+    pub fn clamped(mut self) -> Self {
+        self.angle = self.angle.rem_euclid(360.0);
+        self.opacity = self.opacity.clamp(0.0, 1.0);
+        self
+    }
+}
+
 /// Background color definitions
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundColors {
@@ -778,6 +819,9 @@ pub struct Theme {
     /// Vibrancy/blur effect settings
     #[serde(default)]
     pub vibrancy: Option<VibrancySettings>,
+    /// Optional background gradient rendered behind the app shell.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background_gradient: Option<BackgroundGradient>,
     /// Font configuration for editor and terminal
     #[serde(default)]
     pub fonts: Option<FontConfig>,
@@ -1010,6 +1054,7 @@ impl Default for Theme {
             opacity: Some(BackgroundOpacity::default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
+            background_gradient: None,
             fonts: Some(FontConfig::default()),
             appearance: AppearanceMode::default(),
         }
@@ -1088,6 +1133,7 @@ impl Theme {
                 ..DropShadow::default()
             }),
             vibrancy: Some(VibrancySettings::default()),
+            background_gradient: None,
             fonts: Some(FontConfig::default()),
             appearance: AppearanceMode::Light,
         }
@@ -1101,6 +1147,7 @@ impl Theme {
             opacity: Some(BackgroundOpacity::dark_default()),
             drop_shadow: Some(DropShadow::default()),
             vibrancy: Some(VibrancySettings::default()),
+            background_gradient: None,
             fonts: Some(FontConfig::default()),
             appearance: AppearanceMode::Dark,
         }
@@ -1224,6 +1271,14 @@ impl Theme {
     /// Check if vibrancy effect should be enabled
     pub fn is_vibrancy_enabled(&self) -> bool {
         self.get_vibrancy().enabled
+    }
+
+    /// Get a clamped background gradient when enabled.
+    pub fn active_background_gradient(&self) -> Option<BackgroundGradient> {
+        self.background_gradient
+            .clone()
+            .map(BackgroundGradient::clamped)
+            .filter(|gradient| gradient.enabled && gradient.opacity > 0.0)
     }
 
     /// Get font configuration
@@ -2259,6 +2314,26 @@ mod tests {
         assert_eq!(clamped.border_inactive, 0.3);
         assert_eq!(clamped.border_active, 1.0);
         assert_eq!(clamped.vibrancy_background, Some(0.0));
+    }
+
+    #[test]
+    fn test_background_gradient_defaults_to_none_and_clamps_when_enabled() {
+        assert!(Theme::dark_default().active_background_gradient().is_none());
+
+        let mut theme = Theme::dark_default();
+        theme.background_gradient = Some(BackgroundGradient {
+            enabled: true,
+            from: 0x111111,
+            to: 0x222222,
+            angle: 725.0,
+            opacity: 2.0,
+        });
+
+        let gradient = theme
+            .active_background_gradient()
+            .expect("enabled gradient should be active");
+        assert_eq!(gradient.angle, 5.0);
+        assert_eq!(gradient.opacity, 1.0);
     }
 
     #[test]

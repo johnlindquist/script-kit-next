@@ -292,13 +292,7 @@ fn render_transcript(id: AcpChatStateId, compact: bool) -> AnyElement {
                 true,
                 compact,
             ))
-            .child(message(
-                "Assistant",
-                "The next gaps are Agent Chat, built-in browsers, and lower-level component primitives",
-                false,
-                compact,
-            ))
-            .child(streaming_cursor())
+            .child(activity_row(compact))
             .into_any_element(),
         AcpChatStateId::Search => body
             .child(message(
@@ -485,14 +479,37 @@ fn permission_card(compact: bool) -> AnyElement {
         .into_any_element()
 }
 
-fn streaming_cursor() -> AnyElement {
+fn activity_row(compact: bool) -> AnyElement {
     let theme = get_cached_theme();
 
     div()
-        .px(px(12.0))
-        .text_sm()
-        .text_color(theme.colors.accent.selected.to_rgb())
-        .child("▌")
+        .w_full()
+        .px(px(if compact { 8.0 } else { 12.0 }))
+        .py(px(if compact { 6.0 } else { 8.0 }))
+        .child(
+            div()
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgba((theme.colors.text.muted << 8) | 0x99))
+                .child("Assistant"),
+        )
+        .child(
+            div()
+                .pt(px(4.0))
+                .flex()
+                .items_center()
+                .gap(px(8.0))
+                .text_size(px(if compact { 12.0 } else { 14.0 }))
+                .line_height(px(if compact { 18.0 } else { 20.0 }))
+                .text_color(rgba((theme.colors.text.secondary << 8) | 0xCC))
+                .child(
+                    div()
+                        .size(px(6.0))
+                        .rounded_full()
+                        .bg(theme.colors.accent.selected.to_rgb()),
+                )
+                .child("Working..."),
+        )
         .into_any_element()
 }
 

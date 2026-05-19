@@ -219,7 +219,13 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::ScriptIssuesView { report } = &self.current_view {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        chat.submit_with_expanded_tokens(cx);
+                    });
+                    return;
+                } else if let AppView::ScriptIssuesView { report } = &self.current_view {
                     let report = report.clone();
                     self.fix_script_issues_in_agent(&report, cx);
                     return;
@@ -267,6 +273,24 @@ impl ScriptListApp {
                 } else {
                     self.open_tab_ai_acp_with_entry_intent(None, cx);
                 }
+            }
+            crate::footer_popup::FooterAction::Stop => {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |chat, cx| {
+                        let _ = chat.cancel_streaming_from_escape(cx);
+                    });
+                } else {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_stop_ignored",
+                        view = ?self.current_view,
+                        "Ignored Stop footer action outside ACP chat"
+                    );
+                }
+            }
+            crate::footer_popup::FooterAction::PasteResponse => {
+                self.paste_latest_acp_response_to_frontmost(cx);
             }
             crate::footer_popup::FooterAction::Apply => {
                 if self.dispatch_kit_store_remove_footer_action(cx) {
@@ -350,6 +374,57 @@ impl ScriptListApp {
         );
         self.execute_script_by_path(&path_str, cx);
         true
+    }
+
+    pub(crate) fn paste_latest_acp_response_to_frontmost(&mut self, cx: &mut Context<Self>) {
+        let Some(text) = self.latest_acp_assistant_response(cx) else {
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "acp_footer_paste_response_ignored",
+                "Ignored Paste Response footer action because no assistant response exists"
+            );
+            return;
+        };
+
+        crate::platform::defer_hide_main_window(cx);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let injector = crate::text_injector::TextInjector::new();
+            if let Err(error) = injector.paste_text(&text) {
+                tracing::warn!(
+                    target: "script_kit::footer_popup",
+                    event = "acp_footer_paste_response_failed",
+                    %error,
+                    "Failed to paste ACP response into frontmost app"
+                );
+            }
+        });
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "acp_footer_paste_response_dispatched",
+            "Dispatched latest ACP assistant response to frontmost app"
+        );
+    }
+
+    fn latest_acp_assistant_response(&self, cx: &App) -> Option<String> {
+        let AppView::AcpChatView { entity } = &self.current_view else {
+            return None;
+        };
+
+        let view = entity.read(cx);
+        let thread = view.live_thread().read(cx);
+        thread
+            .messages
+            .iter()
+            .rev()
+            .find(|message| {
+                matches!(
+                    message.role,
+                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                ) && !message.body.trim().is_empty()
+            })
+            .map(|message| message.body.to_string())
     }
 
     fn dispatch_design_gallery_select_footer_action(&mut self, cx: &mut Context<Self>) -> bool {
@@ -523,18 +598,14 @@ impl ScriptListApp {
             return buttons;
         }
 
-        // For ACP views, hide the Run button until a validated script receipt
-        // exists. This prevents running the wrong target (first main-list item)
-        // when a script is still being generated/validated.
+        // ACP owns its own footer state: Send/Paste Response/Stop + Actions.
         if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            let ready = self.acp_ready_script_path.is_some();
-            let buttons = self.acp_footer_buttons(ready);
+            let buttons = self.acp_footer_buttons();
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
                 view = ?self.current_view,
                 button_count = buttons.len(),
-                acp_ready = ready,
                 "Resolved ACP footer buttons"
             );
             return buttons;
@@ -778,25 +849,38 @@ impl ScriptListApp {
         buttons
     }
 
-    /// Build footer buttons for the ACP chat surface. The `Run` button only
-    /// appears when a validated `SCRIPT_READY` receipt exists.
-    fn acp_footer_buttons(&self, ready: bool) -> Vec<crate::footer_popup::FooterButtonConfig> {
+    /// Build footer buttons for the ACP chat surface from the child-owned
+    /// composer/thread state snapshot.
+    fn acp_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
         let enabled = !footer_disabled;
 
-        let mut buttons = Vec::new();
-        if ready {
-            buttons.push(FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(enabled));
+        if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
+            return snapshot
+                .buttons
+                .iter()
+                .map(|button| {
+                    let mut config =
+                        FooterButtonConfig::new(button.action, button.key, button.label)
+                            .selected(button.selected)
+                            .enabled(enabled && button.enabled);
+                    if let Some(reason) = button.disabled_reason {
+                        config = config.disabled_reason(reason);
+                    }
+                    config
+                })
+                .collect();
         }
-        buttons.push(
+
+        vec![
+            FooterButtonConfig::new(FooterAction::Run, "↵", "Send").disabled_reason("loading_acp"),
             FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                 .selected(actions_open)
                 .enabled(enabled),
-        );
-        buttons
+        ]
     }
 
     pub(crate) fn main_window_footer_config(
@@ -913,6 +997,15 @@ impl ScriptListApp {
         config: &mut crate::footer_popup::MainWindowFooterConfig,
     ) {
         if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
+                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
+                    dot_status: snapshot.dot_status,
+                    model_name: snapshot.model_display.clone(),
+                    prefer_accent_for_active_states: true,
+                });
+                return;
+            }
+
             let (Some(dot_status), Some(model_name)) = (
                 self.acp_footer_dot_status,
                 self.acp_footer_model_display.as_ref(),

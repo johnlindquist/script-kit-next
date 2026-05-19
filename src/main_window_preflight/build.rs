@@ -7,18 +7,116 @@ use crate::main_window_preflight::types::{
 use crate::AppView;
 
 fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchResult> {
-    app.main_menu_result_caches
-        .cloned_first_search_result_at_or_after_grouped_item(app.selected_index)
+    use crate::scripts::*;
+
+    match &app.current_view {
+        AppView::ScriptList => app
+            .main_menu_result_caches
+            .cloned_first_search_result_at_or_after_grouped_item(app.selected_index),
+        AppView::BrowserHistoryView {
+            filter,
+            selected_index,
+        } => {
+            let filtered_entries = crate::browser_history::fuzzy_search_browser_history(
+                &app.cached_browser_history,
+                filter,
+            );
+            filtered_entries.get(*selected_index).map(|hit| {
+                SearchResult::BrowserHistory(BrowserHistoryMatch {
+                    hit: hit.entry.convert_to_root_hit(),
+                    subtitle: crate::browser_history::format_browser_history_meta(&hit.entry),
+                    score: hit.score,
+                })
+            })
+        }
+        AppView::AppLauncherView {
+            filter,
+            selected_index,
+        } => {
+            let filtered_apps =
+                crate::ScriptListApp::app_launcher_filtered_entries(&app.apps, filter);
+            filtered_apps.get(*selected_index).map(|(_, info)| {
+                SearchResult::App(AppMatch {
+                    app: (*info).clone(),
+                    score: 0,
+                })
+            })
+        }
+        AppView::WindowSwitcherView {
+            filter,
+            selected_index,
+        } => {
+            let filtered_windows: Vec<_> = if filter.is_empty() {
+                app.cached_windows.iter().enumerate().collect()
+            } else {
+                let filter_lower = filter.to_lowercase();
+                app.cached_windows
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, w)| {
+                        w.title.to_lowercase().contains(&filter_lower)
+                            || w.app.to_lowercase().contains(&filter_lower)
+                    })
+                    .collect()
+            };
+            filtered_windows.get(*selected_index).map(|(_, info)| {
+                SearchResult::Window(WindowMatch {
+                    window: (*info).clone(),
+                    score: 0,
+                })
+            })
+        }
+        _ => None,
+    }
 }
 
 fn visible_result_keys(app: &crate::ScriptListApp) -> Vec<String> {
-    app.main_menu_result_caches
-        .grouped_search_results()
-        .filter_map(|result| result.stable_selection_key())
-        .collect()
+    match &app.current_view {
+        AppView::ScriptList => app
+            .main_menu_result_caches
+            .grouped_search_results()
+            .filter_map(|result| result.stable_selection_key())
+            .collect(),
+        AppView::BrowserHistoryView { filter, .. } => {
+            crate::browser_history::fuzzy_search_browser_history(
+                &app.cached_browser_history,
+                filter,
+            )
+            .iter()
+            .map(|hit| hit.entry.history_key())
+            .collect()
+        }
+        AppView::AppLauncherView { filter, .. } => {
+            crate::ScriptListApp::app_launcher_filtered_entries(&app.apps, filter)
+                .into_iter()
+                .map(|(_, app)| app.path.to_string_lossy().to_string())
+                .collect()
+        }
+        AppView::WindowSwitcherView { filter, .. } => {
+            let filter_lower = filter.to_lowercase();
+            app.cached_windows
+                .iter()
+                .filter(|w| {
+                    filter.is_empty()
+                        || w.title.to_lowercase().contains(&filter_lower)
+                        || w.app.to_lowercase().contains(&filter_lower)
+                })
+                .map(|w| w.id.to_string())
+                .collect()
+        }
+        _ => Vec::new(),
+    }
 }
 
 fn visible_row_fingerprint(app: &crate::ScriptListApp) -> String {
+    if !matches!(app.current_view, AppView::ScriptList) {
+        return format!(
+            "v:{}:{}",
+            app.current_view.app_view_variant(),
+            visible_result_keys(app).len()
+        );
+    }
+
     app.main_menu_result_caches
         .grouped_items()
         .iter()
@@ -63,6 +161,7 @@ fn result_role(result: &crate::scripts::SearchResult) -> MainWindowPreflightResu
         | crate::scripts::SearchResult::Window(_) => MainWindowPreflightResultRole::Primary,
         crate::scripts::SearchResult::File(_) => MainWindowPreflightResultRole::RootFile,
         crate::scripts::SearchResult::Note(_)
+        | crate::scripts::SearchResult::Todo(_)
         | crate::scripts::SearchResult::AcpHistory(_)
         | crate::scripts::SearchResult::AiVault(_)
         | crate::scripts::SearchResult::ClipboardHistory(_)
@@ -86,6 +185,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::Window(_) => MainWindowPreflightActionKind::SwitchWindow,
         crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
         crate::scripts::SearchResult::Note(_) => MainWindowPreflightActionKind::RunCommand,
+        crate::scripts::SearchResult::Todo(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AcpHistory(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AiVault(_) => {
             MainWindowPreflightActionKind::ResumeVaultConversation
@@ -110,6 +210,23 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
 }
 
 fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPreflightVisibleResult> {
+    if !matches!(app.current_view, AppView::ScriptList) {
+        // For built-in views, we just return the selected result as the only visible result for now
+        // to satisfy the basic preflight requirements.
+        if let Some(result) = selected_result(app) {
+            return vec![MainWindowPreflightVisibleResult {
+                visible_rank: 0,
+                grouped_index: 0,
+                stable_key: result.stable_selection_key(),
+                role: result_role(&result),
+                action_kind: enter_action_kind(&result),
+                type_label: result.type_label().to_string(),
+                source_name: result.source_name().map(ToString::to_string),
+            }];
+        }
+        return Vec::new();
+    }
+
     app.main_menu_result_caches
         .grouped_items()
         .iter()
@@ -219,32 +336,51 @@ fn build_root_passive_frame_receipt(app: &crate::ScriptListApp) -> Option<RootPa
 pub(crate) fn build_main_window_preflight_receipt(
     app: &crate::ScriptListApp,
 ) -> Option<MainWindowPreflightReceipt> {
-    if !matches!(app.current_view, AppView::ScriptList) {
+    if !matches!(
+        app.current_view,
+        AppView::ScriptList
+            | AppView::AppLauncherView { .. }
+            | AppView::WindowSwitcherView { .. }
+            | AppView::BrowserTabsView { .. }
+            | AppView::ClipboardHistoryView { .. }
+            | AppView::BrowserHistoryView { .. }
+            | AppView::EmojiPickerView { .. }
+            | AppView::ProcessManagerView { .. }
+            | AppView::CurrentAppCommandsView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. }
+            | AppView::AcpHistoryView { .. }
+            | AppView::DictationHistoryView { .. }
+            | AppView::NotesBrowseView { .. }
+    ) {
         return None;
     }
 
-    let result = selected_result(app)?;
+    let result = selected_result(app);
     let mut warnings = Vec::new();
 
-    if matches!(&result, crate::scripts::SearchResult::Agent(_)) {
-        warnings
-            .push("Agent execution is not fully implemented in execute_selected yet.".to_string());
+    if let Some(result) = &result {
+        if matches!(result, crate::scripts::SearchResult::Agent(_)) {
+            warnings.push(
+                "Agent execution is not fully implemented in execute_selected yet.".to_string(),
+            );
+        }
     }
 
     if app.filter_text.trim().is_empty() {
         warnings.push("Tab-to-AI is inactive until the filter has text.".to_string());
     }
 
-    let enter_action = MainWindowPreflightAction {
-        kind: enter_action_kind(&result),
+    let enter_action = result.as_ref().map(|result| MainWindowPreflightAction {
+        kind: enter_action_kind(result),
         label: app.main_window_primary_action_label(),
         subject: result.name().to_string(),
         type_label: result.type_label().to_string(),
         source_name: result.source_name().map(ToString::to_string),
         description: result.description().map(ToString::to_string),
-    };
+    });
     let visible_results = visible_result_receipts(app);
-    let selected_result_role = result_role(&result);
+    let selected_result_role = result.as_ref().map(result_role);
     let computed_search_text =
         crate::menu_syntax::free_text_for_search(&app.menu_syntax_mode, &app.filter_text)
             .to_string();
@@ -265,7 +401,7 @@ pub(crate) fn build_main_window_preflight_receipt(
         source_filters,
         filter_indicators,
         selected_index: app.selected_index,
-        selected_result_key: result.stable_selection_key(),
+        selected_result_key: result.as_ref().and_then(|r| r.stable_selection_key()),
         selected_result_role,
         visible_results,
         visible_result_key_fingerprint: visible_result_keys(app).join("|"),
@@ -287,9 +423,9 @@ pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightRec
         visible_result_key_fingerprint = %receipt.visible_result_key_fingerprint,
         visible_row_fingerprint = %receipt.visible_row_fingerprint,
         visible_result_count = receipt.visible_result_count,
-        enter_label = %receipt.enter_action.label,
-        enter_subject = %receipt.enter_action.subject,
-        enter_type = %receipt.enter_action.type_label,
+        enter_label = %receipt.enter_action.as_ref().map(|a| a.label.as_str()).unwrap_or("none"),
+        enter_subject = %receipt.enter_action.as_ref().map(|a| a.subject.as_str()).unwrap_or("none"),
+        enter_type = %receipt.enter_action.as_ref().map(|a| a.type_label.as_str()).unwrap_or("none"),
         tab_enabled = receipt.tab_action.is_some(),
         warnings = ?receipt.warnings,
         "Built main window preflight receipt"

@@ -56,6 +56,10 @@ pub struct AcpStateSnapshot {
     /// Number of messages in the thread history.
     pub message_count: usize,
 
+    /// True when a submitted user turn is streaming before assistant text lands.
+    #[serde(default)]
+    pub awaiting_first_assistant_text: bool,
+
     /// Picker state (None when picker is closed).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub picker: Option<AcpPickerState>,
@@ -118,6 +122,7 @@ impl Default for AcpStateSnapshot {
             has_selection: false,
             selection_range: None,
             message_count: 0,
+            awaiting_first_assistant_text: false,
             picker: None,
             last_accepted_item: None,
             context_chip_count: 0,
@@ -794,6 +799,7 @@ mod tests {
             has_selection: false,
             selection_range: None,
             message_count: 3,
+            awaiting_first_assistant_text: true,
             picker: None,
             last_accepted_item: Some(AcpAcceptedItem {
                 label: "context".to_string(),
@@ -826,6 +832,7 @@ mod tests {
         assert!(parsed["cursorIndex"].is_number());
         assert!(parsed["hasSelection"].is_boolean());
         assert!(parsed["messageCount"].is_number());
+        assert_eq!(parsed["awaitingFirstAssistantText"], true);
         assert!(parsed["lastAcceptedItem"].is_object());
         assert!(parsed["contextChipCount"].is_number());
         assert_eq!(parsed["contextSummary"], "context");
@@ -863,6 +870,7 @@ mod tests {
         let snap: AcpStateSnapshot =
             serde_json::from_value(json).expect("deserialize minimal JSON");
         assert_eq!(snap.status, "idle");
+        assert!(!snap.awaiting_first_assistant_text);
         assert!(snap.picker.is_none());
         assert!(snap.last_accepted_item.is_none());
         assert!(snap.input_layout.is_none());

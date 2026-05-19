@@ -433,6 +433,7 @@ impl NotesApp {
                 }),
                 parent_window_id: None,
                 parent_kind: None,
+                pid: Some(std::process::id()),
             });
             self.last_window_height = clamped_height;
             applied = true;

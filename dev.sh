@@ -97,6 +97,7 @@ export SCRIPT_KIT_DEV_STAMP_FILE
 # target/, which is the bulk of the "frozen" silence. Run it in the background
 # so the heartbeat starts immediately. Result lands on stderr when ready.
 SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB="${SCRIPT_KIT_TARGET_CLEAN_THRESHOLD_GB:-50}"
+SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB="${SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB:-50}"
 if [ "${SCRIPT_KIT_REPORT_CACHE_SIZE:-1}" = "1" ]; then
     (
         humanize_kib() {
@@ -129,6 +130,16 @@ if [ "${SCRIPT_KIT_REPORT_CACHE_SIZE:-1}" = "1" ]; then
             agent_kib="$(du -sk target-agent 2>/dev/null | awk '{print $1}')"
             agent_human="$(humanize_kib "${agent_kib:-0}")"
             echo "[dev.sh] cache target-agent=${agent_human}" >&2
+            pools_kib="$(du -sk target-agent/pools 2>/dev/null | awk '{print $1}')"
+            runtime_kib="$(du -sk target-agent/runtime 2>/dev/null | awk '{print $1}')"
+            [ -n "$pools_kib" ] && echo "[dev.sh] cache target-agent-pools=$(humanize_kib "$pools_kib")" >&2
+            [ -n "$runtime_kib" ] && echo "[dev.sh] cache target-agent-runtime=$(humanize_kib "$runtime_kib")" >&2
+            if [[ "$SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB" =~ ^[0-9]+$ ]] && [ "$SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB" -gt 0 ]; then
+                threshold_kib=$((SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB * 1024 * 1024))
+                if [ -n "$agent_kib" ] && [ "$agent_kib" -gt "$threshold_kib" ]; then
+                    echo "[dev.sh] SUGGEST target-agent/ is ${agent_human} (>${SCRIPT_KIT_TARGET_AGENT_THRESHOLD_GB}G) — run: scripts/agentic/prune-cargo-targets.sh --apply" >&2
+                fi
+            fi
         fi
     ) &
     SCRIPT_KIT_DEV_CACHE_PID=$!

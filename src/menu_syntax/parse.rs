@@ -98,6 +98,11 @@ pub fn parse_with_config_and_capture_targets(
 
     if let Some(colon_idx) = input.find(':') {
         let head = &input[..colon_idx];
+        if super::payload::source_for_head(&input[..=colon_idx]).is_some() {
+            if let Some(query) = parse_filter_query(input) {
+                return MenuSyntaxParse::AdvancedQuery(query);
+            }
+        }
         if !head.is_empty()
             && !head.contains(char::is_whitespace)
             && is_capture_target_registered(head, registered_capture_targets)
@@ -434,7 +439,7 @@ mod tests {
             ("+todo body", &[], "capture:todo:prefix"),
             ("+unknown", &[], "none"),
             ("+unknown body", &[], "none"),
-            ("todo: body", &[], "capture:todo:keyword"),
+            ("todo: body", &[], "advanced-query"),
             ("unknown: body", &[], "none"),
             ("localhost:3000", &[], "none"),
             ("#tag", &[], "none"),
@@ -504,7 +509,7 @@ mod tests {
 
     #[test]
     fn known_capture_target_without_content_is_incomplete() {
-        for input in [";todo", ";note", ";cal", ";social", "note:", "todo:"] {
+        for input in [";todo", ";note", ";cal", ";social", "note:"] {
             match parse(input) {
                 MenuSyntaxParse::Incomplete(s) => {
                     assert!(
@@ -514,6 +519,14 @@ mod tests {
                 }
                 other => panic!("expected Incomplete for '{input}', got {other:?}"),
             }
+        }
+
+        match parse("todo:") {
+            MenuSyntaxParse::AdvancedQuery(query) => {
+                assert_eq!(query.free_text, "");
+                assert!(query.source_filters.allows(RootUnifiedSourceFilter::Todo));
+            }
+            other => panic!("expected todo source filter for 'todo:', got {other:?}"),
         }
     }
 

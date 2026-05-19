@@ -139,6 +139,7 @@ pub(super) fn build_grouped_view_results(
             }
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
+            SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
             SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
             SearchResult::ClipboardHistory(cm) => {
@@ -203,6 +204,7 @@ pub(super) fn build_grouped_view_results(
                     }
                     SearchResult::File(_) => {}
                     SearchResult::Note(_) => {}
+                    SearchResult::Todo(_) => {}
                     SearchResult::AcpHistory(_) => {}
                     SearchResult::AiVault(_) => {}
                     SearchResult::ClipboardHistory(_) => {}
@@ -242,6 +244,7 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::File(_) => {}
                 SearchResult::Note(_) => {}
+                SearchResult::Todo(_) => {}
                 SearchResult::AcpHistory(_) => {}
                 SearchResult::AiVault(_) => {}
                 SearchResult::ClipboardHistory(_) => {}
