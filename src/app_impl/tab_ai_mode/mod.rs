@@ -38,6 +38,8 @@ enum TabAiHarnessCloseDisposition {
 impl ScriptListApp {
     /// Give the ACP chat one frame to paint before deferred context staging runs.
     const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
+    /// Upper bound for Ask Anything / ambient desktop capture before bootstrap fails open.
+    const TAB_AI_DEFERRED_CAPTURE_TIMEOUT_SEC: u64 = 30;
 
     fn wire_embedded_acp_footer_callbacks(
         &mut self,
