@@ -280,6 +280,9 @@ pub mod mcp_kit_tools;
 // MCP Notes Tools - notes mutation tools for the full-control plane
 pub mod mcp_notes_tools;
 
+// MCP Scripts Tools - script file mutation tools for the full-control plane
+pub mod mcp_scripts_tools;
+
 // MCP Computer Use Tools - computer/* namespace for desktop observation
 // Provides the stable first slice of agent-facing computer-use capabilities
 pub mod mcp_computer_use_tools;

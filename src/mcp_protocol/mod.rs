@@ -22,6 +22,7 @@ use crate::mcp_kit_tools;
 use crate::mcp_notes_tools;
 use crate::mcp_resources;
 use crate::mcp_script_tools;
+use crate::mcp_scripts_tools;
 use crate::scripts::Script;
 use crate::scripts::Scriptlet;
 use serde::{Deserialize, Serialize};
@@ -513,7 +514,7 @@ fn handle_tools_call_with_runtime_parts(
         .cloned()
         .unwrap_or(serde_json::json!({}));
 
-    if mcp_notes_tools::is_notes_tool(tool_name) {
+    if mcp_notes_tools::is_notes_tool(tool_name) || mcp_scripts_tools::is_scripts_tool(tool_name) {
         let mutation_context = mcp_control::MutationContext {
             trace_id,
             token_scopes,
