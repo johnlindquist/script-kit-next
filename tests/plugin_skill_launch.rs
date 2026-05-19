@@ -81,16 +81,16 @@ fn skill_search_result_source_name_is_plugin_title() {
 }
 
 #[test]
-fn skill_search_result_type_tag_uses_gold_color() {
+fn skill_search_result_type_accessory_uses_workflow_icon() {
     let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
     });
-    let (label, color) = result.type_tag_info();
+    let (label, icon_name) = result.type_accessory_info();
     assert_eq!(label, "Skill");
-    assert_eq!(color, 0xFBBF24, "skill badge should use gold accent");
+    assert_eq!(icon_name, "workflow");
 }
 
 #[test]

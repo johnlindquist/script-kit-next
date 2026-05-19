@@ -350,6 +350,12 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Mirror the physical handler: clear any stale CommandBar `is_open`
+        // state so simulated Cmd+K / Cmd+P can reopen after an external
+        // dismissal of the detached actions window.
+        self.command_bar.reconcile_open_state();
+        self.new_chat_command_bar.reconcile_open_state();
+
         let has_cmd = modifiers.contains(&KeyModifier::Cmd);
         let key_lower = key.to_lowercase();
 

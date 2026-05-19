@@ -376,6 +376,7 @@ impl ScriptListApp {
 
     /// Opacity presets for quick selection
     const OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.00, "0%"),
         (0.10, "10%"),
         (0.25, "25%"),
         (0.50, "50%"),
@@ -385,22 +386,29 @@ impl ScriptListApp {
 
     /// Secondary text opacity presets for placeholder/hint/description tiers.
     const TEXT_OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.00, "0%"),
+        (0.25, "25%"),
         (0.50, "50%"),
         (0.60, "60%"),
         (0.65, "65%"),
         (0.70, "70%"),
         (0.80, "80%"),
         (0.90, "90%"),
+        (1.00, "100%"),
     ];
 
     /// Focused row/background opacity presets.
     const FOCUSED_BACKGROUND_OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
+        (0.00, "0%"),
         (0.05, "5%"),
         (0.07, "7%"),
         (0.10, "10%"),
         (0.15, "15%"),
         (0.20, "20%"),
         (0.25, "25%"),
+        (0.50, "50%"),
+        (0.75, "75%"),
+        (1.00, "100%"),
     ];
 
     /// Find the closest accent palette index for a given accent color

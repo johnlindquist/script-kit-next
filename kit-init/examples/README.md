@@ -29,6 +29,7 @@ Pick one artifact, copy one starter, save it under `plugins/main/`, then stop. D
 | `choose-from-list.ts` | Rich choices with descriptions and preview panels |
 | `clipboard-transform.ts` | Clipboard read/transform/write workflow |
 | `path-picker.ts` | File picker and Bun file operations |
+| `todoist-demo.ts` | Todoist-style task manager: projects, labels, priorities, views, CRUD, `;todo` sync |
 | `github-device-login.ts` | GitHub OAuth device-code sign-in and token persistence |
 | `microsoft-graph-device-login.ts` | Microsoft Graph device-code sign-in with calendar scopes |
 | `google-calendar-device-login.ts` | Google OAuth device-code sign-in with Calendar event scope |

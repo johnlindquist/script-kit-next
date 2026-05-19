@@ -378,10 +378,11 @@ fn test_search_accessories_hide_source_hint_during_filtering() {
     let result = make_script_search_result(script);
 
     let accessories = resolve_search_accessories(&result, "clip");
-    assert!(
-        accessories.type_tag.is_some(),
-        "type label should stay visible"
-    );
+    let type_accessory = accessories
+        .type_accessory
+        .expect("type icon should stay visible");
+    assert_eq!(type_accessory.label, "Script");
+    assert_eq!(type_accessory.icon_name, "file-code");
     assert_eq!(
         accessories.source_hint, None,
         "source/category metadata should be hidden during filtering"

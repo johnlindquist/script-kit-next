@@ -636,28 +636,27 @@ impl SearchResult {
         self.name().to_string()
     }
 
-    /// Get a colored type tag for display as a pill badge during search mode.
-    /// Returns (label, color) where color is a u32 hex RGB value.
-    /// Each type gets a distinct, muted color for visual scanning.
-    pub fn type_tag_info(&self) -> (&'static str, u32) {
+    /// Semantic type accessory for search-mode list rows.
+    /// Returns (tooltip/accessibility label, Lucide icon hint name).
+    pub fn type_accessory_info(&self) -> (&'static str, &'static str) {
         match self {
-            SearchResult::Script(_) => ("Script", 0x3B82F6), // Blue-500 (saturated for vibrancy)
-            SearchResult::Scriptlet(_) => ("Snippet", 0x8B5CF6), // Violet-500
-            SearchResult::Skill(_) => ("Skill", 0xFBBF24),   // Gold-400 (matches brand accent)
-            SearchResult::BuiltIn(_) => ("Command", 0x34D399), // Emerald-400
-            SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
-            SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
-            SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
-            SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
-            SearchResult::AcpHistory(_) => ("Agent Chat", 0x22C55E), // Green-500
-            SearchResult::AiVault(_) => ("Vault", 0x14B8A6), // Teal-500
-            SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
-            SearchResult::DictationHistory(_) => ("Dictation", 0xFB7185), // Rose-400
-            SearchResult::BrowserTab(_) => ("Tab", 0x06B6D4), // Cyan-500
-            SearchResult::BrowserHistory(_) => ("Web", 0x38BDF8), // Sky-400
-            SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
-            SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
-            SearchResult::ScriptIssue(_) => ("Issues", 0xEF4444), // Red-500
+            SearchResult::Script(_) => ("Script", "file-code"),
+            SearchResult::Scriptlet(_) => ("Snippet", "scroll-text"),
+            SearchResult::Skill(_) => ("Skill", "workflow"),
+            SearchResult::BuiltIn(_) => ("Command", "command"),
+            SearchResult::App(_) => ("App", "package"),
+            SearchResult::Window(_) => ("Window", "panel-top"),
+            SearchResult::File(_) => ("File", "file"),
+            SearchResult::Note(_) => ("Note", "notebook-text"),
+            SearchResult::AcpHistory(_) => ("Agent Chat", "message-circle"),
+            SearchResult::AiVault(_) => ("Vault", "vault"),
+            SearchResult::ClipboardHistory(_) => ("Clipboard", "clipboard"),
+            SearchResult::DictationHistory(_) => ("Dictation", "mic"),
+            SearchResult::BrowserTab(_) => ("Tab", "panel-top"),
+            SearchResult::BrowserHistory(_) => ("Web", "globe"),
+            SearchResult::Agent(_) => ("Agent", "bot"),
+            SearchResult::Fallback(_) => ("Fallback", "zap"),
+            SearchResult::ScriptIssue(_) => ("Issues", "triangle-alert"),
         }
     }
 
@@ -911,7 +910,7 @@ mod tests {
             Some("file//Users/example/Desktop/fix spelling.png".to_string())
         );
         assert_eq!(result.history_result_key(), result.launcher_command_id());
-        assert_eq!(result.type_tag_info(), ("File", 0x60A5FA));
+        assert_eq!(result.type_accessory_info(), ("File", "file"));
         assert_eq!(result.source_name(), Some("Files"));
         assert_eq!(result.get_default_action_text(), "Open File");
     }
@@ -955,7 +954,10 @@ mod tests {
             result.history_result_key(),
             Some("acp-history/session-123".to_string())
         );
-        assert_eq!(result.type_tag_info(), ("Agent Chat", 0x22C55E));
+        assert_eq!(
+            result.type_accessory_info(),
+            ("Agent Chat", "message-circle")
+        );
         assert_eq!(result.source_name(), Some("Agent Chat Conversations"));
         assert_eq!(result.get_default_action_text(), "Resume Conversation");
     }
@@ -988,7 +990,7 @@ mod tests {
             result.history_result_key(),
             Some("clipboard-history/clip-123".to_string())
         );
-        assert_eq!(result.type_tag_info(), ("Clipboard", 0xA78BFA));
+        assert_eq!(result.type_accessory_info(), ("Clipboard", "clipboard"));
         assert_eq!(result.source_name(), Some("Clipboard History"));
         assert_eq!(result.get_default_action_text(), "Paste Clipboard");
     }

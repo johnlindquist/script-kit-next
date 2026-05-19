@@ -105,6 +105,9 @@ const EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM: &str =
 /// Example script: path-picker
 const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
     include_str!("../../kit-init/examples/scripts/path-picker.ts");
+/// Example script: Todoist-style task manager demo
+const EMBEDDED_EXAMPLE_TODOIST_DEMO: &str =
+    include_str!("../../kit-init/examples/scripts/todoist-demo.ts");
 /// Example script helper: OAuth device flow
 const EMBEDDED_EXAMPLE_OAUTH_DEVICE_FLOW_HELPER: &str =
     include_str!("../../kit-init/examples/scripts/lib/oauth-device-flow.ts");
@@ -980,6 +983,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_EXAMPLE_PATH_PICKER,
         &mut warnings,
         "plugins/examples/scripts/path-picker.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin.join("scripts").join("todoist-demo.ts"),
+        EMBEDDED_EXAMPLE_TODOIST_DEMO,
+        &mut warnings,
+        "plugins/examples/scripts/todoist-demo.ts",
     );
     write_string_if_changed(
         &examples_plugin
