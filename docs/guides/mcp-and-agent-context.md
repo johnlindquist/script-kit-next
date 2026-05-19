@@ -51,6 +51,20 @@ kit://context?selectedText=1&browserUrl=1&menuBar=0
 
 Common fields include selected text, frontmost app, menu bar, browser URL, focused window, screenshot, and panel screenshot.
 
+## High-Value Tools
+
+Mutation tools return structured JSON inside MCP text content and are audited to `~/.scriptkit/mcp-audit.jsonl`. Destructive tools require `confirm:true`, and token scopes can narrow access by domain.
+
+| Tool group | Examples | Scope |
+| --- | --- | --- |
+| App/runtime control | `kit/show`, `kit/hide`, `kit/state`, `kit/trigger_builtin` | `ui:control` for show/hide/trigger |
+| Notes | `kit/notes_create`, `kit/notes_update`, `kit/notes_delete` | `notes:write` |
+| Scripts | `kit/scripts_create`, `kit/scripts_update`, `kit/scripts_delete`, `kit/scripts_run` | `scripts:write`, `scripts:run` |
+| Clipboard history | `kit/clipboard_copy`, `kit/clipboard_pin`, `kit/clipboard_unpin`, `kit/clipboard_delete`, `kit/clipboard_clear_unpinned` | `clipboard:write` |
+| Config/preferences | `kit/config_get`, `kit/config_set`, `kit/config_validate`, `kit/config_reset`, `kit/config_set_command_shortcut` | `config:read`, `config:write` |
+
+Use `kit://trigger-builtins` to discover canonical `builtin/...` IDs before calling `kit/trigger_builtin`.
+
 ## Agent Chat Context
 
 Open Agent Chat with `Tab` from the launcher. Agent Chat can stage context from the current surface and attach additional context parts at submit time.
