@@ -207,6 +207,13 @@ struct ConfigResetTool;
 struct ConfigSetCommandShortcutTool;
 struct ConfigRemoveCommandShortcutTool;
 
+fn required_tool_definition(definitions: Vec<ToolDefinition>, name: &str) -> ToolDefinition {
+    match definitions.into_iter().find(|tool| tool.name == name) {
+        Some(tool) => tool,
+        None => panic!("missing required tool definition: {name}"),
+    }
+}
+
 impl DynMutationTool for NotesCreateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -219,10 +226,10 @@ impl DynMutationTool for NotesCreateTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_notes_tools::get_notes_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_notes_tools::NOTES_CREATE_TOOL)
-            .expect("notes create tool definition")
+        required_tool_definition(
+            mcp_notes_tools::get_notes_tool_definitions(),
+            mcp_notes_tools::NOTES_CREATE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
@@ -246,10 +253,10 @@ impl DynMutationTool for NotesUpdateTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_notes_tools::get_notes_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_notes_tools::NOTES_UPDATE_TOOL)
-            .expect("notes update tool definition")
+        required_tool_definition(
+            mcp_notes_tools::get_notes_tool_definitions(),
+            mcp_notes_tools::NOTES_UPDATE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
@@ -273,10 +280,10 @@ impl DynMutationTool for NotesDeleteTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_notes_tools::get_notes_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_notes_tools::NOTES_DELETE_TOOL)
-            .expect("notes delete tool definition")
+        required_tool_definition(
+            mcp_notes_tools::get_notes_tool_definitions(),
+            mcp_notes_tools::NOTES_DELETE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
@@ -300,10 +307,10 @@ impl DynMutationTool for ScriptsCreateTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_scripts_tools::get_scripts_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_CREATE_TOOL)
-            .expect("scripts create tool definition")
+        required_tool_definition(
+            mcp_scripts_tools::get_scripts_tool_definitions(),
+            mcp_scripts_tools::SCRIPTS_CREATE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
@@ -323,10 +330,10 @@ impl DynMutationTool for ScriptsUpdateTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_scripts_tools::get_scripts_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_UPDATE_TOOL)
-            .expect("scripts update tool definition")
+        required_tool_definition(
+            mcp_scripts_tools::get_scripts_tool_definitions(),
+            mcp_scripts_tools::SCRIPTS_UPDATE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
@@ -346,10 +353,10 @@ impl DynMutationTool for ScriptsDeleteTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_scripts_tools::get_scripts_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_DELETE_TOOL)
-            .expect("scripts delete tool definition")
+        required_tool_definition(
+            mcp_scripts_tools::get_scripts_tool_definitions(),
+            mcp_scripts_tools::SCRIPTS_DELETE_TOOL,
+        )
     }
 
     fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
@@ -369,10 +376,10 @@ impl DynMutationTool for ScriptsRunTool {
     }
 
     fn definition(&self) -> ToolDefinition {
-        mcp_scripts_tools::get_scripts_tool_definitions()
-            .into_iter()
-            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_RUN_TOOL)
-            .expect("scripts run tool definition")
+        required_tool_definition(
+            mcp_scripts_tools::get_scripts_tool_definitions(),
+            mcp_scripts_tools::SCRIPTS_RUN_TOOL,
+        )
     }
 
     fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {

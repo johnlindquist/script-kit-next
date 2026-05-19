@@ -112,13 +112,22 @@ jq -e '.result.content[0].type=="text" and ((.result.content[0].text | fromjson)
 
 Use `kit/state` for setup proof because it is safe and read-only. Avoid `kit/show` or `kit/hide` unless you specifically want to change the app window visibility while testing.
 
-For shell workflows that should use the same server discovery and bearer-token behavior, use the repo CLI wrapper:
+For shell workflows that should use the same server discovery and bearer-token behavior, use the app-managed `scriptkit` command shim. Script Kit refreshes it at `~/.scriptkit/bin/scriptkit` on startup:
 
 ```bash
-bun scripts/mcp-cli.ts tools
-bun scripts/mcp-cli.ts read kit://trigger-builtins
-bun scripts/mcp-cli.ts call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
+~/.scriptkit/bin/scriptkit --help
+~/.scriptkit/bin/scriptkit mcp tools
+~/.scriptkit/bin/scriptkit mcp read kit://trigger-builtins
+~/.scriptkit/bin/scriptkit mcp call kit/trigger_builtin '{"builtinId":"builtin/clipboard-history"}'
 ```
+
+To add a shorter `scriptkit` command in your shell, run:
+
+```bash
+~/.scriptkit/bin/scriptkit install-command ~/.local/bin/scriptkit
+```
+
+Then make sure `~/.local/bin` is on `PATH`.
 
 ## Troubleshooting
 

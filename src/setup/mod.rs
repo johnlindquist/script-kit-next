@@ -12,6 +12,8 @@ use tracing::{debug, info, instrument, warn};
 const EMBEDDED_CONFIG_TEMPLATE: &str = include_str!("../../kit-init/config-template.ts");
 /// Embedded SDK content (included at compile time)
 const EMBEDDED_SDK: &str = include_str!("../../scripts/kit-sdk.ts");
+/// Embedded user-facing command line shim
+const EMBEDDED_SCRIPTKIT_CLI: &str = include_str!("../../scripts/mcp-cli.ts");
 /// Optional theme example (included at compile time)
 const EMBEDDED_THEME_EXAMPLE: &str = include_str!("../../kit-init/theme.example.json");
 /// Embedded package.json template for user's kit directory
@@ -519,6 +521,7 @@ pub fn migrate_from_kenv() -> bool {
 /// │   ├── AGENTS.md              # Redirect stub → ../AGENTS.md
 /// │   └── CLAUDE.md              # Redirect stub → ../CLAUDE.md
 /// ├── sdk/                       # Runtime SDK (kit-sdk.ts)
+/// ├── bin/                       # App-managed command shims
 /// ├── db/                        # Databases
 /// ├── logs/                      # Application logs
 /// ├── cache/
@@ -640,6 +643,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("tmp").join("test-scripts"),
         kit_dir.join("tmp").join("test-scriptlets"),
         kit_dir.join("sdk"),
+        kit_dir.join("bin"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
         kit_dir.join("cache").join("app-icons"),
@@ -652,6 +656,15 @@ pub fn ensure_kit_setup() -> SetupResult {
     // App-managed: SDK (refresh if changed)
     let sdk_path = kit_dir.join("sdk").join("kit-sdk.ts");
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
+
+    // App-managed: user-facing `scriptkit` command shim (refresh if changed)
+    let scriptkit_cli_path = kit_dir.join("bin").join("scriptkit");
+    write_executable_string_if_changed(
+        &scriptkit_cli_path,
+        EMBEDDED_SCRIPTKIT_CLI,
+        &mut warnings,
+        "bin/scriptkit",
+    );
 
     let plugins_dir = kit_dir.join("plugins");
 
@@ -1205,6 +1218,9 @@ ai-chats.db
 # SDK is managed by the app, always regenerated
 sdk/
 
+# Command shims are managed by the app, always regenerated
+bin/
+
 # Application logs
 logs/
 
@@ -1498,6 +1514,43 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
         let _ = fs::remove_file(&temp_path);
     } else {
         debug!(path = %path.display(), "Updated {}", label);
+    }
+}
+
+fn write_executable_string_if_changed(
+    path: &Path,
+    contents: &str,
+    warnings: &mut Vec<String>,
+    label: &str,
+) {
+    write_string_if_changed(path, contents, warnings, label);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        match fs::metadata(path) {
+            Ok(metadata) => {
+                let mut permissions = metadata.permissions();
+                if permissions.mode() & 0o755 != 0o755 {
+                    permissions.set_mode(0o755);
+                    if let Err(error) = fs::set_permissions(path, permissions) {
+                        warnings.push(format!(
+                            "Failed to mark {} executable ({}): {}",
+                            label,
+                            path.display(),
+                            error
+                        ));
+                    }
+                }
+            }
+            Err(error) => warnings.push(format!(
+                "Failed to stat {} for executable permissions ({}): {}",
+                label,
+                path.display(),
+                error
+            )),
+        }
     }
 }
 /// Ensure tsconfig.json has proper TypeScript/Bun settings (merge-safe)
@@ -2312,6 +2365,10 @@ mod tests {
             kit_root.join("sdk").join("kit-sdk.ts").exists(),
             "sdk/kit-sdk.ts should exist"
         );
+        assert!(
+            kit_root.join("bin").join("scriptkit").exists(),
+            "bin/scriptkit should exist"
+        );
 
         // Verify other directories
         assert!(kit_root.join("db").exists(), "db/ directory should exist");
@@ -2486,6 +2543,7 @@ mod tests {
             ("config.ts", "~/.scriptkit/config.ts"),
             ("theme.json", "~/.scriptkit/theme.json"),
             ("sdk/kit-sdk.ts", "~/.scriptkit/sdk/"),
+            ("bin/scriptkit", "~/.scriptkit/bin/scriptkit"),
         ];
 
         for (relative_path, doc_path) in documented_paths {

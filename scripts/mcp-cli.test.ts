@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runMcpCli } from "./mcp-cli";
@@ -68,6 +68,21 @@ function discoveryEnv(baseUrl: string) {
 }
 
 describe("mcp-cli", () => {
+  it("prints product-oriented top-level help", async () => {
+    const result = await runMcpCli(["--help"]);
+    expect(typeof result).toBe("string");
+    expect(result).toContain("scriptkit mcp tools");
+    expect(result).toContain("scriptkit install-command");
+    expect(result).toContain("~/.scriptkit/server.json");
+  });
+
+  it("prints mcp subcommand help", async () => {
+    const result = await runMcpCli(["mcp", "--help"]);
+    expect(typeof result).toBe("string");
+    expect(result).toContain("Script Kit MCP commands");
+    expect(result).toContain("SCRIPT_KIT_MCP_ENDPOINT");
+  });
+
   it("lists tools through discovery server.json", async () => {
     const mock = startMockMcp((body) => {
       expect(body.method).toBe("tools/list");
@@ -79,7 +94,7 @@ describe("mcp-cli", () => {
     });
     const { dir, env } = discoveryEnv(mock.url.origin);
     try {
-      const result = await runCli(["tools"], env);
+      const result = await runCli(["mcp", "tools"], env);
       expect(typeof result).toBe("object");
       expect(result.success).toBe(true);
       expect((result as any).data.result.tools[0].name).toBe("kit/trigger_builtin");
@@ -117,6 +132,23 @@ describe("mcp-cli", () => {
     expect((result as any).data.result.content[0].text).toBe("{\"ok\":true}");
   });
 
+  it("keeps direct mcp command aliases for repo-local workflows", async () => {
+    const mock = startMockMcp((body) => {
+      expect(body.method).toBe("tools/list");
+      return {
+        jsonrpc: "2.0",
+        id: body.id,
+        result: { tools: [] },
+      };
+    });
+    const result = await runCli(["tools"], {
+      SCRIPT_KIT_MCP_ENDPOINT: mock.url.origin,
+      SCRIPT_KIT_MCP_TOKEN: "test-token",
+    });
+    expect(typeof result).toBe("object");
+    expect(result.success).toBe(true);
+  });
+
   it("reads resources", async () => {
     const mock = startMockMcp((body) => {
       expect(body.method).toBe("resources/read");
@@ -133,5 +165,19 @@ describe("mcp-cli", () => {
     });
     expect(typeof result).toBe("object");
     expect((result as any).data.result.contents[0].uri).toBe("kit://trigger-builtins");
+  });
+
+  it("installs a scriptkit command symlink at a chosen target", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "script-kit-command-"));
+    const target = join(dir, "scriptkit");
+    try {
+      const result = await runMcpCli(["install-command", target]);
+      expect(typeof result).toBe("object");
+      expect((result as any).success).toBe(true);
+      expect(existsSync(target)).toBe(true);
+      expect(readlinkSync(target)).toContain("mcp-cli.ts");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

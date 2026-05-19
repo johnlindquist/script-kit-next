@@ -136,7 +136,19 @@ Useful APIs to look up first:
 - `computer.listNativeWindows`, `computer.captureNativeWindow`
 - `hud` and `notify`
 
-## 7. Pick Your Next Guide
+## 7. Use the Command Line
+
+Script Kit refreshes an app-managed command shim at `~/.scriptkit/bin/scriptkit` while setting up the workspace. Use it directly, add `~/.scriptkit/bin` to `PATH`, or install a shorter shell command:
+
+```bash
+~/.scriptkit/bin/scriptkit --help
+~/.scriptkit/bin/scriptkit install-command ~/.local/bin/scriptkit
+scriptkit mcp tools
+```
+
+The MCP subcommands require Script Kit to be running because they read the live server discovery file at `~/.scriptkit/server.json`.
+
+## 8. Pick Your Next Guide
 
 - Want the big picture? Read [Feature Tour](./feature-tour.md).
 - Want every launcher input mode? Read [Main Menu Input](./main-menu-input.md).

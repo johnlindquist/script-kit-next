@@ -326,6 +326,7 @@ export default {
 | Config | `~/.scriptkit/config.ts` |
 | Theme | `~/.scriptkit/theme.json` |
 | SDK | `~/.scriptkit/sdk/kit-sdk.ts` (do not edit) |
+| CLI | `~/.scriptkit/bin/scriptkit` (managed command shim; do not edit) |
 | Logs | `~/.scriptkit/logs/` |
 | Bundled skills | `~/.scriptkit/plugins/scriptkit/skills/` |
 | Examples (scripts) | `~/.scriptkit/plugins/examples/scripts/` |
