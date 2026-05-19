@@ -65,17 +65,35 @@ impl MutationRegistry {
         let tool = self.tools.get(name)?;
         let meta = tool.meta();
         if !scope_allows(&ctx.token_scopes, meta.required_scope) {
-            let mut result = mcp_notes_tools::error_tool_result(
+            let result = mcp_notes_tools::error_tool_result(
                 meta.name,
                 NotesMutationError::new(
                     NotesMutationErrorCode::InvalidParams,
                     format!("Missing required MCP scope: {}", meta.required_scope),
                 ),
             );
-            result.is_error = Some(true);
+            append_audit_event(&McpAuditEvent {
+                ts: chrono::Utc::now(),
+                trace_id: ctx.trace_id.clone(),
+                method: "tools/call".to_string(),
+                tool: Some(meta.name.to_string()),
+                resource_uri: None,
+                action: meta.name.to_string(),
+                risk: format!("{:?}", meta.risk),
+                success: false,
+                error_code: Some("scope_denied".to_string()),
+                target_id: None,
+            });
             return Some(result);
         }
 
+        let result = tool.call(args, ctx);
+        let success = result.is_error != Some(true);
+        let error_code = if success {
+            None
+        } else {
+            tool_result_error_code(&result).or_else(|| Some("tool_error".to_string()))
+        };
         append_audit_event(&McpAuditEvent {
             ts: chrono::Utc::now(),
             trace_id: ctx.trace_id.clone(),
@@ -84,11 +102,11 @@ impl MutationRegistry {
             resource_uri: None,
             action: meta.name.to_string(),
             risk: format!("{:?}", meta.risk),
-            success: true,
-            error_code: None,
+            success,
+            error_code,
             target_id: None,
         });
-        Some(tool.call(args, ctx))
+        Some(result)
     }
 }
 
@@ -278,4 +296,14 @@ fn append_audit_event(event: &McpAuditEvent) {
         use std::io::Write;
         let _ = writeln!(file, "{line}");
     }
+}
+
+fn tool_result_error_code(result: &ToolResult) -> Option<String> {
+    let text = result.content.first()?.text.as_str();
+    let value: serde_json::Value = serde_json::from_str(text).ok()?;
+    value
+        .get("error")
+        .and_then(|error| error.get("code"))
+        .and_then(|code| code.as_str())
+        .map(ToString::to_string)
 }

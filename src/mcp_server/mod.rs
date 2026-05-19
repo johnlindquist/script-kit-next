@@ -717,6 +717,48 @@ mod tests {
     }
 
     #[test]
+    fn test_auth_accepts_scoped_agent_token_and_applies_scopes() -> anyhow::Result<()> {
+        let (server, temp_dir) = create_test_server(43228)?;
+        let scoped_token = "scoped-agent-token-for-test";
+        let agents_dir = temp_dir.path().join("agents");
+        fs::create_dir_all(&agents_dir).context("create agents dir")?;
+        let config = serde_json::json!({
+            "tokenHash": hash_token(scoped_token),
+            "scopes": ["mcp:read"]
+        });
+        fs::write(
+            agents_dir.join("readonly-agent.json"),
+            serde_json::to_string_pretty(&config)?,
+        )
+        .context("write scoped agent config")?;
+
+        let _handle = server.start()?;
+        thread::sleep(std::time::Duration::from_millis(100));
+
+        let request = r#"{"jsonrpc":"2.0","id":"scope-denied","method":"tools/call","params":{"name":"kit/notes_create","arguments":{"body":"denied"}}}"#;
+        let (status, body) = http_post_json(43228, "/rpc", scoped_token, request)?;
+
+        assert_eq!(status, 200);
+        let response: serde_json::Value =
+            serde_json::from_str(&body).context("parse scoped token RPC response")?;
+        assert_eq!(response["jsonrpc"], "2.0");
+        assert_eq!(response["result"]["isError"], true);
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .context("missing tool text")?;
+        let payload: serde_json::Value =
+            serde_json::from_str(text).context("parse scope-denial tool payload")?;
+        assert!(
+            payload["error"]["message"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("notes:write"),
+            "scoped token should authenticate but still deny notes writes"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn test_discovery_file_created() -> anyhow::Result<()> {
         let (server, temp_dir) = create_test_server(43215)?;
         let token = server.token().to_string();

@@ -19,6 +19,10 @@ use std::sync::Arc;
 
 const NOTES_RESOURCE_URI: &str = "kit://notes";
 const NOTES_RESOURCE_SCHEMA_VERSION: u32 = 1;
+const AUDIT_RESOURCE_URI: &str = "kit://audit";
+const AUDIT_RESOURCE_SCHEMA_VERSION: u32 = 1;
+const AUDIT_DEFAULT_LIMIT: usize = 100;
+const AUDIT_HARD_LIMIT: usize = 500;
 const GIT_DIFF_DEFAULT_LIMIT_BYTES: usize = 1024 * 1024;
 const GIT_DIFF_HARD_CAP_BYTES: usize = 8 * 1024 * 1024;
 /// MCP Resource definition
@@ -151,6 +155,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             name: "Notes".to_string(),
             description: Some(
                 "Active Script Kit notes. Read kit://notes for a bounded list, or kit://notes/{id} for a full note."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: AUDIT_RESOURCE_URI.to_string(),
+            name: "MCP Audit Log".to_string(),
+            description: Some(
+                "Recent MCP mutation audit events from ~/.scriptkit/mcp-audit.jsonl. Supports ?limit=100 and ?traceId=..."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -394,6 +407,7 @@ pub fn read_resource(
         }
         "kit://git-status" => read_git_status_resource(),
         _ if is_notes_resource_uri(uri) => read_notes_resource(uri),
+        _ if is_audit_resource_uri(uri) => read_audit_resource(uri),
         _ if uri == "kit://git-diff" || uri.starts_with("kit://git-diff?") => {
             read_git_diff_resource(uri)
         }
@@ -418,6 +432,10 @@ pub(crate) fn is_context_resource_uri(uri: &str) -> bool {
 
 pub(crate) fn is_notes_resource_uri(uri: &str) -> bool {
     uri == NOTES_RESOURCE_URI || uri.starts_with("kit://notes?") || uri.starts_with("kit://notes/")
+}
+
+pub(crate) fn is_audit_resource_uri(uri: &str) -> bool {
+    uri == AUDIT_RESOURCE_URI || uri.starts_with("kit://audit?")
 }
 
 fn read_notes_resource(uri: &str) -> Result<ResourceContent, String> {
@@ -533,6 +551,70 @@ fn query_bool(uri: &str, key: &str) -> bool {
             return pair == key;
         };
         k == key && matches!(v, "1" | "true" | "TRUE" | "yes")
+    })
+}
+
+fn query_string_param(uri: &str, key: &str) -> Option<String> {
+    let query = uri.split_once('?')?.1;
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find_map(|(k, v)| if k == key { Some(v.to_string()) } else { None })
+}
+
+fn read_audit_resource(uri: &str) -> Result<ResourceContent, String> {
+    let limit = parse_u64_query_param(uri, "limit")
+        .map(|value| value as usize)
+        .unwrap_or(AUDIT_DEFAULT_LIMIT)
+        .clamp(1, AUDIT_HARD_LIMIT);
+    let trace_id_filter = query_string_param(uri, "traceId");
+
+    let audit_path = dirs::home_dir()
+        .ok_or_else(|| "Failed to resolve home directory for MCP audit log".to_string())?
+        .join(".scriptkit")
+        .join("mcp-audit.jsonl");
+
+    let text = match std::fs::read_to_string(&audit_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => {
+            return Err(format!(
+                "Failed to read MCP audit log {}: {error}",
+                audit_path.display()
+            ));
+        }
+    };
+
+    let mut matched = Vec::new();
+    for line in text.lines().rev() {
+        let Ok(event) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if let Some(trace_id) = &trace_id_filter {
+            if event.get("traceId").and_then(|value| value.as_str()) != Some(trace_id.as_str()) {
+                continue;
+            }
+        }
+        matched.push(event);
+        if matched.len() == limit {
+            break;
+        }
+    }
+    matched.reverse();
+
+    let json = serde_json::json!({
+        "schemaVersion": AUDIT_RESOURCE_SCHEMA_VERSION,
+        "uri": uri,
+        "count": matched.len(),
+        "truncated": text.lines().count() > matched.len(),
+        "events": matched,
+    });
+
+    Ok(ResourceContent {
+        uri: uri.to_string(),
+        mime_type: "application/json".to_string(),
+        text: serde_json::to_string_pretty(&json)
+            .map_err(|error| format!("Failed to serialize MCP audit resource: {error}"))?,
     })
 }
 /// Read kit://state resource
@@ -3328,18 +3410,19 @@ mod tests {
 
     #[test]
     fn test_resources_list_includes_all() {
-        // REQUIREMENT: resources/list returns all three resources
+        // REQUIREMENT: resources/list returns the full MCP resource registry.
         let resources = get_resource_definitions();
 
         assert_eq!(
             resources.len(),
-            26,
+            27,
             "Resource registry count should be updated when new MCP resources land"
         );
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
         assert!(uris.contains(&"kit://notes"), "Should include kit://notes");
+        assert!(uris.contains(&"kit://audit"), "Should include kit://audit");
         assert!(uris.contains(&"scripts://"), "Should include scripts://");
         assert!(
             uris.contains(&"scriptlets://"),

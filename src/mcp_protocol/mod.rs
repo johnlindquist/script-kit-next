@@ -626,6 +626,7 @@ fn handle_resources_read_with_context(
         Err(err) => {
             let error_code = if mcp_resources::is_context_resource_uri(uri)
                 || mcp_resources::is_notes_resource_uri(uri)
+                || mcp_resources::is_audit_resource_uri(uri)
             {
                 error_codes::INVALID_PARAMS
             } else {
