@@ -492,10 +492,14 @@ impl NotesApp {
         let cancel_note_id = note_id;
         let weak_notes_for_cancel = weak_notes.clone();
 
-        // Non-entity-bound: avoids keep_open_while closing dialog on re-render
-        crate::confirm::open_parent_confirm_dialog(
+        // Non-entity-bound: avoids keep_open_while closing dialog on re-render.
+        // Pin the popup explicitly to the Notes window so AppKit attaches it as
+        // a child of the Notes NSPanel and bottom-aligns to *its* frame instead
+        // of whichever window happens to be the current key window.
+        crate::confirm::open_parent_confirm_dialog_for_automation_parent(
             window,
             cx,
+            "notes",
             crate::confirm::ParentConfirmOptions {
                 title,
                 body,
@@ -797,8 +801,13 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
-            "Notes delete should use the parent confirm helper"
+            normalized
+                .contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent("),
+            "Notes delete should use the parent-id-aware confirm helper so the popup pins to the Notes window"
+        );
+        assert!(
+            normalized.contains("\"notes\""),
+            "Notes delete should explicitly parent the confirm popup to automation id \"notes\""
         );
         assert!(
             !normalized.contains("window.open_dialog(cx, move |dialog"),
@@ -906,8 +915,9 @@ mod notes_search_and_delete_regression_tests {
         let normalized = normalize_ws(delete_request);
 
         assert!(
-            normalized.contains("crate::confirm::open_parent_confirm_dialog("),
-            "Notes delete should use the parent confirm helper"
+            normalized
+                .contains("crate::confirm::open_parent_confirm_dialog_for_automation_parent("),
+            "Notes delete should use the parent-id-aware confirm helper"
         );
         assert!(
             normalized.contains("weak_notes.clone()"),
