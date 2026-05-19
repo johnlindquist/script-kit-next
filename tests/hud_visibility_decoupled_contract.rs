@@ -4,6 +4,10 @@ fn prompt_handler_source() -> String {
     fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler source")
 }
 
+fn hud_manager_source() -> String {
+    fs::read_to_string("src/hud_manager/mod.rs").expect("read HUD manager source")
+}
+
 fn show_hud_arm(source: &str) -> &str {
     let start = source
         .find("PromptMessage::ShowHud { text, duration_ms } => {")
@@ -50,5 +54,22 @@ fn hud_message_does_not_request_main_window_show() {
     assert!(
         !arm.contains("prepare_window_for_prompt"),
         "ShowHud is not prompt UI and must not use prompt window preparation"
+    );
+}
+
+#[test]
+fn hud_surface_tracks_main_window_background_opacity_and_material() {
+    let source = hud_manager_source();
+
+    assert!(
+        source.contains("opacity.vibrancy_background.unwrap_or(opacity.main)")
+            && source.contains("hex_to_rgba_with_opacity(\n                colors.background.main,\n                background_alpha,\n            )")
+            && source.contains(".bg(rgba(colors.background_rgba))"),
+        "HUD pill background must use the same theme background alpha path as the main window"
+    );
+    assert!(
+        source.contains("crate::platform::configure_hud_window_vibrancy(")
+            && source.contains("theme.should_use_dark_vibrancy()"),
+        "HUD native window must use the same cached theme material/appearance path as the main window"
     );
 }
