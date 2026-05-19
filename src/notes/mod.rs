@@ -54,8 +54,9 @@ pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 #[allow(unused_imports)]
 pub(crate) use storage::{
-    delete_note_cart_item, delete_note_cart_items, get_all_notes, list_note_cart_items,
-    list_note_cart_items_deduped, root_notes_query_is_eligible, save_note_cart_item, search_notes,
+    delete_note_cart_item, delete_note_cart_items, delete_note_permanently, get_all_notes,
+    get_deleted_notes, get_note, init_notes_db, list_note_cart_items, list_note_cart_items_deduped,
+    root_notes_query_is_eligible, save_note, save_note_cart_item, search_notes,
     search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
     RootNoteSearchHit, RootNotesSectionOptions,
 };
@@ -63,8 +64,9 @@ pub(crate) use storage::{
 // Re-export key types - suppress unused warnings since these are public API
 #[allow(unused_imports)]
 pub use window::{
-    close_notes_embedded_acp, close_notes_window, get_notes_app_entity_and_handle,
-    get_notes_editor_text, inject_text_into_notes, is_notes_window, is_notes_window_open,
-    open_note_in_notes_window, open_notes_window, open_notes_window_without_launcher_restore,
-    quick_capture, save_note_with_content, NotesApp, NotesSurfaceMode,
+    apply_mcp_notes_mutation_on_main_thread, close_notes_embedded_acp, close_notes_window,
+    get_notes_app_entity_and_handle, get_notes_editor_text, inject_text_into_notes,
+    is_notes_window, is_notes_window_open, open_note_in_notes_window, open_notes_window,
+    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content, NotesApp,
+    NotesSurfaceMode,
 };

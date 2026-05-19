@@ -123,6 +123,55 @@ impl NotesApp {
         cx.notify();
     }
 
+    pub(super) fn reload_after_external_note_mutation(
+        &mut self,
+        changed_note_id: NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        tracing::info!(
+            event = "notes_external_mcp_refresh_started",
+            note_id = %changed_note_id,
+            search_query = %self.search_query,
+            has_unsaved_changes = self.has_unsaved_changes,
+            "notes_external_mcp_refresh_started"
+        );
+
+        if self.has_unsaved_changes && !self.save_current_note() {
+            anyhow::bail!("Failed to save dirty Notes editor before MCP refresh");
+        }
+
+        let query = self.search_query.clone();
+        let (refreshed_notes, _used_full_list) = self.refresh_notes_for_search_query(&query)?;
+        self.notes = refreshed_notes;
+        self.deleted_notes = storage::get_deleted_notes()
+            .map_err(|error| anyhow::anyhow!("Failed to reload deleted notes: {error}"))?;
+
+        if self
+            .notes
+            .iter()
+            .any(|note| note.id == changed_note_id && note.deleted_at.is_none())
+        {
+            self.view_mode = NotesViewMode::AllNotes;
+            self.select_note(changed_note_id, window, cx);
+        } else if self.selected_note_id == Some(changed_note_id) {
+            self.sync_search_selection(window, cx);
+        } else {
+            self.sync_search_selection(window, cx);
+        }
+
+        tracing::info!(
+            event = "notes_external_mcp_refresh_completed",
+            note_id = %changed_note_id,
+            notes_len = self.notes.len(),
+            deleted_notes_len = self.deleted_notes.len(),
+            selected_note_id = %self.selected_note_id.map(|id| id.as_str()).unwrap_or_else(|| "none".to_string()),
+            "notes_external_mcp_refresh_completed"
+        );
+        cx.notify();
+        Ok(())
+    }
+
     /// Sync selection to first search result after filtering changes the visible note list.
     pub(super) fn sync_search_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(first) = self.notes.first() {

@@ -17,7 +17,9 @@
 
 // --- merged from part_000.rs ---
 use crate::mcp_computer_use_tools;
+use crate::mcp_control;
 use crate::mcp_kit_tools;
+use crate::mcp_notes_tools;
 use crate::mcp_resources;
 use crate::mcp_script_tools;
 use crate::scripts::Script;
@@ -96,6 +98,12 @@ pub enum McpMethod {
     /// Read a specific resource
     #[strum(serialize = "resources/read")]
     ResourcesRead,
+    /// Write a resource (registered now; implementation lands in Slice 3)
+    #[strum(serialize = "resources/write")]
+    ResourcesWrite,
+    /// Subscribe to resource changes (registered now; implementation lands in Slice 3)
+    #[strum(serialize = "resources/subscribe")]
+    ResourcesSubscribe,
 }
 impl McpMethod {
     /// Parse method string to enum variant
@@ -111,8 +119,43 @@ impl McpMethod {
             Self::ToolsCall => "tools/call",
             Self::ResourcesList => "resources/list",
             Self::ResourcesRead => "resources/read",
+            Self::ResourcesWrite => "resources/write",
+            Self::ResourcesSubscribe => "resources/subscribe",
         }
     }
+}
+
+#[derive(Clone)]
+pub struct McpRuntimeContext {
+    pub computer: Option<
+        Arc<dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync>,
+    >,
+    pub notes_mutation_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
+    pub token_scopes: Vec<String>,
+    pub trace_id: String,
+}
+
+impl Default for McpRuntimeContext {
+    fn default() -> Self {
+        Self {
+            computer: None,
+            notes_mutation_bridge: None,
+            token_scopes: legacy_all_scopes(),
+            trace_id: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+}
+
+pub fn legacy_all_scopes() -> Vec<String> {
+    vec![
+        "mcp:read".to_string(),
+        "notes:write".to_string(),
+        "ui:control".to_string(),
+        "scripts:run".to_string(),
+        "computer:act".to_string(),
+        "destructive:delete".to_string(),
+        "mcp:*".to_string(),
+    ]
 }
 impl JsonRpcResponse {
     /// Create a success response
@@ -282,7 +325,7 @@ pub fn handle_request_with_runtime_context(
     scripts: &[std::sync::Arc<Script>],
     scriptlets: &[std::sync::Arc<Scriptlet>],
     app_state: Option<&mcp_resources::AppStateResource>,
-    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
+    runtime_context: Option<&McpRuntimeContext>,
 ) -> JsonRpcResponse {
     // Check for valid jsonrpc version
     if request.jsonrpc != JSONRPC_VERSION {
@@ -298,11 +341,18 @@ pub fn handle_request_with_runtime_context(
         Some(McpMethod::Initialize) => handle_initialize(request),
         Some(McpMethod::ToolsList) => handle_tools_list_with_scripts(request, scripts),
         Some(McpMethod::ToolsCall) => {
-            handle_tools_call_with_runtime(request, scripts, computer_runtime)
+            handle_tools_call_with_runtime_context(request, scripts, runtime_context)
         }
         Some(McpMethod::ResourcesList) => handle_resources_list(request),
         Some(McpMethod::ResourcesRead) => {
             handle_resources_read_with_context(request, scripts, scriptlets, app_state)
+        }
+        Some(McpMethod::ResourcesWrite) | Some(McpMethod::ResourcesSubscribe) => {
+            JsonRpcResponse::error(
+                request.id,
+                error_codes::METHOD_NOT_FOUND,
+                format!("MethodNotImplementedYet: {}", request.method),
+            )
         }
         None => JsonRpcResponse::error(
             request.id,
@@ -348,8 +398,9 @@ pub fn handle_tools_list_with_scripts(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
-    // Get kit/* namespace tools
-    let mut all_tools = mcp_kit_tools::get_kit_tool_definitions();
+    // Mutation tools must be listed and routed before generic kit/* fallback.
+    let mut all_tools = mcp_control::build_default_mutation_registry().definitions();
+    all_tools.extend(mcp_kit_tools::get_kit_tool_definitions());
     all_tools.extend(mcp_computer_use_tools::get_computer_use_tool_definitions());
 
     // Get scripts/* namespace tools (only scripts with schema.input)
@@ -388,6 +439,52 @@ pub fn handle_tools_call_with_runtime(
     scripts: &[std::sync::Arc<Script>],
     computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
 ) -> JsonRpcResponse {
+    handle_tools_call_with_runtime_parts(
+        request,
+        scripts,
+        computer_runtime,
+        None,
+        legacy_all_scopes(),
+        uuid::Uuid::new_v4().to_string(),
+    )
+}
+
+pub fn handle_tools_call_with_runtime_context(
+    request: JsonRpcRequest,
+    scripts: &[std::sync::Arc<Script>],
+    runtime_context: Option<&McpRuntimeContext>,
+) -> JsonRpcResponse {
+    let computer_runtime = runtime_context
+        .and_then(|context| context.computer.as_deref())
+        .map(|runtime| {
+            runtime as &dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge
+        });
+    let notes_bridge = runtime_context.and_then(|context| context.notes_mutation_bridge.clone());
+    let token_scopes = runtime_context
+        .map(|context| context.token_scopes.clone())
+        .unwrap_or_else(legacy_all_scopes);
+    let trace_id = runtime_context
+        .map(|context| context.trace_id.clone())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+    handle_tools_call_with_runtime_parts(
+        request,
+        scripts,
+        computer_runtime,
+        notes_bridge,
+        token_scopes,
+        trace_id,
+    )
+}
+
+fn handle_tools_call_with_runtime_parts(
+    request: JsonRpcRequest,
+    scripts: &[std::sync::Arc<Script>],
+    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
+    notes_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
+    token_scopes: Vec<String>,
+    trace_id: String,
+) -> JsonRpcResponse {
     // Validate params
     let params = match request.params.as_object() {
         Some(p) => p,
@@ -415,6 +512,21 @@ pub fn handle_tools_call_with_runtime(
         .get("arguments")
         .cloned()
         .unwrap_or(serde_json::json!({}));
+
+    if mcp_notes_tools::is_notes_tool(tool_name) {
+        let mutation_context = mcp_control::MutationContext {
+            trace_id,
+            token_scopes,
+            notes_bridge,
+        };
+        let registry = mcp_control::build_default_mutation_registry();
+        if let Some(result) = registry.call(tool_name, arguments.clone(), &mutation_context) {
+            return JsonRpcResponse::success(
+                request.id,
+                serde_json::to_value(result).unwrap_or(serde_json::json!({})),
+            );
+        }
+    }
 
     // Route kit/* namespace tools
     if mcp_kit_tools::is_kit_tool(tool_name) {
@@ -512,7 +624,9 @@ fn handle_resources_read_with_context(
             )
         }
         Err(err) => {
-            let error_code = if mcp_resources::is_context_resource_uri(uri) {
+            let error_code = if mcp_resources::is_context_resource_uri(uri)
+                || mcp_resources::is_notes_resource_uri(uri)
+            {
                 error_codes::INVALID_PARAMS
             } else {
                 error_codes::METHOD_NOT_FOUND
@@ -1211,6 +1325,14 @@ mod tests {
             McpMethod::from_str("resources/read"),
             Some(McpMethod::ResourcesRead)
         );
+        assert_eq!(
+            McpMethod::from_str("resources/write"),
+            Some(McpMethod::ResourcesWrite)
+        );
+        assert_eq!(
+            McpMethod::from_str("resources/subscribe"),
+            Some(McpMethod::ResourcesSubscribe)
+        );
         assert_eq!(McpMethod::from_str("unknown"), None);
         Ok(())
     }
@@ -1221,6 +1343,11 @@ mod tests {
         assert_eq!(McpMethod::ToolsCall.as_str(), "tools/call");
         assert_eq!(McpMethod::ResourcesList.as_str(), "resources/list");
         assert_eq!(McpMethod::ResourcesRead.as_str(), "resources/read");
+        assert_eq!(McpMethod::ResourcesWrite.as_str(), "resources/write");
+        assert_eq!(
+            McpMethod::ResourcesSubscribe.as_str(),
+            "resources/subscribe"
+        );
         Ok(())
     }
     #[test]

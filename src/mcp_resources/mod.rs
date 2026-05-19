@@ -16,6 +16,11 @@ use crate::scripts::{FailedScript, ScriptValidationIssue, ValidationReport};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
+
+const NOTES_RESOURCE_URI: &str = "kit://notes";
+const NOTES_RESOURCE_SCHEMA_VERSION: u32 = 1;
+const GIT_DIFF_DEFAULT_LIMIT_BYTES: usize = 1024 * 1024;
+const GIT_DIFF_HARD_CAP_BYTES: usize = 8 * 1024 * 1024;
 /// MCP Resource definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpResource {
@@ -139,6 +144,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "scriptlets://".to_string(),
             name: "Scriptlets".to_string(),
             description: Some("List of all available scriptlets from markdown files".to_string()),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: NOTES_RESOURCE_URI.to_string(),
+            name: "Notes".to_string(),
+            description: Some(
+                "Active Script Kit notes. Read kit://notes for a bounded list, or kit://notes/{id} for a full note."
+                    .to_string(),
+            ),
             mime_type: "application/json".to_string(),
         },
         McpResource {
@@ -379,7 +393,10 @@ pub fn read_resource(
             read_notifications_resource(uri)
         }
         "kit://git-status" => read_git_status_resource(),
-        "kit://git-diff" => read_git_diff_resource(),
+        _ if is_notes_resource_uri(uri) => read_notes_resource(uri),
+        _ if uri == "kit://git-diff" || uri.starts_with("kit://git-diff?") => {
+            read_git_diff_resource(uri)
+        }
         "kit://processes" => read_processes_resource(),
         "kit://system" => read_system_info_resource(),
         STDIN_COMMANDS_REFERENCE_URI => read_stdin_commands_resource(),
@@ -397,6 +414,126 @@ pub(crate) fn is_context_resource_uri(uri: &str) -> bool {
         || uri.starts_with("kit://context?")
         || uri == "kit://context/schema"
         || uri.starts_with("kit://context/schema?")
+}
+
+pub(crate) fn is_notes_resource_uri(uri: &str) -> bool {
+    uri == NOTES_RESOURCE_URI || uri.starts_with("kit://notes?") || uri.starts_with("kit://notes/")
+}
+
+fn read_notes_resource(uri: &str) -> Result<ResourceContent, String> {
+    crate::notes::init_notes_db()
+        .map_err(|error| format!("Failed to initialize notes database: {error}"))?;
+
+    if uri == NOTES_RESOURCE_URI || uri.starts_with("kit://notes?") {
+        return read_notes_list_resource(uri);
+    }
+
+    read_single_note_resource(uri)
+}
+
+fn read_notes_list_resource(uri: &str) -> Result<ResourceContent, String> {
+    let include_deleted = query_bool(uri, "includeDeleted");
+    let mut notes = if include_deleted {
+        let mut active = crate::notes::get_all_notes()
+            .map_err(|error| format!("Failed to read active notes: {error}"))?;
+        let mut deleted = crate::notes::get_deleted_notes()
+            .map_err(|error| format!("Failed to read deleted notes: {error}"))?;
+        active.append(&mut deleted);
+        active
+    } else {
+        crate::notes::get_all_notes().map_err(|error| format!("Failed to read notes: {error}"))?
+    };
+
+    let original_len = notes.len();
+    let limit = parse_u64_query_param(uri, "limit")
+        .unwrap_or(100)
+        .clamp(1, 500) as usize;
+    notes.truncate(limit);
+
+    let summaries: Vec<Value> = notes.iter().map(note_summary_json).collect();
+    let json = serde_json::json!({
+        "schemaVersion": NOTES_RESOURCE_SCHEMA_VERSION,
+        "uri": NOTES_RESOURCE_URI,
+        "count": summaries.len(),
+        "truncated": original_len > summaries.len(),
+        "notes": summaries,
+    });
+
+    Ok(ResourceContent {
+        uri: NOTES_RESOURCE_URI.to_string(),
+        mime_type: "application/json".to_string(),
+        text: serde_json::to_string_pretty(&json)
+            .map_err(|error| format!("Failed to serialize notes resource: {error}"))?,
+    })
+}
+
+fn read_single_note_resource(uri: &str) -> Result<ResourceContent, String> {
+    let raw_id = uri
+        .strip_prefix("kit://notes/")
+        .and_then(|rest| rest.split('?').next())
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| format!("Invalid notes resource URI: {uri}"))?;
+    let note_id = crate::notes::NoteId::parse(raw_id)
+        .ok_or_else(|| format!("Invalid note id in URI: {raw_id}"))?;
+    let note = crate::notes::get_note(note_id)
+        .map_err(|error| format!("Failed to read note {note_id}: {error}"))?
+        .ok_or_else(|| format!("Note not found: {note_id}"))?;
+
+    let resource_uri = format!("kit://notes/{note_id}");
+    let json = serde_json::json!({
+        "schemaVersion": NOTES_RESOURCE_SCHEMA_VERSION,
+        "uri": resource_uri,
+        "note": note,
+    });
+
+    Ok(ResourceContent {
+        uri: resource_uri,
+        mime_type: "application/json".to_string(),
+        text: serde_json::to_string_pretty(&json)
+            .map_err(|error| format!("Failed to serialize note resource: {error}"))?,
+    })
+}
+
+fn note_summary_json(note: &crate::notes::Note) -> Value {
+    let preview: String = note.content.chars().take(240).collect();
+    serde_json::json!({
+        "id": note.id.as_str(),
+        "uri": format!("kit://notes/{}", note.id),
+        "title": note.title,
+        "preview": preview,
+        "charCount": note.content.chars().count(),
+        "createdAt": note.created_at.to_rfc3339(),
+        "updatedAt": note.updated_at.to_rfc3339(),
+        "deletedAt": note.deleted_at.map(|dt| dt.to_rfc3339()),
+        "isPinned": note.is_pinned,
+        "sortOrder": note.sort_order,
+    })
+}
+
+pub(crate) fn parse_u64_query_param(uri: &str, key: &str) -> Option<u64> {
+    let query = uri.split_once('?')?.1;
+    query
+        .split('&')
+        .filter_map(|pair| pair.split_once('='))
+        .find_map(|(k, v)| {
+            if k == key {
+                v.parse::<u64>().ok()
+            } else {
+                None
+            }
+        })
+}
+
+fn query_bool(uri: &str, key: &str) -> bool {
+    let Some(query) = uri.split_once('?').map(|(_, query)| query) else {
+        return false;
+    };
+    query.split('&').any(|pair| {
+        let Some((k, v)) = pair.split_once('=') else {
+            return pair == key;
+        };
+        k == key && matches!(v, "1" | "true" | "TRUE" | "yes")
+    })
 }
 /// Read kit://state resource
 fn read_state_resource(app_state: Option<&AppStateResource>) -> Result<ResourceContent, String> {
@@ -2222,7 +2359,7 @@ fn read_git_status_resource() -> Result<ResourceContent, String> {
 }
 
 /// Read `kit://git-diff` — runs `git diff` (combined staged + unstaged).
-fn read_git_diff_resource() -> Result<ResourceContent, String> {
+fn read_git_diff_resource(uri: &str) -> Result<ResourceContent, String> {
     // Show both staged and unstaged changes
     let staged = std::process::Command::new("git")
         .args(["diff", "--cached"])
@@ -2273,12 +2410,38 @@ fn read_git_diff_resource() -> Result<ResourceContent, String> {
     if text.is_empty() {
         text.push_str("No changes.");
     }
+    let total_bytes = text.len();
+    let limit = parse_u64_query_param(uri, "limitBytes")
+        .map(|value| value as usize)
+        .unwrap_or(GIT_DIFF_DEFAULT_LIMIT_BYTES)
+        .clamp(1, GIT_DIFF_HARD_CAP_BYTES);
+    let offset = parse_u64_query_param(uri, "offsetBytes")
+        .map(|value| value as usize)
+        .unwrap_or(0)
+        .min(total_bytes);
+    let end = next_char_boundary(&text, (offset + limit).min(total_bytes));
+    let start = next_char_boundary(&text, offset);
+    let truncated = end < total_bytes || start > 0;
+    let mut bounded_text = text[start..end].to_string();
+    if truncated {
+        bounded_text.push_str(&format!(
+            "\n\n[kit://git-diff truncated: offsetBytes={start}, limitBytes={limit}, totalBytes={total_bytes}]"
+        ));
+    }
 
     Ok(ResourceContent {
-        uri: "kit://git-diff".to_string(),
+        uri: uri.to_string(),
         mime_type: "text/plain".to_string(),
-        text,
+        text: bounded_text,
     })
+}
+
+fn next_char_boundary(text: &str, mut idx: usize) -> usize {
+    idx = idx.min(text.len());
+    while idx < text.len() && !text.is_char_boundary(idx) {
+        idx += 1;
+    }
+    idx
 }
 
 /// Read `kit://processes` — top processes by CPU.
@@ -3170,12 +3333,13 @@ mod tests {
 
         assert_eq!(
             resources.len(),
-            25,
+            26,
             "Resource registry count should be updated when new MCP resources land"
         );
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
+        assert!(uris.contains(&"kit://notes"), "Should include kit://notes");
         assert!(uris.contains(&"scripts://"), "Should include scripts://");
         assert!(
             uris.contains(&"scriptlets://"),
