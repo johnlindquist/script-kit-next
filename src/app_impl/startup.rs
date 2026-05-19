@@ -1175,6 +1175,12 @@ impl ScriptListApp {
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if let AppView::ScriptIssuesView { report } = &this.current_view {
+                                let report = report.clone();
+                                this.fix_script_issues_in_agent(&report, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
                             // Menu-syntax trigger popup owns Enter when it is
                             // visible on ScriptList — Accept the selected row
                             // the same way the ACP / and @ pickers do.

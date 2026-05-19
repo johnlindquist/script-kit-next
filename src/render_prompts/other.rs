@@ -674,7 +674,7 @@ impl ScriptListApp {
             None
         };
 
-        // Key handler: Escape → back to ScriptList; Cmd+C → copy diagnostics text.
+        // Key handler: Escape -> back to ScriptList; Enter -> Fix in Agent; Cmd+C -> copy diagnostics text.
         let entity = cx.entity().downgrade();
         let report_for_keys = report.clone();
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
@@ -682,6 +682,15 @@ impl ScriptListApp {
             let has_cmd = event.keystroke.modifiers.platform;
             if crate::ui_foundation::is_key_escape(key) {
                 this.go_back_or_close(window, cx);
+                return;
+            }
+            if crate::ui_foundation::is_key_enter(key)
+                && !has_cmd
+                && !event.keystroke.modifiers.shift
+                && !event.keystroke.modifiers.alt
+                && !event.keystroke.modifiers.control
+            {
+                this.fix_script_issues_in_agent(&report_for_keys, cx);
                 return;
             }
             if has_cmd && key.eq_ignore_ascii_case("c") {
@@ -829,6 +838,32 @@ impl ScriptListApp {
             }
         }
         out
+    }
+
+    pub(crate) fn format_script_issues_agent_prompt(
+        report: &crate::scripts::ValidationReport,
+    ) -> String {
+        format!(
+            "Fix these Script Kit script validation issues. Inspect each script path, repair the metadata collisions or validation failures, and summarize what changed.\n\n{}",
+            Self::format_script_issues_diagnostics(report)
+        )
+    }
+
+    pub(crate) fn fix_script_issues_in_agent(
+        &mut self,
+        report: &crate::scripts::ValidationReport,
+        cx: &mut Context<Self>,
+    ) {
+        let prompt = Self::format_script_issues_agent_prompt(report);
+        tracing::info!(
+            target: "script_kit::script_issues",
+            event = "script_issues_fix_in_agent",
+            failed_count = report.failed_scripts.len(),
+            fatal_count = report.fatal_count,
+            warning_count = report.warning_count,
+            "Submitting script issues diagnostics to Agent Chat"
+        );
+        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(Some(prompt), cx);
     }
 
     pub(crate) fn render_creation_feedback(

@@ -400,6 +400,34 @@
                                             }
                                         }
                                     }
+                                    AppView::ScriptIssuesView { report } => {
+                                        let report = report.clone();
+                                        match key_lower.as_str() {
+                                            "enter" | "return" if !has_shift && !has_cmd => {
+                                                logging::log(
+                                                    "STDIN",
+                                                    "SimulateKey: Enter - fix script issues in Agent Chat",
+                                                );
+                                                view.fix_script_issues_in_agent(&report, ctx);
+                                            }
+                                            "escape" => {
+                                                logging::log(
+                                                    "STDIN",
+                                                    "SimulateKey: Escape - leave script issues view",
+                                                );
+                                                view.go_back_or_close(window, ctx);
+                                            }
+                                            _ => {
+                                                logging::log(
+                                                    "STDIN",
+                                                    &format!(
+                                                        "SimulateKey: Unhandled key '{}' in ScriptIssuesView",
+                                                        key_lower
+                                                    ),
+                                                );
+                                            }
+                                        }
+                                    }
                                     AppView::PathPrompt { entity, .. } => {
                                         // Path prompt key handling
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to PathPrompt", key_lower));
