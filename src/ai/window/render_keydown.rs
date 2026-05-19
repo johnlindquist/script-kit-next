@@ -67,6 +67,14 @@ impl AiApp {
         // Hide mouse cursor on any keyboard interaction
         self.hide_mouse_cursor(cx);
 
+        // Clear stale CommandBar `is_open` state if the detached actions
+        // window was dismissed externally (focus loss, click outside) without
+        // routing through close(). Without this, the open-branch routing at
+        // lines ~288/331/627 would consume keys for an invisible bar and
+        // Cmd+K reopen could short-circuit on a stale flag.
+        self.command_bar.reconcile_open_state();
+        self.new_chat_command_bar.reconcile_open_state();
+
         // Handle keyboard shortcuts
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;

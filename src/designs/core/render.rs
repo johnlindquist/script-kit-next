@@ -34,7 +34,7 @@ pub(crate) fn root_file_type_svg_icon(file_type: crate::file_search::FileType) -
 
 #[derive(Debug, Default)]
 pub(crate) struct SearchAccessories {
-    pub(crate) type_tag: Option<crate::list_item::TypeTag>,
+    pub(crate) type_accessory: Option<crate::list_item::TypeAccessory>,
     pub(crate) source_hint: Option<String>,
 }
 
@@ -46,11 +46,11 @@ pub(crate) fn resolve_search_accessories(
         return SearchAccessories::default();
     }
 
-    // Search rows should stay calm: keep only a quiet type label.
+    // Search rows should stay calm: keep only a quiet type icon.
     // Category/match-reason metadata is intentionally hidden.
-    let (label, color) = result.type_tag_info();
+    let (label, icon_name) = result.type_accessory_info();
     SearchAccessories {
-        type_tag: Some(crate::list_item::TypeTag { label, color }),
+        type_accessory: Some(crate::list_item::TypeAccessory { label, icon_name }),
         source_hint: None,
     }
 }
@@ -332,11 +332,11 @@ pub fn render_design_item(
                 ),
             };
 
-            // During search mode, keep only quiet type labels.
+            // During search mode, keep only quiet type icons.
             // During grouped mode, use discoverability hints.
-            let (type_tag, source_hint) = if !filter_text.is_empty() {
+            let (type_accessory, source_hint) = if !filter_text.is_empty() {
                 let accessories = resolve_search_accessories(result, filter_text);
-                (accessories.type_tag, accessories.source_hint)
+                (accessories.type_accessory, accessories.source_hint)
             } else {
                 // Grouped view: use extracted helpers for discoverability hints
                 let hint = match result {
@@ -362,7 +362,7 @@ pub fn render_design_item(
                 .with_accent_bar(true)
                 .highlight_indices_opt(highlight_indices)
                 .description_highlight_indices_opt(description_highlight_indices)
-                .type_tag_opt(type_tag)
+                .type_accessory_opt(type_accessory)
                 .source_hint_opt(source_hint)
                 .tool_badge_opt(tool_badge)
                 .into_any_element()

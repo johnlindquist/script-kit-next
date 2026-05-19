@@ -53,6 +53,25 @@ fn looks_like_symbol_icon_hint(icon_hint: &str) -> bool {
 
     !has_ascii_alnum && char_count <= 4
 }
+
+/// Resolve an icon hint to an on-disk SVG path for list-item rendering.
+fn resolve_svg_icon_path(name: &str) -> String {
+    if let Some(icon_name) = icon_name_from_str(name) {
+        icon_name.external_path().to_string()
+    } else {
+        let lucide_path = format!(
+            "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
+            env!("CARGO_MANIFEST_DIR"),
+            name
+        );
+        if std::path::Path::new(&lucide_path).exists() {
+            lucide_path
+        } else {
+            IconName::Code.external_path().to_string()
+        }
+    }
+}
+
 /// Fixed height for list items used in uniform-height virtualized lists.
 ///
 /// IMPORTANT: When using GPUI `uniform_list`, the item closure must render
@@ -190,8 +209,8 @@ const SEARCH_SHORTCUT_FONT_SIZE: f32 = 10.0;
 const TOOL_BADGE_FONT_SIZE: f32 = 10.0;
 /// Source hint font size (e.g. "main", "cleanshot")
 const SOURCE_HINT_FONT_SIZE: f32 = 11.0;
-/// Type tag pill font size (e.g. "Script", "Snippet")
-const TYPE_TAG_FONT_SIZE: f32 = 11.0;
+/// Search-mode type accessory icon size (Lucide hint rendered at accent tint)
+const TYPE_ACCESSORY_ICON_SIZE: f32 = 12.0;
 /// Section header label font size
 const SECTION_HEADER_FONT_SIZE: f32 = 12.0;
 /// Section header icon size
@@ -212,12 +231,6 @@ const TOOL_BADGE_PADDING_X: f32 = 4.0;
 const TOOL_BADGE_PADDING_Y: f32 = 1.0;
 /// Tool badge corner radius
 const TOOL_BADGE_RADIUS: f32 = 3.0;
-/// Type tag pill horizontal padding
-const TYPE_TAG_PADDING_X: f32 = 8.0;
-/// Type tag pill vertical padding
-const TYPE_TAG_PADDING_Y: f32 = 2.0;
-/// Type tag pill corner radius
-const TYPE_TAG_RADIUS: f32 = 4.0;
 // =============================================================================
 // Section Header Spacing
 // =============================================================================
@@ -253,8 +266,6 @@ const ALPHA_DESC_QUIET: u32 = 0x73;
 /// 70% opacity — used for source hint text
 /// (Bumped from 65% for WCAG-friendlier contrast on vibrancy)
 const ALPHA_HINT: u32 = 0xB3;
-/// 60% opacity — subtle type labels during search
-const ALPHA_TYPE_LABEL: u32 = 0x99;
 /// 75% opacity — subtle matched-character tint without high-contrast flash
 const ALPHA_MATCH_HIGHLIGHT: u32 = 0xBF;
 /// 65% opacity — used for section header count
@@ -265,11 +276,6 @@ const ALPHA_SUBTLE: u32 = 0xA6;
 const ALPHA_BORDER: u32 = 0x4D;
 /// 22% opacity — reserved for strong separators (currently unused, kept for design variants)
 const _ALPHA_SEPARATOR_STRONG: u32 = 0x38;
-/// 20% opacity — used for type tag pill background
-/// (Higher than separator for visible badge fill on vibrancy)
-const ALPHA_TAG_BG: u32 = 0x33;
-/// 35% opacity — used for type tag pill border
-const ALPHA_TAG_BORDER: u32 = 0x59;
 /// 8% opacity — used for section separator
 /// Barely-there divider; the section label itself provides enough grouping signal
 pub(crate) const ALPHA_SEPARATOR: u32 = 0x14;
@@ -935,9 +941,9 @@ pub struct ListItem {
     /// Character indices in the description that match the search query (for fuzzy highlight)
     /// When present, matched characters are rendered with accent color for visual emphasis
     description_highlight_indices: Option<Vec<usize>>,
-    /// Type tag shown as subtle colored text (e.g., "Script", "Snippet", "App")
-    /// Only shown during search mode to help distinguish mixed result types
-    type_tag: Option<TypeTag>,
+    /// Type accessory shown as a subtle accent-tinted icon during search mode
+    /// to help distinguish mixed result types without visible type text.
+    type_accessory: Option<TypeAccessory>,
     /// Source/kit name (e.g., "main", "cleanshot") shown as subtle text during search
     source_hint: Option<String>,
     /// Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
@@ -951,13 +957,13 @@ pub struct ListItem {
     /// Use for domain-specific badges or indicators (e.g., "Saved" status badges).
     trailing_accessory: Option<AnyElement>,
 }
-/// Type tag displayed as subtle colored text on list items during search
+/// Type accessory displayed as a subtle accent-tinted icon on list items during search
 #[derive(Clone, Debug)]
-pub struct TypeTag {
-    /// Display label (e.g., "Script", "Snippet", "App")
+pub struct TypeAccessory {
+    /// Tooltip/accessibility label (e.g., "Script", "Snippet", "App")
     pub label: &'static str,
-    /// Color for the tag (u32 hex, e.g., 0x3B82F6 for blue)
-    pub color: u32,
+    /// Lucide or Script Kit icon hint name (e.g., "file-code", "command")
+    pub icon_name: &'static str,
 }
 /// Width of the left accent bar for selected items
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
@@ -1000,7 +1006,7 @@ impl ListItem {
             show_accent_bar: false,
             highlight_indices: None,
             description_highlight_indices: None,
-            type_tag: None,
+            type_accessory: None,
             source_hint: None,
             tool_badge: None,
             leading_accessory: None,
@@ -1158,16 +1164,15 @@ impl ListItem {
         self
     }
 
-    /// Set a type tag to show as subtle colored text (e.g., "Script", "Snippet")
-    /// Only used during search mode to distinguish mixed result types
-    pub fn type_tag(mut self, tag: TypeTag) -> Self {
-        self.type_tag = Some(tag);
+    /// Set a type accessory icon for search-mode rows (tooltip uses label)
+    pub fn type_accessory(mut self, accessory: TypeAccessory) -> Self {
+        self.type_accessory = Some(accessory);
         self
     }
 
-    /// Set an optional type tag
-    pub fn type_tag_opt(mut self, tag: Option<TypeTag>) -> Self {
-        self.type_tag = tag;
+    /// Set an optional type accessory
+    pub fn type_accessory_opt(mut self, accessory: Option<TypeAccessory>) -> Self {
+        self.type_accessory = accessory;
         self
     }
 
@@ -1285,25 +1290,7 @@ impl RenderOnce for ListItem {
                     )
             }
             Some(IconKind::Svg(name)) => {
-                // Resolve icon name to SVG path:
-                // 1. Try internal IconName enum (Script Kit's own icons)
-                // 2. Fall back to vendored Lucide SVGs by kebab-case name
-                // 3. Last resort: Code icon
-                let svg_path: String = if let Some(icon_name) = icon_name_from_str(name) {
-                    icon_name.external_path().to_string()
-                } else {
-                    // Try Lucide vendored path (kebab-case name → vendor SVG)
-                    let lucide_path = format!(
-                        "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
-                        env!("CARGO_MANIFEST_DIR"),
-                        name
-                    );
-                    if std::path::Path::new(&lucide_path).exists() {
-                        lucide_path
-                    } else {
-                        IconName::Code.external_path().to_string()
-                    }
-                };
+                let svg_path = resolve_svg_icon_path(name);
                 div()
                     .w(icon_size)
                     .h(icon_size)
@@ -1591,7 +1578,7 @@ impl RenderOnce for ListItem {
         let trailing_accessory = self.trailing_accessory;
 
         inner_content = inner_content.child(item_content).child({
-            // Right-side accessories: [source hint] [type tag] [shortcut badge]
+            // Right-side accessories: [source hint] [type icon] [shortcut badge]
             let mut accessories = div()
                 .flex()
                 .flex_row()
@@ -1599,7 +1586,7 @@ impl RenderOnce for ListItem {
                 .flex_shrink_0()
                 .gap(px(ITEM_ACCESSORIES_GAP));
 
-            // Tool badge, source hint, and type tag use progressive disclosure.
+            // Tool badge, source hint, and type accessory use progressive disclosure.
             // Search mode intentionally strips noisy metadata to keep rows calm.
             let show_accessories = self.selected || hover_visible || is_filtering;
 
@@ -1633,14 +1620,26 @@ impl RenderOnce for ListItem {
                 }
             }
 
-            // Type tag stays visible during search, but as quiet text instead of a pill badge.
-            if let Some(ref tag) = self.type_tag {
+            // Type accessory stays visible during search as a quiet accent-tinted icon.
+            if let Some(ref accessory) = self.type_accessory {
+                let tooltip_label = accessory.label.to_string();
+                let svg_path = resolve_svg_icon_path(accessory.icon_name);
+                let accent_color = rgb(colors.accent_selected);
                 accessories = accessories.child(
                     div()
-                        .text_size(px(TYPE_TAG_FONT_SIZE))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgba((tag.color << 8) | ALPHA_TYPE_LABEL))
-                        .child(tag.label),
+                        .id(ElementId::Name(
+                            format!("type-accessory-{}", accessory.label).into(),
+                        ))
+                        .tooltip(move |window, cx| {
+                            Tooltip::new(tooltip_label.clone()).build(window, cx)
+                        })
+                        .flex_shrink_0()
+                        .child(
+                            svg()
+                                .external_path(svg_path)
+                                .size(px(TYPE_ACCESSORY_ICON_SIZE))
+                                .text_color(accent_color),
+                        ),
                 );
             }
 

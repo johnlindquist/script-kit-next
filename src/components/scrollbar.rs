@@ -78,18 +78,19 @@ impl ScrollbarColors {
     /// Opacity values are theme-aware: light mode uses higher opacity for visibility.
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
         let is_dark = theme.is_dark_mode();
+        let opacity = theme.get_opacity();
         let (track_opacity, thumb_opacity, thumb_hover_opacity) = if is_dark {
-            (0.1, 0.4, 0.6) // Dark mode: lower opacity works well
+            (0.1, opacity.selected, (opacity.selected + 0.12).min(1.0))
         } else {
-            (0.15, 0.5, 0.7) // Light mode: higher opacity for visibility
+            (0.15, opacity.selected, (opacity.selected + 0.12).min(1.0))
         };
 
         Self {
             track: theme.colors.ui.border,
             track_opacity,
-            thumb: theme.colors.text.muted,
+            thumb: theme.colors.text.primary,
             thumb_opacity,
-            thumb_hover: theme.colors.text.secondary,
+            thumb_hover: theme.colors.text.primary,
             thumb_hover_opacity,
         }
     }

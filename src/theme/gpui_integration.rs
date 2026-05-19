@@ -290,10 +290,15 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.info = hex_to_hsla(colors.ui.info);
     theme_color.info_foreground = hex_to_hsla(status_foreground(colors.ui.info));
 
-    // Scrollbar - track is transparent so it blends with any background
+    // Scrollbar - track is transparent; thumb uses the same neutral overlay
+    // recipe as list selection (text.primary @ opacity.selected) so it stays
+    // visually tied to row chrome instead of rendering as a solid dimmed bar.
     theme_color.scrollbar = hsla(0.0, 0.0, 0.0, 0.0);
-    theme_color.scrollbar_thumb = hex_to_hsla(colors.text.dimmed);
-    theme_color.scrollbar_thumb_hover = hex_to_hsla(colors.text.muted);
+    theme_color.scrollbar_thumb = subtle_overlay(colors.text.primary, opacity.selected);
+    theme_color.scrollbar_thumb_hover = subtle_overlay(
+        colors.text.primary,
+        (opacity.selected + 0.12).clamp(0.0, 1.0),
+    );
 
     // Caret (cursor) - prefer explicit focused cursor override when configured
     let has_focused_cursor_override = sk_theme
@@ -770,6 +775,27 @@ mod tests {
         let opacity = theme.get_opacity();
         let expected = subtle_overlay(theme.colors.text.primary, opacity.text_placeholder);
         assert_hsla_close(mapped.muted_foreground, expected);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_scrollbar_thumb_matches_selection_overlay() {
+        let mut theme = Theme::dark_default();
+        theme.opacity = Some(BackgroundOpacity {
+            selected: 0.38,
+            ..theme.get_opacity()
+        });
+
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        let opacity = theme.get_opacity();
+        let expected_thumb = subtle_overlay(theme.colors.text.primary, opacity.selected);
+        let expected_thumb_hover = subtle_overlay(
+            theme.colors.text.primary,
+            (opacity.selected + 0.12).clamp(0.0, 1.0),
+        );
+
+        assert_hsla_close(mapped.scrollbar_thumb, expected_thumb);
+        assert_hsla_close(mapped.scrollbar_thumb_hover, expected_thumb_hover);
+        assert_hsla_close(mapped.scrollbar_thumb, mapped.list_active);
     }
 
     #[test]
