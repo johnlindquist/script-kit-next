@@ -1,3 +1,4 @@
+use crate::mcp_clipboard_tools;
 use crate::mcp_kit_tools::{ToolDefinition, ToolResult};
 use crate::mcp_notes_tools::{
     self, McpNotesMutationBridge, NotesMutationError, NotesMutationErrorCode, NotesMutationRequest,
@@ -120,6 +121,11 @@ pub fn build_default_mutation_registry() -> MutationRegistry {
     registry.register(ScriptsUpdateTool);
     registry.register(ScriptsDeleteTool);
     registry.register(ScriptsRunTool);
+    registry.register(ClipboardCopyTool);
+    registry.register(ClipboardPinTool);
+    registry.register(ClipboardUnpinTool);
+    registry.register(ClipboardDeleteTool);
+    registry.register(ClipboardClearUnpinnedTool);
     registry
 }
 
@@ -178,6 +184,11 @@ struct ScriptsCreateTool;
 struct ScriptsUpdateTool;
 struct ScriptsDeleteTool;
 struct ScriptsRunTool;
+struct ClipboardCopyTool;
+struct ClipboardPinTool;
+struct ClipboardUnpinTool;
+struct ClipboardDeleteTool;
+struct ClipboardClearUnpinnedTool;
 
 impl DynMutationTool for NotesCreateTool {
     fn meta(&self) -> MutationToolMeta {
@@ -352,6 +363,128 @@ impl DynMutationTool for ScriptsRunTool {
     }
 }
 
+fn clipboard_tool_definition(name: &str) -> ToolDefinition {
+    mcp_clipboard_tools::get_clipboard_tool_definitions()
+        .into_iter()
+        .find(|tool| tool.name == name)
+        .unwrap_or_else(|| panic!("clipboard tool definition missing: {name}"))
+}
+
+impl DynMutationTool for ClipboardCopyTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_clipboard_tools::CLIPBOARD_COPY_TOOL,
+            description: "Copy a clipboard-history entry to the system clipboard",
+            risk: RiskClass::StateMutating,
+            required_scope: "clipboard:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_COPY_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_clipboard_tools::handle_clipboard_tool_call(
+            mcp_clipboard_tools::CLIPBOARD_COPY_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ClipboardPinTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_clipboard_tools::CLIPBOARD_PIN_TOOL,
+            description: "Pin a clipboard-history entry",
+            risk: RiskClass::StateMutating,
+            required_scope: "clipboard:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_PIN_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_clipboard_tools::handle_clipboard_tool_call(
+            mcp_clipboard_tools::CLIPBOARD_PIN_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ClipboardUnpinTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_clipboard_tools::CLIPBOARD_UNPIN_TOOL,
+            description: "Unpin a clipboard-history entry",
+            risk: RiskClass::StateMutating,
+            required_scope: "clipboard:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_UNPIN_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_clipboard_tools::handle_clipboard_tool_call(
+            mcp_clipboard_tools::CLIPBOARD_UNPIN_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ClipboardDeleteTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_clipboard_tools::CLIPBOARD_DELETE_TOOL,
+            description: "Delete a clipboard-history entry",
+            risk: RiskClass::Destructive,
+            required_scope: "clipboard:write",
+            requires_confirm: true,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_DELETE_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_clipboard_tools::handle_clipboard_tool_call(
+            mcp_clipboard_tools::CLIPBOARD_DELETE_TOOL,
+            args,
+        )
+    }
+}
+
+impl DynMutationTool for ClipboardClearUnpinnedTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_clipboard_tools::CLIPBOARD_CLEAR_UNPINNED_TOOL,
+            description: "Clear unpinned clipboard-history entries",
+            risk: RiskClass::Destructive,
+            required_scope: "clipboard:write",
+            requires_confirm: true,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_CLEAR_UNPINNED_TOOL)
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_clipboard_tools::handle_clipboard_tool_call(
+            mcp_clipboard_tools::CLIPBOARD_CLEAR_UNPINNED_TOOL,
+            args,
+        )
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct McpAuditEvent {
@@ -374,6 +507,7 @@ pub(crate) fn scope_allows(scopes: &[String], required: &str) -> bool {
             || scope == "*"
             || scope == "mcp:*"
             || scope == "dev:*"
+            || (required.starts_with("clipboard:") && scope == "clipboard:*")
             || (required.starts_with("notes:") && scope == "notes:*")
             || (required.starts_with("scripts:") && scope == "scripts:*")
     })

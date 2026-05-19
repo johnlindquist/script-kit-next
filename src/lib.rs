@@ -277,6 +277,9 @@ pub mod mcp_control;
 // Provides kit/show, kit/hide, kit/state tools
 pub mod mcp_kit_tools;
 
+// MCP Clipboard Tools - clipboard history mutation tools
+pub mod mcp_clipboard_tools;
+
 // MCP Notes Tools - notes mutation tools for the full-control plane
 pub mod mcp_notes_tools;
 
