@@ -368,7 +368,7 @@ struct McpAuditEvent {
     target_id: Option<String>,
 }
 
-fn scope_allows(scopes: &[String], required: &str) -> bool {
+pub(crate) fn scope_allows(scopes: &[String], required: &str) -> bool {
     scopes.iter().any(|scope| {
         scope == required
             || scope == "*"
