@@ -1,0 +1,27 @@
+Blocked before curl/receipt/commit.
+
+Implemented the slice code and new tests, but the required final gate failed:
+
+`SCRIPT_KIT_AGENT_ID=mcp-slice1 ./scripts/agentic/agent-cargo.sh test --lib`
+
+Result: `FAILED`, with `13125 passed; 204 failed; 41 ignored`. The failures are outside this slice, mostly existing menu syntax/action-dialog tests plus one Notes ACP footer source test. Per your instruction, I stopped and did not run the curl round-trip, did not write the final receipt, and did not commit.
+
+Green before the blocker:
+
+- `./scripts/agentic/agent-cargo.sh fmt -- --check`
+- `./scripts/agentic/agent-cargo.sh test --lib mcp_notes`
+- `./scripts/agentic/agent-cargo.sh test --lib mcp_resources`
+- `./scripts/agentic/agent-cargo.sh test --test mcp_protocol_golden -- --nocapture`
+- `./scripts/agentic/agent-cargo.sh test --test close_notes_window_lock_release_before_update_contract -- --nocapture`
+- Extra focused checks:
+  - `test --test mcp_notes_tools -- --nocapture`
+  - `test --test mcp_notes_resources -- --nocapture`
+
+Captured inspection artifacts:
+
+- `.codex-run/20260519T030800Z-mcp-slice1-blocked/output.log`
+- `.codex-run/20260519T030800Z-mcp-slice1-blocked/failed-command.txt`
+- `.codex-run/20260519T030800Z-mcp-slice1-blocked/slice-status.txt`
+- `.codex-run/20260519T030800Z-mcp-slice1-blocked/slice-diff.patch`
+
+No files were staged.
