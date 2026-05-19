@@ -4792,9 +4792,9 @@ fn overlay_timer_and_target_badge_use_readable_primary_text() {
         "timer must use active primary text, not muted translucent text"
     );
     assert!(
-        window_src.contains(".text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))")
-            && window_src.contains("target_badge_label(self.state.target)"),
-        "target badge must use readable primary text and the dynamic label helper"
+        window_src.contains("render_target_badge_content(self.state.target)")
+            && window_src.contains("target_badge_label(target)"),
+        "target badge must render through the shared content helper with text fallback"
     );
 }
 
@@ -4804,9 +4804,12 @@ fn external_app_badge_names_the_tracked_frontmost_app() {
 
     assert!(
         window_src.contains("pub(crate) fn target_badge_label(")
+            && window_src.contains("pub(crate) fn target_badge_frontmost_app_icon(")
+            && window_src.contains("crate::app_launcher::cached_app_icon_for_bundle")
             && window_src.contains("crate::frontmost_app_tracker::get_last_real_app()")
-            && window_src.contains("target.overlay_label().into()"),
-        "external-app badge labels should prefer the tracked frontmost app name and fall back to the static target label"
+            && window_src.contains("target.overlay_label().into()")
+            && window_src.contains("icons::render::render_image"),
+        "external-app badge should prefer the indexed frontmost app icon and fall back to the tracked app name or static target label"
     );
 }
 

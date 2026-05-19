@@ -1263,7 +1263,8 @@ impl AcpChatView {
     }
 
     /// Expand typed display tokens in the input text back to full paths/URIs
-    /// before sending to the AI. Replaces `@rs:demo` with `@file:"/full/path.rs"` etc.
+    /// before sending to the AI. Replaces `@file:demo.rs` (and other alias keys)
+    /// with `@file:"/full/path.rs"` via `typed_mention_aliases`.
     fn expand_typed_tokens_for_submit(&self, cx: &mut Context<Self>) {
         if self.typed_mention_aliases.is_empty() {
             return;

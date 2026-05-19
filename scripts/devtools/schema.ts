@@ -14,6 +14,9 @@ const classifications = [
   "blocked-by-native-escalation-required",
   "blocked-by-fixture-only",
   "blocked-by-timeout",
+  "blocked-by-response-timeout",
+  "blocked-by-session-queue",
+  "blocked-by-parse-error",
 ];
 
 const receiptEnvelopeFields = [
