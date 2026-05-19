@@ -24,6 +24,8 @@ type CliResult =
   | { success: true; data: unknown }
   | { success: false; error: string };
 
+class CliFailure extends Error {}
+
 function usage() {
   return [
     "Usage:",
@@ -44,8 +46,7 @@ function print(result: CliResult): void {
 }
 
 function fail(message: string): never {
-  print({ success: false, error: message });
-  process.exit(1);
+  throw new CliFailure(message);
 }
 
 function parseJsonArg(raw: string | undefined, fallback: unknown): unknown {
@@ -105,7 +106,7 @@ function resolveEndpointAndToken(): { endpoint: string; token: string } {
   return { endpoint, token };
 }
 
-async function rpc(method: string, params: unknown): Promise<unknown> {
+export async function rpc(method: string, params: unknown): Promise<unknown> {
   const { endpoint, token } = resolveEndpointAndToken();
   const response = await fetch(endpoint, {
     method: "POST",
@@ -136,11 +137,10 @@ async function rpc(method: string, params: unknown): Promise<unknown> {
   return payload;
 }
 
-async function main() {
-  const [command, first, second] = process.argv.slice(2);
+export async function runMcpCli(argv: string[]): Promise<CliResult | string> {
+  const [command, first, second] = argv;
   if (!command || command === "--help" || command === "-h") {
-    console.log(usage());
-    return;
+    return usage();
   }
 
   let data: unknown;
@@ -170,9 +170,24 @@ async function main() {
     fail(`Unknown command: ${command}. Use --help for usage.`);
   }
 
-  print({ success: true, data });
+  return { success: true, data };
 }
 
-main().catch((error) => {
-  fail(error instanceof Error ? error.message : String(error));
-});
+async function main() {
+  const result = await runMcpCli(process.argv.slice(2));
+  if (typeof result === "string") {
+    console.log(result);
+  } else {
+    print(result);
+  }
+}
+
+if (import.meta.main) {
+  main().catch((error) => {
+    print({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    process.exit(error instanceof CliFailure ? 1 : 1);
+  });
+}

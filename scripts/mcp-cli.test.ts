@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-const CLI_PATH = new URL("./mcp-cli.ts", import.meta.url).pathname;
+import { runMcpCli } from "./mcp-cli";
 
 let server: ReturnType<typeof Bun.serve> | null = null;
 
@@ -30,21 +29,22 @@ function startMockMcp(handler: (body: any) => any) {
 }
 
 async function runCli(args: string[], env: Record<string, string>) {
-  const proc = Bun.spawn(["bun", CLI_PATH, ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env, ...env },
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-  return {
-    exitCode,
-    stdout: stdout.trim() ? JSON.parse(stdout) : null,
-    stderr: stderr.trim(),
-  };
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(env)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+  try {
+    return await runMcpCli(args);
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 }
 
 function discoveryEnv(baseUrl: string) {
@@ -77,12 +77,12 @@ describe("mcp-cli", () => {
         result: { tools: [{ name: "kit/trigger_builtin" }] },
       };
     });
-    const { dir, env } = discoveryEnv(`http://127.0.0.1:${mock.port}`);
+    const { dir, env } = discoveryEnv(mock.url.origin);
     try {
       const result = await runCli(["tools"], env);
-      expect(result.exitCode).toBe(0);
-      expect(result.stdout.success).toBe(true);
-      expect(result.stdout.data.result.tools[0].name).toBe("kit/trigger_builtin");
+      expect(typeof result).toBe("object");
+      expect(result.success).toBe(true);
+      expect((result as any).data.result.tools[0].name).toBe("kit/trigger_builtin");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -108,13 +108,13 @@ describe("mcp-cli", () => {
         JSON.stringify({ builtinId: "builtin/clipboard-history" }),
       ],
       {
-        SCRIPT_KIT_MCP_ENDPOINT: `http://127.0.0.1:${mock.port}/rpc`,
+        SCRIPT_KIT_MCP_ENDPOINT: `${mock.url.origin}/rpc`,
         SCRIPT_KIT_MCP_TOKEN: "test-token",
       },
     );
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.success).toBe(true);
-    expect(result.stdout.data.result.content[0].text).toBe("{\"ok\":true}");
+    expect(typeof result).toBe("object");
+    expect(result.success).toBe(true);
+    expect((result as any).data.result.content[0].text).toBe("{\"ok\":true}");
   });
 
   it("reads resources", async () => {
@@ -128,10 +128,10 @@ describe("mcp-cli", () => {
       };
     });
     const result = await runCli(["read", "kit://trigger-builtins"], {
-      SCRIPT_KIT_MCP_ENDPOINT: `http://127.0.0.1:${mock.port}`,
+      SCRIPT_KIT_MCP_ENDPOINT: mock.url.origin,
       SCRIPT_KIT_MCP_TOKEN: "test-token",
     });
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout.data.result.contents[0].uri).toBe("kit://trigger-builtins");
+    expect(typeof result).toBe("object");
+    expect((result as any).data.result.contents[0].uri).toBe("kit://trigger-builtins");
   });
 });
