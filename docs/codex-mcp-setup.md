@@ -83,11 +83,23 @@ jq -e '.jsonrpc=="2.0" and .id=="codex-guide-init" and .result.serverInfo.name==
 
 rpc "codex-guide-tools" "tools/list" '{}' \
   | tee /tmp/script-kit-mcp-tools-list.json
-jq -e '.result.tools | map(.name) | index("kit/show") and index("kit/hide") and index("kit/state")' /tmp/script-kit-mcp-tools-list.json
+jq -e '.result.tools | map(.name) |
+  index("kit/show") and
+  index("kit/hide") and
+  index("kit/state") and
+  index("kit/trigger_builtin") and
+  index("kit/notes_create") and
+  index("kit/scripts_create") and
+  index("kit/clipboard_pin") and
+  index("kit/config_get")' /tmp/script-kit-mcp-tools-list.json
 
 rpc "codex-guide-resources" "resources/list" '{}' \
   | tee /tmp/script-kit-mcp-resources-list.json
-jq -e '.result.resources | map(.uri) | index("kit://state") and index("scripts://") and index("scriptlets://")' /tmp/script-kit-mcp-resources-list.json
+jq -e '.result.resources | map(.uri) |
+  index("kit://state") and
+  index("scripts://") and
+  index("scriptlets://") and
+  index("kit://trigger-builtins")' /tmp/script-kit-mcp-resources-list.json
 
 rpc "codex-guide-read-state" "resources/read" '{"uri":"kit://state"}' \
   | tee /tmp/script-kit-mcp-resources-read-state.json
