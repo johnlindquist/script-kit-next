@@ -12,6 +12,7 @@
 
 // --- merged from part_000.rs ---
 use crate::logging;
+use crate::mcp_kit_tools::McpKitRuntimeBridge;
 use crate::mcp_notes_tools::SharedNotesMutationBridge;
 use crate::mcp_protocol::{self, JsonRpcResponse, McpRuntimeContext};
 use anyhow::{Context, Result};
@@ -132,6 +133,14 @@ impl McpServer {
 
     pub(crate) fn with_notes_mutation_bridge(mut self, bridge: SharedNotesMutationBridge) -> Self {
         self.runtime_context.notes_mutation_bridge = Some(bridge);
+        self
+    }
+
+    pub(crate) fn with_kit_runtime_bridge(
+        mut self,
+        bridge: Arc<dyn McpKitRuntimeBridge + Send + Sync>,
+    ) -> Self {
+        self.runtime_context.kit_runtime_bridge = Some(bridge);
         self
     }
 

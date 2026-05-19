@@ -198,6 +198,12 @@
         std::sync::Arc::new(crate::mcp_control::GpuiNotesMcpBridge::with_default_timeout(
             mcp_notes_ui_tx,
         ));
+    let (mcp_kit_runtime_tx, mcp_kit_runtime_rx) = async_channel::bounded(100);
+    let mcp_kit_runtime_bridge: std::sync::Arc<
+        dyn crate::mcp_kit_tools::McpKitRuntimeBridge + Send + Sync,
+    > = std::sync::Arc::new(crate::mcp_kit_tools::GpuiKitRuntimeBridge::with_default_timeout(
+        mcp_kit_runtime_tx,
+    ));
 
     // Start MCP server for AI agent integration
     // Server runs on localhost:43210 with Bearer token authentication
@@ -206,7 +212,8 @@
         Ok(server) => {
             let server = server
                 .with_computer_runtime(mcp_computer_runtime_for_server)
-                .with_notes_mutation_bridge(mcp_notes_bridge);
+                .with_notes_mutation_bridge(mcp_notes_bridge)
+                .with_kit_runtime_bridge(mcp_kit_runtime_bridge);
             let server_url = server.url();
 
             match server.start() {
@@ -1803,6 +1810,41 @@ let stdin_rx = start_stdin_listener();
 let window_for_stdin = window;
 let app_entity_for_stdin = app_entity.clone();
 
+enum RuntimeCommandIngress {
+    Stdin(StdinCommandEnvelope),
+    Mcp(crate::mcp_kit_tools::McpKitRuntimeCommand),
+}
+
+let (runtime_command_tx, runtime_command_rx) = async_channel::bounded(100);
+let runtime_command_stdin_tx = runtime_command_tx.clone();
+cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+    while let Ok(envelope) = stdin_rx.recv().await {
+        if runtime_command_stdin_tx
+            .send(RuntimeCommandIngress::Stdin(envelope))
+            .await
+            .is_err()
+        {
+            break;
+        }
+    }
+})
+.detach();
+
+let runtime_command_mcp_tx = runtime_command_tx.clone();
+cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+    while let Ok(command) = mcp_kit_runtime_rx.recv().await {
+        if runtime_command_mcp_tx
+            .send(RuntimeCommandIngress::Mcp(command))
+            .await
+            .is_err()
+        {
+            break;
+        }
+    }
+})
+.detach();
+drop(runtime_command_tx);
+
 // Track if we've received any stdin commands (for timeout warning)
 static STDIN_RECEIVED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
@@ -1922,17 +1964,27 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
     logging::log("STDIN", "Async stdin command handler started");
 
     // Event-driven: recv().await yields until a command arrives
-    while let Ok(StdinCommandEnvelope {
-        command: cmd,
-        correlation_id,
-    }) = stdin_rx.recv().await
+    while let Ok(ingress) = runtime_command_rx.recv().await
     {
+        let (cmd, correlation_id, mcp_response_tx) = match ingress {
+            RuntimeCommandIngress::Stdin(StdinCommandEnvelope {
+                command,
+                correlation_id,
+            }) => (command, correlation_id, None),
+            RuntimeCommandIngress::Mcp(command) => (
+                StdinCommand::External(command.command),
+                command.correlation_id,
+                Some(command.response_tx),
+            ),
+        };
+        let command_type = cmd.command_type();
+        let request_id = cmd.request_id().map(ToString::to_string);
         let _guard = logging::set_correlation_id(correlation_id);
         // Mark that we've received stdin (clears the timeout warning)
         STDIN_RECEIVED.store(true, std::sync::atomic::Ordering::SeqCst);
         logging::log(
             "STDIN",
-            &format!("Processing external command type={}", cmd.command_type()),
+            &format!("Processing external command type={}", command_type),
         );
 
         let lifecycle_action = devtools_lifecycle_action_for_stdin(&cmd);
@@ -3874,6 +3926,13 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 }); // close app_entity_inner.update
             }); // close window_for_stdin.update
         }); // close cx.update
+        if let Some(response_tx) = mcp_response_tx {
+            let _ = response_tx.send(Ok(crate::mcp_kit_tools::KitRuntimeCommandResult {
+                accepted: true,
+                command_type: command_type.to_string(),
+                request_id,
+            }));
+        }
     }
 
     logging::log("STDIN", "Async stdin command handler exiting");

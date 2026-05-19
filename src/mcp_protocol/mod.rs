@@ -132,6 +132,7 @@ pub struct McpRuntimeContext {
         Arc<dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync>,
     >,
     pub notes_mutation_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
+    pub kit_runtime_bridge: Option<Arc<dyn mcp_kit_tools::McpKitRuntimeBridge + Send + Sync>>,
     pub token_scopes: Vec<String>,
     pub trace_id: String,
 }
@@ -141,6 +142,7 @@ impl Default for McpRuntimeContext {
         Self {
             computer: None,
             notes_mutation_bridge: None,
+            kit_runtime_bridge: None,
             token_scopes: legacy_all_scopes(),
             trace_id: uuid::Uuid::new_v4().to_string(),
         }
@@ -445,6 +447,7 @@ pub fn handle_tools_call_with_runtime(
         scripts,
         computer_runtime,
         None,
+        None,
         legacy_all_scopes(),
         uuid::Uuid::new_v4().to_string(),
     )
@@ -461,6 +464,7 @@ pub fn handle_tools_call_with_runtime_context(
             runtime as &dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge
         });
     let notes_bridge = runtime_context.and_then(|context| context.notes_mutation_bridge.clone());
+    let kit_runtime_bridge = runtime_context.and_then(|context| context.kit_runtime_bridge.clone());
     let token_scopes = runtime_context
         .map(|context| context.token_scopes.clone())
         .unwrap_or_else(legacy_all_scopes);
@@ -473,6 +477,7 @@ pub fn handle_tools_call_with_runtime_context(
         scripts,
         computer_runtime,
         notes_bridge,
+        kit_runtime_bridge.as_deref(),
         token_scopes,
         trace_id,
     )
@@ -483,6 +488,7 @@ fn handle_tools_call_with_runtime_parts(
     scripts: &[std::sync::Arc<Script>],
     computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
     notes_bridge: Option<mcp_notes_tools::SharedNotesMutationBridge>,
+    kit_runtime_bridge: Option<&(dyn mcp_kit_tools::McpKitRuntimeBridge + Send + Sync)>,
     token_scopes: Vec<String>,
     trace_id: String,
 ) -> JsonRpcResponse {
@@ -516,8 +522,8 @@ fn handle_tools_call_with_runtime_parts(
 
     if mcp_notes_tools::is_notes_tool(tool_name) || mcp_scripts_tools::is_scripts_tool(tool_name) {
         let mutation_context = mcp_control::MutationContext {
-            trace_id,
-            token_scopes,
+            trace_id: trace_id.clone(),
+            token_scopes: token_scopes.clone(),
             notes_bridge,
         };
         let registry = mcp_control::build_default_mutation_registry();
@@ -531,7 +537,21 @@ fn handle_tools_call_with_runtime_parts(
 
     // Route kit/* namespace tools
     if mcp_kit_tools::is_kit_tool(tool_name) {
-        let result = mcp_kit_tools::handle_kit_tool_call(tool_name, &arguments);
+        if mcp_kit_tools::requires_ui_control_scope(tool_name)
+            && !mcp_control::scope_allows(&token_scopes, "ui:control")
+        {
+            let result = mcp_kit_tools::scope_denied_tool_result(tool_name, "ui:control");
+            return JsonRpcResponse::success(
+                request.id,
+                serde_json::to_value(result).unwrap_or(serde_json::json!({})),
+            );
+        }
+        let result = mcp_kit_tools::handle_kit_tool_call_with_runtime(
+            tool_name,
+            &arguments,
+            kit_runtime_bridge,
+            &trace_id,
+        );
         return JsonRpcResponse::success(
             request.id,
             serde_json::to_value(result).unwrap_or(serde_json::json!({})),
