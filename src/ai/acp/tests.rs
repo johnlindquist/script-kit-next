@@ -2768,3 +2768,78 @@ fn acp_main_menu_skill_stage_matches_slash_selection_without_submit() {
         "main-menu skill staging must not auto-submit"
     );
 }
+
+const LIFECYCLE_RESET_SOURCE: &str = include_str!("../../app_impl/lifecycle_reset.rs");
+
+#[test]
+fn at_inline_portal_window_cannot_outlive_owner() {
+    // Invariant: the ACP `@` mention picker (a detached non-activating popup
+    // window) must never be visible after its owner ACP view loses the
+    // trigger or after the main launcher abandons the ACP surface.
+    //
+    // We enforce this with three independent guards. If any of them is
+    // removed, the screenshot bug (orphaned "Open full notes / Portal"
+    // popup floating next to a `ScriptList` main window) can reappear.
+
+    // 1. apply_composer_picker_transition closes the detached popup window
+    //    on every non-Open transition, even when the reducer forgot to
+    //    request sync_popup.
+    let composer_body = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "fn apply_composer_picker_transition",
+        "fn clear_composer_picker",
+    );
+    assert!(
+        composer_body.contains("let next_picker_open = matches!(&state, AcpComposerPickerState::Open(_));")
+            && composer_body.contains(
+                "crate::ai::acp::picker_popup::close_mention_popup_window(cx);",
+            ),
+        "apply_composer_picker_transition must unconditionally close the detached @ popup whenever the picker state is not Open"
+    );
+
+    // 2. AcpMentionPopupWindow self-prunes on render when its WeakEntity
+    //    owner is dropped or no longer carries a live `@` session.
+    assert!(
+        ACP_PICKER_POPUP_SOURCE.contains("fn owner_is_live(&self, cx: &App) -> bool")
+            && ACP_PICKER_POPUP_SOURCE
+                .contains("view.read(cx).has_active_mention_session()")
+            && ACP_PICKER_POPUP_SOURCE.contains("if !self.owner_is_live(cx)"),
+        "AcpMentionPopupWindow::render must self-prune when its owner ACP view is gone or has no live mention session"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) fn has_active_mention_session(&self) -> bool"),
+        "AcpChatView must expose `has_active_mention_session` so the detached popup can verify owner liveness"
+    );
+
+    // 3. Lifecycle reset paths centralize the close so it cannot be
+    //    skipped by individual surface transitions.
+    assert!(
+        LIFECYCLE_RESET_SOURCE.contains(
+            "pub(crate) fn close_floating_popups_for_owner_loss",
+        ) && LIFECYCLE_RESET_SOURCE
+            .contains("crate::ai::acp::picker_popup::close_mention_popup_window(cx);")
+            && LIFECYCLE_RESET_SOURCE.contains(
+                "crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);",
+            ),
+        "lifecycle_reset must expose `close_floating_popups_for_owner_loss` that closes the ACP @ picker and menu-syntax popup"
+    );
+    for caller in [
+        "close_and_reset_window",
+        "hide_main_window_preserving_state_for_focus_loss",
+    ] {
+        let start = LIFECYCLE_RESET_SOURCE
+            .find(caller)
+            .unwrap_or_else(|| panic!("missing lifecycle entry: {caller}"));
+        let body = &LIFECYCLE_RESET_SOURCE[start..LIFECYCLE_RESET_SOURCE.len().min(start + 1500)];
+        assert!(
+            body.contains("close_floating_popups_for_owner_loss"),
+            "{caller} must close detached popup windows before tearing down the owner surface"
+        );
+    }
+    assert!(
+        REGISTRIES_STATE_SOURCE.contains(
+            "self.close_floating_popups_for_owner_loss(\"reset_to_script_list\", cx);",
+        ),
+        "reset_to_script_list must close detached popup windows so they cannot survive a return to the main script list"
+    );
+}

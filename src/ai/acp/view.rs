@@ -684,6 +684,14 @@ impl AcpChatView {
         self.mention_popup_parent_window = Some(parent);
     }
 
+    /// True when the composer still has a live `@`/`/` trigger that owns the
+    /// detached mention popup window. The popup's `Render` impl uses this as
+    /// its owner-liveness invariant: if it returns false, the popup self-prunes
+    /// on the next frame.
+    pub(crate) fn has_active_mention_session(&self) -> bool {
+        self.mention_session.is_some()
+    }
+
     fn sync_acp_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         self.sync_mention_popup_window_from_cached_parent(cx);
         self.sync_model_selector_popup_window_from_cached_parent(cx);
@@ -2207,6 +2215,7 @@ impl AcpChatView {
             clear_slash_input,
         } = transition;
 
+        let next_picker_open = matches!(&state, AcpComposerPickerState::Open(_));
         match state {
             AcpComposerPickerState::Closed => {
                 self.mention_session.take();
@@ -2220,6 +2229,13 @@ impl AcpChatView {
                 self.mention_session.take();
                 self.dismissed_mention_trigger = Some(trigger);
             }
+        }
+
+        // Canonical close: never depend on every reducer path remembering
+        // `sync_popup`. If the logical picker state is not Open, the detached
+        // window must go away on this turn.
+        if !next_picker_open {
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
         }
 
         if clear_last_accepted_item {

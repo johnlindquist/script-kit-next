@@ -147,8 +147,32 @@ impl ScriptListApp {
     /// 1. Cancels any running script
     /// 2. Resets state to the default script list
     /// 3. Hides the window
+    /// Force-close every detached "floating popup" window owned by the main
+    /// launcher (ACP `@` mention picker, ACP model selector, ACP history,
+    /// and the menu-syntax trigger popup). These windows cache a
+    /// `WeakEntity` of the owner view but rely on the owner to explicitly
+    /// close them on lifecycle / surface transitions. Whenever we hide the
+    /// main window, return to ScriptList, or otherwise abandon the owner
+    /// surface, call this to guarantee they cannot survive past their owner.
+    pub(crate) fn close_floating_popups_for_owner_loss(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+        crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+        crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+        crate::ai::acp::history_popup::close_history_popup_window(cx);
+        tracing::info!(
+            target: "script_kit::popup_owner",
+            event = "floating_popups_closed_for_owner_loss",
+            reason,
+        );
+    }
+
     pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
         logging::log("VISIBILITY", "=== Close and reset window ===");
+        self.close_floating_popups_for_owner_loss("close_and_reset_window", cx);
         clear_main_state_restore_after_focus_loss();
 
         // Reset pin state when window is closed
@@ -245,6 +269,7 @@ impl ScriptListApp {
             "VISIBILITY",
             "=== Hide main window after focus loss, preserving ScriptList state ===",
         );
+        self.close_floating_popups_for_owner_loss("focus_loss_hide", cx);
 
         if !matches!(self.current_view, AppView::ScriptList) {
             logging::log(
