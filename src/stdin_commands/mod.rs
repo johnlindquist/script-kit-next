@@ -474,6 +474,19 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Install a no-token Agent Chat transcript fixture for devtools proof.
+    ///
+    /// phase accepts "awaitingFirstAssistantText", "assistantText", or "idle".
+    /// This mutates the active ACP thread only; it never submits to an agent.
+    SetAcpTestFixture {
+        phase: String,
+        #[serde(default, rename = "userText")]
+        user_text: Option<String>,
+        #[serde(default, rename = "assistantText")]
+        assistant_text: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Show the debug grid overlay with options (for visual testing)
     ShowGrid {
         #[serde(default = "default_grid_size", rename = "gridSize")]
@@ -659,6 +672,7 @@ impl ExternalCommand {
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
             | Self::SetAcpInput { request_id, .. }
+            | Self::SetAcpTestFixture { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
@@ -693,6 +707,7 @@ impl ExternalCommand {
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
             Self::SetAcpInput { .. } => "setAcpInput",
+            Self::SetAcpTestFixture { .. } => "setAcpTestFixture",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
             Self::HideGrid => "hideGrid",
@@ -730,6 +745,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "setAiSearch",
     "setAiInput",
     "setAcpInput",
+    "setAcpTestFixture",
     "getAiWindowState",
     "showGrid",
     "hideGrid",
@@ -1164,6 +1180,7 @@ mod tests {
                 request_id: None,
             },
             ExternalCommand::OpenNotes,
+            ExternalCommand::OpenAbout,
             ExternalCommand::OpenAi,
             ExternalCommand::OpenMiniAi,
             ExternalCommand::OpenAiWithMockData,
@@ -1191,6 +1208,12 @@ mod tests {
             ExternalCommand::SetAcpInput {
                 text: String::new(),
                 submit: false,
+                request_id: None,
+            },
+            ExternalCommand::SetAcpTestFixture {
+                phase: "awaitingFirstAssistantText".to_string(),
+                user_text: None,
+                assistant_text: None,
                 request_id: None,
             },
             ExternalCommand::GetAiWindowState { request_id: None },
@@ -1849,6 +1872,28 @@ mod tests {
         let json = r#"{"type": "setAcpInput", "text": "hello", "requestId": "req-acp"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert_eq!(cmd.request_id(), Some("req-acp"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_set_acp_test_fixture_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "setAcpTestFixture", "phase": "awaitingFirstAssistantText", "userText": "hello", "requestId": "req-fixture"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert_eq!(cmd.command_type(), "setAcpTestFixture");
+        assert_eq!(cmd.request_id(), Some("req-fixture"));
+        match cmd {
+            ExternalCommand::SetAcpTestFixture {
+                phase,
+                user_text,
+                assistant_text,
+                ..
+            } => {
+                assert_eq!(phase, "awaitingFirstAssistantText");
+                assert_eq!(user_text.as_deref(), Some("hello"));
+                assert!(assistant_text.is_none());
+            }
+            _ => panic!("Expected SetAcpTestFixture command"),
+        }
         Ok(())
     }
 

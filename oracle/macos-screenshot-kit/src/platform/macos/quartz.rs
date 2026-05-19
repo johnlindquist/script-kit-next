@@ -2,8 +2,8 @@ use super::cf::{cf_number_i64, dict_bool, dict_f64, dict_i64, dict_rect, dict_st
 use super::ffi::*;
 use super::image::NativeImage;
 use crate::{
-    CaptureOptions, CaptureTarget, DisplayInfo, Point, Rect, Result, ScreenshotError, WindowFrameMode,
-    WindowId, WindowInfo, WindowListOptions,
+    CaptureOptions, CaptureTarget, DisplayInfo, Point, Rect, Result, ScreenshotError,
+    WindowFrameMode, WindowId, WindowInfo, WindowListOptions,
 };
 use std::os::raw::c_void;
 use std::ptr;
@@ -12,7 +12,9 @@ pub(super) fn displays() -> Result<Vec<DisplayInfo>> {
     let mut count = 0_u32;
     let err = unsafe { CGGetActiveDisplayList(0, ptr::null_mut(), &mut count) };
     if err != kCGErrorSuccess {
-        return Err(ScreenshotError::CoreGraphics(format!("CGGetActiveDisplayList(count) failed: {err}")));
+        return Err(ScreenshotError::CoreGraphics(format!(
+            "CGGetActiveDisplayList(count) failed: {err}"
+        )));
     }
     if count == 0 {
         return Ok(Vec::new());
@@ -21,7 +23,9 @@ pub(super) fn displays() -> Result<Vec<DisplayInfo>> {
     let mut ids = vec![0_u32; count as usize];
     let err = unsafe { CGGetActiveDisplayList(count, ids.as_mut_ptr(), &mut count) };
     if err != kCGErrorSuccess {
-        return Err(ScreenshotError::CoreGraphics(format!("CGGetActiveDisplayList failed: {err}")));
+        return Err(ScreenshotError::CoreGraphics(format!(
+            "CGGetActiveDisplayList failed: {err}"
+        )));
     }
     ids.truncate(count as usize);
 
@@ -31,11 +35,24 @@ pub(super) fn displays() -> Result<Vec<DisplayInfo>> {
         let bounds = unsafe { CGDisplayBounds(id) };
         let pixel_width = unsafe { CGDisplayPixelsWide(id) };
         let pixel_height = unsafe { CGDisplayPixelsHigh(id) };
-        let scale_x = if bounds.size.width > 0.0 { pixel_width as f64 / bounds.size.width } else { 1.0 };
-        let scale_y = if bounds.size.height > 0.0 { pixel_height as f64 / bounds.size.height } else { scale_x };
+        let scale_x = if bounds.size.width > 0.0 {
+            pixel_width as f64 / bounds.size.width
+        } else {
+            1.0
+        };
+        let scale_y = if bounds.size.height > 0.0 {
+            pixel_height as f64 / bounds.size.height
+        } else {
+            scale_x
+        };
         out.push(DisplayInfo {
             id,
-            bounds: Rect::new(bounds.origin.x, bounds.origin.y, bounds.size.width, bounds.size.height),
+            bounds: Rect::new(
+                bounds.origin.x,
+                bounds.origin.y,
+                bounds.size.width,
+                bounds.size.height,
+            ),
             pixel_width,
             pixel_height,
             scale_factor: ((scale_x + scale_y) / 2.0).max(1.0),
@@ -57,13 +74,15 @@ pub(super) fn windows(options: WindowListOptions) -> Result<Vec<WindowInfo>> {
     }
 
     let array = unsafe { CGWindowListCopyWindowInfo(list_option, 0) };
-    let array = OwnedCf::new_const(array)
-        .ok_or_else(|| ScreenshotError::CoreGraphics("CGWindowListCopyWindowInfo returned null".into()))?;
+    let array = OwnedCf::new_const(array).ok_or_else(|| {
+        ScreenshotError::CoreGraphics("CGWindowListCopyWindowInfo returned null".into())
+    })?;
 
     let count = unsafe { CFArrayGetCount(array.as_ptr() as CFArrayRef) };
     let mut out = Vec::new();
     for i in 0..count {
-        let dict = unsafe { CFArrayGetValueAtIndex(array.as_ptr() as CFArrayRef, i) } as CFDictionaryRef;
+        let dict =
+            unsafe { CFArrayGetValueAtIndex(array.as_ptr() as CFArrayRef, i) } as CFDictionaryRef;
         if dict.is_null() {
             continue;
         }
@@ -76,7 +95,8 @@ pub(super) fn windows(options: WindowListOptions) -> Result<Vec<WindowInfo>> {
         if !options.include_untitled && title.is_none() {
             continue;
         }
-        let bounds = dict_rect(dict, "kCGWindowBounds").unwrap_or_else(|| Rect::new(0.0, 0.0, 0.0, 0.0));
+        let bounds =
+            dict_rect(dict, "kCGWindowBounds").unwrap_or_else(|| Rect::new(0.0, 0.0, 0.0, 0.0));
         let layer = dict_i64(dict, "kCGWindowLayer").unwrap_or_default();
         let alpha = dict_f64(dict, "kCGWindowAlpha").unwrap_or(1.0);
         if let Some(min_alpha) = options.min_alpha {
@@ -121,17 +141,26 @@ pub(super) fn window_at_point(point: Point) -> Result<WindowInfo> {
     windows(WindowListOptions::default())?
         .into_iter()
         .find(|w| w.is_probably_user_window() && w.bounds.contains(point))
-        .ok_or_else(|| ScreenshotError::NotFound(format!("no visible layer-0 window at {},{}", point.x, point.y)))
+        .ok_or_else(|| {
+            ScreenshotError::NotFound(format!(
+                "no visible layer-0 window at {},{}",
+                point.x, point.y
+            ))
+        })
 }
 
 pub(super) fn mouse_location() -> Result<Point> {
     let event = unsafe { CGEventCreate(ptr::null()) };
-    let event = OwnedCf::new_mut(event).ok_or_else(|| ScreenshotError::CoreGraphics("CGEventCreate failed".into()))?;
+    let event = OwnedCf::new_mut(event)
+        .ok_or_else(|| ScreenshotError::CoreGraphics("CGEventCreate failed".into()))?;
     let p = unsafe { CGEventGetLocation(event.as_mut_ptr() as CGEventRef) };
     Ok(Point::new(p.x, p.y))
 }
 
-pub(super) fn capture_core_graphics(target: CaptureTarget, options: &CaptureOptions) -> Result<(NativeImage, CaptureTarget)> {
+pub(super) fn capture_core_graphics(
+    target: CaptureTarget,
+    options: &CaptureOptions,
+) -> Result<(NativeImage, CaptureTarget)> {
     if options.include_cursor {
         return Err(ScreenshotError::UnsupportedBackend("CoreGraphics still screenshots do not include the cursor; use CaptureBackend::Auto or SystemScreencapture"));
     }
@@ -182,13 +211,23 @@ pub(super) fn capture_core_graphics(target: CaptureTarget, options: &CaptureOpti
                 .map(|w| w.id)
                 .collect();
             if ids.is_empty() {
-                return Err(ScreenshotError::NotFound(format!("no visible windows for pid {pid}")));
+                return Err(ScreenshotError::NotFound(format!(
+                    "no visible windows for pid {pid}"
+                )));
             }
             capture_windows_array(&ids, image_options)?
         }
-        CaptureTarget::VisibleWindows { exclude_window_ids, exclude_pids, include_all_layers } => {
+        CaptureTarget::VisibleWindows {
+            exclude_window_ids,
+            exclude_pids,
+            include_all_layers,
+        } => {
             let list_options = WindowListOptions {
-                allowed_layers: if *include_all_layers { None } else { Some(vec![0]) },
+                allowed_layers: if *include_all_layers {
+                    None
+                } else {
+                    Some(vec![0])
+                },
                 exclude_desktop_elements: !options.include_desktop_elements,
                 ..WindowListOptions::default()
             };
@@ -200,7 +239,9 @@ pub(super) fn capture_core_graphics(target: CaptureTarget, options: &CaptureOpti
                 .map(|w| w.id)
                 .collect();
             if ids.is_empty() {
-                return Err(ScreenshotError::NotFound("no windows left after applying exclusions".into()));
+                return Err(ScreenshotError::NotFound(
+                    "no windows left after applying exclusions".into(),
+                ));
             }
             capture_windows_array(&ids, image_options)?
         }
@@ -213,7 +254,9 @@ pub(super) fn capture_core_graphics(target: CaptureTarget, options: &CaptureOpti
         }
         CaptureTarget::FrontmostWindow
         | CaptureTarget::WindowUnderCursor
-        | CaptureTarget::WindowAtPoint(_) => unreachable!("resolve_target converts dynamic window targets"),
+        | CaptureTarget::WindowAtPoint(_) => {
+            unreachable!("resolve_target converts dynamic window targets")
+        }
     };
 
     Ok((NativeImage::from_create_rule(image)?, target))
@@ -222,15 +265,24 @@ pub(super) fn capture_core_graphics(target: CaptureTarget, options: &CaptureOpti
 fn resolve_target(target: CaptureTarget) -> Result<CaptureTarget> {
     match target {
         CaptureTarget::FrontmostWindow => Ok(CaptureTarget::Window(frontmost_window()?.id)),
-        CaptureTarget::WindowUnderCursor => Ok(CaptureTarget::Window(window_at_point(mouse_location()?)?.id)),
-        CaptureTarget::WindowAtPoint(point) => Ok(CaptureTarget::Window(window_at_point(point)?.id)),
+        CaptureTarget::WindowUnderCursor => Ok(CaptureTarget::Window(
+            window_at_point(mouse_location()?)?.id,
+        )),
+        CaptureTarget::WindowAtPoint(point) => {
+            Ok(CaptureTarget::Window(window_at_point(point)?.id))
+        }
         other => Ok(other),
     }
 }
 
-fn capture_windows_array(window_ids: &[WindowId], image_options: CGWindowImageOption) -> Result<CGImageRef> {
+fn capture_windows_array(
+    window_ids: &[WindowId],
+    image_options: CGWindowImageOption,
+) -> Result<CGImageRef> {
     if window_ids.is_empty() {
-        return Err(ScreenshotError::InvalidInput("window array capture requires at least one window ID".into()));
+        return Err(ScreenshotError::InvalidInput(
+            "window array capture requires at least one window ID".into(),
+        ));
     }
 
     let mut numbers = Vec::with_capacity(window_ids.len());
@@ -249,10 +301,13 @@ fn capture_windows_array(window_ids: &[WindowId], image_options: CGWindowImageOp
             ptr::null(),
         )
     };
-    let array = OwnedCf::new_const(array)
-        .ok_or_else(|| ScreenshotError::CoreGraphics("CFArrayCreate for window IDs failed".into()))?;
+    let array = OwnedCf::new_const(array).ok_or_else(|| {
+        ScreenshotError::CoreGraphics("CFArrayCreate for window IDs failed".into())
+    })?;
 
-    let image = unsafe { CGWindowListCreateImageFromArray(CGRectNull, array.as_ptr() as CFArrayRef, image_options) };
+    let image = unsafe {
+        CGWindowListCreateImageFromArray(CGRectNull, array.as_ptr() as CFArrayRef, image_options)
+    };
     Ok(image)
 }
 
@@ -287,8 +342,15 @@ fn rect_to_cg(rect: Rect) -> CGRect {
 }
 
 fn validate_rect(rect: Rect) -> Result<()> {
-    if !rect.x.is_finite() || !rect.y.is_finite() || !rect.width.is_finite() || !rect.height.is_finite() || rect.is_empty() {
-        Err(ScreenshotError::InvalidInput(format!("invalid capture rectangle: {rect:?}")))
+    if !rect.x.is_finite()
+        || !rect.y.is_finite()
+        || !rect.width.is_finite()
+        || !rect.height.is_finite()
+        || rect.is_empty()
+    {
+        Err(ScreenshotError::InvalidInput(format!(
+            "invalid capture rectangle: {rect:?}"
+        )))
     } else {
         Ok(())
     }

@@ -209,6 +209,7 @@ pub fn open_chat_window_with_thread(
         });
 
         let view = cx.new(|cx| AcpChatView::new(thread, cx));
+        let entity_weak = view.downgrade();
         view.update(cx, |view, _cx| {
             view.set_allowed_portal_kinds(vec![PortalKind::AcpHistory]);
             view.set_on_toggle_actions(move |_window, cx| {
@@ -224,6 +225,10 @@ pub fn open_chat_window_with_thread(
                     let display_id = window.display(cx).map(|display| display.id());
                     view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
                 });
+            });
+            let paste_entity_weak = entity_weak.clone();
+            view.set_on_paste_response_requested(move |_window, cx| {
+                dispatch_detached_action(&paste_entity_weak, "acp_paste_to_frontmost", cx);
             });
             view.set_on_open_portal(move |kind, cx| match kind {
                 PortalKind::AcpHistory => {
@@ -298,6 +303,7 @@ pub fn open_chat_window_with_thread(
         bounds: detached_bounds,
         parent_window_id: None,
         parent_kind: None,
+        pid: Some(std::process::id()),
     });
 
     // Activate the detached window so it gets keyboard focus immediately.
@@ -928,6 +934,39 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                 if let Some(last_assistant) = maybe_last {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(last_assistant));
                     tracing::info!(event = "detached_action_copy_last_response");
+                }
+            }
+        }
+        "acp_paste_to_frontmost" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                let maybe_last = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| {
+                                matches!(m.role, super::thread::AcpThreadMessageRole::Assistant)
+                                    && !m.body.trim().is_empty()
+                            })
+                            .map(|m| m.body.to_string())
+                    })
+                };
+                if let Some(last_assistant) = maybe_last {
+                    close_chat_window(cx);
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        let injector = crate::text_injector::TextInjector::new();
+                        if let Err(error) = injector.paste_text(&last_assistant) {
+                            tracing::warn!(
+                                event = "detached_action_paste_last_response_failed",
+                                %error
+                            );
+                        }
+                    });
+                    tracing::info!(event = "detached_action_paste_last_response");
                 }
             }
         }

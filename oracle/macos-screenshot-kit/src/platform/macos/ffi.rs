@@ -118,11 +118,7 @@ extern "C" {
         theType: c_int,
         valuePtr: *const c_void,
     ) -> CFNumberRef;
-    pub fn CFNumberGetValue(
-        number: CFNumberRef,
-        theType: c_int,
-        valuePtr: *mut c_void,
-    ) -> Boolean;
+    pub fn CFNumberGetValue(number: CFNumberRef, theType: c_int, valuePtr: *mut c_void) -> Boolean;
     pub fn CFBooleanGetValue(boolean: CFTypeRef) -> Boolean;
 
     pub fn CFDataCreate(allocator: CFAllocatorRef, bytes: *const u8, length: CFIndex) -> CFDataRef;
@@ -169,7 +165,8 @@ extern "C" {
         imageOption: CGWindowImageOption,
     ) -> CGImageRef;
 
-    pub fn CGRectMakeWithDictionaryRepresentation(dict: CFDictionaryRef, rect: *mut CGRect) -> bool;
+    pub fn CGRectMakeWithDictionaryRepresentation(dict: CFDictionaryRef, rect: *mut CGRect)
+        -> bool;
 
     pub fn CGImageGetWidth(image: CGImageRef) -> usize;
     pub fn CGImageGetHeight(image: CGImageRef) -> usize;
@@ -213,14 +210,16 @@ extern "C" {
     );
     pub fn CGImageDestinationFinalize(idst: CGImageDestinationRef) -> bool;
 
-    pub fn CGImageSourceCreateWithData(data: CFDataRef, options: CFDictionaryRef) -> CGImageSourceRef;
+    pub fn CGImageSourceCreateWithData(
+        data: CFDataRef,
+        options: CFDictionaryRef,
+    ) -> CGImageSourceRef;
     pub fn CGImageSourceCreateImageAtIndex(
         isrc: CGImageSourceRef,
         index: usize,
         options: CFDictionaryRef,
     ) -> CGImageRef;
 }
-
 
 pub fn null_allocator() -> CFAllocatorRef {
     std::ptr::null()
@@ -231,5 +230,8 @@ pub fn null_dict() -> CFDictionaryRef {
 }
 
 pub fn cg_rect(x: f64, y: f64, width: f64, height: f64) -> CGRect {
-    CGRect { origin: CGPoint { x, y }, size: CGSize { width, height } }
+    CGRect {
+        origin: CGPoint { x, y },
+        size: CGSize { width, height },
+    }
 }

@@ -179,6 +179,9 @@ pub struct AutomationInspectSnapshot {
     /// Machine-readable warnings (e.g. `"panel_only_acp_detached"`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
+    /// Process ID of the window owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
 }
 
 #[cfg(test)]
@@ -209,6 +212,7 @@ mod tests {
             os_window_id: None,
             semantic_quality: None,
             warnings: Vec::new(),
+            pid: None,
         }
     }
 
@@ -286,6 +290,7 @@ mod tests {
             os_window_id: Some(12345),
             semantic_quality: Some(SemanticQuality::Full),
             warnings: vec!["panel_only_notes".to_string()],
+            pid: Some(1234),
         };
 
         let json = serde_json::to_string(&snapshot).expect("serialize");

@@ -2924,6 +2924,7 @@ mod tests {
                 os_window_id: Some(123),
                 semantic_quality: Some(SemanticQuality::Full),
                 warnings: Vec::new(),
+                pid: Some(1234),
             })
         }
 
@@ -5869,6 +5870,7 @@ mod tests {
             }),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(1234),
         });
 
         let result =
@@ -5918,6 +5920,7 @@ mod tests {
             }),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(1234),
         });
         assert!(crate::windows::set_automation_focus(&id));
 
@@ -5986,6 +5989,7 @@ mod tests {
             }),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(1234),
         });
 
         let result = handle_computer_use_tool_call(

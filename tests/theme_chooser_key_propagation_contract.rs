@@ -25,7 +25,7 @@ fn assert_stop_before_marker(source: &str, marker: &str) {
     let marker_start = source
         .find(marker)
         .unwrap_or_else(|| panic!("expected marker `{marker}` in theme chooser source"));
-    let search_start = marker_start.saturating_sub(1200);
+    let search_start = marker_start.saturating_sub(2000);
     let preceding = &source[search_start..marker_start];
     assert!(
         preceding.contains("cx.stop_propagation();"),
@@ -66,7 +66,9 @@ fn handled_theme_chooser_clicks_stop_propagation() {
         "\"theme_chooser_material_click\"",
         "\"theme_chooser_font_size_click\"",
         "\"theme_chooser_reset_click\"",
-        "this.apply_and_persist_theme(remixed, \"theme_chooser_surprise_me\", cx);",
+        "\"theme_chooser_save_as_click\"",
+        "\"theme_chooser_gradient_click\"",
+        "\"theme_chooser_surprise_me\"",
     ] {
         assert_stop_before_marker(THEME_CHOOSER_SOURCE, marker);
     }

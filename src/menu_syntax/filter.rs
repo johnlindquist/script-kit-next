@@ -50,6 +50,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::Window(_) => ArtifactKind::Window,
         SearchResult::File(_) => ArtifactKind::File,
         SearchResult::Note(_) => ArtifactKind::Note,
+        SearchResult::Todo(_) => ArtifactKind::Todo,
         SearchResult::AcpHistory(_) => ArtifactKind::AcpHistory,
         SearchResult::AiVault(_) => ArtifactKind::AiVault,
         SearchResult::ClipboardHistory(_) => ArtifactKind::ClipboardHistory,
@@ -169,6 +170,11 @@ fn matches_tag(result: &SearchResult, tag: &str) -> bool {
             .as_deref()
             .map(|group| tag_matches(group, tag))
             .unwrap_or(false),
+        SearchResult::Todo(tm) => tm
+            .hit
+            .tags
+            .iter()
+            .any(|candidate| tag_matches(candidate, tag)),
         _ => false,
     }
 }
@@ -399,7 +405,7 @@ mod tests {
     use super::*;
     use crate::metadata_parser::TypedMetadata;
     use crate::scripts::{
-        MatchIndices, ScriptMatch, ScriptMatchKind, ScriptletMatch, SearchResult,
+        MatchIndices, ScriptMatch, ScriptMatchKind, ScriptletMatch, SearchResult, TodoMatch,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -449,6 +455,25 @@ mod tests {
         })
     }
 
+    fn todo_match(title: &str, tags: &[&str]) -> SearchResult {
+        SearchResult::Todo(TodoMatch {
+            hit: crate::menu_syntax::RootTodoSearchHit {
+                stable_key: format!("todo/test/{title}"),
+                title: title.to_string(),
+                body: title.to_string(),
+                subtitle: "Captured todo".to_string(),
+                tags: tags.iter().map(|tag| tag.to_string()).collect(),
+                priority: None,
+                due: None,
+                created_at: None,
+                path: PathBuf::from("/tmp/todos.jsonl"),
+                line_number: Some(1),
+                raw_line: title.to_string(),
+            },
+            score: 100,
+        })
+    }
+
     #[test]
     fn type_predicate_filters_by_artifact_kind() {
         let s = make_script_with_extra("foo", HashMap::new());
@@ -469,6 +494,25 @@ mod tests {
             raw: ":type:skill".to_string(),
         };
         assert_eq!(apply_advanced_query(results, &query2).len(), 0);
+    }
+
+    #[test]
+    fn tag_predicate_filters_todo_result_tags() {
+        let results = vec![
+            todo_match("Buy milk", &["home", "errands"]),
+            todo_match("Renew passport", &["admin"]),
+        ];
+        let query = AdvancedQuery {
+            free_text: String::new(),
+            predicates: vec![Predicate::Tag("errands".to_string())],
+            source_filters: Default::default(),
+            raw: "todo: #errands".to_string(),
+        };
+
+        let filtered = apply_advanced_query(results, &query);
+
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].name(), "Buy milk");
     }
 
     #[test]

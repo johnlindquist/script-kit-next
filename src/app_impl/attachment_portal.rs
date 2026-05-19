@@ -1,4 +1,5 @@
 use super::*;
+use gpui::{AsyncApp, WeakEntity};
 
 const ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON: f32 = 1.0;
 
@@ -286,14 +287,18 @@ impl ScriptListApp {
                 self.open_file_search(portal_query, cx);
             }
             PortalKind::BrowserHistory => {
-                self.cached_browser_history = crate::browser_history::list_recent_history(500)
-                    .unwrap_or_else(|error| {
-                        tracing::warn!(
-                            event = "browser_history_portal_load_failed",
-                            error = %error,
-                        );
-                        Vec::new()
-                    });
+                cx.spawn(async move |this, mut cx| {
+                    let result = crate::browser_history::list_recent_history(500);
+                    this.update(cx, |this, cx| {
+                        if let Ok(entries) = result {
+                            this.cached_browser_history = entries;
+                            cx.notify();
+                        }
+                    })
+                    .ok();
+                })
+                .detach();
+
                 self.open_builtin_filterable_view_with_filter(
                     AppView::BrowserHistoryView {
                         filter: portal_query.clone(),

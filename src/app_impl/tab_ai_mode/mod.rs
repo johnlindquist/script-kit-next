@@ -80,6 +80,13 @@ impl ScriptListApp {
                 });
             });
 
+            let paste_response_app = app_entity.clone();
+            view.set_on_paste_response_requested(move |_window, cx| {
+                paste_response_app.update(cx, |app, cx| {
+                    app.paste_latest_acp_response_to_frontmost(cx);
+                });
+            });
+
             let portal_app = app_entity.clone();
             view.set_on_open_portal(move |kind, cx| {
                 portal_app.update(cx, |app, cx| {
@@ -147,17 +154,12 @@ impl ScriptListApp {
             AppView::AcpChatView { entity } if entity == view_entity
         );
         let footer_status_changed = if visible_acp_view_changed && !view.is_setup_mode() {
-            let dot_status = view.footer_dot_status(cx);
-            let model_display = view
-                .live_thread()
-                .read(cx)
-                .selected_model_display()
-                .to_string();
-            let changed = self.acp_footer_dot_status != Some(dot_status)
-                || self.acp_footer_model_display.as_deref() != Some(model_display.as_str());
+            let snapshot = view.footer_snapshot(cx);
+            let changed = self.acp_footer_snapshot.as_ref() != Some(&snapshot);
             if changed {
-                self.acp_footer_dot_status = Some(dot_status);
-                self.acp_footer_model_display = Some(model_display);
+                self.acp_footer_dot_status = Some(snapshot.dot_status);
+                self.acp_footer_model_display = Some(snapshot.model_display.clone());
+                self.acp_footer_snapshot = Some(snapshot);
             }
             changed
         } else {
@@ -2730,6 +2732,7 @@ impl ScriptListApp {
             self.acp_ready_script_path = None;
             self.acp_footer_dot_status = None;
             self.acp_footer_model_display = None;
+            self.acp_footer_snapshot = None;
             self.rekey_main_automation_surface_from_current_view();
             crate::windows::ensure_embedded_ai_window(false);
             self.transition_acp_surface(
@@ -2836,6 +2839,7 @@ impl ScriptListApp {
         self.acp_ready_script_path = None;
         self.acp_footer_dot_status = None;
         self.acp_footer_model_display = None;
+        self.acp_footer_snapshot = None;
         self.pending_focus = if focus_main_filter {
             Some(FocusTarget::MainFilter)
         } else {
@@ -3170,6 +3174,7 @@ impl ScriptListApp {
             scripts::SearchResult::Window(_) => "window",
             scripts::SearchResult::File(_) => "file",
             scripts::SearchResult::Note(_) => "note",
+            scripts::SearchResult::Todo(_) => "todo",
             scripts::SearchResult::AcpHistory(_) => "acpHistory",
             scripts::SearchResult::AiVault(_) => "aiVault",
             scripts::SearchResult::ClipboardHistory(_) => "clipboardHistory",
@@ -3219,6 +3224,16 @@ impl ScriptListApp {
                 "updatedAt": m.hit.updated_at.to_rfc3339(),
                 "isPinned": m.hit.is_pinned,
                 "charCount": m.hit.char_count,
+            }),
+            scripts::SearchResult::Todo(m) => serde_json::json!({
+                "stableKey": m.hit.stable_key,
+                "title": m.hit.title,
+                "body": m.hit.body,
+                "subtitle": m.hit.subtitle,
+                "tags": m.hit.tags,
+                "priority": m.hit.priority,
+                "due": m.hit.due,
+                "createdAt": m.hit.created_at,
             }),
             scripts::SearchResult::AcpHistory(m) => serde_json::json!({
                 "sessionId": m.entry.session_id,

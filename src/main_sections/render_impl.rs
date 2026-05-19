@@ -459,9 +459,9 @@ impl Render for ScriptListApp {
             AppView::TemplatePrompt { entity, .. } => {
                 self.render_template_prompt(entity, cx).into_any_element()
             }
-            AppView::HotkeyPrompt { entity, .. } => {
-                self.render_hotkey_prompt(entity, window, cx).into_any_element()
-            }
+            AppView::HotkeyPrompt { entity, .. } => self
+                .render_hotkey_prompt(entity, window, cx)
+                .into_any_element(),
             AppView::ChatPrompt { entity, .. } => {
                 self.render_chat_prompt(entity, cx).into_any_element()
             }
@@ -729,6 +729,8 @@ impl Render for ScriptListApp {
 
         // Get vibrancy background - None when vibrancy enabled (let Root handle blur)
         let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&self.theme);
+        let theme_background_gradient =
+            crate::ui_foundation::get_theme_background_gradient(&self.theme);
 
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
@@ -918,6 +920,9 @@ impl Render for ScriptListApp {
                     }))
                     // Apply background only when vibrancy is disabled
                     .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+                    // A user-authored gradient is explicit theme content, so it
+                    // renders even when vibrancy is enabled.
+                    .when_some(theme_background_gradient, |d, bg| d.bg(bg))
                     // Visual styling - rounded corners, subtle border, clip content
                     .rounded(px(12.))
                     .border_1()

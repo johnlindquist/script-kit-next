@@ -98,6 +98,7 @@ fn resolve_acp_popup_parent_automation_id(
             bounds: Some(automation_bounds(parent_bounds)),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(std::process::id()),
         });
         return Ok(parent_id);
     }

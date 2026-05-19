@@ -72,7 +72,11 @@ impl ScreenshotClient {
 
     /// Return all queried windows containing a point, preserving the window-server order.
     /// Use `WindowListOptions::visible_all_layers()` to include menus, popovers, and tooltips.
-    pub fn windows_at_point(&self, point: Point, options: WindowListOptions) -> Result<Vec<WindowInfo>> {
+    pub fn windows_at_point(
+        &self,
+        point: Point,
+        options: WindowListOptions,
+    ) -> Result<Vec<WindowInfo>> {
         Ok(self
             .windows(options)?
             .into_iter()
@@ -109,11 +113,14 @@ impl ScreenshotClient {
         image.save_as(path, format)
     }
 
-
     /// Capture directly to the macOS clipboard using the system screenshot backend.
     ///
     /// This is useful for apps that mirror Shift-Control-Command screenshot workflows.
-    pub fn capture_to_clipboard(&self, target: CaptureTarget, options: CaptureOptions) -> Result<()> {
+    pub fn capture_to_clipboard(
+        &self,
+        target: CaptureTarget,
+        options: CaptureOptions,
+    ) -> Result<()> {
         platform::capture_to_clipboard(target, options)
     }
 
@@ -124,7 +131,10 @@ impl ScreenshotClient {
 
     /// Capture each active display separately. This is the safest path for multi-monitor
     /// workflows that do not want one giant virtual-desktop image.
-    pub fn capture_each_display(&self, options: CaptureOptions) -> Result<Vec<(DisplayInfo, CapturedImage)>> {
+    pub fn capture_each_display(
+        &self,
+        options: CaptureOptions,
+    ) -> Result<Vec<(DisplayInfo, CapturedImage)>> {
         let displays = self.displays()?;
         let mut out = Vec::with_capacity(displays.len());
         for display in displays {
@@ -143,8 +153,16 @@ pub struct CapturedImage {
 }
 
 impl CapturedImage {
-    pub(crate) fn new(inner: platform::NativeImage, target: CaptureTarget, backend: CaptureBackend) -> Self {
-        Self { inner, target, backend }
+    pub(crate) fn new(
+        inner: platform::NativeImage,
+        target: CaptureTarget,
+        backend: CaptureBackend,
+    ) -> Self {
+        Self {
+            inner,
+            target,
+            backend,
+        }
     }
 
     /// Width in pixels.
@@ -180,7 +198,11 @@ impl CapturedImage {
     /// Save using the image format implied by the extension. Defaults to PNG if the extension is unknown.
     pub fn save(&self, path: impl AsRef<std::path::Path>) -> Result<()> {
         let path = path.as_ref();
-        let format = match path.extension().and_then(|ext| ext.to_str()).map(|s| s.to_ascii_lowercase()) {
+        let format = match path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|s| s.to_ascii_lowercase())
+        {
             Some(ext) if ext == "jpg" || ext == "jpeg" => ImageFormat::Jpeg { quality: 0.92 },
             Some(ext) if ext == "tif" || ext == "tiff" => ImageFormat::Tiff,
             Some(ext) if ext == "heic" || ext == "heif" => ImageFormat::Heic { quality: 0.92 },

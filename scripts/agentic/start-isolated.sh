@@ -29,7 +29,7 @@ done
 
 bash "${SCRIPT_DIR}/preflight-isolated.sh" --mode isolated
 
-export SCRIPT_KIT_SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions-${SESSION}}"
+export SCRIPT_KIT_SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
 if [[ "$NOTES_SANDBOX" -eq 1 ]]; then
   export SCRIPT_KIT_TEST_NOTES_DB_PATH="${SCRIPT_KIT_TEST_NOTES_DB_PATH:-/tmp/sk-notes-${SESSION}.db}"
 fi

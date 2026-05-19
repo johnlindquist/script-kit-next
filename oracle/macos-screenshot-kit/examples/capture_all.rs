@@ -11,6 +11,10 @@ fn main() -> macos_screenshot_kit::Result<()> {
 
     let image = client.capture(CaptureTarget::AllDisplays, CaptureOptions::png())?;
     image.save("all-displays.png")?;
-    println!("saved all-displays.png ({}x{})", image.width(), image.height());
+    println!(
+        "saved all-displays.png ({}x{})",
+        image.width(),
+        image.height()
+    );
     Ok(())
 }

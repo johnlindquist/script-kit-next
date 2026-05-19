@@ -20,12 +20,12 @@ The Script Kit launcher is a search box, but its first token can also switch int
 | `>` | Open Quick Terminal when it is the whole input. |
 | `?` | Open the launcher actions/help surface when actions are available. |
 | `:` | Open the filter picker for advanced launcher search. |
-| `files: report` or `f:report` | Restrict search to one source. |
+| `files: report`, `todo: renew`, or `f:report` | Restrict search to one source. |
 | `-apps: chrome` | Exclude a source. |
 | `type:script deploy` | Refine normal search with property filters. |
 | `;` or `;todo Renew passport #errands p1` | Pick a capture target or capture structured local data. |
 | `+` or `+todo Renew passport` | Legacy capture picker/alias. |
-| `todo: Renew passport` | Keyword capture alias, only for known/registered targets. |
+| `note: Decision` | Keyword capture alias, only for known/registered targets. |
 | `!` or `!dep` | Discover registered command heads in the command picker. |
 | `>deploy env:prod #release -- --dry-run` | Invoke a command head with fields, tags, and argv. |
 
@@ -181,7 +181,7 @@ Examples:
 ;note "Decision: ship parser first" #project
 ;link https://zed.dev #rust
 ;cal Design review start:"friday 2pm" for:45m
-todo: Renew passport #errands
+note: Renew passport #errands
 + 
 +todo Renew passport
 ```

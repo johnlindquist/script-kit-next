@@ -613,6 +613,29 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Note", style));
         }
 
+        scripts::SearchResult::Todo(todo_match) => {
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(todo_match.hit.title.clone()),
+            );
+
+            if !todo_match.hit.subtitle.is_empty() {
+                content = content.child(focused_info_labeled_section(
+                    "DETAILS",
+                    &todo_match.hit.subtitle,
+                    style,
+                ));
+            }
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Todo", style));
+        }
+
         scripts::SearchResult::AcpHistory(acp_history_match) => {
             let entry = &acp_history_match.entry;
 
@@ -1159,6 +1182,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
                     scripts::SearchResult::Note(_) => None,
+                    scripts::SearchResult::Todo(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
@@ -1304,6 +1328,12 @@ impl ScriptListApp {
                         format!("note:{}", m.hit.id.as_str()),
                         false,
                         "Open",
+                    )),
+                    scripts::SearchResult::Todo(m) => Some(ScriptInfo::with_action_verb(
+                        &m.hit.title,
+                        m.hit.stable_key.clone(),
+                        false,
+                        "Copy",
                     )),
                     scripts::SearchResult::ClipboardHistory(m) => Some(
                         ScriptInfo::with_action_verb(

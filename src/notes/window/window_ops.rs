@@ -593,6 +593,7 @@ fn open_notes_window_with_close_behavior(
         bounds: Some(notes_automation_bounds(bounds)),
         parent_window_id: None,
         parent_kind: None,
+        pid: Some(std::process::id()),
     });
 
     // Focus the editor input in the Notes window

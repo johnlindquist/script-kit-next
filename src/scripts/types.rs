@@ -309,6 +309,13 @@ pub struct NoteMatch {
     pub(crate) score: i32,
 }
 
+/// Represents a passive root-search match for a captured todo.
+#[derive(Clone, Debug)]
+pub struct TodoMatch {
+    pub(crate) hit: crate::menu_syntax::RootTodoSearchHit,
+    pub(crate) score: i32,
+}
+
 /// Represents a passive root-search match for a saved ACP conversation.
 #[derive(Clone, Debug)]
 pub struct AcpHistoryMatch {
@@ -379,6 +386,8 @@ pub enum SearchResult {
     File(FileMatch),
     /// Local Note surfaced as a passive root-search source.
     Note(NoteMatch),
+    /// Captured todo surfaced as a root-search source.
+    Todo(TodoMatch),
     /// Saved ACP conversation surfaced as a passive root-search source.
     AcpHistory(AcpHistoryMatch),
     /// cmux AI Vault session metadata surfaced as a passive root-search source.
@@ -428,6 +437,7 @@ impl SearchResult {
             SearchResult::Window(_) => Some(RootUnifiedSourceFilter::Windows),
             SearchResult::File(_) => Some(RootUnifiedSourceFilter::Files),
             SearchResult::Note(_) => Some(RootUnifiedSourceFilter::Notes),
+            SearchResult::Todo(_) => Some(RootUnifiedSourceFilter::Todo),
             SearchResult::AcpHistory(_) => Some(RootUnifiedSourceFilter::Conversations),
             SearchResult::AiVault(_) => Some(RootUnifiedSourceFilter::AiVault),
             SearchResult::ClipboardHistory(_) => Some(RootUnifiedSourceFilter::ClipboardHistory),
@@ -451,6 +461,7 @@ impl SearchResult {
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::File(fm) => &fm.file.name,
             SearchResult::Note(nm) => &nm.title,
+            SearchResult::Todo(tm) => &tm.hit.title,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
             SearchResult::AiVault(am) => &am.hit.safe_title,
             SearchResult::ClipboardHistory(cm) => &cm.title,
@@ -483,6 +494,7 @@ impl SearchResult {
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
+            SearchResult::Todo(tm) => Some(tm.hit.subtitle.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::AiVault(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
@@ -509,6 +521,7 @@ impl SearchResult {
             SearchResult::Window(wm) => wm.score,
             SearchResult::File(fm) => fm.score,
             SearchResult::Note(nm) => nm.score,
+            SearchResult::Todo(tm) => tm.score,
             SearchResult::AcpHistory(am) => am.score,
             SearchResult::AiVault(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
@@ -532,6 +545,7 @@ impl SearchResult {
             SearchResult::Window(_) => "Window",
             SearchResult::File(_) => "File",
             SearchResult::Note(_) => "Note",
+            SearchResult::Todo(_) => "Todo",
             SearchResult::AcpHistory(_) => "Agent Chat Conversation",
             SearchResult::AiVault(_) => "Vault Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
@@ -566,6 +580,7 @@ impl SearchResult {
             ),
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
             SearchResult::Note(_) => None,
+            SearchResult::Todo(_) => None,
             SearchResult::AcpHistory(_) => None,
             SearchResult::AiVault(_) => None,
             SearchResult::ClipboardHistory(_) => None,
@@ -594,6 +609,7 @@ impl SearchResult {
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
             SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
             SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
+            SearchResult::Todo(tm) => Some(tm.hit.stable_key.clone()),
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
@@ -648,6 +664,7 @@ impl SearchResult {
             SearchResult::Window(_) => ("Window", "panel-top"),
             SearchResult::File(_) => ("File", "file"),
             SearchResult::Note(_) => ("Note", "notebook-text"),
+            SearchResult::Todo(_) => ("Todo", "list-todo"),
             SearchResult::AcpHistory(_) => ("Agent Chat", "message-circle"),
             SearchResult::AiVault(_) => ("Vault", "vault"),
             SearchResult::ClipboardHistory(_) => ("Clipboard", "clipboard"),
@@ -696,6 +713,7 @@ impl SearchResult {
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             SearchResult::File(_) => Some("Files"),
             SearchResult::Note(_) => Some("Notes"),
+            SearchResult::Todo(_) => Some("Todos"),
             SearchResult::AcpHistory(_) => Some("Agent Chat Conversations"),
             SearchResult::AiVault(_) => Some("AI Vault"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
@@ -754,6 +772,7 @@ impl SearchResult {
                 }
             }
             SearchResult::Note(_) => "Open Note",
+            SearchResult::Todo(_) => "Copy Todo",
             SearchResult::AcpHistory(_) => "Resume Conversation",
             SearchResult::AiVault(_) => "Resume in Terminal",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",

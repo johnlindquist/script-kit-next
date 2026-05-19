@@ -10,6 +10,10 @@ fn main() -> macos_screenshot_kit::Result<()> {
         CaptureOptions::png().without_window_shadow(),
     )?;
     image.save("frontmost-window.png")?;
-    println!("saved frontmost-window.png ({}x{})", image.width(), image.height());
+    println!(
+        "saved frontmost-window.png ({}x{})",
+        image.width(),
+        image.height()
+    );
     Ok(())
 }

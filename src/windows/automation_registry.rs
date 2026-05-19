@@ -172,6 +172,7 @@ pub fn register_attached_popup(
         bounds,
         parent_window_id: Some(parent_window_id.clone()),
         parent_kind: Some(parent_kind),
+        pid: Some(std::process::id()),
     };
 
     upsert_automation_window(info);
@@ -221,6 +222,7 @@ pub fn ensure_embedded_ai_window(active: bool) {
             bounds: None,
             parent_window_id: Some("main".to_string()),
             parent_kind: Some(AutomationWindowKind::Main),
+            pid: Some(std::process::id()),
         });
     } else {
         let _ = remove_automation_window("ai");
@@ -525,6 +527,7 @@ mod tests {
             bounds: None,
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(std::process::id()),
         }
     }
 
@@ -760,6 +763,7 @@ mod tests {
             }),
             parent_window_id: None,
             parent_kind: None,
+            pid: Some(std::process::id()),
         };
         upsert_automation_window(info.clone());
 
@@ -968,6 +972,7 @@ mod tests {
             bounds: None,
             parent_window_id: None,
             parent_kind: None,
+            pid: None,
         });
         upsert_automation_window(AutomationWindowInfo {
             id: format!("{p}:promptPopup:a"),
@@ -979,6 +984,7 @@ mod tests {
             bounds: None,
             parent_window_id: None,
             parent_kind: None,
+            pid: None,
         });
 
         // Index 0 must be :a (lexicographically first)

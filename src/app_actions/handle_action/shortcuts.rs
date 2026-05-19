@@ -169,6 +169,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Window(_)
                         | scripts::SearchResult::Skill(_)
                         | scripts::SearchResult::Note(_)
+                        | scripts::SearchResult::Todo(_)
                         | scripts::SearchResult::BrowserTab(_)
                         | scripts::SearchResult::BrowserHistory(_) => {
                             return DispatchOutcome::error(
@@ -309,6 +310,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Window(_)
                         | scripts::SearchResult::Skill(_)
                         | scripts::SearchResult::Note(_)
+                        | scripts::SearchResult::Todo(_)
                         | scripts::SearchResult::BrowserTab(_)
                         | scripts::SearchResult::BrowserHistory(_)
                         | scripts::SearchResult::Agent(_) => {

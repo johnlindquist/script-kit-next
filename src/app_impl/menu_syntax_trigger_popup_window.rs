@@ -865,6 +865,10 @@ impl ScriptListApp {
                 self.computed_filter_text = text.clone();
                 self.set_menu_syntax_mode_from_filter(&text);
                 self.invalidate_grouped_cache();
+                self.reconcile_script_list_after_filter_change(
+                    "menu_syntax_trigger_popup_replace",
+                    cx,
+                );
 
                 if keep_open {
                     // Re-run the popup state machine against the new filter

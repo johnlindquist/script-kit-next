@@ -330,6 +330,7 @@ impl ScriptListApp {
                     // execute_root_file_open is shared by Enter and the root-file Open action.
                     scripts::SearchResult::File(_) => None,
                     scripts::SearchResult::Note(_) => None,
+                    scripts::SearchResult::Todo(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::AiVault(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
@@ -449,6 +450,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Note(note_match) => {
                         self.execute_root_note_open(note_match.hit.id, cx);
+                    }
+                    scripts::SearchResult::Todo(todo_match) => {
+                        self.execute_root_todo_copy(&todo_match.hit, cx);
                     }
                     scripts::SearchResult::AcpHistory(acp_history_match) => {
                         self.resume_acp_conversation_from_history(
@@ -649,6 +653,21 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    pub(crate) fn execute_root_todo_copy(
+        &mut self,
+        hit: &crate::menu_syntax::RootTodoSearchHit,
+        cx: &mut Context<Self>,
+    ) {
+        let text = if hit.body.trim().is_empty() {
+            hit.title.clone()
+        } else {
+            hit.body.clone()
+        };
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+        logging::log("EXEC", &format!("Copied root todo: {}", hit.stable_key));
+        self.show_hud("Copied todo".to_string(), Some(HUD_SHORT_MS), cx);
     }
 
     pub(crate) fn execute_root_dictation_history_paste(

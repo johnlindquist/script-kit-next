@@ -51,6 +51,16 @@ pub const SOURCE_HEAD_DESCRIPTORS: &[SourceHeadDescriptor] = &[
         lat_section_id: ADVANCED_QUERY_LAT_SECTION,
     },
     SourceHeadDescriptor {
+        source: RootUnifiedSourceFilter::Todo,
+        long: "todo:",
+        short: None,
+        label: "Todos",
+        description: "Search local ;todo captures",
+        browse_blurb: "Browse captured todos.",
+        example: "todo: renew passport",
+        lat_section_id: ADVANCED_QUERY_LAT_SECTION,
+    },
+    SourceHeadDescriptor {
         source: RootUnifiedSourceFilter::ClipboardHistory,
         long: "clipboard:",
         short: Some("c:"),

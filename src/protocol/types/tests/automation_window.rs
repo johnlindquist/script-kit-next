@@ -110,6 +110,7 @@ fn automation_window_info_round_trip() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: Some(1234),
     };
     let json = serde_json::to_string(&info).expect("serialize");
     let back: AutomationWindowInfo = serde_json::from_str(&json).expect("deserialize");
@@ -146,6 +147,7 @@ fn automation_window_info_with_bounds() {
         }),
         parent_window_id: None,
         parent_kind: None,
+        pid: Some(1234),
     };
     let json = serde_json::to_string(&info).expect("serialize");
     assert!(json.contains("\"bounds\""));
@@ -252,6 +254,7 @@ fn automation_window_list_result_round_trip() {
                 bounds: None,
                 parent_window_id: None,
                 parent_kind: None,
+                pid: Some(1001),
             },
             AutomationWindowInfo {
                 id: "acpDetached:thread-1".into(),
@@ -263,6 +266,7 @@ fn automation_window_list_result_round_trip() {
                 bounds: None,
                 parent_window_id: None,
                 parent_kind: None,
+                pid: Some(1001),
             },
         ],
         Some("acpDetached:thread-1".into()),
@@ -494,6 +498,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
             os_window_id: Some(99),
             semantic_quality: Some(crate::protocol::SemanticQuality::PanelOnly),
             warnings: vec!["panel_only_acp_detached".into()],
+            pid: Some(1234),
         },
     );
     assert_eq!(msg.request_id(), Some("inspect-1"));

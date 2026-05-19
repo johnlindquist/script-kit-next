@@ -46,7 +46,12 @@ pub struct Rect {
 
 impl Rect {
     pub const fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
-        Self { x, y, width, height }
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
     }
 
     pub fn origin(self) -> Point {
@@ -260,7 +265,10 @@ impl CaptureOptions {
     }
 
     pub fn jpeg(quality: f32) -> Self {
-        Self { format: ImageFormat::Jpeg { quality }, ..Self::default() }
+        Self {
+            format: ImageFormat::Jpeg { quality },
+            ..Self::default()
+        }
     }
 
     pub fn with_backend(mut self, backend: CaptureBackend) -> Self {
@@ -309,7 +317,10 @@ impl Default for WindowListOptions {
 impl WindowListOptions {
     /// Query visible windows at every layer. Useful for menus, popovers, tooltips, and overlays.
     pub fn visible_all_layers() -> Self {
-        Self { allowed_layers: None, ..Self::default() }
+        Self {
+            allowed_layers: None,
+            ..Self::default()
+        }
     }
 
     /// Query the broadest window list CoreGraphics exposes.

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 DEVTOOLS_SESSION_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DEVTOOLS_SESSION_BINARY="${DEVTOOLS_SESSION_REPO_ROOT}/target/debug/script-kit-gpui"
+DEVTOOLS_SESSION_BINARY="${SCRIPT_KIT_GPUI_BINARY:-${DEVTOOLS_SESSION_REPO_ROOT}/target/debug/script-kit-gpui}"
 DEVTOOLS_SESSION_START_TS="${SECONDS:-0}"
 
 json_escape() {
@@ -23,7 +23,7 @@ detect_dev_sh() {
 }
 
 gpui_instance_count() {
-  pgrep -fc "${DEVTOOLS_SESSION_BINARY}" 2>/dev/null || echo 0
+  pgrep -x -c 'script-kit-gpui' 2>/dev/null || echo 0
 }
 
 detect_dev_watch_healthy() {

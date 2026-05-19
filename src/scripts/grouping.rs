@@ -397,6 +397,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         root_recent_file_results,
         crate::file_search::RootFileSectionOptions::default(),
         &[],
+        crate::menu_syntax::RootTodoSectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
+        &[],
         crate::notes::RootNotesSectionOptions {
             enabled: false,
             ..Default::default()
@@ -461,6 +466,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
     root_file_options: crate::file_search::RootFileSectionOptions,
+    root_todo_hits: &[crate::menu_syntax::RootTodoSearchHit],
+    root_todo_options: crate::menu_syntax::RootTodoSectionOptions,
     root_note_hits: &[crate::notes::RootNoteSearchHit],
     root_notes_options: crate::notes::RootNotesSectionOptions,
     root_clipboard_history_hits: &[crate::clipboard_history::ClipboardEntryMeta],
@@ -538,6 +545,21 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         RootPassiveResultBudget::for_results(&flat_results, root_passive_result_limits);
     for source in root_passive_source_order {
         match source {
+            crate::config::UnifiedSearchPassiveSource::Todos => {
+                if !root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Todo) {
+                    continue;
+                }
+                append_root_todos_section(
+                    &mut grouped,
+                    &mut flat_results,
+                    filter_text,
+                    advanced_query,
+                    root_todo_hits,
+                    root_todo_options,
+                    &mut passive_budget,
+                    root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Todo),
+                );
+            }
             crate::config::UnifiedSearchPassiveSource::BrowserTabs => {
                 if !root_source_filters
                     .allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs)
@@ -928,6 +950,53 @@ fn append_root_notes_section(
         )
     });
     append_root_passive_section(grouped, flat_results, "Notes", rows, status);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_root_todos_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::menu_syntax::RootTodoSearchHit],
+    options: crate::menu_syntax::RootTodoSectionOptions,
+    budget: &mut RootPassiveResultBudget,
+    explicit_source_filter: bool,
+) {
+    if !crate::menu_syntax::root_todo_query_is_eligible(filter_text, options) {
+        return;
+    }
+
+    let limit = budget.limit_for_source(options.max_results);
+    if limit == 0 && !explicit_source_filter {
+        return;
+    }
+
+    let mut rows = hits
+        .iter()
+        .enumerate()
+        .map(|(rank, hit)| {
+            SearchResult::Todo(crate::scripts::TodoMatch {
+                hit: hit.clone(),
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect::<Vec<_>>();
+    if let Some(query) = advanced_query {
+        rows = crate::menu_syntax::apply_advanced_query(rows, query);
+    }
+    rows.truncate(limit);
+
+    budget.consume(rows.len());
+    let status = explicit_source_filter.then(|| {
+        source_chip_result_status(
+            crate::menu_syntax::RootUnifiedSourceFilter::Todo,
+            rows.len(),
+            hits.len(),
+            false,
+        )
+    });
+    append_root_passive_section(grouped, flat_results, "Todos", rows, status);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2070,6 +2139,7 @@ mod advanced_query_tests {
                     | SearchResult::Window(_) => "primary",
                     SearchResult::File(_) => "rootFile",
                     SearchResult::Note(_)
+                    | SearchResult::Todo(_)
                     | SearchResult::AcpHistory(_)
                     | SearchResult::AiVault(_)
                     | SearchResult::ClipboardHistory(_)
@@ -2092,6 +2162,7 @@ mod advanced_query_tests {
         for result in flat {
             let source = match result {
                 SearchResult::Note(_) => "Notes",
+                SearchResult::Todo(_) => "Todos",
                 SearchResult::AcpHistory(_) => "Agent Chat Conversations",
                 SearchResult::AiVault(_) => "AI Vault",
                 SearchResult::ClipboardHistory(_) => "Clipboard History",
@@ -2202,6 +2273,11 @@ mod advanced_query_tests {
             &root_files,
             &[],
             crate::file_search::RootFileSectionOptions::default(),
+            &[],
+            crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -2353,6 +2429,11 @@ mod advanced_query_tests {
             &root_files,
             &[],
             crate::file_search::RootFileSectionOptions::default(),
+            &[],
+            crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -2521,6 +2602,11 @@ mod advanced_query_tests {
                     &[],
                     &[],
                     crate::file_search::RootFileSectionOptions::default(),
+                    &[],
+                    crate::menu_syntax::RootTodoSectionOptions {
+                        enabled: false,
+                        ..Default::default()
+                    },
                     &notes,
                     crate::notes::RootNotesSectionOptions {
                         enabled: true,
@@ -2631,6 +2717,11 @@ mod advanced_query_tests {
             &root_files,
             &[],
             crate::file_search::RootFileSectionOptions::default(),
+            &[],
+            crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -2744,6 +2835,11 @@ mod advanced_query_tests {
             &[],
             &[],
             crate::file_search::RootFileSectionOptions::default(),
+            &[],
+            crate::menu_syntax::RootTodoSectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
             &notes,
             crate::notes::RootNotesSectionOptions {
                 enabled: true,
@@ -2849,6 +2945,11 @@ mod advanced_query_tests {
                 &root_files,
                 &[],
                 crate::file_search::RootFileSectionOptions::default(),
+                &[],
+                crate::menu_syntax::RootTodoSectionOptions {
+                    enabled: false,
+                    ..Default::default()
+                },
                 &notes,
                 crate::notes::RootNotesSectionOptions {
                     enabled: true,
@@ -4736,6 +4837,11 @@ mod advanced_query_tests {
                 &recent_files,
                 crate::file_search::RootFileSectionOptions {
                     source_filter_browse_target_visible_rows: Some(target),
+                    ..Default::default()
+                },
+                &[],
+                crate::menu_syntax::RootTodoSectionOptions {
+                    enabled: false,
                     ..Default::default()
                 },
                 &[],

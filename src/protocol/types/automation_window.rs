@@ -97,4 +97,7 @@ pub struct AutomationWindowInfo {
     /// For attached popups: the kind of the parent window.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_kind: Option<AutomationWindowKind>,
+    /// Process ID of the window owner (useful for attaching profilers).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pid: Option<u32>,
 }

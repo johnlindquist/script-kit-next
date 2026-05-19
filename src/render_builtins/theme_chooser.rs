@@ -42,6 +42,22 @@ struct ThemeChooserContrastSnapshot {
     worst_ratio: f32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum ThemeChooserCatalogKind {
+    BuiltIn(usize),
+    User { slug: String },
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ThemeChooserCatalogEntry {
+    pub(crate) kind: ThemeChooserCatalogKind,
+    pub(crate) name: String,
+    pub(crate) description: String,
+    pub(crate) is_dark: bool,
+    pub(crate) theme: std::sync::Arc<crate::theme::Theme>,
+    pub(crate) preview_colors: theme::presets::PresetPreviewColors,
+}
+
 fn build_theme_chooser_contrast_snapshot(
     theme: &crate::theme::Theme,
 ) -> ThemeChooserContrastSnapshot {
@@ -133,17 +149,17 @@ impl ScriptListApp {
 
     fn theme_chooser_match_summary(
         filtered_indices: &[usize],
-        presets: &[theme::presets::ThemePreset],
+        catalog: &[ThemeChooserCatalogEntry],
     ) -> ThemeChooserMatchSummary {
-        let catalog_dark = presets.iter().filter(|preset| preset.is_dark).count();
+        let catalog_dark = catalog.iter().filter(|entry| entry.is_dark).count();
         let visible_dark = filtered_indices
             .iter()
-            .filter(|&&idx| presets[idx].is_dark)
+            .filter(|&&idx| catalog[idx].is_dark)
             .count();
         ThemeChooserMatchSummary {
-            catalog_total: presets.len(),
+            catalog_total: catalog.len(),
             catalog_dark,
-            catalog_light: presets.len().saturating_sub(catalog_dark),
+            catalog_light: catalog.len().saturating_sub(catalog_dark),
             visible_total: filtered_indices.len(),
             visible_dark,
             visible_light: filtered_indices.len().saturating_sub(visible_dark),
@@ -212,25 +228,79 @@ impl ScriptListApp {
         theme::presets::filtered_preset_indices_cached(filter)
     }
 
-    /// Cached filtered indices for the theme chooser render path.
-    /// Returns an `Arc<Vec<usize>>` so it can be shared with click closures
-    /// without recomputation. Only rebuilds when the filter string changes.
-    fn cached_theme_chooser_filtered_indices(filter: &str) -> std::sync::Arc<Vec<usize>> {
-        use std::cell::RefCell;
-        thread_local! {
-            static LAST_FILTER: RefCell<Option<(String, std::sync::Arc<Vec<usize>>)>> =
-                RefCell::new(None);
+    fn theme_preview_colors_for_theme(
+        theme: &crate::theme::Theme,
+    ) -> theme::presets::PresetPreviewColors {
+        theme::presets::PresetPreviewColors {
+            bg: theme.colors.background.main,
+            accent: theme.colors.accent.selected,
+            text: theme.colors.text.primary,
+            secondary: theme.colors.text.secondary,
+            border: theme.colors.ui.border,
         }
-        LAST_FILTER.with(|slot| {
-            if let Some((cached_filter, cached_indices)) = slot.borrow().as_ref() {
-                if cached_filter == filter {
-                    return cached_indices.clone();
-                }
+    }
+
+    fn theme_chooser_catalog() -> Vec<ThemeChooserCatalogEntry> {
+        let presets = theme::presets::presets_cached();
+        let preview_colors = theme::presets::preset_preview_colors_cached();
+        let mut catalog = theme::user_themes::list_user_themes()
+            .into_iter()
+            .filter_map(|user_theme| {
+                let theme = theme::user_themes::load_user_theme(&user_theme.slug)?;
+                let preview_colors = Self::theme_preview_colors_for_theme(&theme);
+                Some(ThemeChooserCatalogEntry {
+                    kind: ThemeChooserCatalogKind::User {
+                        slug: user_theme.slug.clone(),
+                    },
+                    name: user_theme.name,
+                    description: "User theme saved in ~/.scriptkit/themes".to_string(),
+                    is_dark: theme.has_dark_colors(),
+                    theme: std::sync::Arc::new(theme),
+                    preview_colors,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        catalog.extend(presets.iter().enumerate().map(|(index, preset)| {
+            ThemeChooserCatalogEntry {
+                kind: ThemeChooserCatalogKind::BuiltIn(index),
+                name: preset.name.to_string(),
+                description: preset.description.to_string(),
+                is_dark: preset.is_dark,
+                theme: theme::presets::preset_theme_cached(index),
+                preview_colors: preview_colors[index],
             }
-            let built = std::sync::Arc::new(theme::presets::filtered_preset_indices_cached(filter));
-            *slot.borrow_mut() = Some((filter.to_string(), built.clone()));
-            built
-        })
+        }));
+
+        catalog
+    }
+
+    fn theme_chooser_catalog_filtered_indices(
+        filter: &str,
+        catalog: &[ThemeChooserCatalogEntry],
+    ) -> Vec<usize> {
+        let filter = filter.trim().to_lowercase();
+        if filter.is_empty() {
+            return (0..catalog.len()).collect();
+        }
+        catalog
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry.name.to_lowercase().contains(&filter)
+                    || entry.description.to_lowercase().contains(&filter)
+                    || match &entry.kind {
+                        ThemeChooserCatalogKind::BuiltIn(index) => theme::presets::presets_cached()
+                            .get(*index)
+                            .map(|preset| preset.id.contains(&filter))
+                            .unwrap_or(false),
+                        ThemeChooserCatalogKind::User { slug } => {
+                            slug.contains(&filter) || "user personal custom".contains(&filter)
+                        }
+                    }
+            })
+            .map(|(index, _)| index)
+            .collect()
     }
 
     /// Cached original-theme preset classification for the theme chooser.
@@ -278,9 +348,9 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Apply a theme AND persist to disk (auto-save on click).
-    /// Does NOT update `theme_before_chooser` — that stays as the entry
-    /// snapshot so Escape can undo all click-saves.
+    /// Apply a theme AND persist to disk.
+    /// Theme Designer should call this only for explicit Apply/Done/Undo
+    /// style commits, not ordinary preview or customization controls.
     fn apply_and_persist_theme(
         &mut self,
         next_theme: crate::theme::Theme,
@@ -346,21 +416,114 @@ impl ScriptListApp {
         self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
-    /// Preview a preset AND persist to disk (for mouse clicks).
-    fn preview_and_persist_theme_chooser_preset(
+    fn preview_theme_chooser_catalog_entry(
         &mut self,
+        catalog: &[ThemeChooserCatalogEntry],
         filtered_indices: &[usize],
         filtered_selected_index: usize,
         reason: &'static str,
+        persist: bool,
         cx: &mut Context<Self>,
     ) {
-        let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
+        let Some(&catalog_idx) = filtered_indices.get(filtered_selected_index) else {
             return;
         };
-        let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
+        let Some(entry) = catalog.get(catalog_idx) else {
+            return;
+        };
         self.theme_chooser_list_state
             .scroll_to_reveal_item(filtered_selected_index);
-        self.apply_and_persist_theme(next_theme, reason, cx);
+        let next_theme = (*entry.theme).clone();
+        if persist {
+            self.apply_and_persist_theme(next_theme, reason, cx);
+        } else {
+            self.apply_theme_chooser_theme(next_theme, reason, cx);
+        }
+    }
+
+    fn save_current_theme_as_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let name = format!(
+            "Custom Theme {}",
+            chrono::Local::now().format("%Y-%m-%d %H.%M.%S")
+        );
+        match theme::user_themes::save_theme_as_user_theme(&name, self.theme.as_ref()) {
+            Ok(saved) => {
+                tracing::info!(slug = %saved.slug, path = %saved.path.display(), reason, "theme_chooser_saved_user_theme");
+                cx.notify();
+            }
+            Err(error) => {
+                tracing::warn!(%error, reason, "theme_chooser_save_user_theme_failed");
+            }
+        }
+    }
+
+    fn delete_selected_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let Some((filter, selected_index)) = self.current_theme_chooser_selection() else {
+            return;
+        };
+        let catalog = Self::theme_chooser_catalog();
+        let filtered = Self::theme_chooser_catalog_filtered_indices(&filter, &catalog);
+        let Some(entry) = filtered
+            .get(selected_index)
+            .and_then(|catalog_idx| catalog.get(*catalog_idx))
+        else {
+            return;
+        };
+        if let ThemeChooserCatalogKind::User { slug } = &entry.kind {
+            match theme::user_themes::delete_user_theme(slug) {
+                Ok(()) => {
+                    tracing::info!(slug, reason, "theme_chooser_deleted_user_theme");
+                    cx.notify();
+                }
+                Err(error) => {
+                    tracing::warn!(slug, %error, reason, "theme_chooser_delete_user_theme_failed");
+                }
+            }
+        }
+    }
+
+    fn cycle_theme_chooser_gradient(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        const GRADIENT_PRESETS: &[(u32, u32, f32, f32)] = &[
+            (0x1e1e1e, 0x3b2f5f, 135.0, 0.28),
+            (0x111827, 0x164e63, 135.0, 0.30),
+            (0x1f2937, 0x7c2d12, 135.0, 0.24),
+        ];
+
+        let mut next = (*self.theme).clone();
+        let current = next.background_gradient.clone().unwrap_or_default();
+        if !current.enabled {
+            let (from, to, angle, opacity) = GRADIENT_PRESETS[0];
+            next.background_gradient = Some(theme::BackgroundGradient {
+                enabled: true,
+                from,
+                to,
+                angle,
+                opacity,
+            });
+        } else {
+            let current_index = GRADIENT_PRESETS
+                .iter()
+                .position(|(from, to, angle, opacity)| {
+                    *from == current.from
+                        && *to == current.to
+                        && (*angle - current.angle).abs() < 0.5
+                        && (*opacity - current.opacity).abs() < 0.01
+                })
+                .unwrap_or(usize::MAX);
+            if current_index + 1 < GRADIENT_PRESETS.len() {
+                let (from, to, angle, opacity) = GRADIENT_PRESETS[current_index + 1];
+                next.background_gradient = Some(theme::BackgroundGradient {
+                    enabled: true,
+                    from,
+                    to,
+                    angle,
+                    opacity,
+                });
+            } else {
+                next.background_gradient = None;
+            }
+        }
+        self.apply_theme_chooser_theme(next, reason, cx);
     }
 
     fn sync_theme_chooser_list_state(&mut self, item_count: usize) {
@@ -465,12 +628,16 @@ impl ScriptListApp {
         let Some((filter, selected_index)) = self.current_theme_chooser_selection() else {
             return;
         };
-        let filtered = Self::theme_chooser_filtered_indices(&filter);
-        if persist {
-            self.preview_and_persist_theme_chooser_preset(&filtered, selected_index, reason, cx);
-        } else {
-            self.preview_theme_chooser_preset(&filtered, selected_index, reason, cx);
-        }
+        let catalog = Self::theme_chooser_catalog();
+        let filtered = Self::theme_chooser_catalog_filtered_indices(&filter, &catalog);
+        self.preview_theme_chooser_catalog_entry(
+            &catalog,
+            &filtered,
+            selected_index,
+            reason,
+            persist,
+            cx,
+        );
     }
 
     fn cycle_theme_chooser_accent(
@@ -605,6 +772,18 @@ impl ScriptListApp {
             }
             "theme_chooser_reset" => {
                 self.preview_current_theme_chooser_preset("theme_chooser_action_reset", false, cx);
+            }
+            "theme_chooser_save_as_user_theme" => {
+                self.save_current_theme_as_user_theme(
+                    "theme_chooser_action_save_as_user_theme",
+                    cx,
+                );
+            }
+            "theme_chooser_delete_user_theme" => {
+                self.delete_selected_user_theme("theme_chooser_action_delete_user_theme", cx);
+            }
+            "theme_chooser_gradient_cycle" => {
+                self.cycle_theme_chooser_gradient("theme_chooser_action_gradient_cycle", cx);
             }
             "theme_chooser_accent_previous" => {
                 self.cycle_theme_chooser_accent(-1, "theme_chooser_action_accent_previous", cx);
@@ -829,25 +1008,39 @@ impl ScriptListApp {
         let badge_border_bg = rgba(chrome.badge_border_rgba);
         let theme_row_selected_bg = rgba(chrome.selection_rgba);
         let theme_row_hover_bg = rgba(chrome.hover_rgba);
-        let presets = theme::presets::presets_cached();
-        let preview_colors = theme::presets::preset_preview_colors_cached();
-        let first_light = theme::presets::first_light_theme_index();
+        let catalog = std::sync::Arc::new(Self::theme_chooser_catalog());
+        let first_light = catalog
+            .iter()
+            .position(|entry| {
+                !entry.is_dark && matches!(entry.kind, ThemeChooserCatalogKind::BuiltIn(_))
+            })
+            .unwrap_or(0);
         let original_match =
             Self::cached_theme_chooser_original_match(self.theme_before_chooser.as_ref());
-        let original_index = original_match.as_ref().map(|m| m.preset_index).unwrap_or(0);
+        let original_index = original_match
+            .as_ref()
+            .and_then(|m| {
+                catalog.iter().position(|entry| {
+                    matches!(&entry.kind, ThemeChooserCatalogKind::BuiltIn(index) if *index == m.preset_index)
+                })
+            })
+            .unwrap_or(0);
         let original_is_exact = original_match
             .as_ref()
             .map(|m| m.is_exact())
             .unwrap_or(false);
 
-        // Filter presets by name or description (cached by filter string)
-        let filtered_indices = Self::cached_theme_chooser_filtered_indices(filter);
+        // Filter built-in and user themes by name or description.
+        let filtered_indices = std::sync::Arc::new(Self::theme_chooser_catalog_filtered_indices(
+            filter, &catalog,
+        ));
         let filtered_count = filtered_indices.len();
         self.sync_theme_chooser_list_state(filtered_count);
         let filter_is_empty = filter.is_empty();
 
-        let summary = Self::theme_chooser_match_summary(&filtered_indices, presets);
+        let summary = Self::theme_chooser_match_summary(&filtered_indices, &catalog);
         let entity_handle = cx.entity().downgrade();
+        let catalog_for_keys = std::sync::Arc::clone(&catalog);
 
         // ── Keyboard handler ───────────────────────────────────────
         let handle_key = cx.listener(
@@ -1047,15 +1240,20 @@ impl ScriptListApp {
                         } else {
                             return;
                         };
-                    let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                    let filtered = Self::theme_chooser_catalog_filtered_indices(
+                        &current_filter,
+                        &catalog_for_keys,
+                    );
                     if let AppView::ThemeChooserView {
                         ref selected_index, ..
                     } = this.current_view
                     {
-                        this.preview_theme_chooser_preset(
+                        this.preview_theme_chooser_catalog_entry(
+                            &catalog_for_keys,
                             &filtered,
                             *selected_index,
                             "theme_chooser_reset_shortcut",
+                            false,
                             cx,
                         );
                     }
@@ -1069,7 +1267,10 @@ impl ScriptListApp {
                     } else {
                         return;
                     };
-                let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                let filtered = Self::theme_chooser_catalog_filtered_indices(
+                    &current_filter,
+                    &catalog_for_keys,
+                );
                 let count = filtered.len();
                 if count == 0 {
                     if is_key_up(key)
@@ -1118,10 +1319,12 @@ impl ScriptListApp {
                     // Copy index before calling &mut self method
                     let idx = *selected_index;
                     // Map to actual preset index and apply theme
-                    this.preview_theme_chooser_preset(
+                    this.preview_theme_chooser_catalog_entry(
+                        &catalog_for_keys,
                         &filtered,
                         idx,
                         "theme_chooser_keyboard_preview",
+                        false,
                         cx,
                     );
                     cx.stop_propagation();
@@ -1130,12 +1333,12 @@ impl ScriptListApp {
         );
 
         // ── Pre-compute data for list closure ──────────────────────
-        let presets_for_list = presets;
         let selected = selected_index;
         let orig_idx = original_index;
         let orig_exact = original_is_exact;
         let first_light_idx = first_light;
         let filtered_indices_for_list = std::sync::Arc::clone(&filtered_indices);
+        let catalog_for_list = std::sync::Arc::clone(&catalog);
         let entity_handle_for_customize = entity_handle.clone();
         let accent_badge_border = rgba(chrome.accent_badge_border_rgba);
         let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
@@ -1146,15 +1349,17 @@ impl ScriptListApp {
         let list = list(
             self.theme_chooser_list_state.clone(),
             move |ix, _window, _cx| {
-                let preset_idx = filtered_indices_for_list[ix];
+                let catalog_idx = filtered_indices_for_list[ix];
+                let entry = &catalog_for_list[catalog_idx];
                 let is_selected = ix == selected;
-                let is_original = preset_idx == orig_idx;
-                let preset = &presets_for_list[preset_idx];
-                let name = preset.name;
-                let desc = preset.description;
-                let colors = &preview_colors[preset_idx];
-                let is_first_light =
-                    filter_is_empty && preset_idx == first_light_idx && first_light_idx > 0;
+                let is_original = catalog_idx == orig_idx;
+                let name = entry.name.as_str();
+                let desc = entry.description.as_str();
+                let colors = &entry.preview_colors;
+                let is_first_light = filter_is_empty
+                    && catalog_idx == first_light_idx
+                    && first_light_idx > 0
+                    && matches!(entry.kind, ThemeChooserCatalogKind::BuiltIn(_));
 
                 // Compact color bar — thin horizontal strip showing theme palette
                 let color_bar = div()
@@ -1171,8 +1376,15 @@ impl ScriptListApp {
                     .child(div().flex_1().bg(rgb(colors.border)));
 
                 // Badge for original theme — "Saved" if exact match, "Modified" if remixed
-                let saved_badge = if is_original {
-                    let label = if orig_exact { "Saved" } else { "Modified" };
+                let is_user_theme = matches!(&entry.kind, ThemeChooserCatalogKind::User { .. });
+                let saved_badge = if is_original || is_user_theme {
+                    let label = if is_user_theme {
+                        "User"
+                    } else if orig_exact {
+                        "Saved"
+                    } else {
+                        "Modified"
+                    };
                     Some(
                         div()
                             .px(px(6.0))
@@ -1206,11 +1418,13 @@ impl ScriptListApp {
                 // Click handler: select + preview via captured Arc indices
                 let click_entity = entity_handle.clone();
                 let click_indices = std::sync::Arc::clone(&filtered_indices_for_list);
+                let click_catalog = std::sync::Arc::clone(&catalog_for_list);
                 let click_handler =
                     move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
                         cx.stop_propagation();
                         if let Some(app) = click_entity.upgrade() {
                             let indices = std::sync::Arc::clone(&click_indices);
+                            let catalog = std::sync::Arc::clone(&click_catalog);
                             app.update(cx, |this, cx| {
                                 if let AppView::ThemeChooserView {
                                     ref mut selected_index,
@@ -1219,10 +1433,12 @@ impl ScriptListApp {
                                 {
                                     *selected_index = ix;
                                 }
-                                this.preview_and_persist_theme_chooser_preset(
+                                this.preview_theme_chooser_catalog_entry(
+                                    &catalog,
                                     &indices,
                                     ix,
                                     "theme_chooser_mouse_click",
+                                    false,
                                     cx,
                                 );
                             });
@@ -1230,8 +1446,8 @@ impl ScriptListApp {
                     };
 
                 // Build shared ListItem row — matches main menu rendering
-                let item = crate::list_item::ListItem::new(name, list_colors)
-                    .description(desc)
+                let item = crate::list_item::ListItem::new(name.to_string(), list_colors)
+                    .description(desc.to_string())
                     .selected(is_selected)
                     .with_accent_bar(true)
                     .index(ix)
@@ -1303,6 +1519,7 @@ impl ScriptListApp {
         let current_opacity_main = self.theme.get_opacity().main;
         let current_text_placeholder_opacity = self.theme.get_opacity().text_placeholder;
         let current_focused_background_opacity = self.theme.get_opacity().selected;
+        let gradient_enabled = self.theme.active_background_gradient().is_some();
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -1354,7 +1571,7 @@ impl ScriptListApp {
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.apply_and_persist_theme(
+                                    this.apply_theme_chooser_theme(
                                         modified,
                                         "theme_chooser_accent_click",
                                         cx,
@@ -1410,7 +1627,7 @@ impl ScriptListApp {
                                 app.update(cx, |this, cx| {
                                     let modified =
                                         Self::apply_text_opacity_preset(this.theme.as_ref(), value);
-                                    this.apply_and_persist_theme(
+                                    this.apply_theme_chooser_theme(
                                         modified,
                                         "theme_chooser_text_opacity_click",
                                         cx,
@@ -1473,7 +1690,7 @@ impl ScriptListApp {
                                                 this.theme.as_ref(),
                                                 value,
                                             );
-                                        this.apply_and_persist_theme(
+                                        this.apply_theme_chooser_theme(
                                             modified,
                                             "theme_chooser_focused_background_opacity_click",
                                             cx,
@@ -1529,7 +1746,7 @@ impl ScriptListApp {
                                         this.theme.as_ref(),
                                         value,
                                     );
-                                    this.apply_and_persist_theme(
+                                    this.apply_theme_chooser_theme(
                                         modified,
                                         "theme_chooser_opacity_click",
                                         cx,
@@ -1568,7 +1785,7 @@ impl ScriptListApp {
                             if let Some(ref mut vibrancy) = modified.vibrancy {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
-                            this.apply_and_persist_theme(
+                            this.apply_theme_chooser_theme(
                                 modified,
                                 "theme_chooser_vibrancy_click",
                                 cx,
@@ -1651,7 +1868,7 @@ impl ScriptListApp {
                                     if let Some(ref mut vibrancy) = modified.vibrancy {
                                         vibrancy.material = material;
                                     }
-                                    this.apply_and_persist_theme(
+                                    this.apply_theme_chooser_theme(
                                         modified,
                                         "theme_chooser_material_click",
                                         cx,
@@ -1712,7 +1929,7 @@ impl ScriptListApp {
                                             ..Default::default()
                                         });
                                     }
-                                    this.apply_and_persist_theme(
+                                    this.apply_theme_chooser_theme(
                                         modified,
                                         "theme_chooser_font_size_click",
                                         cx,
@@ -1728,6 +1945,7 @@ impl ScriptListApp {
 
         // Build reset button (clickable)
         let reset_entity = entity_handle_for_customize.clone();
+        let reset_catalog = std::sync::Arc::clone(&catalog);
         let reset_button = div()
             .id("reset-to-preset")
             .px(px(10.0))
@@ -1756,15 +1974,20 @@ impl ScriptListApp {
                                 } else {
                                     return;
                                 };
-                            let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                            let filtered = Self::theme_chooser_catalog_filtered_indices(
+                                &current_filter,
+                                &reset_catalog,
+                            );
                             if let AppView::ThemeChooserView {
                                 ref selected_index, ..
                             } = this.current_view
                             {
-                                this.preview_and_persist_theme_chooser_preset(
+                                this.preview_theme_chooser_catalog_entry(
+                                    &reset_catalog,
                                     &filtered,
                                     *selected_index,
                                     "theme_chooser_reset_click",
+                                    false,
                                     cx,
                                 );
                             }
@@ -1802,20 +2025,92 @@ impl ScriptListApp {
                                 this.theme.as_ref(),
                                 theme_chooser_remix_seed(),
                             );
-                            this.apply_and_persist_theme(remixed, "theme_chooser_surprise_me", cx);
+                            this.apply_theme_chooser_theme(
+                                remixed,
+                                "theme_chooser_surprise_me",
+                                cx,
+                            );
                         });
                     }
                 },
             )
             .child("Surprise Me");
 
+        let save_theme_entity = entity_handle_for_customize.clone();
+        let save_as_button = div()
+            .id("theme-save-as-user-theme")
+            .px(px(10.0))
+            .py(px(4.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .text_xs()
+            .border_1()
+            .border_color(badge_border_bg)
+            .text_color(rgb(text_secondary))
+            .hover(move |s| s.bg(theme_row_hover_bg))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Save as user theme").build(window, cx)
+            })
+            .on_click(
+                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    cx.stop_propagation();
+                    if let Some(app) = save_theme_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.save_current_theme_as_user_theme(
+                                "theme_chooser_save_as_click",
+                                cx,
+                            );
+                        });
+                    }
+                },
+            )
+            .child("Save As");
+
+        let gradient_entity = entity_handle_for_customize.clone();
+        let gradient_button = div()
+            .id("theme-gradient-cycle")
+            .px(px(10.0))
+            .py(px(4.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .text_xs()
+            .when(gradient_enabled, |d| {
+                d.bg(rgb(accent_color))
+                    .text_color(rgb(text_on_accent))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+            })
+            .when(!gradient_enabled, |d| {
+                d.border_1()
+                    .border_color(badge_border_bg)
+                    .text_color(rgb(text_secondary))
+                    .hover(move |s| s.bg(theme_row_hover_bg))
+            })
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Cycle background gradient").build(window, cx)
+            })
+            .on_click(
+                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    cx.stop_propagation();
+                    if let Some(app) = gradient_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.cycle_theme_chooser_gradient("theme_chooser_gradient_click", cx);
+                        });
+                    }
+                },
+            )
+            .child(if gradient_enabled {
+                "Gradient On"
+            } else {
+                "Gradient"
+            });
+
         let accent_name = Self::accent_color_name(accent_color);
 
         // Resolve selected preset name for live preview header
         let selected_preset_name = filtered_indices
             .get(selected_index)
-            .and_then(|idx| presets.get(*idx))
-            .map(|preset| preset.name)
+            .and_then(|idx| catalog.get(*idx))
+            .map(|entry| entry.name.as_str())
             .unwrap_or("Theme Preview");
 
         // Resolve contrast-safe semantic chip colors
@@ -1857,6 +2152,8 @@ impl ScriptListApp {
                             .flex_row()
                             .items_center()
                             .gap(px(6.0))
+                            .child(save_as_button)
+                            .child(gradient_button)
                             .child(surprise_button)
                             .child(reset_button),
                     ),

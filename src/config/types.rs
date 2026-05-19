@@ -59,6 +59,7 @@ pub struct UnifiedSearchConfig {
     pub passive_source_order: Vec<UnifiedSearchPassiveSource>,
     pub passive_result_limits: UnifiedSearchPassiveResultLimitsConfig,
     pub files: UnifiedSearchFilesConfig,
+    pub todos: UnifiedSearchTodosConfig,
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
     pub ai_vault: UnifiedSearchAiVaultConfig,
@@ -75,6 +76,7 @@ impl Default for UnifiedSearchConfig {
             passive_source_order: default_unified_search_passive_source_order(),
             passive_result_limits: UnifiedSearchPassiveResultLimitsConfig::default(),
             files: UnifiedSearchFilesConfig::default(),
+            todos: UnifiedSearchTodosConfig::default(),
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
             ai_vault: UnifiedSearchAiVaultConfig::default(),
@@ -90,6 +92,7 @@ impl Default for UnifiedSearchConfig {
 #[serde(rename_all = "camelCase")]
 pub enum UnifiedSearchPassiveSource {
     BrowserTabs,
+    Todos,
     Notes,
     ClipboardHistory,
     DictationHistory,
@@ -99,8 +102,9 @@ pub enum UnifiedSearchPassiveSource {
 }
 
 impl UnifiedSearchPassiveSource {
-    pub(crate) const DEFAULT_ORDER: [Self; 7] = [
+    pub(crate) const DEFAULT_ORDER: [Self; 8] = [
         Self::BrowserTabs,
+        Self::Todos,
         Self::Notes,
         Self::ClipboardHistory,
         Self::DictationHistory,
@@ -152,6 +156,24 @@ impl Default for UnifiedSearchFilesConfig {
             recent_files: DEFAULT_UNIFIED_SEARCH_FILES_RECENT_FILES,
             directory_browse: DEFAULT_UNIFIED_SEARCH_FILES_DIRECTORY_BROWSE,
             promotion: RootFilePromotionConfig::Never,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchTodosConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+}
+
+impl Default for UnifiedSearchTodosConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_results: 10,
+            min_query_chars: 0,
         }
     }
 }
@@ -461,6 +483,15 @@ impl UnifiedSearchConfig {
             max_results: self.notes.max_results.clamp(1, 5),
             min_query_chars: self.notes.min_query_chars.clamp(2, 32),
             search_content: self.notes.search_content,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn todo_section_options(&self) -> crate::menu_syntax::RootTodoSectionOptions {
+        crate::menu_syntax::RootTodoSectionOptions {
+            enabled: self.enabled && self.todos.enabled,
+            max_results: self.todos.max_results.clamp(1, 24),
+            min_query_chars: self.todos.min_query_chars.clamp(0, 32),
         }
     }
 

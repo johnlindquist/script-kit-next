@@ -40,9 +40,13 @@ impl Drop for OwnedCf {
 }
 
 pub(super) fn cf_string(s: &str) -> Result<OwnedCf, ScreenshotError> {
-    let c = CString::new(s).map_err(|_| ScreenshotError::InvalidInput(format!("string contains NUL byte: {s:?}")))?;
-    let ptr = unsafe { CFStringCreateWithCString(null_allocator(), c.as_ptr(), kCFStringEncodingUTF8) };
-    OwnedCf::new_const(ptr).ok_or_else(|| ScreenshotError::CoreGraphics(format!("CFStringCreateWithCString failed for {s:?}")))
+    let c = CString::new(s)
+        .map_err(|_| ScreenshotError::InvalidInput(format!("string contains NUL byte: {s:?}")))?;
+    let ptr =
+        unsafe { CFStringCreateWithCString(null_allocator(), c.as_ptr(), kCFStringEncodingUTF8) };
+    OwnedCf::new_const(ptr).ok_or_else(|| {
+        ScreenshotError::CoreGraphics(format!("CFStringCreateWithCString failed for {s:?}"))
+    })
 }
 
 pub(super) fn cf_number_i64(value: i64) -> Result<OwnedCf, ScreenshotError> {
@@ -53,7 +57,8 @@ pub(super) fn cf_number_i64(value: i64) -> Result<OwnedCf, ScreenshotError> {
             &value as *const i64 as *const c_void,
         )
     };
-    OwnedCf::new_const(ptr).ok_or_else(|| ScreenshotError::CoreGraphics("CFNumberCreate(i64) failed".into()))
+    OwnedCf::new_const(ptr)
+        .ok_or_else(|| ScreenshotError::CoreGraphics("CFNumberCreate(i64) failed".into()))
 }
 
 pub(super) fn cf_number_f64(value: f64) -> Result<OwnedCf, ScreenshotError> {
@@ -64,7 +69,8 @@ pub(super) fn cf_number_f64(value: f64) -> Result<OwnedCf, ScreenshotError> {
             &value as *const f64 as *const c_void,
         )
     };
-    OwnedCf::new_const(ptr).ok_or_else(|| ScreenshotError::CoreGraphics("CFNumberCreate(f64) failed".into()))
+    OwnedCf::new_const(ptr)
+        .ok_or_else(|| ScreenshotError::CoreGraphics("CFNumberCreate(f64) failed".into()))
 }
 
 pub(super) fn dict_get(dict: CFDictionaryRef, key: &str) -> Option<CFTypeRef> {
@@ -109,7 +115,12 @@ pub(super) fn dict_rect(dict: CFDictionaryRef, key: &str) -> Option<Rect> {
     let mut rect = CGRect::default();
     let ok = unsafe { CGRectMakeWithDictionaryRepresentation(value, &mut rect) };
     if ok {
-        Some(Rect::new(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height))
+        Some(Rect::new(
+            rect.origin.x,
+            rect.origin.y,
+            rect.size.width,
+            rect.size.height,
+        ))
     } else {
         None
     }
@@ -141,8 +152,18 @@ pub(super) fn cf_number_to_i64(value: CFNumberRef) -> Option<i64> {
         return None;
     }
     let mut out = 0_i64;
-    let ok = unsafe { CFNumberGetValue(value, kCFNumberSInt64Type, &mut out as *mut i64 as *mut c_void) };
-    if ok != 0 { Some(out) } else { None }
+    let ok = unsafe {
+        CFNumberGetValue(
+            value,
+            kCFNumberSInt64Type,
+            &mut out as *mut i64 as *mut c_void,
+        )
+    };
+    if ok != 0 {
+        Some(out)
+    } else {
+        None
+    }
 }
 
 pub(super) fn cf_number_to_f64(value: CFNumberRef) -> Option<f64> {
@@ -150,8 +171,18 @@ pub(super) fn cf_number_to_f64(value: CFNumberRef) -> Option<f64> {
         return None;
     }
     let mut out = 0_f64;
-    let ok = unsafe { CFNumberGetValue(value, kCFNumberDoubleType, &mut out as *mut f64 as *mut c_void) };
-    if ok != 0 { Some(out) } else { None }
+    let ok = unsafe {
+        CFNumberGetValue(
+            value,
+            kCFNumberDoubleType,
+            &mut out as *mut f64 as *mut c_void,
+        )
+    };
+    if ok != 0 {
+        Some(out)
+    } else {
+        None
+    }
 }
 
 pub(super) fn data_to_vec(data: CFDataRef) -> Vec<u8> {

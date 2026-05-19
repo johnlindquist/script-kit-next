@@ -189,6 +189,33 @@ impl ScriptListApp {
             .with_section("Customize")
             .with_icon(IconName::Refresh),
             Action::new(
+                "theme_chooser_save_as_user_theme",
+                "Save as User Theme",
+                Some("Save the current Theme Designer state under ~/.scriptkit/themes".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Manage")
+            .with_icon(IconName::Plus),
+            Action::new(
+                "theme_chooser_delete_user_theme",
+                "Delete Selected User Theme",
+                Some(
+                    "Delete the selected user-authored theme; built-in themes are read-only"
+                        .to_string(),
+                ),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Manage")
+            .with_icon(IconName::Trash),
+            Action::new(
+                "theme_chooser_gradient_cycle",
+                "Cycle Background Gradient",
+                Some("Toggle or cycle optional background gradient flair".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Customize")
+            .with_icon(IconName::BoltOutlined),
+            Action::new(
                 "theme_chooser_accent_previous",
                 "Previous Accent Color",
                 Some("Move to the previous accent swatch".to_string()),

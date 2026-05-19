@@ -35,3 +35,53 @@ fn theme_chooser_customize_opacity_controls_cover_full_percent_range() {
         "each theme designer opacity control should expose a 100% endpoint"
     );
 }
+
+#[test]
+fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let actions = read_source("src/render_builtins/actions.rs");
+    let user_themes = read_source("src/theme/user_themes.rs");
+    let theme_types = read_source("src/theme/types.rs");
+    let render_impl = read_source("src/main_sections/render_impl.rs");
+
+    assert!(chooser.contains("fn theme_chooser_catalog()"));
+    assert!(chooser.contains("theme::user_themes::list_user_themes()"));
+    assert!(chooser.contains("theme::user_themes::load_user_theme"));
+    assert!(chooser.contains("save_current_theme_as_user_theme"));
+    assert!(chooser.contains("delete_selected_user_theme"));
+    assert!(chooser.contains("cycle_theme_chooser_gradient"));
+    assert!(chooser.contains("self.apply_theme_chooser_theme(next_theme, reason, cx);"));
+    assert!(
+        !chooser.contains("this.apply_and_persist_theme("),
+        "Theme Designer customization clicks should preview only; Done/Enter owns persistence"
+    );
+    assert!(
+        !chooser
+            .contains("\"theme_chooser_mouse_click\",\n                                    true"),
+        "Theme Designer row clicks should not persist active theme.json"
+    );
+    assert!(
+        !chooser.contains("persist_theme_and_sync_all_windows(\n                    cx,\n                    self.theme.as_ref(),\n                    reason"),
+        "Save as user theme should write the library preset without applying active theme.json"
+    );
+
+    for action_id in [
+        "theme_chooser_save_as_user_theme",
+        "theme_chooser_delete_user_theme",
+        "theme_chooser_gradient_cycle",
+    ] {
+        assert!(
+            actions.contains(action_id) && chooser.contains(action_id),
+            "Theme Designer action `{action_id}` must be exposed in actions and executed"
+        );
+    }
+
+    assert!(user_themes.contains("pub fn save_theme_as_user_theme("));
+    assert!(user_themes.contains("pub fn save_user_theme_unique("));
+    assert!(user_themes.contains("pub fn load_user_theme("));
+    assert!(user_themes.contains(".get(\"hover\")"));
+    assert!(user_themes.contains(".get(\"selected\")"));
+    assert!(theme_types.contains("pub struct BackgroundGradient"));
+    assert!(theme_types.contains("pub fn active_background_gradient(&self)"));
+    assert!(render_impl.contains("get_theme_background_gradient(&self.theme)"));
+}

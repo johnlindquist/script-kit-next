@@ -37,7 +37,10 @@
 // --- merged from part_000.rs ---
 use crate::designs::{get_tokens, DesignColors, DesignSpacing, DesignVariant};
 use crate::theme::{ColorScheme, Theme};
-use gpui::{px, Div, Hsla, InteractiveElement, Rgba, Stateful, Styled};
+use gpui::{
+    linear_color_stop, linear_gradient, px, rgba, Background, Div, Hsla, InteractiveElement, Rgba,
+    Stateful, Styled,
+};
 /// Convert a hex color (u32) to RGBA with specified opacity.
 ///
 /// This is the standard way to create semi-transparent colors for vibrancy support.
@@ -185,6 +188,19 @@ pub fn get_vibrancy_background(theme: &Theme) -> Option<Rgba> {
         // No vibrancy: use solid background
         Some(gpui::rgb(theme.colors.background.main))
     }
+}
+
+/// Resolve the optional theme background gradient as a GPUI fill.
+pub fn get_theme_background_gradient(theme: &Theme) -> Option<Background> {
+    let gradient = theme.active_background_gradient()?;
+    let alpha = crate::theme::types::opacity_to_alpha(gradient.opacity);
+    let from = rgba((gradient.from << 8) | alpha);
+    let to = rgba((gradient.to << 8) | alpha);
+    Some(linear_gradient(
+        gradient.angle,
+        linear_color_stop(from, 0.0),
+        linear_color_stop(to, 1.0),
+    ))
 }
 /// Get container background with optional opacity for semi-transparent areas.
 ///

@@ -29,27 +29,26 @@ pub(crate) fn render_main_window_preflight_receipt(
                 .text_color(rgb(chrome.badge_text_hex))
                 .child("Execution Contract"),
         )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(4.))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child(format!("\u{21B5} {}", receipt.enter_action.label)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(chrome.badge_text_hex))
-                        .child(format!(
-                            "{} \u{00B7} {}",
-                            receipt.enter_action.type_label, receipt.enter_action.subject
-                        )),
-                ),
-        )
+        .when_some(receipt.enter_action.as_ref(), |d, enter| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("\u{21B5} {}", enter.label)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.badge_text_hex))
+                            .child(format!("{} \u{00B7} {}", enter.type_label, enter.subject)),
+                    ),
+            )
+        })
         .when_some(receipt.tab_action.as_ref(), |d, tab| {
             d.child(
                 div()

@@ -232,6 +232,12 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("NotebookText".to_string())),
                 ),
+                SearchResult::Todo(tm) => (
+                    tm.hit.title.clone(),
+                    Some(tm.hit.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("ListTodo".to_string())),
+                ),
                 SearchResult::AcpHistory(am) => (
                     am.entry.title_display().to_string(),
                     Some(am.subtitle.clone()),

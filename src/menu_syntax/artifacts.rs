@@ -108,6 +108,38 @@ pub struct ReadArtifactReport {
     pub warnings: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RootTodoSectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+}
+
+impl Default for RootTodoSectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_results: 10,
+            min_query_chars: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RootTodoSearchHit {
+    pub stable_key: String,
+    pub title: String,
+    pub body: String,
+    pub subtitle: String,
+    pub tags: Vec<String>,
+    pub priority: Option<u8>,
+    pub due: Option<String>,
+    pub created_at: Option<String>,
+    pub path: PathBuf,
+    pub line_number: Option<usize>,
+    pub raw_line: String,
+}
+
 impl ReadArtifactReport {
     /// Merge another report into this one. Entries are appended in order,
     /// skipped counts sum, and warnings are capped at [`MAX_WARNINGS`] so a
@@ -275,6 +307,186 @@ pub fn read_all_artifacts(sk_path: &Path) -> ReadArtifactReport {
     report
 }
 
+pub fn root_todo_query_is_eligible(query: &str, options: RootTodoSectionOptions) -> bool {
+    options.enabled && query.chars().count() >= options.min_query_chars && !query.contains('\n')
+}
+
+pub fn search_root_todos_direct(
+    query: &str,
+    options: RootTodoSectionOptions,
+) -> Vec<RootTodoSearchHit> {
+    if !root_todo_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+    search_root_todos_in_sk_path(query, options, &default_sk_path())
+}
+
+pub fn search_root_todos_in_sk_path(
+    query: &str,
+    options: RootTodoSectionOptions,
+    sk_path: &Path,
+) -> Vec<RootTodoSearchHit> {
+    if !options.enabled {
+        return Vec::new();
+    }
+    let path = sk_path
+        .join("menu-syntax")
+        .join(CaptureArtifactKind::Todo.filename());
+    let report = read_jsonl_artifact(&path, CaptureArtifactKind::Todo);
+    let normalized_query = normalize_match_text(query);
+    let mut hits = report
+        .entries
+        .into_iter()
+        .rev()
+        .filter_map(todo_hit_from_artifact)
+        .filter(|hit| todo_hit_matches(hit, &normalized_query))
+        .take(options.max_results)
+        .collect::<Vec<_>>();
+    hits.shrink_to_fit();
+    hits
+}
+
+fn todo_hit_from_artifact(artifact: CaptureArtifact) -> Option<RootTodoSearchHit> {
+    if artifact.kind != CaptureArtifactKind::Todo {
+        return None;
+    }
+    let parsed = serde_json::from_str::<serde_json::Value>(&artifact.raw_line).ok()?;
+    let body = parsed
+        .get("body")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(artifact.snippet.as_str())
+        .to_string();
+    let tags = parsed
+        .get("tags")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let priority = parsed
+        .get("priority")
+        .and_then(|value| value.as_u64())
+        .and_then(|value| u8::try_from(value).ok());
+    let due = parsed
+        .get("due")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| first_date_display(&parsed));
+    let subtitle = todo_subtitle(
+        &tags,
+        priority,
+        due.as_deref(),
+        artifact.created_at.as_deref(),
+    );
+    let line_number = artifact.line_number;
+    let stable_key = format!(
+        "todo/{}:{}",
+        artifact.path.display(),
+        line_number.unwrap_or_default()
+    );
+    Some(RootTodoSearchHit {
+        stable_key,
+        title: body.clone(),
+        body,
+        subtitle,
+        tags,
+        priority,
+        due,
+        created_at: artifact.created_at,
+        path: artifact.path,
+        line_number,
+        raw_line: artifact.raw_line,
+    })
+}
+
+fn first_date_display(parsed: &serde_json::Value) -> Option<String> {
+    parsed
+        .get("dates")
+        .and_then(|value| value.as_array())
+        .and_then(|dates| dates.first())
+        .and_then(|date| {
+            date.get("iso")
+                .or_else(|| date.get("source"))
+                .and_then(|value| value.as_str())
+        })
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn todo_subtitle(
+    tags: &[String],
+    priority: Option<u8>,
+    due: Option<&str>,
+    created_at: Option<&str>,
+) -> String {
+    let mut parts = Vec::new();
+    if let Some(priority) = priority {
+        parts.push(format!("p{priority}"));
+    }
+    if let Some(due) = due.filter(|value| !value.trim().is_empty()) {
+        parts.push(format!("due {due}"));
+    }
+    if !tags.is_empty() {
+        parts.push(
+            tags.iter()
+                .map(|tag| format!("#{tag}"))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
+    }
+    if let Some(created_at) = created_at.filter(|value| !value.trim().is_empty()) {
+        parts.push(created_at.to_string());
+    }
+    if parts.is_empty() {
+        "Captured todo".to_string()
+    } else {
+        parts.join(" · ")
+    }
+}
+
+fn todo_hit_matches(hit: &RootTodoSearchHit, normalized_query: &str) -> bool {
+    if normalized_query.is_empty() {
+        return true;
+    }
+    let mut haystack = String::new();
+    haystack.push_str(&hit.body);
+    haystack.push(' ');
+    haystack.push_str(&hit.raw_line);
+    haystack.push(' ');
+    haystack.push_str(&hit.tags.join(" "));
+    if let Some(due) = &hit.due {
+        haystack.push(' ');
+        haystack.push_str(due);
+    }
+    normalize_match_text(&haystack).contains(normalized_query)
+}
+
+fn normalize_match_text(value: &str) -> String {
+    value.trim().to_ascii_lowercase()
+}
+
+fn default_sk_path() -> PathBuf {
+    if let Ok(path) = std::env::var(crate::setup::SK_PATH_ENV) {
+        if !path.trim().is_empty() {
+            return PathBuf::from(path);
+        }
+    }
+    std::env::var("HOME")
+        .map(|home| PathBuf::from(home).join(".scriptkit"))
+        .unwrap_or_else(|_| PathBuf::from(".scriptkit"))
+}
+
 fn push_warning(report: &mut ReadArtifactReport, msg: String) {
     if report.warnings.len() >= MAX_WARNINGS {
         return;
@@ -364,6 +576,39 @@ mod tests {
         );
         assert_eq!(report.entries[0].line_number, Some(1));
         assert_eq!(report.entries[1].line_number, Some(2));
+    }
+
+    #[test]
+    fn search_root_todos_reads_newest_first_and_matches_tags_due_and_body() {
+        let tmp = TempDir::new().expect("tempdir");
+        let base = tmp.path().join("menu-syntax");
+        write_file(
+            &base,
+            "todos.jsonl",
+            r#"{"body":"renew passport","tags":["errands"],"priority":1,"createdAt":"2026-05-19T10:00:00Z"}
+{"body":"book design review","tags":["work"],"due":"Friday","createdAt":"2026-05-19T11:00:00Z"}
+"#,
+        );
+
+        let hits = search_root_todos_in_sk_path(
+            "work",
+            RootTodoSectionOptions {
+                max_results: 10,
+                ..Default::default()
+            },
+            tmp.path(),
+        );
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "book design review");
+        assert!(hits[0].subtitle.contains("#work"));
+        assert!(hits[0].subtitle.contains("due Friday"));
+
+        let hits =
+            search_root_todos_in_sk_path("passport", RootTodoSectionOptions::default(), tmp.path());
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].priority, Some(1));
+        assert_eq!(hits[0].line_number, Some(1));
     }
 
     #[test]

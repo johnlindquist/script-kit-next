@@ -55,6 +55,10 @@ const FOOTER_AI_SLOT_WIDTH: f64 = 56.0;
 const FOOTER_APPLY_SLOT_WIDTH: f64 = 88.0;
 #[cfg(target_os = "macos")]
 const FOOTER_CLOSE_SLOT_WIDTH: f64 = 88.0;
+#[cfg(target_os = "macos")]
+const FOOTER_STOP_SLOT_WIDTH: f64 = 80.0;
+#[cfg(target_os = "macos")]
+const FOOTER_PASTE_RESPONSE_SLOT_WIDTH: f64 = 144.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
@@ -63,6 +67,8 @@ pub(crate) enum FooterAction {
     Ai,
     Apply,
     Close,
+    Stop,
+    PasteResponse,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1035,6 +1041,8 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
         FooterAction::Ai => FOOTER_AI_SLOT_WIDTH,
         FooterAction::Apply => FOOTER_APPLY_SLOT_WIDTH,
         FooterAction::Close => FOOTER_CLOSE_SLOT_WIDTH,
+        FooterAction::Stop => FOOTER_STOP_SLOT_WIDTH,
+        FooterAction::PasteResponse => FOOTER_PASTE_RESPONSE_SLOT_WIDTH,
     }
 }
 
@@ -1248,6 +1256,8 @@ mod footer_layout_tests {
         assert_eq!(footer_hint_slot_width(FooterAction::Run), 96.0);
         assert_eq!(footer_hint_slot_width(FooterAction::Actions), 96.0);
         assert_eq!(footer_hint_slot_width(FooterAction::Ai), 56.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Stop), 80.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::PasteResponse), 144.0);
     }
 
     #[test]
@@ -1365,6 +1375,8 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Ai => "ai",
         FooterAction::Apply => "apply",
         FooterAction::Close => "close",
+        FooterAction::Stop => "stop",
+        FooterAction::PasteResponse => "pasteResponse",
     }
 }
 
@@ -2004,6 +2016,8 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Ai => sel!(aiFooterAction:),
         FooterAction::Apply => sel!(applyFooterAction:),
         FooterAction::Close => sel!(closeFooterAction:),
+        FooterAction::Stop => sel!(stopFooterAction:),
+        FooterAction::PasteResponse => sel!(pasteResponseFooterAction:),
     }
 }
 
@@ -2042,6 +2056,14 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             sel!(closeFooterAction:),
             footer_close_action as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(
+            sel!(stopFooterAction:),
+            footer_stop_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(pasteResponseFooterAction:),
+            footer_paste_response_action as extern "C" fn(&Object, Sel, id),
+        );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
@@ -2069,4 +2091,18 @@ extern "C" fn footer_apply_action(_this: &objc::runtime::Object, _: objc::runtim
 #[cfg(target_os = "macos")]
 extern "C" fn footer_close_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
     send_footer_action(FooterAction::Close);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_stop_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Stop);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_paste_response_action(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: id,
+) {
+    send_footer_action(FooterAction::PasteResponse);
 }

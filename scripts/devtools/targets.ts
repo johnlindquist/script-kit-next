@@ -53,6 +53,12 @@ function parseArgs(argv: string[]): Args {
       args.target = { type: "titleContains", text: argv[++index] ?? "" };
     } else if (arg === "--focused") {
       args.target = { type: "focused" };
+    } else if (arg === "--target-json") {
+      try {
+        args.target = JSON.parse(argv[++index] ?? "{}");
+      } catch (error) {
+        throw new Error(`Invalid --target-json: ${error}`);
+      }
     } else if (arg === "--main") {
       args.target = { type: "main" };
     } else if (arg === "--surface") {
@@ -160,6 +166,7 @@ function pickWindows(windows: JsonObject) {
     appViewVariant: window.appViewVariant ?? null,
     parentAutomationId: window.parentAutomationId ?? window.parentWindowId ?? null,
     parentKind: window.parentKind ?? null,
+    pid: window.pid ?? null,
   }));
 }
 
@@ -221,6 +228,7 @@ function targetIdentity(args: Args, inspect: JsonObject, windows: JsonObject) {
         targetBoundsInScreenshot: snapshot.targetBoundsInScreenshot ?? null,
         nonBlankRatio: snapshot.nonBlankRatio ?? null,
       },
+      pid: snapshot.pid ?? listedWindow.pid ?? null,
       strictTargetMatch,
       ambiguity,
     },

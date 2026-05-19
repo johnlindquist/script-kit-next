@@ -5,11 +5,10 @@
 use anyhow::Result;
 use gpui::{
     Action, App, AppContext, Bounds, ClipboardItem, Context, Entity, EntityInputHandler,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding,
-    Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ParentElement as _, Pixels, Point, Render, ScrollHandle, ScrollWheelEvent, SharedString,
-    Styled as _, Subscription, Task, UTF16Selection, Window, actions, div, point,
-    prelude::FluentBuilder as _, px,
+    EventEmitter, FocusHandle, Focusable, Hsla, InteractiveElement as _, IntoElement, KeyBinding,
+    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _,
+    Pixels, Point, Render, ScrollHandle, ScrollWheelEvent, SharedString, Styled as _, Subscription,
+    Task, UTF16Selection, Window, actions, div, point, prelude::FluentBuilder as _, px,
 };
 use gpui::{Half, TextAlign};
 use ropey::{Rope, RopeSlice};
@@ -586,14 +585,8 @@ impl InputState {
     }
 
     /// Set byte ranges plus semantic role names for state receipts.
-    pub fn set_highlight_ranges_with_roles(
-        &mut self,
-        ranges: Vec<(Range<usize>, Hsla, String)>,
-    ) {
-        self.highlight_range_roles = ranges
-            .iter()
-            .map(|(_, _, role)| role.clone())
-            .collect();
+    pub fn set_highlight_ranges_with_roles(&mut self, ranges: Vec<(Range<usize>, Hsla, String)>) {
+        self.highlight_range_roles = ranges.iter().map(|(_, _, role)| role.clone()).collect();
         self.highlight_ranges = ranges
             .into_iter()
             .map(|(range, color, _)| (range, color))

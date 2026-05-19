@@ -63,7 +63,7 @@ pub use self::types::{
     AppMatch, BrowserHistoryMatch, BrowserTabMatch, BuiltInMatch, ClipboardHistoryMatch,
     DictationHistoryMatch, FallbackConfig, FallbackMatch, FileMatch, MatchIndices, NoteMatch,
     Script, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
-    ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
+    ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

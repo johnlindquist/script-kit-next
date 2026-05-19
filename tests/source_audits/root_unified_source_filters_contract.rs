@@ -19,6 +19,7 @@ fn source_filter_parser_is_inline_and_capture_safe() {
         "short: Some(\"f:\")",
         "canonical: \"notes:\"",
         "short: Some(\"n:\")",
+        "canonical: \"todo:\"",
         "canonical: \"clipboard:\"",
         "short: Some(\"c:\")",
         "canonical: \"conversations:\"",
@@ -45,14 +46,14 @@ fn source_filter_parser_is_inline_and_capture_safe() {
     assert!(query.contains("source_filters.insert(source)"));
 
     let source_filter_route = parse
-        .rfind("if let Some(query) = parse_filter_query(input)")
+        .find("if let Some(query) = parse_filter_query(input)")
         .expect("parse should route inline source filters");
     let capture_keyword_route = parse
         .rfind("return finalize_capture(input, registered_capture_targets);")
         .expect("keyword capture route should exist");
     assert!(
-        capture_keyword_route < source_filter_route,
-        "keyword capture syntax must keep owning input before inline source filters are considered"
+        source_filter_route < capture_keyword_route,
+        "registered source heads like todo: must route before keyword capture aliases"
     );
     assert!(mode.contains("free_text_for_search"));
     assert!(mode.contains("query.free_text.as_str()"));
@@ -86,6 +87,8 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains("source_filters: source_filters.clone()"));
     assert!(filtering
         .contains("source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes)"));
+    assert!(filtering
+        .contains("source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Todo)"));
     assert!(filtering.contains(
         "source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)"
     ));
@@ -97,6 +100,7 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     ));
     assert!(filtering.contains(".allows(crate::menu_syntax::RootUnifiedSourceFilter::Files))"));
     assert!(filtering.contains("clipboard_history_options.enabled = true;"));
+    assert!(filtering.contains("todo_options.enabled = true;"));
     assert!(filtering.contains("notes_options.enabled = true;"));
     assert!(filtering.contains("dictation_history_options.enabled = true;"));
     assert!(filtering.contains("browser_tabs_options.enabled = true;"));
@@ -104,6 +108,8 @@ fn source_filters_are_frame_keyed_and_gate_async_sources() {
     assert!(filtering.contains("acp_history_options.enabled = true;"));
     assert!(filtering
         .contains("crate::notes::search_root_notes_meta_direct(search_text, notes_options)"));
+    assert!(filtering
+        .contains("crate::menu_syntax::search_root_todos_direct(search_text, todo_options)"));
     assert!(
         filtering.contains("crate::clipboard_history::search_root_clipboard_history_meta_direct(")
     );
@@ -135,6 +141,7 @@ fn explicit_source_filters_raise_passive_source_caps() {
     ));
     for source in [
         "notes_options.max_results",
+        "todo_options.max_results",
         "clipboard_history_options.max_results",
         "dictation_history_options.max_results",
         "acp_history_options.max_results",
@@ -167,6 +174,8 @@ fn grouping_suppresses_primary_and_disallowed_sources_when_filter_active() {
     assert!(grouping.contains(
         "root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes)"
     ));
+    assert!(grouping
+        .contains("root_source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Todo)"));
     assert!(grouping.contains("root_source_filters\n                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::ClipboardHistory)"));
     assert!(grouping.contains(
         "root_source_filters\n                    .allows(crate::menu_syntax::RootUnifiedSourceFilter::Conversations)"

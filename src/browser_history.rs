@@ -1,7 +1,9 @@
 use std::cmp::Ordering;
 use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -135,6 +137,28 @@ impl BrowserHistoryEntry {
     pub fn history_key(&self) -> String {
         format!("{}:{}:{}", self.browser_bundle_id, self.profile, self.url)
     }
+
+    pub fn convert_to_root_hit(&self) -> RootBrowserHistorySearchHit {
+        RootBrowserHistorySearchHit {
+            stable_key: self.history_key(),
+            provider_label: self.browser_name.clone(),
+            profile_label: self.profile.clone(),
+            title: self.title.clone(),
+            url: self.url.clone(),
+            domain: self.host.clone(),
+            last_visit_unix_ms: self.last_visited_at_ms,
+            visit_count: self.visit_count,
+        }
+    }
+}
+
+pub fn format_browser_history_meta(entry: &BrowserHistoryEntry) -> String {
+    format!(
+        "{} · {} visits · {}",
+        entry.browser_name,
+        entry.visit_count,
+        format_history_timestamp(entry.last_visited_at_ms)
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,6 +201,7 @@ pub(crate) struct RootPassiveSnapshotStatus {
     pub generation: u64,
     pub refreshing: bool,
     pub cached_count: usize,
+    pub last_refreshed_at: Option<Instant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -276,23 +301,25 @@ pub(crate) fn search_root_browser_history_meta_direct(
     query: &str,
     options: RootBrowserHistorySectionOptions,
 ) -> Vec<RootBrowserHistorySearchHit> {
+    // Verification-bearing: never block the caller on a fresh refresh.
+    // Return cached results and let the app layer handle the background refresh
+    // via ensure_root_browser_history_refresh (called by search_root_browser_history_meta_from_home).
     if !root_browser_history_query_is_eligible(query, options.clone()) {
         return Vec::new();
     }
 
-    let home = match std::env::var_os("HOME").map(PathBuf::from) {
-        Some(home) => home,
-        None => return Vec::new(),
-    };
+    let candidates = cached_root_browser_history_snapshot(options.cache_ttl_ms);
+    if candidates.is_empty() {
+        // Trigger a refresh if we have nothing, but still don't block.
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            ensure_root_browser_history_refresh(home, options.clone(), "direct_query_empty_cache");
+        }
+    }
 
-    refresh_root_browser_history_snapshot_from_home(&home, &options)
-        .map(|candidates| {
-            root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
-                .into_iter()
-                .take(options.max_results)
-                .collect()
-        })
-        .unwrap_or_default()
+    root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
+        .into_iter()
+        .take(options.max_results)
+        .collect()
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
@@ -325,7 +352,9 @@ fn search_root_browser_history_meta_from_home(
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
-fn cached_root_browser_history_snapshot(cache_ttl_ms: u64) -> Vec<RootBrowserHistorySearchHit> {
+pub(crate) fn cached_root_browser_history_snapshot(
+    cache_ttl_ms: u64,
+) -> Vec<RootBrowserHistorySearchHit> {
     let ttl = Duration::from_millis(cache_ttl_ms);
     if let Ok(cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         if let Some(snapshot) = cache.snapshot.as_ref() {
@@ -349,16 +378,18 @@ pub(crate) fn root_browser_history_snapshot_status() -> RootPassiveSnapshotStatu
                 .as_ref()
                 .map(|snapshot| snapshot.hits.len())
                 .unwrap_or(0),
+            last_refreshed_at: cache.snapshot.as_ref().map(|s| s.captured_at),
         })
         .unwrap_or(RootPassiveSnapshotStatus {
             generation: 0,
             refreshing: false,
             cached_count: 0,
+            last_refreshed_at: None,
         })
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
-fn ensure_root_browser_history_refresh(
+pub(crate) fn ensure_root_browser_history_refresh(
     home: PathBuf,
     options: RootBrowserHistorySectionOptions,
     reason: &'static str,
@@ -443,8 +474,42 @@ fn ensure_root_browser_history_refresh(
     });
 }
 
+pub(crate) fn mark_root_browser_history_refresh_in_flight() -> bool {
+    if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+        if cache.refresh_in_flight {
+            return false;
+        }
+        cache.refresh_in_flight = true;
+        cache.generation = cache.generation.wrapping_add(1);
+        return true;
+    }
+    false
+}
+
+pub(crate) fn update_root_browser_history_snapshot(hits: Vec<RootBrowserHistorySearchHit>) {
+    if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+        cache.snapshot = Some(RootBrowserHistorySnapshot {
+            captured_at: Instant::now(),
+            hits,
+        });
+        cache.generation = cache.generation.wrapping_add(1);
+        cache.refresh_in_flight = false;
+        cache.last_refresh_error = None;
+    }
+}
+
+pub(crate) fn clear_root_browser_history_refresh_in_flight(error: Option<String>) {
+    if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
+        cache.refresh_in_flight = false;
+        cache.generation = cache.generation.wrapping_add(1);
+        if let Some(err) = error {
+            cache.last_refresh_error = Some(err);
+        }
+    }
+}
+
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
-fn refresh_root_browser_history_snapshot_from_home(
+pub(crate) fn refresh_root_browser_history_snapshot_from_home(
     home: &Path,
     options: &RootBrowserHistorySectionOptions,
 ) -> Result<Vec<RootBrowserHistorySearchHit>> {
@@ -493,7 +558,7 @@ fn refresh_root_browser_history_snapshot_from_home(
 }
 
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
-fn root_fuzzy_search_browser_history_hits(
+pub(crate) fn root_fuzzy_search_browser_history_hits(
     hits: &[RootBrowserHistorySearchHit],
     query: &str,
     search_urls: bool,
@@ -1004,8 +1069,11 @@ fn load_history_from_db(
     profile: &str,
     limit: usize,
 ) -> Result<Vec<BrowserHistoryEntry>> {
-    let temp_dir = tempfile::tempdir().context("create temp dir for browser history db copy")?;
-    let copied_db = copy_sqlite_db_snapshot(db_path, temp_dir.path())?;
+    let _db_name = db_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("History");
+    let copied_db = copy_sqlite_db_snapshot(db_path, &browser.app_name, profile)?;
     let conn = Connection::open_with_flags(
         &copied_db,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
@@ -1024,22 +1092,56 @@ fn load_history_from_db(
     }
 }
 
-fn copy_sqlite_db_snapshot(db_path: &Path, dest_root: &Path) -> Result<PathBuf> {
+fn copy_sqlite_db_snapshot(db_path: &Path, provider: &str, profile: &str) -> Result<PathBuf> {
+    let home = std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .ok_or_else(|| anyhow!("missing HOME env var"))?;
+
+    // Stable cache path: ~/.scriptkit/cache/browser-history/{provider}/{profile}
+    let cache_root = home
+        .join(".scriptkit/cache/browser-history")
+        .join(provider.to_lowercase().replace(' ', "-"))
+        .join(short_sha256_hex(profile));
+
+    fs::create_dir_all(&cache_root)
+        .with_context(|| format!("create_cache_dir_failed: {}", cache_root.display()))?;
+
     let db_name = db_path
         .file_name()
         .ok_or_else(|| anyhow!("missing database filename"))?;
-    let dest_db = dest_root.join(db_name);
-    std::fs::copy(db_path, &dest_db)
-        .with_context(|| format!("copy_browser_history_db_failed: {}", db_path.display()))?;
+    let dest_db = cache_root.join(db_name);
 
+    let src_metadata = fs::metadata(db_path)
+        .with_context(|| format!("stat_source_db_failed: {}", db_path.display()))?;
+    let src_mtime = src_metadata.modified()?;
+
+    if dest_db.exists() {
+        let dest_metadata = fs::metadata(&dest_db)?;
+        if let Ok(dest_mtime) = dest_metadata.modified() {
+            if src_mtime <= dest_mtime {
+                // Snapshot is already up to date based on mtime.
+                return Ok(dest_db);
+            }
+        }
+    }
+
+    fs::copy(db_path, &dest_db).with_context(|| {
+        format!(
+            "copy_browser_history_db_failed: {} -> {}",
+            db_path.display(),
+            dest_db.display()
+        )
+    })?;
+
+    // Also copy sidecar files if they exist (WAL mode)
     for suffix in ["-wal", "-shm"] {
         let candidate = PathBuf::from(format!("{}{}", db_path.display(), suffix));
         if candidate.exists() {
             let candidate_name = candidate
                 .file_name()
                 .ok_or_else(|| anyhow!("missing sqlite sidecar filename"))?;
-            let dest = dest_root.join(candidate_name);
-            let _ = std::fs::copy(&candidate, dest);
+            let dest = cache_root.join(candidate_name);
+            let _ = fs::copy(&candidate, dest);
         }
     }
 
@@ -1103,9 +1205,7 @@ fn query_root_chromium_history_db(
     limit: usize,
     search_urls: bool,
 ) -> Result<Vec<RootBrowserHistorySearchHit>> {
-    let temp_dir =
-        tempfile::tempdir().context("create temp dir for root browser history db copy")?;
-    let copied_db = copy_sqlite_db_snapshot(db_path, temp_dir.path())?;
+    let copied_db = copy_sqlite_db_snapshot(db_path, spec.provider_label, profile_label)?;
     let conn = Connection::open_with_flags(
         &copied_db,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,

@@ -141,6 +141,32 @@ fn refine_popup_does_not_blank_launcher_results() {
 }
 
 #[test]
+fn exact_colon_drawer_uses_filter_head_catalog_not_static_examples() {
+    let trigger_picker = fs::read_to_string("src/menu_syntax/trigger_picker.rs")
+        .expect("Failed to read src/menu_syntax/trigger_picker.rs");
+
+    assert!(
+        trigger_picker.contains("fn is_exact_bare_colon(input: &str) -> bool")
+            && trigger_picker.contains("fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow>")
+            && trigger_picker.contains("ADVANCED_QUERY_HEAD_ROW_SPECS")
+            && trigger_picker.contains("SOURCE_HEAD_SPECS")
+            && trigger_picker.contains("return bare_colon_filter_head_rows();"),
+        "bare ':' should use a dedicated filter-head catalog that includes source heads and advanced query heads"
+    );
+    assert!(
+        trigger_picker.contains(
+            "advanced_query_active_token(input).is_empty() && !is_exact_bare_colon(input)"
+        ),
+        "exact ':' must not append recent advanced queries after the filter-head catalog"
+    );
+    assert!(
+        trigger_picker.contains("display_token: \"meta.<path>:\",")
+            && trigger_picker.contains("insert_token: \":meta.\","),
+        "bare ':' should advertise the generic meta.<path>: head instead of a concrete metadata example"
+    );
+}
+
+#[test]
 fn capture_target_picker_closes_when_body_composition_starts() {
     let trigger_picker = fs::read_to_string("src/menu_syntax/trigger_picker.rs")
         .expect("Failed to read src/menu_syntax/trigger_picker.rs");

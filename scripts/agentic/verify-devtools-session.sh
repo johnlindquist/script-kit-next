@@ -39,11 +39,16 @@ fi
 
 echo "[verify-devtools-session] === 2. Build timeout wrapper (<10s with timeout=1) ===" >&2
 SECONDS=0
-SCRIPT_KIT_AGENT_ID=dt-agent-build bash scripts/agentic/build-isolated-binary.sh 1 >/dev/null 2>&1 || true
+DEVTOOLS_SESSION_JSON=1 SCRIPT_KIT_AGENT_ID=dt-agent-build SCRIPT_KIT_CARGO_TARGET_POOL=agent-debug bash scripts/agentic/build-isolated-binary.sh --json 1 >/tmp/sk-build-timeout.json 2>/tmp/sk-build-timeout.err || true
 if [[ "$SECONDS" -lt 10 ]]; then
   pass "build-isolated-binary 1s cap elapsed=${SECONDS}s"
 else
   fail "build hung ${SECONDS}s (expected <10s)"
+fi
+if grep -Eq '"status":"(ok|error)"' /tmp/sk-build-timeout.json 2>/dev/null && ! grep -q 'promotedTo' /tmp/sk-build-timeout.json 2>/dev/null; then
+  pass "build-isolated-binary JSON contract"
+else
+  fail "build-isolated-binary JSON contract"
 fi
 
 echo "[verify-devtools-session] === 3. classify ===" >&2
@@ -68,7 +73,7 @@ fi
 echo "[verify-devtools-session] === 5. isolated start (optional; needs clean machine) ===" >&2
 if pgrep -f 'cargo-watch watch.*dev-cycle' >/dev/null 2>&1; then
   echo "[verify-devtools-session] SKIP isolated start: ./dev.sh running" >&2
-elif [[ "$(pgrep -fc "${REPO_ROOT}/target/debug/script-kit-gpui" 2>/dev/null || echo 0)" -gt 1 ]]; then
+elif [[ "$(pgrep -fl 'script-kit-gpui' 2>/dev/null | grep -E 'script-kit-gpui($|[[:space:]])' | wc -l | tr -d '[:space:]')" -gt 1 ]]; then
   echo "[verify-devtools-session] SKIP isolated start: multiple GPUI instances" >&2
 else
   SESSION="dt-smoke-$$"

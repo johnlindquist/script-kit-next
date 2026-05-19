@@ -823,23 +823,67 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
         "ACP footer should use the shared clickable hint-strip renderer so footer buttons behave like the main menu"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("\"⌘K Actions\"")
-            && ACP_VIEW_SOURCE.contains("chat.trigger_toggle_actions(window, cx);"),
+        ACP_VIEW_SOURCE.contains("FooterAction::Actions => \"⌘K Actions\"")
+            && ACP_VIEW_SOURCE
+                .contains("FooterAction::Actions => self.trigger_toggle_actions(window, cx),"),
         "ACP footer Actions hint must route through the shared clickable footer renderer"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view_entity, cx);")
+        TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view, cx);")
             && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
             && TAB_AI_MODE_SOURCE.contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
             && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
-            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);"),
-        "embedded ACP hosts must wire footer clicks to the existing actions, close, and history popup paths"
+            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);")
+            && TAB_AI_MODE_SOURCE.contains("view.set_on_paste_response_requested")
+            && TAB_AI_MODE_SOURCE.contains("app.paste_latest_acp_response_to_frontmost(cx);"),
+        "embedded ACP hosts must wire footer clicks to the existing actions, close, history popup, and paste-response paths"
     );
     assert!(
         ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_toggle_actions")
             && ACP_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);")
             && ACP_CHAT_WINDOW_SOURCE.contains("close_chat_window(cx);"),
         "detached ACP hosts must wire footer clicks to the detached actions toggle and close paths"
+    );
+}
+
+#[test]
+fn acp_footer_primary_action_tracks_composer_response_and_streaming_state() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn footer_buttons_for_thread")
+            && ACP_VIEW_SOURCE.contains("FooterAction::PasteResponse")
+            && ACP_VIEW_SOURCE.contains("label: \"Paste Response\"")
+            && ACP_VIEW_SOURCE.contains("label: \"Send\"")
+            && ACP_VIEW_SOURCE.contains("label: \"Stop\""),
+        "ACP footer state must expose Send, Paste Response, and Stop as child-owned footer button specs"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("thread.input.text().is_empty()")
+            && ACP_VIEW_SOURCE.contains("Self::has_pastable_assistant_response(thread)")
+            && ACP_VIEW_SOURCE.contains("AcpThreadStatus::Streaming =>"),
+        "ACP footer labels must be driven by raw composer emptiness, assistant response presence, and streaming state"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("Self::has_pastable_assistant_response(&thread)")
+            && ACP_VIEW_SOURCE.contains("self.trigger_paste_response_requested(window, cx);")
+            && ACP_VIEW_SOURCE.contains("caused_submit: false"),
+        "Enter on an empty composer after an assistant response must route to Paste Response instead of empty-submit"
+    );
+}
+
+#[test]
+fn native_acp_footer_uses_child_snapshot_and_explicit_footer_actions() {
+    assert!(
+        UI_WINDOW_SOURCE.contains("self.acp_footer_snapshot.as_ref()")
+            && UI_WINDOW_SOURCE.contains("FooterButtonConfig::new(button.action, button.key, button.label)")
+            && UI_WINDOW_SOURCE.contains("FooterAction::Stop")
+            && UI_WINDOW_SOURCE.contains("FooterAction::PasteResponse"),
+        "native ACP footer must render from the child ACP footer snapshot and dispatch explicit Stop/PasteResponse actions"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("paste_latest_acp_response_to_frontmost")
+            && UI_WINDOW_SOURCE.contains("crate::platform::defer_hide_main_window(cx)")
+            && UI_WINDOW_SOURCE.contains("injector.paste_text(&text)"),
+        "Paste Response must use the existing frontmost-app paste path instead of being a label-only no-op"
     );
 }
 
@@ -903,8 +947,8 @@ fn acp_footer_omits_global_cmd_enter_ai_button() {
         "external ACP footer should not show the global Cmd+Enter AI hint"
     );
     assert!(
-        footer_block.contains("FooterAction::Actions")
-            && external_footer_block.contains("\"⌘K Actions\""),
+        UI_WINDOW_SOURCE.contains("FooterAction::Actions")
+            && ACP_VIEW_SOURCE.contains("FooterAction::Actions => \"⌘K Actions\""),
         "ACP footers must keep the Actions affordance after removing the AI button"
     );
 }

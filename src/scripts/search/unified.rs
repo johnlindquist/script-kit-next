@@ -26,14 +26,15 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::Scriptlet(_) => 5,
         SearchResult::File(_) => 6,
         SearchResult::BrowserTab(_) => 7,
-        SearchResult::Note(_) => 8,
-        SearchResult::ClipboardHistory(_) => 9,
-        SearchResult::DictationHistory(_) => 10,
-        SearchResult::AcpHistory(_) => 11,
-        SearchResult::AiVault(_) => 12,
-        SearchResult::BrowserHistory(_) => 13,
-        SearchResult::Agent(_) => 14,
-        SearchResult::Fallback(_) => 15, // Fallbacks always last
+        SearchResult::Todo(_) => 8,
+        SearchResult::Note(_) => 9,
+        SearchResult::ClipboardHistory(_) => 10,
+        SearchResult::DictationHistory(_) => 11,
+        SearchResult::AcpHistory(_) => 12,
+        SearchResult::AiVault(_) => 13,
+        SearchResult::BrowserHistory(_) => 14,
+        SearchResult::Agent(_) => 15,
+        SearchResult::Fallback(_) => 16, // Fallbacks always last
         // Script issues are pinned separately via grouping; if encountered in
         // sort, treat like a high-priority header (above built-ins).
         SearchResult::ScriptIssue(_) => -1,

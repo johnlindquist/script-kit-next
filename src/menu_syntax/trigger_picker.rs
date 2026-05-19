@@ -288,7 +288,7 @@ fn build_advanced_query_snapshot(input: &str, ctx: &TriggerPickerContext) -> Tri
 
     rows.extend(typo_fix_rows(input));
     rows.extend(filtered_static_qualifier_rows(input));
-    if advanced_query_active_token(input).is_empty() {
+    if advanced_query_active_token(input).is_empty() && !is_exact_bare_colon(input) {
         rows.extend(recent_query_rows(&ctx.recent_queries));
     }
     // Run 12 — the advanced-query popup no longer pushes a generic
@@ -306,6 +306,10 @@ fn build_advanced_query_snapshot(input: &str, ctx: &TriggerPickerContext) -> Tri
 }
 
 fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
+    if is_exact_bare_colon(input) {
+        return bare_colon_filter_head_rows();
+    }
+
     let active = advanced_query_active_token(input);
     if let Some(rows) = has_field_value_rows_for_active_token(&active) {
         return rows;
@@ -317,6 +321,10 @@ fn filtered_static_qualifier_rows(input: &str) -> Vec<TriggerPickerRow> {
     rows.into_iter()
         .filter(|row| qualifier_row_matches_active_token(row, &active))
         .collect()
+}
+
+fn is_exact_bare_colon(input: &str) -> bool {
+    input.trim() == ":"
 }
 
 fn advanced_query_active_token(input: &str) -> String {
@@ -541,6 +549,132 @@ struct StaticQualifierRow {
     example: &'static str,
     insert: &'static str,
     keep_open: bool,
+}
+
+struct AdvancedQueryHeadRowSpec {
+    id: &'static str,
+    display_token: &'static str,
+    insert_token: &'static str,
+    title: &'static str,
+    subtitle: &'static str,
+}
+
+const ADVANCED_QUERY_HEAD_ROW_SPECS: &[AdvancedQueryHeadRowSpec] = &[
+    AdvancedQueryHeadRowSpec {
+        id: "type",
+        display_token: "type:",
+        insert_token: ":type:",
+        title: "Type",
+        subtitle: "Filter by result type.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "shortcut",
+        display_token: "shortcut:",
+        insert_token: ":shortcut:",
+        title: "Shortcut",
+        subtitle: "Filter by keyboard shortcut.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "source",
+        display_token: "source:",
+        insert_token: ":source:",
+        title: "Source",
+        subtitle: "Filter by plugin, kit, or source name.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "plugin",
+        display_token: "plugin:",
+        insert_token: ":plugin:",
+        title: "Plugin",
+        subtitle: "Filter by plugin id.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "name",
+        display_token: "name:",
+        insert_token: ":name:",
+        title: "Name",
+        subtitle: "Filter by result name.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "desc",
+        display_token: "desc:",
+        insert_token: ":desc:",
+        title: "Description",
+        subtitle: "Filter by description text.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "alias",
+        display_token: "alias:",
+        insert_token: ":alias:",
+        title: "Alias",
+        subtitle: "Filter by alias text.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "tag",
+        display_token: "tag:",
+        insert_token: ":tag:",
+        title: "Tag",
+        subtitle: "Filter by tag name.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "has",
+        display_token: "has:",
+        insert_token: ":has:",
+        title: "Has",
+        subtitle: "Filter by available metadata fields.",
+    },
+    AdvancedQueryHeadRowSpec {
+        id: "meta",
+        display_token: "meta.<path>:",
+        insert_token: ":meta.",
+        title: "Metadata Path",
+        subtitle: "Filter by a nested metadata path.",
+    },
+];
+
+fn bare_colon_filter_head_rows() -> Vec<TriggerPickerRow> {
+    let mut rows: Vec<TriggerPickerRow> = crate::menu_syntax::SOURCE_HEAD_SPECS
+        .iter()
+        .map(|spec| TriggerPickerRow {
+            id: format!("source-head:{}", spec.canonical),
+            mode: TriggerPickerMode::AdvancedQuery,
+            kind: TriggerPickerRowKind::Qualifier,
+            title: spec.label.to_string(),
+            token: Some(spec.canonical.to_string()),
+            subtitle: Some(spec.description.to_string()),
+            detail: None,
+            example: None,
+            badges: Vec::new(),
+            action: TriggerPickerAction::InsertToken {
+                token: spec.canonical.to_string(),
+                keep_open: false,
+            },
+            enabled: true,
+        })
+        .collect();
+
+    rows.extend(
+        ADVANCED_QUERY_HEAD_ROW_SPECS
+            .iter()
+            .map(|spec| TriggerPickerRow {
+                id: format!("qualifier-head:{}", spec.id),
+                mode: TriggerPickerMode::AdvancedQuery,
+                kind: TriggerPickerRowKind::Qualifier,
+                title: spec.title.to_string(),
+                token: Some(spec.display_token.to_string()),
+                subtitle: Some(spec.subtitle.to_string()),
+                detail: None,
+                example: None,
+                badges: Vec::new(),
+                action: TriggerPickerAction::InsertToken {
+                    token: spec.insert_token.to_string(),
+                    keep_open: true,
+                },
+                enabled: true,
+            }),
+    );
+
+    rows
 }
 
 fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
@@ -1421,28 +1555,72 @@ mod tests {
     }
 
     #[test]
-    fn bare_colon_builds_qualifier_rows() {
+    fn exact_bare_colon_lists_filter_heads_not_terminal_examples() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
         assert_eq!(snap.mode, TriggerPickerMode::AdvancedQuery);
         assert!(snap.target.is_none());
 
-        let qualifier_count = snap
+        let tokens: Vec<&str> = snap
             .rows
             .iter()
-            .filter(|r| r.kind == TriggerPickerRowKind::Qualifier)
-            .count();
-        assert!(
-            qualifier_count >= 10,
-            "expected at least 10 qualifier rows, got {qualifier_count}"
-        );
+            .filter_map(|row| row.token.as_deref())
+            .collect();
 
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:type:script"));
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:shortcut:any"));
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:#"));
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:tag:"));
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:-type:app"));
-        assert!(snap.rows.iter().any(|r| r.id == "qualifier:meta.category:"));
+        for expected in [
+            "files:",
+            "notes:",
+            "todo:",
+            "clipboard:",
+            "tabs:",
+            "history:",
+            "apps:",
+            "scripts:",
+            "commands:",
+            "conversations:",
+            "vault:",
+            "dictation:",
+            "windows:",
+            "type:",
+            "shortcut:",
+            "source:",
+            "plugin:",
+            "name:",
+            "desc:",
+            "alias:",
+            "tag:",
+            "has:",
+            "meta.<path>:",
+        ] {
+            assert!(
+                tokens.contains(&expected),
+                "bare ':' should list filter head {expected}, got {tokens:?}"
+            );
+        }
+
+        for forbidden in [
+            "type:script",
+            "type:scriptlet",
+            "shortcut:any",
+            "shortcut:none",
+            "shortcut:cmd+k",
+            "has:menuSyntax",
+            "has:shortcut",
+            "-type:app",
+            "#",
+        ] {
+            assert!(
+                !tokens.contains(&forbidden),
+                "bare ':' should not show concrete qualifier {forbidden}"
+            );
+        }
+
+        assert!(
+            snap.rows
+                .iter()
+                .all(|row| row.detail.is_none() && row.example.is_none()),
+            "bare ':' head rows should not reserve synopsis/help space"
+        );
     }
 
     #[test]
@@ -1469,7 +1647,7 @@ mod tests {
     #[test]
     fn trigger_picker_includes_hash_tag_filter_row() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":#", &ctx).expect("snapshot");
         let row = snap
             .rows
             .iter()
@@ -1564,14 +1742,14 @@ mod tests {
     fn colon_qualifier_with_open_value_keeps_popup_open() {
         let ctx = ctx_empty();
         let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
-        let source_row = snap
+        let type_row = snap
             .rows
             .iter()
-            .find(|r| r.id == "qualifier:source:")
-            .expect("source row");
-        match &source_row.action {
+            .find(|r| r.token.as_deref() == Some("type:"))
+            .expect("type head row");
+        match &type_row.action {
             TriggerPickerAction::InsertToken { token, keep_open } => {
-                assert_eq!(token, ":source:");
+                assert_eq!(token, ":type:");
                 assert!(*keep_open, "open-value qualifier must keep popup open");
             }
             other => panic!("expected InsertToken, got {other:?}"),
@@ -1581,7 +1759,7 @@ mod tests {
     #[test]
     fn colon_qualifier_concrete_row_closes_popup() {
         let ctx = ctx_empty();
-        let snap = build_trigger_picker_snapshot(":", &ctx).expect("snapshot");
+        let snap = build_trigger_picker_snapshot(":type:", &ctx).expect("snapshot");
         let row = snap
             .rows
             .iter()
@@ -1589,7 +1767,7 @@ mod tests {
             .expect("type:script row");
         match &row.action {
             TriggerPickerAction::InsertToken { token, keep_open } => {
-                assert_eq!(token, ":type:script");
+                assert_eq!(token, "type:script");
                 assert!(!*keep_open, "concrete qualifier must close the popup");
             }
             other => panic!("expected InsertToken, got {other:?}"),
@@ -1658,7 +1836,7 @@ mod tests {
     }
 
     #[test]
-    fn recent_queries_surface_when_parseable_advanced_queries() {
+    fn exact_bare_colon_does_not_append_recent_queries() {
         let ctx = TriggerPickerContext {
             recent_queries: vec![
                 ":type:script deploy".to_string(),
@@ -1676,11 +1854,9 @@ mod tests {
             .collect();
         assert_eq!(
             recent.len(),
-            2,
-            "only advanced-query recent entries should surface"
+            0,
+            "exact ':' should stay a filter-head catalog, not a recent-query list"
         );
-        assert_eq!(recent[0].title, ":type:script deploy");
-        assert_eq!(recent[1].title, ":shortcut:any");
     }
 
     #[test]

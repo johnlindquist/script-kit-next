@@ -61,6 +61,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Notes row has no filesystem path"),
         )),
+        Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Todos row has no filesystem path"),
+        )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Agent Chat conversations row has no filesystem path"),
         )),
@@ -110,6 +113,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Notes row has no filesystem path"),
+        )),
+        Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Todos row has no filesystem path"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Agent Chat conversations row has no filesystem path"),
@@ -170,6 +176,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open notes in Quick Terminal"),
+        )),
+        Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open todos in Quick Terminal"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open Agent Chat conversations in Quick Terminal"),
@@ -234,6 +243,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit notes from root search"),
+        )),
+        Some(SearchResult::Todo(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit todos from root search"),
         )),
         Some(SearchResult::BrowserTab(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit browser tabs from root search"),
