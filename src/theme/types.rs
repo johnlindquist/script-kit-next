@@ -445,16 +445,49 @@ impl DropShadow {
 pub struct BackgroundGradient {
     /// Whether the gradient should be rendered.
     pub enabled: bool,
-    /// Starting color for the gradient.
+    /// Starting color for the base gradient.
     #[serde(with = "hex_color_serde")]
     pub from: HexColor,
-    /// Ending color for the gradient.
+    /// Ending color for the base gradient.
     #[serde(with = "hex_color_serde")]
     pub to: HexColor,
-    /// Angle in degrees. 0 is top-to-bottom; 90 is left-to-right.
+    /// Angle in degrees for the base gradient.
     pub angle: f32,
-    /// Alpha applied to both gradient stops.
+    /// Alpha applied to base gradient stops.
     pub opacity: f32,
+    /// Optional additional overlapping layers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub layers: Vec<GradientLayer>,
+}
+
+/// A single overlapping gradient layer.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct GradientLayer {
+    /// Whether this layer is enabled.
+    pub enabled: bool,
+    /// Starting color for this layer.
+    #[serde(with = "hex_color_serde")]
+    pub from: HexColor,
+    /// Ending color for this layer.
+    #[serde(with = "hex_color_serde")]
+    pub to: HexColor,
+    /// Angle in degrees for this layer.
+    pub angle: f32,
+    /// Opacity for this layer (0.0-1.0).
+    pub opacity: f32,
+}
+
+impl Default for GradientLayer {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            from: 0xFB22FF, // Fun pink default
+            to: 0x22E0FF,   // Fun cyan default
+            angle: 45.0,
+            opacity: 0.25,
+        }
+    }
 }
 
 impl Default for BackgroundGradient {
@@ -465,6 +498,7 @@ impl Default for BackgroundGradient {
             to: 0x2d2d30,
             angle: 135.0,
             opacity: 0.35,
+            layers: Vec::new(),
         }
     }
 }
@@ -473,6 +507,10 @@ impl BackgroundGradient {
     pub fn clamped(mut self) -> Self {
         self.angle = self.angle.rem_euclid(360.0);
         self.opacity = self.opacity.clamp(0.0, 1.0);
+        for layer in self.layers.iter_mut() {
+            layer.angle = layer.angle.rem_euclid(360.0);
+            layer.opacity = layer.opacity.clamp(0.0, 1.0);
+        }
         self
     }
 }
@@ -2327,6 +2365,7 @@ mod tests {
             to: 0x222222,
             angle: 725.0,
             opacity: 2.0,
+            layers: Vec::new(),
         });
 
         let gradient = theme

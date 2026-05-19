@@ -252,9 +252,9 @@ impl ScriptListApp {
                                 let is_hovered = hovered == Some(ix);
 
                                 let description = if !tab.title.trim().is_empty() {
-                                    Some(tab.url.clone())
+                                    Some(tab.url.to_string())
                                 } else if !tab.browser_name.is_empty() {
-                                    Some(tab.browser_name.clone())
+                                    Some(tab.browser_name.to_string())
                                 } else {
                                     None
                                 };
@@ -513,17 +513,17 @@ fn browser_tab_icon_for_render(
     app_icons: &std::collections::HashMap<String, crate::app_launcher::DecodedIcon>,
 ) -> list_item::IconKind {
     // Prefer per-site favicon (fetched from Google's favicon service)
-    if let Some(favicon) = crate::browser_tabs::cached_favicon(&tab.url) {
+    if let Some(favicon) = script_kit_gpui::favicons::cached_favicon(&tab.url) {
         return list_item::IconKind::Image(favicon);
     }
 
     // Fall back to browser app icon
-    if let Some(icon) = app_icons.get(&tab.browser_bundle_id) {
+    if let Some(icon) = app_icons.get(tab.browser_bundle_id.as_ref()) {
         return list_item::IconKind::Image(icon.clone());
     }
 
     // Last resort: browser-specific emoji
-    match tab.browser_name.as_str() {
+    match tab.browser_name.as_ref() {
         "Safari" => list_item::IconKind::Emoji("🧭".to_string()),
         "Google Chrome" => list_item::IconKind::Emoji("🌐".to_string()),
         "Arc" => list_item::IconKind::Emoji("🅰️".to_string()),

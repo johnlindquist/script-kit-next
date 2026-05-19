@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
@@ -68,12 +67,12 @@ const SUPPORTED_BROWSERS: &[SupportedBrowser] = &[
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct BrowserTabInfo {
-    pub browser_name: String,
-    pub browser_bundle_id: String,
+    pub browser_name: Arc<str>,
+    pub browser_bundle_id: Arc<str>,
     pub window_index: usize,
     pub tab_index: usize,
-    pub title: String,
-    pub url: String,
+    pub title: Arc<str>,
+    pub url: Arc<str>,
 }
 
 impl BrowserTabInfo {
@@ -133,19 +132,19 @@ pub(crate) struct RootPassiveSnapshotStatus {
 #[allow(dead_code)]
 pub(crate) struct RootBrowserTabSearchHit {
     pub stable_key: String,
+    pub url: String,
+    pub provider_label: String,
     pub tab: BrowserTabInfo,
     pub title: String,
-    pub url: String,
     pub domain: String,
-    pub provider_label: String,
-    pub score: i32,
+    pub score: f32,
 }
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct RootBrowserTabSnapshot {
     captured_at: Instant,
-    tabs: Vec<BrowserTabInfo>,
+    tabs: Arc<Vec<BrowserTabInfo>>,
 }
 
 #[derive(Debug, Default)]
@@ -220,9 +219,9 @@ pub fn activate_tab(tab: &BrowserTabInfo) -> Result<()> {
         anyhow!(
             "Unsupported browser '{}'",
             if tab.browser_name.is_empty() {
-                tab.browser_bundle_id.as_str()
+                tab.browser_bundle_id.as_ref()
             } else {
-                tab.browser_name.as_str()
+                tab.browser_name.as_ref()
             }
         )
     })?;
@@ -414,35 +413,34 @@ fn search_root_browser_tabs_internal(
         },
     );
 
-    let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms)
-        .into_iter()
+    let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms);
+    let tabs = tabs
+        .iter()
         .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
         .take(options.scan_limit)
+        .cloned()
         .collect::<Vec<_>>();
 
     root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls)
         .into_iter()
         .take(options.max_results)
         .map(|tab_match| {
-            let title = root_tab_title(&tab_match.tab);
-            let domain = domain_from_url(&tab_match.tab.url)
-                .unwrap_or("")
-                .to_string();
+            let domain = host_from_url(&tab_match.tab.url).to_string();
             RootBrowserTabSearchHit {
                 stable_key: root_browser_tab_stable_key(&tab_match.tab),
-                url: tab_match.tab.url.clone(),
-                provider_label: tab_match.tab.browser_name.clone(),
-                tab: tab_match.tab,
-                title,
+                url: tab_match.tab.url.to_string(),
+                provider_label: tab_match.tab.browser_name.to_string(),
+                tab: tab_match.tab.clone(),
+                title: tab_match.tab.title.to_string(),
                 domain,
-                score: tab_match.score,
+                score: tab_match.score as f32,
             }
         })
         .collect()
 }
 
 #[allow(dead_code)]
-fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
+fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Arc<Vec<BrowserTabInfo>> {
     let ttl = Duration::from_millis(cache_ttl_ms);
     if let Ok(cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
         if let Some(snapshot) = cache.snapshot.as_ref() {
@@ -451,7 +449,7 @@ fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
         }
     }
 
-    Vec::new()
+    Arc::new(Vec::new())
 }
 
 #[allow(dead_code)]
@@ -530,9 +528,17 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
                 let row_count = tabs.len();
                 cache.snapshot = Some(RootBrowserTabSnapshot {
                     captured_at: Instant::now(),
-                    tabs,
+                    tabs: Arc::new(tabs.clone()),
                 });
                 cache.last_refresh_error = None;
+
+                // Trigger favicon fetch in background
+                let urls: Vec<String> = tabs.iter().map(|t| t.url.to_string()).collect();
+                std::thread::spawn(move || {
+                    let needing = crate::favicons::domains_needing_favicons(&urls);
+                    crate::favicons::fetch_favicons_blocking(&needing);
+                });
+
                 tracing::info!(
                     source = "browser_tabs",
                     generation,
@@ -719,10 +725,12 @@ fn browser_tab_provider_for_bundle_id(
 fn root_tab_title(tab: &BrowserTabInfo) -> String {
     let title = tab.display_title().trim();
     if title.is_empty() {
-        domain_from_url(&tab.url)
-            .filter(|domain| !domain.is_empty())
-            .unwrap_or("Untitled Tab")
-            .to_string()
+        let host = host_from_url(&tab.url);
+        if host.is_empty() {
+            "Untitled Tab".to_string()
+        } else {
+            host.to_string()
+        }
     } else {
         title.to_string()
     }
@@ -761,7 +769,8 @@ end tell
 
 fn supported_browser_for(tab: &BrowserTabInfo) -> Option<&'static SupportedBrowser> {
     SUPPORTED_BROWSERS.iter().find(|browser| {
-        browser.bundle_id == tab.browser_bundle_id || browser.app_name == tab.browser_name
+        browser.bundle_id == tab.browser_bundle_id.as_ref()
+            || browser.app_name == tab.browser_name.as_ref()
     })
 }
 
@@ -803,12 +812,12 @@ fn parse_tab_rows(browser: &SupportedBrowser, output: &str) -> Result<Vec<Browse
                 .to_string();
 
             Ok(BrowserTabInfo {
-                browser_name: browser.app_name.to_string(),
-                browser_bundle_id: browser.bundle_id.to_string(),
+                browser_name: browser.app_name.into(),
+                browser_bundle_id: browser.bundle_id.into(),
                 window_index,
                 tab_index,
-                title,
-                url,
+                title: title.into(),
+                url: url.into(),
             })
         })
         .collect()
@@ -971,71 +980,7 @@ tell application "{app_name}"
     )
 }
 
-// ── Favicon cache ──────────────────────────────────────────────────────
-
-/// In-memory cache of decoded favicon images keyed by domain.
-/// `None` means a fetch was attempted but failed.
-static FAVICON_CACHE: LazyLock<Mutex<HashMap<String, Option<Arc<gpui::RenderImage>>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-/// Look up a cached favicon for the given URL's domain.
-/// Returns `None` if not yet fetched or fetch failed.
-pub fn cached_favicon(url: &str) -> Option<Arc<gpui::RenderImage>> {
-    let domain = domain_from_url(url)?;
-    let cache = FAVICON_CACHE.lock().ok()?;
-    cache.get(domain)?.clone()
-}
-
-/// Extract the host from a URL (e.g. "https://docs.google.com/foo" → "docs.google.com").
-fn domain_from_url(url: &str) -> Option<&str> {
-    let after_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
-    let host = after_scheme.split('/').next().unwrap_or(after_scheme);
-    if host.is_empty() {
-        None
-    } else {
-        Some(host)
-    }
-}
-
-/// Return the list of unique domains from `tabs` that are not yet in the cache.
-pub fn domains_needing_favicons(tabs: &[BrowserTabInfo]) -> Vec<String> {
-    let cache = FAVICON_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let mut seen = std::collections::HashSet::new();
-    let mut domains = Vec::new();
-
-    for tab in tabs {
-        if let Some(domain) = domain_from_url(&tab.url) {
-            let d = domain.to_string();
-            if !cache.contains_key(&d) && seen.insert(d.clone()) {
-                domains.push(d);
-            }
-        }
-    }
-    domains
-}
-
-/// Fetch favicons for the given domains (blocking). Call from a background thread.
-/// Results are stored in the static `FAVICON_CACHE`.
-pub fn fetch_favicons_blocking(domains: &[String]) {
-    let agent = ureq::Agent::new_with_defaults();
-
-    for domain in domains {
-        let url = format!("https://www.google.com/s2/favicons?domain={}&sz=64", domain);
-
-        let result = (|| -> Option<Arc<gpui::RenderImage>> {
-            let response = agent.get(&url).call().ok()?;
-            let body = response.into_body().read_to_vec().ok()?;
-            if body.len() < 100 {
-                // Too small — likely a placeholder/error
-                return None;
-            }
-            crate::list_item::decode_png_to_render_image(&body).ok()
-        })();
-
-        let mut cache = FAVICON_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        cache.insert(domain.clone(), result);
-    }
-}
+// Favicon logic moved to src/favicons.rs
 
 #[cfg(test)]
 mod tests {

@@ -127,6 +127,7 @@ pub mod app_launcher;
 pub mod browser_history;
 pub mod browser_tabs;
 pub mod builtins;
+pub mod favicons;
 
 // Typed handle for path-prompt action ids. Physically lives under
 // `src/app_impl/` (pulled into the binary via `include!`); the lib

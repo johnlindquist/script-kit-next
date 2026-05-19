@@ -352,14 +352,14 @@ fn browser_history_entries_can_be_collected_as_inline_portal_results() {
     super::collect_browser_history_inline_items_from_entries(
         "rust",
         vec![crate::browser_history::BrowserHistoryEntry {
-            browser_name: "Safari".to_string(),
-            browser_bundle_id: "com.apple.Safari".to_string(),
-            title: "Rust docs".to_string(),
-            url: "https://doc.rust-lang.org/".to_string(),
-            host: "doc.rust-lang.org".to_string(),
+            browser_name: "Safari".to_string().into(),
+            browser_bundle_id: "com.apple.Safari".to_string().into(),
+            title: "Rust docs".to_string().into(),
+            url: "https://doc.rust-lang.org/".to_string().into(),
+            host: "doc.rust-lang.org".to_string().into(),
             last_visited_at_ms: 1,
             visit_count: 2,
-            profile: "Default".to_string(),
+            profile: "Default".to_string().into(),
         }],
         &mut items,
     );

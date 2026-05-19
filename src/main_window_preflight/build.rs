@@ -24,7 +24,8 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
             filtered_entries.get(*selected_index).map(|hit| {
                 SearchResult::BrowserHistory(BrowserHistoryMatch {
                     hit: hit.entry.convert_to_root_hit(),
-                    subtitle: crate::browser_history::format_browser_history_meta(&hit.entry),
+                    subtitle: crate::browser_history::format_browser_history_meta(&hit.entry)
+                        .into(),
                     score: hit.score,
                 })
             })

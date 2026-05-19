@@ -2,7 +2,7 @@
 
 use crate::ai::window::context_picker::types::ContextPickerTrigger;
 
-use super::view::{AcpDismissedMentionTrigger, AcpMentionSession};
+use super::types::{AcpDismissedMentionTrigger, AcpMentionSession};
 
 const MENTION_PICKER_MAX_VISIBLE: usize = 8;
 

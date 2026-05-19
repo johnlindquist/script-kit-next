@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -110,14 +111,14 @@ const SUPPORTED_BROWSERS: &[SupportedBrowserHistory] = &[
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrowserHistoryEntry {
-    pub browser_name: String,
-    pub browser_bundle_id: String,
-    pub title: String,
-    pub url: String,
-    pub host: String,
+    pub browser_name: Arc<str>,
+    pub browser_bundle_id: Arc<str>,
+    pub title: Arc<str>,
+    pub url: Arc<str>,
+    pub host: Arc<str>,
     pub last_visited_at_ms: i64,
     pub visit_count: i64,
-    pub profile: String,
+    pub profile: Arc<str>,
 }
 
 impl BrowserHistoryEntry {
@@ -141,11 +142,11 @@ impl BrowserHistoryEntry {
     pub fn convert_to_root_hit(&self) -> RootBrowserHistorySearchHit {
         RootBrowserHistorySearchHit {
             stable_key: self.history_key(),
-            provider_label: self.browser_name.clone(),
-            profile_label: self.profile.clone(),
-            title: self.title.clone(),
-            url: self.url.clone(),
-            domain: self.host.clone(),
+            provider_label: self.browser_name.to_string(),
+            profile_label: self.profile.to_string(),
+            title: self.title.to_string(),
+            url: self.url.to_string(),
+            domain: self.host.to_string(),
             last_visit_unix_ms: self.last_visited_at_ms,
             visit_count: self.visit_count,
         }
@@ -220,7 +221,7 @@ pub(crate) struct RootBrowserHistorySearchHit {
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
 struct RootBrowserHistorySnapshot {
     captured_at: Instant,
-    hits: Vec<RootBrowserHistorySearchHit>,
+    hits: Arc<Vec<RootBrowserHistorySearchHit>>,
 }
 
 #[derive(Debug, Default)]
@@ -330,19 +331,22 @@ fn search_root_browser_history_meta_from_home(
 ) -> Vec<RootBrowserHistorySearchHit> {
     ensure_root_browser_history_refresh(home.to_path_buf(), options.clone(), "root_search_query");
 
-    let selected_provider_labels: HashSet<_> = options
+    let selected_provider_labels: HashSet<String> = options
         .providers
         .iter()
         .filter_map(|provider| root_browser_history_provider_label(*provider))
+        .map(|s| s.to_string())
         .collect();
     let cutoff_unix_ms = Utc::now()
         .timestamp_millis()
         .saturating_sub(i64::from(options.max_age_days).saturating_mul(24 * 60 * 60 * 1000));
-    let candidates = cached_root_browser_history_snapshot(options.cache_ttl_ms)
-        .into_iter()
+    let candidates = cached_root_browser_history_snapshot(options.cache_ttl_ms);
+    let candidates = candidates
+        .iter()
         .filter(|hit| selected_provider_labels.contains(hit.provider_label.as_str()))
         .filter(|hit| hit.last_visit_unix_ms >= cutoff_unix_ms)
         .take(options.scan_limit)
+        .cloned()
         .collect::<Vec<_>>();
 
     root_fuzzy_search_browser_history_hits(&candidates, query, options.search_urls)
@@ -354,7 +358,7 @@ fn search_root_browser_history_meta_from_home(
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
 pub(crate) fn cached_root_browser_history_snapshot(
     cache_ttl_ms: u64,
-) -> Vec<RootBrowserHistorySearchHit> {
+) -> Arc<Vec<RootBrowserHistorySearchHit>> {
     let ttl = Duration::from_millis(cache_ttl_ms);
     if let Ok(cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         if let Some(snapshot) = cache.snapshot.as_ref() {
@@ -363,7 +367,7 @@ pub(crate) fn cached_root_browser_history_snapshot(
         }
     }
 
-    Vec::new()
+    Arc::new(Vec::new())
 }
 
 #[allow(dead_code)] // Runtime state receipts use this through the binary app layer.
@@ -448,9 +452,17 @@ pub(crate) fn ensure_root_browser_history_refresh(
                 let row_count = hits.len();
                 cache.snapshot = Some(RootBrowserHistorySnapshot {
                     captured_at: Instant::now(),
-                    hits,
+                    hits: Arc::new(hits.clone()),
                 });
                 cache.last_refresh_error = None;
+
+                // Trigger favicon fetch in background for top results
+                let urls: Vec<String> = hits.iter().take(100).map(|h| h.url.to_string()).collect();
+                std::thread::spawn(move || {
+                    let _needing = crate::favicons::domains_needing_favicons(&urls);
+                    crate::favicons::fetch_favicons_blocking(&_needing);
+                });
+
                 tracing::info!(
                     source = "browser_history",
                     generation,
@@ -490,7 +502,7 @@ pub(crate) fn update_root_browser_history_snapshot(hits: Vec<RootBrowserHistoryS
     if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         cache.snapshot = Some(RootBrowserHistorySnapshot {
             captured_at: Instant::now(),
-            hits,
+            hits: Arc::new(hits),
         });
         cache.generation = cache.generation.wrapping_add(1);
         cache.refresh_in_flight = false;
@@ -1475,14 +1487,14 @@ fn browser_history_entry(
     last_visited_at_ms: i64,
 ) -> BrowserHistoryEntry {
     BrowserHistoryEntry {
-        browser_name: browser.app_name.to_string(),
-        browser_bundle_id: browser.bundle_id.to_string(),
-        host: host_from_url(&url).to_string(),
-        title,
-        url,
+        browser_name: browser.app_name.into(),
+        browser_bundle_id: browser.bundle_id.into(),
+        host: host_from_url(&url).into(),
+        title: title.into(),
+        url: url.into(),
         last_visited_at_ms,
         visit_count,
-        profile: profile.to_string(),
+        profile: profile.into(),
     }
 }
 
@@ -1573,18 +1585,18 @@ mod tests {
     #[test]
     fn dedupe_history_entries_collapses_normalized_url_duplicates() {
         let newer = BrowserHistoryEntry {
-            browser_name: "Google Chrome".to_string(),
-            browser_bundle_id: "com.google.Chrome".to_string(),
-            title: "Portal".to_string(),
-            url: "https://example.com/docs#intro".to_string(),
-            host: "example.com".to_string(),
+            browser_name: "Google Chrome".into(),
+            browser_bundle_id: "com.google.Chrome".into(),
+            title: "Portal".into(),
+            url: "https://example.com/docs#intro".into(),
+            host: "example.com".into(),
             last_visited_at_ms: Utc::now().timestamp_millis(),
             visit_count: 5,
-            profile: "Default".to_string(),
+            profile: "Default".into(),
         };
         let older = BrowserHistoryEntry {
             last_visited_at_ms: newer.last_visited_at_ms - 10_000,
-            url: "https://example.com/docs/".to_string(),
+            url: "https://example.com/docs/".into(),
             visit_count: 2,
             ..newer.clone()
         };
@@ -1596,20 +1608,20 @@ mod tests {
     #[test]
     fn dedupe_history_entries_collapses_same_title_and_host_across_browsers() {
         let newer = BrowserHistoryEntry {
-            browser_name: "Google Chrome".to_string(),
-            browser_bundle_id: "com.google.Chrome".to_string(),
-            title: "Inbox (1,626) - johnlindquist@gmail.com - Gmail".to_string(),
-            url: "https://mail.google.com/mail/u/0/#inbox".to_string(),
-            host: "mail.google.com".to_string(),
+            browser_name: "Google Chrome".into(),
+            browser_bundle_id: "com.google.Chrome".into(),
+            title: "Inbox (1,626) - johnlindquist@gmail.com - Gmail".into(),
+            url: "https://mail.google.com/mail/u/0/#inbox".into(),
+            host: "mail.google.com".into(),
             last_visited_at_ms: Utc::now().timestamp_millis(),
             visit_count: 7,
-            profile: "Default".to_string(),
+            profile: "Default".into(),
         };
         let older = BrowserHistoryEntry {
-            browser_name: "Arc".to_string(),
-            browser_bundle_id: "company.thebrowser.Browser".to_string(),
-            url: "https://mail.google.com/mail/u/1/#inbox".to_string(),
-            profile: "Profile 1".to_string(),
+            browser_name: "Arc".into(),
+            browser_bundle_id: "company.thebrowser.Browser".into(),
+            url: "https://mail.google.com/mail/u/1/#inbox".into(),
+            profile: "Profile 1".into(),
             last_visited_at_ms: newer.last_visited_at_ms - 5_000,
             ..newer.clone()
         };

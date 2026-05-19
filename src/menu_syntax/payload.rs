@@ -311,6 +311,16 @@ pub struct RootUnifiedSourceFilterSet {
     exclude: BTreeSet<RootUnifiedSourceFilter>,
 }
 
+impl FromIterator<RootUnifiedSourceFilter> for RootUnifiedSourceFilterSet {
+    fn from_iter<T: IntoIterator<Item = RootUnifiedSourceFilter>>(iter: T) -> Self {
+        let mut set = Self::default();
+        for source in iter {
+            set.insert(source);
+        }
+        set
+    }
+}
+
 impl RootUnifiedSourceFilterSet {
     pub fn is_empty(&self) -> bool {
         self.include.is_empty() && self.exclude.is_empty()

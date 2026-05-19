@@ -49,6 +49,7 @@ impl ScriptListApp {
                 "profile": entry.profile,
             })),
         };
+        let _needing = script_kit_gpui::favicons::domains_needing_favicons(&[entry.url.clone()]);
         let label = crate::ai::format_explicit_target_chip_label(&target);
         crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }
     }
@@ -223,6 +224,15 @@ impl ScriptListApp {
         } else {
             let selected = selected_index;
             let entity = cx.entity().downgrade();
+            let app_icons: std::collections::HashMap<String, crate::app_launcher::DecodedIcon> =
+                self.apps
+                    .iter()
+                    .filter_map(|app| {
+                        app.bundle_id
+                            .clone()
+                            .and_then(|bundle_id| app.icon.clone().map(|icon| (bundle_id, icon)))
+                    })
+                    .collect();
 
             div()
                 .id("browser-history-list")
@@ -233,12 +243,15 @@ impl ScriptListApp {
                 .track_scroll(&self.browser_history_scroll_handle)
                 .overflow_y_scrollbar()
                 .children(filtered_entries.iter().enumerate().map(move |(display_ix, entry)| {
+                    let icon = browser_history_icon_for_render(entry, &app_icons);
                     let item = ListItem::new(entry.display_title().to_string(), list_colors)
+                        .icon_kind(icon)
                         .description_opt(Some(Self::browser_history_meta(entry)))
                         .selected(display_ix == selected)
                         .with_accent_bar(true);
 
                     let entity = entity.clone();
+                    let app_icons = app_icons.clone();
                     div()
                         .id(gpui::ElementId::Integer(display_ix as u64))
                         .cursor_pointer()
@@ -266,6 +279,7 @@ impl ScriptListApp {
                                             if let Some(entry) =
                                                 filtered_entries.get(display_ix)
                                             {
+                                                let _icon = browser_history_icon_for_render(entry, &app_icons);
                                                 let part = this.browser_history_attachment_part(
                                                     display_ix,
                                                     entry,
@@ -314,7 +328,7 @@ impl ScriptListApp {
                         .pt(px(design_spacing.padding_sm))
                         .text_xs()
                         .text_color(rgb(text_muted))
-                        .child(entry.url),
+                        .child(entry.url.to_string()),
                 )
                 .into_any_element(),
             None => div()
@@ -446,6 +460,31 @@ impl ScriptListApp {
         .track_focus(&self.focus_handle)
         .on_key_down(handle_key)
         .into_any_element()
+    }
+}
+
+fn browser_history_icon_for_render(
+    entry: &crate::browser_history::BrowserHistoryEntry,
+    app_icons: &std::collections::HashMap<String, crate::app_launcher::DecodedIcon>,
+) -> list_item::IconKind {
+    // Prefer per-site favicon
+    if let Some(favicon) = script_kit_gpui::favicons::cached_favicon(&entry.url) {
+        return list_item::IconKind::Image(favicon);
+    }
+
+    // Fall back to browser app icon if available
+    if let Some(icon) = app_icons.get(entry.browser_bundle_id.as_ref()) {
+        return list_item::IconKind::Image(icon.clone());
+    }
+
+    // Last resort: browser-specific emoji
+    match entry.browser_name.as_ref() {
+        "Safari" => list_item::IconKind::Emoji("🧭".to_string()),
+        "Google Chrome" => list_item::IconKind::Emoji("🌐".to_string()),
+        "Arc" => list_item::IconKind::Emoji("🅰️".to_string()),
+        "Brave Browser" => list_item::IconKind::Emoji("🦁".to_string()),
+        "Microsoft Edge" => list_item::IconKind::Emoji("🌊".to_string()),
+        _ => list_item::IconKind::Emoji("🔗".to_string()),
     }
 }
 

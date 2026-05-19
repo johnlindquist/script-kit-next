@@ -4728,13 +4728,13 @@ impl ScriptListApp {
                 );
                 self.cached_browser_tabs = tabs;
 
-                let domains =
-                    crate::browser_tabs::domains_needing_favicons(&self.cached_browser_tabs);
+                let urls: Vec<String> = self.cached_browser_tabs.iter().map(|t| t.url.to_string()).collect();
+                let domains = crate::favicons::domains_needing_favicons(&urls);
                 if !domains.is_empty() {
                     let task = cx.spawn(async move |this, cx| {
                         cx.background_executor()
                             .spawn(async move {
-                                crate::browser_tabs::fetch_favicons_blocking(&domains);
+                                crate::favicons::fetch_favicons_blocking(&domains);
                             })
                             .await;
                         let _ = cx.update(|cx| {
