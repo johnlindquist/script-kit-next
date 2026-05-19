@@ -1,0 +1,1 @@
+{"schemaVersion":1,"status":"error","session":"mention-token-dt-20260518-210453","requestId":"mention-batch-1","error":{"code":"parse_error","message":"unknown variant `simulateKey`, expected one of `setInput`, `openActions`, `togglePreview`, `forceSubmit`, `waitFor`, `selectByValue`, `selectBySemanticId`, `filterAndSelect`, `typeAndSubmit`"}}
