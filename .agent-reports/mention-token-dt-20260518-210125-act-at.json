@@ -1,0 +1,475 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.act",
+  "command": "act.set-input",
+  "classification": "blocked-by-timeout",
+  "session": "mention-token-dt-20260518-210125",
+  "startedAt": "2026-05-19T03:01:52.777Z",
+  "endedAt": "2026-05-19T03:01:53.435Z",
+  "actionId": "devtools-act-set-input-1779159713435-332bf2",
+  "actionKind": "set-input",
+  "requestedTarget": {
+    "selector": {
+      "type": "id",
+      "id": "ai"
+    },
+    "strict": false,
+    "expectedSurfaceKind": "AcpChat"
+  },
+  "targetBefore": {
+    "automationId": "ai",
+    "stableTargetId": "ai",
+    "targetKind": "Ai",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": false,
+    "ambiguity": []
+  },
+  "input": {
+    "text": "@",
+    "semanticId": null,
+    "key": null,
+    "modifiers": []
+  },
+  "safety": {
+    "channel": "batch",
+    "destructive": false,
+    "submitAllowed": false,
+    "nativeEscalation": false,
+    "errors": [],
+    "warnings": [],
+    "submitAttempted": false,
+    "submitPreflightSelectedSemanticId": null
+  },
+  "submitLifecycle": {
+    "state": "not-submit",
+    "reason": "action is not submit-like"
+  },
+  "postActionLifecycle": {
+    "state": "not-lifecycle-sensitive",
+    "reason": "action keeps source target inspectable"
+  },
+  "dismissLifecycle": null,
+  "expected": {
+    "protocolResponse": "batchResult",
+    "submitAllowed": false,
+    "noNativeEscalation": true,
+    "prePostReceipts": [
+      "focus.inspect",
+      "scroll.inspect"
+    ]
+  },
+  "actionReceipt": {
+    "type": "batchResult",
+    "requestId": "devtools-act-set-input-1779159712777-430395",
+    "success": false,
+    "results": [
+      {
+        "index": 0,
+        "success": false,
+        "command": "batch",
+        "elapsed": 0,
+        "error": {
+          "code": "action_failed",
+          "message": "batch supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved ai (Ai)"
+        }
+      }
+    ],
+    "failedAt": 0,
+    "totalElapsed": 0
+  },
+  "targetAfter": {
+    "automationId": "ai",
+    "stableTargetId": "ai",
+    "targetKind": "Ai",
+    "hostKind": null,
+    "parentAutomationId": "main",
+    "openerAutomationId": null,
+    "surfaceKind": null,
+    "appViewVariant": null,
+    "nativeFooterSurface": null,
+    "surfaceFamily": null,
+    "routeId": null,
+    "routeStack": [],
+    "targetGeneration": null,
+    "surfaceGeneration": null,
+    "dataGeneration": null,
+    "bounds": null,
+    "screenId": null,
+    "zOrder": null,
+    "visible": null,
+    "frontmost": null,
+    "focused": null,
+    "screenshotIdentity": {
+      "width": null,
+      "height": null,
+      "targetBoundsInScreenshot": null,
+      "nonBlankRatio": null
+    },
+    "strictTargetMatch": false,
+    "ambiguity": []
+  },
+  "visibleResult": {
+    "focusChanged": false,
+    "selectionChanged": false,
+    "inputChanged": false,
+    "windowVisibleBefore": true,
+    "windowVisibleAfter": true,
+    "scrollChanged": false
+  },
+  "before": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "mention-token-dt-20260518-210125",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "ai"
+        },
+        "strict": false,
+        "expectedSurfaceKind": "AcpChat"
+      },
+      "target": {
+        "automationId": "ai",
+        "stableTargetId": "ai",
+        "targetKind": "Ai",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": null,
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": null,
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windowFocused": false,
+      "windowVisible": true,
+      "focusedSemanticId": null,
+      "selectedSemanticId": null,
+      "focusedNode": null,
+      "selectedNode": null,
+      "activeFooter": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "unsupported",
+        "surfaceKind": null,
+        "inputOwnership": null,
+        "keyboardPolicy": null
+      },
+      "missingPrimitives": [
+        "focusedSemanticId"
+      ],
+      "warnings": [
+        "window is visible but not focused",
+        "focused semantic id missing"
+      ],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "mention-token-dt-20260518-210125",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "ai"
+        },
+        "strict": false,
+        "expectedSurfaceKind": "AcpChat"
+      },
+      "target": {
+        "automationId": "ai",
+        "stableTargetId": "ai",
+        "targetKind": "Ai",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": null,
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": null,
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": null,
+        "scrollTopItem": null,
+        "contentHeight": null,
+        "viewportHeight": null,
+        "safeViewportHeight": null,
+        "footerHeight": null,
+        "maxScrollTop": null,
+        "canScrollY": null,
+        "selectedIndex": -1,
+        "selectedRowTop": null,
+        "selectedRowBottom": null,
+        "selectedRowVisible": null,
+        "selectedRowAboveFooter": null,
+        "itemCount": 0
+      },
+      "resizePressure": {
+        "overflowY": null,
+        "hiddenContentHeight": null,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [
+        "mainListScroll"
+      ],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1779159712742-5a160c",
+        "promptType": "unsupported",
+        "promptId": "target_unsupported:Ai",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true
+      }
+    }
+  },
+  "after": {
+    "focus": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.focus",
+      "command": "focus.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "mention-token-dt-20260518-210125",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "ai"
+        },
+        "strict": false,
+        "expectedSurfaceKind": "AcpChat"
+      },
+      "target": {
+        "automationId": "ai",
+        "stableTargetId": "ai",
+        "targetKind": "Ai",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": null,
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": null,
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "windowFocused": false,
+      "windowVisible": true,
+      "focusedSemanticId": null,
+      "selectedSemanticId": null,
+      "focusedNode": null,
+      "selectedNode": null,
+      "activeFooter": null,
+      "keyboardOwner": {
+        "inputValue": "",
+        "promptType": "unsupported",
+        "surfaceKind": null,
+        "inputOwnership": null,
+        "keyboardPolicy": null
+      },
+      "missingPrimitives": [
+        "focusedSemanticId"
+      ],
+      "warnings": [
+        "window is visible but not focused",
+        "focused semantic id missing"
+      ],
+      "errors": []
+    },
+    "scroll": {
+      "schemaVersion": 1,
+      "tool": "script-kit-devtools.scroll",
+      "command": "scroll.inspect",
+      "classification": "blocked-by-missing-primitive",
+      "session": "mention-token-dt-20260518-210125",
+      "requestedTarget": {
+        "selector": {
+          "type": "id",
+          "id": "ai"
+        },
+        "strict": false,
+        "expectedSurfaceKind": "AcpChat"
+      },
+      "target": {
+        "automationId": "ai",
+        "stableTargetId": "ai",
+        "targetKind": "Ai",
+        "hostKind": null,
+        "parentAutomationId": "main",
+        "openerAutomationId": null,
+        "surfaceKind": null,
+        "appViewVariant": null,
+        "nativeFooterSurface": null,
+        "surfaceFamily": null,
+        "routeId": null,
+        "routeStack": [],
+        "targetGeneration": null,
+        "surfaceGeneration": null,
+        "dataGeneration": null,
+        "bounds": null,
+        "screenId": null,
+        "zOrder": null,
+        "visible": null,
+        "frontmost": null,
+        "focused": null,
+        "screenshotIdentity": {
+          "width": null,
+          "height": null,
+          "targetBoundsInScreenshot": null,
+          "nonBlankRatio": null
+        },
+        "strictTargetMatch": false,
+        "ambiguity": []
+      },
+      "scroll": {
+        "scrollTop": null,
+        "scrollTopItem": null,
+        "contentHeight": null,
+        "viewportHeight": null,
+        "safeViewportHeight": null,
+        "footerHeight": null,
+        "maxScrollTop": null,
+        "canScrollY": null,
+        "selectedIndex": -1,
+        "selectedRowTop": null,
+        "selectedRowBottom": null,
+        "selectedRowVisible": null,
+        "selectedRowAboveFooter": null,
+        "itemCount": 0
+      },
+      "resizePressure": {
+        "overflowY": null,
+        "hiddenContentHeight": null,
+        "selectedRowOccluded": false
+      },
+      "missingPrimitives": [
+        "mainListScroll"
+      ],
+      "errors": [],
+      "state": {
+        "type": "stateResult",
+        "requestId": "devtools-scroll-state-1779159713367-561c8b",
+        "promptType": "unsupported",
+        "promptId": "target_unsupported:Ai",
+        "inputValue": "",
+        "choiceCount": 0,
+        "visibleChoiceCount": 0,
+        "selectedIndex": -1,
+        "isFocused": false,
+        "windowVisible": true
+      }
+    }
+  },
+  "warnings": [
+    "window is visible but not focused",
+    "focused semantic id missing",
+    "window is visible but not focused",
+    "focused semantic id missing"
+  ],
+  "errors": [
+    {
+      "type": "batchResult",
+      "requestId": "devtools-act-set-input-1779159712777-430395",
+      "success": false,
+      "results": [
+        {
+          "index": 0,
+          "success": false,
+          "command": "batch",
+          "elapsed": 0,
+          "error": {
+            "code": "action_failed",
+            "message": "batch supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved ai (Ai)"
+          }
+        }
+      ],
+      "failedAt": 0,
+      "totalElapsed": 0
+    }
+  ]
+}

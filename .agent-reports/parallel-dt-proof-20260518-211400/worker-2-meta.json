@@ -1,0 +1,13 @@
+{
+  "worker": 2,
+  "session": "dt-proof-b",
+  "commit": "1e487f2d3",
+  "commitMessage": "Prevent the ACP @ inline portal popup from getting stuck open",
+  "agentId": "dt-proof-2",
+  "sessionDir": "/tmp/sk-agentic-sessions-dt-proof-b",
+  "startedAtUtc": "2026-05-19T03:14:00Z",
+  "workerShellPid": 71084,
+  "appPid": 71214,
+  "finishedAtUtc": "2026-05-19T03:14:03Z",
+  "durationSec": 3
+}

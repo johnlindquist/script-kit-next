@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "tool": "script-kit-devtools.investigate",
+  "generatedAt": "2026-05-19T03:01:26.081Z",
+  "classification": "blocked-by-unknown-surface",
+  "intake": {
+    "bugReport": "ACP file @mention picker rewrites @file: selections to extension prefixes like @md: or @ts: instead of @file:<basename.ext>",
+    "requestedSurface": "acp-chat-ai",
+    "screenshots": [],
+    "phase": "red-before-fix"
+  },
+  "target": {
+    "requested": "acp-chat-ai",
+    "normalized": "acp-chat-ai",
+    "surfaceKind": null,
+    "appViewVariants": [],
+    "explicitCoverageId": null,
+    "hasExplicitCoverage": false,
+    "proofPolicy": null,
+    "visualPolicy": null,
+    "focusPolicy": null,
+    "keyboardPolicy": null,
+    "actionsPolicy": null
+  },
+  "scenarioHints": [
+    "layout box model, scroll extent, overflow, resize pressure, and before/after bounds proof",
+    "Notes target, editor selection, preview scroll, dirty state, and shortcut focus proof",
+    "portal origin, return target, staged context parts, resource redaction, and privacy proof"
+  ],
+  "requiredReceipts": [
+    "target identity: listAutomationWindows + inspectAutomationWindow with exact target id",
+    "semantic state: getState/getElements for the same target id",
+    "layout state: getLayoutInfo or explicit missing target-scoped layout primitive",
+    "interaction transcript: action intent, primitive used, target id, visible result, and receipt id",
+    "visual proof: strict target screenshot only after semantic and layout identity agree",
+    "red/green comparison: same target, same action path, same metric names before and after fix"
+  ],
+  "missingRuntimePrimitives": [
+    "devtools.acp.inspect",
+    "devtools.acp.timeline",
+    "devtools.composer.inspect",
+    "devtools.turn.diff"
+  ],
+  "failClosedRules": [
+    "Do not call a recipe pass a green investigation.",
+    "Do not treat screenshots as sufficient without target, semantic, and layout identity.",
+    "Do not drive native input unless the bug depends on OS focus, pointer delivery, permissions, or screen capture.",
+    "If a required primitive is missing, report blocked-by-missing-primitive with the exact field needed."
+  ],
+  "recommendedCommands": {
+    "inspect": "bun scripts/devtools/inspect.ts --session dev --show --main",
+    "inventory": "bun scripts/devtools/surfaces.ts",
+    "coverage": null,
+    "measure": null
+  },
+  "owningBatches": [
+    {
+      "id": "acp-chat-ai",
+      "name": "ACP chat, composer, history, SDK AI APIs, model setup",
+      "featureIds": [
+        "001",
+        "003",
+        "004",
+        "006",
+        "010",
+        "013",
+        "015",
+        "016",
+        "017",
+        "018",
+        "019",
+        "020",
+        "021",
+        "022",
+        "023",
+        "026",
+        "027",
+        "028",
+        "029",
+        "030",
+        "031",
+        "032",
+        "033",
+        "038",
+        "040",
+        "041",
+        "043",
+        "044",
+        "045"
+      ],
+      "requiredDevToolsPrimitives": [
+        "devtools.acp.inspect",
+        "devtools.acp.timeline",
+        "devtools.composer.inspect",
+        "devtools.turn.diff"
+      ]
+    }
+  ]
+}
