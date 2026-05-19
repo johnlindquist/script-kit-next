@@ -99,8 +99,23 @@ function assertFileToken(inputText: string, fileLabel: string) {
 
 async function main() {
   const args = parseArgs(Bun.argv.slice(2));
+  // Use flat /tmp/sk-agentic-sessions/<session>/ (not .../${SESSION}/${SESSION}/).
+  if (!process.env.SCRIPT_KIT_SESSION_DIR) {
+    process.env.SCRIPT_KIT_SESSION_DIR = "/tmp/sk-agentic-sessions";
+  }
+
   if (args.start) {
     await run(["bash", "scripts/agentic/session.sh", "start", args.session], "session-start");
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const status = await run(
+        ["bash", "scripts/agentic/session.sh", "status", args.session],
+        "session-status",
+      );
+      if (status.healthy === true && status.alive === true) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
     await run(
       [
         "bash",
@@ -114,32 +129,50 @@ async function main() {
       ],
       "session-show",
     );
+    await run(
+      [
+        "bash",
+        "scripts/agentic/session.sh",
+        "send",
+        args.session,
+        JSON.stringify({ type: "openAi" }),
+        "--await-parse",
+        "--timeout",
+        String(args.timeoutMs),
+      ],
+      "openAi",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  } else {
+    await run(
+      [
+        "bash",
+        "scripts/agentic/session.sh",
+        "send",
+        args.session,
+        JSON.stringify({ type: "openAi" }),
+        "--await-parse",
+        "--timeout",
+        String(args.timeoutMs),
+      ],
+      "openAi",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  await run(
-    [
-      "bash",
-      "scripts/agentic/session.sh",
-      "send",
-      args.session,
-      JSON.stringify({ type: "openAi" }),
-      "--await-parse",
-      "--timeout",
-      String(args.timeoutMs),
-    ],
-    "openAi",
-  );
-
   const target = { type: "id", id: "ai" };
+  // Picker is two-level: `@` → `@file` category → basename row (e.g. CLAUDE.md).
   const batchPayload = {
     type: "batch",
     requestId: `devtools-acp-mention-${Date.now()}`,
     target,
     commands: [
       { type: "setInput", text: "@" },
-      { type: "waitFor", condition: { type: "acpPickerOpen" }, timeout: 5000, pollInterval: 25 },
+      { type: "waitFor", condition: { type: "acpPickerOpen" }, timeout: 8000, pollInterval: 25 },
+      { type: "selectByValue", value: "@file", submit: true },
+      { type: "waitFor", condition: { type: "acpPickerOpen" }, timeout: 8000, pollInterval: 25 },
       { type: "selectByValue", value: args.fileLabel, submit: true },
-      { type: "waitFor", condition: { type: "acpItemAccepted" }, timeout: 5000, pollInterval: 25 },
+      { type: "waitFor", condition: { type: "acpItemAccepted" }, timeout: 8000, pollInterval: 25 },
     ],
     options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
     trace: "on",

@@ -85,7 +85,7 @@ should_skip_build() {
 }
 
 cmd_classify() {
-  progress classify 0 "classifying bootstrap mode"
+  progress classify "classifying bootstrap mode"
   MODE="$(classify_mode "$MODE")"
   local dev_sh=false
   local gpui_count
@@ -105,7 +105,7 @@ cmd_classify() {
 }
 
 cmd_verify_script() {
-  progress verify-script 0 "running SK_VERIFY script proof"
+  progress verify-script "running SK_VERIFY script proof"
   if [[ -z "$SCRIPT_PATH" ]]; then
     json_error verify-script script_verify_missing "verify-script requires --script PATH" "Pass --script kit-init/examples/scripts/todoist-demo.ts"
     exit 21
@@ -132,7 +132,7 @@ cmd_verify_script() {
 }
 
 cmd_cleanup() {
-  progress cleanup 0 "stopping session"
+  progress cleanup "stopping session"
   if [[ -z "$SESSION" ]]; then
     json_error cleanup usage_error "cleanup requires --session NAME" ""
     exit 2
@@ -147,7 +147,7 @@ cmd_cleanup() {
 }
 
 cmd_prove() {
-  progress prove 0 "getState RPC proof"
+  progress prove "getState RPC proof"
   if [[ -z "$SESSION" ]]; then
     json_error prove usage_error "prove requires --session NAME" ""
     exit 2
@@ -171,7 +171,7 @@ cmd_start() {
     json_error start usage_error "start requires --session NAME" ""
     exit 2
   fi
-  progress start 0 "resolving mode"
+  progress start "resolving mode"
   MODE="$(classify_mode "$MODE")"
 
   if [[ "$MODE" == "script-only" ]]; then
@@ -186,7 +186,7 @@ cmd_start() {
   local bus="${sdir}/protocol-responses.ndjson"
   local build_log="/tmp/sk-isolated-build-${SCRIPT_KIT_AGENT_ID:-dt-agent-build}.log"
 
-  progress preflight 0 "preflight mode=${MODE}"
+  progress preflight "preflight mode=${MODE}"
   local preflight_args=(--mode "$MODE")
   [[ "$MODE" == "reuse-dev-watch" ]] && preflight_args+=(--allow-dev-sh)
   set +e
@@ -211,7 +211,7 @@ cmd_start() {
   fi
 
   if [[ "$MODE" == "reuse-dev-watch" ]]; then
-    progress reuse-dev-watch 0 "attaching to dev-watch session"
+    progress reuse-dev-watch "attaching to dev-watch session"
     local status_json
     status_json="$(bash scripts/agentic/session.sh status dev-watch 2>/dev/null || true)"
     if ! printf '%s' "$status_json" | grep -q '"healthy":true\|"alive":true'; then
@@ -222,7 +222,7 @@ cmd_start() {
     local proof_get_state="skipped"
     local proof_response_type=""
     if [[ "$DO_PROVE" -eq 1 ]]; then
-      progress prove 0 "getState RPC on dev-watch"
+      progress prove "getState RPC on dev-watch"
       local rpc_json='{"type":"getState","requestId":"devtools-session-prove","summaryOnly":true}'
       local result
       if result="$(bash scripts/agentic/session.sh rpc dev-watch "$rpc_json" --expect stateResult --timeout "$RPC_TIMEOUT_MS" 2>/dev/null)"; then
@@ -252,7 +252,7 @@ cmd_start() {
 
   if ! should_skip_build "$MODE"; then
     if [[ "$BUILD_POLICY" == "always" ]] || [[ "$BUILD_POLICY" == "auto" ]]; then
-      progress build 0 "building and promoting binary (timeout 120s)"
+      progress build "building and promoting binary (timeout 120s)"
       DEVTOOLS_SESSION_JSON=1
       export DEVTOOLS_SESSION_JSON
       if ! bash "${SCRIPT_DIR}/build-isolated-binary.sh" 120; then
@@ -267,10 +267,10 @@ cmd_start() {
       fi
     fi
   else
-    progress build 0 "skipping cargo build (policy=${BUILD_POLICY}, rust unchanged or never)"
+    progress build "skipping cargo build (policy=${BUILD_POLICY}, rust unchanged or never)"
   fi
 
-  progress start 0 "starting isolated session (internal ready timeout 5s)"
+  progress start "starting isolated session (internal ready timeout 5s)"
   local start_args=("$SESSION")
   [[ "${#NOTES_FLAG[@]}" -gt 0 ]] && start_args+=("${NOTES_FLAG[@]}")
   start_args+=(--wait-sec "$READY_TIMEOUT_SEC")
@@ -295,7 +295,7 @@ cmd_start() {
   local proof_get_state="skipped"
   local proof_response_type=""
   if [[ "$DO_PROVE" -eq 1 ]]; then
-    progress prove 0 "getState RPC"
+    progress prove "getState RPC"
     local rpc_json='{"type":"getState","requestId":"devtools-session-prove","summaryOnly":true}'
     local result
     if result="$(bash scripts/agentic/session.sh rpc "$SESSION" "$rpc_json" --expect stateResult --timeout "$RPC_TIMEOUT_MS" 2>/dev/null)"; then

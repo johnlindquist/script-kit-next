@@ -5270,19 +5270,21 @@ impl ScriptListApp {
                             match cmd {
                                 protocol::BatchCommand::SetInput { text } => {
                                     let text = text.clone();
+                                    let text_len = text.len();
                                     let acp_entity = acp_entity.clone();
                                     let result = this.update(cx, |_this, cx| {
                                         acp_entity.update(cx, |view, cx| {
-                                            let Some(thread) = view.thread() else {
+                                            if view.thread().is_none() {
                                                 return "detached ACP is in setup mode".to_string();
-                                            };
-                                            thread.update(cx, |thread, cx| {
-                                                thread.set_input(&text, cx);
-                                            });
+                                            }
+                                            // Route through `AcpChatView::set_input` so mention
+                                            // picker sessions refresh (thread-only updates
+                                            // leave `mention_session` stale for selectByValue).
+                                            view.set_input(text, cx);
                                             tracing::info!(
                                                 target: "script_kit::transaction",
                                                 event = "transaction_detached_acp_set_input",
-                                                text_len = text.len(),
+                                                text_len,
                                                 "detached ACP set_input"
                                             );
                                             String::new() // empty = success
