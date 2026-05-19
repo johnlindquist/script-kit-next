@@ -502,6 +502,7 @@ impl CommandBarConfig {
                 section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
+                search_placeholder: Some("Search Notes".to_string()),
                 max_height: NOTES_RECENT_POPUP_MAX_HEIGHT,
                 ..ActionsDialogConfig::default()
             },
@@ -676,6 +677,30 @@ impl CommandBar {
         self.dialog = None;
     }
 
+    /// Reconcile the in-memory `is_open` flag against the actual detached
+    /// actions window. If the window was dismissed externally (focus loss,
+    /// click outside, system close) without routing through `close()`, the
+    /// boolean would otherwise stick true and swallow every keystroke at the
+    /// keyboard-routing layer. Returns true when stale state was cleared.
+    #[inline]
+    fn reset_open_state_if_window_gone(&mut self) -> bool {
+        if self.is_open && !is_actions_window_open() {
+            self.reset_open_state();
+            logging::log(
+                "COMMAND_BAR",
+                "Reset stale open state because the actions window is no longer open",
+            );
+            return true;
+        }
+        false
+    }
+
+    /// Public reconciliation entry used by host windows (e.g. Notes keyboard
+    /// handler) before they consume keystrokes based on `is_open()`.
+    pub fn reconcile_open_state(&mut self) -> bool {
+        self.reset_open_state_if_window_gone()
+    }
+
     /// Create a new CommandBar with actions and configuration
     pub fn new(actions: Vec<Action>, config: CommandBarConfig, theme: Arc<theme::Theme>) -> Self {
         Self {
@@ -747,6 +772,7 @@ impl CommandBar {
 
     /// Toggle open/close state (for Cmd+K binding)
     pub fn toggle<V: 'static>(&mut self, window: &mut Window, cx: &mut Context<V>) {
+        self.reset_open_state_if_window_gone();
         if self.is_open {
             self.close(cx);
         } else {
@@ -771,6 +797,7 @@ impl CommandBar {
         cx: &mut Context<V>,
         position: super::window::WindowPosition,
     ) {
+        self.reset_open_state_if_window_gone();
         if self.is_open {
             return;
         }
@@ -863,9 +890,14 @@ impl CommandBar {
         logging::log("COMMAND_BAR", "Command bar closed");
     }
 
-    /// Check if the command bar is open
+    /// Check if the command bar is open.
+    ///
+    /// Returns true only when both the local flag is set AND the detached
+    /// actions window is still open. This guards against external dismissals
+    /// (focus loss, click outside) that would otherwise leave `is_open` stuck
+    /// true and make the keyboard router consume every keystroke.
     pub fn is_open(&self) -> bool {
-        self.is_open
+        self.is_open && is_actions_window_open()
     }
 
     /// Get the currently selected action ID

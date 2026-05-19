@@ -68,6 +68,29 @@ impl NotesApp {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        // Reconcile detached CommandBar windows: if they were dismissed
+        // externally (focus loss, click outside) without routing through
+        // close_actions_panel / close_browse_panel, the in-memory `is_open`
+        // flag would otherwise stick true and swallow every keystroke at the
+        // popup-first branches below — making Cmd+P / Cmd+K appear dead.
+        let command_bar_was_stale = self.command_bar.reconcile_open_state();
+        let note_switcher_was_stale = self.note_switcher.reconcile_open_state();
+        if command_bar_was_stale {
+            self.show_actions_panel = false;
+            self.actions_panel = None;
+        }
+        if note_switcher_was_stale {
+            self.show_browse_panel = false;
+            self.browse_panel = None;
+        }
+        if command_bar_was_stale || note_switcher_was_stale {
+            // Detached action windows are visual-only; restore focus to the
+            // Notes root so the next Cmd+P / Cmd+K is routable. Avoid forcing
+            // editor focus so Notes-hosted ACP keeps its surface.
+            self.focus_handle.focus(window, cx);
+            cx.notify();
+        }
+
         if window.has_active_dialog(cx) {
             // The dialog component registers Enter→Confirm and Escape→Cancel
             // keybindings in the "Dialog" key context.  However, the Notes
