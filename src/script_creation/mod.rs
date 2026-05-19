@@ -158,7 +158,7 @@ where
 /// - Removes special characters (keeps only alphanumeric and hyphens)
 /// - Removes leading/trailing hyphens
 /// - Collapses multiple consecutive hyphens into one
-fn sanitize_name(name: &str) -> String {
+pub(crate) fn sanitize_name(name: &str) -> String {
     let sanitized: String = name
         .to_lowercase()
         .chars()

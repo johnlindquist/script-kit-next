@@ -3,6 +3,7 @@ use crate::mcp_notes_tools::{
     self, McpNotesMutationBridge, NotesMutationError, NotesMutationErrorCode, NotesMutationRequest,
     NotesMutationResult, SharedNotesMutationBridge,
 };
+use crate::mcp_scripts_tools;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -115,6 +116,10 @@ pub fn build_default_mutation_registry() -> MutationRegistry {
     registry.register(NotesCreateTool);
     registry.register(NotesUpdateTool);
     registry.register(NotesDeleteTool);
+    registry.register(ScriptsCreateTool);
+    registry.register(ScriptsUpdateTool);
+    registry.register(ScriptsDeleteTool);
+    registry.register(ScriptsRunTool);
     registry
 }
 
@@ -169,6 +174,10 @@ impl McpNotesMutationBridge for GpuiNotesMcpBridge {
 struct NotesCreateTool;
 struct NotesUpdateTool;
 struct NotesDeleteTool;
+struct ScriptsCreateTool;
+struct ScriptsUpdateTool;
+struct ScriptsDeleteTool;
+struct ScriptsRunTool;
 
 impl DynMutationTool for NotesCreateTool {
     fn meta(&self) -> MutationToolMeta {
@@ -251,6 +260,98 @@ impl DynMutationTool for NotesDeleteTool {
     }
 }
 
+impl DynMutationTool for ScriptsCreateTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_scripts_tools::SCRIPTS_CREATE_TOOL,
+            description: "Create a Script Kit script",
+            risk: RiskClass::StateMutating,
+            required_scope: "scripts:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        mcp_scripts_tools::get_scripts_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_CREATE_TOOL)
+            .expect("scripts create tool definition")
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_CREATE_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ScriptsUpdateTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_scripts_tools::SCRIPTS_UPDATE_TOOL,
+            description: "Update a Script Kit script",
+            risk: RiskClass::StateMutating,
+            required_scope: "scripts:write",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        mcp_scripts_tools::get_scripts_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_UPDATE_TOOL)
+            .expect("scripts update tool definition")
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_UPDATE_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ScriptsDeleteTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_scripts_tools::SCRIPTS_DELETE_TOOL,
+            description: "Delete a Script Kit script",
+            risk: RiskClass::Destructive,
+            required_scope: "scripts:write",
+            requires_confirm: true,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        mcp_scripts_tools::get_scripts_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_DELETE_TOOL)
+            .expect("scripts delete tool definition")
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_DELETE_TOOL, args)
+    }
+}
+
+impl DynMutationTool for ScriptsRunTool {
+    fn meta(&self) -> MutationToolMeta {
+        MutationToolMeta {
+            name: mcp_scripts_tools::SCRIPTS_RUN_TOOL,
+            description: "Run a Script Kit script",
+            risk: RiskClass::ExternalProcess,
+            required_scope: "scripts:run",
+            requires_confirm: false,
+        }
+    }
+
+    fn definition(&self) -> ToolDefinition {
+        mcp_scripts_tools::get_scripts_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == mcp_scripts_tools::SCRIPTS_RUN_TOOL)
+            .expect("scripts run tool definition")
+    }
+
+    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+        mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_RUN_TOOL, args)
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct McpAuditEvent {
@@ -274,6 +375,7 @@ fn scope_allows(scopes: &[String], required: &str) -> bool {
             || scope == "mcp:*"
             || scope == "dev:*"
             || (required.starts_with("notes:") && scope == "notes:*")
+            || (required.starts_with("scripts:") && scope == "scripts:*")
     })
 }
 

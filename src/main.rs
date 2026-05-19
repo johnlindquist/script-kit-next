@@ -220,6 +220,7 @@ mod mcp_notes_tools;
 mod mcp_protocol;
 mod mcp_resources;
 mod mcp_script_tools;
+mod mcp_scripts_tools;
 mod mcp_server;
 mod mcp_streaming;
 
