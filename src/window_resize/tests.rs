@@ -41,15 +41,15 @@ fn capped_rows_drop_as_section_headers_consume_budget() {
         capped_mini_main_window_selectable_rows(0),
         MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS
     );
-    // With 440px max, budget = 440-56-1-30 = 353
-    // 1 header: (353-32)/40 = 8.025 → 8, min(8, 8) = 8
+    // With 440px max, budget = 440-44-1-30 = 365
+    // 1 header: (365-32)/40 = 8.325 → 8, min(8, 8) = 8
     assert_eq!(capped_mini_main_window_selectable_rows(1), 8);
-    // 2 headers: (353-64)/40 = 7.225 → 7
+    // 2 headers: (365-64)/40 = 7.525 → 7
     assert_eq!(capped_mini_main_window_selectable_rows(2), 7);
-    // 4 headers: (353-128)/40 = 5.625 → 5
+    // 4 headers: (365-128)/40 = 5.925 → 5
     assert_eq!(capped_mini_main_window_selectable_rows(4), 5);
     // With enough headers, no selectable rows fit at all
-    assert_eq!(capped_mini_main_window_selectable_rows(10), 0);
+    assert_eq!(capped_mini_main_window_selectable_rows(12), 0);
 }
 
 // ---------------------------------------------------------------------------

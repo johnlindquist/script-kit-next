@@ -134,10 +134,7 @@ fn show_main_window_helper(
     let current_window_width = current_bounds.map(|(_, _, width, _)| width as f32);
     logging::log(
         "POSITION_TRACE",
-        &format!(
-            "Current window bounds before show: {:?}",
-            current_bounds
-        ),
+        &format!("Current window bounds before show: {:?}", current_bounds),
     );
     let window_size = app_entity.update(cx, |view, ctx| {
         if needs_reset_before_show {
@@ -159,20 +156,16 @@ fn show_main_window_helper(
             let (grouped_items, _) = view.get_grouped_results_cached();
             let sizing =
                 crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
-            gpui::size(
-                px(
-                    crate::window_resize::width_for_view(ViewType::MiniMainWindow)
-                        .unwrap_or(750.0),
-                ),
-                crate::window_resize::height_for_mini_main_window(sizing),
-            )
+            let target = crate::window_resize::MainMenuSizingTarget::Mini(sizing);
+            gpui::size(px(target.width()), target.height())
+        } else if matches!(view.current_view, AppView::ScriptList) {
+            let target = crate::window_resize::MainMenuSizingTarget::Full;
+            gpui::size(px(target.width()), target.height())
         } else if let Some((view_type, item_count)) = view.calculate_window_size_params() {
             gpui::size(
-                px(
-                    crate::window_resize::width_for_view(view_type)
-                        .or(current_window_width)
-                        .unwrap_or(750.0),
-                ),
+                px(crate::window_resize::width_for_view(view_type)
+                    .or(current_window_width)
+                    .unwrap_or(750.0)),
                 crate::window_resize::height_for_view(view_type, item_count),
             )
         } else {
@@ -228,7 +221,9 @@ fn show_main_window_helper(
                     "POSITION_TRACE",
                     &format!(
                         "Adjusted x: saved.x={:.0} -> adjusted_x={:.0} (shift={:.1})",
-                        saved.x, adjusted_x, adjusted_x - saved.x
+                        saved.x,
+                        adjusted_x,
+                        adjusted_x - saved.x
                     ),
                 );
                 // Use saved position but with current window height (may have changed)
@@ -252,11 +247,7 @@ fn show_main_window_helper(
                 "VISIBILITY",
                 "No saved position for this display, using eye-line",
             );
-            platform::calculate_eye_line_bounds_for_snapshot(
-                window_size,
-                mouse,
-                &visible_displays,
-            )
+            platform::calculate_eye_line_bounds_for_snapshot(window_size, mouse, &visible_displays)
         }
     } else {
         logging::log("VISIBILITY", "Could not get mouse position, using eye-line");

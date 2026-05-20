@@ -9,6 +9,9 @@ const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
 /// Choice value representing "use system default" in the mic-selection prompt.
 const BUILTIN_MIC_DEFAULT_VALUE: &str = "__system_default__";
 
+/// Synthetic prompt ID for snap mode configuration.
+const BUILTIN_SNAP_MODE_PROMPT_ID: &str = "builtin:configure-snap-mode";
+
 /// Synthetic prompt ID for the dictation model download consent prompt.
 /// Checked in `submit_arg_prompt_from_current_state` to intercept submit
 /// and either start the Parakeet download or cancel.
@@ -209,19 +212,14 @@ enum SettingsSnapModeBuiltinAction {
     Simple,
     Expanded,
     Precision,
+    Configure,
 }
 
 impl SettingsSnapModeBuiltinAction {
     fn from_command(command: builtins::SettingsCommandType) -> Option<Self> {
         match command {
-            builtins::SettingsCommandType::DisableWindowSnapping => Some(Self::Disable),
-            builtins::SettingsCommandType::SnapModeSimple => Some(Self::Simple),
-            builtins::SettingsCommandType::SnapModeExpanded => Some(Self::Expanded),
-            builtins::SettingsCommandType::SnapModePrecision => Some(Self::Precision),
-            builtins::SettingsCommandType::ResetWindowPositions
-            | builtins::SettingsCommandType::ChooseTheme
-            | builtins::SettingsCommandType::SelectMicrophone
-            | builtins::SettingsCommandType::DictationSetup => None,
+            builtins::SettingsCommandType::ConfigureSnapMode => Some(Self::Configure),
+            _ => None,
         }
     }
 
@@ -231,6 +229,7 @@ impl SettingsSnapModeBuiltinAction {
             Self::Simple => window_control::SnapMode::Simple,
             Self::Expanded => window_control::SnapMode::Expanded,
             Self::Precision => window_control::SnapMode::Precision,
+            Self::Configure => window_control::SnapMode::Off,
         }
     }
 
@@ -240,6 +239,7 @@ impl SettingsSnapModeBuiltinAction {
             Self::Simple => "Snap mode: Simple",
             Self::Expanded => "Snap mode: Expanded",
             Self::Precision => "Snap mode: Precision",
+            Self::Configure => "Configure snap mode",
         }
     }
 
@@ -249,47 +249,28 @@ impl SettingsSnapModeBuiltinAction {
             Self::Simple => "set_snap_mode::simple",
             Self::Expanded => "set_snap_mode::expanded",
             Self::Precision => "set_snap_mode::precision",
+            Self::Configure => "configure_snap_mode",
         }
     }
 
     fn persistence_failure_code(self) -> &'static str {
-        match self {
-            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
-                "set_snap_mode_failed"
-            }
-        }
+        "set_snap_mode_failed"
     }
 
     fn persistence_failure_log(self) -> &'static str {
-        match self {
-            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
-                "Failed to persist snap mode from built-in command"
-            }
-        }
+        "Failed to persist snap mode from built-in command"
     }
 
     fn persistence_failure_hud(self, error: &dyn std::fmt::Display) -> String {
-        match self {
-            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
-                format!("Failed to update snap mode: {error}")
-            }
-        }
+        format!("Failed to update snap mode: {error}")
     }
 
     fn persistence_failure_message(self) -> &'static str {
-        match self {
-            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
-                "Failed to save snap mode"
-            }
-        }
+        "Failed to save snap mode"
     }
 
     fn runtime_transition_failure_log(self) -> &'static str {
-        match self {
-            Self::Disable | Self::Simple | Self::Expanded | Self::Precision => {
-                "Failed to apply runtime transition after snap mode change"
-            }
-        }
+        "Failed to apply runtime transition after snap mode change"
     }
 }
 
@@ -1573,10 +1554,7 @@ impl SettingsCommandBuiltinAction {
                 SettingsMicrophoneBuiltinAction::from_command(command)
                     .expect("select microphone command should map to microphone action"),
             ),
-            builtins::SettingsCommandType::DisableWindowSnapping
-            | builtins::SettingsCommandType::SnapModeSimple
-            | builtins::SettingsCommandType::SnapModeExpanded
-            | builtins::SettingsCommandType::SnapModePrecision => Self::SnapMode(
+            builtins::SettingsCommandType::ConfigureSnapMode => Self::SnapMode(
                 SettingsSnapModeBuiltinAction::from_command(command)
                     .expect("snap mode settings command should map to snap mode action"),
             ),
@@ -5324,6 +5302,9 @@ impl ScriptListApp {
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
+        if action == SettingsSnapModeBuiltinAction::Configure {
+            return self.execute_configure_snap_mode_prompt(dctx, cx);
+        }
         let target_mode = action.target_mode();
 
         let previous = window_control::current_snap_mode();
@@ -5384,6 +5365,111 @@ impl ScriptListApp {
 
         self.show_hud(action.hud_text().to_string(), Some(HUD_SHORT_MS), cx);
         Self::builtin_success(dctx, action.success_detail())
+    }
+
+    fn execute_configure_snap_mode_prompt(
+        &mut self,
+        dctx: &crate::action_helpers::DispatchContext,
+        cx: &mut Context<Self>,
+    ) -> crate::action_helpers::DispatchOutcome {
+        let current = window_control::current_snap_mode();
+        let choices = vec![
+            Choice {
+                name: if current == window_control::SnapMode::Off {
+                    "Disable Snapping (current)".to_string()
+                } else {
+                    "Disable Snapping".to_string()
+                },
+                value: "off".to_string(),
+                description: Some("Turn off drag snapping and hide snap overlays".to_string()),
+                key: None,
+                semantic_id: Some(builtin_choice_semantic_id(
+                    BUILTIN_SNAP_MODE_PROMPT_ID,
+                    0,
+                    "off",
+                )),
+            },
+            Choice {
+                name: if current == window_control::SnapMode::Simple {
+                    "Snap Mode: Simple (current)".to_string()
+                } else {
+                    "Snap Mode: Simple".to_string()
+                },
+                value: "simple".to_string(),
+                description: Some("Use halves, quadrants, center, and almost-maximize targets".to_string()),
+                key: None,
+                semantic_id: Some(builtin_choice_semantic_id(
+                    BUILTIN_SNAP_MODE_PROMPT_ID,
+                    1,
+                    "simple",
+                )),
+            },
+            Choice {
+                name: if current == window_control::SnapMode::Expanded {
+                    "Snap Mode: Expanded (current)".to_string()
+                } else {
+                    "Snap Mode: Expanded".to_string()
+                },
+                value: "expanded".to_string(),
+                description: Some("Use halves, quadrants, thirds, and two-thirds targets".to_string()),
+                key: None,
+                semantic_id: Some(builtin_choice_semantic_id(
+                    BUILTIN_SNAP_MODE_PROMPT_ID,
+                    2,
+                    "expanded",
+                )),
+            },
+            Choice {
+                name: if current == window_control::SnapMode::Precision {
+                    "Snap Mode: Precision (current)".to_string()
+                } else {
+                    "Snap Mode: Precision".to_string()
+                },
+                value: "precision".to_string(),
+                description: Some("Use the full snap grid including sixths for finer placement".to_string()),
+                key: None,
+                semantic_id: Some(builtin_choice_semantic_id(
+                    BUILTIN_SNAP_MODE_PROMPT_ID,
+                    3,
+                    "precision",
+                )),
+            },
+        ];
+
+        let start_index = match current {
+            window_control::SnapMode::Off => 0,
+            window_control::SnapMode::Simple => 1,
+            window_control::SnapMode::Expanded => 2,
+            window_control::SnapMode::Precision => 3,
+        };
+
+        let choice_count = choices.len();
+        tracing::info!(
+            category = "AUTOMATION",
+            prompt_id = BUILTIN_SNAP_MODE_PROMPT_ID,
+            choice_count = choice_count,
+            selected_index = start_index,
+            semantic_ids_populated = choices.iter().all(|c| c.semantic_id.is_some()),
+            "opened_builtin_snap_mode_prompt"
+        );
+
+        self.opened_from_main_menu = true;
+        self.arg_input.clear();
+        self.arg_selected_index = start_index;
+        self.focused_input = FocusedInput::ArgPrompt;
+        self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Select Snap Mode".to_string());
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.current_view = AppView::MiniPrompt {
+            id: BUILTIN_SNAP_MODE_PROMPT_ID.to_string(),
+            placeholder: "Select Snap Mode".to_string(),
+            choices,
+        };
+        resize_to_view_sync(ViewType::MiniPrompt, choice_count.min(5));
+        cx.notify();
+
+        Self::builtin_success(dctx, "configure_snap_mode")
     }
 
     fn execute_select_microphone_builtin(

@@ -18,10 +18,7 @@ enum SettingsAction {
     AllowScreenRecording,
     RequestAccessibilityPermission,
     OpenAccessibilitySettings,
-    DisableWindowSnapping,
-    SnapModeSimple,
-    SnapModeExpanded,
-    SnapModePrecision,
+    ConfigureSnapMode,
     ResetWindowPositions,
 }
 
@@ -123,45 +120,12 @@ fn get_settings_items() -> Vec<SettingsItem> {
         },
     ];
 
-    let snap_mode = crate::window_control::current_snap_mode();
-
-    if snap_mode != crate::window_control::SnapMode::Off {
-        items.push(SettingsItem {
-            name: "Disable Window Snapping",
-            description: "Turn off drag snapping and snap overlays until a snap mode is re-enabled",
-            icon: "ban",
-            action: SettingsAction::DisableWindowSnapping,
-        });
-    }
-
-    if snap_mode != crate::window_control::SnapMode::Simple {
-        items.push(SettingsItem {
-            name: "Snap Mode: Simple",
-            description:
-                "Use halves, quadrants, center, and almost-maximize targets while dragging windows",
-            icon: "square-split-horizontal",
-            action: SettingsAction::SnapModeSimple,
-        });
-    }
-
-    if snap_mode != crate::window_control::SnapMode::Expanded {
-        items.push(SettingsItem {
-            name: "Snap Mode: Expanded",
-            description:
-                "Use halves, quadrants, thirds, and two-thirds targets while dragging windows",
-            icon: "columns-3",
-            action: SettingsAction::SnapModeExpanded,
-        });
-    }
-
-    if snap_mode != crate::window_control::SnapMode::Precision {
-        items.push(SettingsItem {
-            name: "Snap Mode: Precision",
-            description: "Use the full snap grid including sixths for finer placements",
-            icon: "grid-3x2",
-            action: SettingsAction::SnapModePrecision,
-        });
-    }
+    items.push(SettingsItem {
+        name: "Configure Snap Mode",
+        description: "Choose a snapping grid density or disable drag snapping",
+        icon: "square-split-horizontal",
+        action: SettingsAction::ConfigureSnapMode,
+    });
 
     if crate::window_state::has_custom_positions() {
         items.push(SettingsItem {
@@ -425,48 +389,15 @@ impl ScriptListApp {
 
                 self.execute_builtin(&entry, cx);
             }
-            SettingsAction::DisableWindowSnapping => {
+            SettingsAction::ConfigureSnapMode => {
                 let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
                     .into_iter()
-                    .find(|entry| entry.id == "builtin/disable-window-snapping");
+                    .find(|entry| entry.id == "builtin/configure-snap-mode");
 
                 if let Some(entry) = entry {
                     self.execute_builtin(&entry, cx);
                 } else {
-                    self.show_error_toast("Disable Window Snapping is unavailable", cx);
-                }
-            }
-            SettingsAction::SnapModeSimple => {
-                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
-                    .into_iter()
-                    .find(|entry| entry.id == "builtin/snap-mode-simple");
-
-                if let Some(entry) = entry {
-                    self.execute_builtin(&entry, cx);
-                } else {
-                    self.show_error_toast("Snap Mode: Simple is unavailable", cx);
-                }
-            }
-            SettingsAction::SnapModeExpanded => {
-                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
-                    .into_iter()
-                    .find(|entry| entry.id == "builtin/snap-mode-expanded");
-
-                if let Some(entry) = entry {
-                    self.execute_builtin(&entry, cx);
-                } else {
-                    self.show_error_toast("Snap Mode: Expanded is unavailable", cx);
-                }
-            }
-            SettingsAction::SnapModePrecision => {
-                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
-                    .into_iter()
-                    .find(|entry| entry.id == "builtin/snap-mode-precision");
-
-                if let Some(entry) = entry {
-                    self.execute_builtin(&entry, cx);
-                } else {
-                    self.show_error_toast("Snap Mode: Precision is unavailable", cx);
+                    self.show_error_toast("Configure Snap Mode is unavailable", cx);
                 }
             }
             SettingsAction::ResetWindowPositions => {
@@ -495,6 +426,12 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font().to_string();
 
         let chrome = theme::AppChromeColors::from_theme(&self.theme);
 
@@ -687,14 +624,10 @@ impl ScriptListApp {
             .collect();
 
         let list_element: AnyElement = if item_count == 0 {
-            div()
-                .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgba(chrome.text_muted_rgba))
-                .font_family(design_typography.font_family)
-                .child(SettingsEmptyState::from_filter(&filter).message())
-                .into_any_element()
+            let state = SettingsEmptyState::from_filter(&filter);
+            crate::list_item::EmptyState::new(state.message(), empty_text_color, &empty_font_family)
+                .icon(crate::designs::icon_variations::IconName::Settings)
+                .into_element()
         } else {
             div()
                 .w_full()

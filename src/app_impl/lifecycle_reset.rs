@@ -24,10 +24,7 @@ fn force_kill_script_process_group(pid: u32) -> Result<(), String> {
 }
 
 impl ScriptListApp {
-    pub(crate) fn reset_window_positions_to_default_main_menu(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn reset_window_positions_to_default_main_menu(&mut self, cx: &mut Context<Self>) {
         logging::log(
             "WINDOW_STATE",
             "Resetting window positions and returning main window to default menu",
@@ -39,11 +36,10 @@ impl ScriptListApp {
         self.reset_to_script_list(cx);
 
         let (grouped_items, _) = self.get_grouped_results_cached();
-        let sizing = crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
-        let window_size = size(
-            px(crate::window_resize::width_for_view(ViewType::MiniMainWindow).unwrap_or(750.0)),
-            crate::window_resize::height_for_mini_main_window(sizing),
-        );
+        let sizing =
+            crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
+        let target = crate::window_resize::MainMenuSizingTarget::Mini(sizing);
+        let window_size = size(px(target.width()), target.height());
         let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
         platform::move_first_window_to_bounds(&bounds);
 
@@ -482,7 +478,8 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.dictation_history_scroll_handle.scroll_to_top_of_item(0);
+                self.dictation_history_scroll_handle
+                    .scroll_to_top_of_item(0);
             }
             AppView::NotesBrowseView {
                 filter,

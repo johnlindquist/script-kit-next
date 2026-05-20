@@ -25,14 +25,11 @@ fn builtin_entry_needs_main_window(entry: &builtins::BuiltInEntry) -> bool {
         builtins::BuiltInFeature::SystemAction(_) => false,
         builtins::BuiltInFeature::FrecencyCommand(_) => false,
         builtins::BuiltInFeature::SettingsCommand(command) => match command {
-            builtins::SettingsCommandType::ResetWindowPositions
-            | builtins::SettingsCommandType::DisableWindowSnapping
-            | builtins::SettingsCommandType::SnapModeSimple
-            | builtins::SettingsCommandType::SnapModeExpanded
-            | builtins::SettingsCommandType::SnapModePrecision => false,
+            builtins::SettingsCommandType::ResetWindowPositions => false,
             builtins::SettingsCommandType::ChooseTheme
             | builtins::SettingsCommandType::SelectMicrophone
-            | builtins::SettingsCommandType::DictationSetup => true,
+            | builtins::SettingsCommandType::DictationSetup
+            | builtins::SettingsCommandType::ConfigureSnapMode => true,
         },
         builtins::BuiltInFeature::PermissionCommand(command) => match command {
             builtins::PermissionCommandType::CheckPermissions
@@ -790,7 +787,6 @@ mod builtin_command_window_visibility_tests {
         let config = crate::config::BuiltInConfig::default();
         for command_id in [
             "builtin/reset-window-positions",
-            "builtin/snap-mode-simple",
             "builtin/inspect-current-context",
             "builtin/script-kit-selfie",
         ] {
