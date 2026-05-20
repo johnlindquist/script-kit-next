@@ -275,6 +275,17 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
 
         actions.push(
             Action::new(
+                "copy_backlinks",
+                "Copy Backlinks",
+                Some("Copies notes that link here".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section("Copy"),
+        );
+
+        actions.push(
+            Action::new(
                 "export",
                 "Copy as HTML",
                 Some("Copies the note as HTML".to_string()),
@@ -375,6 +386,33 @@ mod tests {
         assert_eq!(copy_deeplink.shortcut.as_deref(), Some("shift+cmd+d"));
         // Confirm it no longer uses the old hardcoded glyph
         assert_ne!(copy_deeplink.shortcut.as_deref(), Some("⇧⌘Y"));
+    }
+
+    #[test]
+    fn test_get_notes_command_bar_actions_includes_backlinks_when_selected() {
+        let selected = NotesInfo {
+            has_selection: true,
+            is_trash_view: false,
+            auto_sizing_enabled: true,
+        };
+        let empty = NotesInfo {
+            has_selection: false,
+            is_trash_view: false,
+            auto_sizing_enabled: true,
+        };
+
+        let selected_actions = get_notes_command_bar_actions(&selected);
+        let backlinks = selected_actions
+            .iter()
+            .find(|action| action.id == "copy_backlinks")
+            .expect("missing copy_backlinks action");
+        assert_eq!(backlinks.title, "Copy Backlinks");
+        assert_eq!(backlinks.section.as_deref(), Some("Copy"));
+
+        let empty_actions = get_notes_command_bar_actions(&empty);
+        assert!(empty_actions
+            .iter()
+            .all(|action| action.id != "copy_backlinks"));
     }
 
     #[test]

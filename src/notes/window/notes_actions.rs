@@ -155,6 +155,41 @@ impl NotesApp {
         self.copy_text_to_clipboard(&quicklink);
     }
 
+    pub(super) fn copy_note_backlinks(&mut self, cx: &mut Context<Self>) {
+        let Some((id, _)) = self.selected_note_for_action("copy_note_backlinks", cx) else {
+            return;
+        };
+
+        match storage::get_note_backlinks(id) {
+            Ok(backlinks) if backlinks.is_empty() => {
+                self.copy_text_to_clipboard("No backlinks");
+                self.show_action_feedback("No backlinks", false);
+            }
+            Ok(backlinks) => {
+                let markdown = backlinks
+                    .iter()
+                    .map(|note| {
+                        let title = if note.title.trim().is_empty() {
+                            "Untitled Note"
+                        } else {
+                            note.title.trim()
+                        };
+                        format!("- [{}]({})", title, self.note_deeplink(note.id))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                self.copy_text_to_clipboard(&markdown);
+                self.show_action_feedback("Copied backlinks", false);
+            }
+            Err(error) => {
+                tracing::warn!(error = %error, note_id = %id, "Failed to copy note backlinks");
+                self.show_action_feedback("Backlinks unavailable", true);
+            }
+        }
+
+        cx.notify();
+    }
+
     pub(super) fn duplicate_selected_note(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some((_id, note)) = self.selected_note_for_action("duplicate_selected_note", cx) else {
             return;
