@@ -5,7 +5,9 @@ use std::sync::Arc;
 
 use super::mode::capture_body_boundary_has_started_with_targets;
 use super::parse::{parse, parse_with_capture_targets, MenuSyntaxParse};
-use super::payload::{IncompleteKind, KNOWN_CAPTURE_TARGETS};
+use super::payload::{
+    picker_visible_capture_targets, resolve_capture_target, IncompleteKind, KNOWN_CAPTURE_TARGETS,
+};
 use crate::scripts::{Script, Scriptlet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -434,7 +436,7 @@ fn build_capture_snapshot(
     match target {
         None => {}
         Some(t) => {
-            let entry = capture_target_catalog(ctx)
+            let entry = capture_target_catalog(ctx, true)
                 .into_iter()
                 .find(|entry| entry.slug.eq_ignore_ascii_case(t))
                 .unwrap_or_else(|| builtin_capture_target_entry(t));
@@ -495,7 +497,24 @@ fn build_capture_picker_snapshot(
     filter: Option<&str>,
     ctx: &TriggerPickerContext,
 ) -> TriggerPickerSnapshot {
-    let catalog = capture_target_catalog(ctx);
+    let catalog = capture_target_catalog(ctx, filter.is_some());
+    if let Some(needle) = filter {
+        if let Some(entry) = catalog
+            .iter()
+            .find(|entry| entry.slug.eq_ignore_ascii_case(needle))
+        {
+            let rows = vec![
+                capture_target_row_from_entry(entry),
+                footer_create_handler_row(Some(entry.slug.clone())),
+            ];
+            return TriggerPickerSnapshot {
+                mode: TriggerPickerMode::Capture,
+                target: Some(entry.slug.clone()),
+                rows,
+            };
+        }
+    }
+
     let (mut rows, footer_target): (Vec<TriggerPickerRow>, Option<String>) = match filter {
         None => (
             catalog.iter().map(capture_target_row_from_entry).collect(),
@@ -1177,13 +1196,29 @@ struct CaptureTargetEntry {
     example: Option<String>,
 }
 
-fn capture_target_catalog(ctx: &TriggerPickerContext) -> Vec<CaptureTargetEntry> {
+fn capture_target_catalog(
+    ctx: &TriggerPickerContext,
+    include_hidden_aliases: bool,
+) -> Vec<CaptureTargetEntry> {
     let label_overrides = registered_capture_target_label_overrides(ctx);
     let mut entries: Vec<CaptureTargetEntry> = KNOWN_CAPTURE_TARGETS
         .iter()
+        .filter(|target| {
+            include_hidden_aliases
+                || picker_visible_capture_targets()
+                    .iter()
+                    .any(|visible| visible.eq_ignore_ascii_case(target))
+        })
         .map(|target| builtin_capture_target_entry(target))
         .collect();
     for target in registered_capture_targets(ctx) {
+        if !include_hidden_aliases {
+            if let Some(resolution) = resolve_capture_target(&target) {
+                if !resolution.picker_visible {
+                    continue;
+                }
+            }
+        }
         if !entries
             .iter()
             .any(|existing| existing.slug.eq_ignore_ascii_case(&target))
@@ -1237,8 +1272,23 @@ fn builtin_capture_target_entry(target: &str) -> CaptureTargetEntry {
     let (title, detail, example) = match target {
         "todo" => (
             "Todo inbox",
-            "Append JSON line to todos.jsonl",
+            "Create or update a Todo task",
             Some(";todo buy milk #errand p1"),
+        ),
+        "reminder" => (
+            "Todo reminder",
+            "Compatibility target: Todo reminder operation",
+            Some(";reminder walk dog every day at 8am #home"),
+        ),
+        "snooze" => (
+            "Todo snooze",
+            "Compatibility target: Todo snooze operation",
+            Some(";snooze in 30 minutes Review PR #432"),
+        ),
+        "defer" => (
+            "Todo defer",
+            "Compatibility target: Todo defer operation",
+            Some(";defer until next week Refactor settings panel"),
         ),
         "cal" => (
             "Calendar event",
@@ -1246,9 +1296,14 @@ fn builtin_capture_target_entry(target: &str) -> CaptureTargetEntry {
             Some(";cal standup tomorrow 3pm"),
         ),
         "note" => (
-            "Daily note",
-            "Append bullet to today's markdown note",
+            "Note",
+            "Create or update a built-in Note or daily note",
             Some(";note decision to ship parser first"),
+        ),
+        "notes" => (
+            "Note compatibility alias",
+            "Compatibility alias of ;note",
+            Some(";notes decision to ship parser first"),
         ),
         "social" => (
             "Social draft",
@@ -1256,11 +1311,18 @@ fn builtin_capture_target_entry(target: &str) -> CaptureTargetEntry {
             Some(";social shipping menu syntax today"),
         ),
         "link" => (
-            "Tagged link",
-            "Append JSON line to bookmarks.jsonl",
+            "Saved link",
+            "Save or update a tagged link",
             Some(";link https://zed.dev #rust"),
         ),
-        _ => ("Capture target", "Unknown target", None),
+        "snippet" => (
+            "Snippet",
+            "Create, update, or remove a snippet",
+            Some(";snippet add fetch-json trigger:fj lang:ts -- const res = await fetch(url)"),
+        ),
+        _ => resolve_capture_target(target)
+            .map(|resolution| (resolution.title, resolution.detail, None))
+            .unwrap_or(("Capture target", "Unknown target", None)),
     };
 
     CaptureTargetEntry {
@@ -1319,7 +1381,19 @@ fn score_capture_target(needle: &str, entry: &CaptureTargetEntry) -> Option<i32>
     ]
     .into_iter()
     .flatten()
+    .chain(
+        capture_target_search_aliases(&entry.slug)
+            .into_iter()
+            .filter_map(|alias| score_text_match(&needle, alias, false)),
+    )
     .max()
+}
+
+fn capture_target_search_aliases(slug: &str) -> Vec<&'static str> {
+    match slug {
+        "note" => vec!["daily", "daily note", "notes"],
+        _ => Vec::new(),
+    }
 }
 
 fn normalize_match_text(text: &str) -> String {
@@ -1442,7 +1516,7 @@ pub fn nearest_capture_target_for_slug(
         scripts: scripts.to_vec(),
         ..Default::default()
     };
-    capture_target_catalog(&ctx)
+    capture_target_catalog(&ctx, true)
         .into_iter()
         .find(|entry| within_one_edit(&needle, &normalize_match_text(&entry.slug)))
         .map(|entry| (entry.slug, entry.title))
@@ -1859,7 +1933,10 @@ mod tests {
             .filter(|r| r.kind == TriggerPickerRowKind::CaptureTarget)
             .filter_map(|r| r.token.as_deref())
             .collect();
-        assert_eq!(targets, vec![";todo", ";cal", ";note", ";social", ";link"]);
+        assert_eq!(
+            targets,
+            vec![";todo", ";note", ";link", ";snippet", ";cal", ";social"]
+        );
     }
 
     #[test]

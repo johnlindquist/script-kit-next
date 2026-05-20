@@ -1,11 +1,14 @@
 ---
-name: Notes Helper Examples
+name: Note Helper Examples
 description: Create, update, organize, and inspect Notes through canonical runtime ports
 author: Script Kit
 icon: notebook-pen
 ---
 
-# Notes Helper Examples
+# Note Helper Examples
+
+`;note` is the official product grammar for built-in Notes. `;notes` remains a
+compatibility alias for older helpers and examples.
 
 ## Create Organized Note
 

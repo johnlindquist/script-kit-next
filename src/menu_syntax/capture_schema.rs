@@ -10,6 +10,7 @@ pub enum FieldRequirement {
     AnyDate,
     DateRole(DateRole),
     Kv(String),
+    ObjectSelection,
 }
 
 impl FieldRequirement {
@@ -36,6 +37,7 @@ impl FieldRequirement {
                 DateRole::Inferred => "date".to_string(),
             },
             FieldRequirement::Kv(key) => key.clone(),
+            FieldRequirement::ObjectSelection => "selected object".to_string(),
         }
     }
 
@@ -54,6 +56,7 @@ impl FieldRequirement {
                 .kv
                 .iter()
                 .any(|(k, v)| k.eq_ignore_ascii_case(key) && !v.trim().is_empty()),
+            FieldRequirement::ObjectSelection => false,
         }
     }
 }
@@ -87,14 +90,54 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
                 FieldRequirement::Priority,
                 FieldRequirement::AnyDate,
                 FieldRequirement::Url,
+                FieldRequirement::ObjectSelection,
             ],
             forbidden: vec![],
+        }),
+        "reminder" => Some(CaptureFieldSchema {
+            target: "reminder".to_string(),
+            required: vec![FieldRequirement::Body],
+            optional: vec![
+                FieldRequirement::Tag,
+                FieldRequirement::AnyDate,
+                FieldRequirement::Duration,
+                FieldRequirement::ObjectSelection,
+            ],
+            forbidden: vec![FieldRequirement::Url],
+        }),
+        "snooze" => Some(CaptureFieldSchema {
+            target: "snooze".to_string(),
+            required: vec![FieldRequirement::Body, FieldRequirement::AnyDate],
+            optional: vec![
+                FieldRequirement::Tag,
+                FieldRequirement::Duration,
+                FieldRequirement::ObjectSelection,
+            ],
+            forbidden: vec![FieldRequirement::Priority, FieldRequirement::Url],
+        }),
+        "defer" => Some(CaptureFieldSchema {
+            target: "defer".to_string(),
+            required: vec![FieldRequirement::Body, FieldRequirement::AnyDate],
+            optional: vec![
+                FieldRequirement::Tag,
+                FieldRequirement::Priority,
+                FieldRequirement::ObjectSelection,
+            ],
+            forbidden: vec![FieldRequirement::Url, FieldRequirement::Duration],
         }),
         "note" => Some(CaptureFieldSchema {
             target: "note".to_string(),
             required: vec![FieldRequirement::Body],
-            optional: vec![FieldRequirement::Tag, FieldRequirement::Url],
+            optional: vec![
+                FieldRequirement::Tag,
+                FieldRequirement::Url,
+                FieldRequirement::ObjectSelection,
+            ],
             forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
+        }),
+        "notes" => builtin_schema("note").map(|mut schema| {
+            schema.target = "notes".to_string();
+            schema
         }),
         "link" => Some(CaptureFieldSchema {
             target: "link".to_string(),
@@ -103,6 +146,20 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
                 FieldRequirement::Body,
                 FieldRequirement::Tag,
                 FieldRequirement::Kv("title".to_string()),
+                FieldRequirement::ObjectSelection,
+            ],
+            forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
+        }),
+        "snippet" => Some(CaptureFieldSchema {
+            target: "snippet".to_string(),
+            required: vec![FieldRequirement::Body],
+            optional: vec![
+                FieldRequirement::Tag,
+                FieldRequirement::Url,
+                FieldRequirement::Kv("title".to_string()),
+                FieldRequirement::Kv("trigger".to_string()),
+                FieldRequirement::Kv("lang".to_string()),
+                FieldRequirement::ObjectSelection,
             ],
             forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
         }),
@@ -127,7 +184,7 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
 }
 
 pub fn builtin_target_slugs() -> &'static [&'static str] {
-    &["todo", "note", "link", "cal", "social"]
+    &["todo", "note", "link", "snippet", "cal", "social"]
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,9 +366,7 @@ mod tests {
 
     #[test]
     fn shipped_dynamic_targets_do_not_have_builtin_schema() {
-        for target in [
-            "gcal", "github", "expense", "snippet", "fixture", "reminder", "snooze", "defer",
-        ] {
+        for target in ["gcal", "github", "expense", "fixture"] {
             assert!(
                 builtin_schema(target).is_none(),
                 "`{target}` should not gain a builtin schema by accident"
@@ -322,8 +377,11 @@ mod tests {
     #[test]
     fn builtin_target_slugs_match_known_targets() {
         let slugs: Vec<&str> = builtin_target_slugs().to_vec();
-        assert_eq!(slugs.len(), 5);
-        assert_eq!(slugs, vec!["todo", "note", "link", "cal", "social"]);
+        assert_eq!(slugs.len(), 6);
+        assert_eq!(
+            slugs,
+            vec!["todo", "note", "link", "snippet", "cal", "social"]
+        );
         for slug in &slugs {
             assert!(
                 builtin_schema(slug).is_some(),
@@ -365,6 +423,49 @@ mod tests {
         assert!(builtin_schema("CAL").is_some());
         assert!(builtin_schema("Todo").is_some());
         assert!(builtin_schema("LinK").is_some());
+    }
+
+    #[test]
+    fn todo_alias_schemas_accept_expected_temporal_fields() {
+        let reminder = builtin_schema("reminder").expect("reminder schema");
+        assert_eq!(reminder.target, "reminder");
+        assert!(reminder.required.contains(&FieldRequirement::Body));
+        assert!(reminder.optional.contains(&FieldRequirement::AnyDate));
+        assert!(reminder.optional.contains(&FieldRequirement::Duration));
+
+        let snooze = builtin_schema("snooze").expect("snooze schema");
+        assert!(snooze.required.contains(&FieldRequirement::AnyDate));
+        assert!(snooze.optional.contains(&FieldRequirement::ObjectSelection));
+
+        let defer = builtin_schema("defer").expect("defer schema");
+        assert!(defer.required.contains(&FieldRequirement::AnyDate));
+        assert!(defer.optional.contains(&FieldRequirement::Priority));
+    }
+
+    #[test]
+    fn notes_alias_uses_note_schema() {
+        let note = builtin_schema("note").expect("note schema");
+        let notes = builtin_schema("notes").expect("notes schema");
+        assert_eq!(notes.target, "notes");
+        assert_eq!(notes.required, note.required);
+        assert_eq!(notes.optional, note.optional);
+        assert_eq!(notes.forbidden, note.forbidden);
+    }
+
+    #[test]
+    fn snippet_schema_requires_body_and_accepts_snippet_fields() {
+        let schema = builtin_schema("snippet").expect("snippet schema");
+        assert!(schema.required.contains(&FieldRequirement::Body));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("title".to_string())));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("trigger".to_string())));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("lang".to_string())));
+        assert!(schema.optional.contains(&FieldRequirement::ObjectSelection));
     }
 
     #[test]

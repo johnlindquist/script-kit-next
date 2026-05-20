@@ -204,10 +204,20 @@ impl ScriptListApp {
             .capture_for(&self.filter_text)
             .cloned()
         {
-            let mut handlers =
-                crate::menu_syntax::rank_scripts_handling_capture(&self.scripts, &invocation);
-            if let Some(script) = handlers.drain(..).next() {
-                self.execute_menu_syntax_capture_script(script, invocation, cx);
+            let mut ranked_handlers =
+                crate::menu_syntax::rank_handlers_for_target(&self.scripts, &invocation);
+            if let Some(handler) = ranked_handlers.first() {
+                if crate::menu_syntax::ranked_handler_is_user_authored(handler) {
+                    self.execute_menu_syntax_capture_script(handler.script.clone(), invocation, cx);
+                    return;
+                }
+            }
+            match self.try_execute_app_owned_menu_syntax_capture(&invocation, cx) {
+                AppOwnedCaptureOutcome::Handled | AppOwnedCaptureOutcome::Invalid => return,
+                AppOwnedCaptureOutcome::NotOwned => {}
+            }
+            if let Some(handler) = ranked_handlers.drain(..).next() {
+                self.execute_menu_syntax_capture_script(handler.script, invocation, cx);
             } else {
                 self.show_hud(
                     format!("No capture handler for +{}", invocation.target),
@@ -374,6 +384,22 @@ impl ScriptListApp {
                     (capture_invocation, &result)
                 {
                     let script = script_match.script.clone();
+                    let selected_handler_is_user_authored =
+                        crate::menu_syntax::rank_handlers_for_target(&self.scripts, &invocation)
+                            .into_iter()
+                            .find(|entry| entry.script.path == script.path)
+                            .map(|entry| {
+                                crate::menu_syntax::ranked_handler_is_user_authored(&entry)
+                            })
+                            .unwrap_or(true);
+                    if !selected_handler_is_user_authored {
+                        match self.try_execute_app_owned_menu_syntax_capture(&invocation, cx) {
+                            AppOwnedCaptureOutcome::Handled | AppOwnedCaptureOutcome::Invalid => {
+                                return;
+                            }
+                            AppOwnedCaptureOutcome::NotOwned => {}
+                        }
+                    }
                     self.execute_menu_syntax_capture_script(script, invocation, cx);
                     return;
                 }
@@ -704,11 +730,7 @@ impl ScriptListApp {
         });
     }
 
-    pub(crate) fn execute_root_browser_history_open(
-        &mut self,
-        url: &str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn execute_root_browser_history_open(&mut self, url: &str, cx: &mut Context<Self>) {
         match crate::browser_history::open_browser_history_url(url) {
             Ok(()) => {
                 logging::log("EXEC", &format!("Opened root browser history URL: {url}"));
@@ -739,7 +761,10 @@ impl ScriptListApp {
                 self.hide_main_and_reset(cx);
             }
             Err(error) => {
-                logging::log("ERROR", &format!("Failed to focus root browser tab: {error}"));
+                logging::log(
+                    "ERROR",
+                    &format!("Failed to focus root browser tab: {error}"),
+                );
                 self.show_hud(
                     "Failed to switch browser tab".to_string(),
                     Some(HUD_MEDIUM_MS),
@@ -860,11 +885,7 @@ impl ScriptListApp {
             crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID => {
                 match crate::file_search::quick_look(&file.path) {
                     Ok(()) => {
-                        self.show_hud(
-                            format!("Previewing {}", file.name),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
+                        self.show_hud(format!("Previewing {}", file.name), Some(HUD_MEDIUM_MS), cx);
                     }
                     Err(error) => {
                         logging::log(

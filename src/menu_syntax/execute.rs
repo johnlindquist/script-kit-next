@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::date::ResolvedCaptureInvocation;
-use super::payload::ArgvInvocation;
+use super::payload::{resolve_capture_target, ArgvInvocation, CaptureObjectRef};
 
 pub const MENU_SYNTAX_PAYLOAD_VERSION: &str = "menu-syntax.payload.v1";
 pub const MENU_SYNTAX_PAYLOAD_SCHEMA_ID: &str = "kit://schema/menu-syntax/payload-v1";
@@ -32,6 +32,14 @@ pub struct MenuSyntaxPayload {
     pub version: String,
     pub family: String,
     pub target: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub canonical_target: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_alias_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation: Option<String>,
     pub raw: String,
     pub body: String,
     pub tags: Vec<String>,
@@ -46,6 +54,10 @@ pub struct MenuSyntaxPayload {
     pub dates: Vec<super::date::ResolvedDate>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unresolved_dates: Vec<super::date::UnresolvedDate>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub object_refs: Vec<CaptureObjectRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary_object_ref: Option<CaptureObjectRef>,
     pub handler: MenuSyntaxHandlerRef,
 }
 
@@ -57,10 +69,21 @@ pub fn build_capture_payload(
     for (k, v) in invocation.kv {
         kv_map.insert(k, v);
     }
+    let target_resolution = resolve_capture_target(&invocation.target);
     MenuSyntaxPayload {
         version: MENU_SYNTAX_PAYLOAD_VERSION.to_string(),
         family: "capture.v1".to_string(),
-        target: invocation.target,
+        target: invocation.target.clone(),
+        raw_target: Some(invocation.target.clone()),
+        canonical_target: target_resolution
+            .as_ref()
+            .map(|resolution| resolution.canonical_target_str().to_string()),
+        target_alias_of: target_resolution
+            .as_ref()
+            .and_then(|resolution| resolution.target_alias_of_str().map(str::to_string)),
+        operation: target_resolution
+            .as_ref()
+            .map(|resolution| resolution.operation.as_str().to_string()),
         raw: invocation.raw,
         body: invocation.body,
         tags: invocation.tags,
@@ -72,6 +95,8 @@ pub fn build_capture_payload(
         kv: kv_map,
         dates: invocation.dates,
         unresolved_dates: invocation.unresolved_dates,
+        object_refs: Vec::new(),
+        primary_object_ref: None,
         handler,
     }
 }
@@ -177,11 +202,27 @@ mod tests {
         assert_eq!(payload.version, MENU_SYNTAX_PAYLOAD_VERSION);
         assert_eq!(payload.family, "capture.v1");
         assert_eq!(payload.target, "todo");
+        assert_eq!(payload.raw_target.as_deref(), Some("todo"));
+        assert_eq!(payload.canonical_target.as_deref(), Some("todo"));
+        assert_eq!(payload.operation.as_deref(), Some("create"));
         assert_eq!(payload.body, "Renew passport");
         assert_eq!(payload.tags, vec!["errands".to_string()]);
         assert_eq!(payload.priority, Some(1));
         assert_eq!(payload.dates.len(), 1);
         assert_eq!(payload.handler.command_id, "script/main:Capture Todo Inbox");
+    }
+
+    #[test]
+    fn build_payload_preserves_raw_alias_and_adds_canonical_target() {
+        let invocation = resolved_capture(";reminder Walk dog tomorrow #home");
+        let payload = build_capture_payload(handler(), invocation);
+        assert_eq!(payload.target, "reminder");
+        assert_eq!(payload.raw_target.as_deref(), Some("reminder"));
+        assert_eq!(payload.canonical_target.as_deref(), Some("todo"));
+        assert_eq!(payload.target_alias_of.as_deref(), Some("todo"));
+        assert_eq!(payload.operation.as_deref(), Some("remind"));
+        assert!(payload.object_refs.is_empty());
+        assert!(payload.primary_object_ref.is_none());
     }
 
     // doc-anchor-removed: menu-syntax Execution Payload

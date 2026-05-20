@@ -403,7 +403,9 @@ fn unknown_capture_target_is_warning_not_error() {
 
 #[test]
 fn core_capture_targets_do_not_warn_as_custom() {
-    for target in ["todo", "cal", "note", "social", "link"] {
+    for target in [
+        "todo", "cal", "note", "notes", "social", "link", "snippet", "reminder", "snooze", "defer",
+    ] {
         let v = json!([{"family": "capture.v1", "targets": [target]}]);
         let warnings = warning_messages(&v);
         assert!(
@@ -432,7 +434,7 @@ fn mcal_is_known_special_case_for_doctor() {
 
 #[test]
 fn shipped_dynamic_targets_warn_as_metadata_driven_custom_targets() {
-    for target in ["gcal", "github", "expense", "snippet", "fixture"] {
+    for target in ["gcal", "github", "expense", "fixture"] {
         let v = json!([{"family": "capture.v1", "targets": [target]}]);
         let report = doctor_validate(&v);
 
