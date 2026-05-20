@@ -210,12 +210,15 @@ pub fn render_design_item(
                     (am.app.name.clone(), None, None, Some(icon))
                 }
                 SearchResult::Window(wm) => {
-                    // Windows get a generic File icon, title as name, app as description
+                    let icon = match &wm.app_icon {
+                        Some(img) => IconKind::Image(img.clone()),
+                        None => IconKind::Svg("panel-top".to_string()),
+                    };
                     (
                         wm.window.title.clone(),
-                        Some(wm.window.app.clone()),
+                        Some(wm.subtitle.clone()),
                         None,
-                        Some(IconKind::Svg("File".to_string())),
+                        Some(icon),
                     )
                 }
                 SearchResult::File(fm) => (

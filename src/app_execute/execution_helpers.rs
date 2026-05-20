@@ -142,6 +142,9 @@ impl ScriptListApp {
             self.show_error_toast(message, cx);
         } else {
             tracing::info!(message = %&format!("Focused window: {}", window.title));
+            self.root_window_focus_seq = self.root_window_focus_seq.wrapping_add(1);
+            self.root_window_focus_recency
+                .insert(window.selection_key(), self.root_window_focus_seq);
             self.close_and_reset_window(cx);
         }
     }
@@ -265,7 +268,7 @@ impl ScriptListApp {
             // Show success toast
             self.toast_manager.push(
                 components::toast::Toast::success(message, &self.theme)
-                .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    .duration_ms(Some(TOAST_SUCCESS_MS)),
             );
         }
 

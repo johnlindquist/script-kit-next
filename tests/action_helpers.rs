@@ -124,6 +124,8 @@ fn make_window_match() -> WindowMatch {
             window_control::Bounds::new(0, 0, 800, 600),
             1234,
         ),
+        app_icon: None,
+        subtitle: "Test App - 800x600 - pid 1234".to_string(),
         score: 100,
     }
 }

@@ -1,18 +1,44 @@
 use anyhow::{bail, Context, Result};
+use core_foundation::array::CFArray;
+use core_foundation::base::{CFTypeRef as CoreFoundationTypeRef, TCFType};
+use core_foundation::dictionary::CFDictionaryRef;
+use core_foundation::string::CFString;
 use macos_accessibility_client::accessibility;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::ffi::c_void;
+use std::path::PathBuf;
 use tracing::{debug, info, instrument, warn};
 
 use super::ax::{
-    get_ax_attribute, get_window_position, get_window_size, get_window_string_attribute,
+    get_ax_attribute, get_window_bool_attribute, get_window_position, get_window_size,
+    get_window_string_attribute,
 };
 use super::cache::{cache_window, clear_window_cache};
 use super::cf::{cf_release, cf_retain};
 use super::ffi::{
     AXUIElementCreateApplication, AXUIElementRef, CFArrayGetCount, CFArrayGetValueAtIndex,
-    CFArrayRef,
+    CFArrayRef, CFEqual,
 };
-use super::types::{Bounds, WindowInfo};
+use super::types::{Bounds, WindowInfo, WindowInfoInit};
+
+#[derive(Clone)]
+struct RunningAppMetadata {
+    app: String,
+    bundle_id: Option<String>,
+    app_path: Option<PathBuf>,
+    app_order: usize,
+    is_frontmost_app: bool,
+}
+
+#[derive(Clone)]
+struct CoreGraphicsWindowInfo {
+    native_window_id: u32,
+    pid: i32,
+    title: String,
+    bounds: Bounds,
+    is_on_current_space: bool,
+}
 
 #[link(name = "AppKit", kind = "framework")]
 extern "C" {
@@ -68,6 +94,7 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
     clear_window_cache();
 
     let mut windows = Vec::new();
+    let mut running_apps_by_pid = HashMap::<i32, RunningAppMetadata>::new();
 
     // Get list of running applications using objc
     // SAFETY: All objc msg_send! calls target well-known AppKit/Foundation classes
@@ -81,6 +108,13 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
         let workspace: *mut Object = msg_send![workspace_class, sharedWorkspace];
         let running_apps: *mut Object = msg_send![workspace, runningApplications];
         let app_count: usize = msg_send![running_apps, count];
+        let frontmost_app: *mut Object = msg_send![workspace, frontmostApplication];
+        let frontmost_pid: i32 = if frontmost_app.is_null() {
+            -1
+        } else {
+            msg_send![frontmost_app, processIdentifier]
+        };
+        let mut global_order = 0usize;
 
         for i in 0..app_count {
             let app: *mut Object = msg_send![running_apps, objectAtIndex: i];
@@ -110,12 +144,29 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
 
             // Get PID
             let pid: i32 = msg_send![app, processIdentifier];
+            let bundle_id = nsstring_to_string(msg_send![app, bundleIdentifier]);
+            let bundle_url: *mut Object = msg_send![app, bundleURL];
+            let app_path = nsurl_to_pathbuf(bundle_url);
+            let is_frontmost_app = pid == frontmost_pid;
+            running_apps_by_pid.insert(
+                pid,
+                RunningAppMetadata {
+                    app: app_name_str.clone(),
+                    bundle_id: bundle_id.clone(),
+                    app_path: app_path.clone(),
+                    app_order: i,
+                    is_frontmost_app,
+                },
+            );
 
             // Create AXUIElement for this application
             let ax_app = AXUIElementCreateApplication(pid);
             if ax_app.is_null() {
                 continue;
             }
+
+            let focused_window = get_ax_attribute(ax_app, "AXFocusedWindow").ok();
+            let main_window = get_ax_attribute(ax_app, "AXMainWindow").ok();
 
             // Get windows for this app
             if let Ok(windows_value) = get_ax_attribute(ax_app, "AXWindows") {
@@ -147,6 +198,12 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
 
                     // Create a unique window ID: (pid << 16) | window_index
                     let window_id = ((pid as u32) << 16) | (j as u32);
+                    let window_ref = ax_window as AXUIElementRef;
+                    let is_focused =
+                        focused_window.is_some_and(|focused| CFEqual(window_ref as _, focused));
+                    let is_main = main_window.is_some_and(|main| CFEqual(window_ref as _, main));
+                    let is_minimized =
+                        get_window_bool_attribute(window_ref, "AXMinimized").unwrap_or(false);
 
                     // Retain the window ref before caching - CFArrayGetValueAtIndex returns
                     // a borrowed reference, so we need to retain it to extend its lifetime
@@ -154,14 +211,25 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
                     let retained_window = cf_retain(ax_window);
                     cache_window(window_id, retained_window as AXUIElementRef);
 
-                    windows.push(WindowInfo::new(
-                        window_id,
-                        app_name_str.clone(),
+                    windows.push(WindowInfo::new(WindowInfoInit {
+                        id: window_id,
+                        app: app_name_str.clone(),
                         title,
-                        Bounds::new(x, y, width, height),
+                        bounds: Bounds::new(x, y, width, height),
                         pid,
-                        Some(retained_window as usize),
-                    ));
+                        bundle_id: bundle_id.clone(),
+                        app_path: app_path.clone(),
+                        app_order: i,
+                        window_index: j as usize,
+                        global_order,
+                        is_frontmost_app,
+                        is_focused,
+                        is_main,
+                        is_minimized,
+                        is_on_current_space: true,
+                        ax_window: Some(retained_window as usize),
+                    }));
+                    global_order = global_order.wrapping_add(1);
                 }
 
                 // Release windows_value - AXUIElementCopyAttributeValue returns an owned
@@ -169,13 +237,293 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
                 cf_release(windows_value);
             }
 
+            if let Some(focused_window) = focused_window {
+                cf_release(focused_window);
+            }
+            if let Some(main_window) = main_window {
+                cf_release(main_window);
+            }
+
             // Release ax_app - AXUIElementCreateApplication returns an owned CF object
             cf_release(ax_app);
         }
     }
 
+    append_core_graphics_windows(&mut windows, &running_apps_by_pid);
+
     info!(window_count = windows.len(), "Listed windows");
     Ok(windows)
+}
+
+fn append_core_graphics_windows(
+    windows: &mut Vec<WindowInfo>,
+    running_apps_by_pid: &HashMap<i32, RunningAppMetadata>,
+) {
+    let Ok(cg_windows) = list_core_graphics_windows_all_spaces() else {
+        return;
+    };
+
+    let mut global_order = windows.len();
+    for (index, cg_window) in cg_windows.into_iter().enumerate() {
+        let Some(app) = running_apps_by_pid.get(&cg_window.pid) else {
+            continue;
+        };
+        if window_matches_existing_ax_row(windows, &cg_window) {
+            continue;
+        }
+
+        let id = synthetic_window_id_for_core_graphics_window(&cg_window, windows);
+        windows.push(WindowInfo::new(WindowInfoInit {
+            id,
+            app: app.app.clone(),
+            title: cg_window.title,
+            bounds: cg_window.bounds,
+            pid: cg_window.pid,
+            bundle_id: app.bundle_id.clone(),
+            app_path: app.app_path.clone(),
+            app_order: app.app_order,
+            window_index: index,
+            global_order,
+            is_frontmost_app: app.is_frontmost_app,
+            is_focused: false,
+            is_main: false,
+            is_minimized: false,
+            is_on_current_space: cg_window.is_on_current_space,
+            ax_window: None,
+        }));
+        global_order = global_order.wrapping_add(1);
+    }
+}
+
+fn synthetic_window_id_for_core_graphics_window(
+    cg_window: &CoreGraphicsWindowInfo,
+    existing: &[WindowInfo],
+) -> u32 {
+    let mut id = ((cg_window.pid as u32) << 16) | (cg_window.native_window_id & 0xffff);
+    while existing.iter().any(|window| window.id == id) {
+        id = id.wrapping_add(1);
+    }
+    id
+}
+
+fn window_matches_existing_ax_row(
+    windows: &[WindowInfo],
+    cg_window: &CoreGraphicsWindowInfo,
+) -> bool {
+    windows.iter().any(|window| {
+        window.pid == cg_window.pid
+            && window.title == cg_window.title
+            && bounds_are_close(window.bounds, cg_window.bounds)
+    })
+}
+
+fn bounds_are_close(left: Bounds, right: Bounds) -> bool {
+    const TOLERANCE: i32 = 12;
+    (left.x - right.x).abs() <= TOLERANCE
+        && (left.y - right.y).abs() <= TOLERANCE
+        && (left.width as i32 - right.width as i32).abs() <= TOLERANCE
+        && (left.height as i32 - right.height as i32).abs() <= TOLERANCE
+}
+
+fn list_core_graphics_windows_all_spaces() -> Result<Vec<CoreGraphicsWindowInfo>> {
+    const K_CG_NULL_WINDOW_ID: u32 = 0;
+    const K_CG_WINDOW_LIST_OPTION_ALL: u32 = 0;
+    const K_CG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS: u32 = 1 << 4;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGWindowListCopyWindowInfo(
+            option: u32,
+            relative_to_window: u32,
+        ) -> core_foundation::array::CFArrayRef;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFDictionaryGetValueIfPresent(
+            the_dict: CFDictionaryRef,
+            key: *const c_void,
+            value: *mut *const c_void,
+        ) -> u8;
+    }
+
+    let window_info_list = unsafe {
+        CGWindowListCopyWindowInfo(
+            K_CG_WINDOW_LIST_OPTION_ALL | K_CG_WINDOW_LIST_EXCLUDE_DESKTOP_ELEMENTS,
+            K_CG_NULL_WINDOW_ID,
+        )
+    };
+    if window_info_list.is_null() {
+        return Ok(Vec::new());
+    }
+
+    let info_array: CFArray = unsafe { CFArray::wrap_under_create_rule(window_info_list) };
+    let k_owner_pid = CFString::new("kCGWindowOwnerPID");
+    let k_window_number = CFString::new("kCGWindowNumber");
+    let k_window_name = CFString::new("kCGWindowName");
+    let k_window_bounds = CFString::new("kCGWindowBounds");
+    let k_window_is_on_screen = CFString::new("kCGWindowIsOnscreen");
+    let k_window_layer = CFString::new("kCGWindowLayer");
+    let k_window_alpha = CFString::new("kCGWindowAlpha");
+
+    let mut windows = Vec::new();
+    for index in 0..info_array.len() {
+        let Some(item_ref) = info_array.get(index) else {
+            continue;
+        };
+        let dict_ref = *item_ref as CFDictionaryRef;
+        if dict_ref.is_null() {
+            continue;
+        }
+        if cf_number_i64(dict_ref, &k_window_layer) != Some(0) {
+            continue;
+        }
+        if cf_number_f64(dict_ref, &k_window_alpha).is_some_and(|alpha| alpha <= 0.0) {
+            continue;
+        }
+        let Some(pid) = cf_number_i64(dict_ref, &k_owner_pid).map(|value| value as i32) else {
+            continue;
+        };
+        let Some(native_window_id) = cf_number_i64(dict_ref, &k_window_number)
+            .filter(|value| *value >= 0)
+            .map(|value| value as u32)
+        else {
+            continue;
+        };
+        let Some(bounds) = cf_bounds(dict_ref, &k_window_bounds) else {
+            continue;
+        };
+        if bounds.width < 50 || bounds.height < 50 {
+            continue;
+        }
+        let Some(title) = cf_string(dict_ref, &k_window_name).filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+
+        windows.push(CoreGraphicsWindowInfo {
+            native_window_id,
+            pid,
+            title,
+            bounds,
+            is_on_current_space: cf_bool(dict_ref, &k_window_is_on_screen).unwrap_or(false),
+        });
+
+        if index > 5000 {
+            break;
+        }
+    }
+
+    unsafe fn dictionary_value(
+        dict: CFDictionaryRef,
+        key: &CFString,
+        get_value: unsafe extern "C" fn(CFDictionaryRef, *const c_void, *mut *const c_void) -> u8,
+    ) -> Option<CoreFoundationTypeRef> {
+        let mut value: *const c_void = std::ptr::null();
+        if get_value(dict, key.as_concrete_TypeRef() as *const c_void, &mut value) == 0
+            || value.is_null()
+        {
+            None
+        } else {
+            Some(value as CoreFoundationTypeRef)
+        }
+    }
+
+    fn value_for(dict: CFDictionaryRef, key: &CFString) -> Option<CoreFoundationTypeRef> {
+        unsafe { dictionary_value(dict, key, CFDictionaryGetValueIfPresent) }
+    }
+
+    fn cf_number_i64(dict: CFDictionaryRef, key: &CFString) -> Option<i64> {
+        use core_foundation::number::CFNumber;
+        let value = value_for(dict, key)?;
+        let number = unsafe { CFNumber::wrap_under_get_rule(value as _) };
+        number.to_i64()
+    }
+
+    fn cf_number_f64(dict: CFDictionaryRef, key: &CFString) -> Option<f64> {
+        use core_foundation::number::CFNumber;
+        let value = value_for(dict, key)?;
+        let number = unsafe { CFNumber::wrap_under_get_rule(value as _) };
+        number.to_f64()
+    }
+
+    fn cf_bool(dict: CFDictionaryRef, key: &CFString) -> Option<bool> {
+        use core_foundation::boolean::CFBoolean;
+        let value = value_for(dict, key)?;
+        Some(unsafe { CFBoolean::wrap_under_get_rule(value as _) }.into())
+    }
+
+    fn cf_string(dict: CFDictionaryRef, key: &CFString) -> Option<String> {
+        let value = value_for(dict, key)?;
+        let string = unsafe { CFString::wrap_under_get_rule(value as _) };
+        Some(string.to_string())
+    }
+
+    fn cf_bounds(dict: CFDictionaryRef, key: &CFString) -> Option<Bounds> {
+        use core_foundation::dictionary::CFDictionary;
+        let value = value_for(dict, key)?;
+        let bounds_dict = unsafe {
+            CFDictionary::<CFString, core_foundation::base::CFType>::wrap_under_get_rule(value as _)
+        };
+        let x = bounds_dict
+            .find(&CFString::new("X"))
+            .and_then(|value| unsafe {
+                core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
+                    .to_f64()
+            })?;
+        let y = bounds_dict
+            .find(&CFString::new("Y"))
+            .and_then(|value| unsafe {
+                core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
+                    .to_f64()
+            })?;
+        let width = bounds_dict
+            .find(&CFString::new("Width"))
+            .and_then(|value| unsafe {
+                core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
+                    .to_f64()
+            })?;
+        let height = bounds_dict
+            .find(&CFString::new("Height"))
+            .and_then(|value| unsafe {
+                core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
+                    .to_f64()
+            })?;
+
+        Some(Bounds::new(
+            x.round() as i32,
+            y.round() as i32,
+            width.round() as u32,
+            height.round() as u32,
+        ))
+    }
+
+    Ok(windows)
+}
+
+unsafe fn nsstring_to_string(value: *mut objc::runtime::Object) -> Option<String> {
+    use objc::{msg_send, sel, sel_impl};
+    if value.is_null() {
+        return None;
+    }
+    let utf8: *const i8 = msg_send![value, UTF8String];
+    if utf8.is_null() {
+        return None;
+    }
+    std::ffi::CStr::from_ptr(utf8)
+        .to_str()
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(ToString::to_string)
+}
+
+unsafe fn nsurl_to_pathbuf(url: *mut objc::runtime::Object) -> Option<PathBuf> {
+    use objc::{msg_send, sel, sel_impl};
+    if url.is_null() {
+        return None;
+    }
+    let path: *mut objc::runtime::Object = msg_send![url, path];
+    nsstring_to_string(path).map(PathBuf::from)
 }
 
 #[derive(Debug, Deserialize)]
@@ -374,14 +722,24 @@ pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
             // Cache the window reference for subsequent operations
             cache_window(window_id, ax_window);
 
-            let window_info = WindowInfo::new(
-                window_id,
-                app_name.clone(),
-                title.clone(),
-                Bounds::new(x, y, width, height),
-                target_pid,
-                Some(window_ref as usize),
-            );
+            let window_info = WindowInfo::new(WindowInfoInit {
+                id: window_id,
+                app: app_name.clone(),
+                title: title.clone(),
+                bounds: Bounds::new(x, y, width, height),
+                pid: target_pid,
+                bundle_id: None,
+                app_path: None,
+                app_order: 0,
+                window_index: 0,
+                global_order: 0,
+                is_frontmost_app: true,
+                is_focused: true,
+                is_main: true,
+                is_minimized: false,
+                is_on_current_space: true,
+                ax_window: Some(window_ref as usize),
+            });
 
             debug!(
                 window_id = window_info.id,

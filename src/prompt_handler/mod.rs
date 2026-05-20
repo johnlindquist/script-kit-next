@@ -650,6 +650,7 @@ fn resolve_automation_read_target(
                 || crate::ai::acp::model_selector_popup::is_model_selector_popup_window_open()
                 || crate::ai::acp::history_popup::is_history_popup_window_open()
                 || crate::confirm::is_confirm_popup_window_open()
+                || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
                 || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
             if any_open {
                 tracing::info!(
@@ -2842,6 +2843,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 String::new(),
                                 0,
                                 0,
@@ -2873,6 +2875,7 @@ impl ScriptListApp {
                                 request_id.clone(),
                                 "actionsDialog".to_string(),
                                 Some(format!("target:{:?}:{}", resolved.kind, resolved.id)),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -2911,6 +2914,7 @@ impl ScriptListApp {
                                 None,
                                 None,
                                 None,
+                                None,
                                 String::new(),
                                 0,
                                 0,
@@ -2941,6 +2945,7 @@ impl ScriptListApp {
                                 request_id.clone(),
                                 "target_resolution_failed".to_string(),
                                 Some(format!("target_error:{}", error)),
+                                None,
                                 None,
                                 None,
                                 None,
@@ -3765,25 +3770,90 @@ impl ScriptListApp {
                 let is_focused = window_visible && self.focused_input != FocusedInput::None;
                 let filter_input_decorations = {
                     let input_state = self.gpui_input_state.read(cx);
-                    let text = input_state.value().to_string();
+                    let input_text = input_state.value().to_string();
+                    let use_canonical_filter =
+                        self.pending_filter_sync && !self.filter_text.is_empty();
+                    let text = if use_canonical_filter
+                        || (input_text.is_empty() && !self.filter_text.is_empty())
+                    {
+                        self.filter_text.clone()
+                    } else {
+                        input_text
+                    };
+                    let object_refs_by_range =
+                        menu_syntax_object_refs_by_range_for_filter(&text, &self.scripts);
                     let roles = input_state.highlight_range_roles();
-                    let chips = input_state
-                        .highlight_ranges()
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(index, (range, _color))| {
-                            let chip_text = text.get(range.clone())?.to_string();
-                            let role = roles
-                                .get(index)
-                                .cloned()
-                                .unwrap_or_else(|| "highlight".to_string());
-                            Some(serde_json::json!({
-                                "text": chip_text,
-                                "range": [range.start, range.end],
-                                "role": role,
-                            }))
+                    let mut chips = if use_canonical_filter {
+                        Vec::new()
+                    } else {
+                        input_state
+                            .highlight_ranges()
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(index, (range, _color))| {
+                                let chip_text = text.get(range.clone())?.to_string();
+                                let role = roles
+                                    .get(index)
+                                    .cloned()
+                                    .unwrap_or_else(|| "highlight".to_string());
+                                let mut chip = serde_json::json!({
+                                    "text": chip_text,
+                                    "range": [range.start, range.end],
+                                    "role": role,
+                                });
+                                if role == "objectRef" {
+                                    if let Some(object_ref) =
+                                        object_refs_by_range.get(&(range.start, range.end))
+                                    {
+                                        chip["kind"] = serde_json::json!(object_ref.kind.as_str());
+                                        chip["id"] = serde_json::json!(object_ref.id);
+                                        chip["label"] = serde_json::json!(object_ref.label);
+                                        if let Some(deeplink) = object_ref.deeplink.as_ref() {
+                                            chip["deeplink"] = serde_json::json!(deeplink);
+                                        }
+                                    }
+                                }
+                                Some(chip)
+                            })
+                            .collect::<Vec<_>>()
+                    };
+                    if chips.is_empty() && !text.is_empty() {
+                        let capture_targets =
+                            crate::menu_syntax::registered_capture_targets_from_scripts(
+                                &self.scripts,
+                            );
+                        chips = crate::menu_syntax::input_spans_for_input_with_targets(
+                            &text,
+                            &capture_targets,
+                        )
+                        .into_iter()
+                        .filter(|span| {
+                            span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject
                         })
-                        .collect::<Vec<_>>();
+                        .filter_map(|span| {
+                            let chip_text = text.get(span.range.clone())?.to_string();
+                            let role = crate::menu_syntax::input_span_role_name(span.role);
+                            let mut chip = serde_json::json!({
+                                "text": chip_text,
+                                "range": [span.range.start, span.range.end],
+                                "role": role,
+                            });
+                            if role == "objectRef" {
+                                if let Some(object_ref) =
+                                    object_refs_by_range.get(&(span.range.start, span.range.end))
+                                {
+                                    chip["kind"] = serde_json::json!(object_ref.kind.as_str());
+                                    chip["id"] = serde_json::json!(object_ref.id);
+                                    chip["label"] = serde_json::json!(object_ref.label);
+                                    if let Some(deeplink) = object_ref.deeplink.as_ref() {
+                                        chip["deeplink"] = serde_json::json!(deeplink);
+                                    }
+                                }
+                            }
+                            Some(chip)
+                        })
+                        .collect();
+                    }
                     Some(serde_json::json!({
                         "text": text,
                         "chips": chips,
@@ -3957,6 +4027,7 @@ impl ScriptListApp {
                     Some(self.current_surface_contract_snapshot()),
                     self.active_popup_contract_snapshot(),
                     Some(self.active_footer_snapshot(cx)),
+                    self.submit_diagnostics_snapshot(),
                     placeholder,
                     input_value,
                     choice_count,
@@ -6918,6 +6989,13 @@ impl ScriptListApp {
                                             serde_json::Value::Null => String::new(),
                                             other => other.to_string(),
                                         };
+                                        this.record_submit_diagnostic(
+                                            "protocol",
+                                            "forceSubmit",
+                                            Some(id.as_str()),
+                                            Some(value_str.as_str()),
+                                            false,
+                                        );
                                         this.submit_prompt_response(id, Some(value_str.clone()), cx);
                                         Ok(value_str)
                                     } else {
@@ -8594,6 +8672,8 @@ impl ScriptListApp {
         let popup_open = self.show_actions_popup
             || self.actions_dialog.is_some()
             || self.menu_syntax_trigger_popup_state.snapshot.is_some()
+            || self.menu_syntax_object_selector_state.snapshot.is_some()
+            || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
             || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
         let config = self.main_window_footer_config_with_cx(Some(cx));
         let native_buttons: Vec<_> = config
@@ -8844,8 +8924,10 @@ impl ScriptListApp {
                 cx.notify();
             }
             AppView::ScriptList => {
-                self.filter_text = text.to_string();
+                let text = text.to_string();
+                self.filter_text = text.clone();
                 self.selected_index = 0;
+                self.queue_filter_compute(text, cx);
                 cx.notify();
             }
             AppView::AcpChatView { entity } => {
@@ -9186,15 +9268,23 @@ impl ScriptListApp {
             AppView::ArgPrompt { id, choices, .. }
             | AppView::MiniPrompt { id, choices, .. }
             | AppView::MicroPrompt { id, choices, .. } => {
+                let id = id.clone();
                 let filtered = self.get_filtered_arg_choices(choices);
                 let value = if self.arg_selected_index < filtered.len() {
                     filtered[self.arg_selected_index].value.clone()
                 } else {
                     self.arg_input.text().to_string()
                 };
+                self.record_submit_diagnostic(
+                    "protocol",
+                    "submit_current_value",
+                    Some(id.as_str()),
+                    Some(value.as_str()),
+                    false,
+                );
                 if let Some(ref sender) = self.response_sender {
                     let _ = sender.try_send(Message::Submit {
-                        id: id.clone(),
+                        id,
                         value: Some(value),
                     });
                 }
@@ -9221,6 +9311,22 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
         protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
     }
+}
+
+fn menu_syntax_object_refs_by_range_for_filter(
+    text: &str,
+    scripts: &[std::sync::Arc<crate::scripts::Script>],
+) -> std::collections::HashMap<(usize, usize), crate::menu_syntax::CaptureObjectRef> {
+    let capture_targets = crate::menu_syntax::registered_capture_targets_from_scripts(scripts);
+    let invocation = match crate::menu_syntax::parse_with_capture_targets(text, &capture_targets) {
+        crate::menu_syntax::MenuSyntaxParse::Capture(invocation) => invocation,
+        _ => return std::collections::HashMap::new(),
+    };
+    crate::menu_syntax::object_refs_for_raw_capture(&invocation.target, &invocation.raw)
+        .into_iter()
+        .filter(|object_ref| object_ref.resolved)
+        .filter_map(|object_ref| object_ref.range.map(|range| (range, object_ref)))
+        .collect()
 }
 
 // --- merged from part_002.rs ---

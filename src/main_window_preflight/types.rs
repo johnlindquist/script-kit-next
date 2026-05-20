@@ -54,6 +54,10 @@ pub(crate) struct MainWindowPreflightVisibleResult {
     pub action_kind: MainWindowPreflightActionKind,
     pub type_label: String,
     pub source_name: Option<String>,
+    pub description: Option<String>,
+    pub leading_icon_present: bool,
+    pub leading_icon_kind: Option<String>,
+    pub leading_icon_bundle_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

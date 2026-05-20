@@ -18,6 +18,7 @@ pub(super) const kCFNumberSInt32Type: i32 = 3;
 extern "C" {
     pub(super) fn CFRelease(cf: *const c_void);
     pub(super) fn CFRetain(cf: *const c_void) -> *const c_void;
+    pub(super) fn CFEqual(cf1: CFTypeRef, cf2: CFTypeRef) -> bool;
 }
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -62,6 +63,8 @@ extern "C" {
     pub(super) fn CFArrayGetValueAtIndex(array: CFArrayRef, index: i64) -> CFTypeRef;
     pub(super) fn CFGetTypeID(cf: CFTypeRef) -> u64;
     pub(super) fn CFStringGetTypeID() -> u64;
+    pub(super) fn CFBooleanGetValue(boolean: CFTypeRef) -> bool;
+    pub(super) fn CFBooleanGetTypeID() -> u64;
     pub(super) fn CFNumberGetValue(
         number: CFTypeRef,
         number_type: i32,

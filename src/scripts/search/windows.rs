@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use crate::scripts::RootWindowEntry;
 use crate::window_control::WindowInfo;
 
 use super::super::types::WindowMatch;
@@ -17,19 +18,33 @@ use super::{find_ignore_ascii_case, NucleoCtx, MIN_FUZZY_QUERY_LEN};
 /// - Fuzzy match on app name: 50 points
 /// - Fuzzy match on window title: 40 points
 pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMatch> {
+    let entries = windows
+        .iter()
+        .cloned()
+        .map(|window| RootWindowEntry {
+            subtitle: window.descriptor.clone(),
+            window,
+            app_icon: None,
+            duplicate_rank: None,
+            duplicate_count: 1,
+            local_recency_seq: None,
+        })
+        .collect::<Vec<_>>();
+    fuzzy_search_root_windows(&entries, query)
+}
+
+/// Fuzzy search root/unified window entries with app-layer icon/subtitle data.
+pub fn fuzzy_search_root_windows(windows: &[RootWindowEntry], query: &str) -> Vec<WindowMatch> {
     if query.is_empty() {
-        // If no query, return all windows with equal score, sorted by app name then title
+        // If no query, browse by practical focus/recency signals with stable fallbacks.
         let mut matches: Vec<usize> = (0..windows.len()).collect();
-        matches.sort_by(
-            |a_idx, b_idx| match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
-                Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
-                other => other,
-            },
-        );
+        matches.sort_by(|a_idx, b_idx| compare_window_entries(&windows[*a_idx], &windows[*b_idx]));
         return matches
             .into_iter()
             .map(|index| WindowMatch {
-                window: windows[index].clone(),
+                window: windows[index].window.clone(),
+                app_icon: windows[index].app_icon.clone(),
+                subtitle: windows[index].subtitle.clone(),
                 score: 0,
             })
             .collect();
@@ -46,7 +61,8 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     // Gate nucleo fuzzy matching on minimum query length to reduce noise
     let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
 
-    for (index, window) in windows.iter().enumerate() {
+    for (index, entry) in windows.iter().enumerate() {
+        let window = &entry.window;
         let mut score = 0i32;
 
         // Score by app name match - highest priority
@@ -83,18 +99,28 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
             }
         }
 
+        if query_is_ascii {
+            if let Some(pos) = window
+                .bundle_id
+                .as_deref()
+                .and_then(|bundle_id| find_ignore_ascii_case(bundle_id, &query_lower))
+            {
+                score += if pos == 0 { 35 } else { 20 };
+            }
+            if let Some(pos) = find_ignore_ascii_case(&entry.subtitle, &query_lower) {
+                score += if pos == 0 { 30 } else { 15 };
+            }
+        }
+
         if score > 0 {
             matches.push((index, score));
         }
     }
 
-    // Sort by score (highest first), then by app name, then by title for ties
+    // Sort by score (highest first), then focus/recency signals for ties.
     matches.sort_by(
         |(a_idx, a_score), (b_idx, b_score)| match b_score.cmp(a_score) {
-            Ordering::Equal => match windows[*a_idx].app.cmp(&windows[*b_idx].app) {
-                Ordering::Equal => windows[*a_idx].title.cmp(&windows[*b_idx].title),
-                other => other,
-            },
+            Ordering::Equal => compare_window_entries(&windows[*a_idx], &windows[*b_idx]),
             other => other,
         },
     );
@@ -102,8 +128,24 @@ pub fn fuzzy_search_windows(windows: &[WindowInfo], query: &str) -> Vec<WindowMa
     matches
         .into_iter()
         .map(|(index, score)| WindowMatch {
-            window: windows[index].clone(),
+            window: windows[index].window.clone(),
+            app_icon: windows[index].app_icon.clone(),
+            subtitle: windows[index].subtitle.clone(),
             score,
         })
         .collect()
+}
+
+fn compare_window_entries(a: &RootWindowEntry, b: &RootWindowEntry) -> Ordering {
+    b.window
+        .is_frontmost_app
+        .cmp(&a.window.is_frontmost_app)
+        .then_with(|| b.window.is_focused.cmp(&a.window.is_focused))
+        .then_with(|| b.window.is_main.cmp(&a.window.is_main))
+        .then_with(|| b.local_recency_seq.cmp(&a.local_recency_seq))
+        .then_with(|| a.window.is_minimized.cmp(&b.window.is_minimized))
+        .then_with(|| a.window.app_order.cmp(&b.window.app_order))
+        .then_with(|| a.window.window_index.cmp(&b.window.window_index))
+        .then_with(|| a.window.title.cmp(&b.window.title))
+        .then_with(|| a.window.id.cmp(&b.window.id))
 }

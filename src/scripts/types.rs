@@ -190,7 +190,20 @@ pub struct AppMatch {
 #[derive(Clone, Debug)]
 pub struct WindowMatch {
     pub window: crate::window_control::WindowInfo,
+    pub app_icon: Option<crate::app_launcher::DecodedIcon>,
+    pub subtitle: String,
     pub score: i32,
+}
+
+/// Root/unified Windows row enriched by the app layer for rendering.
+#[derive(Clone, Debug)]
+pub struct RootWindowEntry {
+    pub window: crate::window_control::WindowInfo,
+    pub app_icon: Option<crate::app_launcher::DecodedIcon>,
+    pub subtitle: String,
+    pub duplicate_rank: Option<usize>,
+    pub duplicate_count: usize,
+    pub local_recency_seq: Option<u64>,
 }
 
 /// Represents a scored match result for a plugin-owned skill.
@@ -491,7 +504,7 @@ impl SearchResult {
             }
             SearchResult::BuiltIn(bm) => Some(&bm.entry.description),
             SearchResult::App(am) => am.app.path.to_str(),
-            SearchResult::Window(wm) => Some(&wm.window.app),
+            SearchResult::Window(wm) => Some(wm.subtitle.as_str()),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::Todo(tm) => Some(tm.hit.subtitle.as_str()),
@@ -603,9 +616,7 @@ impl SearchResult {
                 "skill:{}:{}",
                 sm.skill.plugin_id, sm.skill.skill_id
             )),
-            SearchResult::Window(wm) => {
-                Some(format!("window:{}:{}", wm.window.app, wm.window.title))
-            }
+            SearchResult::Window(wm) => Some(wm.window.selection_key()),
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
             SearchResult::AiVault(am) => Some(am.hit.stable_key.clone()),
             SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
@@ -720,6 +731,7 @@ impl SearchResult {
             SearchResult::DictationHistory(_) => Some("Dictation History"),
             SearchResult::BrowserTab(_) => Some("Browser Tabs"),
             SearchResult::BrowserHistory(_) => Some("Browser History"),
+            SearchResult::Window(_) => Some("Windows"),
             SearchResult::ScriptIssue(_) => None,
             _ => None,
         }
