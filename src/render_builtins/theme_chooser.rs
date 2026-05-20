@@ -3457,6 +3457,7 @@ impl ScriptListApp {
                             .when(!vibrancy_enabled, |d| d.ml(px(2.0))),
                     )
                     .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
                         if let Some(app) = vibrancy_click_entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.toggle_theme_chooser_vibrancy(
@@ -3529,6 +3530,7 @@ impl ScriptListApp {
                             .when(!gradient_enabled, |d| d.ml(px(2.0))),
                     )
                     .on_click(move |_, _, cx| {
+                        cx.stop_propagation();
                         if let Some(app) = grad_click_entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 let mut modified = (*this.theme).clone();
