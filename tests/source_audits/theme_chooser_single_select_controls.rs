@@ -68,7 +68,9 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
 
     for action_id in [
         "theme_chooser_save_as_user_theme",
+        "theme_chooser_update_user_theme",
         "theme_chooser_delete_user_theme",
+        "theme_chooser_restore_deleted_user_theme",
         "theme_chooser_gradient_cycle",
     ] {
         assert!(
@@ -79,12 +81,89 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
 
     assert!(user_themes.contains("pub fn save_theme_as_user_theme("));
     assert!(user_themes.contains("pub fn save_user_theme_unique("));
+    assert!(user_themes.contains("pub fn resolve_user_theme_name("));
+    assert!(user_themes.contains("pub fn save_theme_to_user_theme_slug("));
+    assert!(user_themes.contains("pub fn delete_user_theme_with_backup("));
+    assert!(user_themes.contains("pub fn restore_user_theme_backup("));
     assert!(user_themes.contains("pub fn load_user_theme("));
     assert!(user_themes.contains(".get(\"hover\")"));
     assert!(user_themes.contains(".get(\"selected\")"));
     assert!(theme_types.contains("pub struct BackgroundGradient"));
     assert!(theme_types.contains("pub fn active_background_gradient(&self)"));
     assert!(render_impl.contains("theme_background_gradient_layers(\"bg-layer\", &self.theme)"));
+}
+
+#[test]
+fn theme_chooser_exposes_management_status_and_safe_user_theme_actions() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let actions = read_source("src/render_builtins/actions.rs");
+    let collector = read_source("src/app_layout/collect_elements.rs");
+    let user_themes = read_source("src/theme/user_themes.rs");
+
+    for symbol in [
+        "ThemeChooserManagementState",
+        "ThemeChooserManagementStatus",
+        "theme_chooser_is_dirty",
+        "suggested_theme_chooser_save_name",
+        "update_selected_user_theme",
+        "confirm_delete_selected_user_theme",
+        "restore_last_deleted_user_theme",
+    ] {
+        assert!(
+            chooser.contains(symbol),
+            "missing ThemeChooser management symbol `{symbol}`"
+        );
+    }
+
+    for action in [
+        "theme_chooser_save_as_user_theme",
+        "theme_chooser_update_user_theme",
+        "theme_chooser_delete_user_theme",
+        "theme_chooser_restore_deleted_user_theme",
+    ] {
+        assert!(
+            actions.contains(action),
+            "actions dialog must expose `{action}`"
+        );
+        assert!(
+            chooser.contains(action),
+            "ThemeChooser must execute `{action}`"
+        );
+        assert!(
+            collector.contains(action),
+            "getElements must expose `{action}`"
+        );
+    }
+
+    for semantic in [
+        "status:theme-chooser-dirty-state",
+        "control:theme-chooser:save-name",
+        "button:theme-chooser-update-user-theme",
+        "button:theme-chooser-restore-deleted-user-theme",
+        "action_disabled",
+    ] {
+        assert!(
+            collector.contains(semantic),
+            "getElements missing `{semantic}`"
+        );
+    }
+
+    for persistence in [
+        "resolve_user_theme_name",
+        "save_theme_to_user_theme_slug",
+        "delete_user_theme_with_backup",
+        "restore_user_theme_backup",
+    ] {
+        assert!(
+            user_themes.contains(persistence),
+            "user_themes missing `{persistence}`"
+        );
+    }
+
+    assert!(
+        !chooser.contains("Custom Theme {}"),
+        "Theme Designer save-copy names should not be timestamp-only"
+    );
 }
 
 #[test]

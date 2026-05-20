@@ -422,18 +422,16 @@ impl PermissionCommandBuiltinAction {
     fn all_permissions_granted_hud(self) -> &'static str {
         match self {
             Self::CheckPermissions => "All permissions granted!",
-            Self::RequestAccessibility
-            | Self::OpenAccessibilitySettings
-            | Self::Assistant(_) => "",
+            Self::RequestAccessibility | Self::OpenAccessibilitySettings | Self::Assistant(_) => "",
         }
     }
 
     fn missing_permissions_message(self, missing: &[&str]) -> String {
         match self {
             Self::CheckPermissions => format!("Missing permissions: {}", missing.join(", ")),
-            Self::RequestAccessibility
-            | Self::OpenAccessibilitySettings
-            | Self::Assistant(_) => String::new(),
+            Self::RequestAccessibility | Self::OpenAccessibilitySettings | Self::Assistant(_) => {
+                String::new()
+            }
         }
     }
 
@@ -1713,11 +1711,9 @@ impl AiGenerateBuiltinAction {
                      using the current menu, selection, and browser context. \
                      User request: {request}"
                 ),
-                None => {
-                    "Generate a Script Kit script for the frontmost app \
+                None => "Generate a Script Kit script for the frontmost app \
                      using the current menu, selection, and browser context."
-                        .to_string()
-                }
+                    .to_string(),
             }),
         }
     }
@@ -3762,6 +3758,7 @@ impl ScriptListApp {
 
     fn open_theme_chooser_view(&mut self, cx: &mut Context<Self>) {
         self.theme_before_chooser = Some(self.theme.clone());
+        self.theme_chooser_management = None;
         let start_index = theme::presets::find_current_preset_index(&self.theme);
 
         self.open_builtin_filterable_view(
@@ -4707,7 +4704,11 @@ impl ScriptListApp {
                 );
                 self.cached_browser_tabs = tabs;
 
-                let urls: Vec<String> = self.cached_browser_tabs.iter().map(|t| t.url.to_string()).collect();
+                let urls: Vec<String> = self
+                    .cached_browser_tabs
+                    .iter()
+                    .map(|t| t.url.to_string())
+                    .collect();
                 let domains = crate::favicons::domains_needing_favicons(&urls);
                 if !domains.is_empty() {
                     let task = cx.spawn(async move |this, cx| {
@@ -4846,11 +4847,7 @@ impl ScriptListApp {
             "{}",
             action.request_log_message()
         );
-        self.show_hud(
-            action.start_hud().to_string(),
-            Some(HUD_SHORT_MS),
-            cx,
-        );
+        self.show_hud(action.start_hud().to_string(), Some(HUD_SHORT_MS), cx);
 
         let dctx_owned = dctx.clone();
         let action_for_task = action;
@@ -5396,7 +5393,9 @@ impl ScriptListApp {
                     "Snap Mode: Simple".to_string()
                 },
                 value: "simple".to_string(),
-                description: Some("Use halves, quadrants, center, and almost-maximize targets".to_string()),
+                description: Some(
+                    "Use halves, quadrants, center, and almost-maximize targets".to_string(),
+                ),
                 key: None,
                 semantic_id: Some(builtin_choice_semantic_id(
                     BUILTIN_SNAP_MODE_PROMPT_ID,
@@ -5411,7 +5410,9 @@ impl ScriptListApp {
                     "Snap Mode: Expanded".to_string()
                 },
                 value: "expanded".to_string(),
-                description: Some("Use halves, quadrants, thirds, and two-thirds targets".to_string()),
+                description: Some(
+                    "Use halves, quadrants, thirds, and two-thirds targets".to_string(),
+                ),
                 key: None,
                 semantic_id: Some(builtin_choice_semantic_id(
                     BUILTIN_SNAP_MODE_PROMPT_ID,
@@ -5426,7 +5427,9 @@ impl ScriptListApp {
                     "Snap Mode: Precision".to_string()
                 },
                 value: "precision".to_string(),
-                description: Some("Use the full snap grid including sixths for finer placement".to_string()),
+                description: Some(
+                    "Use the full snap grid including sixths for finer placement".to_string(),
+                ),
                 key: None,
                 semantic_id: Some(builtin_choice_semantic_id(
                     BUILTIN_SNAP_MODE_PROMPT_ID,
@@ -5490,11 +5493,7 @@ impl ScriptListApp {
                     "{}",
                     action.enumeration_failure_log()
                 );
-                self.show_hud(
-                    action.failure_hud(&error),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
+                self.show_hud(action.failure_hud(&error), Some(HUD_SHORT_MS), cx);
                 return Self::builtin_error(
                     dctx,
                     action.failure_code(),
@@ -7435,8 +7434,7 @@ impl ScriptListApp {
                         return;
                     }
 
-                    let Some(target_app) = crate::frontmost_app_tracker::get_last_real_app()
-                    else {
+                    let Some(target_app) = crate::frontmost_app_tracker::get_last_real_app() else {
                         tracing::error!(
                             category = "DICTATION",
                             "Frontmost-app dictation target disappeared before paste"

@@ -471,11 +471,47 @@ impl ScriptListApp {
                     protocol::ElementInfo::panel("theme-chooser"),
                     protocol::ElementInfo::list("theme-chooser-catalog", filtered.len()),
                 ];
+                let selected_entry =
+                    Self::theme_chooser_selected_entry(&catalog, &filtered, *selected_index);
+                let management = self.theme_chooser_management_snapshot(selected_entry);
+
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "status:theme-chooser-dirty-state".to_string(),
+                    element_type: protocol::ElementType::Panel,
+                    text: Some(management.status_label.clone()),
+                    value: Some(management.status_value.clone()),
+                    selected: Some(management.is_dirty),
+                    focused: None,
+                    index: None,
+                    role: Some("theme-management".to_string()),
+                    kind: Some("dirty-state".to_string()),
+                    source: management.base_slug.clone(),
+                    source_name: management.base_name.clone(),
+                    selectable: Some(false),
+                    status_kind: Some(management.status_kind.clone()),
+                    action_disabled: None,
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "control:theme-chooser:save-name".to_string(),
+                    element_type: protocol::ElementType::Input,
+                    text: Some("Theme Name".to_string()),
+                    value: Some(management.resolved_save_name.clone()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-management".to_string()),
+                    kind: Some("save-name".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(true),
+                    status_kind: management.duplicate_status_kind.clone(),
+                    action_disabled: None,
+                });
 
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-save-as-user-theme".to_string(),
                     element_type: protocol::ElementType::Button,
-                    text: Some("Save As".to_string()),
+                    text: Some("Save Copy".to_string()),
                     value: Some("theme_chooser_save_as_user_theme".to_string()),
                     selected: None,
                     focused: None,
@@ -487,6 +523,54 @@ impl ScriptListApp {
                     selectable: Some(true),
                     status_kind: None,
                     action_disabled: None,
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-update-user-theme".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Update".to_string()),
+                    value: Some("theme_chooser_update_user_theme".to_string()),
+                    selected: Some(management.can_update),
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("update-user-theme".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(management.update_disabled.is_none()),
+                    status_kind: None,
+                    action_disabled: management.update_disabled.clone(),
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-delete-user-theme".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Delete".to_string()),
+                    value: Some("theme_chooser_delete_user_theme".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("delete-user-theme".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(management.delete_disabled.is_none()),
+                    status_kind: None,
+                    action_disabled: management.delete_disabled.clone(),
+                });
+                elements.push(protocol::ElementInfo {
+                    semantic_id: "button:theme-chooser-restore-deleted-user-theme".to_string(),
+                    element_type: protocol::ElementType::Button,
+                    text: Some("Restore".to_string()),
+                    value: Some("theme_chooser_restore_deleted_user_theme".to_string()),
+                    selected: None,
+                    focused: None,
+                    index: None,
+                    role: Some("theme-action".to_string()),
+                    kind: Some("restore-deleted-user-theme".to_string()),
+                    source: None,
+                    source_name: None,
+                    selectable: Some(management.restore_disabled.is_none()),
+                    status_kind: None,
+                    action_disabled: management.restore_disabled.clone(),
                 });
                 elements.push(protocol::ElementInfo {
                     semantic_id: "button:theme-chooser-gradient-cycle".to_string(),
@@ -518,30 +602,29 @@ impl ScriptListApp {
                     .as_ref()
                     .map(|vibrancy| vibrancy.enabled)
                     .unwrap_or(false);
-                let mut push_theme_control = |
-                    semantic_id: String,
-                    element_type: protocol::ElementType,
-                    text: &str,
-                    value: String,
-                    kind: &str,
-                | {
-                    elements.push(protocol::ElementInfo {
-                        semantic_id,
-                        element_type,
-                        text: Some(text.to_string()),
-                        value: Some(value),
-                        selected: None,
-                        focused: None,
-                        index: None,
-                        role: Some("theme-control".to_string()),
-                        kind: Some(kind.to_string()),
-                        source: None,
-                        source_name: None,
-                        selectable: Some(true),
-                        status_kind: None,
-                        action_disabled: None,
-                    });
-                };
+                let mut push_theme_control =
+                    |semantic_id: String,
+                     element_type: protocol::ElementType,
+                     text: &str,
+                     value: String,
+                     kind: &str| {
+                        elements.push(protocol::ElementInfo {
+                            semantic_id,
+                            element_type,
+                            text: Some(text.to_string()),
+                            value: Some(value),
+                            selected: None,
+                            focused: None,
+                            index: None,
+                            role: Some("theme-control".to_string()),
+                            kind: Some(kind.to_string()),
+                            source: None,
+                            source_name: None,
+                            selectable: Some(true),
+                            status_kind: None,
+                            action_disabled: None,
+                        });
+                    };
                 push_theme_control(
                     "control:theme-chooser:accent-color".to_string(),
                     protocol::ElementType::ColorPicker,

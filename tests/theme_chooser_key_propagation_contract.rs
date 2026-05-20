@@ -67,6 +67,10 @@ fn handled_theme_chooser_clicks_stop_propagation() {
         "\"theme_chooser_font_size_click\"",
         "\"theme_chooser_reset_click\"",
         "\"theme_chooser_save_as_click\"",
+        "\"theme_chooser_save_copy_click\"",
+        "\"theme_chooser_update_user_theme_click\"",
+        "\"theme_chooser_delete_user_theme_click\"",
+        "\"theme_chooser_restore_deleted_user_theme_click\"",
         "\"theme_chooser_gradient_click\"",
         "\"theme_chooser_surprise_me\"",
     ] {

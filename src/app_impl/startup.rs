@@ -767,6 +767,8 @@ impl ScriptListApp {
             menu_syntax_form_input_active: false,
             menu_syntax_form_draft_field_id: None,
             menu_syntax_form_draft_value: String::new(),
+            menu_syntax_form_suggestion_field_id: None,
+            menu_syntax_form_suggestion_selected_index: None,
             pending_menu_syntax_ai_proposal: None,
             menu_syntax_trigger_popup_suppressed_filter: None,
             // Scroll stabilization: start with no last scrolled index
@@ -792,6 +794,7 @@ impl ScriptListApp {
             input_mode: InputMode::Mouse,
             main_menu_fallback_state: MainMenuFallbackState::default(),
             theme_before_chooser: None,
+            theme_chooser_management: None,
             theme_chooser_controls: None,
             main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
