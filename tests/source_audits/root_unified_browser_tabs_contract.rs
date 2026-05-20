@@ -1,5 +1,5 @@
 #[test]
-fn root_unified_browser_tabs_config_is_opt_in_and_bounded() {
+fn root_unified_browser_tabs_config_is_default_enabled_and_bounded() {
     let config_types = include_str!("../../src/config/types.rs");
     let config_schema = include_str!("../../scripts/config-schema.ts");
     let defaults = include_str!("../../src/config/defaults.rs");
@@ -9,7 +9,7 @@ fn root_unified_browser_tabs_config_is_opt_in_and_bounded() {
     assert!(config_types.contains("fn browser_tabs_section_options("));
     assert!(config_schema.contains("browserTabs?: UnifiedSearchBrowserTabsConfig"));
     assert!(config_schema.contains("export type BrowserTabProvider"));
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_ENABLED: bool = false"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_ENABLED: bool = true"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS: usize = 3"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS: u64 = 10_000"));
 }

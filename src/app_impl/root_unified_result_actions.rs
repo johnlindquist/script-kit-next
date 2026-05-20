@@ -35,8 +35,11 @@ pub(crate) enum RootUnifiedResultAction {
     AcpHistoryCopyTitle,
     AcpHistoryCopySessionId,
     AcpHistoryCopyPreview,
-    AiVaultResumePreferredTerminal,
-    AiVaultResumeNewTerminal,
+    AiVaultPasteResumeCommand,
+    AiVaultCopyResumeCommand,
+    AiVaultResumeConfiguredTerminal,
+    AiVaultConfigureTerminal,
+    AiVaultResumeQuickTerminal,
     AiVaultCopySessionId,
     AiVaultCopyProvider,
     AiVaultCopyWorkspacePath,
@@ -95,8 +98,11 @@ impl RootUnifiedResultAction {
         Self::AcpHistoryCopyTitle,
         Self::AcpHistoryCopySessionId,
         Self::AcpHistoryCopyPreview,
-        Self::AiVaultResumePreferredTerminal,
-        Self::AiVaultResumeNewTerminal,
+        Self::AiVaultPasteResumeCommand,
+        Self::AiVaultCopyResumeCommand,
+        Self::AiVaultResumeConfiguredTerminal,
+        Self::AiVaultConfigureTerminal,
+        Self::AiVaultResumeQuickTerminal,
         Self::AiVaultCopySessionId,
         Self::AiVaultCopyProvider,
         Self::AiVaultCopyWorkspacePath,
@@ -155,8 +161,11 @@ impl RootUnifiedResultAction {
             Self::AcpHistoryCopyTitle => "root_acp_history_copy_title",
             Self::AcpHistoryCopySessionId => "root_acp_history_copy_session_id",
             Self::AcpHistoryCopyPreview => "root_acp_history_copy_preview",
-            Self::AiVaultResumePreferredTerminal => "root_ai_vault_resume_preferred_terminal",
-            Self::AiVaultResumeNewTerminal => "root_ai_vault_resume_new_terminal",
+            Self::AiVaultPasteResumeCommand => "root_ai_vault_paste_resume_command",
+            Self::AiVaultCopyResumeCommand => "root_ai_vault_copy_resume_command",
+            Self::AiVaultResumeConfiguredTerminal => "root_ai_vault_resume_configured_terminal",
+            Self::AiVaultConfigureTerminal => "root_ai_vault_configure_terminal",
+            Self::AiVaultResumeQuickTerminal => "root_ai_vault_resume_quick_terminal",
             Self::AiVaultCopySessionId => "root_ai_vault_copy_session_id",
             Self::AiVaultCopyProvider => "root_ai_vault_copy_provider",
             Self::AiVaultCopyWorkspacePath => "root_ai_vault_copy_workspace_path",
@@ -257,7 +266,9 @@ impl RootUnifiedActionSubject {
                 app.bundle_id
                     .as_ref()
                     .map(|bundle_id| format!("app/{bundle_id}"))
-                    .unwrap_or_else(|| format!("app/{}", app.name.to_lowercase().replace(' ', "-"))),
+                    .unwrap_or_else(|| {
+                        format!("app/{}", app.name.to_lowercase().replace(' ', "-"))
+                    }),
             ),
             Self::Window(window) => Some(format!("window:{}:{}", window.app, window.title)),
             Self::BuiltIn(entry) => {
@@ -267,10 +278,7 @@ impl RootUnifiedActionSubject {
                     Some(format!("builtin/{}", entry.id))
                 }
             }
-            Self::Skill(skill) => Some(format!(
-                "skill:{}:{}",
-                skill.plugin_id, skill.skill_id
-            )),
+            Self::Skill(skill) => Some(format!("skill:{}:{}", skill.plugin_id, skill.skill_id)),
             Self::ScriptIssue(issue) => Some(format!(
                 "script-issue/{}:{}:{}:{}",
                 issue.title, issue.failed_count, issue.fatal_count, issue.warning_count
@@ -302,9 +310,7 @@ pub(crate) fn root_unified_action_owner_for_result(
         SearchResult::Script(_)
         | SearchResult::Scriptlet(_)
         | SearchResult::BuiltIn(_)
-        | SearchResult::App(_) => {
-            RootUnifiedResultActionOwner::ExistingScriptActions
-        }
+        | SearchResult::App(_) => RootUnifiedResultActionOwner::ExistingScriptActions,
         _ => root_unified_action_subject_from_result(result)
             .map(RootUnifiedResultActionOwner::RootSubject)
             .unwrap_or(RootUnifiedResultActionOwner::None),
@@ -323,10 +329,12 @@ pub(crate) fn root_unified_action_subject_from_result(
         SearchResult::ClipboardHistory(entry) => {
             Some(RootUnifiedActionSubject::Clipboard(entry.entry.clone()))
         }
-        SearchResult::BrowserTab(tab) => Some(RootUnifiedActionSubject::BrowserTab(tab.hit.clone())),
-        SearchResult::BrowserHistory(history) => {
-            Some(RootUnifiedActionSubject::BrowserHistory(history.hit.clone()))
+        SearchResult::BrowserTab(tab) => {
+            Some(RootUnifiedActionSubject::BrowserTab(tab.hit.clone()))
         }
+        SearchResult::BrowserHistory(history) => Some(RootUnifiedActionSubject::BrowserHistory(
+            history.hit.clone(),
+        )),
         SearchResult::AcpHistory(history) => {
             Some(RootUnifiedActionSubject::AcpHistory(history.entry.clone()))
         }
@@ -338,10 +346,12 @@ pub(crate) fn root_unified_action_subject_from_result(
             preview: dictation.preview.clone(),
         }),
         SearchResult::App(app) => Some(RootUnifiedActionSubject::App(app.app.clone())),
-        SearchResult::Window(window) => Some(RootUnifiedActionSubject::Window(window.window.clone())),
-        SearchResult::BuiltIn(builtin) => Some(RootUnifiedActionSubject::BuiltIn(
-            builtin.entry.clone(),
-        )),
+        SearchResult::Window(window) => {
+            Some(RootUnifiedActionSubject::Window(window.window.clone()))
+        }
+        SearchResult::BuiltIn(builtin) => {
+            Some(RootUnifiedActionSubject::BuiltIn(builtin.entry.clone()))
+        }
         SearchResult::Skill(skill) => Some(RootUnifiedActionSubject::Skill(skill.skill.clone())),
         SearchResult::ScriptIssue(issue) => {
             Some(RootUnifiedActionSubject::ScriptIssue(issue.clone()))
@@ -354,14 +364,16 @@ pub(crate) fn root_unified_action_subject_from_result(
     }
 }
 
-pub(crate) fn root_unified_actions_for_subject(
-    subject: &RootUnifiedActionSubject,
-) -> Vec<Action> {
+pub(crate) fn root_unified_actions_for_subject(subject: &RootUnifiedActionSubject) -> Vec<Action> {
     match subject {
         RootUnifiedActionSubject::File(file) => super::actions_toggle::root_file_actions_for(file),
         RootUnifiedActionSubject::Note { .. } => vec![
             action(RootUnifiedResultAction::NoteOpen, "Open Note", "Open"),
-            action(RootUnifiedResultAction::NoteCopyTitle, "Copy Note Title", "Share"),
+            action(
+                RootUnifiedResultAction::NoteCopyTitle,
+                "Copy Note Title",
+                "Share",
+            ),
             action(RootUnifiedResultAction::NoteCopyId, "Copy Note ID", "Share"),
         ],
         RootUnifiedActionSubject::Clipboard(entry) => {
@@ -371,8 +383,16 @@ pub(crate) fn root_unified_actions_for_subject(
                 action(RootUnifiedResultAction::ClipboardPin, "Pin", "Actions")
             };
             let mut actions = vec![
-                action(RootUnifiedResultAction::ClipboardPaste, "Paste Clipboard", "Open"),
-                action(RootUnifiedResultAction::ClipboardCopy, "Copy to Clipboard", "Share"),
+                action(
+                    RootUnifiedResultAction::ClipboardPaste,
+                    "Paste Clipboard",
+                    "Open",
+                ),
+                action(
+                    RootUnifiedResultAction::ClipboardCopy,
+                    "Copy to Clipboard",
+                    "Share",
+                ),
             ];
             if matches!(
                 entry.content_type,
@@ -402,10 +422,26 @@ pub(crate) fn root_unified_actions_for_subject(
             actions
         }
         RootUnifiedActionSubject::BrowserTab(_) => vec![
-            action(RootUnifiedResultAction::BrowserTabSwitch, "Switch to Tab", "Open"),
-            action(RootUnifiedResultAction::BrowserTabOpenUrl, "Open URL in Browser", "Open"),
-            action(RootUnifiedResultAction::BrowserTabCopyUrl, "Copy URL", "Share"),
-            action(RootUnifiedResultAction::BrowserTabCopyTitle, "Copy Title", "Share"),
+            action(
+                RootUnifiedResultAction::BrowserTabSwitch,
+                "Switch to Tab",
+                "Open",
+            ),
+            action(
+                RootUnifiedResultAction::BrowserTabOpenUrl,
+                "Open URL in Browser",
+                "Open",
+            ),
+            action(
+                RootUnifiedResultAction::BrowserTabCopyUrl,
+                "Copy URL",
+                "Share",
+            ),
+            action(
+                RootUnifiedResultAction::BrowserTabCopyTitle,
+                "Copy Title",
+                "Share",
+            ),
             action(
                 RootUnifiedResultAction::BrowserTabCopyTitleUrl,
                 "Copy Title and URL",
@@ -413,8 +449,16 @@ pub(crate) fn root_unified_actions_for_subject(
             ),
         ],
         RootUnifiedActionSubject::BrowserHistory(_) => vec![
-            action(RootUnifiedResultAction::BrowserHistoryOpen, "Open Page", "Open"),
-            action(RootUnifiedResultAction::BrowserHistoryCopyUrl, "Copy URL", "Share"),
+            action(
+                RootUnifiedResultAction::BrowserHistoryOpen,
+                "Open Page",
+                "Open",
+            ),
+            action(
+                RootUnifiedResultAction::BrowserHistoryCopyUrl,
+                "Copy URL",
+                "Share",
+            ),
             action(
                 RootUnifiedResultAction::BrowserHistoryCopyTitle,
                 "Copy Title",
@@ -456,13 +500,28 @@ pub(crate) fn root_unified_actions_for_subject(
         RootUnifiedActionSubject::AiVault(hit) => {
             let mut actions = vec![
                 action(
-                    RootUnifiedResultAction::AiVaultResumePreferredTerminal,
-                    "Resume in Preferred Terminal",
+                    RootUnifiedResultAction::AiVaultPasteResumeCommand,
+                    "Paste Resume Command",
                     "Open",
                 ),
                 action(
-                    RootUnifiedResultAction::AiVaultResumeNewTerminal,
-                    "Resume in New Terminal",
+                    RootUnifiedResultAction::AiVaultCopyResumeCommand,
+                    "Copy Resume Command",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultResumeConfiguredTerminal,
+                    "Resume in Configured Terminal",
+                    "Open",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultConfigureTerminal,
+                    "Configure Terminal",
+                    "Settings",
+                ),
+                action(
+                    RootUnifiedResultAction::AiVaultResumeQuickTerminal,
+                    "Resume in Quick Terminal",
                     "Open",
                 ),
                 action(
@@ -499,7 +558,11 @@ pub(crate) fn root_unified_actions_for_subject(
             actions
         }
         RootUnifiedActionSubject::Dictation { .. } => vec![
-            action(RootUnifiedResultAction::DictationPaste, "Paste Dictation", "Open"),
+            action(
+                RootUnifiedResultAction::DictationPaste,
+                "Paste Dictation",
+                "Open",
+            ),
             action(
                 RootUnifiedResultAction::DictationCopyTranscript,
                 "Copy Transcript",
@@ -529,8 +592,16 @@ pub(crate) fn root_unified_actions_for_subject(
                     "Reveal in Finder",
                     "Open",
                 ),
-                action(RootUnifiedResultAction::AppCopyPath, "Copy App Path", "Share"),
-                action(RootUnifiedResultAction::AppCopyName, "Copy App Name", "Share"),
+                action(
+                    RootUnifiedResultAction::AppCopyPath,
+                    "Copy App Path",
+                    "Share",
+                ),
+                action(
+                    RootUnifiedResultAction::AppCopyName,
+                    "Copy App Name",
+                    "Share",
+                ),
             ];
             if app.bundle_id.is_some() {
                 actions.push(action(
@@ -542,7 +613,11 @@ pub(crate) fn root_unified_actions_for_subject(
             actions
         }
         RootUnifiedActionSubject::Window(_) => vec![
-            action(RootUnifiedResultAction::WindowSwitch, "Switch to Window", "Open"),
+            action(
+                RootUnifiedResultAction::WindowSwitch,
+                "Switch to Window",
+                "Open",
+            ),
             action(
                 RootUnifiedResultAction::WindowCopyTitle,
                 "Copy Window Title",
@@ -561,11 +636,19 @@ pub(crate) fn root_unified_actions_for_subject(
         ],
         RootUnifiedActionSubject::BuiltIn(_) => vec![
             action(RootUnifiedResultAction::CommandRun, "Run Command", "Open"),
-            action(RootUnifiedResultAction::CommandCopyId, "Copy Command ID", "Share"),
+            action(
+                RootUnifiedResultAction::CommandCopyId,
+                "Copy Command ID",
+                "Share",
+            ),
         ],
         RootUnifiedActionSubject::Skill(_) => vec![
             action(RootUnifiedResultAction::SkillOpen, "Open Skill", "Open"),
-            action(RootUnifiedResultAction::SkillCopyId, "Copy Skill ID", "Share"),
+            action(
+                RootUnifiedResultAction::SkillCopyId,
+                "Copy Skill ID",
+                "Share",
+            ),
             action(
                 RootUnifiedResultAction::SkillCopyPluginId,
                 "Copy Plugin ID",
@@ -617,13 +700,14 @@ pub(crate) fn execute_root_unified_result_action(
     };
 
     match (action, subject) {
-        (RootUnifiedResultAction::FileOpen
-        | RootUnifiedResultAction::FileRevealInFinder
-        | RootUnifiedResultAction::FileCopyPath
-        | RootUnifiedResultAction::FileCopyName
-        | RootUnifiedResultAction::FileQuickLook, RootUnifiedActionSubject::File(file)) => {
-            app.execute_root_file_action(action_id, file, window, cx)
-        }
+        (
+            RootUnifiedResultAction::FileOpen
+            | RootUnifiedResultAction::FileRevealInFinder
+            | RootUnifiedResultAction::FileCopyPath
+            | RootUnifiedResultAction::FileCopyName
+            | RootUnifiedResultAction::FileQuickLook,
+            RootUnifiedActionSubject::File(file),
+        ) => app.execute_root_file_action(action_id, file, window, cx),
         (RootUnifiedResultAction::NoteOpen, RootUnifiedActionSubject::Note { id, .. }) => {
             app.execute_root_note_open(*id, cx);
             true
@@ -642,11 +726,18 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardCopy, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::copy_entry_to_clipboard(&entry.id) {
-                app.show_hud(format!("Failed to copy clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to copy clipboard entry: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
-        (RootUnifiedResultAction::ClipboardAttachToAi, RootUnifiedActionSubject::Clipboard(entry)) => {
+        (
+            RootUnifiedResultAction::ClipboardAttachToAi,
+            RootUnifiedActionSubject::Clipboard(entry),
+        ) => {
             let text = crate::clipboard_history::get_entry_content(&entry.id)
                 .unwrap_or_else(|| entry.text_preview.clone());
             app.submit_to_current_or_new_tab_ai_harness_from_text(
@@ -658,25 +749,44 @@ pub(crate) fn execute_root_unified_result_action(
         }
         (RootUnifiedResultAction::ClipboardPin, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::pin_entry(&entry.id) {
-                app.show_hud(format!("Failed to pin clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to pin clipboard entry: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
         (RootUnifiedResultAction::ClipboardUnpin, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::unpin_entry(&entry.id) {
-                app.show_hud(format!("Failed to unpin clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to unpin clipboard entry: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
-        (RootUnifiedResultAction::ClipboardQuickLook, RootUnifiedActionSubject::Clipboard(entry)) => {
+        (
+            RootUnifiedResultAction::ClipboardQuickLook,
+            RootUnifiedActionSubject::Clipboard(entry),
+        ) => {
             if let Err(error) = crate::clipboard_history::quick_look_entry(entry) {
-                app.show_hud(format!("Failed to preview clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to preview clipboard entry: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
         (RootUnifiedResultAction::ClipboardDelete, RootUnifiedActionSubject::Clipboard(entry)) => {
             if let Err(error) = crate::clipboard_history::remove_entry(&entry.id) {
-                app.show_hud(format!("Failed to delete clipboard entry: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to delete clipboard entry: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
@@ -688,52 +798,137 @@ pub(crate) fn execute_root_unified_result_action(
             app.execute_root_browser_history_open(&hit.url, cx);
             true
         }
-        (RootUnifiedResultAction::BrowserTabCopyUrl, RootUnifiedActionSubject::BrowserTab(hit)) => copy(hit.url.clone(), cx),
-        (RootUnifiedResultAction::BrowserTabCopyTitle, RootUnifiedActionSubject::BrowserTab(hit)) => copy(hit.title.clone(), cx),
-        (RootUnifiedResultAction::BrowserTabCopyTitleUrl, RootUnifiedActionSubject::BrowserTab(hit)) => copy(format!("{} — {}", hit.title, hit.url), cx),
-        (RootUnifiedResultAction::BrowserHistoryOpen, RootUnifiedActionSubject::BrowserHistory(hit)) => {
+        (RootUnifiedResultAction::BrowserTabCopyUrl, RootUnifiedActionSubject::BrowserTab(hit)) => {
+            copy(hit.url.clone(), cx)
+        }
+        (
+            RootUnifiedResultAction::BrowserTabCopyTitle,
+            RootUnifiedActionSubject::BrowserTab(hit),
+        ) => copy(hit.title.clone(), cx),
+        (
+            RootUnifiedResultAction::BrowserTabCopyTitleUrl,
+            RootUnifiedActionSubject::BrowserTab(hit),
+        ) => copy(format!("{} — {}", hit.title, hit.url), cx),
+        (
+            RootUnifiedResultAction::BrowserHistoryOpen,
+            RootUnifiedActionSubject::BrowserHistory(hit),
+        ) => {
             app.execute_root_browser_history_open(&hit.url, cx);
             true
         }
-        (RootUnifiedResultAction::BrowserHistoryCopyUrl, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(hit.url.clone(), cx),
-        (RootUnifiedResultAction::BrowserHistoryCopyTitle, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(hit.title.clone(), cx),
-        (RootUnifiedResultAction::BrowserHistoryCopyTitleUrl, RootUnifiedActionSubject::BrowserHistory(hit)) => copy(format!("{} — {}", hit.title, hit.url), cx),
-        (RootUnifiedResultAction::AcpHistoryResume, RootUnifiedActionSubject::AcpHistory(entry)) => {
-            app.resume_acp_conversation_from_history(&entry.session_id, entry.first_message.as_str(), cx);
+        (
+            RootUnifiedResultAction::BrowserHistoryCopyUrl,
+            RootUnifiedActionSubject::BrowserHistory(hit),
+        ) => copy(hit.url.clone(), cx),
+        (
+            RootUnifiedResultAction::BrowserHistoryCopyTitle,
+            RootUnifiedActionSubject::BrowserHistory(hit),
+        ) => copy(hit.title.clone(), cx),
+        (
+            RootUnifiedResultAction::BrowserHistoryCopyTitleUrl,
+            RootUnifiedActionSubject::BrowserHistory(hit),
+        ) => copy(format!("{} — {}", hit.title, hit.url), cx),
+        (
+            RootUnifiedResultAction::AcpHistoryResume,
+            RootUnifiedActionSubject::AcpHistory(entry),
+        ) => {
+            app.resume_acp_conversation_from_history(
+                &entry.session_id,
+                entry.first_message.as_str(),
+                cx,
+            );
             true
         }
-        (RootUnifiedResultAction::AcpHistoryCopyTitle, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.title_display().to_string(), cx),
-        (RootUnifiedResultAction::AcpHistoryCopySessionId, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.session_id.clone(), cx),
-        (RootUnifiedResultAction::AcpHistoryCopyPreview, RootUnifiedActionSubject::AcpHistory(entry)) => copy(entry.preview_display().to_string(), cx),
-        (RootUnifiedResultAction::AiVaultResumePreferredTerminal, RootUnifiedActionSubject::AiVault(hit)) => {
-            app.execute_root_ai_vault_resume_preferred_terminal(hit, cx);
+        (
+            RootUnifiedResultAction::AcpHistoryCopyTitle,
+            RootUnifiedActionSubject::AcpHistory(entry),
+        ) => copy(entry.title_display().to_string(), cx),
+        (
+            RootUnifiedResultAction::AcpHistoryCopySessionId,
+            RootUnifiedActionSubject::AcpHistory(entry),
+        ) => copy(entry.session_id.clone(), cx),
+        (
+            RootUnifiedResultAction::AcpHistoryCopyPreview,
+            RootUnifiedActionSubject::AcpHistory(entry),
+        ) => copy(entry.preview_display().to_string(), cx),
+        (
+            RootUnifiedResultAction::AiVaultPasteResumeCommand,
+            RootUnifiedActionSubject::AiVault(hit),
+        ) => {
+            app.execute_root_ai_vault_paste_resume_command(hit, cx);
             true
         }
-        (RootUnifiedResultAction::AiVaultResumeNewTerminal, RootUnifiedActionSubject::AiVault(hit)) => {
-            app.execute_root_ai_vault_resume_new_terminal(hit, cx);
+        (
+            RootUnifiedResultAction::AiVaultCopyResumeCommand,
+            RootUnifiedActionSubject::AiVault(hit),
+        ) => {
+            app.execute_root_ai_vault_copy_resume_command(hit, cx);
             true
         }
-        (RootUnifiedResultAction::AiVaultCopySessionId, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.session_id.clone(), cx),
-        (RootUnifiedResultAction::AiVaultCopyProvider, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.provider.clone(), cx),
-        (RootUnifiedResultAction::AiVaultCopyWorkspacePath, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.workspace_path.clone().unwrap_or_default(), cx),
-        (RootUnifiedResultAction::AiVaultCopyTitle, RootUnifiedActionSubject::AiVault(hit)) => copy(hit.safe_title.clone(), cx),
+        (
+            RootUnifiedResultAction::AiVaultResumeConfiguredTerminal,
+            RootUnifiedActionSubject::AiVault(hit),
+        ) => {
+            app.execute_root_ai_vault_resume_configured_terminal(hit, cx);
+            true
+        }
+        (
+            RootUnifiedResultAction::AiVaultConfigureTerminal,
+            RootUnifiedActionSubject::AiVault(_),
+        ) => {
+            app.execute_root_ai_vault_configure_terminal(cx);
+            true
+        }
+        (
+            RootUnifiedResultAction::AiVaultResumeQuickTerminal,
+            RootUnifiedActionSubject::AiVault(hit),
+        ) => {
+            app.execute_root_ai_vault_resume_quick_terminal(hit, cx);
+            true
+        }
+        (RootUnifiedResultAction::AiVaultCopySessionId, RootUnifiedActionSubject::AiVault(hit)) => {
+            copy(hit.session_id.clone(), cx)
+        }
+        (RootUnifiedResultAction::AiVaultCopyProvider, RootUnifiedActionSubject::AiVault(hit)) => {
+            copy(hit.provider.clone(), cx)
+        }
+        (
+            RootUnifiedResultAction::AiVaultCopyWorkspacePath,
+            RootUnifiedActionSubject::AiVault(hit),
+        ) => copy(hit.workspace_path.clone().unwrap_or_default(), cx),
+        (RootUnifiedResultAction::AiVaultCopyTitle, RootUnifiedActionSubject::AiVault(hit)) => {
+            copy(hit.safe_title.clone(), cx)
+        }
         (RootUnifiedResultAction::AiVaultRevealInCmux, RootUnifiedActionSubject::AiVault(hit)) => {
             let receipt = crate::ai_vault::reveal_vault_session(hit);
-            app.show_hud(vault_receipt_hud("AI Vault reveal", &receipt), Some(crate::HUD_MEDIUM_MS), cx);
+            app.show_hud(
+                vault_receipt_hud("AI Vault reveal", &receipt),
+                Some(crate::HUD_MEDIUM_MS),
+                cx,
+            );
             true
         }
-        (RootUnifiedResultAction::DictationPaste, RootUnifiedActionSubject::Dictation { id, .. }) => {
+        (
+            RootUnifiedResultAction::DictationPaste,
+            RootUnifiedActionSubject::Dictation { id, .. },
+        ) => {
             app.execute_root_dictation_history_paste(id, cx);
             true
         }
-        (RootUnifiedResultAction::DictationCopyTranscript, RootUnifiedActionSubject::Dictation { id, .. }) => {
+        (
+            RootUnifiedResultAction::DictationCopyTranscript,
+            RootUnifiedActionSubject::Dictation { id, .. },
+        ) => {
             if let Some(entry) = crate::dictation::get_history_entry(id) {
                 copy(entry.transcript, cx)
             } else {
                 true
             }
         }
-        (RootUnifiedResultAction::DictationAttachToAi, RootUnifiedActionSubject::Dictation { id, .. }) => {
+        (
+            RootUnifiedResultAction::DictationAttachToAi,
+            RootUnifiedActionSubject::Dictation { id, .. },
+        ) => {
             if let Some(entry) = crate::dictation::get_history_entry(id) {
                 app.submit_to_current_or_new_tab_ai_harness_from_text(
                     entry.transcript,
@@ -743,17 +938,31 @@ pub(crate) fn execute_root_unified_result_action(
             }
             true
         }
-        (RootUnifiedResultAction::DictationCreateNote, RootUnifiedActionSubject::Dictation { id, .. }) => {
+        (
+            RootUnifiedResultAction::DictationCreateNote,
+            RootUnifiedActionSubject::Dictation { id, .. },
+        ) => {
             if let Some(entry) = crate::dictation::get_history_entry(id) {
                 if let Err(error) = crate::notes::save_note_with_content(cx, entry.transcript) {
-                    app.show_hud(format!("Failed to create note: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                    app.show_hud(
+                        format!("Failed to create note: {error}"),
+                        Some(crate::HUD_MEDIUM_MS),
+                        cx,
+                    );
                 }
             }
             true
         }
-        (RootUnifiedResultAction::DictationDelete, RootUnifiedActionSubject::Dictation { id, .. }) => {
+        (
+            RootUnifiedResultAction::DictationDelete,
+            RootUnifiedActionSubject::Dictation { id, .. },
+        ) => {
             if let Err(error) = crate::dictation::delete_history_entry(id) {
-                app.show_hud(format!("Failed to delete dictation: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+                app.show_hud(
+                    format!("Failed to delete dictation: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
@@ -762,37 +971,73 @@ pub(crate) fn execute_root_unified_result_action(
             true
         }
         (RootUnifiedResultAction::AppRevealInFinder, RootUnifiedActionSubject::App(app_info)) => {
-            if let Err(error) = crate::file_search::reveal_in_finder(&app_info.path.to_string_lossy()) {
-                app.show_hud(format!("Failed to reveal app: {error}"), Some(crate::HUD_MEDIUM_MS), cx);
+            if let Err(error) =
+                crate::file_search::reveal_in_finder(&app_info.path.to_string_lossy())
+            {
+                app.show_hud(
+                    format!("Failed to reveal app: {error}"),
+                    Some(crate::HUD_MEDIUM_MS),
+                    cx,
+                );
             }
             true
         }
-        (RootUnifiedResultAction::AppCopyPath, RootUnifiedActionSubject::App(app_info)) => copy(app_info.path.to_string_lossy().to_string(), cx),
-        (RootUnifiedResultAction::AppCopyName, RootUnifiedActionSubject::App(app_info)) => copy(app_info.name.clone(), cx),
-        (RootUnifiedResultAction::AppCopyBundleId, RootUnifiedActionSubject::App(app_info)) => copy(app_info.bundle_id.clone().unwrap_or_default(), cx),
+        (RootUnifiedResultAction::AppCopyPath, RootUnifiedActionSubject::App(app_info)) => {
+            copy(app_info.path.to_string_lossy().to_string(), cx)
+        }
+        (RootUnifiedResultAction::AppCopyName, RootUnifiedActionSubject::App(app_info)) => {
+            copy(app_info.name.clone(), cx)
+        }
+        (RootUnifiedResultAction::AppCopyBundleId, RootUnifiedActionSubject::App(app_info)) => {
+            copy(app_info.bundle_id.clone().unwrap_or_default(), cx)
+        }
         (RootUnifiedResultAction::WindowSwitch, RootUnifiedActionSubject::Window(window_info)) => {
             app.execute_window_focus(window_info, cx);
             true
         }
-        (RootUnifiedResultAction::WindowCopyTitle, RootUnifiedActionSubject::Window(window_info)) => copy(window_info.title.clone(), cx),
-        (RootUnifiedResultAction::WindowCopyAppName, RootUnifiedActionSubject::Window(window_info)) => copy(window_info.app.clone(), cx),
-        (RootUnifiedResultAction::WindowCopyDescriptor, RootUnifiedActionSubject::Window(window_info)) => copy(format!("{} — {}", window_info.app, window_info.title), cx),
+        (
+            RootUnifiedResultAction::WindowCopyTitle,
+            RootUnifiedActionSubject::Window(window_info),
+        ) => copy(window_info.title.clone(), cx),
+        (
+            RootUnifiedResultAction::WindowCopyAppName,
+            RootUnifiedActionSubject::Window(window_info),
+        ) => copy(window_info.app.clone(), cx),
+        (
+            RootUnifiedResultAction::WindowCopyDescriptor,
+            RootUnifiedActionSubject::Window(window_info),
+        ) => copy(format!("{} — {}", window_info.app, window_info.title), cx),
         (RootUnifiedResultAction::CommandRun, RootUnifiedActionSubject::BuiltIn(entry)) => {
             app.execute_builtin(entry, cx);
             true
         }
-        (RootUnifiedResultAction::CommandCopyId, RootUnifiedActionSubject::BuiltIn(entry)) => copy(entry.id.clone(), cx),
+        (RootUnifiedResultAction::CommandCopyId, RootUnifiedActionSubject::BuiltIn(entry)) => {
+            copy(entry.id.clone(), cx)
+        }
         (RootUnifiedResultAction::SkillOpen, RootUnifiedActionSubject::Skill(skill)) => {
             app.open_acp_with_selected_skill(skill, cx);
             true
         }
-        (RootUnifiedResultAction::SkillCopyId, RootUnifiedActionSubject::Skill(skill)) => copy(skill.skill_id.clone(), cx),
-        (RootUnifiedResultAction::SkillCopyPluginId, RootUnifiedActionSubject::Skill(skill)) => copy(skill.plugin_id.clone(), cx),
+        (RootUnifiedResultAction::SkillCopyId, RootUnifiedActionSubject::Skill(skill)) => {
+            copy(skill.skill_id.clone(), cx)
+        }
+        (RootUnifiedResultAction::SkillCopyPluginId, RootUnifiedActionSubject::Skill(skill)) => {
+            copy(skill.plugin_id.clone(), cx)
+        }
         (RootUnifiedResultAction::ScriptIssueInspect, RootUnifiedActionSubject::ScriptIssue(_)) => {
             app.open_script_issues_view(cx);
             true
         }
-        (RootUnifiedResultAction::ScriptIssueCopySummary, RootUnifiedActionSubject::ScriptIssue(issue)) => copy(issue.description.clone().unwrap_or_else(|| issue.title.clone()), cx),
+        (
+            RootUnifiedResultAction::ScriptIssueCopySummary,
+            RootUnifiedActionSubject::ScriptIssue(issue),
+        ) => copy(
+            issue
+                .description
+                .clone()
+                .unwrap_or_else(|| issue.title.clone()),
+            cx,
+        ),
         _ => {
             tracing::warn!(
                 target: "script_kit::actions",
@@ -812,30 +1057,109 @@ fn copy(value: String, cx: &mut Context<ScriptListApp>) -> bool {
 }
 
 impl ScriptListApp {
-    pub(crate) fn execute_root_ai_vault_resume_preferred_terminal(
+    pub(crate) fn execute_root_ai_vault_paste_resume_command(
         &mut self,
         hit: &crate::ai_vault::AiVaultHit,
         cx: &mut Context<Self>,
     ) {
-        self.execute_root_ai_vault_resume(hit, crate::ai_vault::AiVaultTerminalRouting::UserPreferred, cx);
+        let command = crate::ai_vault::resume_command_for_hit(
+            hit,
+            crate::ai_vault::AiVaultTerminalRouting::UserPreferred,
+        );
+        self.hide_main_and_reset(cx);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            let injector = crate::text_injector::TextInjector::new();
+            if let Err(error) = injector.paste_text(&command) {
+                crate::logging::log(
+                    "ERROR",
+                    &format!("Failed to paste AI Vault resume command: {error}"),
+                );
+            } else {
+                crate::logging::log("EXEC", "Pasted AI Vault resume command");
+            }
+        });
     }
 
-    pub(crate) fn execute_root_ai_vault_resume_new_terminal(
+    pub(crate) fn execute_root_ai_vault_copy_resume_command(
         &mut self,
         hit: &crate::ai_vault::AiVaultHit,
         cx: &mut Context<Self>,
     ) {
-        self.execute_root_ai_vault_resume(hit, crate::ai_vault::AiVaultTerminalRouting::NewTerminal, cx);
+        let command = crate::ai_vault::resume_command_for_hit(
+            hit,
+            crate::ai_vault::AiVaultTerminalRouting::UserPreferred,
+        );
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(command));
+        self.show_hud(
+            "Copied AI Vault resume command".to_string(),
+            Some(crate::HUD_SHORT_MS),
+            cx,
+        );
     }
 
-    fn execute_root_ai_vault_resume(
+    pub(crate) fn execute_root_ai_vault_resume_configured_terminal(
+        &mut self,
+        hit: &crate::ai_vault::AiVaultHit,
+        cx: &mut Context<Self>,
+    ) {
+        match self.config.get_unified_search().ai_vault.resume_terminal {
+            crate::config::AiVaultResumeTerminal::Cmux => {
+                self.execute_root_ai_vault_resume_cmux(
+                    hit,
+                    crate::ai_vault::AiVaultTerminalRouting::UserPreferred,
+                    cx,
+                );
+            }
+            crate::config::AiVaultResumeTerminal::QuickTerminal => {
+                self.execute_root_ai_vault_resume_quick_terminal(hit, cx);
+            }
+        }
+    }
+
+    pub(crate) fn execute_root_ai_vault_configure_terminal(&mut self, cx: &mut Context<Self>) {
+        let snippet = r#"unifiedSearch: {
+  aiVault: {
+    resumeTerminal: "quickTerminal", // or "cmux"
+  },
+},"#;
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(snippet.to_string()));
+        self.show_hud(
+            "Copied AI Vault terminal config snippet".to_string(),
+            Some(crate::HUD_SHORT_MS),
+            cx,
+        );
+    }
+
+    pub(crate) fn execute_root_ai_vault_resume_quick_terminal(
+        &mut self,
+        hit: &crate::ai_vault::AiVaultHit,
+        cx: &mut Context<Self>,
+    ) {
+        let command = crate::ai_vault::resume_command_for_hit(
+            hit,
+            crate::ai_vault::AiVaultTerminalRouting::UserPreferred,
+        );
+        let cwd = hit
+            .workspace_path
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .map(std::path::PathBuf::from);
+        self.open_quick_terminal_with_command(cwd, command, cx);
+    }
+
+    fn execute_root_ai_vault_resume_cmux(
         &mut self,
         hit: &crate::ai_vault::AiVaultHit,
         routing: crate::ai_vault::AiVaultTerminalRouting,
         cx: &mut Context<Self>,
     ) {
         let receipt = crate::ai_vault::resume_vault_session(hit, routing);
-        self.show_hud(vault_receipt_hud("AI Vault resume", &receipt), Some(crate::HUD_MEDIUM_MS), cx);
+        self.show_hud(
+            vault_receipt_hud("AI Vault resume", &receipt),
+            Some(crate::HUD_MEDIUM_MS),
+            cx,
+        );
     }
 }
 
@@ -871,7 +1195,11 @@ mod tests {
     fn action_ids_are_unique() {
         let mut seen = std::collections::HashSet::new();
         for action in RootUnifiedResultAction::ALL {
-            assert!(seen.insert(action.action_id()), "duplicate id {}", action.action_id());
+            assert!(
+                seen.insert(action.action_id()),
+                "duplicate id {}",
+                action.action_id()
+            );
         }
     }
 

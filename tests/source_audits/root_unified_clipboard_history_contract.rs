@@ -1,5 +1,5 @@
 #[test]
-fn root_unified_clipboard_history_config_is_opt_in_and_scoped() {
+fn root_unified_clipboard_history_config_is_default_enabled_and_scoped() {
     let config_types = include_str!("../../src/config/types.rs");
     let config_schema = include_str!("../../scripts/config-schema.ts");
     let defaults = include_str!("../../src/config/defaults.rs");
@@ -8,7 +8,7 @@ fn root_unified_clipboard_history_config_is_opt_in_and_scoped() {
     assert!(config_types.contains("root_clipboard_history_section_options("));
     assert!(config_types.contains("builtins.clipboard_history"));
     assert!(config_schema.contains("clipboardHistory?: UnifiedSearchClipboardHistoryConfig"));
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_ENABLED: bool = false"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_ENABLED: bool = true"));
     assert!(config_schema.contains("notes?: UnifiedSearchNotesConfig"));
 }
 

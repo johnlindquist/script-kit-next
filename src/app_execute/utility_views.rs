@@ -522,6 +522,24 @@ impl ScriptListApp {
         cwd: Option<std::path::PathBuf>,
         cx: &mut Context<Self>,
     ) {
+        self.open_quick_terminal_with_startup_input(cwd, None, cx);
+    }
+
+    pub(crate) fn open_quick_terminal_with_command(
+        &mut self,
+        cwd: Option<std::path::PathBuf>,
+        command: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_quick_terminal_with_startup_input(cwd, Some(command), cx);
+    }
+
+    fn open_quick_terminal_with_startup_input(
+        &mut self,
+        cwd: Option<std::path::PathBuf>,
+        startup_command: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let terminal_action = TerminalOpenUtilityAction::QuickTerminal;
         tracing::info!(
             message = %"Opening Quick Terminal",
@@ -565,28 +583,38 @@ impl ScriptListApp {
         match term_prompt_result {
             Ok(term_prompt) => {
                 let entity = cx.new(|_| term_prompt);
-                if let Some(cwd) = cwd.as_ref() {
-                    let cd_command = format!("cd {}\r", Self::shell_quote_path_for_cd(cwd));
+                if cwd.is_some() || startup_command.is_some() {
+                    let mut initial_input = String::new();
+                    if let Some(cwd) = cwd.as_ref() {
+                        initial_input.push_str(&format!("cd {}\r", Self::shell_quote_path_for_cd(cwd)));
+                    }
+                    if let Some(command) = startup_command.as_ref() {
+                        initial_input.push_str(command.trim_end_matches(&['\r', '\n'][..]));
+                        initial_input.push('\r');
+                    }
                     entity.update(cx, |term, _cx| {
                         if !term.terminal.is_running() {
                             tracing::warn!(
-                                event = "quick_terminal_cwd_pty_dead",
-                                cwd = %cwd.display(),
-                                "Quick Terminal opened with cwd but PTY is not running"
+                                event = "quick_terminal_startup_input_pty_dead",
+                                cwd = cwd.as_ref().map(|path| path.display().to_string()).as_deref(),
+                                has_command = startup_command.is_some(),
+                                "Quick Terminal opened with startup input but PTY is not running"
                             );
                             return;
                         }
-                        match term.terminal.input(cd_command.as_bytes()) {
+                        match term.terminal.input(initial_input.as_bytes()) {
                             Ok(()) => tracing::info!(
-                                event = "quick_terminal_cwd_sent",
-                                cwd = %cwd.display(),
-                                "Quick Terminal cwd command written to PTY"
+                                event = "quick_terminal_startup_input_sent",
+                                cwd = cwd.as_ref().map(|path| path.display().to_string()).as_deref(),
+                                has_command = startup_command.is_some(),
+                                "Quick Terminal startup input written to PTY"
                             ),
                             Err(error) => tracing::warn!(
-                                event = "quick_terminal_cwd_write_failed",
-                                cwd = %cwd.display(),
+                                event = "quick_terminal_startup_input_write_failed",
+                                cwd = cwd.as_ref().map(|path| path.display().to_string()).as_deref(),
+                                has_command = startup_command.is_some(),
                                 error = %error,
-                                "Failed to write Quick Terminal cwd command"
+                                "Failed to write Quick Terminal startup input"
                             ),
                         }
                     });

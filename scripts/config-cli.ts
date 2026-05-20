@@ -154,6 +154,24 @@ interface CommandConfig {
   confirmationRequired?: boolean;
 }
 
+type AiVaultProvider = "claude" | "codex" | "hermesAgent" | "rovoDev";
+type AiVaultResumeTerminal = "cmux" | "quickTerminal";
+
+interface UnifiedSearchAiVaultConfig {
+  enabled?: boolean;
+  maxResults?: number;
+  minQueryChars?: number;
+  providers?: AiVaultProvider[];
+  cacheTtlMs?: number;
+  searchContent?: boolean;
+  resumeTerminal?: AiVaultResumeTerminal;
+  excludePatterns?: string[];
+}
+
+interface UnifiedSearchConfig {
+  aiVault?: UnifiedSearchAiVaultConfig;
+}
+
 type ClaudeCodePermissionMode = "plan" | "dontAsk";
 
 interface ClaudeCodeConfig {
@@ -251,6 +269,7 @@ interface Config {
   windowManagement?: WindowManagementPreferences;
   windowAppearance?: WindowAppearanceConfig;
   commands?: Record<string, CommandConfig>;
+  unifiedSearch?: UnifiedSearchConfig;
   claudeCode?: ClaudeCodeConfig;
   mcp?: McpConfig;
   powerSyntax?: PowerSyntaxConfig;

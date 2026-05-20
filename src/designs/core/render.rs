@@ -32,6 +32,31 @@ pub(crate) fn root_file_type_svg_icon(file_type: crate::file_search::FileType) -
     }
 }
 
+pub(crate) fn ai_vault_provider_svg_icon(provider: &str, display_name: &str) -> &'static str {
+    let normalized_provider = provider
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+    let normalized_display = display_name
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    match (normalized_provider.as_str(), normalized_display.as_str()) {
+        ("codex", _) | (_, "codex") | (_, "openaicodex") => "assets/icons/ai_provider_openai.svg",
+        ("claude", _) | (_, "claudecode") | (_, "claude") | (_, "anthropic") => {
+            "assets/icons/ai_provider_claude.svg"
+        }
+        ("rovodev", _) | (_, "rovodev") | (_, "atlassianrovo") | (_, "atlassian") => {
+            "assets/icons/ai_provider_atlassian.svg"
+        }
+        ("hermesagent", _) | (_, "hermesagent") => "Terminal",
+        _ => "Vault",
+    }
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct SearchAccessories {
     pub(crate) type_accessory: Option<crate::list_item::TypeAccessory>,
@@ -43,6 +68,9 @@ pub(crate) fn resolve_search_accessories(
     filter_text: &str,
 ) -> SearchAccessories {
     if filter_text.is_empty() {
+        return SearchAccessories::default();
+    }
+    if matches!(result, SearchResult::AiVault(_)) {
         return SearchAccessories::default();
     }
 
@@ -251,7 +279,10 @@ pub fn render_design_item(
                     am.hit.safe_title.clone(),
                     Some(am.subtitle.clone()),
                     None,
-                    Some(IconKind::Svg("Vault".to_string())),
+                    Some(IconKind::Svg(
+                        ai_vault_provider_svg_icon(&am.hit.provider, &am.hit.provider_display_name)
+                            .to_string(),
+                    )),
                 ),
                 SearchResult::ClipboardHistory(cm) => (
                     cm.title.clone(),
@@ -376,5 +407,56 @@ pub fn render_design_item(
                 .tool_badge_opt(tool_badge)
                 .into_any_element()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ai_vault_provider_svg_icon, resolve_search_accessories};
+    use crate::ai_vault::{AiVaultHit, AiVaultMatchedField};
+    use crate::scripts::{AiVaultMatch, SearchResult};
+
+    #[test]
+    fn ai_vault_provider_icons_track_originating_tool() {
+        assert_eq!(
+            ai_vault_provider_svg_icon("codex", "Codex"),
+            "assets/icons/ai_provider_openai.svg"
+        );
+        assert_eq!(
+            ai_vault_provider_svg_icon("claude", "Claude Code"),
+            "assets/icons/ai_provider_claude.svg"
+        );
+        assert_eq!(
+            ai_vault_provider_svg_icon("rovoDev", "Rovo Dev"),
+            "assets/icons/ai_provider_atlassian.svg"
+        );
+        assert_eq!(ai_vault_provider_svg_icon("hermes-agent", ""), "Terminal");
+        assert_eq!(ai_vault_provider_svg_icon("unknown", ""), "Vault");
+    }
+
+    #[test]
+    fn ai_vault_search_rows_do_not_render_right_type_accessory() {
+        let hit: AiVaultHit = serde_json::from_value(serde_json::json!({
+            "provider": "codex",
+            "providerDisplayName": "Codex",
+            "sessionId": "session-1",
+            "sourceKind": "cli",
+            "safeTitle": "Investigate launcher filtering",
+            "matchedField": "title",
+            "stableKey": "ai-vault/codex/cli/session-1",
+            "score": 0
+        }))
+        .expect("AI Vault hit fixture should deserialize");
+        assert_eq!(hit.matched_field, AiVaultMatchedField::Title);
+
+        let result = SearchResult::AiVault(AiVaultMatch {
+            hit,
+            subtitle: "Codex".to_string(),
+            score: 1,
+        });
+
+        let accessories = resolve_search_accessories(&result, "vault");
+        assert!(accessories.type_accessory.is_none());
+        assert!(accessories.source_hint.is_none());
     }
 }

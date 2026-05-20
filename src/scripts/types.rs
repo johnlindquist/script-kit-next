@@ -405,13 +405,13 @@ pub enum SearchResult {
     AcpHistory(AcpHistoryMatch),
     /// cmux AI Vault session metadata surfaced as a passive root-search source.
     AiVault(AiVaultMatch),
-    /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
+    /// Recent clipboard metadata surfaced as a passive root-search source.
     ClipboardHistory(ClipboardHistoryMatch),
-    /// Saved dictation transcripts surfaced as an opt-in passive root-search source.
+    /// Saved dictation transcripts surfaced as a passive root-search source.
     DictationHistory(DictationHistoryMatch),
-    /// Open browser tab metadata surfaced as an opt-in passive root-search source.
+    /// Open browser tab metadata surfaced as a passive root-search source.
     BrowserTab(BrowserTabMatch),
-    /// Local browser history metadata surfaced as an opt-in passive root-search source.
+    /// Local browser history metadata surfaced as a passive root-search source.
     BrowserHistory(BrowserHistoryMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
     /// Agent results are actively filtered out of search/grouping/selection.
@@ -786,7 +786,7 @@ impl SearchResult {
             SearchResult::Note(_) => "Open Note",
             SearchResult::Todo(_) => "Copy Todo",
             SearchResult::AcpHistory(_) => "Resume Conversation",
-            SearchResult::AiVault(_) => "Resume in Terminal",
+            SearchResult::AiVault(_) => "Paste Resume Command",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
             SearchResult::DictationHistory(_) => "Paste Dictation",
             SearchResult::BrowserTab(_) => "Switch to Tab",

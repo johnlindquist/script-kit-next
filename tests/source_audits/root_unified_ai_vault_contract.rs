@@ -35,20 +35,33 @@ fn root_unified_ai_vault_contract() {
     assert!(payload.contains("short: Some(\"v:\")"));
     assert!(payload.contains("Self::AiVault => \"vault\""));
 
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED: bool = false"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_AI_VAULT_ENABLED: bool = true"));
     assert!(config.contains("pub ai_vault: UnifiedSearchAiVaultConfig"));
     assert!(config.contains("AiVaultProvider"));
+    assert!(config.contains("AiVaultResumeTerminal"));
+    assert!(config.contains("pub exclude_patterns: Vec<String>"));
     assert!(config.contains("Self::Claude"));
     assert!(config.contains("Self::Codex"));
     assert!(config.contains("Self::AiVault"));
     assert!(config.contains("fn ai_vault_section_options("));
     assert!(config.contains("min_query_chars.clamp(3, 32)"));
     assert!(config.contains("cache_ttl_ms.clamp(5_000, 120_000)"));
+    assert!(config.contains("exclude_patterns: self.ai_vault.exclude_patterns.clone()"));
 
     assert!(ai_vault.contains("SCRIPT_KIT_AI_VAULT_TEST_PROVIDER"));
+    assert!(ai_vault.contains("exclude_patterns: Vec<String>"));
+    assert!(ai_vault.contains("fn apply_ai_vault_exclusions("));
+    assert!(ai_vault.contains("fn ai_vault_hit_excluded("));
+    assert!(ai_vault.contains("fn ai_vault_pattern_matches_hit("));
+    assert!(ai_vault.contains("fn ai_vault_pattern_matches_metadata("));
+    assert!(ai_vault.contains("fn wildcard_match("));
+    assert!(ai_vault.contains("apply_ai_vault_exclusions(&mut hits, &options);"));
     assert!(ai_vault.contains("fn search_local_vault("));
     assert!(ai_vault.contains("fn local_vault_index("));
     assert!(ai_vault.contains("fn ai_vault_index_cache_key("));
+    assert!(ai_vault.contains("fn ai_vault_exclude_fingerprint("));
+    assert!(ai_vault.contains("exclude={}\""));
+    assert!(ai_vault.contains("cmux_search_limit(&options)"));
     assert!(ai_vault.contains("local_vault_index(options.clone())"));
     assert!(ai_vault.contains("provider_enabled(options, \"claude\")"));
     assert!(ai_vault.contains("provider_enabled(options, \"codex\")"));
@@ -67,6 +80,8 @@ fn root_unified_ai_vault_contract() {
         .expect("search_local_vault body should be present");
     assert!(!search_local_vault_body.contains("append_bounded_content_matches"));
     assert!(!search_local_vault_body.contains("hydrate_rollout_search_terms"));
+    assert!(search_local_vault_body.contains("apply_ai_vault_exclusions(&mut hits, &options);"));
+    assert!(search_local_vault_body.contains("apply_local_vault_query_match"));
     assert!(ai_vault.contains("search_haystack"));
     assert!(ai_vault.contains("root_ai_vault_snapshot_status"));
     assert!(ai_vault.contains("ai_vault_cache_generation"));
@@ -99,6 +114,16 @@ fn root_unified_ai_vault_contract() {
     assert!(ai_vault.contains("ai_vault_cmux_response_parse_failed"));
     assert!(!ai_vault.contains("transcript:"));
     assert!(!ai_vault.contains("preview:"));
+    let config_schema = read_source("scripts/config-schema.ts");
+    assert!(config_schema.contains("excludePatterns?: string[]"));
+    assert!(config_schema.contains("Metadata-only patterns"));
+    assert!(config_schema.contains("title:private*"));
+    assert!(config_schema.contains("workspace:~/dev/secret*"));
+    assert!(read_source("scripts/config-cli.ts").contains("excludePatterns?: string[]"));
+    assert!(read_source("src/designs/core/render.rs").contains("ai_vault_provider_svg_icon"));
+    assert!(read_source("src/designs/core/render.rs").contains("ai_provider_openai.svg"));
+    assert!(read_source("src/designs/core/render.rs").contains("ai_provider_claude.svg"));
+    assert!(read_source("src/designs/core/render.rs").contains("ai_provider_atlassian.svg"));
 
     assert!(grouping.contains("append_root_ai_vault_section"));
     assert!(grouping.contains(
@@ -112,8 +137,11 @@ fn root_unified_ai_vault_contract() {
     assert!(filtering_cache.contains("ai-vault-gen="));
 
     for id in [
-        "root_ai_vault_resume_preferred_terminal",
-        "root_ai_vault_resume_new_terminal",
+        "root_ai_vault_paste_resume_command",
+        "root_ai_vault_copy_resume_command",
+        "root_ai_vault_resume_configured_terminal",
+        "root_ai_vault_configure_terminal",
+        "root_ai_vault_resume_quick_terminal",
         "root_ai_vault_copy_session_id",
         "root_ai_vault_copy_provider",
         "root_ai_vault_copy_workspace_path",
@@ -126,8 +154,8 @@ fn root_unified_ai_vault_contract() {
     assert!(actions.contains("\"AI Vault Conversation\""));
     assert!(ai_vault.contains("aiVault.reveal.v1"));
     assert!(actions.contains("reveal_vault_session(hit)"));
-    assert!(selection.contains("execute_root_ai_vault_resume_preferred_terminal"));
-    assert!(preflight.contains("ResumeVaultConversation"));
+    assert!(selection.contains("execute_root_ai_vault_paste_resume_command"));
+    assert!(preflight.contains("PasteResumeCommand"));
     assert!(trigger_registry.contains("TriggerBuiltin::AiVault => \"builtin/vault\""));
     assert!(trigger_registry
         .contains("TriggerBuiltin::AiVault => &[\"vault\", \"ai-vault\", \"aivault\"]"));
@@ -152,7 +180,10 @@ fn root_unified_ai_vault_contract() {
     assert!(actions_matrix.contains("codex-sql-title-match"));
     assert!(actions_matrix.contains("claude-source-actions"));
     assert!(actions_matrix.contains("SCRIPT_KIT_CMUX_COMMAND"));
-    assert!(actions_matrix.contains("root_ai_vault_resume_preferred_terminal"));
+    assert!(actions_matrix.contains("root_ai_vault_paste_resume_command"));
+    assert!(actions_matrix.contains("root_ai_vault_copy_resume_command"));
+    assert!(actions_matrix.contains("root_ai_vault_resume_configured_terminal"));
+    assert!(actions_matrix.contains("root_ai_vault_resume_quick_terminal"));
     assert!(actions_matrix.contains("\"terminalRouting\":\"userPreferred\""));
     assert!(actions_matrix.contains("cmuxRequests.includes(\"transcript\")"));
     assert!(actions_matrix.contains("containsResumeCommand"));

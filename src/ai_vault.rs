@@ -25,6 +25,7 @@ pub(crate) struct RootAiVaultSectionOptions {
     pub providers: Vec<crate::config::AiVaultProvider>,
     pub cache_ttl_ms: u64,
     pub search_content: bool,
+    pub exclude_patterns: Vec<String>,
 }
 
 impl Default for RootAiVaultSectionOptions {
@@ -37,6 +38,7 @@ impl Default for RootAiVaultSectionOptions {
             providers: crate::config::AiVaultProvider::default_root_providers(),
             cache_ttl_ms: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_AI_VAULT_CACHE_TTL_MS,
             search_content: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_AI_VAULT_SEARCH_CONTENT,
+            exclude_patterns: Vec::new(),
         }
     }
 }
@@ -184,6 +186,8 @@ pub(crate) fn search_root_ai_vault_direct(
         normalize_hit(hit);
     }
 
+    apply_ai_vault_exclusions(&mut hits, &options);
+
     let normalized_query = query.trim().to_ascii_lowercase();
     if fixture_backed && !normalized_query.is_empty() {
         hits.retain(|hit| hit_matches_query(hit, &normalized_query, options.search_content));
@@ -247,6 +251,22 @@ pub(crate) fn resume_vault_session(
             error: Some(cmux_failure_message("resume", None)),
         },
     }
+}
+
+pub(crate) fn resume_command_for_hit(
+    hit: &AiVaultHit,
+    terminal_routing: AiVaultTerminalRouting,
+) -> String {
+    if let Some(resume_command) = local_resume_command(hit) {
+        return resume_command;
+    }
+
+    let request = resume_request_json(hit, terminal_routing);
+    format!(
+        "{} ai-vault resume --json {}",
+        shell_quote(&cmux_binary_name()),
+        shell_quote(&request.to_string())
+    )
 }
 
 fn resume_local_vault_session(
@@ -313,6 +333,20 @@ fn resume_local_vault_session(
             error: Some(cmux_failure_message("new-workspace", None)),
         }),
     }
+}
+
+fn resume_request_json(
+    hit: &AiVaultHit,
+    terminal_routing: AiVaultTerminalRouting,
+) -> serde_json::Value {
+    serde_json::json!({
+        "type": "aiVault.resume.v1",
+        "provider": hit.provider,
+        "sessionId": hit.session_id,
+        "sourceKind": hit.source_kind,
+        "workspacePath": hit.workspace_path,
+        "terminalRouting": terminal_routing_value(terminal_routing),
+    })
 }
 
 fn local_resume_command(hit: &AiVaultHit) -> Option<String> {
@@ -400,7 +434,7 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
     let request = serde_json::json!({
         "type": "aiVault.search.v1",
         "query": query,
-        "limit": options.max_results,
+        "limit": cmux_search_limit(&options),
         "offset": 0,
         "providers": providers,
         "cwdFilter": serde_json::Value::Null,
@@ -426,8 +460,14 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
     }
     match serde_json::from_slice::<SearchResponse>(&output.stdout) {
         Ok(response) => {
-            ai_vault_cache_put(cache_key, response.hits.clone());
-            Ok(response.hits)
+            let mut hits = response.hits;
+            for hit in &mut hits {
+                normalize_hit(hit);
+            }
+            apply_ai_vault_exclusions(&mut hits, &options);
+            hits.truncate(options.max_results);
+            ai_vault_cache_put(cache_key, hits.clone());
+            Ok(hits)
         }
         Err(_error) => {
             tracing::warn!(
@@ -444,6 +484,7 @@ fn search_cmux_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<
 fn search_local_vault(query: &str, options: RootAiVaultSectionOptions) -> Result<Vec<AiVaultHit>> {
     let normalized_query = query.trim().to_ascii_lowercase();
     let mut hits = local_vault_index(options.clone())?;
+    apply_ai_vault_exclusions(&mut hits, &options);
     if !normalized_query.is_empty() {
         let mut matched_hits = Vec::with_capacity(options.max_results);
         for mut hit in hits {
@@ -1267,11 +1308,14 @@ fn human_provider(provider: &str) -> &str {
 }
 
 fn cmux_command() -> Option<std::process::Command> {
-    let binary = std::env::var("SCRIPT_KIT_CMUX_COMMAND")
+    Some(std::process::Command::new(cmux_binary_name()))
+}
+
+fn cmux_binary_name() -> String {
+    std::env::var("SCRIPT_KIT_CMUX_COMMAND")
         .ok()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "cmux".to_string());
-    Some(std::process::Command::new(binary))
+        .unwrap_or_else(|| "cmux".to_string())
 }
 
 fn output_with_timeout(
@@ -1311,11 +1355,12 @@ fn ai_vault_cache_key(query: &str, options: &RootAiVaultSectionOptions) -> Strin
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{}\u{1f}{}\u{1f}{}\u{1f}{}",
+        "{}\u{1f}{}\u{1f}{}\u{1f}{}\u{1f}exclude={}",
         query.trim(),
         options.max_results,
         options.search_content,
-        providers
+        providers,
+        ai_vault_exclude_fingerprint(options)
     )
 }
 
@@ -1375,6 +1420,169 @@ fn provider_enabled(options: &RootAiVaultSectionOptions, provider: &str) -> bool
         .providers
         .iter()
         .any(|candidate| candidate.cmux_id() == provider)
+}
+
+fn cmux_search_limit(options: &RootAiVaultSectionOptions) -> usize {
+    if options.exclude_patterns.is_empty() {
+        return options.max_results;
+    }
+    options
+        .max_results
+        .saturating_mul(4)
+        .max(options.max_results.saturating_add(20))
+        .min(200)
+}
+
+fn ai_vault_exclude_fingerprint(options: &RootAiVaultSectionOptions) -> String {
+    let joined = options
+        .exclude_patterns
+        .iter()
+        .map(|pattern| normalize_ai_vault_pattern_value(pattern))
+        .filter(|pattern| !pattern.is_empty())
+        .collect::<Vec<_>>()
+        .join("\u{1e}");
+    format!("excl:{:016x}", stable_fnv1a64(joined.as_bytes()))
+}
+
+fn apply_ai_vault_exclusions(hits: &mut Vec<AiVaultHit>, options: &RootAiVaultSectionOptions) {
+    if options.exclude_patterns.is_empty() {
+        return;
+    }
+    hits.retain(|hit| !ai_vault_hit_excluded(hit, &options.exclude_patterns));
+}
+
+fn ai_vault_hit_excluded(hit: &AiVaultHit, patterns: &[String]) -> bool {
+    patterns
+        .iter()
+        .map(|pattern| pattern.trim())
+        .filter(|pattern| !pattern.is_empty())
+        .any(|pattern| ai_vault_pattern_matches_hit(hit, pattern))
+}
+
+fn ai_vault_pattern_matches_hit(hit: &AiVaultHit, pattern: &str) -> bool {
+    let (field, pattern) = match pattern.split_once(':') {
+        Some((field, value)) if ai_vault_exclusion_field_known(field) => {
+            (Some(field.trim().to_ascii_lowercase()), value.trim())
+        }
+        _ => (None, pattern),
+    };
+    if pattern.is_empty() {
+        return false;
+    }
+
+    match field.as_deref() {
+        Some("title") => ai_vault_pattern_matches_value(pattern, &hit.safe_title),
+        Some("provider") => {
+            ai_vault_pattern_matches_value(pattern, &hit.provider)
+                || ai_vault_pattern_matches_value(pattern, &hit.provider_display_name)
+        }
+        Some("workspace") | Some("workspace_path") | Some("workspacepath") => hit
+            .workspace_path
+            .as_deref()
+            .is_some_and(|value| ai_vault_pattern_matches_value(pattern, value)),
+        Some("model") => hit
+            .model
+            .as_deref()
+            .is_some_and(|value| ai_vault_pattern_matches_value(pattern, value)),
+        Some("session") | Some("session_id") | Some("sessionid") => {
+            ai_vault_pattern_matches_value(pattern, &hit.session_id)
+        }
+        Some("source") | Some("source_kind") | Some("sourcekind") => hit
+            .source_kind
+            .as_deref()
+            .is_some_and(|value| ai_vault_pattern_matches_value(pattern, value)),
+        Some("key") | Some("stable_key") | Some("stablekey") => {
+            ai_vault_pattern_matches_value(pattern, &hit.stable_key)
+        }
+        Some(_) => ai_vault_pattern_matches_metadata(hit, pattern),
+        None => ai_vault_pattern_matches_metadata(hit, pattern),
+    }
+}
+
+fn ai_vault_exclusion_field_known(field: &str) -> bool {
+    matches!(
+        field.trim().to_ascii_lowercase().as_str(),
+        "title"
+            | "provider"
+            | "workspace"
+            | "workspace_path"
+            | "workspacepath"
+            | "model"
+            | "session"
+            | "session_id"
+            | "sessionid"
+            | "source"
+            | "source_kind"
+            | "sourcekind"
+            | "key"
+            | "stable_key"
+            | "stablekey"
+    )
+}
+
+fn ai_vault_pattern_matches_metadata(hit: &AiVaultHit, pattern: &str) -> bool {
+    let mut values = hit.metadata_search_terms();
+    values.push(hit.stable_key.clone());
+    values
+        .iter()
+        .any(|value| ai_vault_pattern_matches_value(pattern, value))
+}
+
+fn ai_vault_pattern_matches_value(pattern: &str, value: &str) -> bool {
+    let pattern = normalize_ai_vault_pattern_value(pattern);
+    if pattern.is_empty() {
+        return false;
+    }
+    let value = normalize_ai_vault_pattern_value(value);
+    if pattern.contains('*') || pattern.contains('?') {
+        return wildcard_match(&pattern, &value);
+    }
+    value.contains(&pattern)
+}
+
+fn normalize_ai_vault_pattern_value(value: &str) -> String {
+    value.trim().replace('\\', "/").to_ascii_lowercase()
+}
+
+fn stable_fnv1a64(bytes: &[u8]) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in bytes {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn wildcard_match(pattern: &str, value: &str) -> bool {
+    let pattern = pattern.as_bytes();
+    let value = value.as_bytes();
+    let (mut pattern_index, mut value_index) = (0, 0);
+    let mut star_index = None;
+    let mut star_value_index = 0;
+
+    while value_index < value.len() {
+        if pattern_index < pattern.len()
+            && (pattern[pattern_index] == b'?' || pattern[pattern_index] == value[value_index])
+        {
+            pattern_index += 1;
+            value_index += 1;
+        } else if pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+            star_index = Some(pattern_index);
+            pattern_index += 1;
+            star_value_index = value_index;
+        } else if let Some(star) = star_index {
+            pattern_index = star + 1;
+            star_value_index += 1;
+            value_index = star_value_index;
+        } else {
+            return false;
+        }
+    }
+
+    while pattern_index < pattern.len() && pattern[pattern_index] == b'*' {
+        pattern_index += 1;
+    }
+    pattern_index == pattern.len()
 }
 
 type AiVaultCache = HashMap<String, (Instant, Vec<AiVaultHit>)>;
