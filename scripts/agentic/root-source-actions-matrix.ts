@@ -469,8 +469,11 @@ const cases: Json[] = [
     sourceName: "AI Vault",
     stableKey: "ai-vault/hermes-agent/cli/vault-source-actions",
     expectedActions: [
-      ["root_ai_vault_resume_preferred_terminal", "Resume in Preferred Terminal"],
-      ["root_ai_vault_resume_new_terminal", "Resume in New Terminal"],
+      ["root_ai_vault_paste_resume_command", "Paste Resume Command"],
+      ["root_ai_vault_copy_resume_command", "Copy Resume Command"],
+      ["root_ai_vault_resume_configured_terminal", "Resume in Configured Terminal"],
+      ["root_ai_vault_configure_terminal", "Configure Terminal"],
+      ["root_ai_vault_resume_quick_terminal", "Resume in Quick Terminal"],
       ["root_ai_vault_copy_session_id", "Copy Session ID"],
       ["root_ai_vault_copy_provider", "Copy Provider"],
       ["root_ai_vault_copy_workspace_path", "Copy Workspace Path"],

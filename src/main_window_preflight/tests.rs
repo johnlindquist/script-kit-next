@@ -79,6 +79,10 @@ fn all_action_kinds_round_trip_to_camel_case() {
         (MainWindowPreflightActionKind::RunAgent, "runAgent"),
         (MainWindowPreflightActionKind::RunFallback, "runFallback"),
         (MainWindowPreflightActionKind::AskAi, "askAi"),
+        (
+            MainWindowPreflightActionKind::PasteResumeCommand,
+            "pasteResumeCommand",
+        ),
     ];
 
     for (kind, expected) in cases {

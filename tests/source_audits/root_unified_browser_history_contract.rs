@@ -1,5 +1,5 @@
 #[test]
-fn root_unified_browser_history_config_is_opt_in_and_scoped() {
+fn root_unified_browser_history_config_is_default_enabled_and_scoped() {
     let config_types = include_str!("../../src/config/types.rs");
     let config_schema = include_str!("../../scripts/config-schema.ts");
     let defaults = include_str!("../../src/config/defaults.rs");
@@ -9,7 +9,7 @@ fn root_unified_browser_history_config_is_opt_in_and_scoped() {
     assert!(config_types.contains("fn browser_history_section_options("));
     assert!(config_schema.contains("browserHistory?: UnifiedSearchBrowserHistoryConfig"));
     assert!(config_schema.contains("export type BrowserHistoryProvider"));
-    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_ENABLED: bool = false"));
+    assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_ENABLED: bool = true"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_MIN_QUERY_CHARS: usize = 4"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SCAN_LIMIT: usize = 500"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_CACHE_TTL_MS: u64 = 30_000"));

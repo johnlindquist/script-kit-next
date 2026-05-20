@@ -192,7 +192,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::Todo(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AcpHistory(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AiVault(_) => {
-            MainWindowPreflightActionKind::ResumeVaultConversation
+            MainWindowPreflightActionKind::PasteResumeCommand
         }
         crate::scripts::SearchResult::ClipboardHistory(_) => {
             MainWindowPreflightActionKind::RunCommand
@@ -295,6 +295,10 @@ fn leading_icon_bundle_id(result: &SearchResult) -> Option<String> {
 
 fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAction> {
     if app.filter_text.trim().is_empty() {
+        return None;
+    }
+
+    if app.menu_syntax_capture_form_owns_input() {
         return None;
     }
 
@@ -406,6 +410,8 @@ pub(crate) fn build_main_window_preflight_receipt(
 
     if app.filter_text.trim().is_empty() {
         warnings.push("Tab-to-AI is inactive until the filter has text.".to_string());
+    } else if app.menu_syntax_capture_form_owns_input() {
+        warnings.push("Tab-to-AI is disabled while the handler form owns Tab.".to_string());
     }
 
     let enter_action = result.as_ref().map(|result| MainWindowPreflightAction {

@@ -190,11 +190,27 @@ impl ScriptListApp {
             return;
         }
 
+        if self.should_consume_script_list_enter_after_submit("execute_selected") {
+            logging::log(
+                "KEY",
+                "Ignoring execute_selected: prompt submit already consumed this Enter",
+            );
+            return;
+        }
+
         if let Some(invocation) = self
             .menu_syntax_mode
             .command_for(&self.filter_text)
             .cloned()
         {
+            let value = self.filter_text.clone();
+            self.record_submit_diagnostic(
+                "launcher",
+                "execute_selected.menu_syntax_command",
+                None,
+                Some(value.as_str()),
+                false,
+            );
             self.execute_menu_syntax_command_invocation(invocation, cx);
             return;
         }
@@ -204,6 +220,14 @@ impl ScriptListApp {
             .capture_for(&self.filter_text)
             .cloned()
         {
+            let value = self.filter_text.clone();
+            self.record_submit_diagnostic(
+                "launcher",
+                "execute_selected.menu_syntax_capture",
+                None,
+                Some(value.as_str()),
+                false,
+            );
             let mut ranked_handlers =
                 crate::menu_syntax::rank_handlers_for_target(&self.scripts, &invocation);
             if let Some(handler) = ranked_handlers.first() {
@@ -307,6 +331,14 @@ impl ScriptListApp {
             }
 
             if let Some(result) = selected_result {
+                let submitted_value = result.launcher_command_name();
+                self.record_submit_diagnostic(
+                    "launcher",
+                    "execute_selected",
+                    None,
+                    Some(submitted_value.as_str()),
+                    false,
+                );
                 // Record frecency usage before executing (unless excluded).
                 // Skills and scriptlets use plugin-qualified keys.
                 let frecency_path: Option<String> = match &result {
@@ -488,10 +520,7 @@ impl ScriptListApp {
                         );
                     }
                     scripts::SearchResult::AiVault(ai_vault_match) => {
-                        self.execute_root_ai_vault_resume_preferred_terminal(
-                            &ai_vault_match.hit,
-                            cx,
-                        );
+                        self.execute_root_ai_vault_paste_resume_command(&ai_vault_match.hit, cx);
                     }
                     scripts::SearchResult::ClipboardHistory(clipboard_match) => {
                         self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
@@ -1009,9 +1038,25 @@ impl ScriptListApp {
             return;
         }
 
+        if self.should_consume_script_list_enter_after_submit("execute_selected_fallback") {
+            logging::log(
+                "KEY",
+                "Ignoring execute_selected_fallback: prompt submit already consumed this Enter",
+            );
+            return;
+        }
+
         if let Some(scripts::SearchResult::Fallback(fallback_match)) =
             self.selected_main_list_search_result_owned()
         {
+            let submitted_value = fallback_match.display_name();
+            self.record_submit_diagnostic(
+                "launcher_fallback",
+                "execute_selected_fallback.grouped",
+                None,
+                Some(submitted_value.as_str()),
+                false,
+            );
             logging::log(
                 "EXEC",
                 &format!(
@@ -1025,6 +1070,14 @@ impl ScriptListApp {
 
         let input = self.filter_text.clone();
         if let Some(fallback) = self.main_menu_fallback_state.selected_item().cloned() {
+            let submitted_value = fallback.display_name();
+            self.record_submit_diagnostic(
+                "launcher_fallback",
+                "execute_selected_fallback.legacy",
+                None,
+                Some(submitted_value.as_str()),
+                false,
+            );
             logging::log(
                 "EXEC",
                 &format!("Executing fallback: {}", fallback.display_name()),

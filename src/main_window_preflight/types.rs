@@ -19,7 +19,7 @@ pub(crate) enum MainWindowPreflightActionKind {
     OpenSkill,
     AskAi,
     InspectIssues,
-    ResumeVaultConversation,
+    PasteResumeCommand,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
