@@ -293,7 +293,11 @@ impl ScriptListApp {
                 self.paste_latest_acp_response_to_frontmost(cx);
             }
             crate::footer_popup::FooterAction::Apply => {
-                if self.dispatch_kit_store_remove_footer_action(cx) {
+                if let AppView::ScriptIssuesView { report } = &self.current_view {
+                    let report = report.clone();
+                    self.copy_script_issues_to_clipboard(&report, cx);
+                    return;
+                } else if self.dispatch_kit_store_remove_footer_action(cx) {
                     return;
                 } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
                     tracing::info!(
@@ -656,9 +660,11 @@ impl ScriptListApp {
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let enabled = !footer_disabled;
-            let buttons =
-                vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Fix in Agent")
-                    .enabled(enabled)];
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Fix in Agent").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Apply, "⌘C", "Copy Issues")
+                    .enabled(enabled),
+            ];
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",

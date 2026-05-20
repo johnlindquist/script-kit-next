@@ -357,11 +357,14 @@ pub(crate) fn render_minimal_list_prompt_scaffold(
                 .w_full()
                 .px(px(crate::ui::chrome::HEADER_PADDING_X))
                 .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(header),
         )
+        // Divider matching main menu
+        .child(render_header_divider())
         .child(
             div()
                 .flex()
@@ -415,11 +418,14 @@ pub(crate) fn render_minimal_list_prompt_shell_with_footer(
                 .w_full()
                 .px(px(crate::ui::chrome::HEADER_PADDING_X))
                 .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(header),
         )
+        // Divider matching main menu
+        .child(render_header_divider())
         .child(
             div()
                 .flex()
@@ -469,12 +475,15 @@ pub(crate) fn render_expanded_view_scaffold(
                 .w_full()
                 .px(px(crate::ui::chrome::HEADER_PADDING_X))
                 .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(header),
         )
-        // 50/50 split content area — no divider, no wrapper chrome
+        // Divider matching main menu
+        .child(render_header_divider())
+        // 50/50 split content area — no wrapper chrome
         .child(
             div()
                 .flex()
@@ -529,12 +538,15 @@ pub(crate) fn render_expanded_view_scaffold_with_hints(
                 .w_full()
                 .px(px(crate::ui::chrome::HEADER_PADDING_X))
                 .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(header),
         )
-        // 50/50 split content area — no divider, no wrapper chrome
+        // Divider matching main menu
+        .child(render_header_divider())
+        // 50/50 split content area — no wrapper chrome
         .child(
             div()
                 .flex()
@@ -589,12 +601,15 @@ pub(crate) fn render_expanded_view_scaffold_with_footer(
                 .w_full()
                 .px(px(crate::ui::chrome::HEADER_PADDING_X))
                 .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(header),
         )
-        // 50/50 split content area — no divider, no wrapper chrome
+        // Divider matching main menu
+        .child(render_header_divider())
+        // 50/50 split content area — no wrapper chrome
         .child(
             div()
                 .flex()
@@ -1122,6 +1137,16 @@ pub(crate) fn emit_prompt_chrome_audit(audit: &PromptChromeAudit) {
             "non-exception surface resolved to prompt_footer"
         );
     }
+}
+
+/// Renders a horizontal divider matching the main menu's header divider.
+fn render_header_divider() -> Div {
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    div()
+        .mx(px(crate::panel::HEADER_DIVIDER_MARGIN))
+        .h(px(crate::panel::HEADER_DIVIDER_HEIGHT))
+        .bg(rgba(chrome.divider_rgba))
 }
 
 #[cfg(test)]

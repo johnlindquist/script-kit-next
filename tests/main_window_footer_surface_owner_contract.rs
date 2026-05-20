@@ -70,8 +70,10 @@ fn script_issues_view_keeps_native_footer_and_fix_in_agent_primary_action() {
     assert!(
         footer_buttons.contains("AppView::ScriptIssuesView { .. }")
             && footer_buttons
-                .contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Fix in Agent\")"),
-        "ScriptIssuesView primary footer action must be Enter / Fix in Agent"
+                .contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Fix in Agent\")")
+            && footer_buttons
+                .contains("FooterButtonConfig::new(FooterAction::Apply, \"⌘C\", \"Copy Issues\")"),
+        "ScriptIssuesView footer must expose Fix in Agent and Copy Issues"
     );
 
     let footer_dispatch = function_body(
@@ -82,6 +84,12 @@ fn script_issues_view_keeps_native_footer_and_fix_in_agent_primary_action() {
         footer_dispatch.contains("AppView::ScriptIssuesView { report }")
             && footer_dispatch.contains("self.fix_script_issues_in_agent(&report, cx);"),
         "ScriptIssuesView footer Run must submit diagnostics to Agent Chat"
+    );
+
+    assert!(
+        footer_dispatch.contains("AppView::ScriptIssuesView { report }")
+            && footer_dispatch.contains("self.copy_script_issues_to_clipboard(&report, cx);"),
+        "ScriptIssuesView footer Copy Issues must copy diagnostics"
     );
 }
 
@@ -108,6 +116,16 @@ fn script_issues_enter_routes_to_agent_chat_prompt_submission() {
             && RUNTIME_STDIN_MATCH_SIMULATE_KEY_SOURCE
                 .contains("view.fix_script_issues_in_agent(&report, ctx);"),
         "simulateKey Enter must keep parity with physical Enter for ScriptIssuesView"
+    );
+
+    let render_script_issues = function_body(
+        RENDER_PROMPTS_OTHER_SOURCE,
+        "pub(crate) fn render_script_issues_view",
+    );
+    assert!(
+        render_script_issues.contains("has_cmd && key.eq_ignore_ascii_case(\"w\")")
+            && render_script_issues.contains("this.go_back_or_close(window, cx);"),
+        "ScriptIssuesView must handle Cmd+W as a close/back shortcut"
     );
 }
 
