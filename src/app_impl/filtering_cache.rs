@@ -424,19 +424,10 @@ impl ScriptListApp {
                 search_text,
                 browser_history_options.clone(),
             ) {
-            // Always use cached snapshot in the unified search loop.
-            // Background refresh is handled by ScriptListApp::maybe_start_root_browser_history_refresh.
-            let candidates = crate::browser_history::cached_root_browser_history_snapshot(
-                browser_history_options.cache_ttl_ms,
-            );
-            crate::browser_history::root_fuzzy_search_browser_history_hits(
-                &candidates,
+            crate::browser_history::search_root_browser_history_meta_direct(
                 search_text,
-                browser_history_options.search_urls,
+                browser_history_options.clone(),
             )
-            .into_iter()
-            .take(browser_history_options.max_results)
-            .collect()
         } else {
             Vec::new()
         };

@@ -205,6 +205,8 @@ pub struct UnifiedSearchAiVaultConfig {
     pub providers: Vec<AiVaultProvider>,
     pub cache_ttl_ms: u64,
     pub search_content: bool,
+    pub resume_terminal: AiVaultResumeTerminal,
+    pub exclude_patterns: Vec<String>,
 }
 
 impl Default for UnifiedSearchAiVaultConfig {
@@ -216,6 +218,8 @@ impl Default for UnifiedSearchAiVaultConfig {
             providers: AiVaultProvider::default_root_providers(),
             cache_ttl_ms: DEFAULT_UNIFIED_SEARCH_AI_VAULT_CACHE_TTL_MS,
             search_content: DEFAULT_UNIFIED_SEARCH_AI_VAULT_SEARCH_CONTENT,
+            resume_terminal: AiVaultResumeTerminal::default(),
+            exclude_patterns: Vec::new(),
         }
     }
 }
@@ -388,6 +392,14 @@ impl AiVaultProvider {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum AiVaultResumeTerminal {
+    #[default]
+    Cmux,
+    QuickTerminal,
+}
+
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum RootFilePromotionConfig {
@@ -473,6 +485,7 @@ impl UnifiedSearchConfig {
             providers: self.ai_vault.providers.clone(),
             cache_ttl_ms: self.ai_vault.cache_ttl_ms.clamp(5_000, 120_000),
             search_content: self.ai_vault.search_content,
+            exclude_patterns: self.ai_vault.exclude_patterns.clone(),
         }
     }
 
