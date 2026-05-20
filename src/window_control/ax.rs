@@ -164,3 +164,26 @@ pub(super) fn get_window_string_attribute(
         Err(_) => None,
     }
 }
+
+/// Get the boolean value of a window attribute.
+pub(super) fn get_window_bool_attribute(window: AXUIElementRef, attribute: &str) -> Option<bool> {
+    match get_ax_attribute(window, attribute) {
+        Ok(value) => {
+            // SAFETY: value is a valid CFTypeRef returned by get_ax_attribute.
+            let type_id = unsafe { CFGetTypeID(value) };
+            // SAFETY: CFBooleanGetTypeID is a pure function returning a constant type ID.
+            let bool_type_id = unsafe { CFBooleanGetTypeID() };
+
+            let result = if type_id == bool_type_id {
+                // SAFETY: the type id check above proves this is a CFBoolean.
+                Some(unsafe { CFBooleanGetValue(value) })
+            } else {
+                None
+            };
+
+            cf_release(value);
+            result
+        }
+        Err(_) => None,
+    }
+}

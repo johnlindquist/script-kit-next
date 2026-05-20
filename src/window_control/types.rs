@@ -1,4 +1,5 @@
 use core_graphics::display::CGRect;
+use std::path::PathBuf;
 
 use super::AXUIElementRef;
 
@@ -46,47 +47,168 @@ pub struct WindowInfo {
     pub bounds: Bounds,
     /// Process ID of the owning application
     pub pid: i32,
+    /// Bundle identifier of the owning application, when available.
+    pub bundle_id: Option<String>,
+    /// Path to the owning application bundle, when available.
+    pub app_path: Option<PathBuf>,
+    /// Index of the owning app in the current NSWorkspace enumeration.
+    pub app_order: usize,
+    /// Index of this window in the owning app's AXWindows list.
+    pub window_index: usize,
+    /// Monotonic order assigned during the current list_windows() enumeration.
+    pub global_order: usize,
+    /// True when the owning app is the current frontmost app.
+    pub is_frontmost_app: bool,
+    /// True when this window matches the app's AXFocusedWindow.
+    pub is_focused: bool,
+    /// True when this window matches the app's AXMainWindow.
+    pub is_main: bool,
+    /// True when AXMinimized reports the window is minimized.
+    pub is_minimized: bool,
+    /// True when CoreGraphics reports the window is visible in the current Space.
+    pub is_on_current_space: bool,
+    /// Precomputed native descriptor for list rows and receipts.
+    pub descriptor: String,
     /// The AXUIElement reference (internal, for operations)
     #[doc(hidden)]
     ax_window: Option<usize>, // Store as usize to avoid lifetime issues
 }
 
+pub(super) struct WindowInfoInit {
+    pub id: u32,
+    pub app: String,
+    pub title: String,
+    pub bounds: Bounds,
+    pub pid: i32,
+    pub bundle_id: Option<String>,
+    pub app_path: Option<PathBuf>,
+    pub app_order: usize,
+    pub window_index: usize,
+    pub global_order: usize,
+    pub is_frontmost_app: bool,
+    pub is_focused: bool,
+    pub is_main: bool,
+    pub is_minimized: bool,
+    pub is_on_current_space: bool,
+    pub ax_window: Option<usize>,
+}
+
+/// Provider state for root unified window search.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RootWindowsProviderStatus {
+    Unknown,
+    Refreshing { count: usize },
+    Ready { count: usize },
+    PermissionRequired,
+    ProviderError { message: String },
+}
+
+impl Default for RootWindowsProviderStatus {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 impl WindowInfo {
-    pub(super) fn new(
-        id: u32,
-        app: String,
-        title: String,
-        bounds: Bounds,
-        pid: i32,
-        ax_window: Option<usize>,
-    ) -> Self {
+    pub(super) fn new(init: WindowInfoInit) -> Self {
+        let descriptor = build_window_descriptor(
+            &init.app,
+            init.pid,
+            init.bounds,
+            init.is_frontmost_app,
+            init.is_focused,
+            init.is_main,
+            init.is_minimized,
+            init.is_on_current_space,
+            None,
+        );
         Self {
-            id,
-            app,
-            title,
-            bounds,
-            pid,
-            ax_window,
+            id: init.id,
+            app: init.app,
+            title: init.title,
+            bounds: init.bounds,
+            pid: init.pid,
+            bundle_id: init.bundle_id,
+            app_path: init.app_path,
+            app_order: init.app_order,
+            window_index: init.window_index,
+            global_order: init.global_order,
+            is_frontmost_app: init.is_frontmost_app,
+            is_focused: init.is_focused,
+            is_main: init.is_main,
+            is_minimized: init.is_minimized,
+            is_on_current_space: init.is_on_current_space,
+            descriptor,
+            ax_window: init.ax_window,
         }
     }
 
     /// Create a WindowInfo without an AX reference (e.g. for testing).
     #[doc(hidden)]
     pub fn for_test(id: u32, app: String, title: String, bounds: Bounds, pid: i32) -> Self {
-        Self {
+        Self::new(WindowInfoInit {
             id,
             app,
             title,
             bounds,
             pid,
+            bundle_id: None,
+            app_path: None,
+            app_order: 0,
+            window_index: id as usize,
+            global_order: id as usize,
+            is_frontmost_app: false,
+            is_focused: false,
+            is_main: false,
+            is_minimized: false,
+            is_on_current_space: true,
             ax_window: None,
-        }
+        })
+    }
+
+    pub fn selection_key(&self) -> String {
+        let app_key = self.bundle_id.as_deref().unwrap_or(self.app.as_str());
+        format!("window:{app_key}:{}:{}", self.pid, self.id)
     }
 
     /// Get the internal window reference for operations
     fn window_ref(&self) -> Option<AXUIElementRef> {
         self.ax_window.map(|ptr| ptr as AXUIElementRef)
     }
+}
+
+pub fn build_window_descriptor(
+    app: &str,
+    pid: i32,
+    bounds: Bounds,
+    is_frontmost_app: bool,
+    is_focused: bool,
+    is_main: bool,
+    is_minimized: bool,
+    is_on_current_space: bool,
+    duplicate_label: Option<&str>,
+) -> String {
+    let mut parts = vec![app.to_string()];
+    if is_frontmost_app {
+        parts.push("Frontmost".to_string());
+    }
+    if is_focused {
+        parts.push("Focused".to_string());
+    } else if is_main {
+        parts.push("Main".to_string());
+    }
+    if is_minimized {
+        parts.push("Minimized".to_string());
+    }
+    if !is_on_current_space {
+        parts.push("Other Space".to_string());
+    }
+    if let Some(label) = duplicate_label {
+        parts.push(label.to_string());
+    }
+    parts.push(format!("{}x{}", bounds.width, bounds.height));
+    parts.push(format!("pid {pid}"));
+    parts.join(" - ")
 }
 
 /// Tiling positions for windows

@@ -19,6 +19,25 @@ struct MainMenuRenderDiagnosticsState {
     filter_perf_start: Option<std::time::Instant>,
 }
 
+#[derive(Clone, Debug)]
+struct SubmitDiagnosticEvent {
+    generation: u64,
+    owner: &'static str,
+    route: &'static str,
+    surface: String,
+    prompt_id: Option<String>,
+    value: Option<String>,
+    selected_index: Option<usize>,
+    consumed_enter: bool,
+}
+
+#[derive(Debug, Default)]
+struct SubmitDiagnosticsState {
+    generation: u64,
+    last: Option<SubmitDiagnosticEvent>,
+    pending_enter_consumed_at: Option<std::time::Instant>,
+}
+
 impl Default for MainMenuRenderDiagnosticsState {
     fn default() -> Self {
         Self {
@@ -570,6 +589,22 @@ struct ScriptListApp {
     focused_clipboard_entry_id: Option<String>,
     /// P0 FIX: Cached windows for WindowSwitcherView (avoids cloning per frame)
     cached_windows: Vec<window_control::WindowInfo>,
+    /// App-layer enriched rows for root/unified `windows:` search.
+    cached_root_windows: Vec<scripts::RootWindowEntry>,
+    /// Last provider state for root unified `windows:` search.
+    root_windows_provider_status: window_control::RootWindowsProviderStatus,
+    /// Generation bumped when root unified search refreshes cached windows.
+    root_windows_refresh_generation: u64,
+    /// Token used to drop stale async root window refresh results.
+    root_windows_refresh_token: u64,
+    /// True while an async root window refresh is in flight.
+    root_windows_refreshing: bool,
+    /// Last successful root window refresh completion.
+    root_windows_last_completed_at: Option<std::time::Instant>,
+    /// In-memory local recency for windows focused through Script Kit.
+    root_window_focus_recency: std::collections::HashMap<String, u64>,
+    /// Sequence number for in-memory root window recency.
+    root_window_focus_seq: u64,
     /// Cached browser tabs for BrowserTabsView (avoids repeated AppleScript calls while open)
     cached_browser_tabs: Vec<browser_tabs::BrowserTabInfo>,
     /// Cached browser history entries for BrowserHistoryView.
@@ -672,6 +707,7 @@ struct ScriptListApp {
     builtin_wheel_owned_selected_index: Option<usize>,
     // Interactive script state
     current_view: AppView,
+    submit_diagnostics: SubmitDiagnosticsState,
     pub(crate) main_window_mode: MainWindowMode,
     script_session: SharedSession,
     // Prompt-specific state (used when view is ArgPrompt or DivPrompt)
@@ -789,6 +825,11 @@ struct ScriptListApp {
     /// field in sync while the detached popup window renders from the snapshot
     /// plus selected row id.
     menu_syntax_trigger_popup_state: crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState,
+    menu_syntax_object_selector_state: crate::menu_syntax::MenuSyntaxObjectSelectorState,
+    /// Focused field index for the grammar-derived handler form shown in
+    /// capture composer mode. Tab/Shift-Tab mutate this instead of opening
+    /// Tab AI while handler mode owns the main input.
+    menu_syntax_form_focused_index: usize,
     /// Run 12 Pass 11 — pending Cmd+Enter inline AI proposal for
     /// `cmd-enter-inline-ai-proposal`. Set by the Cmd+Enter handler when the
     /// user is composing power syntax; threaded into the snapshot so the hint

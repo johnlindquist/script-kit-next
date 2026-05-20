@@ -55,11 +55,7 @@ impl ScriptListApp {
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
         logging::log(
             "FILTER_PERF",
-            &format!(
-                "[2/5] APPLY_FILTER value='{}' len={}",
-                value,
-                value.len()
-            ),
+            &format!("[2/5] APPLY_FILTER value='{}' len={}", value, value.len()),
         );
         if self.computed_filter_text != value {
             let update_start = std::time::Instant::now();
@@ -71,6 +67,7 @@ impl ScriptListApp {
             self.filter_coalescer.reset();
             self.computed_filter_text = value.clone();
             self.maybe_start_root_file_search(&value, cx);
+            self.maybe_start_root_windows_refresh_for_query(&value, cx);
             self.reconcile_script_list_after_filter_change("filter_immediate", cx);
             if let Some(snapshot) = selection_before.as_ref() {
                 if self.restore_root_file_handoff_selection_from_snapshot(snapshot) {
@@ -141,7 +138,10 @@ impl ScriptListApp {
 
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             self.set_menu_syntax_mode_from_filter(&text);
-            self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+            self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
+            if self.menu_syntax_object_selector_state.snapshot.is_none() {
+                self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+            }
             self.invalidate_grouped_cache();
         } else {
             self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
@@ -149,6 +149,7 @@ impl ScriptListApp {
 
         if self.menu_syntax_mode.is_menu_syntax_for(&text)
             || self.menu_syntax_trigger_popup_state.snapshot.is_some()
+            || self.menu_syntax_object_selector_state.snapshot.is_some()
         {
             // Menu syntax owns the result list entirely — clear any stale
             // fallback items so pressing Enter routes to execute_selected,
@@ -180,6 +181,7 @@ impl ScriptListApp {
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
         self.maybe_start_root_file_search(&text, cx);
+        self.maybe_start_root_windows_refresh_for_query(&text, cx);
         self.reconcile_script_list_after_filter_change("set_filter_text_immediate", cx);
 
         // Update fallback state immediately based on filter results
@@ -193,6 +195,7 @@ impl ScriptListApp {
             && !text.is_empty()
             && !self.menu_syntax_mode.is_menu_syntax_for(&text)
             && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+            && self.menu_syntax_object_selector_state.snapshot.is_none()
         {
             let results = self.get_filtered_results_cached();
             if results.is_empty() {

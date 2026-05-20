@@ -62,8 +62,8 @@ pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AcpHistoryMatch, AgentMatch, AiVaultMatch,
     AppMatch, BrowserHistoryMatch, BrowserTabMatch, BuiltInMatch, ClipboardHistoryMatch,
     DictationHistoryMatch, FallbackConfig, FallbackMatch, FileMatch, MatchIndices, NoteMatch,
-    Script, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
-    ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
+    RootWindowEntry, Script, ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind,
+    Scriptlet, ScriptletMatch, SearchResult, SkillMatch, TodoMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{

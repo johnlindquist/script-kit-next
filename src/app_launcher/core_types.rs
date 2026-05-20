@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use rayon::prelude::*;
 use rusqlite::{params, Connection};
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
@@ -38,6 +39,60 @@ pub struct AppInfo {
     /// Pre-decoded icon image (32x32), ready for rendering
     /// **IMPORTANT**: This is pre-decoded to avoid PNG decoding on every render frame
     pub icon: Option<DecodedIcon>,
+}
+
+pub(crate) struct AppIconLookup {
+    by_bundle_id: HashMap<String, DecodedIcon>,
+    by_path: HashMap<PathBuf, DecodedIcon>,
+    by_name: HashMap<String, DecodedIcon>,
+}
+
+impl AppIconLookup {
+    pub(crate) fn from_apps(apps: &[AppInfo]) -> Self {
+        let mut by_bundle_id = HashMap::new();
+        let mut by_path = HashMap::new();
+        let mut by_name = HashMap::new();
+
+        for app in apps {
+            let Some(icon) = app.icon.clone() else {
+                continue;
+            };
+            if let Some(bundle_id) = app.bundle_id.as_ref().filter(|value| !value.is_empty()) {
+                by_bundle_id
+                    .entry(bundle_id.clone())
+                    .or_insert_with(|| icon.clone());
+            }
+            by_path
+                .entry(app.path.clone())
+                .or_insert_with(|| icon.clone());
+            by_name
+                .entry(app.name.to_lowercase())
+                .or_insert_with(|| icon.clone());
+        }
+
+        Self {
+            by_bundle_id,
+            by_path,
+            by_name,
+        }
+    }
+
+    pub(crate) fn icon_for_window(
+        &self,
+        window: &crate::window_control::WindowInfo,
+    ) -> Option<DecodedIcon> {
+        if let Some(bundle_id) = window.bundle_id.as_ref() {
+            if let Some(icon) = self.by_bundle_id.get(bundle_id) {
+                return Some(icon.clone());
+            }
+        }
+        if let Some(path) = window.app_path.as_ref() {
+            if let Some(icon) = self.by_path.get(path) {
+                return Some(icon.clone());
+            }
+        }
+        self.by_name.get(&window.app.to_lowercase()).cloned()
+    }
 }
 
 impl std::fmt::Debug for AppInfo {
@@ -159,6 +214,8 @@ const APP_DIRECTORIES: &[&str] = &[
     "/System/Applications",
     "/System/Applications/Utilities",
     "/Applications/Utilities",
+    // Finder lives directly in CoreServices rather than the Applications subfolder.
+    "/System/Library/CoreServices",
     // System utilities (Keychain Access, Screen Sharing, etc.)
     "/System/Library/CoreServices/Applications",
     // User-specific apps
@@ -176,4 +233,3 @@ const APP_DIRECTORIES: &[&str] = &[
 // ============================================================================
 // SQLite Database Functions
 // ============================================================================
-

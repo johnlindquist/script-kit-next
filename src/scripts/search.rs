@@ -28,7 +28,7 @@ pub use unified::{
 };
 #[cfg(test)]
 pub use unified::{fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows};
-pub use windows::fuzzy_search_windows;
+pub use windows::{fuzzy_search_root_windows, fuzzy_search_windows};
 
 pub(crate) use ascii::{
     contains_ignore_ascii_case, find_ignore_ascii_case, fuzzy_match_with_indices_ascii,

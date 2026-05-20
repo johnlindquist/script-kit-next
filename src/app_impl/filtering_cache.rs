@@ -23,9 +23,213 @@ fn prepend_inline_calculator_group(
     (merged_grouped_items, flat_results)
 }
 
+fn root_window_duplicate_key(window: &crate::window_control::WindowInfo) -> (String, String) {
+    (
+        window
+            .bundle_id
+            .clone()
+            .unwrap_or_else(|| window.app.to_lowercase()),
+        window.title.to_lowercase(),
+    )
+}
+
+fn root_window_duplicate_counts(
+    windows: &[crate::window_control::WindowInfo],
+) -> std::collections::HashMap<(String, String), usize> {
+    let mut counts = std::collections::HashMap::new();
+    for window in windows {
+        *counts.entry(root_window_duplicate_key(window)).or_insert(0) += 1;
+    }
+    counts
+}
+
 impl ScriptListApp {
     pub(crate) fn filter_text(&self) -> &str {
         self.filter_text.as_str()
+    }
+
+    pub(crate) fn build_root_window_entries(
+        windows: &[crate::window_control::WindowInfo],
+        apps: &[crate::app_launcher::AppInfo],
+        recency: &std::collections::HashMap<String, u64>,
+    ) -> Vec<crate::scripts::RootWindowEntry> {
+        let lookup = crate::app_launcher::AppIconLookup::from_apps(apps);
+        let duplicate_counts = root_window_duplicate_counts(windows);
+        let mut duplicate_seen = std::collections::HashMap::<(String, String), usize>::new();
+
+        let mut entries = windows
+            .iter()
+            .cloned()
+            .map(|window| {
+                let duplicate_key = root_window_duplicate_key(&window);
+                let duplicate_count = duplicate_counts.get(&duplicate_key).copied().unwrap_or(1);
+                let duplicate_rank = if duplicate_count > 1 {
+                    let rank = duplicate_seen.entry(duplicate_key).or_insert(0);
+                    *rank += 1;
+                    Some(*rank)
+                } else {
+                    None
+                };
+                let duplicate_label =
+                    duplicate_rank.map(|rank| format!("Window {rank} of {duplicate_count}"));
+                let subtitle = crate::window_control::build_window_descriptor(
+                    &window.app,
+                    window.pid,
+                    window.bounds,
+                    window.is_frontmost_app,
+                    window.is_focused,
+                    window.is_main,
+                    window.is_minimized,
+                    window.is_on_current_space,
+                    duplicate_label.as_deref(),
+                );
+                let local_recency_seq = recency.get(&window.selection_key()).copied();
+                crate::scripts::RootWindowEntry {
+                    app_icon: lookup.icon_for_window(&window),
+                    subtitle,
+                    duplicate_rank,
+                    duplicate_count,
+                    local_recency_seq,
+                    window,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        entries.sort_by(|a, b| {
+            b.window
+                .is_frontmost_app
+                .cmp(&a.window.is_frontmost_app)
+                .then_with(|| b.window.is_focused.cmp(&a.window.is_focused))
+                .then_with(|| b.window.is_main.cmp(&a.window.is_main))
+                .then_with(|| b.local_recency_seq.cmp(&a.local_recency_seq))
+                .then_with(|| a.window.is_minimized.cmp(&b.window.is_minimized))
+                .then_with(|| a.window.app_order.cmp(&b.window.app_order))
+                .then_with(|| a.window.window_index.cmp(&b.window.window_index))
+                .then_with(|| a.window.title.cmp(&b.window.title))
+                .then_with(|| a.window.id.cmp(&b.window.id))
+        });
+
+        entries
+    }
+
+    pub(crate) fn install_root_windows(
+        &mut self,
+        windows: Vec<crate::window_control::WindowInfo>,
+        cx: &mut Context<Self>,
+    ) {
+        self.cached_windows = windows;
+        self.cached_root_windows = Self::build_root_window_entries(
+            &self.cached_windows,
+            &self.apps,
+            &self.root_window_focus_recency,
+        );
+        let count = self.cached_root_windows.len();
+        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
+        self.root_windows_provider_status =
+            crate::window_control::RootWindowsProviderStatus::Ready { count };
+        self.root_windows_last_completed_at = Some(std::time::Instant::now());
+        self.invalidate_grouped_cache();
+        self.reconcile_script_list_after_filter_change("root_windows_refresh_complete", cx);
+        cx.notify();
+    }
+
+    pub(crate) fn rebuild_root_windows_after_app_icon_cache_update(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.cached_windows.is_empty() {
+            return;
+        }
+
+        self.cached_root_windows = Self::build_root_window_entries(
+            &self.cached_windows,
+            &self.apps,
+            &self.root_window_focus_recency,
+        );
+        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
+        self.invalidate_grouped_cache();
+        self.reconcile_script_list_after_filter_change(reason, cx);
+        self.rebuild_main_window_preflight_if_needed();
+    }
+
+    pub(crate) fn maybe_start_root_windows_refresh_for_query(
+        &mut self,
+        query_text: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(advanced_query) = self.menu_syntax_mode.advanced_query_for(query_text) else {
+            return;
+        };
+        let windows_explicit = advanced_query
+            .source_filters
+            .includes(crate::menu_syntax::RootUnifiedSourceFilter::Windows)
+            && advanced_query
+                .source_filters
+                .allows(crate::menu_syntax::RootUnifiedSourceFilter::Windows);
+        if !windows_explicit || self.root_windows_refreshing {
+            return;
+        }
+
+        let stale = self
+            .root_windows_last_completed_at
+            .map(|completed_at| completed_at.elapsed() >= std::time::Duration::from_secs(3))
+            .unwrap_or(true);
+        if !self.cached_root_windows.is_empty() && !stale {
+            return;
+        }
+
+        self.root_windows_refreshing = true;
+        self.root_windows_refresh_token = self.root_windows_refresh_token.wrapping_add(1);
+        let token = self.root_windows_refresh_token;
+        let stale_count = self.cached_root_windows.len();
+        self.root_windows_provider_status =
+            crate::window_control::RootWindowsProviderStatus::Refreshing { count: stale_count };
+        self.root_windows_refresh_generation = self.root_windows_refresh_generation.wrapping_add(1);
+        self.invalidate_grouped_cache();
+        cx.notify();
+
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::window_control::list_windows() })
+                .await;
+
+            let _ = this.update(cx, |app, cx| {
+                if app.root_windows_refresh_token != token {
+                    return;
+                }
+                app.root_windows_refreshing = false;
+                match result {
+                    Ok(windows) => app.install_root_windows(windows, cx),
+                    Err(error) => {
+                        let message = error.to_string();
+                        let lower = message.to_ascii_lowercase();
+                        app.root_windows_provider_status =
+                            if lower.contains("accessibility") || lower.contains("permission") {
+                                crate::window_control::RootWindowsProviderStatus::PermissionRequired
+                            } else {
+                                crate::window_control::RootWindowsProviderStatus::ProviderError {
+                                    message: message
+                                        .lines()
+                                        .next()
+                                        .unwrap_or("unknown error")
+                                        .to_string(),
+                                }
+                            };
+                        app.root_windows_refresh_generation =
+                            app.root_windows_refresh_generation.wrapping_add(1);
+                        app.invalidate_grouped_cache();
+                        app.reconcile_script_list_after_filter_change(
+                            "root_windows_refresh_error",
+                            cx,
+                        );
+                        cx.notify();
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     fn root_passive_frame_for_current_query(
@@ -359,7 +563,8 @@ impl ScriptListApp {
         // `getElements`, and selection-coercion code would keep iterating
         // over stale fuzzy results (e.g. 8 semicolon-ish script matches) behind
         // the popup.
-        if self.menu_syntax_trigger_popup_state.owns_main_list()
+        if self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(filter_text)
@@ -393,7 +598,8 @@ impl ScriptListApp {
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
-        if self.menu_syntax_trigger_popup_state.owns_main_list()
+        if self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&self.filter_text)
@@ -520,13 +726,15 @@ impl ScriptListApp {
         // live input is owned by the trigger popup or capture composer.
         let live_filter_text = self.filter_text.as_str();
         let computed_filter_text = self.computed_filter_text.as_str();
-        let live_menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
-            || self
-                .menu_syntax_mode
-                .capture_composer_owns_input_for(live_filter_text)
-            || self
-                .menu_syntax_mode
-                .command_owns_input_for(live_filter_text);
+        let live_menu_syntax_owns_main_list =
+            self.menu_syntax_object_selector_state.owns_main_list()
+                || self.menu_syntax_trigger_popup_state.owns_main_list()
+                || self
+                    .menu_syntax_mode
+                    .capture_composer_owns_input_for(live_filter_text)
+                || self
+                    .menu_syntax_mode
+                    .command_owns_input_for(live_filter_text);
         if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
             return (
                 Arc::<[GroupedListItem]>::from(Vec::new()),
@@ -544,14 +752,23 @@ impl ScriptListApp {
         #[cfg(not(target_os = "macos"))]
         let current_app_commands_app_name: Option<String> = None;
 
+        let grouped_advanced_query = self
+            .menu_syntax_mode
+            .advanced_query_for(&self.computed_filter_text)
+            .cloned();
+        let grouped_source_filters = grouped_advanced_query
+            .as_ref()
+            .map(|query| query.source_filters.clone())
+            .unwrap_or_default();
         let ai_vault_generation = crate::ai_vault::root_ai_vault_snapshot_status().generation;
+        let root_windows_generation = self.root_windows_refresh_generation;
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
-                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}",
+                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}",
                 self.computed_filter_text
             ),
             None => format!(
-                "{}\x1Fai-vault-gen={ai_vault_generation}",
+                "{}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}",
                 self.computed_filter_text
             ),
         };
@@ -623,7 +840,8 @@ impl ScriptListApp {
             ),
         );
         let raw_filter_text = self.computed_filter_text.clone();
-        let menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
+        let menu_syntax_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&raw_filter_text)
@@ -829,7 +1047,8 @@ impl ScriptListApp {
                 &self.scriptlets,
                 builtins_for_grouping,
                 &self.apps,
-                &self.cached_windows,
+                &self.cached_root_windows,
+                self.root_windows_provider_status.clone(),
                 &self.skills,
                 &self.frecency_store,
                 search_text,

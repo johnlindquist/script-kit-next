@@ -136,6 +136,10 @@
                         app.apps = apps;
                         // Invalidate caches since apps changed
                         app.main_menu_result_caches.mark_apps_loaded();
+                        app.rebuild_root_windows_after_app_icon_cache_update(
+                            "apps_loaded_root_windows_icons",
+                            cx,
+                        );
                         logging::log(
                             "APP",
                             &format!(
@@ -270,8 +274,27 @@
                         }
                         return;
                     }
+                    let prompt_id = match &this.current_view {
+                        AppView::MiniPrompt { id, .. } | AppView::ArgPrompt { id, .. } => {
+                            Some(id.clone())
+                        }
+                        _ => None,
+                    };
+                    if let Some(prompt_id) = prompt_id {
+                        this.submit_arg_prompt_from_current_state(&prompt_id, cx);
+                        return;
+                    }
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
+                        if this.should_consume_script_list_enter_after_submit(
+                            "input_press_enter_script_list",
+                        ) {
+                            logging::log(
+                                "KEY",
+                                "Ignoring PressEnter: prompt submit already consumed this Enter",
+                            );
+                            return;
+                        }
                         // Check if we're in fallback mode first
                         if this.main_menu_fallback_state.is_active() {
                             this.execute_selected_fallback(cx);

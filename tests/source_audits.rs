@@ -191,6 +191,9 @@ mod root_unified_dictation_history_contract;
 #[path = "source_audits/root_unified_notes_contract.rs"]
 mod root_unified_notes_contract;
 
+#[path = "source_audits/root_unified_windows_contract.rs"]
+mod root_unified_windows_contract;
+
 #[path = "source_audits/permiso_builtin_contract.rs"]
 mod permiso_builtin_contract;
 

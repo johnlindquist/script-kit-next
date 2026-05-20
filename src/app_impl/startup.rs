@@ -262,6 +262,10 @@ impl ScriptListApp {
                         app.apps = apps;
                         // Invalidate caches since apps changed
                         app.main_menu_result_caches.mark_apps_loaded();
+                        app.rebuild_root_windows_after_app_icon_cache_update(
+                            "apps_loaded_root_windows_icons",
+                            cx,
+                        );
                         logging::log(
                             "APP",
                             &format!(
@@ -548,6 +552,15 @@ impl ScriptListApp {
 
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
+                        if this.should_consume_script_list_enter_after_submit(
+                            "input_press_enter_script_list",
+                        ) {
+                            logging::log(
+                                "KEY",
+                                "Ignoring PressEnter: prompt submit already consumed this Enter",
+                            );
+                            return;
+                        }
                         // Check if we're in fallback mode first
                         if this.main_menu_fallback_state.is_active() {
                             this.execute_selected_fallback(cx);
@@ -580,12 +593,25 @@ impl ScriptListApp {
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
         crate::dictation::hydrate_dictation_resource_from_history();
-        let initial_cached_windows =
-            if std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some() {
-                crate::window_control::list_windows().unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+        let window_search_test_provider =
+            std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some();
+        let initial_cached_windows = if window_search_test_provider {
+            crate::window_control::list_windows().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let initial_root_windows_provider_status = if window_search_test_provider {
+            crate::window_control::RootWindowsProviderStatus::Ready {
+                count: initial_cached_windows.len(),
+            }
+        } else {
+            crate::window_control::RootWindowsProviderStatus::Unknown
+        };
+        let initial_cached_root_windows = Self::build_root_window_entries(
+            &initial_cached_windows,
+            &apps,
+            &std::collections::HashMap::new(),
+        );
 
         let mut app = ScriptListApp {
             scripts,
@@ -599,6 +625,14 @@ impl ScriptListApp {
             paste_sequential_state: None,
             focused_clipboard_entry_id: None,
             cached_windows: initial_cached_windows,
+            cached_root_windows: initial_cached_root_windows,
+            root_windows_provider_status: initial_root_windows_provider_status,
+            root_windows_refresh_generation: 0,
+            root_windows_refresh_token: 0,
+            root_windows_refreshing: false,
+            root_windows_last_completed_at: None,
+            root_window_focus_recency: std::collections::HashMap::new(),
+            root_window_focus_seq: 0,
             cached_browser_tabs: Vec::new(),
             cached_browser_history: Vec::new(),
             browser_history_loading: false,
@@ -652,6 +686,7 @@ impl ScriptListApp {
             last_scroll_time: None,
             builtin_wheel_owned_selected_index: None,
             current_view: AppView::ScriptList,
+            submit_diagnostics: SubmitDiagnosticsState::default(),
             main_window_mode: MainWindowMode::Mini,
             script_session: Arc::new(ParkingMutex::new(None)),
             arg_input: TextInputState::new(),
@@ -709,6 +744,9 @@ impl ScriptListApp {
             menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode::default(),
             menu_syntax_trigger_popup_state:
                 crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
+            menu_syntax_object_selector_state:
+                crate::menu_syntax::MenuSyntaxObjectSelectorState::default(),
+            menu_syntax_form_focused_index: 0,
             pending_menu_syntax_ai_proposal: None,
             menu_syntax_trigger_popup_suppressed_filter: None,
             // Scroll stabilization: start with no last scrolled index
@@ -1082,6 +1120,22 @@ impl ScriptListApp {
                             // branch so menu-syntax keyboard stays consistent
                             // with the ACP slash / @ pickers.
                             if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                            {
+                                let intent = if has_shift {
+                                    crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                } else {
+                                    crate::menu_syntax::InlinePickerKeyIntent::Apply
+                                };
+                                if this.apply_menu_syntax_object_selector_intent(
+                                    intent, window, cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
                                 && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
                             {
                                 let intent = if has_shift {
@@ -1095,6 +1149,16 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                            }
+
+                            if this.menu_syntax_capture_form_owns_input() {
+                                if has_shift {
+                                    this.focus_previous_menu_syntax_form_field(cx);
+                                } else {
+                                    this.focus_next_menu_syntax_form_field(cx);
+                                }
+                                cx.stop_propagation();
+                                return;
                             }
 
                             if matches!(this.current_view, AppView::ScriptList)
@@ -1188,6 +1252,18 @@ impl ScriptListApp {
                             // Menu-syntax trigger popup owns Enter when it is
                             // visible on ScriptList — Accept the selected row
                             // the same way the ACP / and @ pickers do.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                            {
+                                if this.apply_menu_syntax_object_selector_intent(
+                                    crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                    window,
+                                    cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
                             if matches!(this.current_view, AppView::ScriptList)
                                 && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
                             {
@@ -1724,6 +1800,21 @@ impl ScriptListApp {
                                     // main-list navigation so the popup's selection
                                     // highlight tracks the arrow keys instead of the
                                     // launcher list underneath.
+                                    if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                                        && (is_up || is_down)
+                                    {
+                                        let intent = if is_up {
+                                            crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                        } else {
+                                            crate::menu_syntax::InlinePickerKeyIntent::MoveDown
+                                        };
+                                        if this.apply_menu_syntax_object_selector_intent(
+                                            intent, window, cx,
+                                        ) {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    }
                                     if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
                                         && (is_up || is_down)
                                     {

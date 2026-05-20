@@ -117,7 +117,8 @@ fn plan_script_hotkey_refresh(
     paths.sort();
     paths.dedup();
 
-    paths.into_iter()
+    paths
+        .into_iter()
         .filter_map(|path| {
             let old_shortcut = old_by_path.get(&path).cloned().flatten();
             let new_shortcut = new_by_path.get(&path).cloned().flatten();
@@ -138,7 +139,7 @@ fn plan_script_hotkey_refresh(
                 new_shortcut,
             })
         })
-    .collect()
+        .collect()
 }
 
 fn load_plugin_skills() -> Vec<std::sync::Arc<crate::plugins::PluginSkill>> {
@@ -320,7 +321,8 @@ impl ScriptListApp {
         self.sync_list_state();
         self.selected_index = 0;
         self.validate_selection_bounds(cx);
-        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.main_list_state
+            .scroll_to_reveal_item(self.selected_index);
         self.last_scrolled_index = Some(self.selected_index);
 
         if before_count != self.skills.len() {
@@ -429,6 +431,10 @@ impl ScriptListApp {
     /// 3. The cost of an "unnecessary" notify is near-zero (just marks dirty)
     pub fn refresh_apps(&mut self, cx: &mut Context<Self>) {
         self.apps = crate::app_launcher::get_cached_apps();
+        self.rebuild_root_windows_after_app_icon_cache_update(
+            "refresh_apps_root_windows_icons",
+            cx,
+        );
         // Invalidate caches so main search includes new apps
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
@@ -947,11 +953,13 @@ mod tests {
             scriptlets: 0,
         };
         let hud = build_plugin_inventory_hud(zero, zero);
-        assert!(hud.is_some(), "empty-to-empty should still show empty state");
         assert!(
-            hud.as_ref()
-                .expect("hud should be Some")
-                .contains("No plugin entrypoints yet"),
+            hud.is_some(),
+            "empty-to-empty should still show empty state"
         );
+        assert!(hud
+            .as_ref()
+            .expect("hud should be Some")
+            .contains("No plugin entrypoints yet"),);
     }
 }

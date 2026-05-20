@@ -20,12 +20,25 @@
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
         crate::dictation::hydrate_dictation_resource_from_history();
-        let initial_cached_windows =
-            if std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some() {
-                crate::window_control::list_windows().unwrap_or_default()
-            } else {
-                Vec::new()
-            };
+        let window_search_test_provider =
+            std::env::var_os("SCRIPT_KIT_WINDOW_SEARCH_TEST_PROVIDER").is_some();
+        let initial_cached_windows = if window_search_test_provider {
+            crate::window_control::list_windows().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let initial_root_windows_provider_status = if window_search_test_provider {
+            crate::window_control::RootWindowsProviderStatus::Ready {
+                count: initial_cached_windows.len(),
+            }
+        } else {
+            crate::window_control::RootWindowsProviderStatus::Unknown
+        };
+        let initial_cached_root_windows = Self::build_root_window_entries(
+            &initial_cached_windows,
+            &apps,
+            &std::collections::HashMap::new(),
+        );
 
         let mut app = ScriptListApp {
             scripts,
@@ -38,6 +51,14 @@
             paste_sequential_state: None,
             focused_clipboard_entry_id: None,
             cached_windows: initial_cached_windows,
+            cached_root_windows: initial_cached_root_windows,
+            root_windows_provider_status: initial_root_windows_provider_status,
+            root_windows_refresh_generation: 0,
+            root_windows_refresh_token: 0,
+            root_windows_refreshing: false,
+            root_windows_last_completed_at: None,
+            root_window_focus_recency: std::collections::HashMap::new(),
+            root_window_focus_seq: 0,
             cached_browser_tabs: Vec::new(),
             cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
@@ -86,6 +107,7 @@
             last_scroll_time: None,
             builtin_wheel_owned_selected_index: None,
             current_view: AppView::ScriptList,
+            submit_diagnostics: SubmitDiagnosticsState::default(),
             main_window_mode: MainWindowMode::Mini,
             script_session: Arc::new(ParkingMutex::new(None)),
             arg_input: TextInputState::new(),

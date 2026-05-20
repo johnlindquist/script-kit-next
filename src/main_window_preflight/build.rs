@@ -4,6 +4,7 @@ use crate::main_window_preflight::types::{
     MainWindowPreflightResultRole, MainWindowPreflightVisibleResult, RootPassiveFrameReceipt,
     RootPassiveSourceReceipt,
 };
+use crate::scripts::SearchResult;
 use crate::AppView;
 
 fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchResult> {
@@ -63,6 +64,8 @@ fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchR
             filtered_windows.get(*selected_index).map(|(_, info)| {
                 SearchResult::Window(WindowMatch {
                     window: (*info).clone(),
+                    app_icon: None,
+                    subtitle: info.descriptor.clone(),
                     score: 0,
                 })
             })
@@ -223,6 +226,10 @@ fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPrefligh
                 action_kind: enter_action_kind(&result),
                 type_label: result.type_label().to_string(),
                 source_name: result.source_name().map(ToString::to_string),
+                description: result.description().map(ToString::to_string),
+                leading_icon_present: leading_icon_present(&result),
+                leading_icon_kind: leading_icon_kind(&result),
+                leading_icon_bundle_id: leading_icon_bundle_id(&result),
             }];
         }
         return Vec::new();
@@ -247,6 +254,10 @@ fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPrefligh
                 action_kind: enter_action_kind(result),
                 type_label: result.type_label().to_string(),
                 source_name: result.source_name().map(ToString::to_string),
+                description: result.description().map(ToString::to_string),
+                leading_icon_present: leading_icon_present(result),
+                leading_icon_kind: leading_icon_kind(result),
+                leading_icon_bundle_id: leading_icon_bundle_id(result),
             })
         })
         .enumerate()
@@ -255,6 +266,31 @@ fn visible_result_receipts(app: &crate::ScriptListApp) -> Vec<MainWindowPrefligh
             receipt
         })
         .collect()
+}
+
+fn leading_icon_present(result: &SearchResult) -> bool {
+    match result {
+        SearchResult::App(app) => app.app.icon.is_some(),
+        SearchResult::Window(window) => window.app_icon.is_some(),
+        _ => false,
+    }
+}
+
+fn leading_icon_kind(result: &SearchResult) -> Option<String> {
+    match result {
+        SearchResult::App(app) if app.app.icon.is_some() => Some("appImage".to_string()),
+        SearchResult::Window(window) if window.app_icon.is_some() => Some("appImage".to_string()),
+        SearchResult::Window(_) => Some("fallback".to_string()),
+        _ => None,
+    }
+}
+
+fn leading_icon_bundle_id(result: &SearchResult) -> Option<String> {
+    match result {
+        SearchResult::App(app) => app.app.bundle_id.clone(),
+        SearchResult::Window(window) => window.window.bundle_id.clone(),
+        _ => None,
+    }
 }
 
 fn build_tab_action(app: &crate::ScriptListApp) -> Option<MainWindowPreflightAction> {

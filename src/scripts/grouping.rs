@@ -23,7 +23,7 @@ use crate::list_item::{GroupedListItem, SourceChipStatusKind, SourceChipStatusRo
 use crate::menu_bar::MenuBarItem;
 use crate::plugins::PluginSkill;
 
-use super::search::{fuzzy_search_unified_all_with_skills, fuzzy_search_windows};
+use super::search::{fuzzy_search_root_windows, fuzzy_search_unified_all_with_skills};
 use super::types::{
     FallbackMatch, MatchIndices, Script, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
     SearchResult,
@@ -381,6 +381,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         builtins,
         apps,
         &[],
+        crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
         skills,
         frecency_store,
         filter_text,
@@ -450,7 +451,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
-    windows: &[crate::window_control::WindowInfo],
+    windows: &[crate::scripts::RootWindowEntry],
+    root_windows_provider_status: crate::window_control::RootWindowsProviderStatus,
     skills: &[Arc<PluginSkill>],
     frecency_store: &FrecencyStore,
     filter_text: &str,
@@ -512,6 +514,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
             &mut grouped,
             &mut flat_results,
             windows,
+            root_windows_provider_status,
             filter_text,
             advanced_query,
             root_source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Windows),
@@ -1632,7 +1635,8 @@ fn root_file_passive_insertion_index(
 fn append_root_windows_section(
     grouped: &mut Vec<GroupedListItem>,
     flat_results: &mut Vec<SearchResult>,
-    windows: &[crate::window_control::WindowInfo],
+    windows: &[crate::scripts::RootWindowEntry],
+    provider_status: crate::window_control::RootWindowsProviderStatus,
     filter_text: &str,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     explicit_source_filter: bool,
@@ -1641,7 +1645,40 @@ fn append_root_windows_section(
         return;
     }
 
-    let matches = fuzzy_search_windows(windows, filter_text);
+    let source = crate::menu_syntax::RootUnifiedSourceFilter::Windows;
+    if explicit_source_filter {
+        match provider_status {
+            crate::window_control::RootWindowsProviderStatus::PermissionRequired => {
+                grouped.push(GroupedListItem::SectionHeader("Windows".to_string(), None));
+                grouped.push(GroupedListItem::Status(source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::ProviderUnavailable,
+                    0,
+                    0,
+                    None,
+                    "Accessibility permission required to list windows".to_string(),
+                )));
+                return;
+            }
+            crate::window_control::RootWindowsProviderStatus::ProviderError { message } => {
+                grouped.push(GroupedListItem::SectionHeader("Windows".to_string(), None));
+                grouped.push(GroupedListItem::Status(source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::ProviderUnavailable,
+                    0,
+                    0,
+                    None,
+                    format!("Window provider failed: {message}"),
+                )));
+                return;
+            }
+            crate::window_control::RootWindowsProviderStatus::Unknown
+            | crate::window_control::RootWindowsProviderStatus::Refreshing { .. }
+            | crate::window_control::RootWindowsProviderStatus::Ready { .. } => {}
+        }
+    }
+
+    let matches = fuzzy_search_root_windows(windows, filter_text);
     if matches.is_empty() && !explicit_source_filter {
         return;
     }
@@ -1654,12 +1691,64 @@ fn append_root_windows_section(
         grouped.push(GroupedListItem::Item(idx));
     }
     if explicit_source_filter {
-        grouped.push(GroupedListItem::Status(source_chip_result_status(
-            crate::menu_syntax::RootUnifiedSourceFilter::Windows,
-            shown,
-            shown,
-            false,
-        )));
+        let status = match provider_status {
+            crate::window_control::RootWindowsProviderStatus::Ready { count } if count == 0 => {
+                source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::Exhausted,
+                    shown,
+                    count,
+                    Some(count),
+                    "No windows found".to_string(),
+                )
+            }
+            crate::window_control::RootWindowsProviderStatus::Ready { count }
+                if shown == 0 && count > 0 =>
+            {
+                let query = filter_text.trim();
+                source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::Exhausted,
+                    shown,
+                    count,
+                    Some(count),
+                    format!("No window matches \"{query}\""),
+                )
+            }
+            crate::window_control::RootWindowsProviderStatus::Ready { count } => {
+                source_chip_result_status(source, shown, count, false)
+            }
+            crate::window_control::RootWindowsProviderStatus::Refreshing { count }
+                if shown == 0 && count == 0 =>
+            {
+                source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::Loading,
+                    shown,
+                    count,
+                    Some(count),
+                    "Loading windows...".to_string(),
+                )
+            }
+            crate::window_control::RootWindowsProviderStatus::Refreshing { count } => {
+                source_chip_status_row(
+                    source,
+                    SourceChipStatusKind::Loading,
+                    shown,
+                    count,
+                    Some(count),
+                    "Refreshing windows...".to_string(),
+                )
+            }
+            crate::window_control::RootWindowsProviderStatus::Unknown => {
+                source_chip_result_status(source, shown, shown, false)
+            }
+            crate::window_control::RootWindowsProviderStatus::PermissionRequired
+            | crate::window_control::RootWindowsProviderStatus::ProviderError { .. } => {
+                unreachable!("provider failures return before fuzzy window grouping")
+            }
+        };
+        grouped.push(GroupedListItem::Status(status));
     }
 }
 
@@ -2258,6 +2347,7 @@ mod advanced_query_tests {
             &[builtin_entry("Design Gallery")],
             &[],
             &[],
+            crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &frecency_store,
             query,
@@ -2414,6 +2504,7 @@ mod advanced_query_tests {
             &[builtin_entry("Design Gallery")],
             &[],
             &[],
+            crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &frecency_store,
             query,
@@ -2587,6 +2678,7 @@ mod advanced_query_tests {
                     &[builtin_entry("Design Gallery")],
                     &[],
                     &[],
+                    crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                     &[],
                     &frecency_store,
                     query,
@@ -2702,6 +2794,7 @@ mod advanced_query_tests {
             &[builtin_entry("Design Gallery")],
             &[],
             &[],
+            crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &frecency_store,
             query,
@@ -2820,6 +2913,7 @@ mod advanced_query_tests {
             &[],
             &[],
             &[],
+            crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
             &[],
             &frecency_store,
             query,
@@ -2930,6 +3024,7 @@ mod advanced_query_tests {
                 &[builtin_entry("Design Gallery")],
                 &[],
                 &[],
+                crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                 &[],
                 &frecency_store,
                 query,
@@ -4821,6 +4916,7 @@ mod advanced_query_tests {
                 &[],
                 &[],
                 &[],
+                crate::window_control::RootWindowsProviderStatus::Ready { count: 0 },
                 &[],
                 &FrecencyStore::new(),
                 "",
