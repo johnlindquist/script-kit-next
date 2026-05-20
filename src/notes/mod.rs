@@ -38,6 +38,7 @@ mod browse_panel;
 pub(crate) mod code_highlight;
 mod markdown;
 mod markdown_highlighting;
+pub(crate) mod metadata;
 mod model;
 mod storage;
 pub(crate) mod window;
@@ -55,10 +56,11 @@ pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
 #[allow(unused_imports)]
 pub(crate) use storage::{
     delete_note_cart_item, delete_note_cart_items, delete_note_permanently, get_all_notes,
-    get_deleted_notes, get_note, init_notes_db, list_note_cart_items, list_note_cart_items_deduped,
-    root_notes_query_is_eligible, save_note, save_note_cart_item, search_notes,
-    search_root_notes_meta, search_root_notes_meta_cached, search_root_notes_meta_direct,
-    RootNoteSearchHit, RootNotesSectionOptions,
+    get_deleted_notes, get_note, get_note_backlink_count, get_note_backlinks,
+    get_note_outbound_link_count, get_note_tags, init_notes_db, list_note_cart_items,
+    list_note_cart_items_deduped, root_notes_query_is_eligible, save_note, save_note_cart_item,
+    search_notes, search_root_notes_meta, search_root_notes_meta_cached,
+    search_root_notes_meta_direct, NoteBacklinkSummary, RootNoteSearchHit, RootNotesSectionOptions,
 };
 
 // Re-export key types - suppress unused warnings since these are public API

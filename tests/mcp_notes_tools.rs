@@ -127,6 +127,68 @@ fn notes_create_accepts_content_alias_before_runtime_dispatch() {
 }
 
 #[test]
+fn notes_create_accepts_tags_and_aliases_before_runtime_dispatch() {
+    let result = call_tool(
+        "kit/notes_create",
+        json!({
+            "body": "metadata body",
+            "tags": ["rust", "notes/metadata"],
+            "aliases": ["Metadata Smoke"]
+        }),
+        None,
+    );
+    let payload = first_tool_text(&result);
+    assert_eq!(result["isError"], true);
+    assert_eq!(payload["error"]["code"], "missing_runtime");
+}
+
+#[test]
+fn notes_update_accepts_tags_and_aliases_before_runtime_dispatch() {
+    let result = call_tool(
+        "kit/notes_update",
+        json!({
+            "id": "00000000-0000-0000-0000-000000000000",
+            "tags": ["rust"],
+            "aliases": ["Metadata Smoke"]
+        }),
+        None,
+    );
+    let payload = first_tool_text(&result);
+    assert_eq!(result["isError"], true);
+    assert_eq!(payload["error"]["code"], "missing_runtime");
+}
+
+#[test]
+fn notes_update_rejects_unimplemented_force_field() {
+    let result = call_tool(
+        "kit/notes_update",
+        json!({
+            "id": "00000000-0000-0000-0000-000000000000",
+            "force": true
+        }),
+        None,
+    );
+    let payload = first_tool_text(&result);
+    assert_eq!(result["isError"], true);
+    assert_eq!(payload["error"]["code"], "invalid_params");
+}
+
+#[test]
+fn notes_create_bounds_metadata_arrays_before_runtime_dispatch() {
+    let result = call_tool(
+        "kit/notes_create",
+        json!({
+            "body": "metadata body",
+            "tags": vec!["tag"; 65]
+        }),
+        None,
+    );
+    let payload = first_tool_text(&result);
+    assert_eq!(result["isError"], true);
+    assert_eq!(payload["error"]["code"], "invalid_params");
+}
+
+#[test]
 fn notes_tool_scope_denial_returns_tool_error() {
     let context = McpRuntimeContext {
         token_scopes: vec!["mcp:read".to_string()],

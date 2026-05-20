@@ -9,7 +9,7 @@ Create and automate notes in Script Kit's floating Notes window.
 
 ## Where Notes Live
 
-Notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`. The Notes window manages them directly — scripts interact via automation targets, not raw database access.
+Notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`. The Notes window manages them directly. Scripts and agents must use the runtime write ports (`kit/notes_create`, `kit/notes_update`, `kit/notes_delete`) or the Notes automation target; do not raw-write the database.
 
 ## Opening the Notes Window
 
@@ -31,9 +31,45 @@ notesHotkey: {
 - Markdown editing with formatting toolbar
 - Multiple notes with sidebar navigation
 - Full-text search across all notes
+- Tags from frontmatter or `#tag` markdown
+- Wiki-style links and backlinks from `[[Note Title]]`
 - Soft delete with trash and restore
 - Export to plain text, Markdown, or HTML
 - Character count in footer
+
+## Creating and Organizing Notes
+
+Use the MCP notes tools when creating or organizing notes from an agent. They route through the app runtime, save any dirty open Notes editor before mutation, update the durable metadata index, and optionally open/select the changed note in the Notes window.
+
+```json
+{
+  "name": "kit/notes_create",
+  "arguments": {
+    "title": "Project Plan",
+    "body": "# Project Plan\n\n#planning [[Research Notes]]",
+    "tags": ["planning", "projects/script-kit"],
+    "aliases": ["Plan"],
+    "open": true,
+    "select": true
+  }
+}
+```
+
+```json
+{
+  "name": "kit/notes_update",
+  "arguments": {
+    "id": "NOTE_UUID",
+    "content": "# Project Plan\n\nUpdated body with [[Decision Log]].",
+    "tags": ["planning", "decisions"],
+    "aliases": ["Plan", "Project Plan"],
+    "open": true,
+    "select": true
+  }
+}
+```
+
+Tags and aliases passed to the mutation tools are written into visible YAML frontmatter so users can edit them directly. Markdown `#tags` and `[[Wiki Links]]` are indexed from the note body. Backlinks are derived from the normalized link index; they are not copied into note content.
 
 ## Automation Targets
 
@@ -93,14 +129,14 @@ Use the Notes UI actions for cross-surface handoffs:
 - **Send to Agent Chat** — opens or focuses Agent Chat with the active note content
 - **Save as Note** — creates or updates a note from ACP-generated content
 
-These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) unless real Notes functions are added to `scripts/kit-sdk.ts`.
+These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) plus the runtime MCP notes tools above unless real Notes functions are added to `scripts/kit-sdk.ts`.
 
 ## Common Pitfalls
 
-- **No raw DB access**: Do not read/write `notes.sqlite` directly from scripts. Use the automation protocol.
+- **No raw DB access**: Do not read/write `notes.sqlite` directly from scripts. Use the MCP notes tools for creation/update/delete and the automation protocol for window/editor control.
 - **Hotkey required**: The Notes window has no default hotkey. Users must set `notesHotkey` in config before it appears in the launcher shortcuts.
 - **Automation target must be open**: `getElements` and `batch` commands targeting Notes require the Notes window to be open. Use `waitFor` with a timeout to handle the case where it is not yet visible.
-- **No invented JS globals**: The current public Notes script surface is the automation target (`kind: notes`). Do not document or rely on `notesOpen()`, `notesCreate()`, or similar JavaScript globals unless they are added to `scripts/kit-sdk.ts`.
+- **No invented JS globals**: The current public Notes script surface is the automation target (`kind: notes`) and MCP notes tools. Do not document or rely on `notesOpen()`, `notesCreate()`, or similar JavaScript globals unless they are added to `scripts/kit-sdk.ts`.
 
 ## Related Examples
 
@@ -116,5 +152,6 @@ These are UI actions, not JavaScript globals. The current public Notes script su
 ## Done When
 
 - [ ] Notes window opens and is addressable via automation target
+- [ ] `kit/notes_create` can create a tagged/linked note and open/select it in Notes
 - [ ] `getElements` returns elements with `panel:notes-window` and `input:notes-editor` semantic IDs
 - [ ] `batch` commands successfully set editor content

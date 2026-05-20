@@ -233,7 +233,7 @@ impl Note {
 
     /// Extract title from content (first non-empty line, stripped of markdown)
     fn extract_title(content: &str) -> String {
-        content
+        super::metadata::strip_frontmatter(content)
             .lines()
             .find(|line| !line.trim().is_empty())
             .map(|line| Self::strip_markdown_syntax(line.trim()))

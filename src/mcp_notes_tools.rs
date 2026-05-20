@@ -7,6 +7,8 @@ pub const NOTES_CREATE_TOOL: &str = "kit/notes_create";
 pub const NOTES_UPDATE_TOOL: &str = "kit/notes_update";
 pub const NOTES_DELETE_TOOL: &str = "kit/notes_delete";
 pub const NOTE_BODY_MAX_BYTES: usize = 1024 * 1024;
+pub const NOTE_METADATA_MAX_ITEMS: usize = 64;
+pub const NOTE_METADATA_ITEM_MAX_BYTES: usize = 256;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,6 +62,10 @@ pub struct NotesCreateArgs {
     #[serde(alias = "content")]
     pub body: String,
     #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    #[serde(default)]
     pub is_pinned: bool,
     #[serde(default)]
     pub sort_order: Option<i32>,
@@ -77,6 +83,10 @@ pub struct NotesUpdateArgs {
     #[serde(default, alias = "content")]
     pub body: Option<String>,
     #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    #[serde(default)]
     pub is_pinned: Option<bool>,
     #[serde(default)]
     pub sort_order: Option<i32>,
@@ -84,8 +94,6 @@ pub struct NotesUpdateArgs {
     pub open: bool,
     #[serde(default)]
     pub select: bool,
-    #[serde(default)]
-    pub force: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -145,6 +153,18 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
                     "title": { "type": "string" },
                     "body": { "type": "string", "maxLength": NOTE_BODY_MAX_BYTES },
                     "content": { "type": "string", "maxLength": NOTE_BODY_MAX_BYTES },
+                    "tags": {
+                        "type": "array",
+                        "maxItems": NOTE_METADATA_MAX_ITEMS,
+                        "items": { "type": "string", "maxLength": NOTE_METADATA_ITEM_MAX_BYTES },
+                        "description": "Optional tags to merge into visible note frontmatter."
+                    },
+                    "aliases": {
+                        "type": "array",
+                        "maxItems": NOTE_METADATA_MAX_ITEMS,
+                        "items": { "type": "string", "maxLength": NOTE_METADATA_ITEM_MAX_BYTES },
+                        "description": "Optional aliases to merge into visible note frontmatter."
+                    },
                     "isPinned": { "type": "boolean", "default": false },
                     "sortOrder": { "type": "integer" },
                     "open": { "type": "boolean", "default": false },
@@ -167,11 +187,22 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
                     "title": { "type": "string" },
                     "body": { "type": "string", "maxLength": NOTE_BODY_MAX_BYTES },
                     "content": { "type": "string", "maxLength": NOTE_BODY_MAX_BYTES },
+                    "tags": {
+                        "type": "array",
+                        "maxItems": NOTE_METADATA_MAX_ITEMS,
+                        "items": { "type": "string", "maxLength": NOTE_METADATA_ITEM_MAX_BYTES },
+                        "description": "Optional tags to merge into visible note frontmatter."
+                    },
+                    "aliases": {
+                        "type": "array",
+                        "maxItems": NOTE_METADATA_MAX_ITEMS,
+                        "items": { "type": "string", "maxLength": NOTE_METADATA_ITEM_MAX_BYTES },
+                        "description": "Optional aliases to merge into visible note frontmatter."
+                    },
                     "isPinned": { "type": "boolean" },
                     "sortOrder": { "type": "integer" },
                     "open": { "type": "boolean", "default": false },
-                    "select": { "type": "boolean", "default": false },
-                    "force": { "type": "boolean", "default": false }
+                    "select": { "type": "boolean", "default": false }
                 },
                 "required": ["id"]
             }),
@@ -205,6 +236,8 @@ pub fn parse_notes_mutation_request(
                 ))
             })?;
             validate_body_len(&args.body)?;
+            validate_metadata_items("tags", &args.tags)?;
+            validate_metadata_items("aliases", &args.aliases)?;
             Ok(NotesMutationRequest::Create(args))
         }
         NOTES_UPDATE_TOOL => {
@@ -216,6 +249,8 @@ pub fn parse_notes_mutation_request(
             if let Some(body) = &args.body {
                 validate_body_len(body)?;
             }
+            validate_metadata_items("tags", &args.tags)?;
+            validate_metadata_items("aliases", &args.aliases)?;
             Ok(NotesMutationRequest::Update(args))
         }
         NOTES_DELETE_TOOL => {
@@ -291,6 +326,23 @@ fn validate_body_len(body: &str) -> Result<(), NotesMutationError> {
     if body.len() > NOTE_BODY_MAX_BYTES {
         return Err(NotesMutationError::invalid_params(format!(
             "Note body exceeds {NOTE_BODY_MAX_BYTES} byte limit"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_metadata_items(kind: &str, items: &[String]) -> Result<(), NotesMutationError> {
+    if items.len() > NOTE_METADATA_MAX_ITEMS {
+        return Err(NotesMutationError::invalid_params(format!(
+            "notes {kind} exceeds max item count of {NOTE_METADATA_MAX_ITEMS}"
+        )));
+    }
+    if let Some(value) = items
+        .iter()
+        .find(|value| value.len() > NOTE_METADATA_ITEM_MAX_BYTES)
+    {
+        return Err(NotesMutationError::invalid_params(format!(
+            "notes {kind} item exceeds max byte length of {NOTE_METADATA_ITEM_MAX_BYTES}: {value}"
         )));
     }
     Ok(())

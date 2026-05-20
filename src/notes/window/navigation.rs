@@ -285,6 +285,17 @@ impl NotesApp {
         let selected_note = self
             .selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|note| note.id == id));
+        let selected_note_metadata = selected_note.map(|note| {
+            let tags = storage::get_note_tags(note.id).unwrap_or_default();
+            let outbound_link_count = storage::get_note_outbound_link_count(note.id).unwrap_or(0);
+            let backlink_count = storage::get_note_backlink_count(note.id).unwrap_or(0);
+            serde_json::json!({
+                "tags": tags.iter().take(8).cloned().collect::<Vec<_>>(),
+                "tagCount": tags.len(),
+                "outboundLinkCount": outbound_link_count,
+                "backlinkCount": backlink_count,
+            })
+        });
         let note_position = self.get_note_position();
         let storage_identity = storage::automation_storage_identity();
         let cursor = selection.start.min(editor_text.len());
@@ -337,6 +348,7 @@ impl NotesApp {
                 "contentFingerprint": Self::devtools_text_fingerprint(&note.content),
                 "isPinned": note.is_pinned,
                 "deleted": note.deleted_at.is_some(),
+                "metadata": selected_note_metadata,
                 "position": note_position.map(|(position, total)| serde_json::json!({
                     "index": position,
                     "total": total,

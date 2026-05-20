@@ -1,7 +1,7 @@
 use super::*;
 use crate::mcp_notes_tools::{
     NotesCreateArgs, NotesDeleteArgs, NotesMutationError, NotesMutationErrorCode,
-    NotesMutationRequest, NotesMutationResult, NotesUpdateArgs,
+    NotesMutationRequest, NotesMutationResult, NotesUpdateArgs, NOTE_BODY_MAX_BYTES,
 };
 use crate::theme::get_cached_theme;
 
@@ -214,8 +214,25 @@ fn create_note_from_mcp(
         None => NoteId::new(),
     };
 
-    let mut note = Note::with_content(args.body);
+    let body = crate::notes::metadata::merge_frontmatter(
+        &args.body,
+        crate::notes::metadata::MetadataFrontmatterPatch {
+            tags: args.tags,
+            aliases: args.aliases,
+        },
+    );
+    validate_mcp_note_content_len(&body)?;
+    let mut note = Note::with_content(body);
     note.id = id;
+    if storage::get_note(id)
+        .map_err(internal_notes_error)?
+        .is_some()
+    {
+        return Err(NotesMutationError::new(
+            NotesMutationErrorCode::Conflict,
+            format!("Note already exists: {id}"),
+        ));
+    }
     if let Some(title) = args.title.filter(|title| !title.trim().is_empty()) {
         note.title = title;
     } else if note.title.trim().is_empty() {
@@ -255,10 +272,26 @@ fn update_note_from_mcp(
         })?;
 
     if let Some(body) = args.body {
-        note.content = body;
+        note.content = crate::notes::metadata::merge_frontmatter(
+            &body,
+            crate::notes::metadata::MetadataFrontmatterPatch {
+                tags: args.tags.clone(),
+                aliases: args.aliases.clone(),
+            },
+        );
+        validate_mcp_note_content_len(&note.content)?;
         if args.title.is_none() {
             note.title = title_from_body(&note.content);
         }
+    } else if !args.tags.is_empty() || !args.aliases.is_empty() {
+        note.content = crate::notes::metadata::merge_frontmatter(
+            &note.content,
+            crate::notes::metadata::MetadataFrontmatterPatch {
+                tags: args.tags.clone(),
+                aliases: args.aliases.clone(),
+            },
+        );
+        validate_mcp_note_content_len(&note.content)?;
     }
     if let Some(title) = args.title {
         note.title = if title.trim().is_empty() {
@@ -304,6 +337,14 @@ fn delete_note_from_mcp(
                 "Permanent note delete requires confirm:true",
             ));
         }
+        storage::get_note(id)
+            .map_err(internal_notes_error)?
+            .ok_or_else(|| {
+                NotesMutationError::new(
+                    NotesMutationErrorCode::NotFound,
+                    format!("Note not found: {id}"),
+                )
+            })?;
         storage::delete_note_permanently(id).map_err(internal_notes_error)?;
         return Ok(AppliedMcpNoteMutation {
             id,
@@ -407,11 +448,22 @@ fn refresh_or_open_notes_window_after_mcp_mutation(
 }
 
 fn title_from_body(body: &str) -> String {
-    body.lines()
+    crate::notes::metadata::strip_frontmatter(body)
+        .lines()
         .find(|line| !line.trim().is_empty())
         .map(|line| line.trim().trim_start_matches('#').trim().to_string())
         .filter(|title| !title.is_empty())
         .unwrap_or_else(|| "Untitled Note".to_string())
+}
+
+fn validate_mcp_note_content_len(content: &str) -> Result<(), NotesMutationError> {
+    if content.len() > NOTE_BODY_MAX_BYTES {
+        return Err(NotesMutationError::new(
+            NotesMutationErrorCode::InvalidParams,
+            format!("notes content exceeds max byte length of {NOTE_BODY_MAX_BYTES} after metadata merge"),
+        ));
+    }
+    Ok(())
 }
 
 fn internal_notes_error(error: impl std::fmt::Display) -> NotesMutationError {
