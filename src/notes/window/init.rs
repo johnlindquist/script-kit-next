@@ -121,7 +121,7 @@ impl NotesApp {
                     char_count: n.char_count(),
                     is_current: Some(n.id) == selected_note_id,
                     is_pinned: n.is_pinned,
-                    preview: Self::strip_markdown_for_preview(&n.preview()),
+                    preview: Self::note_switcher_preview(n),
                     relative_time: Self::format_relative_time(n.updated_at),
                 })
                 .collect::<Vec<_>>(),

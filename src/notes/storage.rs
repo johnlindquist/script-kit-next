@@ -818,6 +818,29 @@ pub(crate) fn get_note_tags(note_id: NoteId) -> Result<Vec<String>> {
     Ok(tags)
 }
 
+pub(crate) fn get_note_aliases(note_id: NoteId) -> Result<Vec<String>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT alias
+            FROM note_aliases
+            WHERE note_id = ?1
+            ORDER BY slug ASC
+            "#,
+        )
+        .context("Failed to prepare note aliases query")?;
+    let aliases = stmt
+        .query_map(params![note_id.as_str()], |row| row.get::<_, String>(0))
+        .context("Failed to query note aliases")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note aliases")?;
+    Ok(aliases)
+}
+
 pub(crate) fn get_note_outbound_link_count(note_id: NoteId) -> Result<usize> {
     count_note_links(
         "SELECT COUNT(*) FROM note_links WHERE source_note_id = ?1",
@@ -827,7 +850,13 @@ pub(crate) fn get_note_outbound_link_count(note_id: NoteId) -> Result<usize> {
 
 pub(crate) fn get_note_backlink_count(note_id: NoteId) -> Result<usize> {
     count_note_links(
-        "SELECT COUNT(*) FROM note_links WHERE target_note_id = ?1",
+        r#"
+        SELECT COUNT(DISTINCT l.source_note_id)
+        FROM note_links l
+        JOIN notes n ON n.id = l.source_note_id
+        WHERE l.target_note_id = ?1
+          AND n.deleted_at IS NULL
+        "#,
         note_id,
     )
 }
@@ -1816,6 +1845,7 @@ mod tests {
 
         save_note(&note).expect("failed to save note with metadata");
         let tags = get_note_tags(id).expect("metadata tags should be readable");
+        let aliases = get_note_aliases(id).expect("metadata aliases should be readable");
         let outbound_count =
             get_note_outbound_link_count(id).expect("outbound links should be countable");
 
@@ -1824,6 +1854,12 @@ mod tests {
         assert!(
             tags.iter().any(|tag| tag == &token),
             "frontmatter/hash tag should be indexed"
+        );
+        assert!(
+            aliases
+                .iter()
+                .any(|alias| alias == &format!("{token} Alias")),
+            "frontmatter alias should be indexed"
         );
         assert_eq!(outbound_count, 1);
     }
@@ -1873,6 +1909,53 @@ mod tests {
         assert_eq!(backlinks.len(), 1);
         assert_eq!(backlinks[0].id, source_id);
         assert_eq!(backlinks[0].title, "Source");
+    }
+
+    #[test]
+    fn test_backlink_count_matches_distinct_active_backlink_sources() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before backlink count test");
+        let token = unique_test_token("backlink_distinct");
+        let target = Note::with_content(format!("# {token} Target\nBody"));
+        let target_id = target.id;
+        save_note(&target).expect("failed to save target note");
+        let source = Note::with_content(format!(
+            "# Source\n[[{token} Target]] and again [[{token} Target]]"
+        ));
+        let source_id = source.id;
+        save_note(&source).expect("failed to save source note");
+
+        assert_eq!(
+            get_note_backlink_count(target_id).expect("backlink count should work"),
+            1
+        );
+        assert_eq!(
+            get_note_backlinks(target_id)
+                .expect("backlinks should work")
+                .len(),
+            1
+        );
+
+        let mut deleted_source = get_note(source_id)
+            .expect("source note lookup should work")
+            .expect("source note should exist");
+        deleted_source.soft_delete();
+        save_note(&deleted_source).expect("failed to soft-delete source note");
+
+        assert_eq!(
+            get_note_backlink_count(target_id)
+                .expect("backlink count should ignore deleted sources"),
+            0
+        );
+        assert_eq!(
+            get_note_backlinks(target_id)
+                .expect("backlinks should ignore deleted sources")
+                .len(),
+            0
+        );
+
+        delete_note_permanently(source_id).expect("cleanup failed for source note");
+        delete_note_permanently(target_id).expect("cleanup failed for target note");
     }
 
     #[test]

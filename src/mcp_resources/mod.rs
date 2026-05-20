@@ -154,7 +154,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: NOTES_RESOURCE_URI.to_string(),
             name: "Notes".to_string(),
             description: Some(
-                "Active Script Kit notes. Read kit://notes for a bounded list, or kit://notes/{id} for a full note."
+                "Active Script Kit notes. Read kit://notes for a bounded list with metadata, kit://notes?tag=... to filter organized notes, or kit://notes/{id} for a full note."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -451,7 +451,11 @@ fn read_notes_resource(uri: &str) -> Result<ResourceContent, String> {
 
 fn read_notes_list_resource(uri: &str) -> Result<ResourceContent, String> {
     let include_deleted = query_bool(uri, "includeDeleted");
-    let mut notes = if include_deleted {
+    let list_query = notes_list_search_query(uri);
+    let mut notes = if let Some(query) = &list_query {
+        crate::notes::search_notes(query)
+            .map_err(|error| format!("Failed to search notes: {error}"))?
+    } else if include_deleted {
         let mut active = crate::notes::get_all_notes()
             .map_err(|error| format!("Failed to read active notes: {error}"))?;
         let mut deleted = crate::notes::get_deleted_notes()
@@ -472,6 +476,7 @@ fn read_notes_list_resource(uri: &str) -> Result<ResourceContent, String> {
     let json = serde_json::json!({
         "schemaVersion": NOTES_RESOURCE_SCHEMA_VERSION,
         "uri": NOTES_RESOURCE_URI,
+        "query": list_query,
         "count": summaries.len(),
         "truncated": original_len > summaries.len(),
         "notes": summaries,
@@ -502,6 +507,7 @@ fn read_single_note_resource(uri: &str) -> Result<ResourceContent, String> {
         "schemaVersion": NOTES_RESOURCE_SCHEMA_VERSION,
         "uri": resource_uri,
         "note": note,
+        "metadata": note_metadata_json(note_id),
     });
 
     Ok(ResourceContent {
@@ -514,6 +520,7 @@ fn read_single_note_resource(uri: &str) -> Result<ResourceContent, String> {
 
 fn note_summary_json(note: &crate::notes::Note) -> Value {
     let preview: String = note.content.chars().take(240).collect();
+    let metadata = note_metadata_json(note.id);
     serde_json::json!({
         "id": note.id.as_str(),
         "uri": format!("kit://notes/{}", note.id),
@@ -525,7 +532,38 @@ fn note_summary_json(note: &crate::notes::Note) -> Value {
         "deletedAt": note.deleted_at.map(|dt| dt.to_rfc3339()),
         "isPinned": note.is_pinned,
         "sortOrder": note.sort_order,
+        "metadata": metadata,
     })
+}
+
+fn note_metadata_json(note_id: crate::notes::NoteId) -> Value {
+    let tags = crate::notes::get_note_tags(note_id).unwrap_or_default();
+    let aliases = crate::notes::get_note_aliases(note_id).unwrap_or_default();
+    let tag_count = tags.len();
+    let alias_count = aliases.len();
+    let outbound_link_count = crate::notes::get_note_outbound_link_count(note_id).unwrap_or(0);
+    let backlink_count = crate::notes::get_note_backlink_count(note_id).unwrap_or(0);
+    serde_json::json!({
+        "tags": tags,
+        "aliases": aliases,
+        "tagCount": tag_count,
+        "aliasCount": alias_count,
+        "outboundLinkCount": outbound_link_count,
+        "backlinkCount": backlink_count,
+    })
+}
+
+fn notes_list_search_query(uri: &str) -> Option<String> {
+    if let Some(tag) = query_string_param(uri, "tag").filter(|value| !value.trim().is_empty()) {
+        return Some(format!("tag:{tag}"));
+    }
+    if let Some(alias) = query_string_param(uri, "alias").filter(|value| !value.trim().is_empty()) {
+        return Some(format!("alias:{alias}"));
+    }
+    if let Some(link) = query_string_param(uri, "link").filter(|value| !value.trim().is_empty()) {
+        return Some(format!("link:{link}"));
+    }
+    query_string_param(uri, "q").filter(|value| !value.trim().is_empty())
 }
 
 pub(crate) fn parse_u64_query_param(uri: &str, key: &str) -> Option<u64> {
@@ -556,10 +594,49 @@ fn query_bool(uri: &str, key: &str) -> bool {
 
 fn query_string_param(uri: &str, key: &str) -> Option<String> {
     let query = uri.split_once('?')?.1;
-    query
-        .split('&')
-        .filter_map(|pair| pair.split_once('='))
-        .find_map(|(k, v)| if k == key { Some(v.to_string()) } else { None })
+    query.split('&').find_map(|pair| {
+        let (k, v) = pair.split_once('=')?;
+        (percent_decode_query_component(k) == key).then(|| percent_decode_query_component(v))
+    })
+}
+
+fn percent_decode_query_component(input: &str) -> String {
+    let mut bytes = Vec::with_capacity(input.len());
+    let raw = input.as_bytes();
+    let mut index = 0;
+    while index < raw.len() {
+        match raw[index] {
+            b'+' => {
+                bytes.push(b' ');
+                index += 1;
+            }
+            b'%' if index + 2 < raw.len() => {
+                let hi = hex_value(raw[index + 1]);
+                let lo = hex_value(raw[index + 2]);
+                if let (Some(hi), Some(lo)) = (hi, lo) {
+                    bytes.push((hi << 4) | lo);
+                    index += 3;
+                } else {
+                    bytes.push(raw[index]);
+                    index += 1;
+                }
+            }
+            byte => {
+                bytes.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
+}
+
+fn hex_value(byte: u8) -> Option<u8> {
+    match byte {
+        b'0'..=b'9' => Some(byte - b'0'),
+        b'a'..=b'f' => Some(byte - b'a' + 10),
+        b'A'..=b'F' => Some(byte - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn read_audit_resource(uri: &str) -> Result<ResourceContent, String> {
@@ -3364,6 +3441,10 @@ mod tests {
         crate::test_utils::PROVIDER_JSON_TEST_LOCK.get_or_init(|| std::sync::Mutex::new(()))
     }
 
+    fn unique_notes_resource_token(prefix: &str) -> String {
+        format!("{}_{}", prefix, uuid::Uuid::new_v4().simple())
+    }
+
     // =======================================================
     // TDD Tests - Written FIRST per spec requirements
     // =======================================================
@@ -4429,6 +4510,155 @@ mod tests {
         let json = serde_json::to_string(&item).expect("serialize");
         let parsed: FocusedItemInfo = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(item, parsed);
+    }
+
+    #[test]
+    fn test_notes_list_resource_can_filter_and_report_metadata() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        crate::notes::init_notes_db().expect("notes db should initialize before resource test");
+        let token = unique_notes_resource_token("resource_tag");
+        let note = crate::notes::Note::with_content(format!(
+            "---\ntags: [{token}]\naliases: [{token} Alias]\n---\n# Resource Metadata\nBody [[{token} Target]]"
+        ));
+        let note_id = note.id;
+        crate::notes::save_note(&note).expect("failed to save notes resource test note");
+
+        let content = read_notes_list_resource(&format!("kit://notes?tag={token}&limit=10"))
+            .expect("tag-filtered notes resource should resolve");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
+        let notes = value["notes"].as_array().expect("notes array");
+        let summary = notes
+            .iter()
+            .find(|candidate| candidate["id"] == note_id.as_str())
+            .expect("created note should be returned by tag-filtered resource");
+
+        crate::notes::delete_note_permanently(note_id)
+            .expect("cleanup failed for notes resource metadata test");
+
+        assert_eq!(value["query"], format!("tag:{token}"));
+        assert!(
+            summary["metadata"]["tags"]
+                .as_array()
+                .expect("tags array")
+                .iter()
+                .any(|tag| tag == token.as_str()),
+            "summary metadata should include indexed tags"
+        );
+        assert!(
+            summary["metadata"]["aliases"]
+                .as_array()
+                .expect("aliases array")
+                .iter()
+                .any(|alias| alias == format!("{token} Alias").as_str()),
+            "summary metadata should include indexed aliases"
+        );
+        assert_eq!(summary["metadata"]["outboundLinkCount"], 1);
+    }
+
+    #[test]
+    fn test_single_note_resource_reports_metadata() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        crate::notes::init_notes_db().expect("notes db should initialize before resource test");
+        let token = unique_notes_resource_token("single_resource");
+        let note = crate::notes::Note::with_content(format!(
+            "---\ntags: [{token}]\naliases: [{token} Alias]\n---\n# Single Resource\nBody [[{token} Target]]"
+        ));
+        let note_id = note.id;
+        crate::notes::save_note(&note).expect("failed to save single notes resource test note");
+
+        let content = read_single_note_resource(&format!("kit://notes/{note_id}"))
+            .expect("single notes resource should resolve");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
+
+        crate::notes::delete_note_permanently(note_id)
+            .expect("cleanup failed for single notes resource metadata test");
+
+        assert_eq!(value["note"]["id"], note_id.as_str());
+        assert!(
+            value["metadata"]["tags"]
+                .as_array()
+                .expect("tags array")
+                .iter()
+                .any(|tag| tag == token.as_str()),
+            "single note metadata should include indexed tags"
+        );
+        assert!(
+            value["metadata"]["aliases"]
+                .as_array()
+                .expect("aliases array")
+                .iter()
+                .any(|alias| alias == format!("{token} Alias").as_str()),
+            "single note metadata should include indexed aliases"
+        );
+        assert_eq!(value["metadata"]["outboundLinkCount"], 1);
+    }
+
+    #[test]
+    fn test_notes_resource_query_params_are_url_decoded() {
+        assert_eq!(
+            query_string_param("kit://notes?q=project%20plan", "q"),
+            Some("project plan".to_string())
+        );
+        assert_eq!(
+            query_string_param("kit://notes?alias=Project+Plan", "alias"),
+            Some("Project Plan".to_string())
+        );
+        assert_eq!(
+            notes_list_search_query("kit://notes?tag=projects%2Fscript-kit"),
+            Some("tag:projects/script-kit".to_string())
+        );
+    }
+
+    #[test]
+    fn test_notes_list_resource_filters_alias_link_q_and_plus_decoding() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        crate::notes::init_notes_db().expect("notes db should initialize before resource test");
+        let token = unique_notes_resource_token("resource_query");
+        let alias = format!("{token} Project Plan");
+        let target_title = format!("{token} Target Note");
+        let body_token = format!("{token}_body");
+        let note = crate::notes::Note::with_content(format!(
+            "---\naliases: [{alias}]\n---\n# Resource Query\n{body_token} links to [[{target_title}]]"
+        ));
+        let note_id = note.id;
+        crate::notes::save_note(&note).expect("failed to save notes resource query test note");
+
+        let alias_uri = format!("kit://notes?alias={}&limit=10", alias.replace(' ', "+"));
+        let link_uri = format!(
+            "kit://notes?link={}&limit=10",
+            target_title.replace(' ', "+")
+        );
+        let text_uri = format!("kit://notes?q={body_token}&limit=10");
+        let alias_content =
+            read_notes_list_resource(&alias_uri).expect("alias-filtered notes should resolve");
+        let link_content =
+            read_notes_list_resource(&link_uri).expect("link-filtered notes should resolve");
+        let text_content =
+            read_notes_list_resource(&text_uri).expect("text-filtered notes should resolve");
+
+        crate::notes::delete_note_permanently(note_id)
+            .expect("cleanup failed for notes resource query test");
+
+        for (label, content) in [
+            ("alias", alias_content),
+            ("link", link_content),
+            ("q", text_content),
+        ] {
+            let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
+            let notes = value["notes"].as_array().expect("notes array");
+            assert!(
+                notes
+                    .iter()
+                    .any(|candidate| candidate["id"] == note_id.as_str()),
+                "{label} resource filter should return the created note"
+            );
+        }
     }
 
     // ── Provider-backed JSON resource tests ───────────────────────

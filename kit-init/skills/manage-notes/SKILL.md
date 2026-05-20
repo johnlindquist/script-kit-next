@@ -71,6 +71,8 @@ Use the MCP notes tools when creating or organizing notes from an agent. They ro
 
 Tags and aliases passed to the mutation tools are written into visible YAML frontmatter so users can edit them directly. Markdown `#tags` and `[[Wiki Links]]` are indexed from the note body. Backlinks are derived from the normalized link index; they are not copied into note content.
 
+Read `kit://notes` to inspect organized notes. The resource returns each note's tags, aliases, outbound link count, and backlink count, and supports `?tag=...`, `?alias=...`, `?link=...`, or `?q=...` filters. Read `kit://notes/{id}` for full note content plus the same metadata.
+
 ## Automation Targets
 
 The Notes window is a first-class automation target. Use `target: { "type": "kind", "kind": "notes" }` to address it.
