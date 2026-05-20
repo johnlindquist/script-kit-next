@@ -359,6 +359,11 @@ function expectedResponse(args: Args) {
   return args.actionKind === "key" ? "stdin_command_parsed" : "batchResult";
 }
 
+function expectedResponseForTarget(args: Args, targetReceipt: JsonObject) {
+  if (shouldUseLauncherSetFilter(args, targetReceipt)) return "stdin_command_parsed";
+  return expectedResponse(args);
+}
+
 async function printableTextKeyAction(args: Args, before: JsonObject) {
   const currentInput =
     typeof (before.keyboardOwner as JsonObject | undefined)?.inputValue === "string"
@@ -372,6 +377,8 @@ async function printableTextKeyAction(args: Args, before: JsonObject) {
 }
 
 function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: JsonObject, afterScroll: JsonObject) {
+  const beforeSubmitDiagnostics = before.submitDiagnostics ?? null;
+  const afterSubmitDiagnostics = after.submitDiagnostics ?? null;
   return {
     focusChanged: before.focusedSemanticId !== after.focusedSemanticId,
     selectionChanged: before.selectedSemanticId !== after.selectedSemanticId,
@@ -379,6 +386,7 @@ function visibleResult(before: JsonObject, after: JsonObject, beforeScroll: Json
     windowVisibleBefore: before.windowVisible ?? null,
     windowVisibleAfter: after.windowVisible ?? null,
     scrollChanged: JSON.stringify(beforeScroll.scroll ?? null) !== JSON.stringify(afterScroll.scroll ?? null),
+    submitDiagnosticsChanged: JSON.stringify(beforeSubmitDiagnostics) !== JSON.stringify(afterSubmitDiagnostics),
   };
 }
 
@@ -465,6 +473,17 @@ function isScriptListTargetReceipt(receipt: JsonObject) {
     || resolved?.appViewVariant === "ScriptList";
 }
 
+function isPromptEntityTargetReceipt(receipt: JsonObject) {
+  const resolved = receipt.resolvedTarget as JsonObject | undefined;
+  return resolved?.surfaceKind === "PromptEntity"
+    || resolved?.appViewVariant === "MiniPrompt"
+    || resolved?.appViewVariant === "ArgPrompt";
+}
+
+function shouldUseLauncherSetFilter(args: Args, targetReceipt: JsonObject) {
+  return args.actionKind === "set-input" && isScriptListTargetReceipt(targetReceipt);
+}
+
 function isNonDestructiveLauncherSubmit(actionId: string | null) {
   return actionId !== null && nonDestructiveLauncherSubmitIds.has(actionId);
 }
@@ -523,6 +542,12 @@ async function submitPreflight(args: Args, targetReceipt: JsonObject, before: Js
   const selectedSemanticId = before.selectedSemanticId ?? null;
   const actionId = selectedActionIdFromSemanticId(selectedSemanticId);
   if (!isActionsDialogTargetReceipt(targetReceipt)) {
+    if (isPromptEntityTargetReceipt(targetReceipt)) {
+      return {
+        state: "dispatched",
+        actionId: typeof selectedSemanticId === "string" ? selectedSemanticId : actionId,
+      };
+    }
     if (isScriptListTargetReceipt(targetReceipt) && isNonDestructiveLauncherSubmit(actionId)) {
       return { state: "dispatched", actionId };
     }
@@ -577,6 +602,14 @@ function resolveSubmitLifecycleAfterAction(
   parentAfter: JsonObject | null,
 ): SubmitLifecycleState {
   if (preflight.state !== "dispatched") return preflight;
+  if (sourceAfter.submitDiagnostics && typeof sourceAfter.submitDiagnostics === "object") {
+    return {
+      state: "source-live",
+      actionId: preflight.actionId,
+      parentSubjectId: preflight.parentSubjectId,
+      parentSubjectText: preflight.parentSubjectText,
+    };
+  }
   if (sourceAfter.classification === "ok") {
     return {
       state: "source-live",
@@ -715,7 +748,13 @@ async function main() {
 
   let actionEnvelope: JsonObject = { status: "blocked", reason: "blocked-by-unsafe-operation" };
   if (guardWithPreflight.errors.length === 0 && targetReceipt.classification === "ok") {
-    actionEnvelope = isPrintableTextKey(args)
+    actionEnvelope = shouldUseLauncherSetFilter(args, targetReceipt)
+      ? await send(args.session, {
+        type: "setFilter",
+        requestId: requestId("launcher-set-filter"),
+        text: args.text,
+      }, args.timeoutMs)
+      : isPrintableTextKey(args)
       ? await printableTextKeyAction(args, before)
       : args.actionKind === "key"
       ? await send(args.session, actionPayload(args, selector), args.timeoutMs)
@@ -758,13 +797,17 @@ async function main() {
     postActionLifecycle,
     dismissLifecycle: isDismissLike(args) ? postActionLifecycle : null,
     expected: {
-      protocolResponse: expectedResponse(args),
+      protocolResponse: expectedResponseForTarget(args, targetReceipt),
       submitAllowed: args.allowSubmit,
       noNativeEscalation: !guardWithPreflight.nativeEscalation,
-      prePostReceipts: ["focus.inspect", "scroll.inspect"],
+      prePostReceipts: ["focus.inspect", "focus.inspect.submitDiagnostics", "scroll.inspect"],
     },
     actionReceipt,
     targetAfter: after.target ?? null,
+    submitDiagnostics: {
+      before: before.submitDiagnostics ?? null,
+      after: after.submitDiagnostics ?? null,
+    },
     visibleResult: visibleResult(before, after, beforeScroll, afterScroll),
     before: { focus: before, scroll: beforeScroll },
     after: { focus: after, scroll: afterScroll },

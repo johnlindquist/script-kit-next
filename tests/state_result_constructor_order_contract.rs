@@ -15,6 +15,7 @@ const EXPECTED_STATE_RESULT_FIELDS: &[&str] = &[
     "surface_contract",
     "active_popup_contract",
     "active_footer",
+    "submit_diagnostics",
     "placeholder",
     "input_value",
     "choice_count",

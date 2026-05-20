@@ -154,6 +154,7 @@ async function main() {
     focusedNode: focused,
     selectedNode: nodes.find((node) => node.semanticId === selectedSemanticId) ?? null,
     activeFooter: state.activeFooter ?? null,
+    submitDiagnostics: state.submitDiagnostics ?? null,
     keyboardOwner: {
       inputValue: state.inputValue ?? null,
       promptType: state.promptType ?? null,
