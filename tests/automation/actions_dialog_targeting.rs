@@ -37,6 +37,7 @@ fn actions_dialog_registered_as_popup() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -51,6 +52,7 @@ fn actions_dialog_registered_as_popup() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(actions);
 
@@ -122,6 +124,7 @@ fn actions_dialog_close_removes_from_listing() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(actions);
 
@@ -151,6 +154,7 @@ fn prompt_popup_kind_resolves_independently() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(popup);
 
@@ -552,6 +556,7 @@ fn actions_dialog_records_parent_identity_from_main() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
     script_kit_gpui::windows::register_attached_popup(
@@ -589,6 +594,7 @@ fn actions_dialog_records_parent_identity_from_non_main_host() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
     script_kit_gpui::windows::register_attached_popup(
@@ -629,6 +635,7 @@ fn confirm_popup_records_parent_identity() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
     script_kit_gpui::windows::register_attached_popup(
@@ -690,6 +697,7 @@ fn parent_identity_round_trips_through_serde() {
         bounds: None,
         parent_window_id: Some("main".into()),
         parent_kind: Some(AutomationWindowKind::Main),
+        pid: None,
     };
     let json = serde_json::to_string(&info).expect("serialize");
     assert!(json.contains("\"parentWindowId\":\"main\""));
@@ -711,6 +719,7 @@ fn parent_identity_omitted_when_none_in_serde() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     let json = serde_json::to_string(&info).expect("serialize");
     assert!(!json.contains("parentWindowId"));
@@ -820,6 +829,7 @@ fn actions_dialog_inspect_result_with_panel_only_quality() {
         os_window_id: None,
         semantic_quality: Some(SemanticQuality::PanelOnly),
         warnings: vec!["panel_only_actions_dialog".into()],
+        pid: None,
     };
     let json = serde_json::to_value(&snapshot).expect("serialize");
     assert_eq!(json["semanticQuality"], "panel_only");
@@ -842,7 +852,6 @@ fn prompt_popup_inspect_result_with_full_quality() {
         surface_hit_point: None,
         suggested_hit_points: Vec::new(),
         elements: vec![script_kit_gpui::protocol::ElementInfo {
-            semantic_id: "button:0:confirm".into(),
             element_type: script_kit_gpui::protocol::ElementType::Button,
             text: Some("Confirm".into()),
             value: Some("confirm".into()),
@@ -856,6 +865,7 @@ fn prompt_popup_inspect_result_with_full_quality() {
             selectable: None,
             status_kind: None,
             action_disabled: None,
+            semantic_id: "button:0:confirm".into(),
         }],
         total_count: 1,
         focused_semantic_id: Some("button:0:confirm".into()),
@@ -866,6 +876,7 @@ fn prompt_popup_inspect_result_with_full_quality() {
         os_window_id: None,
         semantic_quality: Some(SemanticQuality::Full),
         warnings: Vec::new(),
+        pid: None,
     };
     let json = serde_json::to_value(&snapshot).expect("serialize");
     assert_eq!(json["semanticQuality"], "full");

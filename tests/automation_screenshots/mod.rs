@@ -80,6 +80,7 @@ fn make_info(
         }),
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     }
 }
 
@@ -280,6 +281,7 @@ fn make_registered(
         bounds,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(info.clone());
     info

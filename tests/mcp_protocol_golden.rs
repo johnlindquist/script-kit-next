@@ -87,7 +87,13 @@ fn load_cases() -> Vec<(usize, GoldenCase)> {
 /// scriptlets / app_state mirrors the stateless request path.
 fn drive_case(request_json: &str) -> JsonRpcResponse {
     match parse_request(request_json) {
-        Ok(req) => handle_request_with_context(req, &[], &[], None),
+        Ok(req) => {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_time()
+                .build()
+                .expect("build test runtime");
+            runtime.block_on(handle_request_with_context(req, &[], &[], None))
+        }
         Err(err_response) => err_response,
     }
 }

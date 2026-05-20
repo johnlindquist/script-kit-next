@@ -41,6 +41,7 @@ fn acp_detached_target_resolves_to_correct_kind() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     });
     script_kit_gpui::windows::upsert_automation_window(AutomationWindowInfo {
         id: format!("{p}:acp-1"),
@@ -52,6 +53,7 @@ fn acp_detached_target_resolves_to_correct_kind() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     });
 
     // Target by ID for deterministic resolution (avoids global registry index collisions)
@@ -88,6 +90,7 @@ fn non_acp_secondary_target_does_not_resolve_as_acp() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     });
 
     let resolved =
@@ -265,6 +268,7 @@ fn acp_detached_target_by_id_resolves_correctly() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     });
 
     let resolved =
@@ -296,6 +300,7 @@ fn multiple_acp_detached_windows_indexed_targeting() {
             bounds: None,
             parent_window_id: None,
             parent_kind: None,
+            pid: None,
         });
     }
 

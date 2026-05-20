@@ -27,7 +27,11 @@ fn notes_resource_rejects_invalid_note_id() {
         params: json!({ "uri": "kit://notes/not-a-uuid" }),
     };
 
-    let response = handle_request(request);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    let response = runtime.block_on(handle_request(request));
     let error = response
         .error
         .expect("invalid note URI should be a JSON-RPC error");
@@ -43,7 +47,11 @@ fn audit_resource_returns_bounded_json_envelope() {
         params: json!({ "uri": "kit://audit?limit=2&traceId=missing-test-trace" }),
     };
 
-    let response = handle_request(request);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    let response = runtime.block_on(handle_request(request));
     let result = response
         .result
         .expect("kit://audit should return a resource envelope even when the log is empty");

@@ -58,6 +58,7 @@ const allowedKeys = new Set([
   "k",
   "p",
   "w",
+  "backspace",
 ]);
 
 function isPrintableTextKey(args: Args) {
@@ -258,7 +259,7 @@ function safety(args: Args) {
   const errors: string[] = [];
   const normalizedKey = args.key.toLowerCase();
 
-  if (args.actionKind === "set-input" && args.text.length === 0) {
+  if (args.actionKind === "set-input" && args.text === undefined) {
     errors.push("set-input requires --text or --value");
   }
   if (args.actionKind === "select" && !args.semanticId) {

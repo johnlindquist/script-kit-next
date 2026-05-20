@@ -39,6 +39,7 @@ fn detached_acp_targeting_flow() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -53,6 +54,7 @@ fn detached_acp_targeting_flow() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 
@@ -104,6 +106,7 @@ fn multiple_detached_acp_windows_indexed() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp0);
 
@@ -117,6 +120,7 @@ fn multiple_detached_acp_windows_indexed() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp1);
 
@@ -201,6 +205,7 @@ fn acp_window_close_removes_from_registry() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 
@@ -238,6 +243,7 @@ fn acp_visibility_toggle() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 
@@ -656,6 +662,7 @@ fn acp_detached_inspect_result_carries_semantic_quality() {
         os_window_id: Some(99),
         semantic_quality: Some(SemanticQuality::PanelOnly),
         warnings: vec!["panel_only_acp_detached".into()],
+        pid: None,
     };
     let msg = Message::automation_inspect_result("inspect-acp-1".into(), snapshot);
     let json = serde_json::to_value(&msg).expect("serialize");
@@ -714,6 +721,7 @@ fn acp_detached_full_quality_inspect_receipt() {
         os_window_id: None,
         semantic_quality: Some(SemanticQuality::Full),
         warnings: Vec::new(),
+        pid: None,
     };
     let json = serde_json::to_value(&snapshot).expect("serialize");
     assert_eq!(json["semanticQuality"], "full");
