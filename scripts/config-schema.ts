@@ -1342,11 +1342,11 @@ export interface Config extends BaseConfig {
    *   files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" },
    *   notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true },
    *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
-   *   aiVault: { enabled: false, maxResults: 3, minQueryChars: 3, providers: ["hermesAgent", "rovoDev"], cacheTtlMs: 30000, searchContent: false },
-   *   clipboardHistory: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
- *   dictationHistory: { enabled: false, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
-   *   browserHistory: { enabled: false, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
-   *   browserTabs: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 80, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true, cacheTtlMs: 10000 }
+ *   aiVault: { enabled: true, maxResults: 3, minQueryChars: 3, providers: ["claude", "codex", "hermesAgent", "rovoDev"], cacheTtlMs: 30000, searchContent: false, resumeTerminal: "cmux", excludePatterns: [] },
+   *   clipboardHistory: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
+ *   dictationHistory: { enabled: true, maxResults: 3, minQueryChars: 4, scanLimit: 200 },
+   *   browserHistory: { enabled: true, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
+   *   browserTabs: { enabled: true, maxResults: 3, minQueryChars: 3, scanLimit: 80, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true, cacheTtlMs: 10000 }
    * }
    * @example
    * ```typescript
@@ -1575,13 +1575,13 @@ export interface UnifiedSearchConfig {
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for passive root AI Vault rows backed by cmux session metadata. */
   aiVault?: UnifiedSearchAiVaultConfig;
-  /** Controls for opt-in passive root clipboard history rows. */
+  /** Controls for passive root clipboard history rows. */
   clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
-  /** Controls for opt-in passive root dictation transcript rows. */
+  /** Controls for passive root dictation transcript rows. */
   dictationHistory?: UnifiedSearchDictationHistoryConfig;
-  /** Controls for opt-in passive root open-browser-tab rows. */
+  /** Controls for passive root open-browser-tab rows. */
   browserTabs?: UnifiedSearchBrowserTabsConfig;
-  /** Controls for opt-in passive root browser history rows. */
+  /** Controls for passive root browser history rows. */
   browserHistory?: UnifiedSearchBrowserHistoryConfig;
 }
 
@@ -1630,10 +1630,11 @@ export interface UnifiedSearchAcpHistoryConfig {
   minQueryChars?: number;
 }
 
-export type AiVaultProvider = "hermesAgent" | "rovoDev";
+export type AiVaultProvider = "claude" | "codex" | "hermesAgent" | "rovoDev";
+export type AiVaultResumeTerminal = "cmux" | "quickTerminal";
 
 export interface UnifiedSearchAiVaultConfig {
-  /** Enable cmux AI Vault rows in root launcher search. Disabled by default. */
+  /** Enable cmux AI Vault rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of AI Vault rows to append. Clamped to 1-5. */
   maxResults?: number;
@@ -1645,6 +1646,18 @@ export interface UnifiedSearchAiVaultConfig {
   cacheTtlMs?: number;
   /** Allow provider-owned content matching while still rendering metadata-only rows. */
   searchContent?: boolean;
+  /** Terminal target used by "Resume in Configured Terminal". */
+  resumeTerminal?: AiVaultResumeTerminal;
+  /**
+   * Metadata-only patterns for hiding AI Vault conversations from root search.
+   *
+   * Plain strings match case-insensitively against title, provider, session id,
+   * source kind, model, workspace path, and stable key. Patterns containing
+   * `*` or `?` use shell-style wildcard matching. Prefix with a field to limit
+   * matching, for example `title:private*`, `workspace:~/dev/secret*`,
+   * `provider:claude`, or `model:gpt-*`.
+   */
+  excludePatterns?: string[];
 }
 
 export interface UnifiedSearchNotesConfig {
@@ -1659,7 +1672,7 @@ export interface UnifiedSearchNotesConfig {
 }
 
 export interface UnifiedSearchClipboardHistoryConfig {
-  /** Enable clipboard history rows in root launcher search. Disabled by default. */
+  /** Enable clipboard history rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of clipboard history rows to append. Clamped to 1-5. */
   maxResults?: number;
@@ -1670,7 +1683,7 @@ export interface UnifiedSearchClipboardHistoryConfig {
 }
 
 export interface UnifiedSearchDictationHistoryConfig {
-  /** Enable dictation transcript rows in root launcher search. Disabled by default. */
+  /** Enable dictation transcript rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of dictation history rows to append. Clamped to 1-5. */
   maxResults?: number;
@@ -1684,7 +1697,7 @@ export type BrowserHistoryProvider = "arc" | "chrome" | "brave" | "edge";
 export type BrowserTabProvider = "arc" | "chrome" | "brave" | "edge";
 
 export interface UnifiedSearchBrowserTabsConfig {
-  /** Enable currently open browser tab rows in root launcher search. Disabled by default. */
+  /** Enable currently open browser tab rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of browser tab rows to append. Clamped to 1-5. */
   maxResults?: number;
@@ -1701,7 +1714,7 @@ export interface UnifiedSearchBrowserTabsConfig {
 }
 
 export interface UnifiedSearchBrowserHistoryConfig {
-  /** Enable browser history rows in root launcher search. Disabled by default. */
+  /** Enable browser history rows in root launcher search. Enabled by default. */
   enabled?: boolean;
   /** Maximum number of browser history rows to append. Clamped to 1-5. */
   maxResults?: number;

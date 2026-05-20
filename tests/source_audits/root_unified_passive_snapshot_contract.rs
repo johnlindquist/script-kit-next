@@ -254,6 +254,53 @@ fn agentic_root_passive_frame_stability_proof_uses_state_receipts() {
 }
 
 #[test]
+fn root_defaults_benchmark_enforces_input_echo_and_staleness() {
+    let proof = include_str!("../../scripts/agentic/root-all-passive-defaults-benchmark.ts");
+    for required in [
+        "setFilterAndMeasureEcho",
+        "measureRapidTypingCase",
+        "measureInFlightCancellation",
+        "inputEchoMs",
+        "staleResultCount",
+        "finalInputStillEchoed",
+        "typingInputEchoP95Ms",
+        "overlappedInputEchoP95Ms",
+        "computedSearchTextMismatchCount",
+    ] {
+        assert!(
+            proof.contains(required),
+            "root passive benchmark should enforce `{required}`"
+        );
+    }
+    assert!(
+        proof.contains("waitForSourceResult(")
+            && proof.contains("expectedComputedSearchText"),
+        "source settle waits must be keyed by the expected final query, not the global fixture query"
+    );
+    assert!(
+        !proof.contains("captureScreenshot") && !proof.contains("simulateClick"),
+        "input responsiveness proof should stay state/protocol-first"
+    );
+}
+
+#[test]
+fn root_file_test_provider_supports_multi_query_cancellation_fixture() {
+    let root_file = include_str!("../../src/app_impl/root_file_search.rs");
+    for required in [
+        "enum RootFileSearchTestProvider",
+        "fixtures: Vec<RootFileSearchTestFixture>",
+        "passthrough_unmatched",
+        "SearchEvent::Done",
+        "fixture.query == query",
+    ] {
+        assert!(
+            root_file.contains(required),
+            "root file test provider should support deterministic multi-query fixture field `{required}`"
+        );
+    }
+}
+
+#[test]
 fn jsonl_history_sources_use_mtime_backed_foreground_indexes() {
     for (source_name, source) in [
         ("acp_history", include_str!("../../src/ai/acp/history.rs")),

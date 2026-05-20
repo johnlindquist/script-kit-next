@@ -1,6 +1,7 @@
 use super::*;
 
 const ROOT_FILE_RESULT_CACHE_LIMIT: usize = 24;
+const ROOT_FILE_SEARCH_DEBOUNCE_MS: u64 = 60;
 
 #[derive(Clone)]
 enum RootFileSearchRequest {
@@ -411,7 +412,7 @@ impl ScriptListApp {
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
-                .timer(std::time::Duration::from_millis(120))
+                .timer(std::time::Duration::from_millis(ROOT_FILE_SEARCH_DEBOUNCE_MS))
                 .await;
 
             if cancel.load(std::sync::atomic::Ordering::Relaxed) {
@@ -526,6 +527,17 @@ struct RootFileSearchTestFixture {
 }
 
 #[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum RootFileSearchTestProvider {
+    Single(RootFileSearchTestFixture),
+    Multi {
+        fixtures: Vec<RootFileSearchTestFixture>,
+        #[serde(default)]
+        passthrough_unmatched: bool,
+    },
+}
+
+#[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RootFileSearchTestFixtureResult {
     path: String,
@@ -551,12 +563,33 @@ fn emit_root_file_search_test_fixture(
     let Ok(raw) = std::env::var("SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER") else {
         return false;
     };
-    let Ok(fixture) = serde_json::from_str::<RootFileSearchTestFixture>(&raw) else {
+    let Ok(provider) = serde_json::from_str::<RootFileSearchTestProvider>(&raw) else {
         return false;
     };
-    if fixture.query != query {
+    let fixture = match provider {
+        RootFileSearchTestProvider::Single(fixture) => {
+            if fixture.query != query {
+                return false;
+            }
+            Some(fixture)
+        }
+        RootFileSearchTestProvider::Multi {
+            fixtures,
+            passthrough_unmatched,
+        } => {
+            let found = fixtures
+                .into_iter()
+                .find(|fixture| fixture.query == query);
+            if found.is_none() && !passthrough_unmatched {
+                let _ = tx.send(crate::file_search::SearchEvent::Done);
+                return true;
+            }
+            found
+        }
+    };
+    let Some(fixture) = fixture else {
         return false;
-    }
+    };
 
     std::thread::sleep(std::time::Duration::from_millis(fixture.delay_ms));
     if cancel.load(std::sync::atomic::Ordering::Relaxed) {
