@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, info};
 
+use super::metadata;
 use super::model::{Note, NoteId};
 
 /// Global database connection for notes
@@ -47,6 +48,13 @@ pub(crate) struct RootNoteSearchHit {
     pub is_pinned: bool,
     pub char_count: usize,
     pub score: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct NoteBacklinkSummary {
+    pub id: NoteId,
+    pub title: String,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -176,6 +184,52 @@ fn ensure_notes_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_note_cart_items_note_id_sort
             ON note_cart_items(note_id, sort_order, updated_at DESC);
 
+        CREATE TABLE IF NOT EXISTS note_tags (
+            note_id TEXT NOT NULL,
+            tag TEXT NOT NULL,
+            normalized_tag TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'markdown',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(note_id, normalized_tag),
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_note_tags_normalized
+            ON note_tags(normalized_tag, note_id);
+
+        CREATE TABLE IF NOT EXISTS note_aliases (
+            note_id TEXT NOT NULL,
+            alias TEXT NOT NULL,
+            slug TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'title',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(note_id, slug),
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_note_aliases_slug
+            ON note_aliases(slug, note_id);
+
+        CREATE TABLE IF NOT EXISTS note_links (
+            source_note_id TEXT NOT NULL,
+            target_note_id TEXT,
+            target_ref TEXT NOT NULL,
+            target_slug TEXT NOT NULL,
+            label TEXT,
+            kind TEXT NOT NULL DEFAULT 'wiki',
+            byte_start INTEGER NOT NULL DEFAULT 0,
+            byte_end INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(source_note_id, target_slug, byte_start, byte_end, kind),
+            FOREIGN KEY(source_note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY(target_note_id) REFERENCES notes(id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_note_links_target
+            ON note_links(target_note_id, source_note_id);
+        CREATE INDEX IF NOT EXISTS idx_note_links_target_slug
+            ON note_links(target_slug, source_note_id);
+
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
             title,
             content,
@@ -234,7 +288,11 @@ pub fn init_notes_db() -> Result<()> {
             .lock()
             .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
 
+        conn.execute_batch("PRAGMA foreign_keys=ON;")
+            .context("Failed to enable notes foreign keys")?;
         ensure_notes_schema(&conn)?;
+        backfill_note_metadata_with_conn(&conn)
+            .context("Failed to backfill notes metadata schema")?;
         debug!("Notes database already initialized, schema verified");
         return Ok(());
     }
@@ -249,8 +307,11 @@ pub fn init_notes_db() -> Result<()> {
 
     conn.execute_batch("PRAGMA journal_mode=WAL;")
         .context("Failed to enable WAL mode")?;
+    conn.execute_batch("PRAGMA foreign_keys=ON;")
+        .context("Failed to enable notes foreign keys")?;
 
     ensure_notes_schema(&conn)?;
+    backfill_note_metadata_with_conn(&conn).context("Failed to backfill notes metadata schema")?;
 
     rebuild_notes_search_index_with_conn(&conn).context("Failed to backfill notes FTS index")?;
 
@@ -295,11 +356,15 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
 /// Save a note (insert or update)
 pub fn save_note(note: &Note) -> Result<()> {
     let db = get_db()?;
-    let conn = db
+    let mut conn = db
         .lock()
         .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
 
-    conn.execute(
+    let tx = conn
+        .transaction()
+        .context("Failed to start note save transaction")?;
+
+    tx.execute(
         r#"
         INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
@@ -324,8 +389,172 @@ pub fn save_note(note: &Note) -> Result<()> {
     )
     .context("Failed to save note")?;
 
+    replace_note_metadata_with_conn(&tx, note).context("Failed to save note metadata")?;
+    tx.commit()
+        .context("Failed to commit note save transaction")?;
+
     debug!(note_id = %note.id, title = %note.title, "Note saved");
     invalidate_root_notes_search_cache();
+    Ok(())
+}
+
+fn replace_note_metadata_with_conn(conn: &Connection, note: &Note) -> Result<()> {
+    let parsed = metadata::parse_note_metadata(&note.title, &note.content);
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "DELETE FROM note_tags WHERE note_id = ?1",
+        params![note.id.as_str()],
+    )
+    .context("Failed to clear note tags")?;
+    conn.execute(
+        "DELETE FROM note_aliases WHERE note_id = ?1",
+        params![note.id.as_str()],
+    )
+    .context("Failed to clear note aliases")?;
+    conn.execute(
+        "DELETE FROM note_links WHERE source_note_id = ?1",
+        params![note.id.as_str()],
+    )
+    .context("Failed to clear note links")?;
+
+    for tag in parsed.tags {
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO note_tags (note_id, tag, normalized_tag, source, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            params![
+                note.id.as_str(),
+                tag.display,
+                tag.normalized,
+                tag.source,
+                now,
+            ],
+        )
+        .context("Failed to insert note tag")?;
+    }
+
+    for alias in parsed.aliases {
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO note_aliases (note_id, alias, slug, source, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5)
+            "#,
+            params![note.id.as_str(), alias.alias, alias.slug, alias.source, now,],
+        )
+        .context("Failed to insert note alias")?;
+    }
+
+    for link in parsed.links {
+        let target_note_id = resolve_note_link_target(conn, &link.target_slug)?;
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO note_links
+                (source_note_id, target_note_id, target_ref, target_slug, label, kind, byte_start, byte_end, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "#,
+            params![
+                note.id.as_str(),
+                target_note_id.map(|id| id.as_str()),
+                link.target_ref,
+                link.target_slug,
+                link.label,
+                link.kind,
+                link.byte_start as i64,
+                link.byte_end as i64,
+                now,
+            ],
+        )
+        .context("Failed to insert note link")?;
+    }
+
+    recompute_all_note_link_targets_with_conn(conn)?;
+    Ok(())
+}
+
+fn resolve_note_link_target(conn: &Connection, target_slug: &str) -> Result<Option<NoteId>> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT note_id
+            FROM note_aliases
+            WHERE slug = ?1
+            ORDER BY source = 'title' DESC, updated_at DESC
+            LIMIT 2
+            "#,
+        )
+        .context("Failed to prepare note link resolution query")?;
+    let matches = stmt
+        .query_map(params![target_slug], |row| row.get::<_, String>(0))
+        .context("Failed to query note aliases for link resolution")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note alias matches")?;
+
+    if matches.len() == 1 {
+        Ok(NoteId::parse(&matches[0]))
+    } else {
+        Ok(None)
+    }
+}
+
+fn resolve_unresolved_links_with_conn(conn: &Connection) -> Result<()> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT DISTINCT target_slug
+            FROM note_links
+            WHERE target_note_id IS NULL
+            "#,
+        )
+        .context("Failed to prepare unresolved note links query")?;
+    let slugs = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .context("Failed to query unresolved note links")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect unresolved note links")?;
+    drop(stmt);
+
+    for slug in slugs {
+        if let Some(target_id) = resolve_note_link_target(conn, &slug)? {
+            conn.execute(
+                "UPDATE note_links SET target_note_id = ?1 WHERE target_slug = ?2 AND target_note_id IS NULL",
+                params![target_id.as_str(), slug],
+            )
+            .context("Failed to resolve note links")?;
+        }
+    }
+
+    Ok(())
+}
+
+fn recompute_all_note_link_targets_with_conn(conn: &Connection) -> Result<()> {
+    conn.execute("UPDATE note_links SET target_note_id = NULL", [])
+        .context("Failed to clear note link targets")?;
+    resolve_unresolved_links_with_conn(conn)
+}
+
+fn backfill_note_metadata_with_conn(conn: &Connection) -> Result<()> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order
+            FROM notes
+            "#,
+        )
+        .context("Failed to prepare notes metadata backfill query")?;
+    let notes = stmt
+        .query_map([], row_to_note)
+        .context("Failed to query notes for metadata backfill")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect notes for metadata backfill")?;
+    drop(stmt);
+
+    for note in notes {
+        replace_note_metadata_with_conn(conn, &note)?;
+    }
+
+    recompute_all_note_link_targets_with_conn(conn)?;
     Ok(())
 }
 
@@ -433,6 +662,11 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
         .lock()
         .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
 
+    if let Some(metadata_notes) = search_notes_metadata_only(&conn, query)? {
+        debug!(query = %query, count = metadata_notes.len(), method = "metadata_only", "Note search completed");
+        return Ok(metadata_notes);
+    }
+
     // Try FTS search first with sanitized query
     let sanitized_query = sanitize_fts_query(query);
 
@@ -494,6 +728,162 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
             Ok(notes)
         }
     }
+}
+
+fn search_notes_metadata_only(conn: &Connection, query: &str) -> Result<Option<Vec<Note>>> {
+    let trimmed = query.trim();
+    if let Some(tag) = trimmed
+        .strip_prefix("tag:")
+        .or_else(|| trimmed.strip_prefix('#'))
+    {
+        return search_notes_by_metadata(conn, "tag", tag).map(Some);
+    }
+    if let Some(alias) = trimmed.strip_prefix("alias:") {
+        return search_notes_by_metadata(conn, "alias", alias).map(Some);
+    }
+    if let Some(link) = trimmed.strip_prefix("link:") {
+        return search_notes_by_metadata(conn, "link", link).map(Some);
+    }
+    Ok(None)
+}
+
+fn search_notes_by_metadata(conn: &Connection, mode: &str, query: &str) -> Result<Vec<Note>> {
+    let normalized = match mode {
+        "tag" => metadata::normalize_tag(query),
+        "alias" | "link" => {
+            let slug = metadata::slugify_note_ref(query);
+            (!slug.is_empty()).then_some(slug)
+        }
+        _ => metadata::normalize_tag(query).or_else(|| {
+            let slug = metadata::slugify_note_ref(query);
+            (!slug.is_empty()).then_some(slug)
+        }),
+    };
+    let Some(normalized) = normalized else {
+        return Ok(Vec::new());
+    };
+    let pattern = format!("{}%", normalized);
+
+    let condition = match mode {
+        "tag" => "t.normalized_tag LIKE ?1",
+        "alias" => "a.slug LIKE ?1",
+        "link" => "l.target_slug LIKE ?1",
+        _ => "t.normalized_tag LIKE ?1 OR a.slug LIKE ?1 OR l.target_slug LIKE ?1",
+    };
+    let sql = format!(
+        r#"
+        SELECT DISTINCT n.id, n.title, n.content, n.created_at, n.updated_at,
+               n.deleted_at, n.is_pinned, n.sort_order
+        FROM notes n
+        LEFT JOIN note_tags t ON t.note_id = n.id
+        LEFT JOIN note_aliases a ON a.note_id = n.id
+        LEFT JOIN note_links l ON l.source_note_id = n.id
+        WHERE n.deleted_at IS NULL AND ({condition})
+        ORDER BY n.is_pinned DESC, n.updated_at DESC
+        LIMIT 200
+        "#
+    );
+
+    let mut stmt = conn
+        .prepare(&sql)
+        .context("Failed to prepare notes metadata search query")?;
+    let notes = stmt
+        .query_map(params![pattern], row_to_note)
+        .context("Failed to execute notes metadata search")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect notes metadata search results")?;
+    Ok(notes)
+}
+
+pub(crate) fn get_note_tags(note_id: NoteId) -> Result<Vec<String>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT tag
+            FROM note_tags
+            WHERE note_id = ?1
+            ORDER BY normalized_tag ASC
+            "#,
+        )
+        .context("Failed to prepare note tags query")?;
+    let tags = stmt
+        .query_map(params![note_id.as_str()], |row| row.get::<_, String>(0))
+        .context("Failed to query note tags")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note tags")?;
+    Ok(tags)
+}
+
+pub(crate) fn get_note_outbound_link_count(note_id: NoteId) -> Result<usize> {
+    count_note_links(
+        "SELECT COUNT(*) FROM note_links WHERE source_note_id = ?1",
+        note_id,
+    )
+}
+
+pub(crate) fn get_note_backlink_count(note_id: NoteId) -> Result<usize> {
+    count_note_links(
+        "SELECT COUNT(*) FROM note_links WHERE target_note_id = ?1",
+        note_id,
+    )
+}
+
+pub(crate) fn get_note_backlinks(note_id: NoteId) -> Result<Vec<NoteBacklinkSummary>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT DISTINCT n.id, n.title, n.updated_at
+            FROM note_links l
+            JOIN notes n ON n.id = l.source_note_id
+            WHERE l.target_note_id = ?1 AND n.deleted_at IS NULL
+            ORDER BY n.updated_at DESC
+            "#,
+        )
+        .context("Failed to prepare note backlinks query")?;
+    let backlinks = stmt
+        .query_map(params![note_id.as_str()], |row| {
+            let id: String = row.get(0)?;
+            let title: String = row.get(1)?;
+            let updated_at_str: String = row.get(2)?;
+            let id = NoteId::parse(&id).ok_or_else(|| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    format!("Invalid backlink source note UUID: {id}").into(),
+                )
+            })?;
+            let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now());
+            Ok(NoteBacklinkSummary {
+                id,
+                title,
+                updated_at,
+            })
+        })
+        .context("Failed to query note backlinks")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect note backlinks")?;
+    Ok(backlinks)
+}
+
+fn count_note_links(sql: &str, note_id: NoteId) -> Result<usize> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+    let count: i64 = conn
+        .query_row(sql, params![note_id.as_str()], |row| row.get(0))
+        .context("Failed to count note links")?;
+    Ok(count.max(0) as usize)
 }
 
 /// Search notes for root launcher rows without returning note body content.
@@ -1412,5 +1802,175 @@ mod tests {
             results.iter().any(|candidate| candidate.id == note.id),
             "search should return the note that contains the special-character query"
         );
+    }
+
+    #[test]
+    fn test_note_metadata_tables_roundtrip() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before metadata roundtrip test");
+        let token = unique_test_token("metadata_roundtrip");
+        let note = Note::with_content(format!(
+            "---\ntags: [{token}, notes/metadata]\naliases: [{token} Alias]\n---\n# Metadata Roundtrip\nBody #{token} [[Missing Target]]"
+        ));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save note with metadata");
+        let tags = get_note_tags(id).expect("metadata tags should be readable");
+        let outbound_count =
+            get_note_outbound_link_count(id).expect("outbound links should be countable");
+
+        delete_note_permanently(id).expect("cleanup failed for metadata note");
+
+        assert!(
+            tags.iter().any(|tag| tag == &token),
+            "frontmatter/hash tag should be indexed"
+        );
+        assert_eq!(outbound_count, 1);
+    }
+
+    #[test]
+    fn test_search_notes_matches_tags_and_aliases() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before metadata search test");
+        let token = unique_test_token("metadata_search");
+        let note = Note::with_content(format!(
+            "---\ntags: [{token}]\naliases: [{token} Alias]\n---\n# Searchable Metadata\nBody"
+        ));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save searchable metadata note");
+        let tag_results = search_notes(&format!("tag:{token}")).expect("tag search should succeed");
+        let alias_results =
+            search_notes(&format!("alias:{token}-alias")).expect("alias search should succeed");
+
+        delete_note_permanently(id).expect("cleanup failed for metadata search note");
+
+        assert!(tag_results.iter().any(|candidate| candidate.id == id));
+        assert!(alias_results.iter().any(|candidate| candidate.id == id));
+    }
+
+    #[test]
+    fn test_backlinks_resolve_after_target_note_is_created() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before backlink test");
+        let token = unique_test_token("backlink_target");
+        let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
+        let source_id = source.id;
+
+        save_note(&source).expect("failed to save unresolved source link");
+        let target = Note::with_content(format!("# {token} Target\nBody"));
+        let target_id = target.id;
+        save_note(&target).expect("failed to save target note");
+
+        let backlink_count =
+            get_note_backlink_count(target_id).expect("backlinks should be countable");
+        let backlinks = get_note_backlinks(target_id).expect("backlinks should be readable");
+
+        delete_note_permanently(source_id).expect("cleanup failed for source note");
+        delete_note_permanently(target_id).expect("cleanup failed for target note");
+
+        assert_eq!(backlink_count, 1);
+        assert_eq!(backlinks.len(), 1);
+        assert_eq!(backlinks[0].id, source_id);
+        assert_eq!(backlinks[0].title, "Source");
+    }
+
+    #[test]
+    fn test_metadata_backfills_existing_notes_after_schema_creation() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before metadata backfill test");
+        let token = unique_test_token("metadata_backfill");
+        let note = Note::with_content(format!("# Backfill\nBody #{token}"));
+        let id = note.id;
+
+        save_note(&note).expect("failed to save note before simulated metadata loss");
+        {
+            let db = get_db().expect("db should be initialized");
+            let conn = db.lock().expect("db lock");
+            conn.execute(
+                "DELETE FROM note_tags WHERE note_id = ?1",
+                params![id.as_str()],
+            )
+            .expect("failed to clear note tags");
+        }
+
+        init_notes_db().expect("init should backfill missing metadata");
+        let tags = get_note_tags(id).expect("tags should be backfilled");
+
+        delete_note_permanently(id).expect("cleanup failed for metadata backfill note");
+
+        assert!(tags.iter().any(|tag| tag == &token));
+    }
+
+    #[test]
+    fn test_backlinks_recompute_when_target_alias_changes() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before stale backlink test");
+        let token = unique_test_token("stale_backlink");
+        let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
+        let source_id = source.id;
+        let mut target = Note::with_content(format!("# {token} Target\nBody"));
+        let target_id = target.id;
+
+        save_note(&target).expect("failed to save target note");
+        save_note(&source).expect("failed to save source note");
+        assert_eq!(
+            get_note_backlink_count(target_id).expect("backlinks should resolve"),
+            1
+        );
+
+        target.title = format!("{token} Renamed");
+        target.content = format!("# {token} Renamed\nBody");
+        save_note(&target).expect("failed to save renamed target note");
+        let backlink_count =
+            get_note_backlink_count(target_id).expect("backlinks should recompute");
+
+        delete_note_permanently(source_id).expect("cleanup failed for source note");
+        delete_note_permanently(target_id).expect("cleanup failed for target note");
+
+        assert_eq!(backlink_count, 0);
+    }
+
+    #[test]
+    fn test_backlinks_do_not_resolve_ambiguous_aliases() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before ambiguous backlink test");
+        let token = unique_test_token("ambiguous_backlink");
+        let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
+        let source_id = source.id;
+        let target_a = Note::with_content(format!("# {token} Target\nA"));
+        let target_a_id = target_a.id;
+        let target_b = Note::with_content(format!("# {token} Target\nB"));
+        let target_b_id = target_b.id;
+
+        save_note(&target_a).expect("failed to save first target note");
+        save_note(&target_b).expect("failed to save second target note");
+        save_note(&source).expect("failed to save source note");
+
+        let backlinks_a = get_note_backlink_count(target_a_id).expect("backlinks should count");
+        let backlinks_b = get_note_backlink_count(target_b_id).expect("backlinks should count");
+
+        delete_note_permanently(source_id).expect("cleanup failed for source note");
+        delete_note_permanently(target_a_id).expect("cleanup failed for first target note");
+        delete_note_permanently(target_b_id).expect("cleanup failed for second target note");
+
+        assert_eq!(backlinks_a + backlinks_b, 0);
+    }
+
+    #[test]
+    fn test_search_notes_matches_link_metadata() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before link metadata search test");
+        let token = unique_test_token("link_search");
+        let source = Note::with_content(format!("# Source\n[[{token} Target]]"));
+        let source_id = source.id;
+
+        save_note(&source).expect("failed to save link source note");
+        let results = search_notes(&format!("link:{token}-target"))
+            .expect("link metadata search should succeed");
+
+        delete_note_permanently(source_id).expect("cleanup failed for link source note");
+
+        assert!(results.iter().any(|note| note.id == source_id));
     }
 }
