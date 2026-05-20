@@ -18,6 +18,7 @@ impl NotesApp {
                     | NotesAction::CopyNoteAs
                     | NotesAction::CopyDeeplink
                     | NotesAction::CreateQuicklink
+                    | NotesAction::CopyBacklinks
                     | NotesAction::Export
                     | NotesAction::Format
                     | NotesAction::DeleteNote
@@ -204,6 +205,7 @@ impl NotesApp {
             NotesAction::CopyNoteAs => self.copy_note_as_markdown(cx),
             NotesAction::CopyDeeplink => self.copy_note_deeplink(cx),
             NotesAction::CreateQuicklink => self.create_note_quicklink(cx),
+            NotesAction::CopyBacklinks => self.copy_note_backlinks(cx),
             NotesAction::Export => self.export_note(ExportFormat::Html, cx),
             NotesAction::DeleteNote => {
                 self.close_actions_panel(window, cx);
@@ -257,6 +259,7 @@ impl NotesApp {
             "copy_note_as" => Some(NotesAction::CopyNoteAs),
             "copy_deeplink" => Some(NotesAction::CopyDeeplink),
             "create_quicklink" => Some(NotesAction::CreateQuicklink),
+            "copy_backlinks" => Some(NotesAction::CopyBacklinks),
             "export" => Some(NotesAction::Export),
             "delete_note" => Some(NotesAction::DeleteNote),
             "restore_note" => Some(NotesAction::RestoreNote),

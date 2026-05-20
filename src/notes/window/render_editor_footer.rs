@@ -40,6 +40,39 @@ impl NotesApp {
             .selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
             .map(|note| crate::formatting::format_absolute_datetime(note.created_at));
+        let selected_metadata = self.selected_note_id.and_then(|id| {
+            let mut parts = Vec::new();
+            let tags = storage::get_note_tags(id).unwrap_or_default();
+            let tag_count = tags.len();
+            parts.extend(tags.into_iter().take(3).map(|tag| format!("#{tag}")));
+            if tag_count > 3 {
+                parts.push(format!("+{} tags", tag_count - 3));
+            }
+
+            let outbound_link_count = storage::get_note_outbound_link_count(id).unwrap_or(0);
+            if outbound_link_count > 0 {
+                parts.push(format!(
+                    "{} link{}",
+                    outbound_link_count,
+                    if outbound_link_count == 1 { "" } else { "s" }
+                ));
+            }
+
+            let backlink_count = storage::get_note_backlink_count(id).unwrap_or(0);
+            if backlink_count > 0 {
+                parts.push(format!(
+                    "{} backlink{}",
+                    backlink_count,
+                    if backlink_count == 1 { "" } else { "s" }
+                ));
+            }
+
+            if parts.is_empty() {
+                None
+            } else {
+                Some(parts)
+            }
+        });
         let navigate_back_click = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
             this.navigate_back(window, cx);
         });
@@ -209,6 +242,27 @@ impl NotesApp {
                                     .child(reading_time.clone()),
                             )
                         })
+                        .when_some(
+                            selected_metadata.clone(),
+                            |d, parts| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_MUTED),
+                                        )
+                                        .child(FOOTER_SEP),
+                                )
+                                .children(parts.into_iter().map(|part| {
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_MUTED),
+                                        )
+                                        .child(part)
+                                }))
+                            },
+                        )
                     }),
             )
             .child(

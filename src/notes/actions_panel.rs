@@ -11,6 +11,7 @@
 //! - Copy Note As... (⇧⌘C) - Copy note in a chosen format
 //! - Copy Deeplink (⇧⌘D) - Copy a deeplink to the note
 //! - Create Quicklink (⇧⌘L) - Copy a quicklink to the note
+//! - Copy Backlinks - Copy notes that link to the current note
 //! - Export... (⇧⌘E) - Export note content
 //! - Move List Item Up (⌃⌘↑) - Reorder notes list (disabled)
 //! - Move List Item Down (⌃⌘↓) - Reorder notes list (disabled)
@@ -66,6 +67,8 @@ pub enum NotesAction {
     CopyDeeplink,
     /// Copy quicklink to the current note
     CreateQuicklink,
+    /// Copy notes that link to the current note
+    CopyBacklinks,
     /// Export note content
     Export,
     /// Move list item up (disabled placeholder)
@@ -99,6 +102,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs,
             NotesAction::CopyDeeplink,
             NotesAction::CreateQuicklink,
+            NotesAction::CopyBacklinks,
             NotesAction::Export,
             NotesAction::MoveListItemUp,
             NotesAction::MoveListItemDown,
@@ -117,6 +121,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => "Copy Note As...",
             NotesAction::CopyDeeplink => "Copy Deeplink",
             NotesAction::CreateQuicklink => "Create Quicklink",
+            NotesAction::CopyBacklinks => "Copy Backlinks",
             NotesAction::Export => "Export...",
             NotesAction::MoveListItemUp => "Move List Item Up",
             NotesAction::MoveListItemDown => "Move List Item Down",
@@ -140,6 +145,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => "C",
             NotesAction::CopyDeeplink => "D",
             NotesAction::CreateQuicklink => "L",
+            NotesAction::CopyBacklinks => "",
             NotesAction::Export => "E",
             NotesAction::MoveListItemUp => "↑",
             NotesAction::MoveListItemDown => "↓",
@@ -180,6 +186,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => &SHIFT_CMD_C,
             NotesAction::CopyDeeplink => &SHIFT_CMD_D,
             NotesAction::CreateQuicklink => &SHIFT_CMD_L,
+            NotesAction::CopyBacklinks => &EMPTY,
             NotesAction::Export => &SHIFT_CMD_E,
             NotesAction::MoveListItemUp => &CTRL_CMD_UP,
             NotesAction::MoveListItemDown => &CTRL_CMD_DOWN,
@@ -209,6 +216,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => Some("shift+cmd+c"),
             NotesAction::CopyDeeplink => Some("shift+cmd+d"),
             NotesAction::CreateQuicklink => Some("shift+cmd+l"),
+            NotesAction::CopyBacklinks => None,
             NotesAction::Export => Some("shift+cmd+e"),
             NotesAction::MoveListItemUp => Some("ctrl+cmd+up"),
             NotesAction::MoveListItemDown => Some("ctrl+cmd+down"),
@@ -244,6 +252,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => IconName::Copy,
             NotesAction::CopyDeeplink => IconName::ArrowRight,
             NotesAction::CreateQuicklink => IconName::Star,
+            NotesAction::CopyBacklinks => IconName::FolderOpen,
             NotesAction::Export => IconName::ArrowRight,
             NotesAction::MoveListItemUp => IconName::ArrowUp,
             NotesAction::MoveListItemDown => IconName::ArrowDown,
@@ -267,6 +276,7 @@ impl NotesAction {
             NotesAction::CopyNoteAs => "copy_note_as",
             NotesAction::CopyDeeplink => "copy_deeplink",
             NotesAction::CreateQuicklink => "create_quicklink",
+            NotesAction::CopyBacklinks => "copy_backlinks",
             NotesAction::Export => "export",
             NotesAction::MoveListItemUp => "move_list_item_up",
             NotesAction::MoveListItemDown => "move_list_item_down",
@@ -301,6 +311,7 @@ impl NotesActionSection {
             | NotesAction::CopyNoteAs
             | NotesAction::CopyDeeplink
             | NotesAction::CreateQuicklink
+            | NotesAction::CopyBacklinks
             | NotesAction::Export => NotesActionSection::Actions,
             NotesAction::MoveListItemUp | NotesAction::MoveListItemDown => NotesActionSection::Move,
             NotesAction::Format => NotesActionSection::Format,
