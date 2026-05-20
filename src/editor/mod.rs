@@ -341,6 +341,7 @@ impl EditorPrompt {
                 InputEvent::PressEnter { secondary: _ } => {
                     // Multi-line editor handles Enter internally for newlines
                 }
+                InputEvent::PressTab { .. } => {}
                 InputEvent::Focus => {
                     logging::log("EDITOR", "Editor focused");
                 }

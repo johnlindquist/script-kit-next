@@ -303,5 +303,16 @@
                         }
                     }
                 }
+                InputEvent::PressTab { secondary } => {
+                    if matches!(this.current_view, AppView::ScriptList)
+                        && this.menu_syntax_capture_form_owns_input()
+                    {
+                        if *secondary {
+                            this.focus_previous_menu_syntax_form_field(window, cx);
+                        } else {
+                            this.focus_next_menu_syntax_form_field(window, cx);
+                        }
+                    }
+                }
             }
         });

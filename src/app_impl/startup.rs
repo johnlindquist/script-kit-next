@@ -571,6 +571,17 @@ impl ScriptListApp {
                         }
                     }
                 }
+                InputEvent::PressTab { secondary } => {
+                    if matches!(this.current_view, AppView::ScriptList)
+                        && this.menu_syntax_capture_form_owns_input()
+                    {
+                        if *secondary {
+                            this.focus_previous_menu_syntax_form_field(window, cx);
+                        } else {
+                            this.focus_next_menu_syntax_form_field(window, cx);
+                        }
+                    }
+                }
             }
         });
 
@@ -1927,7 +1938,7 @@ impl ScriptListApp {
                                                 "list_up"
                                             },
                                         );
-                                        if !source_filter_mode && filter_has_text {
+                                        if !source_filter_mode && filter_has_text && at_top_of_list {
                                             cx.stop_propagation();
                                             return;
                                         }

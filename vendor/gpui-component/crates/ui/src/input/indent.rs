@@ -224,7 +224,8 @@ impl InputState {
     ) {
         // If tab navigation mode is enabled, propagate instead of indenting
         if self.tab_navigation_mode {
-            cx.propagate();
+            cx.emit(crate::input::InputEvent::PressTab { secondary: false });
+            cx.stop_propagation();
             return;
         }
         // First, try to accept inline completion if present
@@ -246,7 +247,8 @@ impl InputState {
     ) {
         // If tab navigation mode is enabled, propagate instead of outdenting
         if self.tab_navigation_mode {
-            cx.propagate();
+            cx.emit(crate::input::InputEvent::PressTab { secondary: true });
+            cx.stop_propagation();
             return;
         }
         self.outdent(false, window, cx);

@@ -219,6 +219,29 @@
                             }
 
                             if matches!(this.current_view, AppView::ScriptList)
+                                && this.handle_menu_syntax_form_key_input(
+                                    key,
+                                    event.keystroke.key_char.as_deref(),
+                                    &event.keystroke.modifiers,
+                                    window,
+                                    cx,
+                                )
+                            {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            if this.menu_syntax_capture_form_owns_input() {
+                                if has_shift {
+                                    this.focus_previous_menu_syntax_form_field(window, cx);
+                                } else {
+                                    this.focus_next_menu_syntax_form_field(window, cx);
+                                }
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
                                 && this.try_navigate_root_file_directory_with_tab(
                                     has_shift, window, cx,
                                 )

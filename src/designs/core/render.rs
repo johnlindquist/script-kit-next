@@ -296,18 +296,32 @@ pub fn render_design_item(
                     None,
                     Some(IconKind::Svg("Mic".to_string())),
                 ),
-                SearchResult::BrowserTab(bm) => (
-                    bm.hit.title.clone(),
-                    Some(bm.subtitle.clone()),
-                    None,
-                    Some(IconKind::Svg("PanelTop".to_string())),
-                ),
-                SearchResult::BrowserHistory(bm) => (
-                    bm.hit.title.clone(),
-                    Some(bm.subtitle.clone()),
-                    None,
-                    Some(IconKind::Svg("Globe".to_string())),
-                ),
+                SearchResult::BrowserTab(bm) => {
+                    let icon = if let Some(img) = crate::favicons::cached_favicon(&bm.hit.url) {
+                        IconKind::Image(img)
+                    } else {
+                        IconKind::Svg("PanelTop".to_string())
+                    };
+                    (
+                        bm.hit.title.clone(),
+                        Some(bm.subtitle.clone()),
+                        None,
+                        Some(icon),
+                    )
+                }
+                SearchResult::BrowserHistory(bm) => {
+                    let icon = if let Some(img) = crate::favicons::cached_favicon(&bm.hit.url) {
+                        IconKind::Image(img)
+                    } else {
+                        IconKind::Svg("Globe".to_string())
+                    };
+                    (
+                        bm.hit.title.clone(),
+                        Some(bm.subtitle.clone()),
+                        None,
+                        Some(icon),
+                    )
+                }
                 SearchResult::Skill(sm) => {
                     // Skills use a star icon (gold accent theme)
                     let description = if sm.skill.description.is_empty() {
@@ -347,22 +361,33 @@ pub fn render_design_item(
                     let fallback_description = fm.display_description();
                     // Fallback commands from "Use with..." section
                     // Map fallback icon names to SVG icons
-                    let icon_name = match fm.fallback.icon() {
-                        "external-link" => "ExternalLink",
-                        "calculator" => "Calculator",
-                        "file" => "File",
-                        "terminal" => "Terminal",
-                        "sticky-note" => "StickyNote",
-                        "clipboard-copy" => "Copy",
-                        "search" => "MagnifyingGlass",
-                        other => other, // Pass through if already a valid icon name
+
+                    let is_open_url = match &fm.fallback {
+                        crate::fallbacks::FallbackItem::Builtin(b) => b.id == "open-url",
+                        crate::fallbacks::FallbackItem::Script(_) => false,
                     };
-                    (
-                        fallback_label,
-                        Some(fallback_description),
-                        None,
-                        Some(IconKind::Svg(icon_name.to_string())),
-                    )
+
+                    let icon = if is_open_url {
+                        if let Some(img) = crate::favicons::get_or_fetch_favicon(filter_text) {
+                            IconKind::Image(img)
+                        } else {
+                            IconKind::Svg("ExternalLink".to_string())
+                        }
+                    } else {
+                        let icon_name = match fm.fallback.icon() {
+                            "external-link" => "ExternalLink",
+                            "calculator" => "Calculator",
+                            "file" => "File",
+                            "terminal" => "Terminal",
+                            "sticky-note" => "StickyNote",
+                            "clipboard-copy" => "Copy",
+                            "search" => "MagnifyingGlass",
+                            other => other, // Pass through if already a valid icon name
+                        };
+                        IconKind::Svg(icon_name.to_string())
+                    };
+
+                    (fallback_label, Some(fallback_description), None, Some(icon))
                 }
                 SearchResult::ScriptIssue(issue) => (
                     issue.title.clone(),

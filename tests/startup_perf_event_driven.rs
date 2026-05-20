@@ -87,7 +87,7 @@ fn test_script_list_arrow_history_navigation_uses_top_of_grouped_items_boundary(
         source.contains("let filter_has_text = !this.filter_text.is_empty()")
             && source.contains("filter_has_text,")
             && source.contains("\"filter_text_up_noop\"")
-            && source.contains("if !source_filter_mode && filter_has_text {")
+            && source.contains("if !source_filter_mode && filter_has_text && at_top_of_list {")
             && source.contains("cx.stop_propagation();")
             && source.contains("return;"),
         "Up arrow handler should consume and noop when the main menu filter has text"

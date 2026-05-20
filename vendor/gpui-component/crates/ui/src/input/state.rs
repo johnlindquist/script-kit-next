@@ -95,6 +95,7 @@ actions!(
 pub enum InputEvent {
     Change,
     PressEnter { secondary: bool },
+    PressTab { secondary: bool },
     Focus,
     Blur,
 }
@@ -357,6 +358,11 @@ pub struct InputState {
     /// This is useful for snippet/template navigation where Tab moves between tabstops.
     pub tab_navigation_mode: bool,
 
+    /// When true, single-space text insertion is treated as Tab navigation.
+    /// Some native macOS paths deliver Tab to single-line text inputs as a
+    /// replacement-space text edit instead of an input action.
+    pub tab_navigation_space_as_tab: bool,
+
     /// When true in multiline mode, plain Enter emits `PressEnter` without
     /// inserting a newline (chat-composer behavior). Shift+Enter (secondary)
     /// still inserts a newline. Has no effect in single-line mode.
@@ -480,6 +486,7 @@ impl InputState {
             _pending_update: false,
             inline_completion: InlineCompletion::default(),
             tab_navigation_mode: false,
+            tab_navigation_space_as_tab: false,
             submit_on_enter: false,
         }
     }
@@ -511,6 +518,16 @@ impl InputState {
         cx: &mut Context<Self>,
     ) {
         self.tab_navigation_mode = enabled;
+        cx.notify();
+    }
+
+    pub fn set_tab_navigation_space_as_tab(
+        &mut self,
+        enabled: bool,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.tab_navigation_space_as_tab = enabled;
         cx.notify();
     }
 
@@ -2138,6 +2155,11 @@ impl EntityInputHandler for InputState {
         cx: &mut Context<Self>,
     ) {
         if self.disabled {
+            return;
+        }
+        if self.tab_navigation_space_as_tab && new_text == " " {
+            cx.emit(InputEvent::PressTab { secondary: false });
+            cx.notify();
             return;
         }
 
