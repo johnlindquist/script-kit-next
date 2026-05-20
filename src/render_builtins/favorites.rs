@@ -177,6 +177,7 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
@@ -291,12 +292,15 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+
         div()
             .flex()
             .flex_col()
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
+            .bg(rgba(chrome.panel_surface_rgba))
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
             .child(
@@ -304,6 +308,7 @@ impl ScriptListApp {
                     .w_full()
                     .px(px(design_spacing.padding_lg))
                     .py(px(design_spacing.padding_md))
+                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -312,7 +317,7 @@ impl ScriptListApp {
                         div().flex_1().child(
                             Input::new(&self.gpui_input_state)
                                 .w_full()
-                                .h(px(28.))
+                                .h(px(input_height))
                                 .px(px(0.))
                                 .py(px(0.))
                                 .with_size(Size::Size(px(design_typography.font_size_xl)))

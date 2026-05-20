@@ -2696,7 +2696,7 @@ impl ScriptListApp {
         let header_padding_top = design_spacing.padding_sm;
         let header_padding_bottom = design_spacing.padding_sm;
         let header_gap = design_spacing.gap_md;
-        let search_input_height = design_typography.font_size_xl + 12.0;
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
 
         let header = div()
             .w_full()
@@ -2711,7 +2711,7 @@ impl ScriptListApp {
                     div().flex_1().flex().flex_row().items_center().child(
                         Input::new(&self.gpui_input_state)
                             .w_full()
-                            .h(px(search_input_height))
+                            .h(px(input_height))
                             .px(px(0.0))
                             .py(px(0.0))
                             .with_size(Size::Size(px(design_typography.font_size_xl)))

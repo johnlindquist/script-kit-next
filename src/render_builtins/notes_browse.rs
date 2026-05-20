@@ -395,6 +395,8 @@ impl ScriptListApp {
                 .into_any_element(),
         };
 
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+
         let header_element = div()
             .flex_1()
             .flex()
@@ -411,7 +413,7 @@ impl ScriptListApp {
                     .child(
                         gpui_component::input::Input::new(&self.gpui_input_state)
                             .w_full()
-                            .h(px(28.))
+                            .h(px(input_height))
                             .px(px(0.))
                             .py(px(0.))
                             .with_size(gpui_component::Size::Size(px(

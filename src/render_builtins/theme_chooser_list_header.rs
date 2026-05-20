@@ -203,6 +203,8 @@
         .track_scroll(&self.theme_chooser_scroll_handle)
         .into_any_element();
 
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+
         // ── Header with search input ───────────────────────────────
         let header = div()
             .w_full()
@@ -222,7 +224,7 @@
                         div().flex_1().flex().flex_row().items_center().child(
                             Input::new(&self.gpui_input_state)
                                 .w_full()
-                                .h(px(28.))
+                                .h(px(input_height))
                                 .px(px(0.))
                                 .py(px(0.))
                                 .with_size(Size::Size(px(design_typography.font_size_xl)))

@@ -565,6 +565,7 @@ impl ScriptListApp {
             self.builtin_uniform_list_scrollbar(&self.process_list_scroll_handle, filtered_len, 8);
         let stop_all_button_colors = crate::components::ButtonColors::from_theme(&self.theme);
         let stop_all_button_entity = cx.entity().downgrade();
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
 
         div()
             .flex()
@@ -572,6 +573,7 @@ impl ScriptListApp {
             .w_full()
             .h_full()
             .rounded(px(design_visual.radius_lg))
+            .bg(rgba(chrome.panel_surface_rgba))
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
             .key_context("process_manager")
@@ -583,6 +585,7 @@ impl ScriptListApp {
                     .w_full()
                     .px(px(crate::ui::chrome::HEADER_PADDING_X))
                     .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -591,7 +594,7 @@ impl ScriptListApp {
                         div().flex_1().flex().flex_row().items_center().child(
                             Input::new(&self.gpui_input_state)
                                 .w_full()
-                                .h(px(28.))
+                                .h(px(input_height))
                                 .px(px(0.))
                                 .py(px(0.))
                                 .with_size(Size::Size(px(design_typography.font_size_xl)))
