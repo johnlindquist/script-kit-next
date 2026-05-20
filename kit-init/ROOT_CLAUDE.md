@@ -49,10 +49,7 @@ Use this plain-text route first:
 - Bundle details → `~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md`
 - Skills overview → `~/.scriptkit/plugins/scriptkit/skills/README.md`
 - Agent details (compatibility) → `~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md`
-- Script example → `~/.scriptkit/plugins/examples/scripts/hello-world.ts`
-- Skill examples → `~/.scriptkit/plugins/examples/skills/`
-- Bundle starter → `~/.scriptkit/plugins/examples/scriptlets/starter.md`
-- Agent example → `~/.scriptkit/plugins/examples/agents/review-pr.claude.md`
+- Script example → `~/.scriptkit/plugins/examples/scripts/todo-app.ts`
 
 ## Directory Layout
 
@@ -78,10 +75,10 @@ Use this plain-text route first:
 │   │       └── troubleshoot/SKILL.md
 │   ├── examples/
 │   │   ├── plugin.json
-│   │   ├── scripts/               ← runnable .ts examples
-│   │   ├── skills/                ← example ACP-first skills
-│   │   ├── scriptlets/            ← built-in scriptlet bundles
-│   │   └── agents/                ← mdflow agent examples
+│   │   ├── README.md
+│   │   ├── START_HERE.md
+│   │   └── scripts/
+│   │       └── todo-app.ts        ← runnable Todo app example
 ├── config.ts                      ← user configuration
 ├── theme.json                     ← theme colors
 ├── package.json                   ← enables top-level await
@@ -189,19 +186,13 @@ Read `plugins/scriptkit/skills/` for detailed guidance on:
 ## Examples
 
 See `plugins/examples/` for working examples:
-- `hello-world.ts` — basic prompt and display
-- `choose-from-list.ts` — rich choices with preview
-- `clipboard-transform.ts` — clipboard read/transform/write
-- `path-picker.ts` — file system operations
-- `skills/review-pr/` — findings-first review skill
-- `skills/plan-feature/` — feature planning skill
-- `skills/explain-code/` — code explanation skill
+- `todo-app.ts` — local Todo app with projects, labels, priorities, due dates, and `;todo` capture sync
 
 ## Configuration
 
 - **Config**: `config.ts` — hotkeys, font sizes, built-in features
 - **Theme**: `theme.json` — colors (hex, rgb, rgba)
-- **TypeScript**: `kit/tsconfig.json` — managed by app, maps `@scriptkit/sdk`
+- **TypeScript**: `tsconfig.json` — managed by app, maps `@scriptkit/sdk`
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 

@@ -1,10 +1,11 @@
 # Bun configuration for Script Kit GPUI
 #
-# @johnlindquist/kit Import Redirect
+# @scriptkit/sdk and @johnlindquist/kit Import Redirect
 # ----------------------------------
-# Scripts can use `import "@johnlindquist/kit"` and it resolves to our local SDK.
+# Scripts can use `import "@scriptkit/sdk"` or `import "@johnlindquist/kit"` and
+# it resolves to our local SDK.
 # This is achieved via a postinstall script in package.json that creates a symlink
-# at node_modules/@johnlindquist/kit -> scripts/kit-sdk.ts
+# at node_modules/@scriptkit/sdk and node_modules/@johnlindquist/kit -> scripts/kit-sdk.ts
 #
 # The symlink is created automatically when running `bun install` or `npm install`.
 # This allows scripts to have editor type hints from the package while actually

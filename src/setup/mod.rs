@@ -50,31 +50,6 @@ const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../../kit-init/scriptlets/ai-text-tools/main.md");
-/// Embedded Agent Chat example extension (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT: &str =
-    include_str!("../../kit-init/scriptlets/examples/acp-chat.md");
-/// Embedded Custom Actions example extension (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS: &str =
-    include_str!("../../kit-init/scriptlets/examples/custom-actions.md");
-/// Embedded Custom Actions shared actions (built-in companion actions for custom-actions example)
-const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS: &str =
-    include_str!("../../kit-init/scriptlets/custom-actions/main.actions.md");
-/// Embedded Notes example extension (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLE_EXTENSION_NOTES: &str =
-    include_str!("../../kit-init/scriptlets/examples/notes.md");
-/// Embedded Examples extension - main scriptlet examples (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../../kit-init/scriptlets/examples/main.md");
-/// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_ADVANCED: &str =
-    include_str!("../../kit-init/scriptlets/examples/advanced.md");
-/// Embedded Examples extension - howto guide (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/scriptlets/examples/howto.md");
-/// Embedded Examples extension - minimal starter bundle
-const EMBEDDED_EXAMPLES_STARTER: &str =
-    include_str!("../../kit-init/scriptlets/examples/starter.md");
-/// Embedded Examples extension - Power Syntax command scriptlets
-const EMBEDDED_EXAMPLES_POWER_SYNTAX: &str =
-    include_str!("../../kit-init/scriptlets/examples/power-syntax.md");
 /// Root-level CLAUDE.md for the ~/.scriptkit workspace (the harness cwd)
 const EMBEDDED_ROOT_CLAUDE_MD: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
 /// Root-level AGENTS.md SDK reference for the ~/.scriptkit workspace
@@ -95,57 +70,8 @@ const EMBEDDED_SKILL_CONFIGURE_MCP: &str =
 /// Skill: troubleshooting
 const EMBEDDED_SKILL_TROUBLESHOOTING: &str =
     include_str!("../../kit-init/skills/troubleshoot/SKILL.md");
-/// Example script: hello-world
-const EMBEDDED_EXAMPLE_HELLO_WORLD: &str =
-    include_str!("../../kit-init/examples/scripts/hello-world.ts");
-/// Example script: choose-from-list
-const EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST: &str =
-    include_str!("../../kit-init/examples/scripts/choose-from-list.ts");
-/// Example script: clipboard-transform
-const EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM: &str =
-    include_str!("../../kit-init/examples/scripts/clipboard-transform.ts");
-/// Example script: path-picker
-const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
-    include_str!("../../kit-init/examples/scripts/path-picker.ts");
-/// Example script: Todoist-style task manager demo
-const EMBEDDED_EXAMPLE_TODOIST_DEMO: &str =
-    include_str!("../../kit-init/examples/scripts/todoist-demo.ts");
-/// Example script helper: OAuth device flow
-const EMBEDDED_EXAMPLE_OAUTH_DEVICE_FLOW_HELPER: &str =
-    include_str!("../../kit-init/examples/scripts/lib/oauth-device-flow.ts");
-/// Example script: GitHub device login
-const EMBEDDED_EXAMPLE_GITHUB_DEVICE_LOGIN: &str =
-    include_str!("../../kit-init/examples/scripts/github-device-login.ts");
-/// Example script: Microsoft Graph device login
-const EMBEDDED_EXAMPLE_MICROSOFT_GRAPH_DEVICE_LOGIN: &str =
-    include_str!("../../kit-init/examples/scripts/microsoft-graph-device-login.ts");
-/// Example script: Google Calendar device login
-const EMBEDDED_EXAMPLE_GOOGLE_CALENDAR_DEVICE_LOGIN: &str =
-    include_str!("../../kit-init/examples/scripts/google-calendar-device-login.ts");
-/// Example script: generic OAuth device flow
-const EMBEDDED_EXAMPLE_GENERIC_OAUTH_DEVICE_FLOW: &str =
-    include_str!("../../kit-init/examples/scripts/generic-oauth-device-flow.ts");
-/// Example script: Power Syntax local GitHub capture
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_GITHUB: &str =
-    include_str!("../../scripts/examples/menu-syntax/capture-github-local.ts");
-/// Example script: Power Syntax expense ledger capture
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_EXPENSE: &str =
-    include_str!("../../scripts/examples/menu-syntax/capture-expense-ledger.ts");
-/// Example script: Power Syntax snippet capture
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_SNIPPET: &str =
-    include_str!("../../scripts/examples/menu-syntax/capture-snippet-library.ts");
-/// Example script: Power Syntax refine fixture
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_REFINE: &str =
-    include_str!("../../scripts/examples/menu-syntax/power-syntax-refine-fixture.ts");
-/// Example script: Power Syntax command env dump
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_ENV: &str =
-    include_str!("../../scripts/examples/menu-syntax/dump-command-env.ts");
-/// Example script: Power Syntax payload lab
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_PAYLOAD: &str =
-    include_str!("../../scripts/examples/menu-syntax/payload-lab.ts");
-/// Example script: Power Syntax duplicate command
-const EMBEDDED_EXAMPLE_POWER_SYNTAX_DUPE: &str =
-    include_str!("../../scripts/examples/menu-syntax/ambiguous-command-script.ts");
+/// Example script: Todo app
+const EMBEDDED_EXAMPLE_TODO_APP: &str = include_str!("../../kit-init/examples/scripts/todo-app.ts");
 /// Canonical menu syntax handler: todo inbox
 const EMBEDDED_CANONICAL_CAPTURE_TODO_INBOX: &str =
     include_str!("../../scripts/examples/menu-syntax/capture-todo-inbox.ts");
@@ -176,15 +102,6 @@ const EMBEDDED_CANONICAL_DRAFT_SOCIAL_POST: &str =
 /// Canonical menu syntax handler: tagged link
 const EMBEDDED_CANONICAL_SAVE_TAGGED_LINK: &str =
     include_str!("../../scripts/examples/menu-syntax/save-tagged-link.ts");
-/// Example skill: review-pr
-const EMBEDDED_EXAMPLE_SKILL_REVIEW_PR: &str =
-    include_str!("../../kit-init/examples/skills/review-pr/SKILL.md");
-/// Example skill: plan-feature
-const EMBEDDED_EXAMPLE_SKILL_PLAN_FEATURE: &str =
-    include_str!("../../kit-init/examples/skills/plan-feature/SKILL.md");
-/// Example skill: explain-code
-const EMBEDDED_EXAMPLE_SKILL_EXPLAIN_CODE: &str =
-    include_str!("../../kit-init/examples/skills/explain-code/SKILL.md");
 /// Examples README
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
 /// Examples START_HERE launchpad
@@ -243,12 +160,6 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
     }
   ]
 }"#;
-/// Example agent: review-pr (compatibility — prefer plugin skills for new AI artifacts)
-const EMBEDDED_EXAMPLE_AGENT_REVIEW_PR: &str =
-    include_str!("../../kit-init/examples/agents/review-pr.claude.md");
-/// Example agent: plan-feature (compatibility — prefer plugin skills for new AI artifacts)
-const EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE: &str =
-    include_str!("../../kit-init/examples/agents/plan-feature.i.gemini.md");
 // --- merged from part_001.rs ---
 // (Old kit-level agents doc constant removed — canonical docs live at root level)
 // --- merged from part_002.rs ---
@@ -766,70 +677,6 @@ pub fn ensure_kit_setup() -> SetupResult {
         "plugins/ai-text-tools/scriptlets/main.md",
     );
 
-    // App-managed: Built-in Examples extension (refresh if changed)
-    // This extension ships with the app and provides complete scriptlet pattern reference
-    let examples_dir = plugins_dir.join("examples").join("scriptlets");
-    write_string_if_changed(
-        &examples_dir.join("main.md"),
-        EMBEDDED_EXAMPLES_MAIN,
-        &mut warnings,
-        "plugins/examples/scriptlets/main.md",
-    );
-    write_string_if_changed(
-        &examples_dir.join("advanced.md"),
-        EMBEDDED_EXAMPLES_ADVANCED,
-        &mut warnings,
-        "plugins/examples/scriptlets/advanced.md",
-    );
-    write_string_if_changed(
-        &examples_dir.join("howto.md"),
-        EMBEDDED_EXAMPLES_HOWTO,
-        &mut warnings,
-        "plugins/examples/scriptlets/howto.md",
-    );
-    write_string_if_changed(
-        &examples_dir.join("starter.md"),
-        EMBEDDED_EXAMPLES_STARTER,
-        &mut warnings,
-        "plugins/examples/scriptlets/starter.md",
-    );
-    write_string_if_changed(
-        &examples_dir.join("power-syntax.md"),
-        EMBEDDED_EXAMPLES_POWER_SYNTAX,
-        &mut warnings,
-        "plugins/examples/scriptlets/power-syntax.md",
-    );
-
-    // App-managed: Built-in Agent Chat example extension (refresh if changed)
-    write_string_if_changed(
-        &examples_dir.join("acp-chat").join("main.md"),
-        EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT,
-        &mut warnings,
-        "plugins/examples/scriptlets/acp-chat/main.md",
-    );
-
-    // App-managed: Built-in Custom Actions example extension (refresh if changed)
-    write_string_if_changed(
-        &examples_dir.join("custom-actions").join("main.md"),
-        EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS,
-        &mut warnings,
-        "plugins/examples/scriptlets/custom-actions/main.md",
-    );
-    write_string_if_changed(
-        &examples_dir.join("custom-actions").join("main.actions.md"),
-        EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS,
-        &mut warnings,
-        "plugins/examples/scriptlets/custom-actions/main.actions.md",
-    );
-
-    // App-managed: Built-in Notes example extension (refresh if changed)
-    write_string_if_changed(
-        &examples_dir.join("notes").join("main.md"),
-        EMBEDDED_EXAMPLE_EXTENSION_NOTES,
-        &mut warnings,
-        "plugins/examples/scriptlets/notes/main.md",
-    );
-
     // User-owned: config.ts (only create if missing)
     let config_path = kit_dir.join("config.ts");
     write_string_if_missing(
@@ -957,8 +804,10 @@ pub fn ensure_kit_setup() -> SetupResult {
         "plugins/scriptkit/skills/add-actions/SKILL.md",
     );
 
-    // App-managed: Example scripts — seeded into the examples plugin (refresh if changed)
+    // App-managed: Examples plugin. Keep this intentionally small: one real
+    // Todo app example plus a short README/launchpad.
     let examples_plugin = plugins_dir.join("examples");
+    prune_managed_examples_plugin(&examples_plugin, &mut warnings);
     write_string_if_changed(
         &examples_plugin.join("README.md"),
         EMBEDDED_EXAMPLES_README,
@@ -972,208 +821,10 @@ pub fn ensure_kit_setup() -> SetupResult {
         "plugins/examples/START_HERE.md",
     );
     write_string_if_changed(
-        &examples_plugin.join("scripts").join("hello-world.ts"),
-        EMBEDDED_EXAMPLE_HELLO_WORLD,
+        &examples_plugin.join("scripts").join("todo-app.ts"),
+        EMBEDDED_EXAMPLE_TODO_APP,
         &mut warnings,
-        "plugins/examples/scripts/hello-world.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scripts").join("choose-from-list.ts"),
-        EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST,
-        &mut warnings,
-        "plugins/examples/scripts/choose-from-list.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("clipboard-transform.ts"),
-        EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM,
-        &mut warnings,
-        "plugins/examples/scripts/clipboard-transform.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scripts").join("path-picker.ts"),
-        EMBEDDED_EXAMPLE_PATH_PICKER,
-        &mut warnings,
-        "plugins/examples/scripts/path-picker.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scripts").join("todoist-demo.ts"),
-        EMBEDDED_EXAMPLE_TODOIST_DEMO,
-        &mut warnings,
-        "plugins/examples/scripts/todoist-demo.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("lib")
-            .join("oauth-device-flow.ts"),
-        EMBEDDED_EXAMPLE_OAUTH_DEVICE_FLOW_HELPER,
-        &mut warnings,
-        "plugins/examples/scripts/lib/oauth-device-flow.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("github-device-login.ts"),
-        EMBEDDED_EXAMPLE_GITHUB_DEVICE_LOGIN,
-        &mut warnings,
-        "plugins/examples/scripts/github-device-login.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("microsoft-graph-device-login.ts"),
-        EMBEDDED_EXAMPLE_MICROSOFT_GRAPH_DEVICE_LOGIN,
-        &mut warnings,
-        "plugins/examples/scripts/microsoft-graph-device-login.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("google-calendar-device-login.ts"),
-        EMBEDDED_EXAMPLE_GOOGLE_CALENDAR_DEVICE_LOGIN,
-        &mut warnings,
-        "plugins/examples/scripts/google-calendar-device-login.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("generic-oauth-device-flow.ts"),
-        EMBEDDED_EXAMPLE_GENERIC_OAUTH_DEVICE_FLOW,
-        &mut warnings,
-        "plugins/examples/scripts/generic-oauth-device-flow.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-capture-github-local.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_GITHUB,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-capture-github-local.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-capture-expense-ledger.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_EXPENSE,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-capture-expense-ledger.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-capture-snippet-library.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_SNIPPET,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-capture-snippet-library.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-refine-fixture.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_REFINE,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-refine-fixture.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-command-env-dump.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_ENV,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-command-env-dump.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-payload-lab.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_PAYLOAD,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-payload-lab.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("scripts")
-            .join("power-syntax-duplicate-command.ts"),
-        EMBEDDED_EXAMPLE_POWER_SYNTAX_DUPE,
-        &mut warnings,
-        "plugins/examples/scripts/power-syntax-duplicate-command.ts",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("skills")
-            .join("review-pr")
-            .join("SKILL.md"),
-        EMBEDDED_EXAMPLE_SKILL_REVIEW_PR,
-        &mut warnings,
-        "plugins/examples/skills/review-pr/SKILL.md",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("skills")
-            .join("plan-feature")
-            .join("SKILL.md"),
-        EMBEDDED_EXAMPLE_SKILL_PLAN_FEATURE,
-        &mut warnings,
-        "plugins/examples/skills/plan-feature/SKILL.md",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("skills")
-            .join("explain-code")
-            .join("SKILL.md"),
-        EMBEDDED_EXAMPLE_SKILL_EXPLAIN_CODE,
-        &mut warnings,
-        "plugins/examples/skills/explain-code/SKILL.md",
-    );
-
-    // App-managed: Example extension references (refresh if changed)
-    write_string_if_changed(
-        &examples_plugin.join("scriptlets").join("main.md"),
-        EMBEDDED_EXAMPLES_MAIN,
-        &mut warnings,
-        "plugins/examples/scriptlets/main.md",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scriptlets").join("advanced.md"),
-        EMBEDDED_EXAMPLES_ADVANCED,
-        &mut warnings,
-        "plugins/examples/scriptlets/advanced.md",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scriptlets").join("howto.md"),
-        EMBEDDED_EXAMPLES_HOWTO,
-        &mut warnings,
-        "plugins/examples/scriptlets/howto.md",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scriptlets").join("starter.md"),
-        EMBEDDED_EXAMPLES_STARTER,
-        &mut warnings,
-        "plugins/examples/scriptlets/starter.md",
-    );
-    write_string_if_changed(
-        &examples_plugin.join("scriptlets").join("power-syntax.md"),
-        EMBEDDED_EXAMPLES_POWER_SYNTAX,
-        &mut warnings,
-        "plugins/examples/scriptlets/power-syntax.md",
-    );
-
-    // App-managed: Example agents (refresh if changed)
-    write_string_if_changed(
-        &examples_plugin.join("agents").join("review-pr.claude.md"),
-        EMBEDDED_EXAMPLE_AGENT_REVIEW_PR,
-        &mut warnings,
-        "plugins/examples/agents/review-pr.claude.md",
-    );
-    write_string_if_changed(
-        &examples_plugin
-            .join("agents")
-            .join("plan-feature.i.gemini.md"),
-        EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE,
-        &mut warnings,
-        "plugins/examples/agents/plan-feature.i.gemini.md",
+        "plugins/examples/scripts/todo-app.ts",
     );
 
     // App-managed: .gitignore (refresh if changed)
@@ -1407,6 +1058,80 @@ fn migrate_plugin_extensions_to_scriptlets(kit_dir: &Path, warnings: &mut Vec<St
         }
     }
 }
+/// Remove only files this app previously managed in the examples plugin.
+///
+/// The examples plugin may contain user experiments, so do not delete whole
+/// artifact directories just because the managed starter pack changed.
+fn prune_managed_examples_plugin(root: &Path, warnings: &mut Vec<String>) {
+    const STALE_MANAGED_EXAMPLE_FILES: &[&str] = &[
+        "agents/plan-feature.i.gemini.md",
+        "agents/review-pr.claude.md",
+        "scripts/choose-from-list.ts",
+        "scripts/clipboard-transform.ts",
+        "scripts/generic-oauth-device-flow.ts",
+        "scripts/github-device-login.ts",
+        "scripts/google-calendar-device-login.ts",
+        "scripts/hello-world.ts",
+        "scripts/lib/oauth-device-flow.ts",
+        "scripts/microsoft-graph-device-login.ts",
+        "scripts/path-picker.ts",
+        "scripts/power-syntax-capture-expense-ledger.ts",
+        "scripts/power-syntax-capture-github-local.ts",
+        "scripts/power-syntax-capture-snippet-library.ts",
+        "scripts/power-syntax-command-env-dump.ts",
+        "scripts/power-syntax-duplicate-command.ts",
+        "scripts/power-syntax-payload-lab.ts",
+        "scripts/power-syntax-refine-fixture.ts",
+        "scripts/todoist-demo.ts",
+        "scriptlets/acp-chat/main.md",
+        "scriptlets/advanced.md",
+        "scriptlets/custom-actions/main.actions.md",
+        "scriptlets/custom-actions/main.md",
+        "scriptlets/howto.md",
+        "scriptlets/main.md",
+        "scriptlets/notes/main.md",
+        "scriptlets/power-syntax.md",
+        "scriptlets/starter.md",
+        "skills/explain-code/SKILL.md",
+        "skills/plan-feature/SKILL.md",
+        "skills/review-pr/SKILL.md",
+    ];
+
+    for rel in STALE_MANAGED_EXAMPLE_FILES {
+        let path = root.join(rel);
+        if !path.is_file() {
+            continue;
+        }
+        if let Err(error) = fs::remove_file(&path) {
+            warnings.push(format!(
+                "Failed to prune stale managed example {}: {}",
+                path.display(),
+                error
+            ));
+        }
+    }
+
+    for rel in [
+        "scripts/lib",
+        "scriptlets/acp-chat",
+        "scriptlets/custom-actions",
+        "scriptlets/notes",
+        "skills/explain-code",
+        "skills/plan-feature",
+        "skills/review-pr",
+        "agents",
+        "scriptlets",
+        "skills",
+    ] {
+        let path = root.join(rel);
+        if path.is_dir() {
+            let _ = fs::remove_dir(&path);
+        }
+    }
+
+    ensure_dir(&root.join("scripts"), warnings);
+}
+
 /// Ensure a plugin root exists with its standard subdirectories and a `plugin.json` manifest.
 fn ensure_plugin_root(
     kit_dir: &Path,

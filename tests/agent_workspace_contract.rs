@@ -84,12 +84,7 @@ fn test_setup_seeds_root_agent_workspace() {
         );
 
         // Example scripts seeded into examples plugin
-        for example in &[
-            "hello-world.ts",
-            "choose-from-list.ts",
-            "clipboard-transform.ts",
-            "path-picker.ts",
-        ] {
+        for example in &["todo-app.ts"] {
             let example_path = kit_root
                 .join("plugins")
                 .join("examples")
@@ -101,36 +96,6 @@ fn test_setup_seeds_root_agent_workspace() {
                 example_path.display()
             );
         }
-        assert!(
-            kit_root
-                .join("plugins")
-                .join("examples")
-                .join("skills")
-                .join("review-pr")
-                .join("SKILL.md")
-                .exists(),
-            "plugins/examples/skills/review-pr/SKILL.md must exist"
-        );
-        assert!(
-            kit_root
-                .join("plugins")
-                .join("examples")
-                .join("skills")
-                .join("plan-feature")
-                .join("SKILL.md")
-                .exists(),
-            "plugins/examples/skills/plan-feature/SKILL.md must exist"
-        );
-        assert!(
-            kit_root
-                .join("plugins")
-                .join("examples")
-                .join("skills")
-                .join("explain-code")
-                .join("SKILL.md")
-                .exists(),
-            "plugins/examples/skills/explain-code/SKILL.md must exist"
-        );
         assert!(
             kit_root
                 .join("plugins")
@@ -339,12 +304,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
         }
 
         // Check all example scripts (now under examples plugin)
-        for example in &[
-            "hello-world.ts",
-            "choose-from-list.ts",
-            "clipboard-transform.ts",
-            "path-picker.ts",
-        ] {
+        for example in &["todo-app.ts"] {
             let example_path = kit_root
                 .join("plugins")
                 .join("examples")
@@ -452,12 +412,20 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
 
-        let examples = [
-            "hello-world.ts",
-            "choose-from-list.ts",
-            "clipboard-transform.ts",
-            "path-picker.ts",
-        ];
+        let examples = ["todo-app.ts"];
+
+        let seeded: Vec<_> =
+            std::fs::read_dir(kit_root.join("plugins").join("examples").join("scripts"))
+                .expect("read examples scripts")
+                .map(|entry| {
+                    entry
+                        .expect("read example script entry")
+                        .file_name()
+                        .to_string_lossy()
+                        .to_string()
+                })
+                .collect();
+        assert_eq!(seeded, examples);
 
         let examples_dir = kit_root.join("plugins").join("examples").join("scripts");
 
@@ -481,6 +449,8 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
             // Must not use Node-only patterns
             let node_only_patterns = [
                 "require(",
+                "from \"node:",
+                "from 'node:",
                 "fs.readFileSync",
                 "fs.writeFileSync",
                 "process.argv",
@@ -498,15 +468,10 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
         // Examples must NOT exist in plugins/main/scripts/ (no pollution)
         let main_scripts = kit_root.join("plugins").join("main").join("scripts");
         for example in &examples {
-            // The example filenames should not appear as auto-installed entries
-            // (hello-world.ts is a special case — the fresh-install sample script
-            // uses that name, which is acceptable since it's user-facing)
-            if *example != "hello-world.ts" {
-                assert!(
-                    !main_scripts.join(example).exists(),
-                    "{example} must not be auto-installed into plugins/main/scripts/"
-                );
-            }
+            assert!(
+                !main_scripts.join(example).exists(),
+                "{example} must not be auto-installed into plugins/main/scripts/"
+            );
         }
 
         // README must exist alongside the scripts
@@ -594,26 +559,73 @@ fn test_script_creation_dirs_follow_sk_path_override() {
     });
 }
 
-/// scriptlets/howto.md must match the current harness authoring contract.
+/// The examples plugin must not seed the old scriptlet example pack.
 #[test]
-fn test_scriptlets_howto_matches_current_harness_authoring_contract() {
+fn test_examples_plugin_only_ships_todo_app() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
-        let howto = fs::read_to_string(
-            kit_root
-                .join("plugins")
-                .join("examples")
-                .join("scriptlets")
-                .join("howto.md"),
-        )
-        .expect("read plugins/examples/scriptlets/howto.md");
+        let examples = kit_root.join("plugins").join("examples");
+        assert!(examples.join("scripts").join("todo-app.ts").exists());
+        assert!(
+            !examples.join("scriptlets").exists()
+                || fs::read_dir(examples.join("scriptlets"))
+                    .expect("read examples scriptlets")
+                    .next()
+                    .is_none(),
+            "examples plugin must not seed scriptlet examples"
+        );
+        assert!(
+            !examples.join("skills").exists()
+                || fs::read_dir(examples.join("skills"))
+                    .expect("read examples skills")
+                    .next()
+                    .is_none(),
+            "examples plugin must not seed skill examples"
+        );
+        assert!(
+            !examples.join("agents").exists()
+                || fs::read_dir(examples.join("agents"))
+                    .expect("read examples agents")
+                    .next()
+                    .is_none(),
+            "examples plugin must not seed agent examples"
+        );
+    });
+}
 
-        assert!(howto.contains("~/.scriptkit/plugins/main/scriptlets/"));
-        assert!(!howto.contains("YOUR-KIT-NAME"));
-        assert!(!howto.contains("kit/work/scriptlets"));
-        assert!(!howto.contains("kit/personal/scriptlets"));
-        assert!(howto.contains("tool:name"));
-        assert!(!howto.contains("| `ts` | Runs TypeScript |"));
+/// Setup should prune stale app-managed examples without deleting user files
+/// that happen to live in the examples plugin.
+#[test]
+fn test_examples_prune_preserves_custom_user_files() {
+    with_temp_sk_path(|kit_root| {
+        let examples = kit_root.join("plugins").join("examples");
+        let scripts = examples.join("scripts");
+        fs::create_dir_all(&scripts).expect("create examples scripts");
+        fs::write(
+            scripts.join("todoist-demo.ts"),
+            "import \"@scriptkit/sdk\";\n",
+        )
+        .expect("write stale managed example");
+        fs::write(
+            scripts.join("custom-user-example.ts"),
+            "import \"@scriptkit/sdk\";\n",
+        )
+        .expect("write custom example");
+
+        let _ = ensure_kit_setup();
+
+        assert!(
+            !scripts.join("todoist-demo.ts").exists(),
+            "stale managed todoist example must be pruned"
+        );
+        assert!(
+            scripts.join("custom-user-example.ts").exists(),
+            "custom files in plugins/examples/scripts must be preserved"
+        );
+        assert!(
+            scripts.join("todo-app.ts").exists(),
+            "current managed todo app example must be seeded"
+        );
     });
 }
 
@@ -694,8 +706,7 @@ fn test_sdk_reference_example_scriptlet_matches_current_scriptlet_contract() {
     assert!(!scriptlet.contains("// Shortcut:"));
 }
 
-/// Fresh setup must seed the full artifact authoring pack: skills, examples for scripts,
-/// scriptlets, and agents — all under plugin roots.
+/// Fresh setup must seed the authoring pack and exactly one shipped example script.
 #[test]
 fn test_seeded_workspace_has_full_artifact_authoring_pack() {
     with_temp_sk_path(|kit_root| {
@@ -706,24 +717,7 @@ fn test_seeded_workspace_has_full_artifact_authoring_pack() {
             "plugins/scriptkit/skills/new-scriptlet/SKILL.md",
             "plugins/scriptkit/skills/new-agent/SKILL.md",
             "plugins/scriptkit/skills/configure-mcp/SKILL.md",
-            "plugins/examples/scripts/hello-world.ts",
-            "plugins/examples/scripts/lib/oauth-device-flow.ts",
-            "plugins/examples/scripts/github-device-login.ts",
-            "plugins/examples/scripts/microsoft-graph-device-login.ts",
-            "plugins/examples/scripts/google-calendar-device-login.ts",
-            "plugins/examples/scripts/generic-oauth-device-flow.ts",
-            "plugins/examples/scripts/power-syntax-capture-github-local.ts",
-            "plugins/examples/scripts/power-syntax-refine-fixture.ts",
-            "plugins/examples/scripts/power-syntax-command-env-dump.ts",
-            "plugins/examples/skills/review-pr/SKILL.md",
-            "plugins/examples/skills/plan-feature/SKILL.md",
-            "plugins/examples/skills/explain-code/SKILL.md",
-            "plugins/examples/scriptlets/main.md",
-            "plugins/examples/scriptlets/power-syntax.md",
-            "plugins/examples/scriptlets/advanced.md",
-            "plugins/examples/scriptlets/howto.md",
-            "plugins/examples/agents/review-pr.claude.md",
-            "plugins/examples/agents/plan-feature.i.gemini.md",
+            "plugins/examples/scripts/todo-app.ts",
         ] {
             assert!(
                 kit_root.join(path).exists(),
@@ -755,15 +749,27 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
                 "~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md",
                 "~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md",
                 "~/.scriptkit/plugins/examples/scripts/",
-                "~/.scriptkit/plugins/examples/skills/",
-                "~/.scriptkit/plugins/examples/scriptlets/",
-                "~/.scriptkit/plugins/examples/agents/",
             ] {
                 assert!(content.contains(needle), "doc missing `{needle}`");
             }
         }
 
-        for needle in ["## Scripts", "## Skills", "## Scriptlets", "## Agents"] {
+        for (label, content) in [("CLAUDE.md", &root_claude), ("AGENTS.md", &root_agents)] {
+            for stale in [
+                "skills/review-pr",
+                "skills/plan-feature",
+                "skills/explain-code",
+                "todoist-demo.ts",
+                "kit/tsconfig.json",
+            ] {
+                assert!(
+                    !content.contains(stale),
+                    "{label} must not reference removed examples or stale paths: {stale}"
+                );
+            }
+        }
+
+        for needle in ["# Script Kit Example", "scripts/todo-app.ts"] {
             assert!(
                 examples_readme.contains(needle),
                 "plugins/examples/README.md missing `{needle}` section"
@@ -789,10 +795,10 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
                 .join("README.md"),
         )
         .expect("read skills README.md");
-        let examples_readme =
+        let _examples_readme =
             fs::read_to_string(kit_root.join("plugins").join("examples").join("README.md"))
                 .expect("read examples README.md");
-        let start_here = fs::read_to_string(
+        let _start_here = fs::read_to_string(
             kit_root
                 .join("plugins")
                 .join("examples")
@@ -834,12 +840,7 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
         }
 
         // --- Agents labeled as compatibility/subordinate ---
-        for (label, content) in [
-            ("CLAUDE.md", &root_claude),
-            ("AGENTS.md", &root_agents),
-            ("examples/README.md", &examples_readme),
-            ("START_HERE.md", &start_here),
-        ] {
+        for (label, content) in [("CLAUDE.md", &root_claude), ("AGENTS.md", &root_agents)] {
             let has_compat = content.contains("(compatibility)")
                 || content.contains("(Compatibility)")
                 || content.contains("compatibility path");
