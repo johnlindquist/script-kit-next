@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use super::date::ResolvedCaptureInvocation;
-use super::payload::{resolve_capture_target, ArgvInvocation, CaptureObjectRef};
+use super::payload::{
+    object_refs_for_raw_capture, resolve_capture_target, ArgvInvocation, CaptureObjectRef,
+};
 
 pub const MENU_SYNTAX_PAYLOAD_VERSION: &str = "menu-syntax.payload.v1";
 pub const MENU_SYNTAX_PAYLOAD_SCHEMA_ID: &str = "kit://schema/menu-syntax/payload-v1";
@@ -70,6 +72,8 @@ pub fn build_capture_payload(
         kv_map.insert(k, v);
     }
     let target_resolution = resolve_capture_target(&invocation.target);
+    let object_refs = object_refs_for_raw_capture(&invocation.target, &invocation.raw);
+    let primary_object_ref = object_refs.first().cloned();
     MenuSyntaxPayload {
         version: MENU_SYNTAX_PAYLOAD_VERSION.to_string(),
         family: "capture.v1".to_string(),
@@ -95,8 +99,8 @@ pub fn build_capture_payload(
         kv: kv_map,
         dates: invocation.dates,
         unresolved_dates: invocation.unresolved_dates,
-        object_refs: Vec::new(),
-        primary_object_ref: None,
+        object_refs,
+        primary_object_ref,
         handler,
     }
 }
@@ -223,6 +227,19 @@ mod tests {
         assert_eq!(payload.operation.as_deref(), Some("remind"));
         assert!(payload.object_refs.is_empty());
         assert!(payload.primary_object_ref.is_none());
+    }
+
+    #[test]
+    fn build_payload_serializes_inline_object_ref_tokens() {
+        let invocation = resolved_capture(";snippet update @snippet:fj -- const value = 1");
+        let payload = build_capture_payload(handler(), invocation);
+        let primary = payload.primary_object_ref.expect("primary object ref");
+        assert_eq!(primary.kind, crate::menu_syntax::CaptureObjectKind::Snippet);
+        assert_eq!(primary.id, "fj");
+        assert_eq!(primary.role, "primary");
+        assert_eq!(primary.token.as_deref(), Some("@snippet:fj"));
+        assert!(primary.resolved);
+        assert_eq!(payload.object_refs.len(), 1);
     }
 
     // doc-anchor-removed: menu-syntax Execution Payload

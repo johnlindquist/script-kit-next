@@ -13,6 +13,7 @@ pub enum MenuSyntaxFragmentRole {
     Tag,
     Url,
     Priority,
+    ObjectRef,
     Unresolved,
 }
 
@@ -31,4 +32,17 @@ pub struct MenuSyntaxFragment {
     pub source: String,
     pub source_span: (usize, usize),
     pub status: MenuSyntaxFragmentStatus,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn object_ref_role_serializes_camel_case() {
+        assert_eq!(
+            serde_json::to_string(&MenuSyntaxFragmentRole::ObjectRef).unwrap(),
+            "\"objectRef\""
+        );
+    }
 }

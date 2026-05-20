@@ -346,6 +346,134 @@ pub fn search_root_todos_in_sk_path(
     hits
 }
 
+pub fn search_root_object_candidates_in_sk_path(
+    kind: crate::menu_syntax::CaptureObjectKind,
+    query: &str,
+    max_results: usize,
+    sk_path: &Path,
+) -> Vec<crate::menu_syntax::ObjectSelectorCandidate> {
+    match kind {
+        crate::menu_syntax::CaptureObjectKind::Todo => {
+            let options = RootTodoSectionOptions {
+                enabled: true,
+                max_results,
+                min_query_chars: 0,
+            };
+            search_root_todos_in_sk_path(query, options, sk_path)
+                .into_iter()
+                .map(|hit| crate::menu_syntax::ObjectSelectorCandidate {
+                    kind,
+                    id: hit.stable_key,
+                    label: hit.title,
+                    subtitle: hit.subtitle,
+                })
+                .collect()
+        }
+        crate::menu_syntax::CaptureObjectKind::Note => Vec::new(),
+        crate::menu_syntax::CaptureObjectKind::Link => search_jsonl_object_candidates(
+            sk_path,
+            CaptureArtifactKind::Bookmark,
+            kind,
+            query,
+            max_results,
+            "url",
+            "title",
+        ),
+        crate::menu_syntax::CaptureObjectKind::Snippet => search_jsonl_object_candidates(
+            sk_path,
+            CaptureArtifactKind::Payload,
+            kind,
+            query,
+            max_results,
+            "trigger",
+            "body",
+        ),
+    }
+}
+
+pub fn search_root_object_candidates_direct(
+    kind: crate::menu_syntax::CaptureObjectKind,
+    query: &str,
+    max_results: usize,
+) -> Vec<crate::menu_syntax::ObjectSelectorCandidate> {
+    search_root_object_candidates_in_sk_path(kind, query, max_results, &default_sk_path())
+}
+
+fn search_jsonl_object_candidates(
+    sk_path: &Path,
+    artifact_kind: CaptureArtifactKind,
+    object_kind: crate::menu_syntax::CaptureObjectKind,
+    query: &str,
+    max_results: usize,
+    id_key: &str,
+    label_key: &str,
+) -> Vec<crate::menu_syntax::ObjectSelectorCandidate> {
+    let filename = match object_kind {
+        crate::menu_syntax::CaptureObjectKind::Link => CaptureArtifactKind::Bookmark.filename(),
+        crate::menu_syntax::CaptureObjectKind::Snippet => "snippets.jsonl",
+        _ => artifact_kind.filename(),
+    };
+    let path = sk_path.join("menu-syntax").join(filename);
+    let report = read_jsonl_artifact(&path, artifact_kind);
+    let needle = normalize_match_text(query);
+    report
+        .entries
+        .into_iter()
+        .rev()
+        .filter_map(|artifact| {
+            let parsed = serde_json::from_str::<serde_json::Value>(&artifact.raw_line).ok()?;
+            if parsed
+                .get("deletedAt")
+                .and_then(|value| value.as_str())
+                .map(|value| !value.trim().is_empty())
+                .unwrap_or(false)
+            {
+                return None;
+            }
+            let id = parsed
+                .get(id_key)
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())?
+                .to_string();
+            let label = parsed
+                .get(label_key)
+                .and_then(|value| value.as_str())
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(id.as_str())
+                .to_string();
+            let subtitle = match object_kind {
+                crate::menu_syntax::CaptureObjectKind::Link => id.clone(),
+                crate::menu_syntax::CaptureObjectKind::Snippet => parsed
+                    .get("language")
+                    .and_then(|value| value.as_str())
+                    .map(|lang| format!("Snippet · {lang}"))
+                    .unwrap_or_else(|| "Snippet".to_string()),
+                _ => artifact.snippet.clone(),
+            };
+            let mut haystack = String::new();
+            haystack.push_str(&id);
+            haystack.push(' ');
+            haystack.push_str(&label);
+            haystack.push(' ');
+            haystack.push_str(&subtitle);
+            haystack.push(' ');
+            haystack.push_str(&artifact.raw_line);
+            if !needle.is_empty() && !normalize_match_text(&haystack).contains(&needle) {
+                return None;
+            }
+            Some(crate::menu_syntax::ObjectSelectorCandidate {
+                kind: object_kind,
+                id,
+                label,
+                subtitle,
+            })
+        })
+        .take(max_results)
+        .collect()
+}
+
 fn todo_hit_from_artifact(artifact: CaptureArtifact) -> Option<RootTodoSearchHit> {
     if artifact.kind != CaptureArtifactKind::Todo {
         return None;
@@ -402,11 +530,19 @@ fn todo_hit_from_artifact(artifact: CaptureArtifact) -> Option<RootTodoSearchHit
         artifact.created_at.as_deref(),
     );
     let line_number = artifact.line_number;
-    let stable_key = format!(
-        "todo/{}:{}",
-        artifact.path.display(),
-        line_number.unwrap_or_default()
-    );
+    let record_id = parsed
+        .get("id")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
+    let stable_key = record_id.unwrap_or_else(|| {
+        format!(
+            "todo/{}:{}",
+            artifact.path.display(),
+            line_number.unwrap_or_default()
+        )
+    });
     Some(RootTodoSearchHit {
         stable_key,
         title: body.clone(),
@@ -622,6 +758,79 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].priority, Some(1));
         assert_eq!(hits[0].line_number, Some(1));
+    }
+
+    #[test]
+    fn root_todo_object_candidates_prefer_record_id_over_line_key() {
+        let tmp = TempDir::new().expect("tempdir");
+        let base = tmp.path().join("menu-syntax");
+        write_file(
+            &base,
+            "todos.jsonl",
+            r#"{"id":"todo_stable_1","body":"review selected mutation","status":"open","createdAt":"2026-05-20T10:00:00Z"}
+"#,
+        );
+
+        let hits = search_root_object_candidates_in_sk_path(
+            crate::menu_syntax::CaptureObjectKind::Todo,
+            "selected",
+            10,
+            tmp.path(),
+        );
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "todo_stable_1");
+        assert_eq!(hits[0].label, "review selected mutation");
+    }
+
+    #[test]
+    fn link_object_candidates_use_url_as_selected_ref_id_and_filter_deleted() {
+        let tmp = TempDir::new().expect("tempdir");
+        let base = tmp.path().join("menu-syntax");
+        write_file(
+            &base,
+            "bookmarks.jsonl",
+            r#"{"url":"https://old.example","title":"Old","deletedAt":"2026-05-20T10:00:00Z"}
+{"url":"https://example.com","title":"Example Docs","tags":["docs"],"deletedAt":null}
+"#,
+        );
+
+        let hits = search_root_object_candidates_in_sk_path(
+            crate::menu_syntax::CaptureObjectKind::Link,
+            "docs",
+            10,
+            tmp.path(),
+        );
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "https://example.com");
+        assert_eq!(hits[0].label, "Example Docs");
+        assert_eq!(hits[0].subtitle, "https://example.com");
+    }
+
+    #[test]
+    fn snippet_object_candidates_use_trigger_as_selected_ref_id_and_filter_deleted() {
+        let tmp = TempDir::new().expect("tempdir");
+        let base = tmp.path().join("menu-syntax");
+        write_file(
+            &base,
+            "snippets.jsonl",
+            r#"{"trigger":"old","body":"deleted snippet","deletedAt":"2026-05-20T10:00:00Z"}
+{"trigger":"fj","body":"const res = await fetch(url)","language":"ts","deletedAt":null}
+"#,
+        );
+
+        let hits = search_root_object_candidates_in_sk_path(
+            crate::menu_syntax::CaptureObjectKind::Snippet,
+            "fetch",
+            10,
+            tmp.path(),
+        );
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, "fj");
+        assert_eq!(hits[0].label, "const res = await fetch(url)");
+        assert_eq!(hits[0].subtitle, "Snippet · ts");
     }
 
     #[test]

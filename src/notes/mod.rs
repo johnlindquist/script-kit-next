@@ -38,6 +38,7 @@ mod browse_panel;
 pub(crate) mod code_highlight;
 mod markdown;
 mod markdown_highlighting;
+pub(crate) mod menu_syntax_capture;
 pub(crate) mod metadata;
 mod model;
 mod storage;

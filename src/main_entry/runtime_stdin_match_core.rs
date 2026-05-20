@@ -190,8 +190,29 @@
                             ExternalCommand::SetFilter { ref text, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
+                                view.menu_syntax_form_input_active = false;
+                                view.menu_syntax_form_draft_field_id = None;
+                                view.menu_syntax_form_draft_value.clear();
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
+                                ctx.notify();
+                            }
+                            ExternalCommand::SetMenuSyntaxFormField { ref field, ref value, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log(
+                                    "STDIN",
+                                    &format!(
+                                        "[{}] Setting menu-syntax form field {:?} to: '{}'",
+                                        rid, field, value
+                                    ),
+                                );
+                                let _ = view.update_menu_syntax_form_field(
+                                    field.as_deref(),
+                                    value.clone(),
+                                    window,
+                                    ctx,
+                                );
+                                let _ = view.get_filtered_results_cached();
                                 ctx.notify();
                             }
                             ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {

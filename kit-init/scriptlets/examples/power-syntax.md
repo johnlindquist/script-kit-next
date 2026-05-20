@@ -204,82 +204,78 @@ The corresponding TypeScript script declares this `menuSyntax` block:
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true
 
-**Reminder `;reminder` capture walkthrough**
+**Todo scheduling compatibility aliases**
 
-`;reminder` is now a Todo-owned compatibility alias. It resolves to the
-canonical `todo` target with the `remind` operation while preserving the raw
-target in the capture payload for older handlers.
+The canonical public target for todo capture is `;todo`. Older inputs using
+`;reminder`, `;snooze`, and `;defer` are still accepted for compatibility, but
+they resolve to the built-in Todo system with specialized operations instead of
+being advertised as separate product targets. Existing handlers can inspect the
+payload `source.rawTarget`, `source.canonicalTarget`, and `source.operation`
+fields when they need to distinguish a compatibility input from canonical todo
+capture.
 
-    ;reminder Walk dog every day at 8am
+**Object refs in app-owned capture**
 
-The app-owned grammar resolves the alias as if the handler had declared this
-canonical `todo` shape:
+App-owned capture targets can carry inline object references in the control
+part of the command. Typed refs resolve immediately into `objectRefs[]` and
+`primaryObjectRef`; bare refs stay unresolved so a future picker/search UI can
+take over without changing the payload shape.
+
+    ;note @Project due:tomorrow
+    ;snippet update @snippet:fetch-json lang:ts -- const data = await fetch(url)
+
+For `;note @Project due:tomorrow`, the note capture body is empty because
+`@Project` is selector context and `due:tomorrow` is parsed date context. For
+`;snippet update @snippet:fetch-json -- ...`, the app-owned snippet writer uses
+the resolved snippet ref as the target trigger when `trigger:` is omitted.
+Snippet body text after `--` is not scanned for object refs.
+
+**Link `;link` capture walkthrough**
+
+`;link` is app-owned bookmark capture. It upserts links into
+`$SK_PATH/menu-syntax/bookmarks.jsonl` and preserves parsed object refs for
+future relation-aware browsing.
+
+    ;link https://example.com title:"Example"
+    ;link save https://example.com #docs
+    ;link delete https://example.com
+
+Handlers that want to mirror the app-owned shape can declare:
 
     menuSyntax:
       - family: capture.v1
         targets:
-          - todo
+          - link
         accepts:
           - tags
-          - date
-          - duration
-          - recurrence
-          - priority
+          - kv
         required:
           - body
-        label: Todo reminder
+        label: Save link
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true
 
-**Snooze `;snooze` capture walkthrough**
+**Snippet `;snippet` capture walkthrough**
 
-`;snooze` is now a Todo-owned compatibility alias. It resolves to the canonical
-`todo` target with the `snooze` operation and keeps numeric issue references
-such as `#432` in the body instead of treating them as tags.
+`;snippet` is app-owned quick snippet capture. It writes JSONL records under
+`$SK_PATH/menu-syntax/snippets.jsonl`; `add`, `update`, and `remove` map to
+create/update/delete operations.
 
-    ;snooze in 30 minutes Review PR #432
+    ;snippet add trigger:fj lang:ts -- const res = await fetch(url)
+    ;snippet update @snippet:fj lang:ts -- const data = await fetch(url)
+    ;snippet remove @snippet:fj
 
-The app-owned grammar resolves the alias as if the handler had declared this
-canonical `todo` shape:
-
-    menuSyntax:
-      - family: capture.v1
-        targets:
-          - todo
-        accepts:
-          - tags
-          - date
-          - relativeDate
-          - duration
-        required:
-          - body
-          - date
-        label: Todo snooze
-        payloadSchema: kit://schema/menu-syntax/payload-v1
-        defaultHandler: true
-
-**Defer `;defer` capture walkthrough**
-
-`;defer` is now a Todo-owned compatibility alias. It resolves to the canonical
-`todo` target with the `defer` operation for fuzzy future scheduling.
-
-    ;defer until next week Refactor settings panel
-
-The app-owned grammar resolves the alias as if the handler had declared this
-canonical `todo` shape:
+Handlers that want the same payload contract can declare:
 
     menuSyntax:
       - family: capture.v1
         targets:
-          - todo
+          - snippet
         accepts:
           - tags
-          - date
-          - relativeDate
-          - priority
+          - kv
         required:
           - body
-          - date
-        label: Todo defer
+        label: Save snippet
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true

@@ -436,15 +436,18 @@ fn build_capture_snapshot(
     match target {
         None => {}
         Some(t) => {
+            let public_target = public_capture_target_slug(t);
             let entry = capture_target_catalog(ctx, true)
                 .into_iter()
-                .find(|entry| entry.slug.eq_ignore_ascii_case(t))
-                .unwrap_or_else(|| builtin_capture_target_entry(t));
+                .find(|entry| entry.slug.eq_ignore_ascii_case(public_target))
+                .unwrap_or_else(|| builtin_capture_target_entry(public_target));
             rows.push(capture_target_row_from_entry(&entry));
         }
     }
 
-    rows.push(footer_create_handler_row(target.map(str::to_string)));
+    rows.push(footer_create_handler_row(
+        target.map(public_capture_target_slug).map(str::to_string),
+    ));
 
     TriggerPickerSnapshot {
         mode: TriggerPickerMode::Capture,
@@ -1203,6 +1206,7 @@ fn capture_target_catalog(
     let label_overrides = registered_capture_target_label_overrides(ctx);
     let mut entries: Vec<CaptureTargetEntry> = KNOWN_CAPTURE_TARGETS
         .iter()
+        .filter(|target| !suppress_public_capture_alias(target))
         .filter(|target| {
             include_hidden_aliases
                 || picker_visible_capture_targets()
@@ -1268,27 +1272,27 @@ fn registered_capture_target_label_overrides(
     labels
 }
 
+fn suppress_public_capture_alias(target: &str) -> bool {
+    matches!(
+        target.to_ascii_lowercase().as_str(),
+        "notes" | "reminder" | "snooze" | "defer"
+    )
+}
+
+fn public_capture_target_slug(target: &str) -> &str {
+    match target.to_ascii_lowercase().as_str() {
+        "notes" => "note",
+        "reminder" | "snooze" | "defer" => "todo",
+        _ => target,
+    }
+}
+
 fn builtin_capture_target_entry(target: &str) -> CaptureTargetEntry {
     let (title, detail, example) = match target {
         "todo" => (
             "Todo inbox",
             "Create or update a Todo task",
             Some(";todo buy milk #errand p1"),
-        ),
-        "reminder" => (
-            "Todo reminder",
-            "Compatibility target: Todo reminder operation",
-            Some(";reminder walk dog every day at 8am #home"),
-        ),
-        "snooze" => (
-            "Todo snooze",
-            "Compatibility target: Todo snooze operation",
-            Some(";snooze in 30 minutes Review PR #432"),
-        ),
-        "defer" => (
-            "Todo defer",
-            "Compatibility target: Todo defer operation",
-            Some(";defer until next week Refactor settings panel"),
         ),
         "cal" => (
             "Calendar event",
@@ -1299,11 +1303,6 @@ fn builtin_capture_target_entry(target: &str) -> CaptureTargetEntry {
             "Note",
             "Create or update a built-in Note or daily note",
             Some(";note decision to ship parser first"),
-        ),
-        "notes" => (
-            "Note compatibility alias",
-            "Compatibility alias of ;note",
-            Some(";notes decision to ship parser first"),
         ),
         "social" => (
             "Social draft",
@@ -1392,6 +1391,7 @@ fn score_capture_target(needle: &str, entry: &CaptureTargetEntry) -> Option<i32>
 fn capture_target_search_aliases(slug: &str) -> Vec<&'static str> {
     match slug {
         "note" => vec!["daily", "daily note", "notes"],
+        "todo" => vec!["reminder", "snooze", "defer"],
         _ => Vec::new(),
     }
 }
@@ -1605,6 +1605,85 @@ mod tests {
                 build_trigger_picker_snapshot(input, &ctx).is_none(),
                 "input '{input}' must fall back to fuzzy search"
             );
+        }
+    }
+
+    #[test]
+    fn trigger_picker_does_not_build_object_selector_snapshot() {
+        let ctx = TriggerPickerContext::default();
+        assert!(
+            build_trigger_picker_snapshot(";snippet update @fetch", &ctx).is_none(),
+            "object refs are owned by menu_syntax::object_selector, not TriggerPickerSnapshot"
+        );
+    }
+
+    #[test]
+    fn notes_alias_never_renders_as_capture_target_row() {
+        let ctx = ctx_empty();
+        assert!(capture_target_catalog(&ctx, true)
+            .iter()
+            .all(|entry| !entry.slug.eq_ignore_ascii_case("notes")));
+
+        let snapshot = build_capture_snapshot(Some("notes"), &ctx);
+        assert!(snapshot.rows.iter().all(|row| {
+            row.token.as_deref() != Some(";notes")
+                && !row.title.contains(";notes")
+                && !row.detail.as_deref().unwrap_or("").contains(";notes")
+                && !row.example.as_deref().unwrap_or("").contains(";notes")
+        }));
+        assert!(
+            snapshot
+                .rows
+                .iter()
+                .any(|row| row.token.as_deref() == Some(";note")),
+            "hidden alias should point at the public ;note row"
+        );
+        assert!(snapshot.rows.iter().all(|row| {
+            !matches!(
+                &row.action,
+                TriggerPickerAction::CreateHandler { target: Some(target) }
+                    if target.eq_ignore_ascii_case("notes")
+            )
+        }));
+    }
+
+    #[test]
+    fn todo_aliases_never_render_as_capture_target_rows() {
+        let ctx = ctx_empty();
+        for alias in ["reminder", "snooze", "defer"] {
+            assert!(capture_target_catalog(&ctx, true)
+                .iter()
+                .all(|entry| !entry.slug.eq_ignore_ascii_case(alias)));
+
+            let snapshot = build_capture_snapshot(Some(alias), &ctx);
+            assert!(snapshot.rows.iter().all(|row| {
+                row.token.as_deref() != Some(&format!(";{alias}"))
+                    && !row.title.contains(&format!(";{alias}"))
+                    && !row
+                        .detail
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains(&format!(";{alias}"))
+                    && !row
+                        .example
+                        .as_deref()
+                        .unwrap_or("")
+                        .contains(&format!(";{alias}"))
+            }));
+            assert!(
+                snapshot
+                    .rows
+                    .iter()
+                    .any(|row| row.token.as_deref() == Some(";todo")),
+                "hidden {alias} alias should point at the public ;todo row"
+            );
+            assert!(snapshot.rows.iter().all(|row| {
+                !matches!(
+                    &row.action,
+                    TriggerPickerAction::CreateHandler { target: Some(target) }
+                        if target.eq_ignore_ascii_case(alias)
+                )
+            }));
         }
     }
 

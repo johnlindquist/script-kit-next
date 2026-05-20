@@ -991,11 +991,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let picker_ctx = crate::menu_syntax::TriggerPickerContext {
-            recent_queries: self.input_history.recent_entries(8),
-            scripts: self.scripts.clone(),
-            scriptlets: self.scriptlets.clone(),
-        };
+        let picker_ctx = self.menu_syntax_trigger_picker_context(raw_filter);
         let transition = crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
             &self.menu_syntax_trigger_popup_state,
             raw_filter,
@@ -1050,6 +1046,17 @@ impl ScriptListApp {
                     cx,
                 );
             }
+        }
+    }
+
+    pub(crate) fn menu_syntax_trigger_picker_context(
+        &self,
+        _raw_filter: &str,
+    ) -> crate::menu_syntax::TriggerPickerContext {
+        crate::menu_syntax::TriggerPickerContext {
+            recent_queries: self.input_history.recent_entries(8),
+            scripts: self.scripts.clone(),
+            scriptlets: self.scriptlets.clone(),
         }
     }
 

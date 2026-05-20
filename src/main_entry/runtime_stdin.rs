@@ -340,8 +340,29 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::SetFilter { ref text, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
+                                view.menu_syntax_form_input_active = false;
+                                view.menu_syntax_form_draft_field_id = None;
+                                view.menu_syntax_form_draft_value.clear();
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
+                                ctx.notify();
+                            }
+                            ExternalCommand::SetMenuSyntaxFormField { ref field, ref value, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log(
+                                    "STDIN",
+                                    &format!(
+                                        "[{}] Setting menu-syntax form field {:?} to: '{}'",
+                                        rid, field, value
+                                    ),
+                                );
+                                let _ = view.update_menu_syntax_form_field(
+                                    field.as_deref(),
+                                    value.clone(),
+                                    window,
+                                    ctx,
+                                );
+                                let _ = view.get_filtered_results_cached();
                                 ctx.notify();
                             }
                             ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
@@ -410,6 +431,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         return;
                                     }
                                 }
+                                let key_char: Option<&str> = if key.chars().count() == 1 {
+                                    Some(key.as_str())
+                                } else {
+                                    None
+                                };
 
                                 match &view.current_view {
                                     AppView::ScriptList => {
@@ -417,14 +443,43 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
                                             view.toggle_actions(ctx, window);
+                                        } else if view.handle_menu_syntax_form_key_input(
+                                            &key_lower,
+                                            key_char,
+                                            &gpui::Modifiers {
+                                                platform: has_cmd,
+                                                shift: has_shift,
+                                                control: _has_ctrl,
+                                                alt: _has_alt,
+                                                function: false,
+                                            },
+                                            window,
+                                            ctx,
+                                        ) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: menu-syntax form text input",
+                                            );
                                         } else if view.main_menu_fallback_state.is_active() {
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    let _ = view
-                                                        .try_route_plain_tab_to_acp_context_capture(
-                                                            ctx,
+                                                    if view.menu_syntax_capture_form_owns_input() {
+                                                        if has_shift {
+                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                        } else {
+                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                        }
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - move menu syntax form focus",
                                                         );
+                                                    } else if !has_shift {
+                                                        let _ = view
+                                                            .try_route_plain_tab_to_acp_context_capture(
+                                                                ctx,
+                                                            );
+                                                    }
                                                 }
                                                 "up" | "arrowup" => {
                                                     if view.main_menu_fallback_state.move_up() {
@@ -451,10 +506,22 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else {
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    let _ = view
-                                                        .try_route_plain_tab_to_acp_context_capture(
-                                                            ctx,
+                                                    if view.menu_syntax_capture_form_owns_input() {
+                                                        if has_shift {
+                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                        } else {
+                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                        }
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - move menu syntax form focus",
                                                         );
+                                                    } else if !has_shift {
+                                                        let _ = view
+                                                            .try_route_plain_tab_to_acp_context_capture(
+                                                                ctx,
+                                                            );
+                                                    }
                                                 }
                                                 "up" | "arrowup" => {
                                                     // Use move_selection_up to properly skip section headers
@@ -465,6 +532,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     view.move_selection_down(ctx);
                                                 }
                                                 "enter" => {
+                                                    if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                                                        if view.apply_menu_syntax_object_selector_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax object selector");
+                                                            return;
+                                                        }
+                                                    }
                                                     if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
                                                         if view.apply_menu_syntax_trigger_popup_intent(
                                                             crate::menu_syntax::InlinePickerKeyIntent::Accept,
@@ -617,15 +694,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     }
                                                 }
                                                 "enter" => {
-                                                    logging::log("STDIN", "SimulateKey: Enter - submit selection");
-                                                    let filtered = view.filtered_arg_choices();
-                                                    if let Some((_, choice)) = filtered.get(view.arg_selected_index) {
-                                                        let value = choice.value.clone();
-                                                        view.submit_prompt_response(prompt_id, Some(value), ctx);
-                                                    } else if !view.arg_input.is_empty() {
-                                                        let value = view.arg_input.text().to_string();
-                                                        view.submit_prompt_response(prompt_id, Some(value), ctx);
-                                                    }
+                                                    logging::log("STDIN", "SimulateKey: Enter - submit mini prompt selection");
+                                                    view.submit_arg_prompt_from_current_state(&prompt_id, ctx);
                                                 }
                                                 "escape" => {
                                                     logging::log("STDIN", "SimulateKey: Escape - cancel script");

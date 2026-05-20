@@ -587,7 +587,8 @@
                                     }
 
                                     let menu_syntax_owns_main_list =
-                                        this.menu_syntax_trigger_popup_state.owns_main_list()
+                                        this.menu_syntax_object_selector_state.owns_main_list()
+                                            || this.menu_syntax_trigger_popup_state.owns_main_list()
                                             || this
                                                 .menu_syntax_mode
                                                 .capture_composer_owns_input_for(&this.filter_text)

@@ -166,6 +166,8 @@ fn source_only_filters_parse_as_empty_advanced_queries() {
         ("v: ", RootUnifiedSourceFilter::AiVault),
         ("vault: ", RootUnifiedSourceFilter::AiVault),
         ("d: ", RootUnifiedSourceFilter::Dictation),
+        ("windows: ", RootUnifiedSourceFilter::Windows),
+        ("w: ", RootUnifiedSourceFilter::Windows),
     ] {
         match parse(input) {
             MenuSyntaxParse::AdvancedQuery(query) => {

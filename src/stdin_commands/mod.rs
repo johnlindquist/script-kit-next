@@ -383,6 +383,17 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Update the active menu-syntax handler form field and sync it back to
+    /// the canonical main input text.
+    SetMenuSyntaxFormField {
+        /// Field id from `getState.menuSyntaxMainHint.form.fields[].id`.
+        /// When omitted, the currently focused handler form field is edited.
+        #[serde(default)]
+        field: Option<String>,
+        value: String,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Trigger a built-in feature by canonical `builtinId` (v1+) or by
     /// legacy `name` alias (v1-deprecated). Exactly one of `builtinId`
     /// or `name` MUST be supplied; the receiver decides which path ran
@@ -665,6 +676,7 @@ impl ExternalCommand {
             | Self::Show { request_id }
             | Self::Hide { request_id }
             | Self::SetFilter { request_id, .. }
+            | Self::SetMenuSyntaxFormField { request_id, .. }
             | Self::TriggerBuiltin { request_id, .. }
             | Self::SimulateKey { request_id, .. }
             | Self::SimulateAiKey { request_id, .. }
@@ -693,6 +705,7 @@ impl ExternalCommand {
             Self::Show { .. } => "show",
             Self::Hide { .. } => "hide",
             Self::SetFilter { .. } => "setFilter",
+            Self::SetMenuSyntaxFormField { .. } => "setMenuSyntaxFormField",
             Self::TriggerBuiltin { .. } => "triggerBuiltin",
             Self::SimulateKey { .. } => "simulateKey",
             Self::OpenNotes => "openNotes",
@@ -731,6 +744,7 @@ pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
     "show",
     "hide",
     "setFilter",
+    "setMenuSyntaxFormField",
     "triggerBuiltin",
     "simulateKey",
     "openNotes",
