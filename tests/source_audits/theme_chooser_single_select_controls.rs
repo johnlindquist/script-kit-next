@@ -136,3 +136,148 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     assert!(prompt_handler.contains("setThemeControl requires ThemeChooserView"));
     assert!(!prompt_handler.contains(".set_theme_chooser_control_from_devtools(&control, &value, cx)\n                                                .ok()"));
 }
+
+#[test]
+fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let gpui_integration = read_source("src/theme/gpui_integration.rs");
+    let theme_service = read_source("src/theme/service.rs");
+    let slider_change = chooser
+        .split("fn apply_theme_chooser_slider_change(")
+        .nth(1)
+        .and_then(|section| section.split("fn apply_theme_chooser_color_change(").next())
+        .expect("missing apply_theme_chooser_slider_change");
+    let slider_preview = chooser
+        .split("fn apply_theme_chooser_slider_theme(")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("fn apply_theme_chooser_theme_preview(")
+                .next()
+        })
+        .expect("missing apply_theme_chooser_slider_theme");
+    let preview_helper = chooser
+        .split("fn apply_theme_chooser_theme_preview(")
+        .nth(1)
+        .and_then(|section| section.split("fn apply_and_persist_theme(").next())
+        .expect("missing apply_theme_chooser_theme_preview");
+    let non_slider_preview = chooser
+        .split("fn apply_theme_chooser_theme(")
+        .nth(1)
+        .and_then(|section| section.split("fn apply_theme_chooser_slider_theme(").next())
+        .expect("missing apply_theme_chooser_theme");
+    let persist_helper = chooser
+        .split("fn apply_and_persist_theme(")
+        .nth(1)
+        .and_then(|section| section.split("fn mutate_theme_chooser_theme(").next())
+        .expect("missing apply_and_persist_theme");
+    let service_reload = theme_service
+        .split("pub(crate) fn reload_theme_cache_sync_and_bump_revision(")
+        .nth(1)
+        .and_then(|section| section.split("/// Persist a theme to disk").next())
+        .expect("missing reload_theme_cache_sync_and_bump_revision");
+
+    assert!(
+        slider_change.contains("self.apply_theme_chooser_slider_theme(")
+            && slider_change.contains("self.mutate_theme_chooser_slider_theme("),
+        "Theme Designer slider drags should route through the live slider preview path"
+    );
+    assert!(
+        !slider_change.contains("self.apply_theme_chooser_theme(")
+            && !slider_change.contains("self.mutate_theme_chooser_theme("),
+        "Theme Designer slider drags must not route through native-sync preview helpers"
+    );
+    assert!(
+        slider_preview.contains("false,\n            mode.notify_parent(),\n            cx,"),
+        "live slider previews should skip native vibrancy reconfiguration"
+    );
+    assert!(
+        non_slider_preview.contains(
+            "self.apply_theme_chooser_theme_preview(next_theme, reason, true, true, cx);"
+        ),
+        "non-slider theme previews should keep native vibrancy synchronized"
+    );
+    assert!(
+        persist_helper.contains("self.apply_theme_chooser_theme(next_theme, reason, cx);")
+            && persist_helper.contains("persist_theme_and_sync_all_windows"),
+        "explicit Theme Designer commits should preview through the native-sync path before persisting"
+    );
+    assert!(
+        service_reload.contains("sync_gpui_component_theme_for_theme_with_source("),
+        "persisted themes should reload through the theme service path that syncs native window state"
+    );
+    assert!(
+        preview_helper
+            .contains("sync_theme_chooser_preview(cx, &self.theme, reason, sync_native_vibrancy);")
+            && preview_helper.contains("if sync_native_vibrancy {")
+            && preview_helper
+                .contains("platform::configure_window_vibrancy_material_for_appearance")
+            && preview_helper.contains("notify_parent: bool")
+            && preview_helper.contains("if notify_parent {\n            cx.notify();"),
+        "Theme Designer preview helper should honor the native-sync flag"
+    );
+    assert!(
+        chooser.contains("Slider drags can skip native window material churn")
+            && !chooser.contains(
+                "applies both gpui-component colors and\n/// native vibrancy/material in one call"
+            ),
+        "Theme Designer preview sync comment should describe conditional native vibrancy ownership"
+    );
+    assert!(
+        chooser.contains(
+            "sync_gpui_component_theme_for_theme_with_source_and_native(\n        cx,\n        active_theme.as_ref(),\n        source,\n        sync_native_vibrancy,"
+        ),
+        "ThemeChooser preview sync must pass the slider native-sync flag into gpui theme integration"
+    );
+    assert!(
+        gpui_integration.contains("sync_native_window: bool")
+            && gpui_integration.contains("if sync_native_window {\n        sync_native_window_theme_for_theme(sk_theme, source);"),
+        "gpui theme integration must allow high-frequency previews to skip native window reconfiguration"
+    );
+}
+
+#[test]
+fn theme_chooser_native_slider_drag_is_not_parent_reconciled_until_release() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let slider = read_source("vendor/gpui-component/crates/ui/src/slider.rs");
+    let new_slider = chooser
+        .split("fn new_theme_chooser_slider(")
+        .nth(1)
+        .and_then(|section| section.split("fn new_theme_chooser_color_picker(").next())
+        .expect("missing new_theme_chooser_slider");
+    let sync_slider = chooser
+        .split("fn sync_slider_entity_value(")
+        .nth(1)
+        .and_then(|section| section.split("fn sync_color_picker_entity_value(").next())
+        .expect("missing sync_slider_entity_value");
+
+    assert!(
+        new_slider.contains("SliderEvent::Change(value)")
+            && new_slider.contains("apply_theme_chooser_slider_drag_change(binding, *value, cx)"),
+        "native slider Change must use the live-drag path"
+    );
+    assert!(
+        new_slider.contains("SliderEvent::Release(value)")
+            && new_slider.contains("apply_theme_chooser_slider_change(binding, *value, cx)"),
+        "native slider Release must use the commit path"
+    );
+    assert!(
+        chooser.contains("enum ThemeChooserSliderApplyMode")
+            && chooser.contains("LiveDrag")
+            && chooser.contains("Commit")
+            && chooser.contains("mode.notify_parent()"),
+        "ThemeChooser slider changes must distinguish live drag from release commit"
+    );
+    assert!(
+        sync_slider.contains("slider.is_dragging()") && sync_slider.contains("return;"),
+        "ThemeChooser must not sync model values into a slider while native drag is active"
+    );
+    assert!(
+        slider.contains("Release(SliderValue)")
+            && slider.contains("dragging: bool")
+            && slider.contains("pub fn is_dragging(&self) -> bool")
+            && slider.contains("fn handle_release(&mut self")
+            && slider.contains(".on_mouse_up_out("),
+        "vendor slider must expose drag lifecycle and clear active drag on mouse-up/out"
+    );
+}

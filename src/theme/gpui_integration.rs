@@ -407,6 +407,20 @@ pub(crate) fn sync_gpui_component_theme_for_theme_with_source(
     sk_theme: &Theme,
     source: &'static str,
 ) {
+    sync_gpui_component_theme_for_theme_with_source_and_native(cx, sk_theme, source, true);
+}
+
+/// Source-tagged runtime theme sync with explicit native window ownership.
+///
+/// High-frequency previews, such as dragging Theme Designer sliders, should
+/// update GPUI colors without reconfiguring AppKit vibrancy/material on every
+/// pointer event. Commit-style theme changes keep `sync_native_window` true.
+pub(crate) fn sync_gpui_component_theme_for_theme_with_source_and_native(
+    cx: &mut App,
+    sk_theme: &Theme,
+    source: &'static str,
+    sync_native_window: bool,
+) {
     let (mode, custom_colors) = resolve_mode_and_colors(sk_theme);
     let is_dark = matches!(mode, ThemeMode::Dark);
     let chrome = crate::theme::chrome::AppChromeColors::from_theme(sk_theme);
@@ -441,7 +455,9 @@ pub(crate) fn sync_gpui_component_theme_for_theme_with_source(
         "gpui_component_theme_synchronized"
     );
 
-    sync_native_window_theme_for_theme(sk_theme, source);
+    if sync_native_window {
+        sync_native_window_theme_for_theme(sk_theme, source);
+    }
 }
 
 fn theme_style(
