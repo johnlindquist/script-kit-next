@@ -2308,7 +2308,7 @@ mod tests {
         assert!(block.contains("--- end artifact authoring guidance ---"));
         assert!(block.contains("### Scriptlet bundle"));
         assert!(block.contains("scriptlets/starter.md"));
-        assert!(block.contains("scripts/hello-world.ts"));
+        assert!(block.contains("scripts/todo-app.ts"));
         assert!(block.contains("`tool:<name>`"));
         assert!(block.contains("_sk_*"));
     }
