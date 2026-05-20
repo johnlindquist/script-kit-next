@@ -321,19 +321,21 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if let Some(ref body) = script.body {
             if let Some(hit) = find_best_content_line(body, &query_lower) {
                 score += SCORE_CONTENT_MATCH;
-                crate::logging::log(
-                    "FILTER_PERF",
-                    &format!(
-                        "[CONTENT_MATCH] script='{}' line={} name_score={} filename_score={} description_score={} primary_text_kind={:?} bonus={}",
-                        script.name,
-                        hit.line_number,
-                        name_score,
-                        filename_score,
-                        description_score,
-                        primary_text_kind,
-                        SCORE_CONTENT_MATCH
-                    ),
-                );
+                if crate::logging::filter_perf_trace_enabled() {
+                    crate::logging::log(
+                        "FILTER_PERF",
+                        &format!(
+                            "[CONTENT_MATCH] script='{}' line={} name_score={} filename_score={} description_score={} primary_text_kind={:?} bonus={}",
+                            script.name,
+                            hit.line_number,
+                            name_score,
+                            filename_score,
+                            description_score,
+                            primary_text_kind,
+                            SCORE_CONTENT_MATCH
+                        ),
+                    );
+                }
                 // Only surface the snippet row when no stronger field won
                 if !primary_text_match {
                     content_match = Some(hit);

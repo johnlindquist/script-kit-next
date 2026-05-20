@@ -514,14 +514,16 @@ pub fn search_root_dictation_history_cached(
         matched_field: hit.matched_field,
     })
     .collect::<Vec<_>>();
-    tracing::info!(
-        category = "DICTATION",
-        event = "root_dictation_history_search_cache_hit",
-        query_len = query.trim().chars().count(),
-        scan_limit = options.scan_limit,
-        max_results = options.max_results,
-        hit_count = hits.len(),
-    );
+    if crate::logging::filter_perf_trace_enabled() {
+        tracing::info!(
+            category = "DICTATION",
+            event = "root_dictation_history_search_cache_hit",
+            query_len = query.trim().chars().count(),
+            scan_limit = options.scan_limit,
+            max_results = options.max_results,
+            hit_count = hits.len(),
+        );
+    }
     hits
 }
 

@@ -57,6 +57,11 @@ use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{fmt, EnvFilter};
 use uuid::Uuid;
+
+pub fn filter_perf_trace_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_FILTER_PERF_LOG").is_some())
+}
 // =============================================================================
 // SESSION IDENTITY & LOG PATHS
 // =============================================================================

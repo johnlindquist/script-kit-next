@@ -575,14 +575,16 @@ impl ScriptListApp {
         );
         self.last_scrolled_index = None;
 
-        tracing::info!(
-            target: "SCROLL_STATE",
-            old_list_count,
-            item_count,
-            selected_index = self.selected_index,
-            row_generation = self.main_list_row_generation,
-            "replaced list state for filter replacement"
-        );
+        if crate::logging::filter_perf_trace_enabled() {
+            tracing::info!(
+                target: "SCROLL_STATE",
+                old_list_count,
+                item_count,
+                selected_index = self.selected_index,
+                row_generation = self.main_list_row_generation,
+                "replaced list state for filter replacement"
+            );
+        }
     }
 
     /// Validate and correct selection bounds after list structure changes.

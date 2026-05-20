@@ -1762,8 +1762,10 @@ impl ScriptListApp {
         }
         self.main_window_preflight_cache_key = new_key;
         let receipt = crate::main_window_preflight::build_main_window_preflight_receipt(self);
-        if let Some(ref r) = receipt {
-            crate::main_window_preflight::log_main_window_preflight_receipt(r);
+        if crate::logging::filter_perf_trace_enabled() {
+            if let Some(ref r) = receipt {
+                crate::main_window_preflight::log_main_window_preflight_receipt(r);
+            }
         }
         self.cached_main_window_preflight = receipt;
     }
