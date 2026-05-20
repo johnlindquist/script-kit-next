@@ -180,9 +180,9 @@
                                                 "tab" => {
                                                     if view.menu_syntax_capture_form_owns_input() {
                                                         if has_shift {
-                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                            view.focus_previous_menu_syntax_form_field(window, ctx);
                                                         } else {
-                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                            view.focus_next_menu_syntax_form_field(window, ctx);
                                                         }
                                                         logging::log(
                                                             "STDIN",
@@ -229,9 +229,9 @@
                                                 "tab" => {
                                                     if view.menu_syntax_capture_form_owns_input() {
                                                         if has_shift {
-                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                            view.focus_previous_menu_syntax_form_field(window, ctx);
                                                         } else {
-                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                            view.focus_next_menu_syntax_form_field(window, ctx);
                                                         }
                                                         logging::log(
                                                             "STDIN",

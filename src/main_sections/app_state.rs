@@ -830,6 +830,18 @@ struct ScriptListApp {
     /// capture composer mode. Tab/Shift-Tab mutate this instead of opening
     /// Tab AI while handler mode owns the main input.
     menu_syntax_form_focused_index: usize,
+    /// Stable signature for the currently rendered handler form. Field input
+    /// entities are recreated only when the handler/schema changes, not when
+    /// field values change.
+    menu_syntax_form_signature: Option<String>,
+    /// Real focusable input entities for handler form fields.
+    menu_syntax_form_inputs: Vec<(String, Entity<InputState>)>,
+    /// Subscriptions that sync real handler field edits back into the parser
+    /// backed filter text.
+    menu_syntax_form_input_subscriptions: Vec<Subscription>,
+    /// Guard for field-input initiated serialization so form input echoes do
+    /// not recursively rewrite the same focused editor.
+    menu_syntax_form_syncing_from_input: bool,
     /// True after Tab has explicitly moved text entry from the main filter
     /// into the handler form. Before this, the form can be visible while the
     /// real cursor and text entry remain in the main input.

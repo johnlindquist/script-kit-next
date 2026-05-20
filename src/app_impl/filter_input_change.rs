@@ -648,6 +648,7 @@ impl ScriptListApp {
         }
 
         self.set_menu_syntax_mode_from_filter(&new_text);
+        self.sync_menu_syntax_form_inputs_from_filter(window, cx);
 
         // Iter 019 D1 / iter 020 D2a — run the pure popup state machine on
         // every filter update and mirror the resulting transition into the
