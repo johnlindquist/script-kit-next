@@ -6,6 +6,26 @@ fn prompt_actions_dialog_offsets(padding_sm: f32, border_thin: f32) -> (f32, f32
     (top, right)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BuiltinPromptSubmitTransition {
+    ReturnToScriptList,
+    CloseMainWindow,
+}
+
+impl BuiltinPromptSubmitTransition {
+    fn apply(self, app: &mut ScriptListApp, cx: &mut gpui::Context<ScriptListApp>) {
+        match self {
+            Self::ReturnToScriptList => {
+                app.reset_to_script_list(cx);
+                cx.notify();
+            }
+            Self::CloseMainWindow => {
+                app.close_and_reset_window(cx);
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 struct PromptRenderContext<'a> {
     theme: &'a crate::theme::Theme,
@@ -197,7 +217,8 @@ fn key_preamble(
         return true;
     }
 
-    if !app.show_actions_popup && app.handle_global_shortcut_with_options(event, is_dismissable, cx) {
+    if !app.show_actions_popup && app.handle_global_shortcut_with_options(event, is_dismissable, cx)
+    {
         if stop_propagation_on_global_shortcut {
             cx.stop_propagation();
         }
@@ -350,6 +371,13 @@ impl ScriptListApp {
                         self.show_error_toast("Select a microphone from the list", cx);
                         return;
                     }
+                    self.record_submit_diagnostic(
+                        "prompt",
+                        "submit_arg_prompt_from_current_state",
+                        Some(prompt_id),
+                        Some(value.as_str()),
+                        true,
+                    );
                     self.handle_builtin_mic_selection(&value, cx);
                     return;
                 }
@@ -365,13 +393,48 @@ impl ScriptListApp {
                         self.show_error_toast("Choose Download or Not now", cx);
                         return;
                     }
+                    self.record_submit_diagnostic(
+                        "prompt",
+                        "submit_arg_prompt_from_current_state",
+                        Some(prompt_id),
+                        Some(value.as_str()),
+                        true,
+                    );
                     self.handle_dictation_model_selection(&value, cx);
                     return;
                 }
+
+                // Intercept snap mode configuration prompt.
+                if prompt_id == BUILTIN_SNAP_MODE_PROMPT_ID {
+                    if !self.is_valid_builtin_snap_mode_selection(&value) {
+                        self.show_error_toast("Select a snap mode from the list", cx);
+                        return;
+                    }
+                    self.record_submit_diagnostic(
+                        "prompt",
+                        "submit_arg_prompt_from_current_state",
+                        Some(prompt_id),
+                        Some(value.as_str()),
+                        true,
+                    );
+                    self.handle_builtin_snap_mode_selection(&value, cx);
+                    return;
+                }
+                self.record_submit_diagnostic(
+                    "prompt",
+                    "submit_arg_prompt_from_current_state",
+                    Some(prompt_id),
+                    Some(value.as_str()),
+                    true,
+                );
                 self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
             }
             ArgSubmitOutcome::InvalidEmpty => {
-                self.show_hud("Type a value to continue".to_string(), Some(HUD_SHORT_MS), cx);
+                self.show_hud(
+                    "Type a value to continue".to_string(),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
             }
         }
     }
@@ -419,11 +482,7 @@ impl ScriptListApp {
                         "System Default".to_string()
                     }
                 };
-                self.show_hud(
-                    format!("Microphone: {label}"),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
+                self.show_hud(format!("Microphone: {label}"), Some(HUD_SHORT_MS), cx);
             }
             Err(error) => {
                 tracing::error!(
@@ -435,8 +494,77 @@ impl ScriptListApp {
             }
         }
 
-        self.reset_to_script_list(cx);
-        cx.notify();
+        BuiltinPromptSubmitTransition::ReturnToScriptList.apply(self, cx);
+    }
+
+    fn is_valid_builtin_snap_mode_selection(&self, value: &str) -> bool {
+        matches!(value, "off" | "simple" | "expanded" | "precision")
+    }
+
+    /// Persist the snap mode selection and close the main window.
+    fn handle_builtin_snap_mode_selection(&mut self, value: &str, cx: &mut Context<Self>) {
+        let target_mode = match value {
+            "off" => crate::window_control::SnapMode::Off,
+            "simple" => crate::window_control::SnapMode::Simple,
+            "expanded" => crate::window_control::SnapMode::Expanded,
+            "precision" => crate::window_control::SnapMode::Precision,
+            _ => {
+                self.show_error_toast("Invalid snap mode selection", cx);
+                return;
+            }
+        };
+
+        let previous = crate::window_control::current_snap_mode();
+        let runtime_active = crate::window_control::is_snap_runtime_active();
+
+        let mode = match crate::window_control::persist_snap_mode(target_mode) {
+            Ok(mode) => mode,
+            Err(error) => {
+                tracing::error!(
+                    category = "WINDOW",
+                    %error,
+                    ?target_mode,
+                    "Failed to persist snap mode from built-in prompt"
+                );
+                self.show_error_toast(format!("Failed to update snap mode: {error}"), cx);
+                return;
+            }
+        };
+
+        if runtime_active {
+            let runtime_result = if mode == crate::window_control::SnapMode::Off {
+                crate::window_control::cancel_snap_runtime(cx)
+            } else {
+                crate::window_control::refresh_snap_runtime_for_mode(cx)
+            };
+
+            if let Err(error) = runtime_result {
+                tracing::warn!(
+                    category = "WINDOW",
+                    %error,
+                    ?mode,
+                    "Failed to apply runtime transition after snap mode change"
+                );
+            }
+        }
+
+        tracing::info!(
+            category = "WINDOW",
+            previous = ?previous,
+            ?mode,
+            runtime_active,
+            "Updated snap mode from built-in prompt choice"
+        );
+
+        let hud_text = match mode {
+            crate::window_control::SnapMode::Off => "Window snapping disabled",
+            crate::window_control::SnapMode::Simple => "Snap mode: Simple",
+            crate::window_control::SnapMode::Expanded => "Snap mode: Expanded",
+            crate::window_control::SnapMode::Precision => "Snap mode: Precision",
+        };
+
+        self.show_hud(hud_text.to_string(), Some(HUD_SHORT_MS), cx);
+        BuiltinPromptSubmitTransition::CloseMainWindow.apply(self, cx);
     }
 
     #[inline]

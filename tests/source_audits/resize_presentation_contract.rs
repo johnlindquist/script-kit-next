@@ -142,6 +142,50 @@ fn expanded_main_window_is_width_only_not_taller_than_mini() {
 }
 
 #[test]
+fn main_menu_show_uses_named_sizing_target_not_previous_prompt_bounds() {
+    let resize = read("src/window_resize/mod.rs");
+    assert!(
+        resize.contains("enum MainMenuSizingTarget")
+            && resize.contains("Self::Full => initial_window_height()")
+            && resize.contains("Self::Mini(sizing) => height_for_mini_main_window(sizing)"),
+        "main menu sizing must have an explicit enum target with full and mini floors"
+    );
+
+    let visibility = read("src/main_sections/window_visibility.rs");
+    let show_bounds = source_between(
+        &visibility,
+        "let window_size = app_entity.update(cx, |view, ctx| {",
+        "logging::log(\n        \"POSITION_TRACE\",",
+    );
+    assert!(
+        show_bounds.contains("MainMenuSizingTarget::Mini(sizing)")
+            && show_bounds.contains("MainMenuSizingTarget::Full"),
+        "show_main_window must compute ScriptList size from named main-menu targets"
+    );
+    assert!(
+        show_bounds.find("MainMenuSizingTarget::Full")
+            < show_bounds.find("view.calculate_window_size_params()"),
+        "ScriptList full main menu sizing must not fall through to generic prompt/list sizing"
+    );
+}
+
+#[test]
+fn reset_positions_uses_named_mini_main_menu_sizing_target() {
+    let lifecycle = read("src/app_impl/lifecycle_reset.rs");
+    let reset = source_between(
+        &lifecycle,
+        "pub(crate) fn reset_window_positions_to_default_main_menu(",
+        "    pub(crate) fn cancel_script_execution(",
+    );
+    assert!(
+        reset.contains("MainMenuSizingTarget::Mini(sizing)")
+            && reset.contains("target.width()")
+            && reset.contains("target.height()"),
+        "default mini main-menu reset must use the named main menu sizing target"
+    );
+}
+
+#[test]
 fn file_search_full_presentation_uses_expanded_main_window_sizing() {
     let source = read("src/app_impl/filter_input_core.rs");
     let resize_for_presentation = source_between(

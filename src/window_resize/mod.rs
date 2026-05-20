@@ -220,6 +220,37 @@ pub(crate) fn height_for_expanded_main_window() -> Pixels {
     px(MINI_MAIN_WINDOW_MAX_HEIGHT)
 }
 
+/// Canonical size target for the main menu.
+///
+/// Main menu sizing is intentionally separate from prompt sizing so a compact
+/// `MiniPrompt` cannot leak its shorter height into the next `ScriptList` show.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Used by binary-only main-window show/reset paths.
+pub(crate) enum MainMenuSizingTarget {
+    /// Standard script list launcher height.
+    Full,
+    /// Compact script list launcher height with grouped-result context.
+    Mini(MiniMainWindowSizing),
+}
+
+impl MainMenuSizingTarget {
+    #[allow(dead_code)] // Used by binary-only main-window show/reset paths.
+    pub(crate) fn width(self) -> f32 {
+        match self {
+            Self::Full => FULL_MAIN_WINDOW_WIDTH,
+            Self::Mini(_) => MINI_MAIN_WINDOW_WIDTH,
+        }
+    }
+
+    #[allow(dead_code)] // Used by binary-only main-window show/reset paths.
+    pub(crate) fn height(self) -> Pixels {
+        match self {
+            Self::Full => initial_window_height(),
+            Self::Mini(sizing) => height_for_mini_main_window(sizing),
+        }
+    }
+}
+
 /// Defer a mini main window resize to the end of the current effect cycle.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
 pub(crate) fn defer_resize_to_mini_main_window(

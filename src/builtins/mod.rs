@@ -190,14 +190,8 @@ pub enum SettingsCommandType {
     SelectMicrophone,
     /// Open dictation setup and readiness guidance
     DictationSetup,
-    /// Disable drag snapping entirely
-    DisableWindowSnapping,
-    /// Use the simplest snap target set
-    SnapModeSimple,
-    /// Use the default expanded snap target set
-    SnapModeExpanded,
-    /// Use the densest snap target set
-    SnapModePrecision,
+    /// Configure snap mode (choose mode or disable)
+    ConfigureSnapMode,
 }
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -541,10 +535,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ChooseTheme => "Open Theme Designer",
                 SettingsCommandType::SelectMicrophone => "Select Microphone",
                 SettingsCommandType::DictationSetup => "Open Dictation Setup",
-                SettingsCommandType::DisableWindowSnapping => "Disable Window Snapping",
-                SettingsCommandType::SnapModeSimple => "Set Snap Mode: Simple",
-                SettingsCommandType::SnapModeExpanded => "Set Snap Mode: Expanded",
-                SettingsCommandType::SnapModePrecision => "Set Snap Mode: Precision",
+                SettingsCommandType::ConfigureSnapMode => "Configure Snap Mode",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
                 UtilityCommandType::MiniMainWindow => "Open Mini Launcher",
@@ -672,10 +663,7 @@ impl BuiltInEntry {
                 SettingsCommandType::ChooseTheme => "Theme",
                 SettingsCommandType::SelectMicrophone => "Microphone",
                 SettingsCommandType::DictationSetup => "Dictation Setup",
-                SettingsCommandType::DisableWindowSnapping => "Snap Off",
-                SettingsCommandType::SnapModeSimple => "Simple Snap",
-                SettingsCommandType::SnapModeExpanded => "Expanded Snap",
-                SettingsCommandType::SnapModePrecision => "Precision Snap",
+                SettingsCommandType::ConfigureSnapMode => "Configure Snap",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
                 UtilityCommandType::MiniMainWindow => "Mini Launcher",
@@ -1697,77 +1685,26 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "mic",
         ));
 
-        let snap_mode = crate::window_control::current_snap_mode();
-
-        if snap_mode != crate::window_control::SnapMode::Off {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/disable-window-snapping",
-                "Disable Window Snapping",
-                "Turn off drag snapping and hide snap overlays until a snap mode is re-enabled",
-                vec![
-                    "snap", "snapping", "window", "disable", "off", "drag", "overlay",
-                ],
-                BuiltInFeature::SettingsCommand(SettingsCommandType::DisableWindowSnapping),
-                "ban",
-            ));
-        }
-
-        if snap_mode != crate::window_control::SnapMode::Simple {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/snap-mode-simple",
-                "Snap Mode: Simple",
-                "Use halves, quadrants, center, and almost-maximize targets while dragging windows",
-                vec![
-                    "snap",
-                    "snapping",
-                    "window",
-                    "simple",
-                    "basic",
-                    "halves",
-                    "quadrants",
-                ],
-                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModeSimple),
-                "square-split-horizontal",
-            ));
-        }
-
-        if snap_mode != crate::window_control::SnapMode::Expanded {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/snap-mode-expanded",
-                "Snap Mode: Expanded",
-                "Use halves, quadrants, thirds, and two-thirds targets while dragging windows",
-                vec![
-                    "snap",
-                    "snapping",
-                    "window",
-                    "expanded",
-                    "thirds",
-                    "two thirds",
-                    "default",
-                ],
-                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModeExpanded),
-                "columns-3",
-            ));
-        }
-
-        if snap_mode != crate::window_control::SnapMode::Precision {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin/snap-mode-precision",
-                "Snap Mode: Precision",
-                "Use the full snap grid including sixths for finer placements",
-                vec![
-                    "snap",
-                    "snapping",
-                    "window",
-                    "precision",
-                    "sixths",
-                    "grid",
-                    "advanced",
-                ],
-                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModePrecision),
-                "grid-3x2",
-            ));
-        }
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/configure-snap-mode",
+            "Configure Snap Mode",
+            "Choose a snapping grid density or disable drag snapping",
+            vec![
+                "snap",
+                "snapping",
+                "window",
+                "configure",
+                "mode",
+                "simple",
+                "expanded",
+                "precision",
+                "off",
+                "disable",
+                "layout",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureSnapMode),
+            "square-split-horizontal",
+        ));
 
         // =========================================================================
         // Utility Commands

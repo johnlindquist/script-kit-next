@@ -177,11 +177,19 @@ impl Render for SnapOverlayView {
 
         let display = model.display_bounds;
         let targets: Vec<SnapOverlayTarget> = model.targets.clone();
-        let (active_border, active_fill, inactive_border, scrim) = match model.mode {
-            SnapMode::Simple => (0x66D9E8FF, 0x66D9E826, 0x66D9E844, 0x00000010),
-            SnapMode::Expanded => (0xFFFFFFFF, 0xFFFFFF1A, 0xFFFFFF33, 0x00000010),
-            SnapMode::Precision => (0xF6AD55FF, 0xF6AD5522, 0xF6AD5540, 0x00000012),
-            SnapMode::Off => (0x00000000, 0x00000000, 0x00000000, 0x00000000),
+
+        // Base color for each snap mode (RGB values with alpha placeholder 00)
+        let base_color = match model.mode {
+            SnapMode::Simple => 0x66D9E800,
+            SnapMode::Expanded => 0xFFFFFF00,
+            SnapMode::Precision => 0xF6AD5500,
+            SnapMode::Off => 0x00000000,
+        };
+
+        let scrim = match model.mode {
+            SnapMode::Simple | SnapMode::Expanded => 0x00000010,
+            SnapMode::Precision => 0x00000012,
+            SnapMode::Off => 0x00000000,
         };
         let scrim = if model.is_dominant { scrim } else { scrim / 2 };
 
@@ -192,22 +200,17 @@ impl Render for SnapOverlayView {
             .w(px(display.width as f32))
             .h(px(display.height as f32))
             .bg(rgba(scrim))
-            .children(targets.into_iter().map(move |target| {
+            .children(targets.into_iter().filter(|t| t.active).map(move |target| {
                 let rel_x = (target.bounds.x - display.x) as f32;
                 let rel_y = (target.bounds.y - display.y) as f32;
 
-                let border = if target.active {
-                    active_border
-                } else {
-                    inactive_border
-                };
-                let fill = if target.active {
-                    active_fill
-                } else {
-                    0x00000000
-                };
+                // Border: 75% opacity (0xC0) when highlighted/active
+                let border = base_color | 0xC0;
 
-                let tile = div()
+                // The area itself is not highlighted/filled anymore, only the border is highlighted.
+                let fill = 0x00000000;
+
+                div()
                     .absolute()
                     .left(px(rel_x))
                     .top(px(rel_y))
@@ -216,13 +219,7 @@ impl Render for SnapOverlayView {
                     .rounded(px(10.))
                     .border_1()
                     .border_color(rgba(border))
-                    .bg(rgba(fill));
-
-                if target.active {
-                    tile
-                } else {
-                    tile.border_dashed()
-                }
+                    .bg(rgba(fill))
             }))
     }
 }
