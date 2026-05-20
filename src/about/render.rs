@@ -6,8 +6,8 @@ use std::{
 };
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, App, ClickEvent, Div, FocusHandle, FontWeight, IntoElement,
-    KeyDownEvent, Window,
+    div, prelude::*, px, rgb, rgba, svg, App, ClickEvent, Div, FocusHandle, FontWeight,
+    IntoElement, KeyDownEvent, Window,
 };
 use gpui_component::scroll::ScrollableElement;
 
@@ -83,8 +83,9 @@ fn render_about_surface_inner(
             div()
                 .id("about-content-scroll")
                 .flex_1()
+                .min_h(px(0.0))
                 .px(px(32.0))
-                .py(px(24.0))
+                .py(px(14.0))
                 .flex()
                 .flex_col()
                 .items_center()
@@ -100,6 +101,7 @@ fn render_about_surface_inner(
                         .child(render_title_version(chrome))
                         .child(render_tagline(chrome))
                         .child(render_creator_row(chrome))
+                        .child(div().h(px(4.0)))
                         .child(render_quick_actions(chrome, &actions))
                         .child(render_update_card(chrome, snapshot, &actions))
                         .child(render_acknowledgements(chrome, state, &actions))
@@ -158,26 +160,26 @@ fn render_header(chrome: theme::AppChromeColors, dismiss: AboutClickHandler) -> 
 
 fn render_logo_block(chrome: theme::AppChromeColors) -> Div {
     div()
-        .size(px(88.0))
-        .mb(px(16.0))
-        .rounded(px(22.0))
+        .size(px(56.0))
+        .mb(px(10.0))
+        .rounded(px(16.0))
         .border_1()
         .border_color(rgba(chrome.border_rgba))
         .bg(rgba(chrome.panel_surface_rgba))
         .flex()
         .items_center()
         .justify_center()
+        .shadow(vec![gpui::BoxShadow {
+            color: rgba(0x00000033).into(),
+            offset: gpui::point(px(0.), px(4.)),
+            blur_radius: px(12.),
+            spread_radius: px(0.),
+        }])
         .child(
-            div()
-                .size(px(48.0))
-                .rounded(px(14.0))
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(30.0))
-                .line_height(px(48.0))
-                .text_color(rgb(chrome.text_primary_hex))
-                .child("▶"),
+            svg()
+                .external_path(crate::utils::get_logo_path())
+                .size(px(36.0))
+                .text_color(rgb(chrome.accent_hex)),
         )
 }
 
@@ -196,18 +198,18 @@ fn render_title_version(chrome: theme::AppChromeColors) -> Div {
         )
         .child(
             div()
-                .h(px(24.0))
-                .mt(px(8.0))
-                .px(px(9.0))
-                .rounded(px(999.0))
+                .h(px(20.0))
+                .mt(px(6.0))
+                .px(px(10.0))
+                .rounded(px(12.0))
                 .border_1()
-                .border_color(rgba(chrome.border_rgba))
-                .bg(rgba(chrome.panel_surface_rgba))
+                .border_color(rgba(chrome.accent_badge_border_rgba))
+                .bg(rgba(chrome.accent_badge_bg_rgba))
                 .flex()
                 .items_center()
                 .text_size(px(12.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba(chrome.text_muted_rgba))
+                .font_weight(FontWeight::BOLD)
+                .text_color(rgb(chrome.accent_badge_text_hex))
                 .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
         )
 }
@@ -216,9 +218,9 @@ fn render_tagline(chrome: theme::AppChromeColors) -> Div {
     div()
         .w(px(440.0))
         .max_w_full()
-        .mt(px(12.0))
-        .text_size(px(14.0))
-        .line_height(px(20.0))
+        .mt(px(6.0))
+        .text_size(px(13.0))
+        .line_height(px(18.0))
         .text_center()
         .text_color(rgba(chrome.text_muted_rgba))
         .child(branding::TAGLINE)
@@ -226,14 +228,14 @@ fn render_tagline(chrome: theme::AppChromeColors) -> Div {
 
 fn render_creator_row(chrome: theme::AppChromeColors) -> Div {
     div()
-        .mt(px(18.0))
-        .h(px(34.0))
+        .mt(px(8.0))
+        .h(px(30.0))
         .flex()
         .items_center()
         .gap(px(10.0))
         .child(
             div()
-                .size(px(28.0))
+                .size(px(32.0))
                 .rounded(px(999.0))
                 .border_1()
                 .border_color(rgba(chrome.border_rgba))
@@ -241,47 +243,54 @@ fn render_creator_row(chrome: theme::AppChromeColors) -> Div {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_size(px(11.0))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgba(chrome.text_hint_rgba))
+                .text_size(px(12.0))
+                .font_weight(FontWeight::BOLD)
+                .text_color(rgb(chrome.accent_hex))
                 .child("JL"),
         )
         .child(
             div()
-                .text_size(px(13.0))
+                .text_size(px(14.0))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(chrome.text_primary_hex))
+                .text_color(rgba(chrome.text_muted_rgba))
                 .child("Created by John Lindquist"),
         )
 }
 
 fn render_quick_actions(chrome: theme::AppChromeColors, actions: &AboutSurfaceActions) -> Div {
     div()
-        .mt(px(22.0))
-        .h(px(34.0))
+        .mt(px(10.0))
+        .w_full()
+        .max_w(px(500.0))
+        .min_w(px(0.0))
         .flex()
+        .flex_wrap()
         .items_center()
+        .justify_center()
         .gap(px(8.0))
-        .child(action_button(
+        .child(action_button_with_min_width(
             "about-open-github",
             "Open GitHub repo",
             chrome,
             actions.open_github.clone(),
             true,
+            128.0,
         ))
-        .child(action_button(
+        .child(action_button_with_min_width(
             "about-open-discord",
             "Open Discord",
             chrome,
             actions.open_discord.clone(),
             true,
+            128.0,
         ))
-        .child(action_button(
+        .child(action_button_with_min_width(
             "about-follow-x",
             "Follow on X",
             chrome,
             actions.follow_x.clone(),
             true,
+            128.0,
         ))
 }
 
@@ -325,11 +334,11 @@ fn render_update_card(
     };
 
     div()
-        .mt(px(24.0))
+        .mt(px(12.0))
         .w_full()
         .max_w(px(500.0))
-        .min_h(px(64.0))
-        .p(px(14.0))
+        .min_h(px(60.0))
+        .p(px(12.0))
         .rounded(px(12.0))
         .border_1()
         .border_color(rgba(chrome.border_rgba))
@@ -338,6 +347,12 @@ fn render_update_card(
         .items_center()
         .justify_between()
         .gap(px(12.0))
+        .shadow(vec![gpui::BoxShadow {
+            color: rgba(0x0000001a).into(),
+            offset: gpui::point(px(0.), px(2.)),
+            blur_radius: px(6.),
+            spread_radius: px(0.),
+        }])
         .child(
             div()
                 .flex_1()
@@ -347,8 +362,8 @@ fn render_update_card(
                 .gap(px(4.0))
                 .child(
                     div()
-                        .text_size(px(13.0))
-                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::BOLD)
                         .text_color(rgb(chrome.text_primary_hex))
                         .child("Updates"),
                 )
@@ -379,7 +394,7 @@ fn render_acknowledgements(
     actions: &AboutSurfaceActions,
 ) -> Div {
     div()
-        .mt(px(14.0))
+        .mt(px(8.0))
         .w_full()
         .max_w(px(500.0))
         .rounded(px(9.0))
@@ -457,6 +472,17 @@ fn action_button(
     handler: AboutClickHandler,
     enabled: bool,
 ) -> impl IntoElement {
+    action_button_with_min_width(id, label, chrome, handler, enabled, 142.0)
+}
+
+fn action_button_with_min_width(
+    id: &'static str,
+    label: &'static str,
+    chrome: theme::AppChromeColors,
+    handler: AboutClickHandler,
+    enabled: bool,
+    min_width: f32,
+) -> impl IntoElement {
     let mut label_element = div()
         .min_w(px(0.0))
         .overflow_hidden()
@@ -469,7 +495,7 @@ fn action_button(
     let mut button = div()
         .id(id)
         .h(px(34.0))
-        .min_w(px(142.0))
+        .min_w(px(min_width))
         .px(px(12.0))
         .rounded(px(9.0))
         .border_1()

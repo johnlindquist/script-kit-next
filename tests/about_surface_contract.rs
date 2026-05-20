@@ -103,7 +103,9 @@ fn about_surface_body_scrolls_when_content_exceeds_container() {
             .expect("About scroll container should wrap the content column")];
 
     assert!(
-        body_block.contains(".flex_1()") && body_block.contains(".overflow_y_scrollbar()"),
+        body_block.contains(".flex_1()")
+            && body_block.contains(".min_h(px(0.0))")
+            && body_block.contains(".overflow_y_scrollbar()"),
         "About body should consume remaining window height and become scrollable when content overflows"
     );
     assert!(
@@ -125,6 +127,62 @@ fn about_route_takes_launcher_input_out_of_focus() {
 fn about_escape_is_consumed_by_the_about_key_handler() {
     assert!(RENDER_IMPL_SOURCE.contains("this.dismiss_about(cx)"));
     assert!(RENDER_IMPL_SOURCE.contains("cx.stop_propagation();"));
+}
+
+#[test]
+fn about_root_key_handler_propagates_non_escape_keys() {
+    let about_start = RENDER_IMPL_SOURCE
+        .find("AppView::About")
+        .expect("About render arm should exist");
+    let key_handler_start = RENDER_IMPL_SOURCE[about_start..]
+        .find("key_down: std::rc::Rc::new")
+        .map(|offset| about_start + offset)
+        .expect("About render arm should wire root key handler");
+    let key_handler = &RENDER_IMPL_SOURCE[key_handler_start
+        ..RENDER_IMPL_SOURCE[key_handler_start..]
+            .find("}),\n                };")
+            .map(|offset| key_handler_start + offset)
+            .expect("About root key handler should close before actions struct")];
+
+    assert!(
+        key_handler.contains("is_key_escape(event.keystroke.key.as_str())"),
+        "About root key handler should only own Escape"
+    );
+    assert!(
+        key_handler.contains("cx.stop_propagation();")
+            && key_handler.contains(
+                "} else {\n                            cx.propagate();\n                        }"
+            ),
+        "About root key handler should propagate Enter/Space to focused child controls"
+    );
+}
+
+#[test]
+fn about_quick_actions_wrap_before_overflowing_narrow_widths() {
+    let quick_actions_start = ABOUT_RENDER_SOURCE
+        .find("fn render_quick_actions")
+        .expect("quick action row should exist");
+    let quick_actions = &ABOUT_RENDER_SOURCE[quick_actions_start
+        ..ABOUT_RENDER_SOURCE[quick_actions_start..]
+            .find("fn render_update_card")
+            .map(|offset| quick_actions_start + offset)
+            .expect("quick action row should precede update card")];
+
+    assert!(
+        quick_actions.contains(".w_full()")
+            && quick_actions.contains(".max_w(px(500.0))")
+            && quick_actions.contains(".min_w(px(0.0))")
+            && quick_actions.contains(".flex_wrap()"),
+        "About quick actions should wrap within the fixed content column instead of overflowing"
+    );
+    assert!(
+        quick_actions.contains("128.0"),
+        "About quick action buttons should use compact minimum widths separate from the update button"
+    );
+    assert!(
+        ABOUT_RENDER_SOURCE.contains("action_button_with_min_width"),
+        "About should keep button sizing explicit per layout context"
+    );
 }
 
 #[test]
