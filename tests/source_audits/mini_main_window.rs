@@ -65,8 +65,10 @@ fn width_for_view_returns_mini_width_for_mini_main_window() {
         "width_for_view must return MINI_MAIN_WINDOW_WIDTH for MiniMainWindow"
     );
     assert!(
-        content.contains("ViewType::ScriptList => Some(FULL_MAIN_WINDOW_WIDTH)"),
-        "width_for_view must return FULL_MAIN_WINDOW_WIDTH for ScriptList (restore full width)"
+        content.contains(
+            "ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH)"
+        ),
+        "width_for_view must return FULL_MAIN_WINDOW_WIDTH for ScriptList and ExpandedMainWindow"
     );
 }
 

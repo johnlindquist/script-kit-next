@@ -1125,7 +1125,8 @@ impl ScriptListApp {
                 // Actions dialog is an overlay, don't resize
                 None
             }
-            // P0 FIX: Clipboard history and app launcher use standard height (same as script list)
+            // Preview/detail builtins widen from the mini launcher without
+            // increasing height, so the shared header/input stays fixed.
             // View state only - data comes from self fields
             AppView::ClipboardHistoryView { filter, .. } => {
                 let entries = &self.cached_clipboard_entries;
@@ -1138,7 +1139,7 @@ impl ScriptListApp {
                         .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::ExpandedMainWindow, filtered_count))
             }
             AppView::EmojiPickerView {
                 filter,
@@ -1235,7 +1236,7 @@ impl ScriptListApp {
                         .filter(|r| r.name.to_lowercase().contains(&query_lower))
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::ExpandedMainWindow, filtered_count))
             }
             AppView::ThemeChooserView { ref filter, .. } => {
                 let presets = theme::presets::presets_cached();
@@ -1251,7 +1252,7 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::ExpandedMainWindow, filtered_count))
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::ScriptIssuesView { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
@@ -1260,7 +1261,7 @@ impl ScriptListApp {
             } => {
                 let (_, count) =
                     crate::mcp_resources::sdk_reference_dataset_and_visible_counts(entries, filter);
-                Some((ViewType::ScriptList, count))
+                Some((ViewType::ExpandedMainWindow, count))
             }
             AppView::ScriptTemplateCatalogView {
                 templates, filter, ..
@@ -1269,7 +1270,7 @@ impl ScriptListApp {
                     crate::mcp_resources::script_template_catalog_dataset_and_visible_counts(
                         templates, filter,
                     );
-                Some((ViewType::ScriptList, count))
+                Some((ViewType::ExpandedMainWindow, count))
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::BrowseKitsView { results, .. } => {
@@ -1303,10 +1304,10 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::ExpandedMainWindow, filtered_count))
             }
             AppView::BrowserHistoryView { filter, .. } => Some((
-                ViewType::ScriptList,
+                ViewType::ExpandedMainWindow,
                 crate::browser_history::fuzzy_search_browser_history(
                     &self.cached_browser_history,
                     filter,
@@ -1314,11 +1315,11 @@ impl ScriptListApp {
                 .len(),
             )),
             AppView::DictationHistoryView { filter, .. } => Some((
-                ViewType::ScriptList,
+                ViewType::ExpandedMainWindow,
                 crate::dictation::search_history(filter, 100).len(),
             )),
             AppView::NotesBrowseView { filter, .. } => Some((
-                ViewType::ScriptList,
+                ViewType::ExpandedMainWindow,
                 if filter.is_empty() {
                     crate::notes::get_all_notes()
                         .map(|notes| notes.len())

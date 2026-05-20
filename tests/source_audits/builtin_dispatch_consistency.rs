@@ -236,9 +236,10 @@ fn open_builtin_filterable_view_sets_shared_focus_contract() {
         "self.current_view = view;",
         "self.hovered_index = None;",
         "self.opened_from_main_menu = true;",
-        "self.main_window_mode = MainWindowMode::Full;",
-        "resize_to_view_sync(ViewType::ScriptList, 0);",
-        "self.main_window_mode = MainWindowMode::Mini;",
+        "MainWindowMode::Full",
+        "\"open_builtin_filterable_view\"",
+        "resize_to_view_sync(ViewType::ExpandedMainWindow, 0);",
+        "MainWindowMode::Mini",
         "resize_to_view_sync(ViewType::MiniMainWindow, 0);",
         "self.pending_focus = Some(FocusTarget::MainFilter);",
         "self.focused_input = FocusedInput::MainFilter;",
@@ -305,6 +306,8 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
         "AppView::ClipboardHistoryView{",
         "AppView::FileSearchView{",
         "AppView::ThemeChooserView{",
+        "AppView::SdkReferenceView{",
+        "AppView::ScriptTemplateCatalogView{",
         "AppView::AcpHistoryView{",
         "AppView::BrowserHistoryView{",
         "AppView::DictationHistoryView{",
@@ -312,8 +315,8 @@ fn deferred_sizing_keeps_preview_builtins_wide() {
     ] {
         let arm = compact_app_view_match_arm(&compacted, view);
         assert!(
-            arm.contains("ViewType::ScriptList"),
-            "calculate_window_size_params must keep preview/detail builtin {view} on ScriptList"
+            arm.contains("ViewType::ExpandedMainWindow"),
+            "calculate_window_size_params must keep preview/detail builtin {view} on ExpandedMainWindow"
         );
         assert!(
             !arm.contains("ViewType::MiniMainWindow"),

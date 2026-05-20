@@ -3747,7 +3747,8 @@ impl ScriptListApp {
     /// `expanded` picks the window sizing contract: `false` matches the main
     /// menu's compact 480×440 (Mini) window for light-weight pickers like
     /// emoji / apps / browser tabs / window switcher; `true` uses the wide
-    /// 750×500 (Full) window for info-heavy views like clipboard history.
+    /// full-width window for info-heavy views like clipboard history while
+    /// preserving the mini window height so the shared input does not shift.
     fn open_builtin_filterable_view(
         &mut self,
         view: AppView,
@@ -3767,7 +3768,7 @@ impl ScriptListApp {
                 cx,
                 "open_builtin_filterable_view",
             );
-            resize_to_view_sync(ViewType::ScriptList, 0);
+            resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
         } else {
             self.set_main_window_mode_state_only(
                 MainWindowMode::Mini,
@@ -3903,7 +3904,7 @@ impl ScriptListApp {
                 cx,
                 "open_builtin_filterable_view_with_filter",
             );
-            resize_to_view_sync(ViewType::ScriptList, 0);
+            resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
         } else {
             self.set_main_window_mode_state_only(
                 MainWindowMode::Mini,

@@ -4,6 +4,7 @@
 //!
 //! **Key Rules:**
 //! - ScriptList (main window with preview): FIXED at 500px, never resizes
+//! - Expanded main-window list/detail surfaces: FIXED at mini height, wider only
 //! - ArgPrompt with choices: Dynamic height based on choice count (capped at 500px)
 //! - ArgPrompt without choices (input only): Compact input-only height
 //! - Editor/Div/Term: Full height 700px
@@ -203,6 +204,15 @@ pub(crate) fn log_mini_window_sizing(
 /// the full max height so transitions between views (e.g. main menu → file search)
 /// and filter changes never cause visible resizing.
 pub(crate) fn height_for_mini_main_window(_sizing: MiniMainWindowSizing) -> Pixels {
+    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+}
+
+/// Height for wide list/detail surfaces entered from the mini launcher.
+///
+/// These surfaces may widen to make room for a preview pane, but they must not
+/// grow taller than the mini main window or the shared input appears to shift
+/// during the transition.
+pub(crate) fn height_for_expanded_main_window() -> Pixels {
     px(MINI_MAIN_WINDOW_MAX_HEIGHT)
 }
 
@@ -530,6 +540,7 @@ fn height_for_view_with_layout(
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
+        ViewType::ExpandedMainWindow => height_for_expanded_main_window(),
         ViewType::MiniMainWindow | ViewType::MiniAiChat => {
             // Flat item_count fallback: assumes all items are selectable (no section headers).
             // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
@@ -576,6 +587,11 @@ fn initial_window_height_with_layout(layout_config: &LayoutConfig) -> Pixels {
 pub enum ViewType {
     /// Script list view (main launcher) - has preview panel, FIXED height
     ScriptList,
+    /// Wide list/detail surface entered from the mini main window.
+    ///
+    /// Uses full width for preview/detail panes while preserving mini height so
+    /// the header/input y-position does not drift during transitions.
+    ExpandedMainWindow,
     /// Script list in compact main-window mode - dynamic height based on item count
     MiniMainWindow,
     /// Mini prompt rendered in the compact main-window width.
@@ -616,7 +632,7 @@ pub fn width_for_view(view_type: ViewType) -> Option<f32> {
             Some(MINI_MAIN_WINDOW_WIDTH)
         }
         // When leaving mini mode, restore full width
-        ViewType::ScriptList => Some(FULL_MAIN_WINDOW_WIDTH),
+        ViewType::ScriptList | ViewType::ExpandedMainWindow => Some(FULL_MAIN_WINDOW_WIDTH),
         _ => None,
     }
 }
@@ -921,6 +937,27 @@ mod resize_tests {
     }
 
     #[test]
+    fn test_expanded_main_window_is_width_only_from_mini_height() {
+        let layout = default_layout();
+        assert_eq!(
+            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::ExpandedMainWindow, 100, &layout),
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::ExpandedMainWindow, 0, &layout),
+            height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout)
+        );
+        assert_eq!(
+            width_for_view(ViewType::ExpandedMainWindow),
+            Some(FULL_MAIN_WINDOW_WIDTH)
+        );
+    }
+
+    #[test]
     fn test_mini_height_fixed_regardless_of_content() {
         // All sizing configurations return the fixed max height
         assert_eq!(
@@ -1138,6 +1175,10 @@ mod resize_tests {
     fn test_width_for_view_script_list_restores_full() {
         assert_eq!(
             width_for_view(ViewType::ScriptList),
+            Some(FULL_MAIN_WINDOW_WIDTH)
+        );
+        assert_eq!(
+            width_for_view(ViewType::ExpandedMainWindow),
             Some(FULL_MAIN_WINDOW_WIDTH)
         );
     }

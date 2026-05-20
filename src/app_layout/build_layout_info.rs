@@ -3,10 +3,30 @@ impl ScriptListApp {
         use crate::list_item::LIST_ITEM_HEIGHT;
         use protocol::{LayoutComponentInfo, LayoutComponentType, LayoutInfo};
 
-        // TODO: Get actual window size once we have access to window in this context
-        // For now, use default values
-        let window_width = 750.0_f32;
-        let window_height = f32::from(crate::window_resize::initial_window_height());
+        // Keep automation layout receipts aligned with the same sizing contract
+        // used by real window resize paths.
+        let layout_view_type = match &self.current_view {
+            AppView::ScriptList => match self.main_window_mode {
+                MainWindowMode::Full => crate::window_resize::ViewType::ScriptList,
+                MainWindowMode::Mini => crate::window_resize::ViewType::MiniMainWindow,
+            },
+            AppView::FileSearchView { presentation, .. } => match presentation {
+                FileSearchPresentation::Full => crate::window_resize::ViewType::ExpandedMainWindow,
+                FileSearchPresentation::Mini => crate::window_resize::ViewType::MiniMainWindow,
+            },
+            AppView::ClipboardHistoryView { .. }
+            | AppView::ThemeChooserView { .. }
+            | AppView::SdkReferenceView { .. }
+            | AppView::ScriptTemplateCatalogView { .. }
+            | AppView::AcpHistoryView { .. }
+            | AppView::BrowserHistoryView { .. }
+            | AppView::DictationHistoryView { .. }
+            | AppView::NotesBrowseView { .. } => crate::window_resize::ViewType::ExpandedMainWindow,
+            _ => crate::window_resize::ViewType::ScriptList,
+        };
+        let window_width =
+            crate::window_resize::width_for_view(layout_view_type).unwrap_or(750.0_f32);
+        let window_height = f32::from(crate::window_resize::height_for_view(layout_view_type, 0));
 
         // Determine current prompt type
         let prompt_type = match &self.current_view {
