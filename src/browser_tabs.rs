@@ -8,6 +8,8 @@ use serde::Deserialize;
 
 const FIELD_SEPARATOR: char = '\u{1e}';
 const RECORD_SEPARATOR: char = '\u{1f}';
+const BROWSER_TIMEOUT: Duration = Duration::from_secs(3);
+const BROWSER_RUNNING_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BrowserFamily {
@@ -746,8 +748,9 @@ fn root_browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
 
 fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInfo>> {
     let script = build_list_tabs_jxa(browser);
-    let output = crate::platform::run_jxa(&script, "browser_tabs_list")
-        .with_context(|| format!("list_browser_tabs_failed: browser={}", browser.app_name))?;
+    let output =
+        crate::platform::run_jxa_with_timeout(&script, "browser_tabs_list", BROWSER_TIMEOUT)
+            .with_context(|| format!("list_browser_tabs_failed: browser={}", browser.app_name))?;
     parse_tab_rows(browser, &output)
 }
 
@@ -762,8 +765,12 @@ end tell
 "#,
     );
 
-    let output = crate::platform::run_osascript(&script, "browser_tabs_is_running")
-        .with_context(|| format!("browser_tabs_is_running_failed: bundle_id={bundle_id}"))?;
+    let output = crate::platform::run_osascript_with_timeout(
+        &script,
+        "browser_tabs_is_running",
+        BROWSER_RUNNING_TIMEOUT,
+    )
+    .with_context(|| format!("browser_tabs_is_running_failed: bundle_id={bundle_id}"))?;
     Ok(output.trim().eq_ignore_ascii_case("true"))
 }
 
