@@ -10,11 +10,31 @@
 
 import type {
   MenuSyntaxMetadata,
+  BuiltInCaptureTarget,
   CaptureHandlerSpec,
   CommandHandlerSpec,
   SkillHandlerSpec,
   MenuSyntaxCapturePayload,
 } from "./menu-syntax";
+
+const publicNoteTarget: BuiltInCaptureTarget = "note";
+void publicNoteTarget;
+
+// @ts-expect-error ;notes is hidden compatibility, not public product grammar.
+const legacyNotesTarget: BuiltInCaptureTarget = "notes";
+void legacyNotesTarget;
+
+// @ts-expect-error ;reminder is a hidden compatibility alias of ;todo.
+const legacyReminderTarget: BuiltInCaptureTarget = "reminder";
+void legacyReminderTarget;
+
+// @ts-expect-error ;snooze is a hidden compatibility alias of ;todo.
+const legacySnoozeTarget: BuiltInCaptureTarget = "snooze";
+void legacySnoozeTarget;
+
+// @ts-expect-error ;defer is a hidden compatibility alias of ;todo.
+const legacyDeferTarget: BuiltInCaptureTarget = "defer";
+void legacyDeferTarget;
 
 // 1. Built-in capture target with full accepts list — mirrors
 //    scripts/examples/menu-syntax/create-calendar-event.ts.
@@ -112,8 +132,14 @@ export const menuSyntax: MenuSyntaxMetadata = [
 //    KIT_MENU_SYNTAX_PAYLOAD_PATH.
 function _useCapturePayload(payload: MenuSyntaxCapturePayload): string {
   const title = payload.kv?.title ?? payload.body;
+  const objectLabel = payload.primaryObjectRef?.label;
   const due = payload.dates?.find((date) => date.role === "due")?.iso;
-  return due ? `${title} (due ${due})` : title;
+  return [objectLabel, due ? `${title} (due ${due})` : title].filter(Boolean).join(": ");
+}
+
+function _useSnippetObjectPayload(payload: MenuSyntaxCapturePayload): string | undefined {
+  const snippetRef = payload.objectRefs?.find((ref) => ref.kind === "snippet");
+  return snippetRef?.resolved ? snippetRef.id : snippetRef?.query;
 }
 
 function _useCalendarPayload(payload: MenuSyntaxCapturePayload): string {

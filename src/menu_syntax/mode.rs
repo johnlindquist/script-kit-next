@@ -103,11 +103,12 @@ impl MenuSyntaxMode {
         };
         match parse {
             MenuSyntaxParse::Capture(_) => true,
-            MenuSyntaxParse::Incomplete(incomplete)
-                if matches!(incomplete.kind, IncompleteKind::MissingCaptureBody(_)) =>
-            {
-                capture_body_boundary_has_started_with_targets(raw, &self.capture_targets)
-            }
+            MenuSyntaxParse::Incomplete(incomplete) => match &incomplete.kind {
+                IncompleteKind::MissingCaptureBody(target) => {
+                    capture_target_is_committed_with_targets(raw, target, &self.capture_targets)
+                }
+                _ => false,
+            },
             _ => false,
         }
     }
@@ -166,6 +167,32 @@ pub fn capture_body_boundary_has_started_with_targets(
         return false;
     }
     true
+}
+
+fn capture_target_is_committed_with_targets(
+    raw: &str,
+    target: &str,
+    registered_targets: &[String],
+) -> bool {
+    let raw = raw.trim_start();
+    if let Some(rest) = raw.strip_prefix(';').or_else(|| raw.strip_prefix('+')) {
+        let target_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        if target_end == 0 {
+            return false;
+        }
+        let raw_target = &rest[..target_end];
+        return raw_target.eq_ignore_ascii_case(target)
+            && is_capture_target_registered(raw_target, registered_targets);
+    }
+
+    let Some(colon_idx) = raw.find(':') else {
+        return false;
+    };
+    let raw_target = &raw[..colon_idx];
+    !raw_target.is_empty()
+        && !raw_target.contains(char::is_whitespace)
+        && raw_target.eq_ignore_ascii_case(target)
+        && is_capture_target_registered(raw_target, registered_targets)
 }
 
 /// Byte span of the "prefix chrome" that should get accent styling in the input
@@ -292,6 +319,23 @@ pub fn input_spans_for_input_with_targets(
     normalize_input_spans(raw, spans, prefix)
 }
 
+pub fn input_span_role_name(role: MenuSyntaxFragmentRole) -> &'static str {
+    match role {
+        MenuSyntaxFragmentRole::Prefix => "prefix",
+        MenuSyntaxFragmentRole::Subject => "subject",
+        MenuSyntaxFragmentRole::Date => "date",
+        MenuSyntaxFragmentRole::DateRange => "dateRange",
+        MenuSyntaxFragmentRole::Duration => "duration",
+        MenuSyntaxFragmentRole::Recurrence => "recurrence",
+        MenuSyntaxFragmentRole::Kv => "kv",
+        MenuSyntaxFragmentRole::Tag => "tag",
+        MenuSyntaxFragmentRole::Url => "url",
+        MenuSyntaxFragmentRole::Priority => "priority",
+        MenuSyntaxFragmentRole::ObjectRef => "objectRef",
+        MenuSyntaxFragmentRole::Unresolved => "unresolved",
+    }
+}
+
 fn capture_accepts_nl_fragments(invocation: &CaptureInvocation) -> bool {
     invocation.target.eq_ignore_ascii_case("cal") || invocation.target.eq_ignore_ascii_case("mcal")
 }
@@ -405,6 +449,9 @@ fn raw_tokens(raw: &str, start: usize) -> Vec<RawToken<'_>> {
 }
 
 fn capture_token_role(token: &str) -> Option<MenuSyntaxFragmentRole> {
+    if typed_object_ref_token_is_resolved(token) {
+        return Some(MenuSyntaxFragmentRole::ObjectRef);
+    }
     if token.strip_prefix('#').is_some_and(|tag| !tag.is_empty()) {
         return Some(MenuSyntaxFragmentRole::Tag);
     }
@@ -440,6 +487,22 @@ fn capture_token_role(token: &str) -> Option<MenuSyntaxFragmentRole> {
         }
     }
     None
+}
+
+fn typed_object_ref_token_is_resolved(token: &str) -> bool {
+    let Some(query) = token.strip_prefix('@') else {
+        return false;
+    };
+    let Some((prefix, id)) = query.split_once(':') else {
+        return false;
+    };
+    if id.trim().is_empty() {
+        return false;
+    }
+    matches!(
+        prefix.trim().to_ascii_lowercase().as_str(),
+        "todo" | "todos" | "note" | "notes" | "link" | "links" | "snippet" | "snippets"
+    )
 }
 
 fn find_fragment_range(raw: &str, start: usize, source: &str) -> Option<Range<usize>> {
@@ -495,10 +558,11 @@ fn role_rank(role: MenuSyntaxFragmentRole) -> u8 {
         MenuSyntaxFragmentRole::Recurrence => 4,
         MenuSyntaxFragmentRole::Priority => 5,
         MenuSyntaxFragmentRole::Url => 6,
-        MenuSyntaxFragmentRole::Tag => 7,
-        MenuSyntaxFragmentRole::Kv => 8,
-        MenuSyntaxFragmentRole::Unresolved => 9,
-        MenuSyntaxFragmentRole::Subject => 10,
+        MenuSyntaxFragmentRole::ObjectRef => 7,
+        MenuSyntaxFragmentRole::Tag => 8,
+        MenuSyntaxFragmentRole::Kv => 9,
+        MenuSyntaxFragmentRole::Unresolved => 10,
+        MenuSyntaxFragmentRole::Subject => 11,
     }
 }
 
@@ -584,8 +648,10 @@ mod tests {
     }
 
     #[test]
-    fn capture_composer_starts_after_plus_target_boundary() {
-        assert!(!MenuSyntaxMode::from_input(";todo").capture_composer_owns_input_for(";todo"));
+    fn capture_composer_starts_after_committed_target() {
+        assert!(MenuSyntaxMode::from_input(";todo").capture_composer_owns_input_for(";todo"));
+        assert!(MenuSyntaxMode::from_input(";note").capture_composer_owns_input_for(";note"));
+        assert!(!MenuSyntaxMode::from_input(";to").capture_composer_owns_input_for(";to"));
         assert!(MenuSyntaxMode::from_input(";todo ").capture_composer_owns_input_for(";todo "));
         assert!(MenuSyntaxMode::from_input(";todo Take out")
             .capture_composer_owns_input_for(";todo Take out"));
@@ -596,7 +662,7 @@ mod tests {
         let targets = vec!["github".to_string()];
         let pending = MenuSyntaxMode::from_input_with_capture_targets("+github", &targets);
         assert!(pending.is_menu_syntax_for("+github"));
-        assert!(!pending.capture_composer_owns_input_for("+github"));
+        assert!(pending.capture_composer_owns_input_for("+github"));
 
         let composing = MenuSyntaxMode::from_input_with_capture_targets("+github issue", &targets);
         assert!(composing.capture_composer_owns_input_for("+github issue"));
@@ -768,6 +834,24 @@ mod tests {
                 .filter(|span| span.role == MenuSyntaxFragmentRole::Kv)
                 .count(),
             2
+        );
+    }
+
+    #[test]
+    fn typed_object_ref_token_gets_object_ref_role_not_kv() {
+        let raw = ";snippet update @snippet:fetch-json -- const value = 1";
+        let spans = input_spans_for_input(raw);
+        let object_ref = spans
+            .iter()
+            .find(|span| span.role == MenuSyntaxFragmentRole::ObjectRef)
+            .expect("typed object ref span");
+        assert_eq!(&raw[object_ref.range.clone()], "@snippet:fetch-json");
+        assert!(
+            !spans.iter().any(|span| {
+                span.role == MenuSyntaxFragmentRole::Kv
+                    && &raw[span.range.clone()] == "@snippet:fetch-json"
+            }),
+            "typed object ref should not be decorated as kv"
         );
     }
 

@@ -830,6 +830,15 @@ struct ScriptListApp {
     /// capture composer mode. Tab/Shift-Tab mutate this instead of opening
     /// Tab AI while handler mode owns the main input.
     menu_syntax_form_focused_index: usize,
+    /// True after Tab has explicitly moved text entry from the main filter
+    /// into the handler form. Before this, the form can be visible while the
+    /// real cursor and text entry remain in the main input.
+    menu_syntax_form_input_active: bool,
+    /// Draft value for the active handler form field. This preserves transient
+    /// entry state like a trailing space while the canonical filter text is
+    /// continuously rewritten from parser-backed field edits.
+    menu_syntax_form_draft_field_id: Option<String>,
+    menu_syntax_form_draft_value: String,
     /// Run 12 Pass 11 — pending Cmd+Enter inline AI proposal for
     /// `cmd-enter-inline-ai-proposal`. Set by the Cmd+Enter handler when the
     /// user is composing power syntax; threaded into the snapshot so the hint

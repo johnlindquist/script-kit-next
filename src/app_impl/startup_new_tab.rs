@@ -189,6 +189,22 @@
                             // plain-Tab routing branch so menu-syntax keyboard stays
                             // consistent with the ACP slash / @ pickers.
                             if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                            {
+                                let intent = if has_shift {
+                                    crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                } else {
+                                    crate::menu_syntax::InlinePickerKeyIntent::Apply
+                                };
+                                if this.apply_menu_syntax_object_selector_intent(
+                                    intent, window, cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
                                 && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
                             {
                                 let intent = if has_shift {
@@ -288,6 +304,18 @@
                 if is_plain_enter {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
+                            {
+                                if this.apply_menu_syntax_object_selector_intent(
+                                    crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                    window,
+                                    cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
                             if matches!(this.current_view, AppView::ScriptList)
                                 && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
                             {

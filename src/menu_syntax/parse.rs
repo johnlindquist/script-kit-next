@@ -139,10 +139,15 @@ fn finalize_capture(input: &str, registered_capture_targets: &[String]) -> MenuS
 }
 
 fn capture_has_content(inv: &CaptureInvocation) -> bool {
-    match inv.target.as_str() {
-        "link" => inv.url.is_some() || !inv.body.trim().is_empty(),
-        _ => !inv.body.trim().is_empty(),
+    if !inv.body.trim().is_empty() {
+        return true;
     }
+    if inv.target == "link" && inv.url.is_some() {
+        return true;
+    }
+    super::capture_schema::builtin_schema(&inv.target)
+        .map(|schema| schema.missing_required(inv).is_empty())
+        .unwrap_or(false)
 }
 
 fn missing_body_hint(target: &str) -> String {
@@ -531,6 +536,30 @@ mod tests {
                 assert!(query.source_filters.allows(RootUnifiedSourceFilter::Todo));
             }
             other => panic!("expected todo source filter for 'todo:', got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn selected_note_ref_with_metadata_is_complete_capture() {
+        match parse(";note @note:550e8400-e29b-41d4-a716-446655440000 due:tomorrow") {
+            MenuSyntaxParse::Capture(inv) => {
+                assert_eq!(inv.target, "note");
+                assert!(inv.body.trim().is_empty());
+                assert_eq!(inv.date_phrases.len(), 1);
+            }
+            other => panic!("expected selected note metadata update capture, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn selected_note_ref_without_metadata_still_needs_content() {
+        match parse(";note @note:550e8400-e29b-41d4-a716-446655440000") {
+            MenuSyntaxParse::Incomplete(s) => {
+                assert!(matches!(s.kind, IncompleteKind::MissingCaptureBody(_)));
+            }
+            other => {
+                panic!("expected selected note without metadata to be incomplete, got {other:?}")
+            }
         }
     }
 

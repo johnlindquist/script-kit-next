@@ -1,4 +1,6 @@
-use crate::menu_syntax::payload::{CaptureInvocation, DateRole};
+use crate::menu_syntax::payload::{
+    object_refs_for_raw_capture, CaptureInvocation, CaptureObjectKind, DateRole,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldRequirement {
@@ -11,6 +13,7 @@ pub enum FieldRequirement {
     DateRole(DateRole),
     Kv(String),
     ObjectSelection,
+    SnippetTriggerOrSelection,
 }
 
 impl FieldRequirement {
@@ -38,13 +41,16 @@ impl FieldRequirement {
             },
             FieldRequirement::Kv(key) => key.clone(),
             FieldRequirement::ObjectSelection => "selected object".to_string(),
+            FieldRequirement::SnippetTriggerOrSelection => {
+                "trigger or selected snippet".to_string()
+            }
         }
     }
 
     pub fn is_satisfied(&self, payload: &CaptureInvocation) -> bool {
         match self {
-            FieldRequirement::Body => !payload.body.trim().is_empty(),
-            FieldRequirement::Url => payload.url.is_some(),
+            FieldRequirement::Body => body_requirement_is_satisfied(payload),
+            FieldRequirement::Url => url_requirement_is_satisfied(payload),
             FieldRequirement::Priority => payload.priority.is_some(),
             FieldRequirement::Duration => payload.duration.is_some(),
             FieldRequirement::Tag => !payload.tags.is_empty(),
@@ -56,9 +62,125 @@ impl FieldRequirement {
                 .kv
                 .iter()
                 .any(|(k, v)| k.eq_ignore_ascii_case(key) && !v.trim().is_empty()),
-            FieldRequirement::ObjectSelection => false,
+            FieldRequirement::ObjectSelection => has_resolved_object_ref(payload, None),
+            FieldRequirement::SnippetTriggerOrSelection => {
+                snippet_trigger_or_selection_requirement_is_satisfied(payload)
+            }
         }
     }
+}
+
+fn body_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
+    if !payload.body.trim().is_empty() {
+        return true;
+    }
+    if matches!(
+        payload.target.to_ascii_lowercase().as_str(),
+        "reminder" | "snooze" | "defer"
+    ) {
+        return has_resolved_object_ref(payload, Some(CaptureObjectKind::Todo));
+    }
+    if matches!(
+        payload.target.to_ascii_lowercase().as_str(),
+        "note" | "notes"
+    ) && has_resolved_object_ref(payload, Some(CaptureObjectKind::Note))
+        && note_payload_has_update_fragment(payload)
+    {
+        return true;
+    }
+    if payload.target.eq_ignore_ascii_case("snippet")
+        && matches!(
+            first_app_owned_operation_word(&payload.body),
+            Some("update" | "delete")
+        )
+    {
+        return has_resolved_object_ref(payload, Some(CaptureObjectKind::Snippet));
+    }
+    false
+}
+
+fn url_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
+    if payload.url.is_some() {
+        return true;
+    }
+    if !payload.target.eq_ignore_ascii_case("link") {
+        return false;
+    }
+    if !matches!(
+        first_app_owned_operation_word(&payload.body),
+        Some("update" | "delete")
+    ) {
+        return false;
+    }
+    has_resolved_object_ref(payload, Some(CaptureObjectKind::Link))
+}
+
+fn snippet_trigger_or_selection_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
+    let has_trigger = payload
+        .kv
+        .iter()
+        .any(|(k, v)| k.eq_ignore_ascii_case("trigger") && !v.trim().is_empty());
+    if has_trigger {
+        return true;
+    }
+    if !payload.target.eq_ignore_ascii_case("snippet") {
+        return false;
+    }
+    matches!(
+        first_app_owned_operation_word(&payload.body),
+        Some("update" | "delete")
+    ) && has_resolved_object_ref(payload, Some(CaptureObjectKind::Snippet))
+}
+
+fn note_payload_has_update_fragment(payload: &CaptureInvocation) -> bool {
+    payload.url.is_some()
+        || !payload.tags.is_empty()
+        || !payload.kv.is_empty()
+        || !payload.date_phrases.is_empty()
+        || matches!(
+            first_app_owned_operation_word(&payload.body),
+            Some("update" | "delete")
+        )
+}
+
+fn selected_link_ref_url(payload: &CaptureInvocation) -> Option<String> {
+    if !payload.target.eq_ignore_ascii_case("link") {
+        return None;
+    }
+    if !matches!(
+        first_app_owned_operation_word(&payload.body),
+        Some("update" | "delete")
+    ) {
+        return None;
+    }
+    object_refs_for_raw_capture(&payload.target, &payload.raw)
+        .into_iter()
+        .find(|object_ref| {
+            object_ref.resolved
+                && object_ref.role == "primary"
+                && object_ref.kind == CaptureObjectKind::Link
+        })
+        .map(|object_ref| object_ref.id)
+}
+
+fn first_app_owned_operation_word(body: &str) -> Option<&'static str> {
+    let first = body.split_whitespace().next()?.to_ascii_lowercase();
+    match first.as_str() {
+        "add" | "create" | "save" => Some("create"),
+        "update" => Some("update"),
+        "remove" | "rm" | "delete" => Some("delete"),
+        _ => None,
+    }
+}
+
+fn has_resolved_object_ref(payload: &CaptureInvocation, kind: Option<CaptureObjectKind>) -> bool {
+    object_refs_for_raw_capture(&payload.target, &payload.raw)
+        .into_iter()
+        .any(|object_ref| {
+            object_ref.resolved
+                && object_ref.role == "primary"
+                && kind.map(|kind| object_ref.kind == kind).unwrap_or(true)
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -131,6 +253,10 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
             optional: vec![
                 FieldRequirement::Tag,
                 FieldRequirement::Url,
+                FieldRequirement::AnyDate,
+                FieldRequirement::Kv("title".to_string()),
+                FieldRequirement::Kv("alias".to_string()),
+                FieldRequirement::Kv("aliases".to_string()),
                 FieldRequirement::ObjectSelection,
             ],
             forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
@@ -152,7 +278,10 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
         }),
         "snippet" => Some(CaptureFieldSchema {
             target: "snippet".to_string(),
-            required: vec![FieldRequirement::Body],
+            required: vec![
+                FieldRequirement::Body,
+                FieldRequirement::SnippetTriggerOrSelection,
+            ],
             optional: vec![
                 FieldRequirement::Tag,
                 FieldRequirement::Url,
@@ -202,6 +331,14 @@ pub enum ValidationResult {
 pub fn validate(payload: &CaptureInvocation, schema: &CaptureFieldSchema) -> ValidationResult {
     if let Some(url) = payload.url.as_deref() {
         if !is_well_formed_url(url) {
+            return ValidationResult::Malformed {
+                field: FieldRequirement::Url,
+                reason: format!("URL must start with http:// or https://, got `{url}`"),
+            };
+        }
+    }
+    if let Some(url) = selected_link_ref_url(payload) {
+        if !is_well_formed_url(&url) {
             return ValidationResult::Malformed {
                 field: FieldRequirement::Url,
                 reason: format!("URL must start with http:// or https://, got `{url}`"),
@@ -443,6 +580,37 @@ mod tests {
     }
 
     #[test]
+    fn selected_todo_ref_satisfies_todo_alias_body_requirement() {
+        let schema = builtin_schema("snooze").expect("snooze schema");
+        let mut inv = empty_invocation("snooze");
+        inv.raw = ";snooze @todo:todo/tmp/sk/menu-syntax/todos.jsonl:1 in 30 minutes".to_string();
+        inv.date_phrases.push(DatePhrase {
+            role: DateRole::Inferred,
+            source: "in 30 minutes".to_string(),
+            source_span: (55, 68),
+        });
+        let missing = schema.missing_required(&inv);
+        assert!(
+            missing.is_empty(),
+            "selected todo should satisfy body: {missing:?}"
+        );
+    }
+
+    #[test]
+    fn unresolved_todo_query_does_not_satisfy_todo_alias_body_requirement() {
+        let schema = builtin_schema("snooze").expect("snooze schema");
+        let mut inv = empty_invocation("snooze");
+        inv.raw = ";snooze @Review in 30 minutes".to_string();
+        inv.date_phrases.push(DatePhrase {
+            role: DateRole::Inferred,
+            source: "in 30 minutes".to_string(),
+            source_span: (16, 29),
+        });
+        let missing = schema.missing_required(&inv);
+        assert_eq!(missing, vec![FieldRequirement::Body]);
+    }
+
+    #[test]
     fn notes_alias_uses_note_schema() {
         let note = builtin_schema("note").expect("note schema");
         let notes = builtin_schema("notes").expect("notes schema");
@@ -457,6 +625,9 @@ mod tests {
         let schema = builtin_schema("snippet").expect("snippet schema");
         assert!(schema.required.contains(&FieldRequirement::Body));
         assert!(schema
+            .required
+            .contains(&FieldRequirement::SnippetTriggerOrSelection));
+        assert!(schema
             .optional
             .contains(&FieldRequirement::Kv("title".to_string())));
         assert!(schema
@@ -466,6 +637,114 @@ mod tests {
             .optional
             .contains(&FieldRequirement::Kv("lang".to_string())));
         assert!(schema.optional.contains(&FieldRequirement::ObjectSelection));
+    }
+
+    #[test]
+    fn link_update_selected_ref_satisfies_url_requirement() {
+        let schema = builtin_schema("link").unwrap();
+        let mut inv = invocation_with_body("link", "update");
+        inv.raw = ";link update @link:https://example.com title:New".to_string();
+        inv.kv.push(("title".to_string(), "New".to_string()));
+
+        assert_eq!(validate(&inv, &schema), ValidationResult::Ready);
+    }
+
+    #[test]
+    fn link_create_selected_ref_does_not_satisfy_url_requirement() {
+        let schema = builtin_schema("link").unwrap();
+        let mut inv = empty_invocation("link");
+        inv.raw = ";link @link:https://example.com".to_string();
+
+        assert_eq!(schema.missing_required(&inv), vec![FieldRequirement::Url]);
+    }
+
+    #[test]
+    fn link_update_bad_selected_ref_url_is_malformed() {
+        let schema = builtin_schema("link").unwrap();
+        let mut inv = invocation_with_body("link", "update");
+        inv.raw = ";link update @link:not-a-url".to_string();
+
+        assert_eq!(
+            validate(&inv, &schema),
+            ValidationResult::Malformed {
+                field: FieldRequirement::Url,
+                reason: "URL must start with http:// or https://, got `not-a-url`".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn snippet_remove_selected_ref_is_ready_without_body() {
+        let schema = builtin_schema("snippet").unwrap();
+        let mut inv = invocation_with_body("snippet", "remove");
+        inv.raw = ";snippet remove @snippet:fj".to_string();
+
+        assert_eq!(validate(&inv, &schema), ValidationResult::Ready);
+    }
+
+    #[test]
+    fn snippet_remove_without_trigger_or_selection_is_incomplete() {
+        let schema = builtin_schema("snippet").unwrap();
+        let inv = invocation_with_body("snippet", "remove");
+
+        assert_eq!(
+            schema.missing_required(&inv),
+            vec![FieldRequirement::SnippetTriggerOrSelection]
+        );
+    }
+
+    #[test]
+    fn snippet_create_selected_ref_does_not_satisfy_trigger_requirement() {
+        let schema = builtin_schema("snippet").unwrap();
+        let mut inv = invocation_with_body("snippet", "add");
+        inv.raw = ";snippet add @snippet:fj -- const x = 1".to_string();
+        inv.body = "add const x = 1".to_string();
+
+        assert_eq!(
+            schema.missing_required(&inv),
+            vec![FieldRequirement::SnippetTriggerOrSelection]
+        );
+    }
+
+    #[test]
+    fn selected_note_ref_with_date_satisfies_note_update_body_requirement() {
+        let schema = builtin_schema("note").unwrap();
+        let mut inv = empty_invocation("note");
+        inv.raw = ";note @note:550e8400-e29b-41d4-a716-446655440000 due:tomorrow".to_string();
+        inv.date_phrases
+            .push(crate::menu_syntax::payload::DatePhrase {
+                role: DateRole::Due,
+                source: "tomorrow".to_string(),
+                source_span: (46, 54),
+            });
+
+        assert_eq!(validate(&inv, &schema), ValidationResult::Ready);
+    }
+
+    #[test]
+    fn selected_note_ref_without_mutation_still_needs_body_or_fields() {
+        let schema = builtin_schema("note").unwrap();
+        let mut inv = empty_invocation("note");
+        inv.raw = ";note @note:550e8400-e29b-41d4-a716-446655440000".to_string();
+
+        assert_eq!(schema.missing_required(&inv), vec![FieldRequirement::Body]);
+    }
+
+    #[test]
+    fn note_allows_date_url_and_metadata_kv_but_forbids_priority_duration() {
+        let schema = builtin_schema("note").unwrap();
+
+        assert!(schema.optional.contains(&FieldRequirement::AnyDate));
+        assert!(schema.optional.contains(&FieldRequirement::Url));
+        assert!(schema.optional.contains(&FieldRequirement::ObjectSelection));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("title".to_string())));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("alias".to_string())));
+        assert!(schema.forbidden.contains(&FieldRequirement::Priority));
+        assert!(schema.forbidden.contains(&FieldRequirement::Duration));
     }
 
     #[test]

@@ -161,6 +161,10 @@
             computed_filter_text: String::new(),
             filter_coalescer: FilterCoalescer::new(),
             menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode::default(),
+            menu_syntax_form_focused_index: 0,
+            menu_syntax_form_input_active: false,
+            menu_syntax_form_draft_field_id: None,
+            menu_syntax_form_draft_value: String::new(),
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render

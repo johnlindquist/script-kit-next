@@ -309,6 +309,7 @@ impl ScriptListApp {
                 .menu_syntax_mode
                 .advanced_query_for(&self.filter_text)
                 .is_none_or(|advanced_query| !advanced_query.has_predicates())
+            && !self.menu_syntax_object_selector_state.owns_main_list()
             && !self.menu_syntax_trigger_popup_state.owns_main_list()
             && !self
                 .menu_syntax_mode

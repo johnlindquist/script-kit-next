@@ -42,6 +42,9 @@ impl ScriptListApp {
         if self.pending_programmatic_filter_echo.is_some() {
             self.pending_programmatic_filter_echo = None;
         }
+        self.menu_syntax_form_input_active = false;
+        self.menu_syntax_form_draft_field_id = None;
+        self.menu_syntax_form_draft_value.clear();
         self.cancel_history_filter_render_pending_if_obsolete(&new_text);
         let new_text_safe = logging::log_user_value(&new_text);
         let canonical_filter_safe = logging::log_user_value(&self.filter_text);
@@ -671,16 +674,22 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_popup_suppressed_filter = None;
             }
 
-            let picker_ctx = crate::menu_syntax::TriggerPickerContext {
-                recent_queries: self.input_history.recent_entries(8),
-                scripts: self.scripts.clone(),
-                scriptlets: self.scriptlets.clone(),
-            };
+            self.run_menu_syntax_object_selector_state_machine(&new_text, window, cx);
+            let object_selector_owns_input =
+                self.menu_syntax_object_selector_state.snapshot.is_some();
+
+            let picker_ctx = self.menu_syntax_trigger_picker_context(&new_text);
             let transition = if popup_suppressed_for_this_text {
                 // User just accepted; popup should stay closed for this
                 // exact filter. Represent that as NoChange so the rest of
                 // the block runs uniformly.
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+            } else if object_selector_owns_input {
+                if self.menu_syntax_trigger_popup_state.snapshot.is_some() {
+                    crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close
+                } else {
+                    crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+                }
             } else {
                 crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
                     &self.menu_syntax_trigger_popup_state,
@@ -756,7 +765,9 @@ impl ScriptListApp {
                     needs_popup_sync = true;
                 }
             }
-            if needs_popup_sync {
+            if object_selector_owns_input {
+                self.invalidate_grouped_cache();
+            } else if needs_popup_sync {
                 self.sync_menu_syntax_trigger_popup_window_for_filter(new_text.clone(), window, cx);
                 // Popup ownership just flipped — invalidate the grouped
                 // results cache so the main launcher list is rebuilt with

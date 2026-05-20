@@ -575,12 +575,104 @@ pub struct CaptureObjectRef {
     pub label: String,
     pub source: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deeplink: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub range: Option<(usize, usize)>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
     pub resolved: bool,
+}
+
+pub fn object_refs_for_raw_capture(target: &str, raw: &str) -> Vec<CaptureObjectRef> {
+    let Some(default_kind) = object_kind_for_capture_target(target) else {
+        return Vec::new();
+    };
+    let Some(body_start) = raw_capture_body_start(raw) else {
+        return Vec::new();
+    };
+    let body = &raw[body_start..];
+    let mut out = Vec::new();
+    let mut offset = 0;
+    for segment in body.split_whitespace() {
+        let Some(rel_start) = body[offset..].find(segment).map(|idx| idx + offset) else {
+            continue;
+        };
+        let rel_end = rel_start + segment.len();
+        offset = rel_end;
+        if segment == "--" {
+            break;
+        }
+        let Some(query) = segment.strip_prefix('@') else {
+            continue;
+        };
+        if query.is_empty() || segment.starts_with("@@") || segment.starts_with("\\@") {
+            continue;
+        }
+        let (kind, id, resolved) = object_ref_parts(default_kind, query);
+        out.push(CaptureObjectRef {
+            role: if out.is_empty() {
+                "primary".to_string()
+            } else {
+                "related".to_string()
+            },
+            kind,
+            id: id.to_string(),
+            label: id.to_string(),
+            source: "inline-token".to_string(),
+            deeplink: resolved.then(|| object_ref_deeplink(kind, id)),
+            query: Some(query.to_string()),
+            range: Some((body_start + rel_start, body_start + rel_end)),
+            token: Some(segment.to_string()),
+            resolved,
+        });
+    }
+    out
+}
+
+pub fn object_ref_deeplink(kind: CaptureObjectKind, id: &str) -> String {
+    format!("@{}:{}", kind.as_str(), id)
+}
+
+fn object_ref_parts(
+    default_kind: CaptureObjectKind,
+    query: &str,
+) -> (CaptureObjectKind, &str, bool) {
+    let Some((prefix, id)) = query.split_once(':') else {
+        return (default_kind, query, false);
+    };
+    let Some(kind) = object_kind_for_ref_prefix(prefix) else {
+        return (default_kind, query, false);
+    };
+    if id.trim().is_empty() {
+        (kind, id, false)
+    } else {
+        (kind, id, true)
+    }
+}
+
+fn object_kind_for_ref_prefix(prefix: &str) -> Option<CaptureObjectKind> {
+    match prefix.trim().to_ascii_lowercase().as_str() {
+        "todo" | "todos" => Some(CaptureObjectKind::Todo),
+        "note" | "notes" => Some(CaptureObjectKind::Note),
+        "link" | "links" => Some(CaptureObjectKind::Link),
+        "snippet" | "snippets" => Some(CaptureObjectKind::Snippet),
+        _ => None,
+    }
+}
+
+fn raw_capture_body_start(raw: &str) -> Option<usize> {
+    if let Some(rest) = raw.strip_prefix(';').or_else(|| raw.strip_prefix('+')) {
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        return Some(1 + end);
+    }
+    let colon_idx = raw.find(':')?;
+    let head = &raw[..colon_idx];
+    if head.is_empty() || head.contains(char::is_whitespace) {
+        return None;
+    }
+    Some(colon_idx + 1)
 }
 
 pub fn object_kind_for_capture_target(target: &str) -> Option<CaptureObjectKind> {
@@ -931,5 +1023,65 @@ impl MenuSyntaxHandlerSpec {
             .as_deref()
             .map(|h| h.eq_ignore_ascii_case(head))
             .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inline_object_refs_resolve_typed_kind_prefixes() {
+        let refs = object_refs_for_raw_capture(
+            "snippet",
+            ";snippet update @snippet:fetch-json -- const value = 1",
+        );
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].kind, CaptureObjectKind::Snippet);
+        assert_eq!(refs[0].id, "fetch-json");
+        assert_eq!(refs[0].role, "primary");
+        assert_eq!(refs[0].token.as_deref(), Some("@snippet:fetch-json"));
+        assert_eq!(refs[0].source, "inline-token");
+        assert_eq!(refs[0].deeplink.as_deref(), Some("@snippet:fetch-json"));
+        assert!(refs[0].resolved);
+    }
+
+    #[test]
+    fn inline_object_refs_resolve_link_url_prefix() {
+        let refs =
+            object_refs_for_raw_capture("link", ";link delete @link:https://example.test/docs");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].kind, CaptureObjectKind::Link);
+        assert_eq!(refs[0].id, "https://example.test/docs");
+        assert_eq!(refs[0].role, "primary");
+        assert_eq!(
+            refs[0].token.as_deref(),
+            Some("@link:https://example.test/docs")
+        );
+        assert_eq!(
+            refs[0].deeplink.as_deref(),
+            Some("@link:https://example.test/docs")
+        );
+        assert!(refs[0].resolved);
+    }
+
+    #[test]
+    fn inline_object_refs_keep_bare_query_unresolved_for_picker_handoff() {
+        let refs = object_refs_for_raw_capture("note", ";note @Project due:tomorrow");
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].kind, CaptureObjectKind::Note);
+        assert_eq!(refs[0].id, "Project");
+        assert_eq!(refs[0].query.as_deref(), Some("Project"));
+        assert!(!refs[0].resolved);
+    }
+
+    #[test]
+    fn inline_object_refs_ignore_snippet_body_after_delimiter() {
+        let refs = object_refs_for_raw_capture(
+            "snippet",
+            ";snippet update @snippet:fetch-json -- @decorator class Example {}",
+        );
+        assert_eq!(refs.len(), 1);
+        assert_eq!(refs[0].id, "fetch-json");
     }
 }

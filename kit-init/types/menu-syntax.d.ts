@@ -14,7 +14,13 @@
  */
 
 /** Built-in capture targets recognized by the launcher's main hint surface. */
-export type BuiltInCaptureTarget = "todo" | "cal" | "note" | "social" | "link";
+export type BuiltInCaptureTarget =
+  | "todo"
+  | "cal"
+  | "note"
+  | "social"
+  | "link"
+  | "snippet";
 
 /** Wildcard target — handler accepts any ;slug it sees. */
 export type WildcardTarget = "*";
@@ -195,6 +201,21 @@ export interface MenuSyntaxResolvedRecurrence {
   label: string;
 }
 
+export type MenuSyntaxObjectKind = "todo" | "note" | "link" | "snippet";
+
+export interface MenuSyntaxObjectRef {
+  role: "primary" | "related" | (string & {});
+  kind: MenuSyntaxObjectKind;
+  id: string;
+  label: string;
+  source: "inline-token" | "picker" | (string & {});
+  deeplink?: string;
+  query?: string;
+  range?: readonly [number, number];
+  token?: string;
+  resolved: boolean;
+}
+
 export interface MenuSyntaxCapturePayload {
   schemaId: string;
   schemaVersion: number;
@@ -212,6 +233,8 @@ export interface MenuSyntaxCapturePayload {
   dates?: MenuSyntaxResolvedDate[];
   unresolvedDates?: MenuSyntaxUnresolvedDate[];
   recurrence?: MenuSyntaxResolvedRecurrence;
+  objectRefs?: MenuSyntaxObjectRef[];
+  primaryObjectRef?: MenuSyntaxObjectRef;
 }
 
 /** Module augmentation for the `script-kit` package main metadata interface. */

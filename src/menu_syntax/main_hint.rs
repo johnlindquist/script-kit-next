@@ -7,8 +7,9 @@ use super::filter::script_command_schema_for;
 use super::fragments::{MenuSyntaxFragmentRole, MenuSyntaxFragmentStatus};
 use super::mode::MenuSyntaxMode;
 use super::payload::{
-    resolve_capture_target, AdvancedQuery, ArgvInvocation, ArtifactKind, CaptureAlias,
-    CaptureInvocation, CommandArgSpec, CommandFlagSpec, DatePhrase, DateRole, IncompleteKind,
+    object_ref_deeplink, resolve_capture_target, AdvancedQuery, ArgvInvocation, ArtifactKind,
+    CanonicalCaptureTarget, CaptureAlias, CaptureInvocation, CaptureObjectRef,
+    CaptureTargetResolution, CommandArgSpec, CommandFlagSpec, DatePhrase, DateRole, IncompleteKind,
     MenuSyntaxHandlerSpec, Predicate, ShortcutPredicate,
 };
 use super::trigger_picker::{
@@ -127,6 +128,12 @@ pub struct MenuSyntaxMainHintSnapshot {
     /// schema (built-in or dynamic).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capture_validation: Option<MenuSyntaxCaptureValidationSnapshot>,
+    /// Structured form projection for capture composer mode. This is the
+    /// clean field surface derived from the same grammar/schema as the power
+    /// syntax, so users can tab through fields while the main input remains
+    /// the synchronized power-user representation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub form: Option<crate::menu_syntax::form::MenuSyntaxFormSnapshot>,
     /// Date phrases the parser recognized as date-slot keys but could not
     /// interpret (e.g. `due:asdf`). Run 12 Pass 10 — wires the data layer
     /// shipped in Run 11 Pass 34's [[src/menu_syntax/date.rs#resolve_capture_dates]]
@@ -297,6 +304,7 @@ fn advanced_query_guide_hint(
             kind: MenuSyntaxMainHintKind::AdvancedQueryGuide,
             status_chips: Vec::new(),
             capture_validation: None,
+            form: None,
             unresolved_dates: Vec::new(),
             menu_syntax_ai_proposal: None,
             raw_filter_text: raw_filter_text.to_string(),
@@ -375,6 +383,7 @@ fn advanced_query_guide_hint(
         kind: MenuSyntaxMainHintKind::AdvancedQueryGuide,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: raw_filter_text.to_string(),
@@ -461,6 +470,7 @@ fn advanced_query_applied_hint(
         kind: MenuSyntaxMainHintKind::AdvancedQueryGuide,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: raw_filter_text.to_string(),
@@ -537,6 +547,7 @@ fn capture_picker_companion_hint(
         kind: MenuSyntaxMainHintKind::CapturePickerCompanion,
         status_chips: Vec::new(),
         capture_validation: None,
+            form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: ctx.raw_filter_text.to_string(),
@@ -553,9 +564,12 @@ fn capture_picker_companion_hint(
         ),
         example: selected
             .and_then(|row| row.example.clone())
-            .or_else(|| target.and_then(|t| target_examples(t).into_iter().next()))
+            .or_else(|| {
+                target.and_then(|t| target_examples(public_examples_target(t)).into_iter().next())
+            })
             .or_else(|| Some(";todo Buy milk #errands p2 due:tomorrow".to_string())),
         examples: target
+            .map(public_examples_target)
             .map(target_examples)
             .unwrap_or_else(|| vec![
                 ";todo Buy milk #errands p2 due:tomorrow".to_string(),
@@ -596,6 +610,7 @@ fn capture_create_handler_hint(
         kind: MenuSyntaxMainHintKind::CapturePickerCompanion,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: ctx.raw_filter_text.to_string(),
@@ -633,12 +648,19 @@ fn capture_composer_hint(
     let mut rows = Vec::new();
     if let Some(resolution) = resolve_capture_target(target) {
         rows.push(hint_row("Target", resolution.canonical_target_str()));
-        rows.push(hint_row("Operation", resolution.operation.as_str()));
+        rows.push(hint_row(
+            "Operation",
+            display_capture_operation(&resolution, invocation),
+        ));
         if let Some(alias_of) = resolution.target_alias_of_str() {
-            rows.push(hint_row(
-                "Alias",
-                &format!("Compatibility alias of ;{alias_of}"),
-            ));
+            let show_alias = !(resolution.canonical_target == CanonicalCaptureTarget::Note
+                && target.eq_ignore_ascii_case("notes"));
+            if show_alias {
+                rows.push(hint_row(
+                    "Alias",
+                    &format!("Compatibility alias of ;{alias_of}"),
+                ));
+            }
         }
         if target.eq_ignore_ascii_case("snippet") {
             rows.push(hint_row(
@@ -713,7 +735,12 @@ fn capture_composer_hint(
     }
 
     let has_body = invocation
-        .map(|invocation| !invocation.body.trim().is_empty() || invocation.url.is_some())
+        .map(|invocation| {
+            !invocation.body.trim().is_empty()
+                || invocation.url.is_some()
+                || todo_alias_has_selected_todo_ref(invocation)
+                || note_update_has_selected_note_and_fields(invocation)
+        })
         .unwrap_or(false);
 
     let clock = crate::menu_syntax::date::MenuSyntaxClock::local_now();
@@ -747,6 +774,9 @@ fn capture_composer_hint(
             chips: vec![chip("schema", MenuSyntaxMainHintTone::Accent)],
         });
     }
+    if let Some(invocation) = invocation {
+        rows.extend(object_ref_hint_rows(invocation));
+    }
 
     Some(finalize_hint(MenuSyntaxMainHintSnapshot {
         kind: MenuSyntaxMainHintKind::CaptureComposer,
@@ -768,6 +798,7 @@ fn capture_composer_hint(
         )),
         status_chips,
         capture_validation,
+        form: None,
         rows,
         fragment_preview: invocation
             .zip(resolved.as_ref())
@@ -782,22 +813,131 @@ fn capture_composer_hint(
         secondary_hint: Some(if has_tags {
             "Tags label this capture for grouping later. They are not launcher filters here."
                 .to_string()
+        } else if target.eq_ignore_ascii_case("note") || target.eq_ignore_ascii_case("notes") {
+            "Tags group the note. due:/at:/start:/end: adds note metadata; url: and key=value attach fields."
+                .to_string()
         } else {
             "Tags group the saved item. p1-p4 sets priority; due:/at:/start: adds dates; key=value adds fields."
                 .to_string()
         }),
         example: Some(
-            target_examples(target)
+            target_examples(public_examples_target(target))
                 .into_iter()
                 .next()
                 .unwrap_or_else(|| format!(";{target} Example")),
         ),
-        examples: target_examples(target),
+        examples: target_examples(public_examples_target(target)),
         warning: ranking_warning,
         active_head: None,
         active_head_value_partial: None,
         accessibility_label: String::new(),
     }))
+}
+
+fn object_ref_hint_rows(invocation: &CaptureInvocation) -> Vec<MenuSyntaxMainHintRow> {
+    crate::menu_syntax::object_refs_for_raw_capture(&invocation.target, &invocation.raw)
+        .into_iter()
+        .filter(|object_ref| object_ref.resolved)
+        .take(3)
+        .map(|object_ref| object_ref_hint_row(&object_ref))
+        .collect()
+}
+
+fn object_ref_hint_row(object_ref: &CaptureObjectRef) -> MenuSyntaxMainHintRow {
+    let token = object_ref
+        .token
+        .clone()
+        .unwrap_or_else(|| format!("@{}:{}", object_ref.kind.as_str(), object_ref.id));
+    let deeplink = object_ref
+        .deeplink
+        .clone()
+        .unwrap_or_else(|| object_ref_deeplink(object_ref.kind, &object_ref.id));
+    MenuSyntaxMainHintRow {
+        label: "Bound object".to_string(),
+        value: deeplink,
+        chips: vec![
+            chip(&token, MenuSyntaxMainHintTone::Success),
+            chip(object_ref.kind.as_str(), MenuSyntaxMainHintTone::Accent),
+        ],
+    }
+}
+
+fn display_capture_operation<'a>(
+    resolution: &'a CaptureTargetResolution,
+    invocation: Option<&CaptureInvocation>,
+) -> &'a str {
+    let Some(invocation) = invocation else {
+        return resolution.operation.as_str();
+    };
+    match resolution.canonical_target {
+        CanonicalCaptureTarget::Link | CanonicalCaptureTarget::Snippet => {
+            first_app_owned_operation_word(&invocation.body)
+                .unwrap_or_else(|| resolution.operation.as_str())
+        }
+        CanonicalCaptureTarget::Note => first_app_owned_operation_word(&invocation.body)
+            .unwrap_or_else(|| {
+                if note_has_selected_note_ref(invocation) {
+                    "update"
+                } else {
+                    "create"
+                }
+            }),
+        _ => resolution.operation.as_str(),
+    }
+}
+
+fn note_update_has_selected_note_and_fields(invocation: &CaptureInvocation) -> bool {
+    if !matches!(
+        invocation.target.to_ascii_lowercase().as_str(),
+        "note" | "notes"
+    ) || !note_has_selected_note_ref(invocation)
+    {
+        return false;
+    }
+    invocation.url.is_some()
+        || !invocation.tags.is_empty()
+        || !invocation.kv.is_empty()
+        || !invocation.date_phrases.is_empty()
+        || matches!(
+            first_app_owned_operation_word(&invocation.body),
+            Some("update" | "delete")
+        )
+}
+
+fn note_has_selected_note_ref(invocation: &CaptureInvocation) -> bool {
+    crate::menu_syntax::object_refs_for_raw_capture(&invocation.target, &invocation.raw)
+        .into_iter()
+        .any(|object_ref| {
+            object_ref.role == "primary"
+                && object_ref.kind == crate::menu_syntax::CaptureObjectKind::Note
+                && object_ref.resolved
+        })
+}
+
+fn todo_alias_has_selected_todo_ref(invocation: &CaptureInvocation) -> bool {
+    if !matches!(
+        invocation.target.to_ascii_lowercase().as_str(),
+        "reminder" | "snooze" | "defer"
+    ) {
+        return false;
+    }
+    crate::menu_syntax::object_refs_for_raw_capture(&invocation.target, &invocation.raw)
+        .into_iter()
+        .any(|object_ref| {
+            object_ref.role == "primary"
+                && object_ref.kind == crate::menu_syntax::CaptureObjectKind::Todo
+                && object_ref.resolved
+        })
+}
+
+fn first_app_owned_operation_word(body: &str) -> Option<&'static str> {
+    let first = body.split_whitespace().next()?.to_ascii_lowercase();
+    match first.as_str() {
+        "add" | "create" | "save" => Some("create"),
+        "update" | "edit" => Some("update"),
+        "remove" | "rm" | "delete" => Some("delete"),
+        _ => None,
+    }
 }
 
 fn capture_accepts_for_target(scripts: &[Arc<Script>], target: &str) -> Vec<String> {
@@ -1031,6 +1171,7 @@ fn command_picker_companion_hint(
                 kind: MenuSyntaxMainHintKind::CommandPickerCompanion,
                 status_chips: Vec::new(),
                 capture_validation: None,
+                form: None,
                 unresolved_dates: Vec::new(),
                 menu_syntax_ai_proposal: None,
                 raw_filter_text: ctx.raw_filter_text.to_string(),
@@ -1074,6 +1215,7 @@ fn command_picker_companion_hint(
         kind: MenuSyntaxMainHintKind::CommandPickerCompanion,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: ctx.raw_filter_text.to_string(),
@@ -1153,6 +1295,7 @@ fn command_composer_hint(
         kind: MenuSyntaxMainHintKind::CommandComposer,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: ctx.raw_filter_text.to_string(),
@@ -1246,6 +1389,7 @@ fn synthetic_active_head_empty_hint(
                 kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                 status_chips: Vec::new(),
                 capture_validation: None,
+                form: None,
                 unresolved_dates: Vec::new(),
                 menu_syntax_ai_proposal: None,
                 raw_filter_text: raw_filter_text.to_string(),
@@ -1280,6 +1424,7 @@ fn synthetic_active_head_empty_hint(
                 kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                 status_chips: Vec::new(),
                 capture_validation: None,
+                form: None,
                 unresolved_dates: Vec::new(),
                 menu_syntax_ai_proposal: None,
                 raw_filter_text: raw_filter_text.to_string(),
@@ -1336,6 +1481,7 @@ fn synthetic_active_head_empty_hint(
                 kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                 status_chips: Vec::new(),
                 capture_validation: None,
+                form: None,
                 unresolved_dates: Vec::new(),
                 menu_syntax_ai_proposal: None,
                 raw_filter_text: raw_filter_text.to_string(),
@@ -1366,6 +1512,7 @@ fn synthetic_active_head_empty_hint(
                 kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                 status_chips: Vec::new(),
                 capture_validation: None,
+                form: None,
                 unresolved_dates: Vec::new(),
                 menu_syntax_ai_proposal: None,
                 raw_filter_text: raw_filter_text.to_string(),
@@ -1469,6 +1616,7 @@ fn advanced_query_empty_hint(
             kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
             status_chips: Vec::new(),
             capture_validation: None,
+            form: None,
             unresolved_dates: Vec::new(),
             menu_syntax_ai_proposal: None,
             raw_filter_text: raw_filter_text.to_string(),
@@ -1503,6 +1651,7 @@ fn advanced_query_empty_hint(
                     kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
                     status_chips: Vec::new(),
                     capture_validation: None,
+                    form: None,
                     unresolved_dates: Vec::new(),
                     menu_syntax_ai_proposal: None,
                     raw_filter_text: raw_filter_text.to_string(),
@@ -1560,6 +1709,7 @@ fn advanced_query_empty_hint(
             kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
             status_chips: Vec::new(),
             capture_validation: None,
+            form: None,
             unresolved_dates: Vec::new(),
             menu_syntax_ai_proposal: None,
             raw_filter_text: raw_filter_text.to_string(),
@@ -1593,6 +1743,7 @@ fn advanced_query_empty_hint(
             kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
             status_chips: Vec::new(),
             capture_validation: None,
+            form: None,
             unresolved_dates: Vec::new(),
             menu_syntax_ai_proposal: None,
             raw_filter_text: raw_filter_text.to_string(),
@@ -1638,6 +1789,7 @@ fn advanced_query_empty_hint(
         kind: MenuSyntaxMainHintKind::AdvancedQueryEmpty,
         status_chips: Vec::new(),
         capture_validation: None,
+        form: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
         raw_filter_text: raw_filter_text.to_string(),
@@ -1962,6 +2114,7 @@ fn command_body_boundary_has_started(input: &str) -> bool {
 /// used by [[src/menu_syntax/capture_gate.rs#decide_capture_gate]] (Run 12
 /// Pass 3) to build the HUD nudge's fix-it suggestion when Enter is blocked.
 pub(crate) fn target_examples(target: &str) -> Vec<String> {
+    let target = public_examples_target(target);
     match target {
         "cal" => vec![
             ";cal Design review start:\"friday 2pm\" #work".to_string(),
@@ -1973,30 +2126,10 @@ pub(crate) fn target_examples(target: &str) -> Vec<String> {
             ";todo Send proposal #client/acme p1 due:friday".to_string(),
             ";todo Renew passport due:eom".to_string(),
         ],
-        "reminder" => vec![
-            ";reminder Submit expense report tomorrow #admin".to_string(),
-            ";reminder Walk dog every day at 8am #home".to_string(),
-            ";reminder Renew passport next month #errands".to_string(),
-        ],
-        "snooze" => vec![
-            ";snooze in 30 minutes Review PR #432".to_string(),
-            ";snooze tomorrow morning Reply to Sam #follow-up".to_string(),
-            ";snooze next monday Revisit launch checklist".to_string(),
-        ],
-        "defer" => vec![
-            ";defer until next week Refactor settings panel p2".to_string(),
-            ";defer friday Follow up on vendor quote #ops".to_string(),
-            ";defer in 2 days Triage plugin docs".to_string(),
-        ],
         "note" => vec![
             ";note Decision to ship parser first #product".to_string(),
             ";note Q2 retrospective takeaways #team".to_string(),
             ";note Coffee chat with Sam — follow up on hiring".to_string(),
-        ],
-        "notes" => vec![
-            ";notes Decision to ship parser first #product".to_string(),
-            ";notes Q2 retrospective takeaways #team".to_string(),
-            ";notes Coffee chat with Sam — follow up on hiring".to_string(),
         ],
         "link" => vec![
             ";link https://zed.dev #rust title:\"GPUI notes\"".to_string(),
@@ -2047,6 +2180,14 @@ pub(crate) fn target_examples(target: &str) -> Vec<String> {
             format!(";{other} Follow up with team owner=me"),
             format!(";{other} Save this for later status=open"),
         ],
+    }
+}
+
+fn public_examples_target(target: &str) -> &str {
+    match target.to_ascii_lowercase().as_str() {
+        "notes" => "note",
+        "reminder" | "snooze" | "defer" => "todo",
+        _ => target,
     }
 }
 
@@ -3497,6 +3638,28 @@ mod tests {
     }
 
     #[test]
+    fn target_examples_for_notes_alias_return_public_note_examples() {
+        let examples = target_examples("notes");
+        assert!(!examples.is_empty());
+        assert!(examples.iter().all(|example| example.starts_with(";note ")));
+        assert!(examples
+            .iter()
+            .all(|example| !example.starts_with(";notes ")));
+    }
+
+    #[test]
+    fn target_examples_for_todo_aliases_return_public_todo_examples() {
+        for alias in ["reminder", "snooze", "defer"] {
+            let examples = target_examples(alias);
+            assert!(!examples.is_empty());
+            assert!(examples.iter().all(|example| example.starts_with(";todo ")));
+            assert!(examples
+                .iter()
+                .all(|example| !example.starts_with(&format!(";{alias} "))));
+        }
+    }
+
+    #[test]
     fn target_examples_for_unknown_target_falls_back_with_correct_verb() {
         // Custom user-defined targets get the generic example list, but each
         // example MUST still start with the user's actual verb — no `;todo`
@@ -3524,9 +3687,6 @@ mod tests {
             ("fixture", ["env=", "kind=", "state="]),
             ("gcal", ["calendarId=", "start:", "guests="]),
             ("mcal", ["calendar=", "alarm=", "start:"]),
-            ("reminder", ["tomorrow", "every day", "next month"]),
-            ("snooze", ["in 30 minutes", "tomorrow", "next monday"]),
-            ("defer", ["until next week", "friday", "in 2 days"]),
         ];
 
         for (target, expected_fragments) in cases {
@@ -3579,6 +3739,15 @@ mod tests {
     }
 
     #[test]
+    fn snippet_hint_labels_update_operation_from_body() {
+        let hint = capture_hint_for(";snippet update @snippet:fj -- const value = 1", &[]);
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Operation" && row.value == "update"));
+    }
+
+    #[test]
     fn main_hint_snapshot_omits_fragment_preview_when_none() {
         let snapshot = MenuSyntaxMainHintSnapshot {
             kind: MenuSyntaxMainHintKind::CaptureComposer,
@@ -3589,6 +3758,7 @@ mod tests {
             status_chip: None,
             status_chips: Vec::new(),
             capture_validation: None,
+            form: None,
             unresolved_dates: Vec::new(),
             menu_syntax_ai_proposal: None,
             rows: Vec::new(),

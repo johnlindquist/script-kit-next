@@ -2251,8 +2251,29 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::SetFilter { ref text, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Setting filter to: '{}'", rid, text));
+                                view.menu_syntax_form_input_active = false;
+                                view.menu_syntax_form_draft_field_id = None;
+                                view.menu_syntax_form_draft_value.clear();
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
+                                ctx.notify();
+                            }
+                            ExternalCommand::SetMenuSyntaxFormField { ref field, ref value, ref request_id } => {
+                                let rid = request_id.as_deref().unwrap_or("-");
+                                logging::log(
+                                    "STDIN",
+                                    &format!(
+                                        "[{}] Setting menu-syntax form field {:?} to: '{}'",
+                                        rid, field, value
+                                    ),
+                                );
+                                let _ = view.update_menu_syntax_form_field(
+                                    field.as_deref(),
+                                    value.clone(),
+                                    window,
+                                    ctx,
+                                );
+                                let _ = view.get_filtered_results_cached();
                                 ctx.notify();
                             }
                             ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
@@ -2431,11 +2452,38 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 "SimulateKey: Cmd+Enter - route to ACP context capture",
                                             );
                                             view.try_route_global_cmd_enter_to_acp_context_capture(ctx);
+                                        } else if view.handle_menu_syntax_form_key_input(
+                                            &key_lower,
+                                            key_char,
+                                            &gpui::Modifiers {
+                                                platform: has_cmd,
+                                                shift: has_shift,
+                                                control: _has_ctrl,
+                                                alt: _has_alt,
+                                                function: false,
+                                            },
+                                            window,
+                                            ctx,
+                                        ) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: menu-syntax form text input",
+                                            );
                                         } else if view.main_menu_fallback_state.is_active() {
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    if view.try_navigate_root_file_directory_with_tab(
+                                                    if view.menu_syntax_capture_form_owns_input() {
+                                                        if has_shift {
+                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                        } else {
+                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                        }
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - move menu syntax form focus",
+                                                        );
+                                                    } else if view.try_navigate_root_file_directory_with_tab(
                                                         has_shift, window, ctx,
                                                     ) {
                                                         logging::log(
@@ -2502,7 +2550,17 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else {
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    if view.try_navigate_root_file_directory_with_tab(
+                                                    if view.menu_syntax_capture_form_owns_input() {
+                                                        if has_shift {
+                                                            view.focus_previous_menu_syntax_form_field(ctx);
+                                                        } else {
+                                                            view.focus_next_menu_syntax_form_field(ctx);
+                                                        }
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - move menu syntax form focus",
+                                                        );
+                                                    } else if view.try_navigate_root_file_directory_with_tab(
                                                         has_shift, window, ctx,
                                                     ) {
                                                         logging::log(
@@ -2525,6 +2583,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     view.move_selection_down(ctx);
                                                 }
                                                 "enter" => {
+                                                    if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                                                        if view.apply_menu_syntax_object_selector_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            logging::log("STDIN", "SimulateKey: Enter - accept menu-syntax object selector");
+                                                            return;
+                                                        }
+                                                    }
                                                     if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
                                                         if view.apply_menu_syntax_trigger_popup_intent(
                                                             crate::menu_syntax::InlinePickerKeyIntent::Accept,
@@ -2540,6 +2608,15 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 }
                                                 "escape" => {
                                                     logging::log("STDIN", "SimulateKey: Escape - close menu-syntax popup, clear filter, go back, or hide");
+                                                    if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                                                        if view.apply_menu_syntax_object_selector_intent(
+                                                            crate::menu_syntax::InlinePickerKeyIntent::Close,
+                                                            window,
+                                                            ctx,
+                                                        ) {
+                                                            return;
+                                                        }
+                                                    }
                                                     if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
                                                         if view.apply_menu_syntax_trigger_popup_intent(
                                                             crate::menu_syntax::InlinePickerKeyIntent::Close,

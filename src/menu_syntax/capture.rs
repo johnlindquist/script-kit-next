@@ -40,6 +40,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
     let raw = input.to_string();
     let rest = input[body_start..].trim_start();
     let tokens = scan_tokens(rest, body_start + leading_whitespace(&input[body_start..]));
+    let supports_object_refs = object_kind_for_capture_target(&target).is_some();
 
     let mut body_parts: Vec<String> = Vec::new();
     let mut tags: Vec<String> = Vec::new();
@@ -56,6 +57,10 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
                 body_parts.push(tail.to_string());
             }
             break;
+        }
+
+        if supports_object_refs && is_object_ref_token(&tok.text) {
+            continue;
         }
 
         if let Some(tag) = tok.text.strip_prefix('#') {
@@ -127,6 +132,13 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
     })
 }
 
+fn is_object_ref_token(token: &str) -> bool {
+    token
+        .strip_prefix('@')
+        .map(|query| !query.is_empty() && !query.starts_with('@'))
+        .unwrap_or(false)
+}
+
 pub fn active_object_selector_for_input(
     input: &str,
     registered_targets: &[String],
@@ -143,10 +155,16 @@ pub fn active_object_selector_for_input(
         let rel_start = body[offset..].find(segment)? + offset;
         let rel_end = rel_start + segment.len();
         offset = rel_end;
+        if segment == "--" {
+            return None;
+        }
         let Some(query) = segment.strip_prefix('@') else {
             continue;
         };
         if segment.starts_with("@@") || segment.starts_with("\\@") {
+            continue;
+        }
+        if object_query_is_resolved_ref(query) {
             continue;
         }
         return Some(ActiveObjectSelector {
@@ -156,6 +174,19 @@ pub fn active_object_selector_for_input(
         });
     }
     None
+}
+
+fn object_query_is_resolved_ref(query: &str) -> bool {
+    let Some((prefix, id)) = query.split_once(':') else {
+        return false;
+    };
+    if id.trim().is_empty() {
+        return false;
+    }
+    matches!(
+        prefix.trim().to_ascii_lowercase().as_str(),
+        "todo" | "todos" | "note" | "notes" | "link" | "links" | "snippet" | "snippets"
+    )
 }
 
 pub fn is_capture_target_registered(target: &str, registered_targets: &[String]) -> bool {
@@ -460,6 +491,8 @@ mod tests {
             super::super::payload::CaptureObjectKind::Note
         );
         assert_eq!(selector.query, "Project");
+        let inv = ok(";note @Project due:tomorrow");
+        assert_eq!(inv.body, "");
     }
 
     #[test]
@@ -471,5 +504,11 @@ mod tests {
             super::super::payload::CaptureObjectKind::Todo
         );
         assert_eq!(selector.query, "Review");
+    }
+
+    #[test]
+    fn snippet_object_ref_token_is_context_not_body() {
+        let inv = ok(";snippet update @snippet:fetch-json -- const value = 1");
+        assert_eq!(inv.body, "update const value = 1");
     }
 }

@@ -11,6 +11,7 @@ pub mod date;
 pub mod doctor;
 pub mod execute;
 pub mod filter;
+pub mod form;
 pub mod fragments;
 pub mod grammar_payload;
 pub mod handler_index;
@@ -25,6 +26,7 @@ pub mod nl_duration;
 pub mod nl_phrase;
 pub mod nl_recurrence;
 pub mod nl_time;
+pub mod object_selector;
 pub mod parse;
 pub mod payload;
 pub mod query;
@@ -44,6 +46,7 @@ pub use actions::{
 #[allow(unused_imports)]
 pub use artifacts::{
     read_all_artifacts, read_jsonl_artifact, read_payload_dir, root_todo_query_is_eligible,
+    search_root_object_candidates_direct, search_root_object_candidates_in_sk_path,
     search_root_todos_direct, search_root_todos_in_sk_path, CaptureArtifact, CaptureArtifactKind,
     ReadArtifactReport, RootTodoSearchHit, RootTodoSectionOptions,
 };
@@ -75,6 +78,12 @@ pub use filter::{
     registered_capture_targets_from_scripts, script_menu_syntax_specs,
 };
 #[allow(unused_imports)]
+pub use form::{
+    apply_capture_form_field_edit, build_capture_form_snapshot, empty_capture_invocation,
+    MenuSyntaxFormFieldKind, MenuSyntaxFormFieldSnapshot, MenuSyntaxFormSnapshot,
+    MenuSyntaxFormSuggestion, MenuSyntaxFormSuggestionPools,
+};
+#[allow(unused_imports)]
 pub use fragments::{MenuSyntaxFragment, MenuSyntaxFragmentRole, MenuSyntaxFragmentStatus};
 #[allow(unused_imports)]
 pub use grammar_payload::{
@@ -103,16 +112,26 @@ pub use main_hint::{
     MenuSyntaxMainHintSnapshot, MenuSyntaxMainHintTone,
 };
 pub use mode::{
-    free_text_for_search, input_spans_for_input_with_targets, prefix_span_for_input, MenuSyntaxMode,
+    free_text_for_search, input_span_role_name, input_spans_for_input_with_targets,
+    prefix_span_for_input, MenuSyntaxMode,
 };
 #[allow(unused_imports)]
-pub use parse::{parse, MenuSyntaxParse};
+pub use object_selector::{
+    apply_object_selector_intent, build_object_selector_snapshot,
+    object_selector_visible_start_for_selection, plan_object_selector_transition,
+    MenuSyntaxObjectSelectorState, ObjectSelectorCandidate, ObjectSelectorContext,
+    ObjectSelectorIntentOutcome, ObjectSelectorRow, ObjectSelectorSnapshot,
+    ObjectSelectorTransition,
+};
+#[allow(unused_imports)]
+pub use parse::{parse, parse_with_capture_targets, MenuSyntaxParse};
 #[allow(unused_imports)]
 pub use payload::{
-    source_for_head, ActiveObjectSelector, AdvancedQuery, ArgvInvocation, CanonicalCaptureTarget,
-    CaptureInvocation, CaptureObjectKind, CaptureObjectRef, CaptureOperation,
-    CaptureTargetResolution, FilterIndicator, FilterIndicatorTone, MenuSyntaxHandlerSpec,
-    RootUnifiedSourceFilter, RootUnifiedSourceFilterSet, SourceHeadSpec, SOURCE_HEAD_SPECS,
+    object_refs_for_raw_capture, source_for_head, ActiveObjectSelector, AdvancedQuery,
+    ArgvInvocation, CanonicalCaptureTarget, CaptureInvocation, CaptureObjectKind, CaptureObjectRef,
+    CaptureOperation, CaptureTargetResolution, FilterIndicator, FilterIndicatorTone,
+    MenuSyntaxHandlerSpec, RootUnifiedSourceFilter, RootUnifiedSourceFilterSet, SourceHeadSpec,
+    SOURCE_HEAD_SPECS,
 };
 #[allow(unused_imports)]
 pub use query::parse_advanced_query;

@@ -138,6 +138,7 @@ fn menu_syntax_input_span_color(
         | crate::menu_syntax::MenuSyntaxFragmentRole::Kv
         | crate::menu_syntax::MenuSyntaxFragmentRole::Tag
         | crate::menu_syntax::MenuSyntaxFragmentRole::Url => theme.colors.accent.selected,
+        crate::menu_syntax::MenuSyntaxFragmentRole::ObjectRef => theme.colors.ui.success,
         crate::menu_syntax::MenuSyntaxFragmentRole::Date
         | crate::menu_syntax::MenuSyntaxFragmentRole::DateRange => theme.colors.ui.info,
         crate::menu_syntax::MenuSyntaxFragmentRole::Duration
@@ -148,20 +149,10 @@ fn menu_syntax_input_span_color(
     }
 }
 
-fn menu_syntax_input_span_role_name(role: crate::menu_syntax::MenuSyntaxFragmentRole) -> &'static str {
-    match role {
-        crate::menu_syntax::MenuSyntaxFragmentRole::Prefix => "prefix",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Subject => "subject",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Date => "date",
-        crate::menu_syntax::MenuSyntaxFragmentRole::DateRange => "dateRange",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Duration => "duration",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Recurrence => "recurrence",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Kv => "kv",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Tag => "tag",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Url => "url",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Priority => "priority",
-        crate::menu_syntax::MenuSyntaxFragmentRole::Unresolved => "unresolved",
-    }
+fn menu_syntax_input_span_role_name(
+    role: crate::menu_syntax::MenuSyntaxFragmentRole,
+) -> &'static str {
+    crate::menu_syntax::input_span_role_name(role)
 }
 
 fn render_menu_syntax_hint_chip(
@@ -260,6 +251,128 @@ fn render_menu_syntax_fragment_preview_row(
             row.chips
                 .iter()
                 .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+        )
+        .into_any_element()
+}
+
+fn render_menu_syntax_form_field(
+    theme: &crate::theme::Theme,
+    field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
+) -> AnyElement {
+    let border_color = if field.focused {
+        rgba((theme.colors.ui.border << 8) | 0xE6)
+    } else {
+        rgba((theme.colors.ui.border << 8) | 0x80)
+    };
+    let display_value = if field.value.trim().is_empty() {
+        field.placeholder.clone()
+    } else {
+        field.value.clone()
+    };
+    let value_color = rgba((theme.colors.text.primary << 8) | 0xFF);
+    div()
+        .id(format!("menu-syntax-form-field-{}", field.id))
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .px(px(10.0))
+        .py(px(8.0))
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(border_color)
+        .bg(if field.focused {
+            rgba((theme.colors.background.search_box << 8) | 0x3D)
+        } else {
+            rgba((theme.colors.background.search_box << 8) | 0x24)
+        })
+        .child(
+            div()
+                .w_full()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_size(px(11.0))
+                        .line_height(px(14.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
+                        .child(field.label.clone()),
+                )
+                .when(field.required && !field.satisfied, |d| {
+                    d.child(
+                        div()
+                            .text_size(px(10.0))
+                            .line_height(px(12.0))
+                            .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
+                            .child("required"),
+                    )
+                }),
+        )
+        .child(
+            div()
+                .w_full()
+                .min_h(px(20.0))
+                .flex()
+                .items_center()
+                .gap(px(3.0))
+                .text_size(px(13.0))
+                .line_height(px(18.0))
+                .text_color(value_color)
+                .child(
+                    div()
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .child(display_value),
+                )
+                .when(field.focused, |d| {
+                    d.child(
+                        div()
+                            .w(px(1.0))
+                            .h(px(18.0))
+                            .bg(rgba((theme.colors.text.primary << 8) | 0xFF)),
+                    )
+                }),
+        )
+        .when(!field.suggestions.is_empty(), |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(5.0))
+                    .children(field.suggestions.iter().take(4).map(|suggestion| {
+                        div()
+                            .px(px(7.0))
+                            .py(px(2.0))
+                            .rounded(px(5.0))
+                            .bg(rgba((theme.colors.text.muted << 8) | 0x14))
+                            .text_size(px(10.0))
+                            .line_height(px(13.0))
+                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xCC))
+                            .child(suggestion.label.clone())
+                    })),
+            )
+        })
+        .into_any_element()
+}
+
+fn render_menu_syntax_form(
+    theme: &crate::theme::Theme,
+    form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+) -> AnyElement {
+    div()
+        .id("menu-syntax-handler-form")
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(6.0))
+        .children(
+            form.fields
+                .iter()
+                .map(|field| render_menu_syntax_form_field(theme, field)),
         )
         .into_any_element()
 }
@@ -367,6 +480,9 @@ fn render_menu_syntax_main_hint(
                         .text_color(body_text)
                         .child(subtitle.clone()),
                 )
+            })
+            .when_some(hint.form.as_ref(), |d, form| {
+                d.child(render_menu_syntax_form(theme, form))
             })
             .when(!hint.rows.is_empty(), |d| {
                 d.child(
@@ -717,10 +833,14 @@ impl ScriptListApp {
         // Use unified color resolver for consistent empty state styling
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
-        let menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
-            || self
+        let handler_form_owns_input_for_render = matches!(self.current_view, AppView::ScriptList)
+            && self
                 .menu_syntax_mode
-                .capture_composer_owns_input_for(&filter_text_for_render)
+                .capture_composer_owns_input_for(&filter_text_for_render);
+        let show_launcher_ask_ai_hint = !handler_form_owns_input_for_render;
+        let menu_syntax_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
+            || self.menu_syntax_trigger_popup_state.owns_main_list()
+            || handler_form_owns_input_for_render
             || self
                 .menu_syntax_mode
                 .command_owns_input_for(&filter_text_for_render);
@@ -812,14 +932,21 @@ impl ScriptListApp {
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
                                 GroupedListItem::SectionHeader(label, icon) => {
-                                    // Section header at 32px height (8px grid) for clear visual separation
+                                    // Section header at 32px height (8px grid) for clear visual separation,
+                                    // or 20px if it is the first section header to pull it up closer to input.
+                                    let is_first = ix == 0;
+                                    let h_px = if is_first {
+                                        crate::list_item::effective_first_section_header_height()
+                                    } else {
+                                        effective_section_header_height
+                                    };
                                     div()
                                         .id(ElementId::NamedInteger(
                                             format!("section-header-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
-                                        .h(px(effective_section_header_height))
-                                        .child(render_section_header(label, icon.as_deref(), theme_colors, ix == 0))
+                                        .h(px(h_px))
+                                        .child(render_section_header(label, icon.as_deref(), theme_colors, is_first))
                                         .into_any_element()
                                 }
                                 GroupedListItem::Status(status) => {
@@ -987,9 +1114,14 @@ impl ScriptListApp {
                 let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));
                 let content_height = px(grouped_items
                     .iter()
-                    .map(|item| match item {
+                    .enumerate()
+                    .map(|(ix, item)| match item {
                         GroupedListItem::SectionHeader(..) => {
-                            crate::list_item::effective_section_header_height()
+                            if ix == 0 {
+                                crate::list_item::effective_first_section_header_height()
+                            } else {
+                                crate::list_item::effective_section_header_height()
+                            }
                         }
                         GroupedListItem::Status(..) => {
                             crate::list_item::effective_source_status_row_height()
@@ -1388,6 +1520,15 @@ impl ScriptListApp {
                         //   2. filter non-empty → clear filter.
                         //   3. launcher-origin surface → go back to the main launcher.
                         //   4. filter empty → hide main window.
+                        if crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open() {
+                            if this.apply_menu_syntax_object_selector_intent(
+                                crate::menu_syntax::InlinePickerKeyIntent::Close,
+                                window,
+                                cx,
+                            ) {
+                                return;
+                            }
+                        }
                         if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
                             if this.apply_menu_syntax_trigger_popup_intent(
                                 crate::menu_syntax::InlinePickerKeyIntent::Close,
@@ -1517,11 +1658,17 @@ impl ScriptListApp {
                             .flex()
                             .items_center()
                             // Search input with cursor and selection support
-                            .child(div().flex_1().flex().flex_row().items_center().child(
-                                self.render_search_input()
-                            ))
-                            // "Ask [⇥]" keyboard hint
-                            .child(crate::components::render_launcher_ask_ai_hint(chrome)),
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .child(self.render_search_input()),
+                            )
+                            .when(show_launcher_ask_ai_hint, |d| {
+                                d.child(crate::components::render_launcher_ask_ai_hint(chrome))
+                            }),
                     )
             })
             // Divider between header and list content
@@ -1590,11 +1737,11 @@ impl ScriptListApp {
                     .block_mouse_except_scroll(),
             ));
 
-            if state_changed {
+            if state_changed && crate::logging::filter_perf_trace_enabled() {
                 tracing::info!(
                     target: "script_kit::prompt_chrome",
                     event = "script_list_mini_ai_hint_rendered",
-                    tab_hint = true,
+                    tab_hint = show_launcher_ask_ai_hint,
                     cmd_enter_hint = false,
                     "Mini ScriptList header rendered Ask AI keyboard hints"
                 );
