@@ -2200,7 +2200,6 @@ impl ScriptListApp {
     ) -> AnyElement {
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
-        let design_typography = tokens.typography();
         let design_visual = tokens.visual();
         let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
         let text_primary = chrome.text_primary_hex;
@@ -2696,7 +2695,6 @@ impl ScriptListApp {
         let header_padding_top = design_spacing.padding_sm;
         let header_padding_bottom = design_spacing.padding_sm;
         let header_gap = design_spacing.gap_md;
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
 
         let header = div()
             .w_full()
@@ -2709,15 +2707,7 @@ impl ScriptListApp {
             .child(
                 div().flex().flex_row().items_center().child(
                     div().flex_1().flex().flex_row().items_center().child(
-                        Input::new(&self.gpui_input_state)
-                            .w_full()
-                            .h(px(input_height))
-                            .px(px(0.0))
-                            .py(px(0.0))
-                            .with_size(Size::Size(px(design_typography.font_size_xl)))
-                            .appearance(false)
-                            .bordered(false)
-                            .focus_bordered(false),
+                        self.render_search_input()
                     ),
                 ),
             );
@@ -3123,7 +3113,7 @@ impl ScriptListApp {
                 .h_full()
                 .rounded(px(design_visual.radius_lg))
                 .text_color(rgb(text_primary))
-                .font_family(design_typography.font_family)
+                .font_family(self.theme_font_family())
                 .key_context("theme_chooser")
                 .track_focus(&self.focus_handle)
                 .on_key_down(handle_key)
@@ -3142,7 +3132,7 @@ impl ScriptListApp {
             .h_full()
             .rounded(px(design_visual.radius_lg))
             .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
+            .font_family(self.theme_font_family())
             .key_context("theme_chooser")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)

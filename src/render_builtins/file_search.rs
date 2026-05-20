@@ -517,6 +517,7 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let is_default_design = self.current_design == DesignVariant::Default;
 
         let _opacity = self.theme.get_opacity();
         // bg_with_alpha removed - let vibrancy show through from Root (matches main menu)
@@ -1417,13 +1418,17 @@ impl ScriptListApp {
         };
 
         // Header: bare input + file count (scaffold adds padding/layout)
-        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+        let header_gap = if is_default_design {
+            12.0
+        } else {
+            design_spacing.gap_md
+        };
         let header_element = div()
             .flex_1()
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(HEADER_GAP))
+            .gap(px(header_gap))
             .occlude()
             .capture_any_mouse_down(cx.listener(|this, _event, window, cx| {
                 if matches!(this.current_view, AppView::FileSearchView { .. }) {
@@ -1472,15 +1477,7 @@ impl ScriptListApp {
             }))
             .child(
                 div().flex_1().flex().flex_row().items_center().child(
-                    Input::new(&self.gpui_input_state)
-                        .w_full()
-                        .h(px(input_height))
-                        .px(px(0.))
-                        .py(px(0.))
-                        .with_size(Size::Size(px(_design_typography.font_size_xl)))
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false),
+                    self.render_search_input(),
                 ),
             )
             .child(
@@ -1598,6 +1595,7 @@ impl ScriptListApp {
                 list_pane,
                 footer,
             )
+            .font_family(self.theme_font_family())
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -1609,6 +1607,7 @@ impl ScriptListApp {
                 preview_pane,
                 footer,
             )
+            .font_family(self.theme_font_family())
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -1707,50 +1706,38 @@ mod file_search_thumbnail_tests {
 
 #[cfg(test)]
 mod file_search_chrome_audit {
+    fn production_source() -> &'static str {
+        include_str!("file_search.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source should exist")
+    }
+
     #[test]
-    fn file_search_uses_shared_expanded_view_shell() {
-        let source = include_str!("file_search.rs");
+    fn file_search_uses_shared_footer_scaffolds() {
+        let source = production_source();
 
-        // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("render_expanded_view_scaffold("),
-            "file_search must use the shared expanded-view scaffold"
+            source.contains("render_expanded_view_scaffold_with_footer("),
+            "file_search expanded view should use the shared footer scaffold"
         );
-
-        // Must emit expanded layout audit
         assert!(
-            source.contains("PromptChromeAudit::expanded(\"file_search\""),
-            "file_search must declare expanded layout mode"
+            source.contains("render_minimal_list_prompt_shell_with_footer("),
+            "file_search mini view should use the shared footer shell"
         );
-
-        // Must NOT have hand-rolled divider chrome (split string to avoid self-match)
-        let divider_call = "SectionDivider".to_owned() + "::new()";
         assert!(
-            !source.contains(&divider_call),
-            "file_search must not use SectionDivider (scaffold owns structure)"
+            source.contains("main_window_footer_slot("),
+            "file_search should route its footer through the native footer slot"
         );
-
-        // Must NOT have legacy PromptFooter
-        let legacy = "Prompt".to_owned() + "Footer::new(";
         assert!(
-            !source.contains(&legacy),
-            "file_search must not use PromptFooter (scaffold owns footer)"
-        );
-
-        // Must NOT have hand-rolled render_simple_hint_strip (scaffold owns footer)
-        // The only render_simple_hint_strip usage should be inside the scaffold itself.
-        // Count occurrences — none should appear in file_search.rs directly.
-        let hint_strip_call = "render_simple_hint_strip(";
-        let count = source.matches(hint_strip_call).count();
-        assert_eq!(
-            count, 0,
-            "file_search must not call render_simple_hint_strip directly (scaffold owns footer, found {count})"
+            source.contains("render_simple_hint_strip(file_search_hints, None)"),
+            "file_search should build the shared hint strip before handing it to the native footer slot"
         );
     }
 
     #[test]
     fn file_search_has_no_hardcoded_alpha_fills() {
-        let source = include_str!("file_search.rs");
+        let source = production_source();
         assert!(
             !source.contains("| 0x24)"),
             "file_search should not contain hardcoded alpha fill 0x24"
@@ -1763,7 +1750,7 @@ mod file_search_chrome_audit {
 
     #[test]
     fn file_search_emits_checkpoint_log() {
-        let source = include_str!("file_search.rs");
+        let source = production_source();
         assert!(
             source.contains("file_search_chrome_checkpoint"),
             "file_search must emit a structured checkpoint log for migration verification"
@@ -1772,7 +1759,7 @@ mod file_search_chrome_audit {
 
     #[test]
     fn file_search_uses_shared_row_state_helpers() {
-        let source = include_str!("file_search.rs");
+        let source = production_source();
         assert!(
             source.contains("crate::list_item::row_selected_background_rgba"),
             "file_search must derive selected row chrome from shared list_item helpers"

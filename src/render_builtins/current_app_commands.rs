@@ -362,8 +362,6 @@ impl ScriptListApp {
 
         let total_count = self.cached_current_app_entries.len();
 
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-
         let header = div()
             .w_full()
             .flex()
@@ -378,15 +376,7 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .child(
-                        Input::new(&self.gpui_input_state)
-                            .w_full()
-                            .h(px(input_height))
-                            .px(px(0.))
-                            .py(px(0.))
-                            .with_size(Size::Size(px(design_typography.font_size_xl)))
-                            .appearance(false)
-                            .bordered(false)
-                            .focus_bordered(false),
+                        self.render_search_input(),
                     ),
             )
             .child(
@@ -538,7 +528,7 @@ impl ScriptListApp {
             .when_some(footer, |d, footer| d.child(footer))
             .rounded(px(design_visual.radius_lg))
             .text_color(rgb(chrome.text_primary_hex))
-            .font_family(design_typography.font_family)
+            .font_family(self.theme_font_family())
             .key_context("current_app_commands")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)

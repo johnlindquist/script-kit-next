@@ -1436,7 +1436,7 @@ impl ScriptListApp {
 
         // Use unified color resolver for text and fonts
         let text_primary = color_resolver.primary_text_color();
-        let font_family = typography_resolver.primary_font().to_string();
+        let font_family = self.theme_font_family();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let capture_targets =
@@ -1501,7 +1501,6 @@ impl ScriptListApp {
                 } else {
                     design_spacing.gap_md
                 };
-                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
 
                 div()
                     .w_full()
@@ -1518,17 +1517,9 @@ impl ScriptListApp {
                             .flex()
                             .items_center()
                             // Search input with cursor and selection support
-                            .child(div().flex_1().flex().flex_row().items_center().child({
-                                Input::new(&self.gpui_input_state)
-                                    .w_full()
-                                    .h(px(input_height))
-                                    .px(px(0.))
-                                    .py(px(0.))
-                                    .with_size(Size::Size(px(typography_resolver.font_size_xl())))
-                                    .appearance(false)
-                                    .bordered(false)
-                                    .focus_bordered(false)
-                            }))
+                            .child(div().flex_1().flex().flex_row().items_center().child(
+                                self.render_search_input()
+                            ))
                             // "Ask [⇥]" keyboard hint
                             .child(crate::components::render_launcher_ask_ai_hint(chrome)),
                     )

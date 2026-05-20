@@ -351,8 +351,6 @@ impl ScriptListApp {
                 .into_any_element(),
         };
 
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-
         let header_element = div()
             .flex_1()
             .flex()
@@ -361,15 +359,7 @@ impl ScriptListApp {
             .gap_3()
             .child(
                 div().flex_1().flex().flex_row().items_center().child(
-                    Input::new(&self.gpui_input_state)
-                        .w_full()
-                        .h(px(input_height))
-                        .px(px(0.))
-                        .py(px(0.))
-                        .with_size(Size::Size(px(design_typography.font_size_xl)))
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false),
+                    self.render_search_input()
                 ),
             )
             .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
@@ -467,7 +457,7 @@ impl ScriptListApp {
             None,
         )
         .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
+        .font_family(self.theme_font_family())
         .key_context("dictation_history")
         .on_key_down(handle_key)
         .track_focus(&self.focus_handle)
@@ -477,44 +467,55 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod dictation_history_scroll_contract {
-    const SOURCE: &str = include_str!("dictation_history.rs");
+    fn production_source() -> &'static str {
+        include_str!("dictation_history.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source should exist")
+    }
 
     #[test]
     fn dictation_history_tracks_scroll_and_copy_shortcuts() {
+        let source = production_source();
+
         assert!(
-            SOURCE.contains(".track_scroll(&self.dictation_history_scroll_handle)"),
+            source.contains(".track_scroll(&self.dictation_history_scroll_handle)"),
             "dictation history should track its dedicated scroll handle"
         );
         assert!(
-            SOURCE.contains(".on_scroll_wheel(cx.listener("),
+            source.contains(".on_scroll_wheel(cx.listener("),
             "dictation history should intercept wheel events on the list pane"
         );
         assert!(
-            SOURCE.contains("builtin_scroll_target_from_wheel"),
+            source.contains("builtin_scroll_target_from_wheel"),
             "dictation history wheel scrolling should use the shared builtin helper"
         );
         assert!(
-            SOURCE.contains("Input::new(&self.gpui_input_state)"),
+            source.contains("self.render_search_input()"),
             "dictation history should expose the shared search input"
         );
         assert!(
-            SOURCE.contains("render_expanded_view_scaffold_with_hints("),
+            !source.contains(&["Input::new(&self.", "gpui_input_state)"].concat()),
+            "dictation history should delegate GPUI input construction to render_search_input"
+        );
+        assert!(
+            source.contains("render_expanded_view_scaffold_with_hints("),
             "dictation history should use the shared expanded scaffold"
         );
         assert!(
-            SOURCE.contains("builtin_reanchor_selection_from_scroll_handle"),
+            source.contains("builtin_reanchor_selection_from_scroll_handle"),
             "dictation history should reanchor selection after ScrollHandle movement"
         );
         assert!(
-            SOURCE.contains("\"dictation_history_paste\""),
+            source.contains("\"dictation_history_paste\""),
             "dictation history should route Enter through the paste action"
         );
         assert!(
-            SOURCE.contains("\"dictation_history_delete\""),
+            source.contains("\"dictation_history_delete\""),
             "dictation history should surface the delete action"
         );
         assert!(
-            SOURCE.contains("toggle_dictation_history_actions"),
+            source.contains("toggle_dictation_history_actions"),
             "dictation history should expose a dedicated actions menu"
         );
     }
