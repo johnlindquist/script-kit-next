@@ -607,6 +607,7 @@ fn make_window(
         bounds,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     }
 }
 
@@ -690,6 +691,7 @@ fn inspect_popup_response_has_geometry_fields() {
         os_window_id: None,
         semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::PanelOnly),
         warnings: vec!["panel_only_actions_dialog".to_string()],
+        pid: None,
     };
 
     // Serialize and verify JSON contract
@@ -824,6 +826,7 @@ fn inspect_no_bounds_produces_no_suggested_hits() {
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
 
     let target_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&info);
@@ -858,6 +861,7 @@ fn inspect_error_snapshot_has_empty_geometry() {
         os_window_id: None,
         semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::Unavailable),
         warnings: vec!["target_resolution_failed: no such window".to_string()],
+        pid: None,
     };
 
     let json = serde_json::to_value(&snapshot).expect("serialize");
@@ -917,6 +921,7 @@ fn inspect_snapshot_v2_geometry_round_trip() {
         os_window_id: None,
         semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::Full),
         warnings: Vec::new(),
+        pid: None,
     };
 
     let json_str = serde_json::to_string(&snapshot).expect("serialize");
@@ -964,6 +969,7 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
             }),
             parent_window_id: None,
             parent_kind: None,
+            pid: None,
         };
 
         let hits = script_kit_gpui::protocol::default_suggested_hit_points(&info, Some(&bounds));

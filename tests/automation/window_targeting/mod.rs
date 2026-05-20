@@ -29,6 +29,7 @@ fn make_info(prefix: &str, id: &str, kind: AutomationWindowKind) -> AutomationWi
         bounds: None,
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     }
 }
 
@@ -337,6 +338,7 @@ fn window_bounds_survive_registry_round_trip() {
         }),
         parent_window_id: None,
         parent_kind: None,
+        pid: None,
     };
     script_kit_gpui::windows::upsert_automation_window(info);
 

@@ -44,7 +44,17 @@ fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) 
             "arguments": arguments,
         }),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, context);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    let response = runtime.block_on(handle_request_with_runtime_context(
+        request,
+        &[],
+        &[],
+        None,
+        context,
+    ));
     response
         .result
         .expect("tools/call should return a JSON-RPC success envelope")
@@ -83,7 +93,17 @@ fn config_tools_are_listed_before_generic_kit_fallback() {
         method: "tools/list".to_string(),
         params: json!({}),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, None);
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    let response = runtime.block_on(handle_request_with_runtime_context(
+        request,
+        &[],
+        &[],
+        None,
+        None,
+    ));
     let tools = response.result.unwrap()["tools"]
         .as_array()
         .unwrap()

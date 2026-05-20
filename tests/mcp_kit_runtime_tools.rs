@@ -40,7 +40,18 @@ fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) 
             "arguments": arguments,
         }),
     };
-    handle_request_with_runtime_context(request, &[], &[], None, context)
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    let response = runtime.block_on(handle_request_with_runtime_context(
+        request,
+        &[],
+        &[],
+        None,
+        context,
+    ));
+    response
         .result
         .expect("tools/call should return a JSON-RPC success envelope")
 }
