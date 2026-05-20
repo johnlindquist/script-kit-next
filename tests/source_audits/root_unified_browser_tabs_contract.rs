@@ -18,16 +18,22 @@ fn root_unified_browser_tabs_config_is_default_enabled_and_bounded() {
 fn root_unified_browser_tabs_search_uses_cached_metadata_only_snapshot() {
     let browser_tabs = include_str!("../../src/browser_tabs.rs");
     let root_search_fn = browser_tabs
-        .split("pub(crate) fn search_root_browser_tabs_meta(")
+        .split("fn search_root_browser_tabs_internal(")
         .nth(1)
-        .and_then(|rest| rest.split("pub(crate) fn focus_root_browser_tab(").next())
-        .expect("search_root_browser_tabs_meta should exist before focus helper");
+        .and_then(|rest| {
+            rest.split("#[allow(dead_code)]\nfn cached_root_browser_tabs_snapshot")
+                .next()
+        })
+        .expect("search_root_browser_tabs_internal should exist before snapshot helper");
 
     assert!(browser_tabs.contains("pub(crate) struct RootBrowserTabsSectionOptions"));
     assert!(browser_tabs.contains("pub(crate) struct RootBrowserTabSearchHit"));
     assert!(browser_tabs.contains("root_browser_tabs_query_is_eligible("));
     assert!(browser_tabs.contains("static ROOT_BROWSER_TAB_SNAPSHOT"));
-    assert!(root_search_fn.contains("ensure_root_browser_tabs_refresh("));
+    assert!(browser_tabs.contains("fn ensure_root_browser_tabs_refresh("));
+    assert!(browser_tabs.contains("ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE"));
+    assert!(browser_tabs.contains("ROOT_BROWSER_TABS_FAILURE_BACKOFF_MAX"));
+    assert!(browser_tabs.contains("cached_root_browser_tabs_snapshot(options.cache_ttl_ms)"));
     assert!(root_search_fn.contains("cached_root_browser_tabs_snapshot(options.cache_ttl_ms)"));
     assert!(root_search_fn.contains(".take(options.scan_limit)"));
     assert!(root_search_fn.contains(".take(options.max_results)"));
@@ -72,10 +78,10 @@ fn root_unified_browser_tabs_result_is_stable_non_bindable_and_tab_typed() {
     assert!(types.contains("SearchResult::BrowserTab(_) => None"));
     assert!(types.contains("SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone())"));
     assert!(types.contains("SearchResult::BrowserTab(_) => \"Switch to Tab\""));
-    assert!(types.contains("SearchResult::BrowserTab(_) => (\"Tab\", 0x06B6D4)"));
+    assert!(types.contains("SearchResult::BrowserTab(_) => (\"Tab\", \"panel-top\")"));
     assert!(types.contains("SearchResult::BrowserTab(_) => Some(\"Browser Tabs\")"));
     assert!(unified.contains("SearchResult::BrowserTab(_) => 7"));
-    assert!(unified.contains("SearchResult::Note(_) => 8"));
+    assert!(unified.contains("SearchResult::Note(_) => 9"));
 }
 
 #[test]
