@@ -4,8 +4,8 @@ use crate::{ActiveTheme, AxisExt, ElementExt, StyledExt, h_flex};
 use gpui::{
     Along, App, AppContext as _, Axis, Background, Bounds, Context, Corners, DefiniteLength,
     DragMoveEvent, Empty, Entity, EntityId, EventEmitter, Hsla, InteractiveElement, IntoElement,
-    MouseButton, MouseDownEvent, ParentElement as _, Pixels, Point, Render, RenderOnce,
-    StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
+    MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels, Point, Render,
+    RenderOnce, StatefulInteractiveElement as _, StyleRefinement, Styled, Window, div,
     prelude::FluentBuilder as _, px, relative,
 };
 
@@ -13,15 +13,6 @@ use gpui::{
 struct DragThumb((EntityId, bool));
 
 impl Render for DragThumb {
-    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        Empty
-    }
-}
-
-#[derive(Clone)]
-struct DragSlider(EntityId);
-
-impl Render for DragSlider {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
         Empty
     }
@@ -447,6 +438,7 @@ impl Slider {
         bar_color: Background,
         thumb_color: Hsla,
         radius: Corners<Pixels>,
+        drag_enabled: bool,
         window: &mut Window,
         cx: &mut App,
     ) -> impl gpui::IntoElement {
@@ -483,34 +475,36 @@ impl Slider {
                     .corner_radii(radius)
                     .bg(thumb_color),
             )
-            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                cx.stop_propagation();
-            })
-            .on_drag(DragThumb((entity_id, is_start)), |drag, _, _, cx| {
-                cx.stop_propagation();
-                cx.new(|_| drag.clone())
-            })
-            .on_drag_move(window.listener_for(
-                &self.state,
-                move |view, e: &DragMoveEvent<DragThumb>, window, cx| {
-                    match e.drag(cx) {
-                        DragThumb((id, is_start)) => {
-                            if *id != entity_id {
-                                return;
-                            }
+            .when(drag_enabled, |this| {
+                this.on_mouse_down(MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                })
+                .on_drag(DragThumb((entity_id, is_start)), |drag, _, _, cx| {
+                    cx.stop_propagation();
+                    cx.new(|_| drag.clone())
+                })
+                .on_drag_move(window.listener_for(
+                    &self.state,
+                    move |view, e: &DragMoveEvent<DragThumb>, window, cx| {
+                        match e.drag(cx) {
+                            DragThumb((id, is_start)) => {
+                                if *id != entity_id {
+                                    return;
+                                }
 
-                            // set value by mouse position
-                            view.update_value_by_position(
-                                axis,
-                                e.event.position,
-                                *is_start,
-                                window,
-                                cx,
-                            )
+                                // set value by mouse position
+                                view.update_value_by_position(
+                                    axis,
+                                    e.event.position,
+                                    *is_start,
+                                    window,
+                                    cx,
+                                )
+                            }
                         }
-                    }
-                },
-            ))
+                    },
+                ))
+            })
     }
 }
 
@@ -523,7 +517,6 @@ impl Styled for Slider {
 impl RenderOnce for Slider {
     fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
         let axis = self.axis;
-        let entity_id = self.state.entity_id();
         let state = self.state.read(cx);
         let is_range = state.value().is_range();
         let percentage = state.percentage.clone();
@@ -617,29 +610,23 @@ impl RenderOnce for Slider {
                                 },
                             ),
                         )
-                    })
-                    .when(!self.disabled && !is_range, |this| {
-                        this.on_drag(DragSlider(entity_id), |drag, _, _, cx| {
-                            cx.stop_propagation();
-                            cx.new(|_| drag.clone())
-                        })
-                        .on_drag_move(window.listener_for(
+                        .on_mouse_move(window.listener_for(
                             &self.state,
-                            move |view, e: &DragMoveEvent<DragSlider>, window, cx| match e.drag(cx)
-                            {
-                                DragSlider(id) => {
-                                    if *id != entity_id {
-                                        return;
-                                    }
-
-                                    view.update_value_by_position(
-                                        axis,
-                                        e.event.position,
-                                        false,
-                                        window,
-                                        cx,
-                                    )
+                            move |state, event: &MouseMoveEvent, window, cx| {
+                                if event.pressed_button != Some(MouseButton::Left) {
+                                    state.handle_release(cx);
+                                    return;
                                 }
+                                if is_range || !state.is_dragging() {
+                                    return;
+                                }
+                                state.update_value_by_position(
+                                    axis,
+                                    event.position,
+                                    false,
+                                    window,
+                                    cx,
+                                );
                             },
                         ))
                     })
@@ -678,6 +665,7 @@ impl RenderOnce for Slider {
                                     bar_color,
                                     thumb_color,
                                     radius,
+                                    true,
                                     window,
                                     cx,
                                 ))
@@ -688,6 +676,7 @@ impl RenderOnce for Slider {
                                 bar_color,
                                 thumb_color,
                                 radius,
+                                is_range,
                                 window,
                                 cx,
                             ))
