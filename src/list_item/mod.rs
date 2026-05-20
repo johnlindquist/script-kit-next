@@ -56,13 +56,26 @@ fn looks_like_symbol_icon_hint(icon_hint: &str) -> bool {
 
 /// Resolve an icon hint to an on-disk SVG path for list-item rendering.
 fn resolve_svg_icon_path(name: &str) -> String {
-    if let Some(icon_name) = icon_name_from_str(name) {
+    let trimmed = name.trim();
+    if trimmed.ends_with(".svg") {
+        let explicit_path = std::path::Path::new(trimmed);
+        let candidate = if explicit_path.is_absolute() {
+            explicit_path.to_path_buf()
+        } else {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(explicit_path)
+        };
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+
+    if let Some(icon_name) = icon_name_from_str(trimmed) {
         icon_name.external_path().to_string()
     } else {
         let lucide_path = format!(
             "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
             env!("CARGO_MANIFEST_DIR"),
-            name
+            trimmed
         );
         if std::path::Path::new(&lucide_path).exists() {
             lucide_path
@@ -153,6 +166,12 @@ pub fn effective_list_item_height() -> f32 {
 #[inline]
 pub fn effective_section_header_height() -> f32 {
     resolved_list_item_metrics().section_header_height
+}
+
+#[inline]
+pub fn effective_first_section_header_height() -> f32 {
+    let metrics = resolved_list_item_metrics();
+    metrics.section_header_height - (metrics.section_padding_top / 2.0)
 }
 
 #[inline]
@@ -653,6 +672,106 @@ pub fn row_type_accessory_rgba(colors: &ListItemColors, selected: bool) -> u32 {
         colors.alpha_icon
     };
     (colors.accent_selected << 8) | alpha
+}
+
+/// Theme-consistent empty state component
+pub struct EmptyState {
+    icon: Option<IconName>,
+    message: String,
+    hint: Option<String>,
+    tips: Option<String>,
+    text_color: u32,
+    font_family: String,
+}
+
+impl EmptyState {
+    pub fn new(
+        message: impl Into<String>,
+        text_color: u32,
+        font_family: impl Into<String>,
+    ) -> Self {
+        Self {
+            icon: None,
+            message: message.into(),
+            hint: None,
+            tips: None,
+            text_color,
+            font_family: font_family.into(),
+        }
+    }
+
+    pub fn icon(mut self, icon: IconName) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    pub fn hint(mut self, hint: impl Into<String>) -> Self {
+        self.hint = Some(hint.into());
+        self
+    }
+
+    pub fn tips(mut self, tips: impl Into<String>) -> Self {
+        self.tips = Some(tips.into());
+        self
+    }
+
+    pub fn render(self) -> AnyElement {
+        let mut element = div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(EMPTY_STATE_GAP))
+            .font_family(self.font_family);
+
+        if let Some(icon) = self.icon {
+            element = element.child(
+                svg()
+                    .external_path(icon.external_path())
+                    .size(px(EMPTY_STATE_ICON_SIZE))
+                    .text_color(rgba((self.text_color << 8) | ALPHA_EMPTY_ICON)),
+            );
+        }
+
+        element = element.child(
+            div()
+                .text_color(rgba((self.text_color << 8) | ALPHA_EMPTY_MESSAGE))
+                .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
+                .font_weight(FontWeight::MEDIUM)
+                .child(self.message),
+        );
+
+        if let Some(hint) = self.hint {
+            element = element.child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((self.text_color << 8) | ALPHA_EMPTY_HINT))
+                    .child(hint),
+            );
+        }
+
+        if let Some(tips) = self.tips {
+            element = element.child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((self.text_color << 8) | ALPHA_EMPTY_TIPS))
+                    .pt(px(EMPTY_STATE_TIPS_MARGIN_TOP))
+                    .child(tips),
+            );
+        }
+
+        element.into_any_element()
+    }
+}
+
+impl IntoElement for EmptyState {
+    type Element = AnyElement;
+
+    fn into_element(self) -> Self::Element {
+        self.render()
+    }
 }
 
 #[cfg(test)]
@@ -1862,7 +1981,7 @@ pub fn render_section_header(
     label: &str,
     icon: Option<&str>,
     colors: ListItemColors,
-    _is_first: bool,
+    is_first: bool,
 ) -> impl IntoElement {
     let metrics = resolved_list_item_metrics();
     // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
@@ -1917,12 +2036,21 @@ pub fn render_section_header(
         );
     }
 
+    let (header_height, padding_top) = if is_first {
+        // First section header has no preceding items, so we pull it up closer to the input field
+        // by reducing the top padding and height to a halfway point between normal (32px) and tight (20px)
+        let half_padding = metrics.section_padding_top / 2.0;
+        (metrics.section_header_height - half_padding, half_padding)
+    } else {
+        (metrics.section_header_height, metrics.section_padding_top)
+    };
+
     // Clean section headers — no background tint for a calmer list appearance
     let header = div()
         .w_full()
-        .h(px(metrics.section_header_height))
+        .h(px(header_height))
         .px(px(SECTION_PADDING_X))
-        .pt(px(metrics.section_padding_top))
+        .pt(px(padding_top))
         .pb(px(SECTION_PADDING_BOTTOM))
         .flex()
         .flex_col()

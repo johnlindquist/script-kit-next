@@ -254,15 +254,11 @@ fn load_file_search_thumbnail_preview(
 }
 
 fn render_file_search_loading_skeleton(
+    list_colors: &crate::list_item::ListItemColors,
     ui_border: u32,
-    accent_color: u32,
     text_dimmed: u32,
     compact: bool,
 ) -> AnyElement {
-    let rail_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-        accent_color,
-        crate::theme::opacity::OPACITY_CARD_BG,
-    ));
     let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
         ui_border,
         crate::theme::opacity::OPACITY_GHOST,
@@ -299,16 +295,12 @@ fn render_file_search_loading_skeleton(
                     .px(px(12.0))
                     .gap(px(12.0))
                     .when(ix == 0, |row| {
-                        row.bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-                            ui_border,
-                            crate::theme::opacity::OPACITY_GHOST_SOFT,
-                        )))
+                        row.bg(rgba(crate::list_item::row_selected_background_rgba(list_colors)))
                     })
-                    .child(div().w(px(3.0)).h(px(28.0)).rounded(px(2.0)).bg(rail_bg))
                     .child(
                         div()
-                            .w(px(26.0))
-                            .h(px(26.0))
+                            .w(px(32.0))
+                            .h(px(32.0))
                             .rounded(px(6.0))
                             .border_1()
                             .border_color(skeleton_strong)
@@ -320,13 +312,13 @@ fn render_file_search_loading_skeleton(
                             .min_w(px(0.0))
                             .flex()
                             .flex_col()
-                            .gap(px(7.0))
+                            .gap(px(2.0))
                             .child(
                                 div()
                                     .w(px(title_w))
                                     .max_w_full()
-                                    .h(px(11.0))
-                                    .rounded(px(5.5))
+                                    .h(px(10.0))
+                                    .rounded(px(5.0))
                                     .bg(skeleton_strong),
                             )
                             .child(
@@ -344,7 +336,7 @@ fn render_file_search_loading_skeleton(
                             .flex()
                             .flex_col()
                             .items_end()
-                            .gap(px(7.0))
+                            .gap(px(2.0))
                             .child(
                                 div()
                                     .w(px(size_w))
@@ -367,6 +359,7 @@ fn render_file_search_loading_skeleton(
         ))
         .into_any_element()
 }
+
 
 impl ScriptListApp {
     fn ensure_file_search_preview_thumbnail(
@@ -517,6 +510,12 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let _design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font().to_string();
         let is_default_design = self.current_design == DesignVariant::Default;
 
         let _opacity = self.theme.get_opacity();
@@ -853,16 +852,17 @@ impl ScriptListApp {
         let list_element = if is_loading && filtered_len == 0 {
             // Loading with no results yet - show static skeleton rows.
             // Render 6 skeleton rows so the list pane stays stable while choices load.
-            render_file_search_loading_skeleton(ui_border, accent_color, text_dimmed, is_mini)
+            render_file_search_loading_skeleton(&list_colors, ui_border, text_dimmed, is_mini)
         } else if filtered_len == 0 {
             // No results and not loading - show empty state message
-            div()
-                .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgb(text_dimmed))
-                .child(FileSearchEmptyState::from_query(query).title())
-                .into_any_element()
+            let state = FileSearchEmptyState::from_query(query);
+            let icon = match state {
+                FileSearchEmptyState::TypeToSearch => crate::designs::icon_variations::IconName::MagnifyingGlass,
+                FileSearchEmptyState::NoFilesFound => crate::designs::icon_variations::IconName::Folder,
+            };
+            crate::list_item::EmptyState::new(state.title(), empty_text_color, &empty_font_family)
+                .icon(icon)
+                .into_element()
         } else {
             uniform_list(
                 "file-search-list",

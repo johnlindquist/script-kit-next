@@ -13,20 +13,26 @@ pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
 }
 
 #[inline]
-fn script_list_row_height(item: &GroupedListItem) -> f32 {
+fn script_list_row_height(item: &GroupedListItem, ix: usize) -> f32 {
     match item {
-        GroupedListItem::SectionHeader(..) => crate::list_item::effective_section_header_height(),
+        GroupedListItem::SectionHeader(..) => {
+            if ix == 0 {
+                crate::list_item::effective_first_section_header_height()
+            } else {
+                crate::list_item::effective_section_header_height()
+            }
+        }
         GroupedListItem::Status(..) => crate::list_item::effective_source_status_row_height(),
         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
     }
 }
 
 pub(crate) fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
-    items.iter().map(script_list_row_height).sum()
+    items.iter().enumerate().map(|(ix, item)| script_list_row_height(item, ix)).sum()
 }
 
 fn script_list_pixel_top_for_item(items: &[GroupedListItem], ix: usize) -> f32 {
-    items.iter().take(ix).map(script_list_row_height).sum()
+    items.iter().take(ix).enumerate().map(|(item_ix, item)| script_list_row_height(item, item_ix)).sum()
 }
 
 fn script_list_pixel_top_for_offset(items: &[GroupedListItem], offset: gpui::ListOffset) -> f32 {
@@ -48,7 +54,7 @@ fn script_list_offset_for_pixel_top(
 
     let mut accumulated = 0.0_f32;
     for (ix, item) in items.iter().enumerate() {
-        let item_height = script_list_row_height(item);
+        let item_height = script_list_row_height(item, ix);
         let item_bottom = accumulated + item_height;
         if scroll_top_px < item_bottom {
             return gpui::ListOffset {
@@ -82,7 +88,7 @@ fn footer_safe_scroll_offset_for_item(
     let max_scroll_top = (script_list_content_height(items) - safe_viewport_height).max(0.0);
     let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset);
     let target_top = script_list_pixel_top_for_item(items, target_ix);
-    let target_bottom = target_top + script_list_row_height(&items[target_ix]);
+    let target_bottom = target_top + script_list_row_height(&items[target_ix], target_ix);
     // doc-anchor-removed: [[design#Footer-safe list reveal]]
     let safe_bottom = current_scroll_top + safe_viewport_height;
 
@@ -118,7 +124,7 @@ impl ScriptListApp {
                 .get(self.selected_index)
                 .map(|_| script_list_pixel_top_for_item(&grouped_items, self.selected_index));
             let selected_row_bottom = grouped_items.get(self.selected_index).map(|item| {
-                selected_row_top.unwrap_or(0.0) + script_list_row_height(item)
+                selected_row_top.unwrap_or(0.0) + script_list_row_height(item, self.selected_index)
             });
             (
                 content_height,

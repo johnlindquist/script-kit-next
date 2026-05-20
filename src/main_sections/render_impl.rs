@@ -730,7 +730,7 @@ impl Render for ScriptListApp {
         // Get vibrancy background - None when vibrancy enabled (let Root handle blur)
         let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&self.theme);
         let theme_background_gradients =
-            crate::ui_foundation::get_theme_background_gradients(&self.theme);
+            crate::ui_foundation::theme_background_gradient_layers("bg-layer", &self.theme);
 
         // Capture mouse_cursor_hidden for use in div builder
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
@@ -922,14 +922,7 @@ impl Render for ScriptListApp {
                     .when_some(vibrancy_bg, |d, bg| d.bg(bg))
                     // A user-authored gradient is explicit theme content, so it
                     // renders even when vibrancy is enabled.
-                    // We render all layers as overlapping absolute divs.
-                    .children(theme_background_gradients.into_iter().enumerate().map(|(i, bg)| {
-                        div()
-                            .id(ElementId::NamedInteger("bg-layer".into(), i as u64))
-                            .absolute()
-                            .inset_0()
-                            .bg(bg)
-                    }))
+                    .children(theme_background_gradients)
                     // Visual styling - rounded corners, subtle border, clip content
                     .rounded(px(12.))
                     .border_1()
