@@ -34,6 +34,30 @@ impl ScriptListApp {
         theme::accent_color_name(color)
     }
 
+    pub(crate) fn theme_font_family(&self) -> String {
+        crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design)
+            .primary_font()
+            .to_string()
+    }
+
+    pub(crate) fn theme_font_size_xl(&self) -> f32 {
+        crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design)
+            .font_size_xl()
+    }
+
+    pub(crate) fn render_search_input(&self) -> gpui_component::input::Input {
+        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+        gpui_component::input::Input::new(&self.gpui_input_state)
+            .w_full()
+            .h(gpui::px(input_height))
+            .px(gpui::px(0.))
+            .py(gpui::px(0.))
+            .with_size(gpui_component::Size::Size(gpui::px(self.theme_font_size_xl())))
+            .appearance(false)
+            .bordered(false)
+            .focus_bordered(false)
+    }
+
     /// Emit a structured scroll log line for builtin views.
     #[allow(clippy::too_many_arguments)]
     fn log_builtin_scroll_event(

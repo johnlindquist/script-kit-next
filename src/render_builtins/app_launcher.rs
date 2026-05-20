@@ -596,7 +596,7 @@ impl ScriptListApp {
             footer,
         )
         .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
+        .font_family(self.theme_font_family())
         .key_context("app_launcher")
         .track_focus(&self.focus_handle)
         .on_key_down(handle_key)

@@ -293,8 +293,6 @@ impl ScriptListApp {
                 .into_any_element(),
         };
 
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-
         let header_element = div()
             .flex_1()
             .flex()
@@ -303,15 +301,7 @@ impl ScriptListApp {
             .gap_3()
             .child(
                 div().flex_1().flex().flex_row().items_center().child(
-                    Input::new(&self.gpui_input_state)
-                        .w_full()
-                        .h(px(input_height))
-                        .px(px(0.))
-                        .py(px(0.))
-                        .with_size(Size::Size(px(design_typography.font_size_xl)))
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false),
+                    self.render_search_input()
                 ),
             )
             .child(div().text_sm().text_color(text_secondary).child(format!(
@@ -345,7 +335,7 @@ impl ScriptListApp {
             footer,
         )
         .text_color(text_primary)
-        .font_family(design_typography.font_family)
+        .font_family(self.theme_font_family())
         .key_context("script_template_catalog")
         .track_focus(&self.focus_handle)
         .on_key_down(handle_key)

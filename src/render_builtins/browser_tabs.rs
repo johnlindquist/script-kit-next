@@ -350,8 +350,6 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
-
         // Build layout following the process_manager / favorites pattern:
         // outer div with shared GPUI Input in header, divider, scrollable list, footer.
         div()
@@ -361,7 +359,7 @@ impl ScriptListApp {
             .h_full()
             .rounded(px(design_visual.radius_lg))
             .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
+            .font_family(self.theme_font_family())
             .key_context("browser_tabs")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -378,15 +376,7 @@ impl ScriptListApp {
                     .gap_3()
                     .child(
                         div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(input_height))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
+                            self.render_search_input()
                         ),
                     )
                     .child(
@@ -538,13 +528,24 @@ fn browser_tab_icon_for_render(
 
 #[cfg(test)]
 mod browser_tabs_chrome_tests {
+    fn production_source() -> &'static str {
+        include_str!("browser_tabs.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source should exist")
+    }
+
     #[test]
     fn browser_tabs_uses_shared_input_and_chrome() {
-        let source = include_str!("browser_tabs.rs");
+        let source = production_source();
 
         assert!(
-            source.contains("Input::new(&self.gpui_input_state)"),
+            source.contains("self.render_search_input()"),
             "browser tabs must use the shared GPUI input"
+        );
+        assert!(
+            !source.contains(&["Input::new(&self.", "gpui_input_state)"].concat()),
+            "browser tabs should delegate GPUI input construction to render_search_input"
         );
         assert!(
             source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
