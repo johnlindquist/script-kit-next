@@ -296,8 +296,14 @@ fn theme_chooser_slider_drag_preview_does_not_resync_native_vibrancy() {
             && !slider_change.contains("self.mutate_theme_chooser_theme("),
         "Theme Designer slider drags must not route through native-sync preview helpers"
     );
+    let slider_preview_compact = slider_preview
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        slider_preview.contains("false,\n            mode.notify_parent(),\n            cx,"),
+        slider_preview_compact.contains(
+            "self.apply_theme_chooser_theme_preview(next_theme, reason, false, mode.notify_parent(), cx);"
+        ),
         "live slider previews should skip native vibrancy reconfiguration"
     );
     assert!(
