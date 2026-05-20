@@ -14,6 +14,9 @@ pub enum ElementType {
     Choice,
     Input,
     Button,
+    Slider,
+    ColorPicker,
+    Toggle,
     Panel,
     List,
     /// Unknown element type (forward compatibility fallback)

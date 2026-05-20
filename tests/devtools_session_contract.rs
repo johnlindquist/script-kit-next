@@ -146,6 +146,34 @@ fn sessions_honor_dynamic_binary_paths() {
 }
 
 #[test]
+fn isolated_session_launch_detaches_from_launcher_hangup() {
+    assert!(
+        SESSION_SH.contains("trap \"\" HUP"),
+        "session.sh must keep the input forwarder alive when the launcher shell exits"
+    );
+    assert!(
+        SESSION_SH.contains("exec 3<>\"$input_fifo\""),
+        "session.sh must keep the input FIFO open across one-shot sender disconnects"
+    );
+    assert!(
+        SESSION_SH.contains("timeout 2 bash -c"),
+        "session.sh startup keepalive must be bounded so a forwarder race cannot hang session start"
+    );
+    assert!(
+        SESSION_SH.contains("os.execvp(sys.argv[1], sys.argv[1:])"),
+        "session.sh must detach and exec the input forwarder so it outlives the launcher shell"
+    );
+    assert!(
+        SESSION_SH.contains("os.setsid()"),
+        "session.sh must put isolated app processes in a new session so the app's SIGHUP handler does not fire when the launcher shell exits"
+    );
+    assert!(
+        SESSION_SH.contains("os.execvpe(sys.argv[1], sys.argv[1:], os.environ)"),
+        "session.sh must exec the configured binary after detaching while preserving the launch environment"
+    );
+}
+
+#[test]
 fn devtools_session_uses_global_session_root_and_staged_binary() {
     assert!(
         DEVTOOLS_SESSION_SH.contains("SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions"),

@@ -51,11 +51,12 @@
             .collect();
 
         // Build opacity preset buttons (clickable)
+        let current_opacity_index = Self::find_opacity_preset_index(current_opacity_main);
         let opacity_buttons: Vec<gpui::AnyElement> = Self::OPACITY_PRESETS
             .iter()
             .enumerate()
             .map(|(i, &(value, label))| {
-                let is_current = (value - current_opacity_main).abs() < 0.05;
+                let is_current = i == current_opacity_index;
                 let click_entity = entity_handle_for_customize.clone();
                 div()
                     .id(ElementId::NamedInteger("opacity-btn".into(), i as u64))

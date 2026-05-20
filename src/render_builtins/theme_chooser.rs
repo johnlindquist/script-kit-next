@@ -182,6 +182,14 @@ impl ScriptListApp {
         u32::from_str_radix(&trimmed[..6], 16).ok()
     }
 
+    fn parse_theme_chooser_hex_input(value: &str) -> Option<u32> {
+        let trimmed = value.trim().trim_start_matches('#');
+        if trimmed.len() != 6 {
+            return None;
+        }
+        u32::from_str_radix(trimmed, 16).ok()
+    }
+
     fn theme_chooser_featured_colors() -> Vec<gpui::Hsla> {
         Self::ACCENT_PALETTE
             .iter()
@@ -544,6 +552,229 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    pub(crate) fn set_theme_chooser_control_from_devtools(
+        &mut self,
+        control: &str,
+        value: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        let control = control
+            .strip_prefix("control:theme-chooser:")
+            .unwrap_or(control);
+        let float_value = || {
+            value
+                .trim()
+                .trim_end_matches('%')
+                .parse::<f32>()
+                .map(|parsed| if value.trim().ends_with('%') { parsed / 100.0 } else { parsed })
+                .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))
+        };
+        let bool_value = || match value.trim().to_ascii_lowercase().as_str() {
+            "true" | "on" | "1" | "yes" => Ok(true),
+            "false" | "off" | "0" | "no" => Ok(false),
+            _ => Err(anyhow::anyhow!("invalid boolean value '{value}'")),
+        };
+        let hex_value = || {
+            Self::parse_theme_chooser_hex_input(value)
+                .ok_or_else(|| anyhow::anyhow!("invalid #RRGGBB value '{value}'"))
+        };
+        let ensure_layer = |index: usize| {
+            let layer_count = self
+                .theme
+                .background_gradient
+                .as_ref()
+                .map(|gradient| gradient.layers.len())
+                .unwrap_or(0);
+            if index >= layer_count {
+                Err(anyhow::anyhow!(
+                    "gradient layer {} does not exist",
+                    index + 1
+                ))
+            } else {
+                Ok(())
+            }
+        };
+
+        match control {
+            "surface-opacity" => {
+                self.apply_theme_chooser_slider_change(
+                    ThemeChooserSliderBinding::SurfaceOpacity,
+                    SliderValue::Single(float_value()?),
+                    cx,
+                );
+            }
+            "secondary-text-opacity" | "typography-hint-opacity" => {
+                self.apply_theme_chooser_slider_change(
+                    ThemeChooserSliderBinding::SecondaryTextOpacity,
+                    SliderValue::Single(float_value()?),
+                    cx,
+                );
+            }
+            "focused-background-opacity" | "focused-row-opacity" => {
+                self.apply_theme_chooser_slider_change(
+                    ThemeChooserSliderBinding::FocusedBackgroundOpacity,
+                    SliderValue::Single(float_value()?),
+                    cx,
+                );
+            }
+            "ui-font-size" => {
+                self.apply_theme_chooser_slider_change(
+                    ThemeChooserSliderBinding::UiFontSize,
+                    SliderValue::Single(float_value()?),
+                    cx,
+                );
+            }
+            "accent-color" => {
+                let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
+                self.apply_theme_chooser_color_change(ThemeChooserColorBinding::Accent, color, cx);
+            }
+            "vibrancy-enabled" => {
+                let enabled = bool_value()?;
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_vibrancy_enabled",
+                    cx,
+                    |theme| {
+                        if let Some(vibrancy) = theme.vibrancy.as_mut() {
+                            vibrancy.enabled = enabled;
+                        } else {
+                            theme.vibrancy = Some(crate::theme::types::VibrancySettings {
+                                enabled,
+                                ..Default::default()
+                            });
+                        }
+                    },
+                );
+            }
+            "gradient-enabled" => {
+                let enabled = bool_value()?;
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_gradient_enabled",
+                    cx,
+                    |theme| {
+                        if let Some(gradient) = theme.background_gradient.as_mut() {
+                            gradient.enabled = enabled;
+                        } else {
+                            theme.background_gradient = Some(theme::BackgroundGradient {
+                                enabled,
+                                ..Default::default()
+                            });
+                        }
+                    },
+                );
+            }
+            "gradient-base-from" => {
+                let color = hex_value()?;
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_gradient_base_from",
+                    cx,
+                    |theme| {
+                        let gradient = theme
+                            .background_gradient
+                            .get_or_insert_with(theme::BackgroundGradient::default);
+                        gradient.from = color;
+                    },
+                );
+            }
+            "gradient-base-to" => {
+                let color = hex_value()?;
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_gradient_base_to",
+                    cx,
+                    |theme| {
+                        let gradient = theme
+                            .background_gradient
+                            .get_or_insert_with(theme::BackgroundGradient::default);
+                        gradient.to = color;
+                    },
+                );
+            }
+            "gradient-base-angle" => {
+                let angle = float_value()?.rem_euclid(360.0);
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_gradient_base_angle",
+                    cx,
+                    |theme| {
+                        let gradient = theme
+                            .background_gradient
+                            .get_or_insert_with(theme::BackgroundGradient::default);
+                        gradient.angle = angle;
+                    },
+                );
+            }
+            "gradient-base-opacity" => {
+                let opacity = float_value()?.clamp(0.0, 1.0);
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_devtools_gradient_base_opacity",
+                    cx,
+                    |theme| {
+                        let gradient = theme
+                            .background_gradient
+                            .get_or_insert_with(theme::BackgroundGradient::default);
+                        gradient.opacity = opacity;
+                    },
+                );
+            }
+            _ => {
+                if let Some(rest) = control.strip_prefix("gradient-layer-") {
+                    let Some((index_text, field)) = rest.split_once('-') else {
+                        return Err(anyhow::anyhow!("unknown theme control '{control}'"));
+                    };
+                    let layer_index = index_text
+                        .parse::<usize>()
+                        .map_err(|_| anyhow::anyhow!("invalid gradient layer in '{control}'"))?
+                        .checked_sub(1)
+                        .ok_or_else(|| anyhow::anyhow!("gradient layer indices are 1-based"))?;
+                    ensure_layer(layer_index)?;
+                    match field {
+                        "from" => {
+                            let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
+                            self.apply_theme_chooser_color_change(
+                                ThemeChooserColorBinding::GradientFrom {
+                                    layer_index: Some(layer_index),
+                                },
+                                color,
+                                cx,
+                            );
+                        }
+                        "to" => {
+                            let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
+                            self.apply_theme_chooser_color_change(
+                                ThemeChooserColorBinding::GradientTo {
+                                    layer_index: Some(layer_index),
+                                },
+                                color,
+                                cx,
+                            );
+                        }
+                        "angle" => {
+                            self.apply_theme_chooser_slider_change(
+                                ThemeChooserSliderBinding::GradientAngle {
+                                    layer_index: Some(layer_index),
+                                },
+                                SliderValue::Single(float_value()?),
+                                cx,
+                            );
+                        }
+                        "opacity" => {
+                            self.apply_theme_chooser_slider_change(
+                                ThemeChooserSliderBinding::GradientOpacity {
+                                    layer_index: Some(layer_index),
+                                },
+                                SliderValue::Single(float_value()?),
+                                cx,
+                            );
+                        }
+                        _ => return Err(anyhow::anyhow!("unknown theme control '{control}'")),
+                    }
+                } else {
+                    return Err(anyhow::anyhow!("unknown theme control '{control}'"));
+                }
+            }
+        }
+
+        Ok(format!("{control}={value}"))
     }
 
     fn sync_slider_entity_value(

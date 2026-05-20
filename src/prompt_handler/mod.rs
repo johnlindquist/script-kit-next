@@ -6329,9 +6329,9 @@ impl ScriptListApp {
                                         }
                                     }
                                 }
-                                protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
-                                    let semantic_id = semantic_id.clone();
-                                    let selected = this.update(cx, |_this, cx| {
+                            protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
+                                let semantic_id = semantic_id.clone();
+                                let selected = this.update(cx, |_this, cx| {
                                         if let Some(v) = crate::ai::acp::picker_popup::batch_select_mention_item_by_semantic_id(&semantic_id, cx) {
                                             return Some(v);
                                         }
@@ -6373,6 +6373,49 @@ impl ScriptListApp {
                                         Err(e) => {
                                             results.push(protocol::BatchResultEntry {
                                                 index, success: false, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::SetThemeControl { control, value } => {
+                                    let control = control.clone();
+                                    let value = value.clone();
+                                    let selected = this.update(cx, |_this, cx| {
+                                        if !matches!(_this.current_view, AppView::ThemeChooserView { .. }) {
+                                            return Err(anyhow::anyhow!(
+                                                "setThemeControl requires ThemeChooserView"
+                                            ));
+                                        }
+                                        _this.set_theme_chooser_control_from_devtools(&control, &value, cx)
+                                    });
+                                    match selected {
+                                        Ok(Ok(v)) => {
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_prompt_popup_set_theme_control",
+                                                control = %control,
+                                                value = %value,
+                                                "PromptPopup set_theme_control"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: true,
+                                                command: "setThemeControl".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: Some(v),
+                                                error: None,
+                                            });
+                                        }
+                                        Ok(Err(e)) | Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index,
+                                                success: false,
+                                                command: "setThemeControl".to_string(),
                                                 elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                                 value: None,
                                                 error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
@@ -6657,6 +6700,47 @@ impl ScriptListApp {
                                             index,
                                             success: false,
                                             command: "selectBySemanticId".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
+                            protocol::BatchCommand::SetThemeControl { control, value } => {
+                                let control = control.clone();
+                                let value = value.clone();
+                                match this.update(cx, |this, cx| {
+                                    if !matches!(this.current_view, AppView::ThemeChooserView { .. }) {
+                                        return Err(anyhow::anyhow!(
+                                            "setThemeControl requires ThemeChooserView"
+                                        ));
+                                    }
+                                    this.set_theme_chooser_control_from_devtools(
+                                        &control,
+                                        &value,
+                                        cx,
+                                    )
+                                }) {
+                                    Ok(Ok(v)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "setThemeControl", control = %control, value = %value, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "setThemeControl".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(v),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "setThemeControl", control = %control, value = %value, error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "setThemeControl".to_string(),
                                             elapsed: Some(cmd_start.elapsed().as_millis() as u64),
                                             value: None,
                                             error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
@@ -9133,6 +9217,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
         protocol::BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId".to_string(),
+        protocol::BatchCommand::SetThemeControl { .. } => "setThemeControl".to_string(),
         protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
         protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
     }

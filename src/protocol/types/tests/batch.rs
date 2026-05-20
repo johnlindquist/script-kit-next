@@ -87,6 +87,21 @@ fn batch_command_select_by_semantic_id_defaults_submit_false() {
 }
 
 #[test]
+fn batch_command_set_theme_control_round_trips() {
+    let cmd = BatchCommand::SetThemeControl {
+        control: "surface-opacity".to_string(),
+        value: "0.5".to_string(),
+    };
+    let json = serde_json::to_value(&cmd).expect("serialize setThemeControl");
+    assert_eq!(json["type"], "setThemeControl");
+    assert_eq!(json["control"], "surface-opacity");
+    assert_eq!(json["value"], "0.5");
+
+    let back: BatchCommand = serde_json::from_value(json).expect("deserialize setThemeControl");
+    assert_eq!(back, cmd);
+}
+
+#[test]
 fn batch_command_filter_and_select_round_trips() {
     let cmd = BatchCommand::FilterAndSelect {
         filter: "app".to_string(),

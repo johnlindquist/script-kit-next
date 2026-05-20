@@ -277,6 +277,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
         BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId",
+        BatchCommand::SetThemeControl { .. } => "setThemeControl",
         BatchCommand::FilterAndSelect { .. } => "filterAndSelect",
         BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit",
     }
@@ -820,10 +821,14 @@ pub fn execute_batch<P: TransactionStateProvider>(
             BatchCommand::ForceSubmit { .. }
             | BatchCommand::OpenActions
             | BatchCommand::TogglePreview
+            | BatchCommand::SetThemeControl { .. }
             | BatchCommand::FilterAndSelect { .. }
             | BatchCommand::TypeAndSubmit { .. } => {
                 // These compound commands are not yet wired to the executor.
                 // Record as unsupported so the caller gets a clear signal.
+                // `setThemeControl` is an app-owned DevTools runtime command
+                // handled by ScriptListApp's batch dispatch because it mutates
+                // live ThemeChooser GPUI state.
                 let error = TransactionError {
                     code: TransactionErrorCode::UnsupportedCommand,
                     message: format!(
