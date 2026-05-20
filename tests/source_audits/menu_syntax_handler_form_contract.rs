@@ -105,9 +105,15 @@ fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
         "handler form focus should use quiet border/background tokens and only show missing required state"
     );
     assert!(
-        field_renderer.contains(".when(field.focused")
-            && field_renderer.contains("theme.colors.text.primary << 8"),
-        "the focused handler field should render a quiet text cursor so Tab focus is visible in the form"
+        field_renderer.contains("gpui_component::input::Input::new(&input)")
+            && field_renderer.contains(".focus_bordered(false)")
+            && field_renderer.contains("placeholder_color"),
+        "handler fields should render real inputs with quiet focus chrome and dim placeholder fallback text"
+    );
+    assert!(
+        !field_renderer.contains(".when(field.focused")
+            && !field_renderer.contains(".h(px(18.0))\n                            .bg("),
+        "handler fields must not draw fake focused-field cursors"
     );
     assert!(
         !render[field_start..].contains("Tab moves fields"),
@@ -142,10 +148,17 @@ fn stdin_can_edit_menu_syntax_form_fields_for_runtime_proof() {
 fn tab_routes_to_handler_form_before_tab_ai_paths() {
     let form_owner = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
-        form_owner.contains("if !self.menu_syntax_form_input_active")
-            && form_owner.contains("self.menu_syntax_form_focused_index = if delta < 0 { field_count - 1 } else { 0 }")
-            && form_owner.contains("handle_menu_syntax_form_key_input"),
-        "first Tab must activate the first handler field instead of advancing past it, and active fields must accept text input"
+        form_owner.contains("gpui_component::input::InputState::new(window, cx)")
+            && form_owner.contains(".tab_navigation(true)")
+            && form_owner.contains("state.focus(window, cx)")
+            && form_owner.contains("actual_menu_syntax_form_focused_index"),
+        "Tab routing must create real focusable handler field inputs and move actual focus handles"
+    );
+    assert!(
+        form_owner.contains("focus_menu_syntax_main_input")
+            && form_owner.contains("self.gpui_input_state")
+            && form_owner.contains("state.focus(window, cx)"),
+        "handler form traversal must be able to return actual focus to the main input"
     );
 
     let preflight = read("src/main_window_preflight/build.rs");

@@ -1,6 +1,180 @@
 use super::*;
 
 impl ScriptListApp {
+    fn menu_syntax_form_signature(form: &crate::menu_syntax::MenuSyntaxFormSnapshot) -> String {
+        let mut signature = format!("{}:", form.target);
+        for field in &form.fields {
+            signature.push_str(&field.id);
+            signature.push('|');
+        }
+        signature
+    }
+
+    pub(crate) fn sync_menu_syntax_form_inputs_from_filter(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.menu_syntax_capture_form_owns_input() {
+            self.clear_menu_syntax_form_inputs();
+            return;
+        }
+
+        let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
+            self.clear_menu_syntax_form_inputs();
+            return;
+        };
+        let Some(form) = snapshot.form else {
+            self.clear_menu_syntax_form_inputs();
+            return;
+        };
+        self.ensure_menu_syntax_form_inputs(&form, window, cx);
+    }
+
+    fn clear_menu_syntax_form_inputs(&mut self) {
+        self.menu_syntax_form_signature = None;
+        self.menu_syntax_form_inputs.clear();
+        self.menu_syntax_form_input_subscriptions.clear();
+        self.menu_syntax_form_syncing_from_input = false;
+    }
+
+    fn menu_syntax_form_input_for(
+        &self,
+        field_id: &str,
+    ) -> Option<Entity<gpui_component::input::InputState>> {
+        self.menu_syntax_form_inputs
+            .iter()
+            .find_map(|(id, input)| (id == field_id).then(|| input.clone()))
+    }
+
+    fn new_menu_syntax_form_input(
+        placeholder: String,
+        value: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<gpui_component::input::InputState> {
+        cx.new(|cx| {
+            gpui_component::input::InputState::new(window, cx)
+                .tab_navigation(true)
+                .placeholder(placeholder)
+                .default_value(value)
+        })
+    }
+
+    fn ensure_menu_syntax_form_inputs(
+        &mut self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let signature = Self::menu_syntax_form_signature(form);
+        if self.menu_syntax_form_signature.as_deref() != Some(signature.as_str()) {
+            self.menu_syntax_form_signature = Some(signature);
+            self.menu_syntax_form_inputs.clear();
+            self.menu_syntax_form_input_subscriptions.clear();
+            for field in &form.fields {
+                let input = Self::new_menu_syntax_form_input(
+                    field.placeholder.clone(),
+                    field.value.clone(),
+                    window,
+                    cx,
+                );
+                let field_id = field.id.clone();
+                let subscription = cx.subscribe_in(&input, window, {
+                    let field_id = field_id.clone();
+                    move |this,
+                          input,
+                          event: &gpui_component::input::InputEvent,
+                          window,
+                          cx| {
+                        if !matches!(event, gpui_component::input::InputEvent::Change) {
+                            return;
+                        }
+                        if this.menu_syntax_form_syncing_from_input {
+                            return;
+                        }
+                        let value = input.read(cx).value().to_string();
+                        this.menu_syntax_form_syncing_from_input = true;
+                        let _ =
+                            this.update_menu_syntax_form_field(Some(&field_id), value, window, cx);
+                        this.menu_syntax_form_syncing_from_input = false;
+                    }
+                });
+                self.menu_syntax_form_inputs.push((field_id, input));
+                self.menu_syntax_form_input_subscriptions.push(subscription);
+            }
+        }
+
+        for field in &form.fields {
+            let Some(input) = self.menu_syntax_form_input_for(&field.id) else {
+                continue;
+            };
+            let current = input.read(cx).value().to_string();
+            if current == field.value {
+                continue;
+            }
+            let focused = input.read(cx).focus_handle(cx).is_focused(window);
+            if focused {
+                continue;
+            }
+            self.menu_syntax_form_syncing_from_input = true;
+            input.update(cx, |state, cx| {
+                state.set_value(field.value.clone(), window, cx);
+                state.set_placeholder(field.placeholder.clone(), window, cx);
+            });
+            self.menu_syntax_form_syncing_from_input = false;
+        }
+    }
+
+    fn actual_menu_syntax_form_focused_index(
+        &self,
+        window: &Window,
+        cx: &App,
+    ) -> Option<usize> {
+        self.menu_syntax_form_inputs
+            .iter()
+            .enumerate()
+            .find_map(|(index, (_, input))| {
+                input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+                    .then_some(index)
+            })
+    }
+
+    fn focus_menu_syntax_form_input_at(
+        &mut self,
+        index: usize,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((field_id, input)) = self.menu_syntax_form_inputs.get(index).cloned() else {
+            return;
+        };
+        self.menu_syntax_form_input_active = true;
+        self.menu_syntax_form_focused_index = index;
+        if let Some(field) = form.fields.get(index) {
+            self.menu_syntax_form_draft_field_id = Some(field.id.clone());
+            self.menu_syntax_form_draft_value = field.value.clone();
+        } else {
+            self.menu_syntax_form_draft_field_id = Some(field_id);
+            self.menu_syntax_form_draft_value.clear();
+        }
+        input.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    fn focus_menu_syntax_main_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.menu_syntax_form_input_active = false;
+        self.menu_syntax_form_draft_field_id = None;
+        self.menu_syntax_form_draft_value.clear();
+        self.gpui_input_state
+            .update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
     pub(crate) fn menu_syntax_capture_form_owns_input(&self) -> bool {
         matches!(self.current_view, AppView::ScriptList)
             && self
@@ -8,12 +182,20 @@ impl ScriptListApp {
                 .capture_composer_owns_input_for(&self.filter_text)
     }
 
-    pub(crate) fn focus_next_menu_syntax_form_field(&mut self, cx: &mut Context<Self>) {
-        self.move_menu_syntax_form_focus(1, cx);
+    pub(crate) fn focus_next_menu_syntax_form_field(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.move_menu_syntax_form_focus(1, window, cx);
     }
 
-    pub(crate) fn focus_previous_menu_syntax_form_field(&mut self, cx: &mut Context<Self>) {
-        self.move_menu_syntax_form_focus(-1, cx);
+    pub(crate) fn focus_previous_menu_syntax_form_field(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.move_menu_syntax_form_focus(-1, window, cx);
     }
 
     pub(crate) fn update_menu_syntax_form_field(
@@ -131,31 +313,43 @@ impl ScriptListApp {
         self.update_menu_syntax_form_field(Some(&field_id), value, window, cx)
     }
 
-    fn move_menu_syntax_form_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
+    fn move_menu_syntax_form_focus(
+        &mut self,
+        delta: isize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
             return;
         };
         let Some(form) = snapshot.form else {
             return;
         };
+        self.ensure_menu_syntax_form_inputs(&form, window, cx);
         let field_count = form.fields.len();
         if field_count == 0 {
             self.menu_syntax_form_focused_index = 0;
             self.menu_syntax_form_input_active = false;
             return;
         }
-        if !self.menu_syntax_form_input_active {
-            self.menu_syntax_form_input_active = true;
-            self.menu_syntax_form_focused_index = if delta < 0 { field_count - 1 } else { 0 };
+        let current = self
+            .actual_menu_syntax_form_focused_index(window, cx)
+            .or_else(|| self.menu_syntax_form_input_active.then_some(
+                self.menu_syntax_form_focused_index.min(field_count - 1),
+            ));
+        let next = match (current, delta < 0) {
+            (None, false) => Some(0),
+            (None, true) => Some(field_count - 1),
+            (Some(0), true) => None,
+            (Some(index), true) => Some(index - 1),
+            (Some(index), false) if index + 1 < field_count => Some(index + 1),
+            (Some(_), false) => None,
+        };
+        if let Some(next_index) = next {
+            self.focus_menu_syntax_form_input_at(next_index, &form, window, cx);
         } else {
-            let current = self.menu_syntax_form_focused_index.min(field_count - 1);
-            self.menu_syntax_form_focused_index = if delta < 0 {
-                current.checked_sub(1).unwrap_or(field_count - 1)
-            } else {
-                (current + 1) % field_count
-            };
+            self.focus_menu_syntax_main_input(window, cx);
         }
-        self.sync_menu_syntax_form_draft_from_form(&form);
         tracing::info!(
             target: "script_kit::menu_syntax_form",
             event = "menu_syntax_form_focus_changed",

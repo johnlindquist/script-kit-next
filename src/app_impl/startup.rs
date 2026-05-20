@@ -749,6 +749,10 @@ impl ScriptListApp {
             menu_syntax_object_selector_state:
                 crate::menu_syntax::MenuSyntaxObjectSelectorState::default(),
             menu_syntax_form_focused_index: 0,
+            menu_syntax_form_signature: None,
+            menu_syntax_form_inputs: Vec::new(),
+            menu_syntax_form_input_subscriptions: Vec::new(),
+            menu_syntax_form_syncing_from_input: false,
             menu_syntax_form_input_active: false,
             menu_syntax_form_draft_field_id: None,
             menu_syntax_form_draft_value: String::new(),
@@ -1171,9 +1175,9 @@ impl ScriptListApp {
 
                             if this.menu_syntax_capture_form_owns_input() {
                                 if has_shift {
-                                    this.focus_previous_menu_syntax_form_field(cx);
+                                    this.focus_previous_menu_syntax_form_field(window, cx);
                                 } else {
-                                    this.focus_next_menu_syntax_form_field(cx);
+                                    this.focus_next_menu_syntax_form_field(window, cx);
                                 }
                                 cx.stop_propagation();
                                 return;

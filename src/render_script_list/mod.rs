@@ -258,19 +258,16 @@ fn render_menu_syntax_fragment_preview_row(
 fn render_menu_syntax_form_field(
     theme: &crate::theme::Theme,
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
+    input: Option<Entity<gpui_component::input::InputState>>,
 ) -> AnyElement {
     let border_color = if field.focused {
         rgba((theme.colors.ui.border << 8) | 0xE6)
     } else {
         rgba((theme.colors.ui.border << 8) | 0x80)
     };
-    let display_value = if field.value.trim().is_empty() {
-        field.placeholder.clone()
-    } else {
-        field.value.clone()
-    };
-    let value_color = rgba((theme.colors.text.primary << 8) | 0xFF);
-    div()
+    let placeholder_color = rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
+    let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
+    let mut field_node = div()
         .id(format!("menu-syntax-form-field-{}", field.id))
         .w_full()
         .flex()
@@ -310,33 +307,54 @@ fn render_menu_syntax_form_field(
                             .child("required"),
                     )
                 }),
+        );
+
+    field_node = if let Some(input) = input {
+        field_node.child(
+            gpui_component::input::Input::new(&input)
+                .w_full()
+                .h(px(input_height))
+                .line_height(px(crate::panel::CURSOR_HEIGHT_LG))
+                .px(px(0.0))
+                .py(px(0.0))
+                .with_size(gpui_component::Size::Size(px(
+                    theme.get_fonts().ui_size + 2.0,
+                )))
+                .appearance(false)
+                .bordered(false)
+                .focus_bordered(false),
         )
-        .child(
+    } else {
+        let has_value = !field.value.trim().is_empty();
+        let display_value = if has_value {
+            field.value.clone()
+        } else {
+            field.placeholder.clone()
+        };
+        field_node.child(
             div()
                 .w_full()
                 .min_h(px(20.0))
                 .flex()
                 .items_center()
-                .gap(px(3.0))
                 .text_size(px(13.0))
                 .line_height(px(18.0))
-                .text_color(value_color)
+                .text_color(if has_value {
+                    rgba((theme.colors.text.primary << 8) | 0xFF)
+                } else {
+                    placeholder_color
+                })
                 .child(
                     div()
                         .min_w(px(0.0))
                         .overflow_hidden()
                         .text_ellipsis()
                         .child(display_value),
-                )
-                .when(field.focused, |d| {
-                    d.child(
-                        div()
-                            .w(px(1.0))
-                            .h(px(18.0))
-                            .bg(rgba((theme.colors.text.primary << 8) | 0xFF)),
-                    )
-                }),
+                ),
         )
+    };
+
+    field_node
         .when(!field.suggestions.is_empty(), |d| {
             d.child(
                 div()
@@ -362,6 +380,7 @@ fn render_menu_syntax_form_field(
 fn render_menu_syntax_form(
     theme: &crate::theme::Theme,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+    inputs: &[(String, Entity<gpui_component::input::InputState>)],
 ) -> AnyElement {
     div()
         .id("menu-syntax-handler-form")
@@ -372,7 +391,12 @@ fn render_menu_syntax_form(
         .children(
             form.fields
                 .iter()
-                .map(|field| render_menu_syntax_form_field(theme, field)),
+                .map(|field| {
+                    let input = inputs
+                        .iter()
+                        .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
+                    render_menu_syntax_form_field(theme, field, input)
+                }),
         )
         .into_any_element()
 }
@@ -381,6 +405,7 @@ fn render_menu_syntax_main_hint(
     hint: &crate::menu_syntax::MenuSyntaxMainHintSnapshot,
     scroll_handle: &ScrollHandle,
     theme: &crate::theme::Theme,
+    form_inputs: &[(String, Entity<gpui_component::input::InputState>)],
 ) -> AnyElement {
     let accent = theme.colors.accent.selected;
     let border = theme.colors.ui.border;
@@ -482,7 +507,7 @@ fn render_menu_syntax_main_hint(
                 )
             })
             .when_some(hint.form.as_ref(), |d, form| {
-                d.child(render_menu_syntax_form(theme, form))
+                d.child(render_menu_syntax_form(theme, form, form_inputs))
             })
             .when(!hint.rows.is_empty(), |d| {
                 d.child(
@@ -864,6 +889,7 @@ impl ScriptListApp {
                         &hint,
                         &self.menu_syntax_main_hint_scroll_handle,
                         &self.theme,
+                        &self.menu_syntax_form_inputs,
                     )
                 })
                 .unwrap_or_else(|| div().w_full().h_full().into_any_element())
@@ -872,6 +898,7 @@ impl ScriptListApp {
                 &hint,
                 &self.menu_syntax_main_hint_scroll_handle,
                 &self.theme,
+                &self.menu_syntax_form_inputs,
             )
         } else if item_count == 0 {
             if let Some(hint) = self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true) {
@@ -879,6 +906,7 @@ impl ScriptListApp {
                     &hint,
                     &self.menu_syntax_main_hint_scroll_handle,
                     &self.theme,
+                    &self.menu_syntax_form_inputs,
                 )
             } else {
                 let has_active_filter = self
