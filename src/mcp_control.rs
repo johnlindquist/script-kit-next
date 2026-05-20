@@ -1,15 +1,17 @@
 use crate::mcp_clipboard_tools;
 use crate::mcp_config_tools;
-use crate::mcp_kit_tools::{ToolDefinition, ToolResult};
+use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use crate::mcp_notes_tools::{
     self, McpNotesMutationBridge, NotesMutationError, NotesMutationErrorCode, NotesMutationRequest,
     NotesMutationResult, SharedNotesMutationBridge,
 };
 use crate::mcp_scripts_tools;
+use async_trait::async_trait;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::oneshot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RiskClass {
@@ -25,7 +27,6 @@ pub struct MutationToolMeta {
     pub description: &'static str,
     pub risk: RiskClass,
     pub required_scope: &'static str,
-    pub requires_confirm: bool,
 }
 
 #[derive(Clone)]
@@ -35,10 +36,11 @@ pub struct MutationContext {
     pub notes_bridge: Option<SharedNotesMutationBridge>,
 }
 
+#[async_trait]
 pub trait DynMutationTool: Send + Sync {
     fn meta(&self) -> MutationToolMeta;
     fn definition(&self) -> ToolDefinition;
-    fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult;
+    async fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult;
 }
 
 #[derive(Default)]
@@ -64,17 +66,11 @@ impl MutationRegistry {
         self.tools.contains_key(name)
     }
 
-    pub fn call(&self, name: &str, args: Value, ctx: &MutationContext) -> Option<ToolResult> {
+    pub async fn call(&self, name: &str, args: Value, ctx: &MutationContext) -> Option<ToolResult> {
         let tool = self.tools.get(name)?;
         let meta = tool.meta();
         if !scope_allows(&ctx.token_scopes, meta.required_scope) {
-            let result = mcp_notes_tools::error_tool_result(
-                meta.name,
-                NotesMutationError::new(
-                    NotesMutationErrorCode::InvalidParams,
-                    format!("Missing required MCP scope: {}", meta.required_scope),
-                ),
-            );
+            let result = scope_denied_tool_result(meta.name, meta.required_scope);
             append_audit_event(&McpAuditEvent {
                 ts: chrono::Utc::now(),
                 trace_id: ctx.trace_id.clone(),
@@ -90,7 +86,7 @@ impl MutationRegistry {
             return Some(result);
         }
 
-        let result = tool.call(args, ctx);
+        let result = tool.call(args, ctx).await;
         let success = result.is_error != Some(true);
         let error_code = if success {
             None
@@ -156,33 +152,86 @@ impl GpuiNotesMcpBridge {
 
 pub struct NotesMcpCommand {
     pub request: NotesMutationRequest,
-    pub response_tx: std::sync::mpsc::SyncSender<Result<NotesMutationResult, NotesMutationError>>,
+    pub response_tx: oneshot::Sender<Result<NotesMutationResult, NotesMutationError>>,
 }
 
+#[async_trait]
 impl McpNotesMutationBridge for GpuiNotesMcpBridge {
-    fn mutate_notes(
+    async fn mutate_notes(
         &self,
         request: NotesMutationRequest,
     ) -> Result<NotesMutationResult, NotesMutationError> {
-        let (response_tx, response_rx) = std::sync::mpsc::sync_channel(1);
-        self.tx
-            .send_blocking(NotesMcpCommand {
-                request,
-                response_tx,
-            })
-            .map_err(|_| {
-                NotesMutationError::new(
+        let (response_tx, response_rx) = oneshot::channel();
+        let deadline = tokio::time::Instant::now() + self.timeout;
+        let command = NotesMcpCommand {
+            request,
+            response_tx,
+        };
+
+        match tokio::time::timeout_at(deadline, self.tx.send(command)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(_)) => {
+                return Err(NotesMutationError::new(
                     NotesMutationErrorCode::MissingRuntime,
                     "Notes mutation runtime is disconnected",
-                )
-            })?;
+                ));
+            }
+            Err(_) => {
+                return Err(NotesMutationError::new(
+                    NotesMutationErrorCode::Internal,
+                    "Timed out enqueueing GPUI notes mutation",
+                ));
+            }
+        }
 
-        response_rx.recv_timeout(self.timeout).map_err(|_| {
-            NotesMutationError::new(
+        match tokio::time::timeout_at(deadline, response_rx).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(NotesMutationError::new(
+                NotesMutationErrorCode::Internal,
+                "GPUI notes mutation bridge response channel closed",
+            )),
+            Err(_) => Err(NotesMutationError::new(
                 NotesMutationErrorCode::Internal,
                 "Timed out waiting for GPUI notes mutation bridge",
-            )
-        })?
+            )),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MutationToolError {
+    code: &'static str,
+    message: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MutationToolEnvelope {
+    ok: bool,
+    action: String,
+    error: MutationToolError,
+}
+
+fn scope_denied_tool_result(action: &str, required_scope: &str) -> ToolResult {
+    let envelope = MutationToolEnvelope {
+        ok: false,
+        action: action.to_string(),
+        error: MutationToolError {
+            code: "scope_denied",
+            message: format!("Missing required MCP scope: {required_scope}"),
+        },
+    };
+    ToolResult {
+        content: vec![ToolContent {
+            content_type: "text".to_string(),
+            text: serde_json::to_string(&envelope).unwrap_or_else(|error| {
+                format!(
+                    r#"{{"ok":false,"action":"{action}","error":{{"code":"internal","message":"Failed to serialize mutation result: {error}"}}}}"#
+                )
+            }),
+        }],
+        is_error: Some(true),
     }
 }
 
@@ -214,6 +263,7 @@ fn required_tool_definition(definitions: Vec<ToolDefinition>, name: &str) -> Too
     }
 }
 
+#[async_trait]
 impl DynMutationTool for NotesCreateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -221,7 +271,6 @@ impl DynMutationTool for NotesCreateTool {
             description: "Create a Script Kit note",
             risk: RiskClass::StateMutating,
             required_scope: "notes:write",
-            requires_confirm: false,
         }
     }
 
@@ -232,15 +281,17 @@ impl DynMutationTool for NotesCreateTool {
         )
     }
 
-    fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
         mcp_notes_tools::handle_notes_tool_call(
             ctx.notes_bridge.as_deref(),
             mcp_notes_tools::NOTES_CREATE_TOOL,
             args,
         )
+        .await
     }
 }
 
+#[async_trait]
 impl DynMutationTool for NotesUpdateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -248,7 +299,6 @@ impl DynMutationTool for NotesUpdateTool {
             description: "Update a Script Kit note",
             risk: RiskClass::StateMutating,
             required_scope: "notes:write",
-            requires_confirm: false,
         }
     }
 
@@ -259,15 +309,17 @@ impl DynMutationTool for NotesUpdateTool {
         )
     }
 
-    fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
         mcp_notes_tools::handle_notes_tool_call(
             ctx.notes_bridge.as_deref(),
             mcp_notes_tools::NOTES_UPDATE_TOOL,
             args,
         )
+        .await
     }
 }
 
+#[async_trait]
 impl DynMutationTool for NotesDeleteTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -275,7 +327,6 @@ impl DynMutationTool for NotesDeleteTool {
             description: "Delete a Script Kit note",
             risk: RiskClass::Destructive,
             required_scope: "notes:write",
-            requires_confirm: true,
         }
     }
 
@@ -286,15 +337,17 @@ impl DynMutationTool for NotesDeleteTool {
         )
     }
 
-    fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, ctx: &MutationContext) -> ToolResult {
         mcp_notes_tools::handle_notes_tool_call(
             ctx.notes_bridge.as_deref(),
             mcp_notes_tools::NOTES_DELETE_TOOL,
             args,
         )
+        .await
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ScriptsCreateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -302,7 +355,6 @@ impl DynMutationTool for ScriptsCreateTool {
             description: "Create a Script Kit script",
             risk: RiskClass::StateMutating,
             required_scope: "scripts:write",
-            requires_confirm: false,
         }
     }
 
@@ -313,11 +365,12 @@ impl DynMutationTool for ScriptsCreateTool {
         )
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_CREATE_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ScriptsUpdateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -325,7 +378,6 @@ impl DynMutationTool for ScriptsUpdateTool {
             description: "Update a Script Kit script",
             risk: RiskClass::StateMutating,
             required_scope: "scripts:write",
-            requires_confirm: false,
         }
     }
 
@@ -336,11 +388,12 @@ impl DynMutationTool for ScriptsUpdateTool {
         )
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_UPDATE_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ScriptsDeleteTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -348,7 +401,6 @@ impl DynMutationTool for ScriptsDeleteTool {
             description: "Delete a Script Kit script",
             risk: RiskClass::Destructive,
             required_scope: "scripts:write",
-            requires_confirm: true,
         }
     }
 
@@ -359,11 +411,12 @@ impl DynMutationTool for ScriptsDeleteTool {
         )
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_DELETE_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ScriptsRunTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -371,7 +424,6 @@ impl DynMutationTool for ScriptsRunTool {
             description: "Run a Script Kit script",
             risk: RiskClass::ExternalProcess,
             required_scope: "scripts:run",
-            requires_confirm: false,
         }
     }
 
@@ -382,7 +434,7 @@ impl DynMutationTool for ScriptsRunTool {
         )
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_scripts_tools::handle_scripts_tool_call(mcp_scripts_tools::SCRIPTS_RUN_TOOL, args)
     }
 }
@@ -394,6 +446,7 @@ fn clipboard_tool_definition(name: &str) -> ToolDefinition {
         .unwrap_or_else(|| panic!("clipboard tool definition missing: {name}"))
 }
 
+#[async_trait]
 impl DynMutationTool for ClipboardCopyTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -401,7 +454,6 @@ impl DynMutationTool for ClipboardCopyTool {
             description: "Copy a clipboard-history entry to the system clipboard",
             risk: RiskClass::StateMutating,
             required_scope: "clipboard:write",
-            requires_confirm: false,
         }
     }
 
@@ -409,7 +461,7 @@ impl DynMutationTool for ClipboardCopyTool {
         clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_COPY_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_clipboard_tools::handle_clipboard_tool_call(
             mcp_clipboard_tools::CLIPBOARD_COPY_TOOL,
             args,
@@ -417,6 +469,7 @@ impl DynMutationTool for ClipboardCopyTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ClipboardPinTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -424,7 +477,6 @@ impl DynMutationTool for ClipboardPinTool {
             description: "Pin a clipboard-history entry",
             risk: RiskClass::StateMutating,
             required_scope: "clipboard:write",
-            requires_confirm: false,
         }
     }
 
@@ -432,7 +484,7 @@ impl DynMutationTool for ClipboardPinTool {
         clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_PIN_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_clipboard_tools::handle_clipboard_tool_call(
             mcp_clipboard_tools::CLIPBOARD_PIN_TOOL,
             args,
@@ -440,6 +492,7 @@ impl DynMutationTool for ClipboardPinTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ClipboardUnpinTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -447,7 +500,6 @@ impl DynMutationTool for ClipboardUnpinTool {
             description: "Unpin a clipboard-history entry",
             risk: RiskClass::StateMutating,
             required_scope: "clipboard:write",
-            requires_confirm: false,
         }
     }
 
@@ -455,7 +507,7 @@ impl DynMutationTool for ClipboardUnpinTool {
         clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_UNPIN_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_clipboard_tools::handle_clipboard_tool_call(
             mcp_clipboard_tools::CLIPBOARD_UNPIN_TOOL,
             args,
@@ -463,6 +515,7 @@ impl DynMutationTool for ClipboardUnpinTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ClipboardDeleteTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -470,7 +523,6 @@ impl DynMutationTool for ClipboardDeleteTool {
             description: "Delete a clipboard-history entry",
             risk: RiskClass::Destructive,
             required_scope: "clipboard:write",
-            requires_confirm: true,
         }
     }
 
@@ -478,7 +530,7 @@ impl DynMutationTool for ClipboardDeleteTool {
         clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_DELETE_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_clipboard_tools::handle_clipboard_tool_call(
             mcp_clipboard_tools::CLIPBOARD_DELETE_TOOL,
             args,
@@ -486,6 +538,7 @@ impl DynMutationTool for ClipboardDeleteTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ClipboardClearUnpinnedTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -493,7 +546,6 @@ impl DynMutationTool for ClipboardClearUnpinnedTool {
             description: "Clear unpinned clipboard-history entries",
             risk: RiskClass::Destructive,
             required_scope: "clipboard:write",
-            requires_confirm: true,
         }
     }
 
@@ -501,7 +553,7 @@ impl DynMutationTool for ClipboardClearUnpinnedTool {
         clipboard_tool_definition(mcp_clipboard_tools::CLIPBOARD_CLEAR_UNPINNED_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_clipboard_tools::handle_clipboard_tool_call(
             mcp_clipboard_tools::CLIPBOARD_CLEAR_UNPINNED_TOOL,
             args,
@@ -516,6 +568,7 @@ fn config_tool_definition(name: &str) -> ToolDefinition {
         .unwrap_or_else(|| panic!("config tool definition missing: {name}"))
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigGetTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -523,7 +576,6 @@ impl DynMutationTool for ConfigGetTool {
             description: "Read Script Kit config",
             risk: RiskClass::Safe,
             required_scope: "config:read",
-            requires_confirm: false,
         }
     }
 
@@ -531,11 +583,12 @@ impl DynMutationTool for ConfigGetTool {
         config_tool_definition(mcp_config_tools::CONFIG_GET_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_GET_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigListTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -543,7 +596,6 @@ impl DynMutationTool for ConfigListTool {
             description: "List Script Kit config keys",
             risk: RiskClass::Safe,
             required_scope: "config:read",
-            requires_confirm: false,
         }
     }
 
@@ -551,11 +603,12 @@ impl DynMutationTool for ConfigListTool {
         config_tool_definition(mcp_config_tools::CONFIG_LIST_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_LIST_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigValidateTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -563,7 +616,6 @@ impl DynMutationTool for ConfigValidateTool {
             description: "Validate Script Kit config",
             risk: RiskClass::Safe,
             required_scope: "config:read",
-            requires_confirm: false,
         }
     }
 
@@ -571,11 +623,12 @@ impl DynMutationTool for ConfigValidateTool {
         config_tool_definition(mcp_config_tools::CONFIG_VALIDATE_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_VALIDATE_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigValidateChangeTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -583,7 +636,6 @@ impl DynMutationTool for ConfigValidateChangeTool {
             description: "Validate a proposed Script Kit config change",
             risk: RiskClass::Safe,
             required_scope: "config:read",
-            requires_confirm: false,
         }
     }
 
@@ -591,7 +643,7 @@ impl DynMutationTool for ConfigValidateChangeTool {
         config_tool_definition(mcp_config_tools::CONFIG_VALIDATE_CHANGE_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(
             mcp_config_tools::CONFIG_VALIDATE_CHANGE_TOOL,
             args,
@@ -599,6 +651,7 @@ impl DynMutationTool for ConfigValidateChangeTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigSetTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -606,7 +659,6 @@ impl DynMutationTool for ConfigSetTool {
             description: "Set a Script Kit config value",
             risk: RiskClass::StateMutating,
             required_scope: "config:write",
-            requires_confirm: false,
         }
     }
 
@@ -614,11 +666,12 @@ impl DynMutationTool for ConfigSetTool {
         config_tool_definition(mcp_config_tools::CONFIG_SET_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_SET_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigResetTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -626,7 +679,6 @@ impl DynMutationTool for ConfigResetTool {
             description: "Reset Script Kit config",
             risk: RiskClass::Destructive,
             required_scope: "config:write",
-            requires_confirm: true,
         }
     }
 
@@ -634,11 +686,12 @@ impl DynMutationTool for ConfigResetTool {
         config_tool_definition(mcp_config_tools::CONFIG_RESET_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(mcp_config_tools::CONFIG_RESET_TOOL, args)
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigSetCommandShortcutTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -646,7 +699,6 @@ impl DynMutationTool for ConfigSetCommandShortcutTool {
             description: "Set a Script Kit command shortcut",
             risk: RiskClass::StateMutating,
             required_scope: "config:write",
-            requires_confirm: false,
         }
     }
 
@@ -654,7 +706,7 @@ impl DynMutationTool for ConfigSetCommandShortcutTool {
         config_tool_definition(mcp_config_tools::CONFIG_SET_COMMAND_SHORTCUT_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(
             mcp_config_tools::CONFIG_SET_COMMAND_SHORTCUT_TOOL,
             args,
@@ -662,6 +714,7 @@ impl DynMutationTool for ConfigSetCommandShortcutTool {
     }
 }
 
+#[async_trait]
 impl DynMutationTool for ConfigRemoveCommandShortcutTool {
     fn meta(&self) -> MutationToolMeta {
         MutationToolMeta {
@@ -669,7 +722,6 @@ impl DynMutationTool for ConfigRemoveCommandShortcutTool {
             description: "Remove a Script Kit command shortcut",
             risk: RiskClass::Destructive,
             required_scope: "config:write",
-            requires_confirm: true,
         }
     }
 
@@ -677,7 +729,7 @@ impl DynMutationTool for ConfigRemoveCommandShortcutTool {
         config_tool_definition(mcp_config_tools::CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL)
     }
 
-    fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
+    async fn call(&self, args: Value, _ctx: &MutationContext) -> ToolResult {
         mcp_config_tools::handle_config_tool_call(
             mcp_config_tools::CONFIG_REMOVE_COMMAND_SHORTCUT_TOOL,
             args,
