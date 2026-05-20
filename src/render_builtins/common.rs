@@ -50,6 +50,7 @@ impl ScriptListApp {
         gpui_component::input::Input::new(&self.gpui_input_state)
             .w_full()
             .h(gpui::px(input_height))
+            .line_height(gpui::px(crate::panel::CURSOR_HEIGHT_LG))
             .px(gpui::px(0.))
             .py(gpui::px(0.))
             .with_size(gpui_component::Size::Size(gpui::px(self.theme_font_size_xl())))

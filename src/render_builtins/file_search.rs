@@ -1486,7 +1486,6 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .justify_end()
-                    .py(px(4.))
                     .w(px(120.))
                     .child(
                         div()
@@ -1754,6 +1753,24 @@ mod file_search_chrome_audit {
         assert!(
             source.contains("file_search_chrome_checkpoint"),
             "file_search must emit a structured checkpoint log for migration verification"
+        );
+    }
+
+    #[test]
+    fn file_search_header_count_does_not_add_vertical_padding() {
+        let source = production_source();
+        let count_start = source
+            .find(".justify_end()")
+            .expect("file_search count block should justify to the end");
+        let count_tail = &source[count_start..];
+        let count_end = count_tail
+            .find(".child(if is_mini")
+            .expect("file_search count block should render mini/full labels");
+        let count_block = &count_tail[..count_end];
+
+        assert!(
+            !count_block.contains(".py("),
+            "file_search header count must not add vertical padding that changes the shared input baseline"
         );
     }
 

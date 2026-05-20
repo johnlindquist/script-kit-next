@@ -130,7 +130,7 @@ impl ScriptListApp {
             FileSearchPresentation::Mini => {
                 crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
             }
-            FileSearchPresentation::Full => resize_to_view_sync(ViewType::ScriptList, 0),
+            FileSearchPresentation::Full => resize_to_view_sync(ViewType::ExpandedMainWindow, 0),
         }
     }
 
@@ -148,7 +148,7 @@ impl ScriptListApp {
                 crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
             }
             FileSearchPresentation::Full if is_first_batch => {
-                resize_to_view_sync(ViewType::ScriptList, 0);
+                resize_to_view_sync(ViewType::ExpandedMainWindow, 0);
             }
             _ => {} // skip intermediate batch resizes
         }
