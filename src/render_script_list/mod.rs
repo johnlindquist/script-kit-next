@@ -1507,6 +1507,7 @@ impl ScriptListApp {
                     .w_full()
                     .px(px(header_padding_x))
                     .py(px(header_padding_y))
+                    .min_h(px(crate::panel::HEADER_BUTTON_HEIGHT))
                     .flex()
                     .flex_row()
                     .items_center()
