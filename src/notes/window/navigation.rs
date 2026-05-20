@@ -287,11 +287,14 @@ impl NotesApp {
             .and_then(|id| self.get_visible_notes().iter().find(|note| note.id == id));
         let selected_note_metadata = selected_note.map(|note| {
             let tags = storage::get_note_tags(note.id).unwrap_or_default();
+            let aliases = storage::get_note_aliases(note.id).unwrap_or_default();
             let outbound_link_count = storage::get_note_outbound_link_count(note.id).unwrap_or(0);
             let backlink_count = storage::get_note_backlink_count(note.id).unwrap_or(0);
             serde_json::json!({
                 "tags": tags.iter().take(8).cloned().collect::<Vec<_>>(),
+                "aliases": aliases.iter().take(8).cloned().collect::<Vec<_>>(),
                 "tagCount": tags.len(),
+                "aliasCount": aliases.len(),
                 "outboundLinkCount": outbound_link_count,
                 "backlinkCount": backlink_count,
             })
@@ -986,6 +989,55 @@ impl NotesApp {
     /// Format a DateTime as a relative time string for the note switcher
     pub(super) fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
         crate::formatting::format_relative_time_short_dt(dt)
+    }
+
+    pub(super) fn note_switcher_preview(note: &Note) -> String {
+        let tags = storage::get_note_tags(note.id).unwrap_or_default();
+        let outbound_link_count = storage::get_note_outbound_link_count(note.id).unwrap_or(0);
+        let backlink_count = storage::get_note_backlink_count(note.id).unwrap_or(0);
+        let preview = Self::strip_markdown_for_preview(&note.preview());
+        Self::note_switcher_preview_from_metadata(
+            &preview,
+            &tags,
+            outbound_link_count,
+            backlink_count,
+        )
+    }
+
+    pub(super) fn note_switcher_preview_from_metadata(
+        preview: &str,
+        tags: &[String],
+        outbound_link_count: usize,
+        backlink_count: usize,
+    ) -> String {
+        let mut metadata_parts = Vec::new();
+        let tag_count = tags.len();
+        metadata_parts.extend(tags.iter().take(3).map(|tag| format!("#{tag}")));
+        if tag_count > 3 {
+            metadata_parts.push(format!("+{} tags", tag_count - 3));
+        }
+
+        if outbound_link_count > 0 {
+            metadata_parts.push(format!(
+                "{} link{}",
+                outbound_link_count,
+                if outbound_link_count == 1 { "" } else { "s" }
+            ));
+        }
+
+        if backlink_count > 0 {
+            metadata_parts.push(format!(
+                "{} backlink{}",
+                backlink_count,
+                if backlink_count == 1 { "" } else { "s" }
+            ));
+        }
+
+        match (metadata_parts.is_empty(), preview.is_empty()) {
+            (true, _) => preview.to_string(),
+            (false, true) => metadata_parts.join(" · "),
+            (false, false) => format!("{} · {}", metadata_parts.join(" · "), preview),
+        }
     }
 
     /// Strip markdown syntax from a preview string for clean display in the note switcher

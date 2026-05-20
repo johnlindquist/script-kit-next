@@ -19,20 +19,46 @@ import "@scriptkit/sdk";
 
 async function callNotesTool(toolName: string, args: Record<string, unknown>) {
   const tool = (await mcp.discover(toolName)).find((entry) => entry.name === toolName);
-  if (!tool) throw new Error(`${toolName} is not available`);
-  return mcp.call(tool.serverId, tool.name, args);
+  if (!tool) throw new Error(` is not available`);
+  const result = await mcp.call(tool.serverId, tool.name, args);
+  const content = Array.isArray(result.content) ? result.content : [];
+  const text = content.find((entry) => entry?.type === "text" && typeof entry.text === "string")?.text;
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return result.structuredContent ?? result.raw ?? result;
 }
 
+const [title, body, tagText, aliasText] = await fields([
+  { name: "title", label: "Title", placeholder: "Project Plan" },
+  { name: "body", label: "Body", placeholder: "# Project Plan\n\n#planning [[Research Notes]]\n\nNext steps..." },
+  { name: "tags", label: "Tags", placeholder: "planning, projects/script-kit" },
+  { name: "aliases", label: "Aliases", placeholder: "Plan, Project Plan" },
+]);
+
+const tags = tagText
+  .split(",")
+  .map((tag) => tag.trim().replace(/^#/, ""))
+  .filter(Boolean);
+const aliases = aliasText
+  .split(",")
+  .map((alias) => alias.trim())
+  .filter(Boolean);
+
 const result = await callNotesTool("kit/notes_create", {
-  title: "Project Plan",
-  body: "# Project Plan\n\n#planning [[Research Notes]]\n\nNext steps...",
-  tags: ["planning", "projects/script-kit"],
-  aliases: ["Plan"],
+  title: title || undefined,
+  body: body || `# ${title || "Untitled Note"}\n\n`,
+  tags,
+  aliases,
   open: true,
   select: true,
 });
 
-await copy(JSON.stringify(result.structuredContent ?? result.raw, null, 2));
+await copy(JSON.stringify(result, null, 2));
 await arg("Created organized note", [
   { name: "Done", description: "The note was created and the result is on the clipboard", value: "done" },
 ]);
@@ -78,23 +104,163 @@ import "@scriptkit/sdk";
 
 async function callNotesTool(toolName: string, args: Record<string, unknown>) {
   const tool = (await mcp.discover(toolName)).find((entry) => entry.name === toolName);
-  if (!tool) throw new Error(`${toolName} is not available`);
-  return mcp.call(tool.serverId, tool.name, args);
+  if (!tool) throw new Error(` is not available`);
+  const result = await mcp.call(tool.serverId, tool.name, args);
+  const content = Array.isArray(result.content) ? result.content : [];
+  const text = content.find((entry) => entry?.type === "text" && typeof entry.text === "string")?.text;
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return result.structuredContent ?? result.raw ?? result;
 }
 
 const id = await arg("Note UUID to update");
+const [content, tagText, aliasText] = await fields([
+  { name: "content", label: "Content", placeholder: "# Project Plan\n\nUpdated body with [[Decision Log]]." },
+  { name: "tags", label: "Tags", placeholder: "planning, decisions" },
+  { name: "aliases", label: "Aliases", placeholder: "Plan, Project Plan" },
+]);
+const tags = tagText
+  .split(",")
+  .map((tag) => tag.trim().replace(/^#/, ""))
+  .filter(Boolean);
+const aliases = aliasText
+  .split(",")
+  .map((alias) => alias.trim())
+  .filter(Boolean);
+
 const result = await callNotesTool("kit/notes_update", {
   id,
-  content: "# Project Plan\n\nUpdated body with [[Decision Log]].",
-  tags: ["planning", "decisions"],
-  aliases: ["Plan", "Project Plan"],
+  content: content || undefined,
+  tags,
+  aliases,
   open: true,
   select: true,
 });
 
-await copy(JSON.stringify(result.structuredContent ?? result.raw, null, 2));
+await copy(JSON.stringify(result, null, 2));
 await arg("Updated organized note", [
   { name: "Done", description: "The note was updated and the result is on the clipboard", value: "done" },
+]);
+```
+
+## Open Organized Note
+
+```metadata
+description: Search kit://notes by tag, alias, link, or text and open the selected note
+tool:notes-open-organized
+```
+
+```typescript
+import "@scriptkit/sdk";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+type NoteSummary = {
+  id: string;
+  title: string;
+  preview?: string;
+  metadata?: {
+    tags?: string[];
+    aliases?: string[];
+    tagCount?: number;
+    aliasCount?: number;
+    outboundLinkCount?: number;
+    backlinkCount?: number;
+  };
+};
+
+async function callNotesTool(toolName: string, args: Record<string, unknown>) {
+  const tool = (await mcp.discover(toolName)).find((entry) => entry.name === toolName);
+  if (!tool) throw new Error(` is not available`);
+  const result = await mcp.call(tool.serverId, tool.name, args);
+  const content = Array.isArray(result.content) ? result.content : [];
+  const text = content.find((entry) => entry?.type === "text" && typeof entry.text === "string")?.text;
+  if (text) {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  return result.structuredContent ?? result.raw ?? result;
+}
+
+async function readNotesResource(uri: string) {
+  const discoveryPath = join(homedir(), ".scriptkit", "server.json");
+  const discovery = JSON.parse(readFileSync(discoveryPath, "utf8")) as { url: string; token: string };
+  const response = await fetch(`${discovery.url.replace(/\/$/, "")}/rpc`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${discovery.token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: `notes-resource-${Date.now()}`,
+      method: "resources/read",
+      params: { uri },
+    }),
+  });
+  const payload = await response.json() as {
+    result?: { contents?: { text?: string }[]; content?: { text?: string }[] };
+    error?: { message?: string };
+  };
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message ?? `Failed to read ${uri}`);
+  }
+  const text = payload.result?.contents?.[0]?.text ?? payload.result?.content?.[0]?.text;
+  if (!text) throw new Error(`No resource text returned for ${uri}`);
+  return JSON.parse(text) as { notes: NoteSummary[] };
+}
+
+const mode = await arg("Search Notes", [
+  { name: "Tag", description: "Find notes by tag", value: "tag" },
+  { name: "Alias", description: "Find notes by alias", value: "alias" },
+  { name: "Link", description: "Find notes linking to a note title", value: "link" },
+  { name: "Text", description: "Full-text note search", value: "q" },
+]);
+const query = await arg(`Search ${mode}`);
+const uri = `kit://notes?${mode}=${encodeURIComponent(query)}&limit=25`;
+const resource = await readNotesResource(uri);
+if (!resource.notes.length) {
+  await arg("No matching notes", [
+    { name: "Done", description: uri, value: "done" },
+  ]);
+  process.exit(0);
+}
+
+const selectedId = await arg({
+  placeholder: "Open note",
+  choices: resource.notes.map((note) => {
+    const metadata = note.metadata ?? {};
+    const details = [
+      ...(metadata.tags ?? []).slice(0, 3).map((tag) => `#${tag}`),
+      metadata.outboundLinkCount ? `${metadata.outboundLinkCount} link${metadata.outboundLinkCount === 1 ? "" : "s"}` : "",
+      metadata.backlinkCount ? `${metadata.backlinkCount} backlink${metadata.backlinkCount === 1 ? "" : "s"}` : "",
+    ].filter(Boolean).join(" - ");
+    return {
+      name: note.title || "Untitled Note",
+      description: details || note.preview || note.id,
+      value: note.id,
+    };
+  }),
+});
+
+const result = await callNotesTool("kit/notes_update", {
+  id: selectedId,
+  open: true,
+  select: true,
+});
+
+await copy(JSON.stringify(result, null, 2));
+await arg("Opened note", [
+  { name: "Done", description: "The note was opened and the result is on the clipboard", value: "done" },
 ]);
 ```
 
@@ -129,7 +295,7 @@ await arg("Copied Notes update payload", [
 ## Copy Notes Search Resource Payload
 
 ```metadata
-description: Copy a kit://notes read request for active notes
+description: Copy a tag-filtered kit://notes read request with metadata
 tool:copy-notes-resource-list
 ```
 
@@ -139,7 +305,7 @@ import "@scriptkit/sdk";
 const request = {
   method: "resources/read",
   params: {
-    uri: "kit://notes?limit=25",
+    uri: "kit://notes?tag=planning&limit=25",
   },
 };
 
