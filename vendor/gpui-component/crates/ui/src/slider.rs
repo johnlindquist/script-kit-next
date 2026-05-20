@@ -30,6 +30,7 @@ impl Render for DragSlider {
 /// Events emitted by the [`SliderState`].
 pub enum SliderEvent {
     Change(SliderValue),
+    Release(SliderValue),
 }
 
 /// The value of the slider, can be a single value or a range of values.
@@ -190,6 +191,7 @@ pub struct SliderState {
     /// The bounds of the slider after rendered.
     bounds: Bounds<Pixels>,
     scale: SliderScale,
+    dragging: bool,
 }
 
 impl SliderState {
@@ -203,6 +205,7 @@ impl SliderState {
             percentage: (0.0..0.0),
             bounds: Bounds::default(),
             scale: SliderScale::default(),
+            dragging: false,
         }
     }
 
@@ -283,6 +286,11 @@ impl SliderState {
         self.value
     }
 
+    /// Whether a native pointer drag currently owns this slider.
+    pub fn is_dragging(&self) -> bool {
+        self.dragging
+    }
+
     /// Converts a value between 0.0 and 1.0 to a value between the minimum and maximum value,
     /// depending on the chosen scale.
     fn percentage_to_value(&self, percentage: f32) -> f32 {
@@ -341,6 +349,7 @@ impl SliderState {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.dragging = true;
         let bounds = self.bounds;
         let step = self.step;
 
@@ -350,6 +359,10 @@ impl SliderState {
             bounds.bottom() - position.y
         };
         let total_size = bounds.size.along(axis);
+        if total_size <= px(0.0) {
+            return;
+        }
+
         let percentage = inner_pos.clamp(px(0.), total_size) / total_size;
 
         let percentage = if is_start {
@@ -361,6 +374,7 @@ impl SliderState {
         let value = self.percentage_to_value(percentage);
         let value = (value / step).round() * step;
 
+        let previous = self.value;
         if is_start {
             self.percentage.start = percentage;
             self.value.set_start(value);
@@ -368,7 +382,19 @@ impl SliderState {
             self.percentage.end = percentage;
             self.value.set_end(value);
         }
+        if self.value == previous {
+            return;
+        }
         cx.emit(SliderEvent::Change(self.value));
+        cx.notify();
+    }
+
+    fn handle_release(&mut self, cx: &mut Context<Self>) {
+        if !self.dragging {
+            return;
+        }
+        self.dragging = false;
+        cx.emit(SliderEvent::Release(self.value));
         cx.notify();
     }
 }
@@ -548,6 +574,20 @@ impl RenderOnce for Slider {
             .refine_style(&self.style)
             .bg(cx.theme().transparent)
             .text_color(cx.theme().foreground)
+            .when(!self.disabled, |this| {
+                this.on_mouse_up(
+                    MouseButton::Left,
+                    window.listener_for(&self.state, |state, _, _, cx| {
+                        state.handle_release(cx);
+                    }),
+                )
+                .on_mouse_up_out(
+                    MouseButton::Left,
+                    window.listener_for(&self.state, |state, _, _, cx| {
+                        state.handle_release(cx);
+                    }),
+                )
+            })
             .child(
                 h_flex()
                     .id("slider-bar-container")

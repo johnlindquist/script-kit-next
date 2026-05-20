@@ -1,5 +1,5 @@
 use crate::theme::gpui_integration::{
-    best_contrast_of_two, sync_gpui_component_theme_for_theme_with_source,
+    best_contrast_of_two, sync_gpui_component_theme_for_theme_with_source_and_native,
 };
 
 use gpui_component::{
@@ -16,6 +16,18 @@ enum ThemeChooserSliderBinding {
     UiFontSize,
     GradientAngle { layer_index: Option<usize> },
     GradientOpacity { layer_index: Option<usize> },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThemeChooserSliderApplyMode {
+    LiveDrag,
+    Commit,
+}
+
+impl ThemeChooserSliderApplyMode {
+    fn notify_parent(self) -> bool {
+        matches!(self, Self::Commit)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -44,14 +56,21 @@ pub(crate) struct ThemeChooserControls {
 }
 
 const THEME_LIST_PAGE_SIZE: usize = 5;
-/// Unified theme chooser preview sync: applies both gpui-component colors and
-/// native vibrancy/material in one call, with a source tag for tracing.
+/// Unified Theme Designer preview sync.
+/// Slider drags can skip native window material churn while commit-style paths
+/// keep native vibrancy synchronized through the caller-owned flag.
 fn sync_theme_chooser_preview(
     cx: &mut gpui::App,
     active_theme: &std::sync::Arc<crate::theme::Theme>,
     source: &'static str,
+    sync_native_vibrancy: bool,
 ) {
-    sync_gpui_component_theme_for_theme_with_source(cx, active_theme.as_ref(), source);
+    sync_gpui_component_theme_for_theme_with_source_and_native(
+        cx,
+        active_theme.as_ref(),
+        source,
+        sync_native_vibrancy,
+    );
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -220,6 +239,9 @@ impl ScriptListApp {
             window,
             move |this, _, event: &SliderEvent, _window, cx| match event {
                 SliderEvent::Change(value) => {
+                    this.apply_theme_chooser_slider_drag_change(binding, *value, cx);
+                }
+                SliderEvent::Release(value) => {
                     this.apply_theme_chooser_slider_change(binding, *value, cx);
                 }
             },
@@ -421,46 +443,92 @@ impl ScriptListApp {
         value: SliderValue,
         cx: &mut Context<Self>,
     ) {
+        self.apply_theme_chooser_slider_change_with_mode(
+            binding,
+            value,
+            ThemeChooserSliderApplyMode::Commit,
+            cx,
+        );
+    }
+
+    fn apply_theme_chooser_slider_drag_change(
+        &mut self,
+        binding: ThemeChooserSliderBinding,
+        value: SliderValue,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_theme_chooser_slider_change_with_mode(
+            binding,
+            value,
+            ThemeChooserSliderApplyMode::LiveDrag,
+            cx,
+        );
+    }
+
+    fn apply_theme_chooser_slider_change_with_mode(
+        &mut self,
+        binding: ThemeChooserSliderBinding,
+        value: SliderValue,
+        mode: ThemeChooserSliderApplyMode,
+        cx: &mut Context<Self>,
+    ) {
         let value = value.end();
         match binding {
             ThemeChooserSliderBinding::SurfaceOpacity => {
                 let next =
                     Self::apply_surface_opacity_preset(self.theme.as_ref(), value.clamp(0.0, 1.0));
-                self.apply_theme_chooser_theme(next, "theme_chooser_surface_opacity_slider", cx);
+                self.apply_theme_chooser_slider_theme(
+                    next,
+                    "theme_chooser_surface_opacity_slider",
+                    mode,
+                    cx,
+                );
             }
             ThemeChooserSliderBinding::SecondaryTextOpacity => {
                 let next =
                     Self::apply_text_opacity_preset(self.theme.as_ref(), value.clamp(0.0, 1.0));
-                self.apply_theme_chooser_theme(next, "theme_chooser_text_opacity_slider", cx);
+                self.apply_theme_chooser_slider_theme(
+                    next,
+                    "theme_chooser_text_opacity_slider",
+                    mode,
+                    cx,
+                );
             }
             ThemeChooserSliderBinding::FocusedBackgroundOpacity => {
                 let next = Self::apply_focused_background_opacity_preset(
                     self.theme.as_ref(),
                     value.clamp(0.0, 1.0),
                 );
-                self.apply_theme_chooser_theme(
+                self.apply_theme_chooser_slider_theme(
                     next,
                     "theme_chooser_focused_background_opacity_slider",
+                    mode,
                     cx,
                 );
             }
             ThemeChooserSliderBinding::UiFontSize => {
                 let size = value.clamp(10.0, 32.0);
-                self.mutate_theme_chooser_theme("theme_chooser_ui_font_size_slider", cx, |theme| {
-                    if let Some(fonts) = theme.fonts.as_mut() {
-                        fonts.ui_size = size;
-                    } else {
-                        theme.fonts = Some(theme::FontConfig {
-                            ui_size: size,
-                            ..Default::default()
-                        });
-                    }
-                });
+                self.mutate_theme_chooser_slider_theme(
+                    "theme_chooser_ui_font_size_slider",
+                    mode,
+                    cx,
+                    |theme| {
+                        if let Some(fonts) = theme.fonts.as_mut() {
+                            fonts.ui_size = size;
+                        } else {
+                            theme.fonts = Some(theme::FontConfig {
+                                ui_size: size,
+                                ..Default::default()
+                            });
+                        }
+                    },
+                );
             }
             ThemeChooserSliderBinding::GradientAngle { layer_index } => {
                 let angle = value.rem_euclid(360.0);
-                self.mutate_theme_chooser_theme(
+                self.mutate_theme_chooser_slider_theme(
                     "theme_chooser_gradient_angle_slider",
+                    mode,
                     cx,
                     |theme| {
                         let Some(gradient) = theme.background_gradient.as_mut() else {
@@ -478,8 +546,9 @@ impl ScriptListApp {
             }
             ThemeChooserSliderBinding::GradientOpacity { layer_index } => {
                 let opacity = value.clamp(0.0, 1.0);
-                self.mutate_theme_chooser_theme(
+                self.mutate_theme_chooser_slider_theme(
                     "theme_chooser_gradient_opacity_slider",
+                    mode,
                     cx,
                     |theme| {
                         let Some(gradient) = theme.background_gradient.as_mut() else {
@@ -784,6 +853,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         slider.update(cx, |slider, cx| {
+            if slider.is_dragging() {
+                return;
+            }
             let current = slider.value().end();
             if (current - value).abs() > 0.000_1 {
                 slider.set_value(value, window, cx);
@@ -1227,15 +1299,46 @@ impl ScriptListApp {
         reason: &'static str,
         cx: &mut Context<Self>,
     ) {
+        self.apply_theme_chooser_theme_preview(next_theme, reason, true, true, cx);
+    }
+
+    fn apply_theme_chooser_slider_theme(
+        &mut self,
+        next_theme: crate::theme::Theme,
+        reason: &'static str,
+        mode: ThemeChooserSliderApplyMode,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_theme_chooser_theme_preview(
+            next_theme,
+            reason,
+            false,
+            mode.notify_parent(),
+            cx,
+        );
+    }
+
+    fn apply_theme_chooser_theme_preview(
+        &mut self,
+        next_theme: crate::theme::Theme,
+        reason: &'static str,
+        sync_native_vibrancy: bool,
+        notify_parent: bool,
+        cx: &mut Context<Self>,
+    ) {
         self.theme = std::sync::Arc::new(next_theme);
         self.sync_open_actions_dialog_theme(cx);
         self.sync_open_terminal_theme(cx);
-        sync_theme_chooser_preview(cx, &self.theme, reason);
-        // Sync native vibrancy so the window material matches the theme
-        let is_dark = self.theme.should_use_dark_vibrancy();
-        let material = self.theme.get_vibrancy().material;
-        platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
-        cx.notify();
+        sync_theme_chooser_preview(cx, &self.theme, reason, sync_native_vibrancy);
+        if sync_native_vibrancy {
+            // Sync native vibrancy so the window material matches the theme.
+            let is_dark = self.theme.should_use_dark_vibrancy();
+            let material = self.theme.get_vibrancy().material;
+            platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
+        }
+        if notify_parent {
+            cx.notify();
+        }
     }
 
     /// Apply a theme AND persist to disk.
@@ -1270,6 +1373,18 @@ impl ScriptListApp {
         self.apply_theme_chooser_theme(next, reason, cx);
     }
 
+    fn mutate_theme_chooser_slider_theme(
+        &mut self,
+        reason: &'static str,
+        mode: ThemeChooserSliderApplyMode,
+        cx: &mut Context<Self>,
+        mutate: impl FnOnce(&mut crate::theme::Theme),
+    ) {
+        let mut next = (*self.theme).clone();
+        mutate(&mut next);
+        self.apply_theme_chooser_slider_theme(next, reason, mode, cx);
+    }
+
     /// Restore a previously saved theme (escape/close paths).
     /// Routes through the same preview sync pipeline as mutations.
     fn restore_theme_chooser_theme(
@@ -1281,7 +1396,7 @@ impl ScriptListApp {
         self.theme = original;
         self.sync_open_actions_dialog_theme(cx);
         self.sync_open_terminal_theme(cx);
-        sync_theme_chooser_preview(cx, &self.theme, reason);
+        sync_theme_chooser_preview(cx, &self.theme, reason, true);
         // Sync native vibrancy for the restored theme
         let is_dark = self.theme.should_use_dark_vibrancy();
         let material = self.theme.get_vibrancy().material;
@@ -3201,11 +3316,11 @@ mod theme_chooser_actions_dialog_sync_tests {
     #[test]
     fn theme_chooser_preview_updates_open_actions_dialog_theme() {
         let source = include_str!("theme_chooser.rs");
-        let apply_fn = source
-            .split("fn apply_theme_chooser_theme(")
+        let preview_fn = source
+            .split("fn apply_theme_chooser_theme_preview(")
             .nth(1)
-            .and_then(|section| section.split("fn mutate_theme_chooser_theme(").next())
-            .expect("missing apply_theme_chooser_theme");
+            .and_then(|section| section.split("fn apply_and_persist_theme(").next())
+            .expect("missing apply_theme_chooser_theme_preview");
         let restore_fn = source
             .split("fn restore_theme_chooser_theme(")
             .nth(1)
@@ -3213,7 +3328,7 @@ mod theme_chooser_actions_dialog_sync_tests {
             .expect("missing restore_theme_chooser_theme");
 
         assert!(
-            apply_fn.contains("self.sync_open_actions_dialog_theme(cx);"),
+            preview_fn.contains("self.sync_open_actions_dialog_theme(cx);"),
             "theme chooser preview mutations should propagate to open actions dialogs"
         );
         assert!(
