@@ -148,6 +148,7 @@ impl ScriptListApp {
 
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             self.set_menu_syntax_mode_from_filter(&text);
+            self.sync_menu_syntax_form_inputs_from_filter(window, cx);
             self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
             if self.menu_syntax_object_selector_state.snapshot.is_none() {
                 self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
@@ -155,6 +156,7 @@ impl ScriptListApp {
             self.invalidate_grouped_cache();
         } else {
             self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
+            self.sync_menu_syntax_form_inputs_from_filter(window, cx);
         }
 
         if self.menu_syntax_mode.is_menu_syntax_for(&text)

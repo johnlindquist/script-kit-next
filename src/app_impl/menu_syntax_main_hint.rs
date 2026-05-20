@@ -1,6 +1,18 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn update_main_input_tab_navigation_for_menu_syntax_form(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let handler_form_owns_input = self.menu_syntax_capture_form_owns_input();
+        self.gpui_input_state.update(cx, |state, cx| {
+            state.set_tab_navigation(handler_form_owns_input, window, cx);
+            state.set_tab_navigation_space_as_tab(handler_form_owns_input, window, cx);
+        });
+    }
+
     fn menu_syntax_form_signature(form: &crate::menu_syntax::MenuSyntaxFormSnapshot) -> String {
         let mut signature = format!("{}:", form.target);
         for field in &form.fields {
@@ -15,6 +27,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.update_main_input_tab_navigation_for_menu_syntax_form(window, cx);
         if !self.menu_syntax_capture_form_owns_input() {
             self.clear_menu_syntax_form_inputs();
             return;
@@ -87,17 +100,30 @@ impl ScriptListApp {
                           event: &gpui_component::input::InputEvent,
                           window,
                           cx| {
-                        if !matches!(event, gpui_component::input::InputEvent::Change) {
-                            return;
+                        match event {
+                            gpui_component::input::InputEvent::Change => {
+                                if this.menu_syntax_form_syncing_from_input {
+                                    return;
+                                }
+                                let value = input.read(cx).value().to_string();
+                                this.menu_syntax_form_syncing_from_input = true;
+                                let _ = this.update_menu_syntax_form_field(
+                                    Some(&field_id),
+                                    value,
+                                    window,
+                                    cx,
+                                );
+                                this.menu_syntax_form_syncing_from_input = false;
+                            }
+                            gpui_component::input::InputEvent::PressTab { secondary } => {
+                                if *secondary {
+                                    this.focus_previous_menu_syntax_form_field(window, cx);
+                                } else {
+                                    this.focus_next_menu_syntax_form_field(window, cx);
+                                }
+                            }
+                            _ => {}
                         }
-                        if this.menu_syntax_form_syncing_from_input {
-                            return;
-                        }
-                        let value = input.read(cx).value().to_string();
-                        this.menu_syntax_form_syncing_from_input = true;
-                        let _ =
-                            this.update_menu_syntax_form_field(Some(&field_id), value, window, cx);
-                        this.menu_syntax_form_syncing_from_input = false;
                     }
                 });
                 self.menu_syntax_form_inputs.push((field_id, input));

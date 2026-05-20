@@ -1306,6 +1306,20 @@ impl ScriptListApp {
 
                 let key_str = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
+                if sk_is_key_tab(key_str)
+                    && !has_cmd
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
+                    && this.menu_syntax_capture_form_owns_input()
+                {
+                    if event.keystroke.modifiers.shift {
+                        this.focus_previous_menu_syntax_form_field(window, cx);
+                    } else {
+                        this.focus_next_menu_syntax_form_field(window, cx);
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
 
                 // Check SDK action shortcuts FIRST (before built-in shortcuts)
                 // This allows scripts to override default shortcuts via setActions()

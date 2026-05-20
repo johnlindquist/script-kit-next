@@ -7,12 +7,48 @@ use std::sync::{Arc, LazyLock, Mutex};
 static FAVICON_CACHE: LazyLock<Mutex<HashMap<String, Option<Arc<RenderImage>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Tracks which domains are currently being fetched in the background to avoid spawning redundant threads.
+static FETCHING_DOMAINS: LazyLock<Mutex<std::collections::HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
 /// Look up a cached favicon for the given URL's domain.
 /// Returns `None` if not yet fetched or fetch failed.
 pub fn cached_favicon(url: &str) -> Option<Arc<RenderImage>> {
     let domain = domain_from_url(url)?;
     let cache = FAVICON_CACHE.lock().ok()?;
     cache.get(domain)?.clone()
+}
+
+/// Look up a cached favicon for the given URL, or trigger a background fetch if not present.
+/// Returns the cached favicon if already present, or None if not present or fetching.
+pub fn get_or_fetch_favicon(url: &str) -> Option<Arc<RenderImage>> {
+    let domain = domain_from_url(url)?;
+
+    // 1. Check if already in cache
+    {
+        if let Ok(cache) = FAVICON_CACHE.lock() {
+            if let Some(opt_img) = cache.get(domain) {
+                return opt_img.clone();
+            }
+        }
+    }
+
+    // 2. Check if already fetching
+    if let Ok(mut fetching) = FETCHING_DOMAINS.lock() {
+        if fetching.insert(domain.to_string()) {
+            // Not fetching yet. Spawn a background thread to fetch it.
+            let domain_clone = domain.to_string();
+            std::thread::spawn(move || {
+                fetch_favicons_blocking(&[domain_clone.clone()]);
+                // Remove from fetching set when done
+                if let Ok(mut fetching) = FETCHING_DOMAINS.lock() {
+                    fetching.remove(&domain_clone);
+                }
+            });
+        }
+    }
+
+    None
 }
 
 /// Extract the host from a URL (e.g. "https://docs.google.com/foo" → "docs.google.com").
@@ -67,5 +103,37 @@ pub fn fetch_favicons_blocking(domains: &[String]) {
 
         let mut cache = FAVICON_CACHE.lock().unwrap_or_else(|e| e.into_inner());
         cache.insert(domain.clone(), result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_domain_from_url() {
+        assert_eq!(
+            domain_from_url("https://google.com/search"),
+            Some("google.com")
+        );
+        assert_eq!(domain_from_url("http://github.com"), Some("github.com"));
+        assert_eq!(domain_from_url("google.com"), Some("google.com"));
+        assert_eq!(domain_from_url(""), None);
+    }
+
+    #[test]
+    fn test_get_or_fetch_favicon_cached() {
+        let test_domain = "example-test-cached.com";
+        {
+            let mut cache = FAVICON_CACHE.lock().unwrap();
+            cache.insert(test_domain.to_string(), None); // Cached as None (failed/placeholder)
+        }
+
+        let result = get_or_fetch_favicon("https://example-test-cached.com/path");
+        assert!(result.is_none());
+
+        // Check it's not in fetching set because it was already cached
+        let fetching = FETCHING_DOMAINS.lock().unwrap();
+        assert!(!fetching.contains(test_domain));
     }
 }

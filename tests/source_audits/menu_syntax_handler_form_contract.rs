@@ -119,6 +119,20 @@ fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
         !render[field_start..].contains("Tab moves fields"),
         "handler form should avoid visible keyboard-instruction copy"
     );
+    assert!(
+        read("src/app_impl/menu_syntax_main_hint.rs")
+            .contains("state.set_tab_navigation(handler_form_owns_input, window, cx)")
+            && read("src/app_impl/menu_syntax_main_hint.rs").contains(
+                "state.set_tab_navigation_space_as_tab(handler_form_owns_input, window, cx)"
+            )
+            && read("vendor/gpui-component/crates/ui/src/input/state.rs")
+                .contains("InputEvent::PressTab { secondary: false }")
+            && read("src/app_impl/filter_input_updates.rs")
+                .contains("self.sync_menu_syntax_form_inputs_from_filter(window, cx);")
+            && render.contains("sk_is_key_tab(key_str)")
+            && render.contains("this.focus_next_menu_syntax_form_field(window, cx);"),
+        "main filter input must propagate Tab while handler forms own input so the form can take real cursor focus"
+    );
 }
 
 #[test]
@@ -173,17 +187,21 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
         "preflight tabAction must be None for handler forms before emitting Ask AI"
     );
 
-    let startup = read("src/app_impl/startup.rs");
-    let physical_form = startup
-        .find("menu_syntax_capture_form_owns_input()")
-        .expect("physical Tab path must check handler form ownership");
-    let physical_ai = startup
-        .find("try_route_plain_tab_to_acp_context_capture")
-        .expect("physical Tab path must still contain Tab AI route");
-    assert!(
-        physical_form < physical_ai,
-        "physical Tab must move handler form focus before Tab AI can claim the key"
-    );
+    for path in ["src/app_impl/startup.rs", "src/app_impl/startup_new_tab.rs"] {
+        let source = read(path);
+        let form = source
+            .find("menu_syntax_capture_form_owns_input()")
+            .unwrap_or_else(|| {
+                panic!("{path}: physical Tab path must check handler form ownership")
+            });
+        let ai = source
+            .find("try_route_plain_tab_to_acp_context_capture")
+            .unwrap_or_else(|| panic!("{path}: physical Tab path must still contain Tab AI route"));
+        assert!(
+            form < ai,
+            "{path}: physical Tab must move handler form focus before Tab AI can claim the key"
+        );
+    }
 
     for path in [
         "src/main_entry/runtime_stdin.rs",
