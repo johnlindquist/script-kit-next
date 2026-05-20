@@ -1,11 +1,49 @@
 use crate::theme::gpui_integration::{
     best_contrast_of_two, sync_gpui_component_theme_for_theme_with_source,
 };
-use crate::ui_foundation::HexColorExt as _;
+
+use gpui_component::{
+    color_picker::{ColorPicker, ColorPickerEvent, ColorPickerState},
+    slider::{Slider, SliderEvent, SliderState, SliderValue},
+    Colorize as _,
+};
+
+#[derive(Clone, Copy, Debug)]
+enum ThemeChooserSliderBinding {
+    SurfaceOpacity,
+    SecondaryTextOpacity,
+    FocusedBackgroundOpacity,
+    UiFontSize,
+    GradientAngle { layer_index: Option<usize> },
+    GradientOpacity { layer_index: Option<usize> },
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ThemeChooserColorBinding {
+    Accent,
+    GradientFrom { layer_index: Option<usize> },
+    GradientTo { layer_index: Option<usize> },
+}
+
+pub(crate) struct ThemeChooserGradientControls {
+    from: Entity<ColorPickerState>,
+    to: Entity<ColorPickerState>,
+    angle: Entity<SliderState>,
+    opacity: Entity<SliderState>,
+}
+
+pub(crate) struct ThemeChooserControls {
+    accent: Entity<ColorPickerState>,
+    surface_opacity: Entity<SliderState>,
+    secondary_text_opacity: Entity<SliderState>,
+    focused_background_opacity: Entity<SliderState>,
+    ui_font_size: Entity<SliderState>,
+    gradient_base: ThemeChooserGradientControls,
+    gradient_layers: Vec<ThemeChooserGradientControls>,
+    subscriptions: Vec<Subscription>,
+}
 
 const THEME_LIST_PAGE_SIZE: usize = 5;
-const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
-
 /// Unified theme chooser preview sync: applies both gpui-component colors and
 /// native vibrancy/material in one call, with a source tag for tracing.
 fn sync_theme_chooser_preview(
@@ -131,6 +169,625 @@ fn cached_theme_chooser_contrast_snapshot(
 }
 
 impl ScriptListApp {
+    fn theme_chooser_hex_to_hsla(hex: u32) -> gpui::Hsla {
+        rgb(hex).into()
+    }
+
+    fn theme_chooser_hsla_to_hex_rgb(color: gpui::Hsla) -> Option<u32> {
+        let hex = color.to_hex().to_string();
+        let trimmed = hex.trim_start_matches('#');
+        if trimmed.len() < 6 {
+            return None;
+        }
+        u32::from_str_radix(&trimmed[..6], 16).ok()
+    }
+
+    fn theme_chooser_featured_colors() -> Vec<gpui::Hsla> {
+        Self::ACCENT_PALETTE
+            .iter()
+            .map(|&(hex, _)| Self::theme_chooser_hex_to_hsla(hex))
+            .collect()
+    }
+
+    fn new_theme_chooser_slider(
+        &self,
+        binding: ThemeChooserSliderBinding,
+        min: f32,
+        max: f32,
+        step: f32,
+        initial: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        subscriptions: &mut Vec<Subscription>,
+    ) -> gpui::Entity<SliderState> {
+        let slider = cx.new(|_| {
+            SliderState::new()
+                .min(min)
+                .max(max)
+                .step(step)
+                .default_value(initial)
+        });
+        subscriptions.push(cx.subscribe_in(
+            &slider,
+            window,
+            move |this, _, event: &SliderEvent, _window, cx| match event {
+                SliderEvent::Change(value) => {
+                    this.apply_theme_chooser_slider_change(binding, *value, cx);
+                }
+            },
+        ));
+        slider
+    }
+
+    fn new_theme_chooser_color_picker(
+        &self,
+        binding: ThemeChooserColorBinding,
+        initial_hex: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        subscriptions: &mut Vec<Subscription>,
+    ) -> gpui::Entity<ColorPickerState> {
+        let initial = Self::theme_chooser_hex_to_hsla(initial_hex);
+        let picker = cx.new(|cx| ColorPickerState::new(window, cx).default_value(initial));
+        subscriptions.push(cx.subscribe_in(
+            &picker,
+            window,
+            move |this, _, event: &ColorPickerEvent, _window, cx| match event {
+                ColorPickerEvent::Change(Some(color)) => {
+                    this.apply_theme_chooser_color_change(binding, *color, cx);
+                }
+                ColorPickerEvent::Change(None) => {}
+            },
+        ));
+        picker
+    }
+
+    fn new_theme_chooser_gradient_controls(
+        &self,
+        layer_index: Option<usize>,
+        from: u32,
+        to: u32,
+        angle: f32,
+        opacity: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        subscriptions: &mut Vec<Subscription>,
+    ) -> ThemeChooserGradientControls {
+        ThemeChooserGradientControls {
+            from: self.new_theme_chooser_color_picker(
+                ThemeChooserColorBinding::GradientFrom { layer_index },
+                from,
+                window,
+                cx,
+                subscriptions,
+            ),
+            to: self.new_theme_chooser_color_picker(
+                ThemeChooserColorBinding::GradientTo { layer_index },
+                to,
+                window,
+                cx,
+                subscriptions,
+            ),
+            angle: self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::GradientAngle { layer_index },
+                0.0,
+                360.0,
+                1.0,
+                angle.rem_euclid(360.0),
+                window,
+                cx,
+                subscriptions,
+            ),
+            opacity: self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::GradientOpacity { layer_index },
+                0.0,
+                1.0,
+                0.01,
+                opacity.clamp(0.0, 1.0),
+                window,
+                cx,
+                subscriptions,
+            ),
+        }
+    }
+
+    fn ensure_theme_chooser_controls(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let opacity = self.theme.get_opacity();
+        let fonts = self.theme.get_fonts();
+        let gradient = self.theme.background_gradient.clone().unwrap_or_default();
+        let needs_init = self.theme_chooser_controls.is_none();
+        if needs_init {
+            let mut subscriptions = Vec::new();
+            let accent = self.new_theme_chooser_color_picker(
+                ThemeChooserColorBinding::Accent,
+                self.theme.colors.accent.selected,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let surface_opacity = self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::SurfaceOpacity,
+                0.0,
+                1.0,
+                0.01,
+                opacity.main,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let secondary_text_opacity = self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::SecondaryTextOpacity,
+                0.0,
+                1.0,
+                0.01,
+                opacity.text_placeholder,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let focused_background_opacity = self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::FocusedBackgroundOpacity,
+                0.0,
+                1.0,
+                0.01,
+                opacity.selected,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let ui_font_size = self.new_theme_chooser_slider(
+                ThemeChooserSliderBinding::UiFontSize,
+                12.0,
+                24.0,
+                0.5,
+                fonts.ui_size,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let gradient_base = self.new_theme_chooser_gradient_controls(
+                None,
+                gradient.from,
+                gradient.to,
+                gradient.angle,
+                gradient.opacity,
+                window,
+                cx,
+                &mut subscriptions,
+            );
+            let gradient_layers = gradient
+                .layers
+                .iter()
+                .enumerate()
+                .map(|(index, layer)| {
+                    self.new_theme_chooser_gradient_controls(
+                        Some(index),
+                        layer.from,
+                        layer.to,
+                        layer.angle,
+                        layer.opacity,
+                        window,
+                        cx,
+                        &mut subscriptions,
+                    )
+                })
+                .collect();
+            self.theme_chooser_controls = Some(ThemeChooserControls {
+                accent,
+                surface_opacity,
+                secondary_text_opacity,
+                focused_background_opacity,
+                ui_font_size,
+                gradient_base,
+                gradient_layers,
+                subscriptions,
+            });
+        }
+        self.reconcile_theme_chooser_gradient_controls(window, cx);
+    }
+
+    fn reconcile_theme_chooser_gradient_controls(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(controls) = self.theme_chooser_controls.as_ref() else {
+            return;
+        };
+        let current_layer_count = self
+            .theme
+            .background_gradient
+            .as_ref()
+            .map(|gradient| gradient.layers.len())
+            .unwrap_or(0);
+        if controls.gradient_layers.len() == current_layer_count {
+            return;
+        }
+        self.theme_chooser_controls = None;
+        self.ensure_theme_chooser_controls(window, cx);
+    }
+
+    fn apply_theme_chooser_slider_change(
+        &mut self,
+        binding: ThemeChooserSliderBinding,
+        value: SliderValue,
+        cx: &mut Context<Self>,
+    ) {
+        let value = value.end();
+        match binding {
+            ThemeChooserSliderBinding::SurfaceOpacity => {
+                let next =
+                    Self::apply_surface_opacity_preset(self.theme.as_ref(), value.clamp(0.0, 1.0));
+                self.apply_theme_chooser_theme(next, "theme_chooser_surface_opacity_slider", cx);
+            }
+            ThemeChooserSliderBinding::SecondaryTextOpacity => {
+                let next =
+                    Self::apply_text_opacity_preset(self.theme.as_ref(), value.clamp(0.0, 1.0));
+                self.apply_theme_chooser_theme(next, "theme_chooser_text_opacity_slider", cx);
+            }
+            ThemeChooserSliderBinding::FocusedBackgroundOpacity => {
+                let next = Self::apply_focused_background_opacity_preset(
+                    self.theme.as_ref(),
+                    value.clamp(0.0, 1.0),
+                );
+                self.apply_theme_chooser_theme(
+                    next,
+                    "theme_chooser_focused_background_opacity_slider",
+                    cx,
+                );
+            }
+            ThemeChooserSliderBinding::UiFontSize => {
+                let size = value.clamp(10.0, 32.0);
+                self.mutate_theme_chooser_theme("theme_chooser_ui_font_size_slider", cx, |theme| {
+                    if let Some(fonts) = theme.fonts.as_mut() {
+                        fonts.ui_size = size;
+                    } else {
+                        theme.fonts = Some(theme::FontConfig {
+                            ui_size: size,
+                            ..Default::default()
+                        });
+                    }
+                });
+            }
+            ThemeChooserSliderBinding::GradientAngle { layer_index } => {
+                let angle = value.rem_euclid(360.0);
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_gradient_angle_slider",
+                    cx,
+                    |theme| {
+                        let Some(gradient) = theme.background_gradient.as_mut() else {
+                            return;
+                        };
+                        if let Some(index) = layer_index {
+                            if let Some(layer) = gradient.layers.get_mut(index) {
+                                layer.angle = angle;
+                            }
+                        } else {
+                            gradient.angle = angle;
+                        }
+                    },
+                );
+            }
+            ThemeChooserSliderBinding::GradientOpacity { layer_index } => {
+                let opacity = value.clamp(0.0, 1.0);
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_gradient_opacity_slider",
+                    cx,
+                    |theme| {
+                        let Some(gradient) = theme.background_gradient.as_mut() else {
+                            return;
+                        };
+                        if let Some(index) = layer_index {
+                            if let Some(layer) = gradient.layers.get_mut(index) {
+                                layer.opacity = opacity;
+                            }
+                        } else {
+                            gradient.opacity = opacity;
+                        }
+                    },
+                );
+            }
+        }
+    }
+
+    fn apply_theme_chooser_color_change(
+        &mut self,
+        binding: ThemeChooserColorBinding,
+        color: gpui::Hsla,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(hex) = Self::theme_chooser_hsla_to_hex_rgb(color) else {
+            return;
+        };
+        match binding {
+            ThemeChooserColorBinding::Accent => {
+                self.mutate_theme_chooser_theme("theme_chooser_accent_color_picker", cx, |theme| {
+                    theme.colors.accent.selected = hex;
+                    theme.colors.text.on_accent =
+                        best_contrast_of_two(hex, 0xFFFFFF, theme.colors.background.main);
+                });
+            }
+            ThemeChooserColorBinding::GradientFrom { layer_index } => {
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_gradient_from_color_picker",
+                    cx,
+                    |theme| {
+                        let Some(gradient) = theme.background_gradient.as_mut() else {
+                            return;
+                        };
+                        if let Some(index) = layer_index {
+                            if let Some(layer) = gradient.layers.get_mut(index) {
+                                layer.from = hex;
+                            }
+                        } else {
+                            gradient.from = hex;
+                        }
+                    },
+                );
+            }
+            ThemeChooserColorBinding::GradientTo { layer_index } => {
+                self.mutate_theme_chooser_theme(
+                    "theme_chooser_gradient_to_color_picker",
+                    cx,
+                    |theme| {
+                        let Some(gradient) = theme.background_gradient.as_mut() else {
+                            return;
+                        };
+                        if let Some(index) = layer_index {
+                            if let Some(layer) = gradient.layers.get_mut(index) {
+                                layer.to = hex;
+                            }
+                        } else {
+                            gradient.to = hex;
+                        }
+                    },
+                );
+            }
+        }
+    }
+
+    fn sync_slider_entity_value(
+        slider: &gpui::Entity<SliderState>,
+        value: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        slider.update(cx, |slider, cx| {
+            let current = slider.value().end();
+            if (current - value).abs() > 0.000_1 {
+                slider.set_value(value, window, cx);
+            }
+        });
+    }
+
+    fn sync_color_picker_entity_value(
+        picker: &gpui::Entity<ColorPickerState>,
+        hex: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let next = Self::theme_chooser_hex_to_hsla(hex);
+        let next_hex = next.to_hex().to_string();
+        picker.update(cx, |picker, cx| {
+            let current_hex = picker.value().map(|value| value.to_hex().to_string());
+            if current_hex.as_deref() != Some(next_hex.as_str()) {
+                picker.set_value(next, window, cx);
+            }
+        });
+    }
+
+    fn sync_gradient_controls_from_theme(
+        controls: &ThemeChooserGradientControls,
+        from: u32,
+        to: u32,
+        angle: f32,
+        opacity: f32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        Self::sync_color_picker_entity_value(&controls.from, from, window, cx);
+        Self::sync_color_picker_entity_value(&controls.to, to, window, cx);
+        Self::sync_slider_entity_value(&controls.angle, angle.rem_euclid(360.0), window, cx);
+        Self::sync_slider_entity_value(&controls.opacity, opacity.clamp(0.0, 1.0), window, cx);
+    }
+
+    fn sync_theme_chooser_control_values(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(controls) = self.theme_chooser_controls.as_ref() else {
+            return;
+        };
+        let opacity = self.theme.get_opacity();
+        let fonts = self.theme.get_fonts();
+
+        Self::sync_color_picker_entity_value(
+            &controls.accent,
+            self.theme.colors.accent.selected,
+            window,
+            cx,
+        );
+        Self::sync_slider_entity_value(&controls.surface_opacity, opacity.main, window, cx);
+        Self::sync_slider_entity_value(
+            &controls.secondary_text_opacity,
+            opacity.text_placeholder,
+            window,
+            cx,
+        );
+        Self::sync_slider_entity_value(
+            &controls.focused_background_opacity,
+            opacity.selected,
+            window,
+            cx,
+        );
+        Self::sync_slider_entity_value(&controls.ui_font_size, fonts.ui_size, window, cx);
+
+        let gradient = self.theme.background_gradient.clone().unwrap_or_default();
+
+        Self::sync_gradient_controls_from_theme(
+            &controls.gradient_base,
+            gradient.from,
+            gradient.to,
+            gradient.angle,
+            gradient.opacity,
+            window,
+            cx,
+        );
+
+        for (index, layer) in gradient.layers.iter().enumerate() {
+            if let Some(layer_controls) = controls.gradient_layers.get(index) {
+                Self::sync_gradient_controls_from_theme(
+                    layer_controls,
+                    layer.from,
+                    layer.to,
+                    layer.angle,
+                    layer.opacity,
+                    window,
+                    cx,
+                );
+            }
+        }
+    }
+
+    fn clear_theme_chooser_controls(&mut self) {
+        self.theme_chooser_controls = None;
+    }
+
+    fn render_theme_chooser_customize_section(
+        title: &'static str,
+        subtitle: Option<&'static str>,
+        chrome: &theme::AppChromeColors,
+        children: Vec<gpui::AnyElement>,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .p(px(12.0))
+            .rounded(px(10.0))
+            .border_1()
+            .border_color(rgba(chrome.badge_border_rgba))
+            .bg(rgba(chrome.panel_surface_rgba))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_dimmed_hex))
+                            .child(title),
+                    )
+                    .when_some(subtitle, |this, subtitle| {
+                        this.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(chrome.text_muted_hex))
+                                .child(subtitle),
+                        )
+                    }),
+            )
+            .children(children)
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_slider_row(
+        label: &'static str,
+        value_label: String,
+        slider: &Entity<SliderState>,
+        chrome: &theme::AppChromeColors,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_primary_hex))
+                            .child(value_label),
+                    ),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .h(px(24.0))
+                    .flex()
+                    .items_center()
+                    .child(Slider::new(slider).horizontal().into_any_element()),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_color_picker_row(
+        label: &'static str,
+        hex: u32,
+        picker: &Entity<ColorPickerState>,
+        chrome: &theme::AppChromeColors,
+    ) -> gpui::AnyElement {
+        div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap(px(10.0))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_muted_hex))
+                            .child(format!("#{:06X}", hex)),
+                    ),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .w(px(18.0))
+                            .h(px(18.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(rgba(chrome.badge_border_rgba))
+                            .bg(rgb(hex)),
+                    )
+                    .child(
+                        ColorPicker::new(picker)
+                            .featured_colors(Self::theme_chooser_featured_colors())
+                            .with_size(Size::Small),
+                    ),
+            )
+            .into_any_element()
+    }
+
     pub(crate) fn submit_theme_chooser_from_input_enter(
         &mut self,
         window: &mut Window,
@@ -145,6 +802,7 @@ impl ScriptListApp {
             tracing::warn!(error = %e, "theme_chooser_done_persist_failed");
         }
         self.theme_before_chooser = None;
+        self.clear_theme_chooser_controls();
         self.go_back_or_close(window, cx);
     }
 
@@ -486,7 +1144,9 @@ impl ScriptListApp {
     fn add_theme_chooser_gradient_layer(&mut self, reason: &'static str, cx: &mut Context<Self>) {
         let mut next = (*self.theme).clone();
         if let Some(ref mut gradient) = next.background_gradient {
-            gradient.layers.push(crate::theme::types::GradientLayer::default());
+            gradient
+                .layers
+                .push(crate::theme::types::GradientLayer::default());
         } else {
             next.background_gradient = Some(crate::theme::types::BackgroundGradient {
                 enabled: true,
@@ -722,39 +1382,20 @@ impl ScriptListApp {
 
     fn render_theme_chooser_gradient_layer_controls(
         &self,
-        index: Option<usize>,
+        title: String,
         enabled: bool,
-        from: u32,
-        to: u32,
+        from_hex: u32,
+        to_hex: u32,
         angle: f32,
         opacity: f32,
-        label: &str,
-        entity_handle: gpui::WeakEntity<Self>,
-        border_color: u32,
-        hover_bg: u32,
-        accent_color: u32,
-        text_on_accent: u32,
-        text_secondary: u32,
-        text_muted: u32,
+        controls: &ThemeChooserGradientControls,
+        chrome: &theme::AppChromeColors,
     ) -> gpui::AnyElement {
-        let is_base = index.is_none();
-        let toggle_entity = entity_handle.clone();
-        let add_entity = entity_handle.clone();
-        let remove_entity = entity_handle.clone();
-
         div()
+            .w_full()
             .flex()
             .flex_col()
-            .gap(px(8.0))
-            .p(px(8.0))
-            .rounded(px(8.0))
-            .bg(if enabled {
-                hover_bg.with_opacity(0.4)
-            } else {
-                gpui::transparent_black()
-            })
-            .border_1()
-            .border_color(rgb(border_color))
+            .gap(px(10.0))
             .child(
                 div()
                     .flex()
@@ -763,331 +1404,58 @@ impl ScriptListApp {
                     .justify_between()
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(
-                                div()
-                                    .w(px(24.0))
-                                    .h(px(12.0))
-                                    .rounded(px(6.0))
-                                    .bg(if enabled {
-                                        rgb(accent_color)
-                                    } else {
-                                        rgb(border_color)
-                                    })
-                                    .id("layer-toggle")
-                                    .cursor_pointer()
-                                    .on_click(move |_, _, cx| {
-                                        if let Some(app) = toggle_entity.upgrade() {
-                                            app.update(cx, |this: &mut Self, cx| {
-                                                this.toggle_theme_chooser_gradient_layer(
-                                                    index,
-                                                    "theme_chooser_layer_toggle",
-                                                    cx,
-                                                );
-                                            });
-                                        }
-                                    })
-                                    .child(
-                                        div()
-                                            .w(px(8.0))
-                                            .h(px(8.0))
-                                            .m(px(2.0))
-                                            .rounded(px(4.0))
-                                            .bg(if enabled {
-                                                rgb(text_on_accent)
-                                            } else {
-                                                rgb(text_secondary)
-                                            })
-                                            .when(enabled, |d| d.ml(px(14.0))),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .text_color(rgb(if enabled {
-                                        text_secondary
-                                    } else {
-                                        text_muted
-                                    }))
-                                    .child(label.to_string()),
-                            ),
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_secondary_hex))
+                            .child(title),
                     )
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0))
-                            .when(!is_base, |d| {
-                                d.child(
-                                    div()
-                                        .cursor_pointer()
-                                        .text_color(rgb(text_muted))
-                                        .hover(|s| s.text_color(rgb(0xef4444)))
-                                        .id("remove-layer")
-                                        .child("✕")
-                                        .on_click(move |_, _, cx| {
-                                            if let Some(app) = remove_entity.upgrade() {
-                                                app.update(cx, |this: &mut Self, cx| {
-                                                    this.remove_theme_chooser_gradient_layer(
-                                                        index.unwrap(),
-                                                        "theme_chooser_layer_remove",
-                                                        cx,
-                                                    );
-                                                });
-                                            }
-                                        }),
-                                )
-                            })
-                            .when(is_base, |d| {
-                                d.child(
-                                    div()
-                                        .cursor_pointer()
-                                        .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .hover(|s| s.text_color(rgb(accent_color)))
-                                        .id("add-layer-inline")
-                                        .child("+ Add Layer")
-                                        .on_click(move |_, _, cx| {
-                                            if let Some(app) = add_entity.upgrade() {
-                                                app.update(cx, |this: &mut Self, cx| {
-                                                    this.add_theme_chooser_gradient_layer(
-                                                        "theme_chooser_layer_add",
-                                                        cx,
-                                                    );
-                                                });
-                                            }
-                                        }),
-                                )
-                            }),
+                            .text_xs()
+                            .text_color(rgb(chrome.text_muted_hex))
+                            .child(if enabled { "Enabled" } else { "Disabled" }),
                     ),
             )
-            .when(enabled, |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(10.0))
-                        .child(
-                            // Color swatches
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(8.0))
-                                .child(self.render_gradient_color_swatch(index, false, from, entity_handle.clone(), border_color, text_muted))
-                                .child(div().text_xs().text_color(rgb(text_muted)).child("→"))
-                                .child(self.render_gradient_color_swatch(index, true, to, entity_handle.clone(), border_color, text_muted))
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(12.0))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(4.0))
-                                        .child(div().text_xs().text_color(rgb(text_muted)).child("Angle"))
-                                        .child(self.render_gradient_numeric_control(index, true, angle, entity_handle.clone(), border_color, text_secondary))
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(4.0))
-                                        .child(div().text_xs().text_color(rgb(text_muted)).child("Opacity"))
-                                        .child(self.render_gradient_numeric_control(index, false, opacity, entity_handle.clone(), border_color, text_secondary))
-                                )
-                        )
-                )
-            })
-            .into_any_element()
-    }
-
-    fn render_gradient_color_swatch(
-        &self,
-        layer_index: Option<usize>,
-        is_to: bool,
-        current_color: u32,
-        entity_handle: gpui::WeakEntity<Self>,
-        border_color: u32,
-        text_muted: u32,
-    ) -> gpui::AnyElement {
-        let palette = Self::ACCENT_PALETTE;
-        let current_idx = palette.iter().position(|&(c, _)| c == current_color).unwrap_or(0);
-        let next_color = palette[(current_idx + 1) % palette.len()].0;
-        let prev_color = palette[(current_idx + palette.len() - 1) % palette.len()].0;
-
-        let click_entity = entity_handle.clone();
-        let right_click_entity = entity_handle.clone();
-
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(4.0))
             .child(
                 div()
-                    .w(px(16.0))
-                    .h(px(16.0))
-                    .rounded(px(4.0))
-                    .bg(rgb(current_color))
-                    .border_1()
-                    .border_color(rgb(border_color))
-                    .id(if is_to { "color-to" } else { "color-from" })
-                    .cursor_pointer()
-                    .on_click(move |_, _, cx| {
-                        if let Some(app) = click_entity.upgrade() {
-                            app.update(cx, |this: &mut Self, cx| {
-                                this.update_theme_chooser_gradient_layer_color(
-                                    layer_index,
-                                    is_to,
-                                    next_color,
-                                    "theme_chooser_gradient_color_cycle",
-                                    cx,
-                                );
-                            });
-                        }
-                    })
-                    .on_mouse_down(gpui::MouseButton::Right, move |_, _, cx| {
-                        if let Some(app) = right_click_entity.upgrade() {
-                            app.update(cx, |this: &mut Self, cx| {
-                                this.update_theme_chooser_gradient_layer_color(
-                                    layer_index,
-                                    is_to,
-                                    prev_color,
-                                    "theme_chooser_gradient_color_cycle_prev",
-                                    cx,
-                                );
-                            });
-                        }
-                    })
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child(format!("#{:06X}", current_color))
-            )
-            .into_any_element()
-    }
-
-    fn render_gradient_numeric_control(
-        &self,
-        layer_index: Option<usize>,
-        is_angle: bool,
-        current_value: f32,
-        entity_handle: gpui::WeakEntity<Self>,
-        border_color: u32,
-        text_secondary: u32,
-    ) -> gpui::AnyElement {
-        let dec_entity = entity_handle.clone();
-        let inc_entity = entity_handle.clone();
-
-        let delta = if is_angle { 15.0 } else { 0.05 };
-        let display_value = if is_angle {
-            format!("{:.0}°", current_value)
-        } else {
-            format!("{:.0}%", current_value * 100.0)
-        };
-
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .border_1()
-            .border_color(rgb(border_color))
-            .rounded(px(4.0))
-            .bg(gpui::transparent_black())
-            .child(
-                div()
-                    .id(if is_angle {
-                        ElementId::NamedInteger("grad-dec-angle".into(), layer_index.unwrap_or(0) as u64)
-                    } else {
-                        ElementId::NamedInteger("grad-dec-opacity".into(), layer_index.unwrap_or(0) as u64)
-                    })
-                    .px(px(4.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(border_color)))
-                    .text_xs()
-                    .text_color(rgb(text_secondary))
-                    .child("-")
-                    .on_click(move |_, _, cx| {
-                        if let Some(app) = dec_entity.upgrade() {
-                            app.update(cx, |this: &mut Self, cx| {
-                                if is_angle {
-                                    this.adjust_theme_chooser_gradient_layer_angle(
-                                        layer_index,
-                                        -delta,
-                                        "theme_chooser_gradient_angle_dec",
-                                        cx,
-                                    );
-                                } else {
-                                    this.adjust_theme_chooser_gradient_layer_opacity(
-                                        layer_index,
-                                        -delta,
-                                        "theme_chooser_gradient_opacity_dec",
-                                        cx,
-                                    );
-                                }
-                            });
-                        }
-                    })
-            )
-            .child(
-                div()
-                    .px(px(6.0))
-                    .min_w(px(40.0))
+                    .w_full()
                     .flex()
-                    .justify_center()
-                    .text_xs()
-                    .text_color(rgb(text_secondary))
-                    .child(display_value)
+                    .flex_row()
+                    .items_center()
+                    .gap(px(12.0))
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Self::render_theme_chooser_color_picker_row(
+                                "From Color",
+                                from_hex,
+                                &controls.from,
+                                chrome,
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .child(Self::render_theme_chooser_color_picker_row(
+                                "To Color",
+                                to_hex,
+                                &controls.to,
+                                chrome,
+                            )),
+                    ),
             )
-            .child(
-                div()
-                    .id(if is_angle {
-                        ElementId::NamedInteger("grad-inc-angle".into(), layer_index.unwrap_or(0) as u64)
-                    } else {
-                        ElementId::NamedInteger("grad-inc-opacity".into(), layer_index.unwrap_or(0) as u64)
-                    })
-                    .px(px(4.0))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(rgb(border_color)))
-                    .text_xs()
-                    .text_color(rgb(text_secondary))
-                    .child("+")
-                    .on_click(move |_, _, cx| {
-                        if let Some(app) = inc_entity.upgrade() {
-                            app.update(cx, |this: &mut Self, cx| {
-                                if is_angle {
-                                    this.adjust_theme_chooser_gradient_layer_angle(
-                                        layer_index,
-                                        delta,
-                                        "theme_chooser_gradient_angle_inc",
-                                        cx,
-                                    );
-                                } else {
-                                    this.adjust_theme_chooser_gradient_layer_opacity(
-                                        layer_index,
-                                        delta,
-                                        "theme_chooser_gradient_opacity_inc",
-                                        cx,
-                                    );
-                                }
-                            });
-                        }
-                    })
-            )
+            .child(Self::render_theme_chooser_slider_row(
+                "Angle",
+                format!("{:.0}°", angle.rem_euclid(360.0)),
+                &controls.angle,
+                chrome,
+            ))
+            .child(Self::render_theme_chooser_slider_row(
+                "Opacity",
+                format!("{:.0}%", opacity.clamp(0.0, 1.0) * 100.0),
+                &controls.opacity,
+                chrome,
+            ))
             .into_any_element()
     }
 
@@ -1255,6 +1623,7 @@ impl ScriptListApp {
                         "theme_chooser_action_undo_persist",
                     );
                 }
+                self.clear_theme_chooser_controls();
                 self.go_back_or_close(window, cx);
             }
             "theme_chooser_remix" => {
@@ -1480,6 +1849,7 @@ impl ScriptListApp {
         &mut self,
         filter: &str,
         selected_index: usize,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let tokens = get_tokens(self.current_design);
@@ -1493,15 +1863,12 @@ impl ScriptListApp {
         let text_muted = chrome.text_muted_hex;
         let accent_color = chrome.accent_hex;
         let text_on_accent = self.theme.colors.text.on_accent;
-        let bg_main = self.theme.colors.background.main;
         let ui_success = self.theme.colors.ui.success;
         let ui_error = self.theme.colors.ui.error;
         let ui_warning = self.theme.colors.ui.warning;
         let ui_info = self.theme.colors.ui.info;
         let divider_bg = rgba(chrome.divider_rgba);
         let badge_border_bg = rgba(chrome.badge_border_rgba);
-        let theme_row_selected_bg = rgba(chrome.selection_rgba);
-        let theme_row_hover_bg = rgba(chrome.hover_rgba);
         let catalog = std::sync::Arc::new(Self::theme_chooser_catalog());
         let first_light = catalog
             .iter()
@@ -1600,6 +1967,7 @@ impl ScriptListApp {
                                 "theme_chooser_escape_undo_persist",
                             );
                         }
+                        this.clear_theme_chooser_controls();
                         this.go_back_or_close(window, cx);
                     }
                     cx.stop_propagation();
@@ -1615,6 +1983,7 @@ impl ScriptListApp {
                             "theme_chooser_close_undo_persist",
                         );
                     }
+                    this.clear_theme_chooser_controls();
                     this.close_and_reset_window(cx);
                     cx.stop_propagation();
                     return;
@@ -1981,8 +2350,6 @@ impl ScriptListApp {
         let header_padding_top = design_spacing.padding_sm;
         let header_padding_bottom = design_spacing.padding_sm;
         let header_gap = design_spacing.gap_md;
-        let preview_panel_gap = design_spacing.padding_sm;
-        let preview_section_gap = design_spacing.padding_sm;
         let search_input_height = design_typography.font_size_xl + 12.0;
 
         let header = div()
@@ -2009,559 +2376,6 @@ impl ScriptListApp {
                 ),
             );
 
-        // ── Preview panel with customization controls ─────────────
-        let current_opacity_main = self.theme.get_opacity().main;
-        let current_text_placeholder_opacity = self.theme.get_opacity().text_placeholder;
-        let current_focused_background_opacity = self.theme.get_opacity().selected;
-        let vibrancy_enabled = self
-            .theme
-            .vibrancy
-            .as_ref()
-            .map(|v| v.enabled)
-            .unwrap_or(true);
-
-        // Build accent color swatches (clickable)
-        let accent_swatches: Vec<gpui::AnyElement> = Self::ACCENT_PALETTE
-            .iter()
-            .enumerate()
-            .map(|(i, &(color, name))| {
-                let is_current = color == accent_color;
-                let click_entity = entity_handle_for_customize.clone();
-                let swatch_bg_main = bg_main;
-                let tooltip_label = format!("Set accent color to {}", name);
-                div()
-                    .id(ElementId::NamedInteger("accent-swatch".into(), i as u64))
-                    .w(px(22.0))
-                    .h(px(22.0))
-                    .rounded(px(11.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .when(is_current, |d| d.bg(theme_row_selected_bg))
-                    .when(!is_current, |d| d.hover(move |s| s.bg(theme_row_hover_bg)))
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                            .build(window, cx)
-                    })
-                    .child(
-                        div()
-                            .w(px(18.0))
-                            .h(px(18.0))
-                            .rounded(px(9.0))
-                            .bg(rgb(color))
-                            .when(is_current, |d| d.border_2().border_color(rgb(text_primary)))
-                            .when(!is_current, |d| d.border_1().border_color(badge_border_bg)),
-                    )
-                    .on_click(
-                        move |_event: &gpui::ClickEvent,
-                              _window: &mut Window,
-                              cx: &mut gpui::App| {
-                            cx.stop_propagation();
-                            if let Some(app) = click_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let mut modified = (*this.theme).clone();
-                                    modified.colors.accent.selected = color;
-                                    modified.colors.text.on_accent =
-                                        best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.apply_theme_chooser_theme(
-                                        modified,
-                                        "theme_chooser_accent_click",
-                                        cx,
-                                    );
-                                });
-                            }
-                        },
-                    )
-                    .into_any_element()
-            })
-            .collect();
-
-        let current_text_opacity_index = Self::closest_float_preset_index(
-            Self::TEXT_OPACITY_PRESETS,
-            current_text_placeholder_opacity,
-        );
-        let text_opacity_buttons: Vec<gpui::AnyElement> = Self::TEXT_OPACITY_PRESETS
-            .iter()
-            .enumerate()
-            .map(|(i, &(value, label))| {
-                let is_current = i == current_text_opacity_index;
-                let click_entity = entity_handle_for_customize.clone();
-                let tooltip_label =
-                    format!("Set placeholder/hint/description opacity to {}", label);
-                div()
-                    .id(ElementId::NamedInteger("text-opacity-btn".into(), i as u64))
-                    .px(px(8.0))
-                    .py(px(3.0))
-                    .rounded(px(4.0))
-                    .cursor_pointer()
-                    .text_xs()
-                    .when(is_current, |d| {
-                        d.bg(rgb(accent_color))
-                            .text_color(rgb(text_on_accent))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                    })
-                    .when(!is_current, |d| {
-                        d.border_1()
-                            .border_color(badge_border_bg)
-                            .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(theme_row_hover_bg))
-                    })
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                            .build(window, cx)
-                    })
-                    .on_click(
-                        move |_event: &gpui::ClickEvent,
-                              _window: &mut Window,
-                              cx: &mut gpui::App| {
-                            cx.stop_propagation();
-                            if let Some(app) = click_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let modified =
-                                        Self::apply_text_opacity_preset(this.theme.as_ref(), value);
-                                    this.apply_theme_chooser_theme(
-                                        modified,
-                                        "theme_chooser_text_opacity_click",
-                                        cx,
-                                    );
-                                });
-                            }
-                        },
-                    )
-                    .child(label.to_string())
-                    .into_any_element()
-            })
-            .collect();
-
-        let current_focused_background_opacity_index = Self::closest_float_preset_index(
-            Self::FOCUSED_BACKGROUND_OPACITY_PRESETS,
-            current_focused_background_opacity,
-        );
-        let focused_background_opacity_buttons: Vec<gpui::AnyElement> =
-            Self::FOCUSED_BACKGROUND_OPACITY_PRESETS
-                .iter()
-                .enumerate()
-                .map(|(i, &(value, label))| {
-                    let is_current = i == current_focused_background_opacity_index;
-                    let click_entity = entity_handle_for_customize.clone();
-                    let tooltip_label = format!("Set focused row background opacity to {}", label);
-                    div()
-                        .id(ElementId::NamedInteger(
-                            "focused-background-opacity-btn".into(),
-                            i as u64,
-                        ))
-                        .px(px(8.0))
-                        .py(px(3.0))
-                        .rounded(px(4.0))
-                        .cursor_pointer()
-                        .text_xs()
-                        .when(is_current, |d| {
-                            d.bg(rgb(accent_color))
-                                .text_color(rgb(text_on_accent))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                        })
-                        .when(!is_current, |d| {
-                            d.border_1()
-                                .border_color(badge_border_bg)
-                                .text_color(rgb(text_secondary))
-                                .hover(move |s| s.bg(theme_row_hover_bg))
-                        })
-                        .tooltip(move |window, cx| {
-                            gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                                .build(window, cx)
-                        })
-                        .on_click(
-                            move |_event: &gpui::ClickEvent,
-                                  _window: &mut Window,
-                                  cx: &mut gpui::App| {
-                                cx.stop_propagation();
-                                if let Some(app) = click_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        let modified =
-                                            Self::apply_focused_background_opacity_preset(
-                                                this.theme.as_ref(),
-                                                value,
-                                            );
-                                        this.apply_theme_chooser_theme(
-                                            modified,
-                                            "theme_chooser_focused_background_opacity_click",
-                                            cx,
-                                        );
-                                    });
-                                }
-                            },
-                        )
-                        .child(label.to_string())
-                        .into_any_element()
-                })
-                .collect();
-
-        // Build opacity preset buttons (clickable)
-        let current_opacity_index = Self::find_opacity_preset_index(current_opacity_main);
-        let opacity_buttons: Vec<gpui::AnyElement> = Self::OPACITY_PRESETS
-            .iter()
-            .enumerate()
-            .map(|(i, &(value, label))| {
-                let is_current = i == current_opacity_index;
-                let click_entity = entity_handle_for_customize.clone();
-                let tooltip_label = format!("Set opacity to {}", label);
-                div()
-                    .id(ElementId::NamedInteger("opacity-btn".into(), i as u64))
-                    .px(px(8.0))
-                    .py(px(3.0))
-                    .rounded(px(4.0))
-                    .cursor_pointer()
-                    .text_xs()
-                    .when(is_current, |d| {
-                        d.bg(rgb(accent_color))
-                            .text_color(rgb(text_on_accent))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                    })
-                    .when(!is_current, |d| {
-                        d.border_1()
-                            .border_color(badge_border_bg)
-                            .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(theme_row_hover_bg))
-                    })
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                            .build(window, cx)
-                    })
-                    .on_click(
-                        move |_event: &gpui::ClickEvent,
-                              _window: &mut Window,
-                              cx: &mut gpui::App| {
-                            cx.stop_propagation();
-                            if let Some(app) = click_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let modified = Self::apply_surface_opacity_preset(
-                                        this.theme.as_ref(),
-                                        value,
-                                    );
-                                    this.apply_theme_chooser_theme(
-                                        modified,
-                                        "theme_chooser_opacity_click",
-                                        cx,
-                                    );
-                                });
-                            }
-                        },
-                    )
-                    .child(label.to_string())
-                    .into_any_element()
-            })
-            .collect();
-
-        // Build vibrancy toggle (clickable)
-        let vibrancy_entity = entity_handle_for_customize.clone();
-        let vibrancy_toggle = div()
-            .id("vibrancy-toggle")
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.0))
-            .cursor_pointer()
-            .hover(move |s| s.bg(theme_row_hover_bg))
-            .rounded(px(4.0))
-            .px(px(4.0))
-            .py(px(2.0))
-            .tooltip(|window, cx| {
-                gpui_component::tooltip::Tooltip::new("Toggle vibrancy blur").build(window, cx)
-            })
-            .on_click(
-                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
-                    cx.stop_propagation();
-                    if let Some(app) = vibrancy_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let mut modified = (*this.theme).clone();
-                            if let Some(ref mut vibrancy) = modified.vibrancy {
-                                vibrancy.enabled = !vibrancy.enabled;
-                            }
-                            this.apply_theme_chooser_theme(
-                                modified,
-                                "theme_chooser_vibrancy_click",
-                                cx,
-                            );
-                        });
-                    }
-                },
-            )
-            .child(
-                div()
-                    .w(px(28.0))
-                    .h(px(14.0))
-                    .rounded(px(7.0))
-                    .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
-                    .when(!vibrancy_enabled, |d| d.bg(badge_border_bg))
-                    .flex()
-                    .items_center()
-                    .child(
-                        div()
-                            .w(px(10.0))
-                            .h(px(10.0))
-                            .rounded(px(5.0))
-                            .when(vibrancy_enabled, |d| d.bg(rgb(text_on_accent)))
-                            .when(!vibrancy_enabled, |d| d.bg(rgb(text_primary)))
-                            .when(vibrancy_enabled, |d| d.ml(px(16.0)))
-                            .when(!vibrancy_enabled, |d| d.ml(px(2.0))),
-                    ),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(text_secondary))
-                    .child(if vibrancy_enabled { "On" } else { "Off" }),
-            );
-
-        // Build vibrancy material buttons (clickable, only shown when vibrancy enabled)
-        let current_material = self
-            .theme
-            .vibrancy
-            .as_ref()
-            .map(|v| v.material)
-            .unwrap_or_default();
-        let material_buttons: Vec<gpui::AnyElement> = Self::VIBRANCY_MATERIALS
-            .iter()
-            .enumerate()
-            .map(|(i, &(material, label))| {
-                let is_current = material == current_material;
-                let click_entity = entity_handle_for_customize.clone();
-                let tooltip_label = format!("Set vibrancy material to {}", label);
-                div()
-                    .id(ElementId::NamedInteger("material-btn".into(), i as u64))
-                    .px(px(6.0))
-                    .py(px(2.0))
-                    .rounded(px(4.0))
-                    .cursor_pointer()
-                    .text_xs()
-                    .when(is_current, |d| {
-                        d.bg(rgb(accent_color))
-                            .text_color(rgb(text_on_accent))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                    })
-                    .when(!is_current, |d| {
-                        d.border_1()
-                            .border_color(badge_border_bg)
-                            .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(theme_row_hover_bg))
-                    })
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                            .build(window, cx)
-                    })
-                    .on_click(
-                        move |_event: &gpui::ClickEvent,
-                              _window: &mut Window,
-                              cx: &mut gpui::App| {
-                            cx.stop_propagation();
-                            if let Some(app) = click_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let mut modified = (*this.theme).clone();
-                                    if let Some(ref mut vibrancy) = modified.vibrancy {
-                                        vibrancy.material = material;
-                                    }
-                                    this.apply_theme_chooser_theme(
-                                        modified,
-                                        "theme_chooser_material_click",
-                                        cx,
-                                    );
-                                });
-                            }
-                        },
-                    )
-                    .child(label.to_string())
-                    .into_any_element()
-            })
-            .collect();
-
-        // Build font size preset buttons (clickable)
-        let current_ui_font_size = self.theme.get_fonts().ui_size;
-        let font_size_buttons: Vec<gpui::AnyElement> = Self::FONT_SIZE_PRESETS
-            .iter()
-            .enumerate()
-            .map(|(i, &(size, label))| {
-                let is_current = (size - current_ui_font_size).abs() < FONT_SIZE_MATCH_TOLERANCE;
-                let click_entity = entity_handle_for_customize.clone();
-                let tooltip_label = format!("Set UI font size to {}px", label);
-                div()
-                    .id(ElementId::NamedInteger("fontsize-btn".into(), i as u64))
-                    .px(px(8.0))
-                    .py(px(2.0))
-                    .rounded(px(4.0))
-                    .cursor_pointer()
-                    .text_xs()
-                    .when(is_current, |d| {
-                        d.bg(rgb(accent_color))
-                            .text_color(rgb(text_on_accent))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                    })
-                    .when(!is_current, |d| {
-                        d.border_1()
-                            .border_color(badge_border_bg)
-                            .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(theme_row_hover_bg))
-                    })
-                    .tooltip(move |window, cx| {
-                        gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
-                            .build(window, cx)
-                    })
-                    .on_click(
-                        move |_event: &gpui::ClickEvent,
-                              _window: &mut Window,
-                              cx: &mut gpui::App| {
-                            cx.stop_propagation();
-                            if let Some(app) = click_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    let mut modified = (*this.theme).clone();
-                                    if let Some(ref mut fonts) = modified.fonts {
-                                        fonts.ui_size = size;
-                                    } else {
-                                        modified.fonts = Some(theme::FontConfig {
-                                            ui_size: size,
-                                            ..Default::default()
-                                        });
-                                    }
-                                    this.apply_theme_chooser_theme(
-                                        modified,
-                                        "theme_chooser_font_size_click",
-                                        cx,
-                                    );
-                                });
-                            }
-                        },
-                    )
-                    .child(label.to_string())
-                    .into_any_element()
-            })
-            .collect();
-
-        // Build reset button (clickable)
-        let reset_entity = entity_handle_for_customize.clone();
-        let reset_catalog = std::sync::Arc::clone(&catalog);
-        let reset_button = div()
-            .id("reset-to-preset")
-            .px(px(10.0))
-            .py(px(4.0))
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .text_xs()
-            .border_1()
-            .border_color(badge_border_bg)
-            .text_color(rgb(text_secondary))
-            .hover(move |s| s.bg(theme_row_hover_bg))
-            .tooltip(|window, cx| {
-                gpui_component::tooltip::Tooltip::new("Reset to selected preset defaults")
-                    .build(window, cx)
-            })
-            .on_click(
-                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
-                    cx.stop_propagation();
-                    if let Some(app) = reset_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let current_filter =
-                                if let AppView::ThemeChooserView { ref filter, .. } =
-                                    this.current_view
-                                {
-                                    filter.clone()
-                                } else {
-                                    return;
-                                };
-                            let filtered = Self::theme_chooser_catalog_filtered_indices(
-                                &current_filter,
-                                &reset_catalog,
-                            );
-                            if let AppView::ThemeChooserView {
-                                ref selected_index, ..
-                            } = this.current_view
-                            {
-                                this.preview_theme_chooser_catalog_entry(
-                                    &reset_catalog,
-                                    &filtered,
-                                    *selected_index,
-                                    "theme_chooser_reset_click",
-                                    false,
-                                    cx,
-                                );
-                            }
-                        });
-                    }
-                },
-            )
-            .child("Reset to Defaults");
-
-        // Build surprise me / remix button (clickable)
-        let surprise_entity = entity_handle_for_customize.clone();
-        let surprise_button = div()
-            .id("theme-surprise-me")
-            .px(px(10.0))
-            .py(px(4.0))
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .text_xs()
-            .border_1()
-            .border_color(badge_border_bg)
-            .text_color(rgb(text_secondary))
-            .hover(move |s| s.bg(theme_row_hover_bg))
-            .tooltip(|window, cx| {
-                gpui_component::tooltip::Tooltip::new(
-                    "Remix accent, opacity, and vibrancy (\u{2318}J)",
-                )
-                .build(window, cx)
-            })
-            .on_click(
-                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
-                    cx.stop_propagation();
-                    if let Some(app) = surprise_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            let remixed = Self::build_theme_chooser_remix(
-                                this.theme.as_ref(),
-                                theme_chooser_remix_seed(),
-                            );
-                            this.apply_theme_chooser_theme(
-                                remixed,
-                                "theme_chooser_surprise_me",
-                                cx,
-                            );
-                        });
-                    }
-                },
-            )
-            .child("Surprise Me");
-
-        let save_theme_entity = entity_handle_for_customize.clone();
-        let save_as_button = div()
-            .id("theme-save-as-user-theme")
-            .px(px(10.0))
-            .py(px(4.0))
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .text_xs()
-            .border_1()
-            .border_color(badge_border_bg)
-            .text_color(rgb(text_secondary))
-            .hover(move |s| s.bg(theme_row_hover_bg))
-            .tooltip(|window, cx| {
-                gpui_component::tooltip::Tooltip::new("Save as user theme").build(window, cx)
-            })
-            .on_click(
-                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
-                    cx.stop_propagation();
-                    if let Some(app) = save_theme_entity.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.save_current_theme_as_user_theme(
-                                "theme_chooser_save_as_click",
-                                cx,
-                            );
-                        });
-                    }
-                },
-            )
-            .child("Save As");
-
-
-        let accent_name = Self::accent_color_name(accent_color);
-
         // Resolve selected preset name for live preview header
         let selected_preset_name = filtered_indices
             .get(selected_index)
@@ -2575,83 +2389,306 @@ impl ScriptListApp {
         let warning_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_warning);
         let info_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_info);
 
-        // Build background gradient management UI
-        let gradient_config = self.theme.background_gradient.as_ref();
-        let gradient_layers_ui: Vec<gpui::AnyElement> = if let Some(gradient) = gradient_config {
-            let mut ui = Vec::new();
+        // ── Preview panel with customization controls (Sliders & ColorPickers) ──
+        self.ensure_theme_chooser_controls(window, cx);
+        self.sync_theme_chooser_control_values(window, cx);
+        let controls = self
+            .theme_chooser_controls
+            .as_ref()
+            .expect("theme chooser controls should be initialized before rendering");
+        let opacity = self.theme.get_opacity();
+        let fonts = self.theme.get_fonts();
+        let accent_name_str = Self::accent_color_name(accent_color);
 
-            // Base Layer UI
-            ui.push(self.render_theme_chooser_gradient_layer_controls(
-                None,
-                gradient.enabled,
-                gradient.from,
-                gradient.to,
-                gradient.angle,
-                gradient.opacity,
-                "Base Layer",
-                entity_handle_for_customize.clone(),
-                badge_border_bg.into(),
-                theme_row_hover_bg.into(),
+        // 1. COLORS SECTION
+        let colors_section = Self::render_theme_chooser_customize_section(
+            "COLORS",
+            Some("Interactive base and selection colors"),
+            &chrome,
+            vec![Self::render_theme_chooser_color_picker_row(
+                "Accent Color",
                 accent_color,
-                text_on_accent,
-                text_secondary,
-                text_muted,
-            ));
+                &controls.accent,
+                &chrome,
+            )],
+        );
 
-            // Additional Layers UI
-            for (i, layer) in gradient.layers.iter().enumerate() {
-                ui.push(self.render_theme_chooser_gradient_layer_controls(
-                    Some(i),
-                    layer.enabled,
-                    layer.from,
-                    layer.to,
-                    layer.angle,
-                    layer.opacity,
-                    &format!("Layer {}", i + 1),
-                    entity_handle_for_customize.clone(),
-                    badge_border_bg.into(),
-                    theme_row_hover_bg.into(),
-                    accent_color,
-                    text_on_accent,
-                    text_secondary,
-                    text_muted,
-                ));
-            }
-            ui
-        } else {
-            let enable_entity = entity_handle_for_customize.clone();
-            vec![
+        // 2. OPACITY & VIBRANCY SECTION
+        let main_opacity_slider_row = Self::render_theme_chooser_slider_row(
+            "Surface Opacity",
+            format!("{:.0}%", opacity.main * 100.0),
+            &controls.surface_opacity,
+            &chrome,
+        );
+        let text_opacity_slider_row = Self::render_theme_chooser_slider_row(
+            "Typography Hint Opacity",
+            format!("{:.0}%", opacity.text_placeholder * 100.0),
+            &controls.secondary_text_opacity,
+            &chrome,
+        );
+        let focused_opacity_slider_row = Self::render_theme_chooser_slider_row(
+            "Focused Row Opacity",
+            format!("{:.0}%", opacity.selected * 100.0),
+            &controls.focused_background_opacity,
+            &chrome,
+        );
+
+        let vibrancy_enabled = self
+            .theme
+            .vibrancy
+            .as_ref()
+            .map(|vibrancy| vibrancy.enabled)
+            .unwrap_or(false);
+        let vibrancy_click_entity = entity_handle_for_customize.clone();
+        let vibrancy_row = div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .child(
                 div()
-                    .id("add-gradient-layer")
-                    .px(px(8.0))
-                    .py(px(12.0))
-                    .rounded(px(6.0))
-                    .border_1()
-                    .border_dashed()
-                    .border_color(rgb(badge_border_bg.into()))
                     .text_xs()
                     .text_color(rgb(text_secondary))
+                    .child("Vibrancy (macOS panel vibrancy)"),
+            )
+            .child(
+                div()
+                    .id("vibrancy-toggle-btn")
+                    .w(px(32.0))
+                    .h(px(18.0))
+                    .rounded(px(9.0))
+                    .cursor_pointer()
+                    .bg(if vibrancy_enabled {
+                        rgb(accent_color)
+                    } else {
+                        badge_border_bg
+                    })
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .cursor_pointer()
-                    .hover(move |s| s.bg(rgb(theme_row_hover_bg.into())))
+                    .child(
+                        div()
+                            .w(px(14.0))
+                            .h(px(14.0))
+                            .rounded(px(7.0))
+                            .bg(if vibrancy_enabled {
+                                rgb(text_on_accent)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(vibrancy_enabled, |d| d.ml(px(16.0)))
+                            .when(!vibrancy_enabled, |d| d.ml(px(2.0))),
+                    )
                     .on_click(move |_, _, cx| {
-                        if let Some(app) = enable_entity.upgrade() {
-                            app.update(cx, |this: &mut Self, cx| {
-                                this.add_theme_chooser_gradient_layer("theme_chooser_enable_gradient", cx);
+                        if let Some(app) = vibrancy_click_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.toggle_theme_chooser_vibrancy(
+                                    "theme_chooser_vibrancy_click",
+                                    cx,
+                                );
                             });
                         }
+                    }),
+            )
+            .into_any_element();
+
+        let opacity_section = Self::render_theme_chooser_customize_section(
+            "OPACITY & VIBRANCY",
+            Some("Vibrancy blend and layer transparency"),
+            &chrome,
+            vec![
+                main_opacity_slider_row,
+                text_opacity_slider_row,
+                focused_opacity_slider_row,
+                vibrancy_row,
+            ],
+        );
+
+        // 3. BACKGROUNDS & GRADIENTS SECTION
+        let gradient_enabled = self
+            .theme
+            .background_gradient
+            .as_ref()
+            .map(|gradient| gradient.enabled)
+            .unwrap_or(false);
+        let grad_click_entity = entity_handle_for_customize.clone();
+        let mut gradient_children = vec![div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(text_secondary))
+                    .child("Enable Backdrop Gradient"),
+            )
+            .child(
+                div()
+                    .id("gradient-toggle-btn")
+                    .w(px(32.0))
+                    .h(px(18.0))
+                    .rounded(px(9.0))
+                    .cursor_pointer()
+                    .bg(if gradient_enabled {
+                        rgb(accent_color)
+                    } else {
+                        badge_border_bg
                     })
+                    .flex()
+                    .items_center()
+                    .child(
+                        div()
+                            .w(px(14.0))
+                            .h(px(14.0))
+                            .rounded(px(7.0))
+                            .bg(if gradient_enabled {
+                                rgb(text_on_accent)
+                            } else {
+                                rgb(text_primary)
+                            })
+                            .when(gradient_enabled, |d| d.ml(px(16.0)))
+                            .when(!gradient_enabled, |d| d.ml(px(2.0))),
+                    )
+                    .on_click(move |_, _, cx| {
+                        if let Some(app) = grad_click_entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                let mut modified = (*this.theme).clone();
+                                if let Some(ref mut grad) = modified.background_gradient {
+                                    grad.enabled = !grad.enabled;
+                                } else {
+                                    modified.background_gradient =
+                                        Some(theme::BackgroundGradient {
+                                            enabled: true,
+                                            ..Default::default()
+                                        });
+                                }
+                                this.apply_theme_chooser_theme(
+                                    modified,
+                                    "theme_chooser_gradient_toggle_click",
+                                    cx,
+                                );
+                            });
+                        }
+                    }),
+            )
+            .into_any_element()];
+
+        if gradient_enabled {
+            gradient_children.push(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.0))
+                    .border_t_1()
+                    .border_color(divider_bg)
+                    .pt(px(8.0))
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child("Enable Background Gradient")
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(text_secondary))
+                            .child("Gradient Base"),
                     )
-                    .into_any_element()
-            ]
-        };
+                    .child(
+                        self.render_theme_chooser_gradient_layer_controls(
+                            "Base Layer".to_string(),
+                            gradient_enabled,
+                            self.theme
+                                .background_gradient
+                                .as_ref()
+                                .map(|gradient| gradient.from)
+                                .unwrap_or_default(),
+                            self.theme
+                                .background_gradient
+                                .as_ref()
+                                .map(|gradient| gradient.to)
+                                .unwrap_or_default(),
+                            self.theme
+                                .background_gradient
+                                .as_ref()
+                                .map(|gradient| gradient.angle)
+                                .unwrap_or_default(),
+                            self.theme
+                                .background_gradient
+                                .as_ref()
+                                .map(|gradient| gradient.opacity)
+                                .unwrap_or(1.0),
+                            &controls.gradient_base,
+                            &chrome,
+                        ),
+                    )
+                    .into_any_element(),
+            );
+            if let Some(gradient) = self.theme.background_gradient.as_ref() {
+                for (i, layer) in gradient.layers.iter().enumerate() {
+                    let Some(layer_controls) = controls.gradient_layers.get(i) else {
+                        continue;
+                    };
+                    gradient_children.push(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.0))
+                            .border_t_1()
+                            .border_color(divider_bg)
+                            .pt(px(8.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(text_secondary))
+                                    .child(format!("Gradient Layer {}", i + 1)),
+                            )
+                            .child(self.render_theme_chooser_gradient_layer_controls(
+                                format!("Layer {}", i + 1),
+                                layer.enabled,
+                                layer.from,
+                                layer.to,
+                                layer.angle,
+                                layer.opacity,
+                                layer_controls,
+                                &chrome,
+                            ))
+                            .into_any_element(),
+                    );
+                }
+            }
+        }
+
+        let backgrounds_section = Self::render_theme_chooser_customize_section(
+            "BACKDROP & GRADIENTS",
+            Some("Layered backgrounds and linear blends"),
+            &chrome,
+            gradient_children,
+        );
+
+        // 4. TYPOGRAPHY SECTION
+        let typography_section = Self::render_theme_chooser_customize_section(
+            "TYPOGRAPHY",
+            Some("Global interface scale and font sizing"),
+            &chrome,
+            vec![Self::render_theme_chooser_slider_row(
+                "UI Font Size",
+                format!("{:.1} px", fonts.ui_size),
+                &controls.ui_font_size,
+                &chrome,
+            )],
+        );
+
+        let customizer_scroller = div()
+            .flex_1()
+            .flex()
+            .flex_col()
+            .gap(px(16.0))
+            .overflow_y_scrollbar()
+            .child(colors_section)
+            .child(opacity_section)
+            .child(backgrounds_section)
+            .child(typography_section);
 
         let preview_panel = div()
             .id("theme-chooser-preview-panel")
@@ -2664,25 +2701,7 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_md))
             .flex()
             .flex_col()
-            .gap(px(preview_panel_gap))
-            .overflow_y_scroll()
-            // ── Background Gradient management section ─────────────
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("BACKGROUND GRADIENT"),
-                    )
-                    .children(gradient_layers_ui),
-            )
-            .child(div().h(px(8.0))) // Spacing
-            // ── Customize header with remix + reset buttons ─────────
+            .gap(px(design_spacing.padding_sm))
             .child(
                 div()
                     .flex()
@@ -2692,170 +2711,18 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_xs()
+                            .font_weight(gpui::FontWeight::BOLD)
                             .text_color(rgb(text_dimmed))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("SETTINGS"),
+                            .child("CUSTOMIZE"),
                     )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0))
-                            .child(save_as_button)
-                            .child(surprise_button)
-                            .child(reset_button),
-                    ),
-            )
-            // Secondary text opacity row
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
-                        "Secondary Text  {:.0}%",
-                        current_text_placeholder_opacity * 100.0
-                    )))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(2.0))
-                            .flex_wrap()
-                            .children(text_opacity_buttons),
-                    ),
-            )
-            // Focused background opacity row
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
-                        "Focused Background  {:.0}%",
-                        current_focused_background_opacity * 100.0
-                    )))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(2.0))
-                            .flex_wrap()
-                            .children(focused_background_opacity_buttons),
-                    ),
-            )
-            // Accent color row (with name)
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(text_muted))
-                                    .child("Accent Color"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(accent_color))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child(accent_name.to_string()),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(preview_section_gap))
-                            .flex_wrap()
-                            .children(accent_swatches),
-                    ),
-            )
-            // Surface opacity row
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
-                        "Surface Opacity  {:.0}%",
-                        current_opacity_main * 100.0
-                    )))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(2.0))
-                            .flex_wrap()
-                            .children(opacity_buttons),
-                    ),
-            )
-            // Vibrancy toggle + material row
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .text_xs()
                             .text_color(rgb(text_muted))
-                            .child("Vibrancy Blur"),
-                    )
-                    .child(vibrancy_toggle)
-                    .when(vibrancy_enabled, |d| {
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(preview_section_gap))
-                                .mt(px(preview_section_gap))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .child("Material"),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .gap(px(3.0))
-                                        .flex_wrap()
-                                        .children(material_buttons),
-                                ),
-                        )
-                    }),
-            )
-            // Font size row
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child(format!("UI Font Size  {:.0}px", current_ui_font_size)),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(preview_section_gap))
-                            .children(font_size_buttons),
+                            .child(format!("Base: {}", selected_preset_name)),
                     ),
             )
+            .child(customizer_scroller)
             // ── Semantic status chips ─────────────────────────────
             .child(
                 div()
@@ -2873,19 +2740,23 @@ impl ScriptListApp {
             // ── Contrast audit (summary only) ────────────────────────
             .child({
                 let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
-                div().text_xs().text_color(rgb(text_muted)).child(format!(
-                    "Contrast {}/{} pass · worst {} {:.2}:1",
-                    contrast_snapshot.passing,
-                    contrast_snapshot.total,
-                    contrast_snapshot.worst_label,
-                    contrast_snapshot.worst_ratio,
-                ))
+                div()
+                    .mt(px(4.0))
+                    .text_xs()
+                    .text_color(rgb(text_muted))
+                    .child(format!(
+                        "Contrast {}/{} pass · worst {} {:.2}:1",
+                        contrast_snapshot.passing,
+                        contrast_snapshot.total,
+                        contrast_snapshot.worst_label,
+                        contrast_snapshot.worst_ratio,
+                    ))
             })
-            // ── Launcher-style live preview (spacing-only separation per spec) ──
+            // ── Launcher-style live preview ──
             .child(div().h(px(1.0)).bg(divider_bg))
             .child(self.render_theme_chooser_live_preview(
-                selected_preset_name,
-                accent_name,
+                &selected_preset_name,
+                accent_name_str,
                 &chrome,
             ));
 

@@ -542,7 +542,7 @@ impl Render for ScriptListApp {
             AppView::ThemeChooserView {
                 ref filter,
                 selected_index,
-            } => self.render_theme_chooser(filter, selected_index, cx),
+            } => self.render_theme_chooser(filter, selected_index, window, cx),
             AppView::NamingPrompt { entity, .. } => {
                 self.render_naming_prompt(entity, cx).into_any_element()
             }
