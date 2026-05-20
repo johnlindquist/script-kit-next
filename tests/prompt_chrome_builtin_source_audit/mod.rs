@@ -446,6 +446,26 @@ fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
 }
 
 #[test]
+fn footer_popup_refresh_signature_covers_visible_theme_inputs() {
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("selection_rgba: u32")
+            && FOOTER_POPUP_SOURCE.contains("hover_rgba: u32")
+            && FOOTER_POPUP_SOURCE.contains("left_dot_hex: Option<u32>"),
+        "native footer refresh signature must include selected/hover/dot colors so theme-only changes cannot be skipped"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("left_dot_hex = config.left_info.as_ref()")
+            && FOOTER_POPUP_SOURCE.contains("footer_dot_hex("),
+        "native footer refresh signature must key on the computed status dot color"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE
+            .contains("pub(crate) fn close_main_footer_popup(cx: &mut App) {\n    clear_main_window_footer_refresh_signature();"),
+        "closing the native footer must clear the cached refresh signature unconditionally"
+    );
+}
+
+#[test]
 fn builtin_renderers_delegate_native_footer_policy_to_slot_helper() {
     let renderers: &[(&str, &str)] = &[
         (
