@@ -7,9 +7,9 @@ use super::filter::script_command_schema_for;
 use super::fragments::{MenuSyntaxFragmentRole, MenuSyntaxFragmentStatus};
 use super::mode::MenuSyntaxMode;
 use super::payload::{
-    AdvancedQuery, ArgvInvocation, ArtifactKind, CaptureAlias, CaptureInvocation, CommandArgSpec,
-    CommandFlagSpec, DatePhrase, DateRole, IncompleteKind, MenuSyntaxHandlerSpec, Predicate,
-    ShortcutPredicate,
+    resolve_capture_target, AdvancedQuery, ArgvInvocation, ArtifactKind, CaptureAlias,
+    CaptureInvocation, CommandArgSpec, CommandFlagSpec, DatePhrase, DateRole, IncompleteKind,
+    MenuSyntaxHandlerSpec, Predicate, ShortcutPredicate,
 };
 use super::trigger_picker::{
     nearest_capture_target_for_slug, TriggerPickerAction, TriggerPickerMode, TriggerPickerRow,
@@ -561,6 +561,8 @@ fn capture_picker_companion_hint(
                 ";todo Buy milk #errands p2 due:tomorrow".to_string(),
                 ";note Decision to ship parser first #product".to_string(),
                 ";link https://zed.dev #rust title:\"GPUI notes\"".to_string(),
+                ";snippet add fetch-json trigger:fj lang:ts -- const res = await fetch(url)"
+                    .to_string(),
             ]),
         warning: None,
         active_head: None,
@@ -629,6 +631,22 @@ fn capture_composer_hint(
     };
 
     let mut rows = Vec::new();
+    if let Some(resolution) = resolve_capture_target(target) {
+        rows.push(hint_row("Target", resolution.canonical_target_str()));
+        rows.push(hint_row("Operation", resolution.operation.as_str()));
+        if let Some(alias_of) = resolution.target_alias_of_str() {
+            rows.push(hint_row(
+                "Alias",
+                &format!("Compatibility alias of ;{alias_of}"),
+            ));
+        }
+        if target.eq_ignore_ascii_case("snippet") {
+            rows.push(hint_row(
+                "Body separator",
+                "Use -- before code or long snippet text",
+            ));
+        }
+    }
     if let Some(invocation) = invocation {
         rows.extend(capture_preview_rows(invocation));
     }
@@ -735,7 +753,9 @@ fn capture_composer_hint(
         unresolved_dates,
         menu_syntax_ai_proposal: ctx.menu_syntax_ai_proposal.cloned(),
         raw_filter_text: ctx.raw_filter_text.to_string(),
-        title: format!("Capture {target}"),
+        title: resolve_capture_target(target)
+            .map(|resolution| format!("Capture {}", resolution.title))
+            .unwrap_or_else(|| format!("Capture {target}")),
         subtitle: Some("Enter saves this as structured local data.".to_string()),
         mode_chip: Some(chip("; capture", MenuSyntaxMainHintTone::Accent)),
         status_chip: Some(chip(
@@ -1953,10 +1973,30 @@ pub(crate) fn target_examples(target: &str) -> Vec<String> {
             ";todo Send proposal #client/acme p1 due:friday".to_string(),
             ";todo Renew passport due:eom".to_string(),
         ],
+        "reminder" => vec![
+            ";reminder Submit expense report tomorrow #admin".to_string(),
+            ";reminder Walk dog every day at 8am #home".to_string(),
+            ";reminder Renew passport next month #errands".to_string(),
+        ],
+        "snooze" => vec![
+            ";snooze in 30 minutes Review PR #432".to_string(),
+            ";snooze tomorrow morning Reply to Sam #follow-up".to_string(),
+            ";snooze next monday Revisit launch checklist".to_string(),
+        ],
+        "defer" => vec![
+            ";defer until next week Refactor settings panel p2".to_string(),
+            ";defer friday Follow up on vendor quote #ops".to_string(),
+            ";defer in 2 days Triage plugin docs".to_string(),
+        ],
         "note" => vec![
             ";note Decision to ship parser first #product".to_string(),
             ";note Q2 retrospective takeaways #team".to_string(),
             ";note Coffee chat with Sam — follow up on hiring".to_string(),
+        ],
+        "notes" => vec![
+            ";notes Decision to ship parser first #product".to_string(),
+            ";notes Q2 retrospective takeaways #team".to_string(),
+            ";notes Coffee chat with Sam — follow up on hiring".to_string(),
         ],
         "link" => vec![
             ";link https://zed.dev #rust title:\"GPUI notes\"".to_string(),
@@ -1979,21 +2019,6 @@ pub(crate) fn target_examples(target: &str) -> Vec<String> {
             ";gcal Project kickoff start:\"friday 10am\" end:\"friday 11am\" guests=ada@example.com".to_string(),
             ";gcal Weekly planning every mon at 9am calendarId=primary location=\"Google Meet\"".to_string(),
         ],
-        "reminder" => vec![
-            ";reminder Submit expense report tomorrow #admin".to_string(),
-            ";reminder Walk dog every day at 8am #home".to_string(),
-            ";reminder Renew passport next month #errands".to_string(),
-        ],
-        "snooze" => vec![
-            ";snooze in 30 minutes Review PR #code".to_string(),
-            ";snooze tomorrow morning Reply to Sam #follow-up".to_string(),
-            ";snooze next monday Revisit launch checklist".to_string(),
-        ],
-        "defer" => vec![
-            ";defer until next week Refactor settings panel p2".to_string(),
-            ";defer friday Follow up on vendor quote #ops".to_string(),
-            ";defer in 2 days Triage plugin docs".to_string(),
-        ],
         "github" => vec![
             ";github johnlindquist/kit Fix popup focus #bug p1".to_string(),
             ";github Review OAuth examples repo=johnlindquist/kit #demo".to_string(),
@@ -2007,10 +2032,10 @@ pub(crate) fn target_examples(target: &str) -> Vec<String> {
             ";expense Taxi amount=22.00 reimbursable=true project=offsite #transport".to_string(),
         ],
         "snippet" => vec![
-            ";snippet parse_capture helper lang=rust title=\"Capture parser\" #rust".to_string(),
-            ";snippet Promise timeout wrapper lang=ts url:https://example.test/snippet #typescript"
+            ";snippet add parse_capture trigger:pc lang:rust -- fn parse_capture() {}".to_string(),
+            ";snippet update @promise-timeout lang:ts -- const timeout = Promise.race([])"
                 .to_string(),
-            ";snippet jq filter for events lang=sh title=\"JSONL event count\"".to_string(),
+            ";snippet rm @old-jq-filter".to_string(),
         ],
         "fixture" => vec![
             ";fixture Validate metadata filter env=dev project=launcher #demo".to_string(),
@@ -3495,7 +3520,7 @@ mod tests {
         let cases = [
             ("github", ["johnlindquist/kit", "repo=", "url:"]),
             ("expense", ["amount=", "vendor=", "reimbursable="]),
-            ("snippet", ["lang=", "title=", "url:"]),
+            ("snippet", ["trigger:", "lang:", "--"]),
             ("fixture", ["env=", "kind=", "state="]),
             ("gcal", ["calendarId=", "start:", "guests="]),
             ("mcal", ["calendar=", "alarm=", "start:"]),
@@ -3524,6 +3549,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn reminder_hint_labels_todo_operation() {
+        let hint = capture_hint_for(";reminder Walk dog every day at 8am", &[]);
+        assert_eq!(hint.title, "Capture Todo reminder");
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Target" && row.value == "todo"));
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Operation" && row.value == "remind"));
+    }
+
+    #[test]
+    fn snippet_hint_mentions_body_separator() {
+        let hint = capture_hint_for(
+            ";snippet add fetch-json trigger:fj lang:ts -- const res = await fetch(url)",
+            &[],
+        );
+        assert_eq!(hint.title, "Capture Snippet");
+        assert!(hint
+            .rows
+            .iter()
+            .any(|row| row.label == "Body separator" && row.value.contains("--")));
     }
 
     #[test]

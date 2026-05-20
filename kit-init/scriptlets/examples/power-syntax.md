@@ -206,41 +206,46 @@ The corresponding TypeScript script declares this `menuSyntax` block:
 
 **Reminder `;reminder` capture walkthrough**
 
-The `;reminder` example demonstrates daily recurrence plus a start time while
-staying local-first by writing a JSONL artifact.
+`;reminder` is now a Todo-owned compatibility alias. It resolves to the
+canonical `todo` target with the `remind` operation while preserving the raw
+target in the capture payload for older handlers.
 
     ;reminder Walk dog every day at 8am
 
-The corresponding TypeScript script declares this `menuSyntax` block:
+The app-owned grammar resolves the alias as if the handler had declared this
+canonical `todo` shape:
 
     menuSyntax:
       - family: capture.v1
         targets:
-          - reminder
+          - todo
         accepts:
+          - tags
           - date
           - duration
           - recurrence
-          - daily
+          - priority
         required:
           - body
-        label: Create reminder
+        label: Todo reminder
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true
 
 **Snooze `;snooze` capture walkthrough**
 
-The `;snooze` example demonstrates relative-now parsing for compact reminder
-delays.
+`;snooze` is now a Todo-owned compatibility alias. It resolves to the canonical
+`todo` target with the `snooze` operation and keeps numeric issue references
+such as `#432` in the body instead of treating them as tags.
 
     ;snooze in 30 minutes Review PR #432
 
-The corresponding TypeScript script declares this `menuSyntax` block:
+The app-owned grammar resolves the alias as if the handler had declared this
+canonical `todo` shape:
 
     menuSyntax:
       - family: capture.v1
         targets:
-          - snooze
+          - todo
         accepts:
           - tags
           - date
@@ -249,22 +254,24 @@ The corresponding TypeScript script declares this `menuSyntax` block:
         required:
           - body
           - date
-        label: Snooze task
+        label: Todo snooze
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true
 
 **Defer `;defer` capture walkthrough**
 
-The `;defer` example demonstrates fuzzy relative date anchors without a time.
+`;defer` is now a Todo-owned compatibility alias. It resolves to the canonical
+`todo` target with the `defer` operation for fuzzy future scheduling.
 
     ;defer until next week Refactor settings panel
 
-The corresponding TypeScript script declares this `menuSyntax` block:
+The app-owned grammar resolves the alias as if the handler had declared this
+canonical `todo` shape:
 
     menuSyntax:
       - family: capture.v1
         targets:
-          - defer
+          - todo
         accepts:
           - tags
           - date
@@ -273,6 +280,6 @@ The corresponding TypeScript script declares this `menuSyntax` block:
         required:
           - body
           - date
-        label: Defer task
+        label: Todo defer
         payloadSchema: kit://schema/menu-syntax/payload-v1
         defaultHandler: true

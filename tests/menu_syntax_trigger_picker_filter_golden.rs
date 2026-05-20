@@ -73,16 +73,17 @@ fn bare_semicolon_lists_all_targets_original_order() {
     assert!(snap.target.is_none());
     assert_eq!(
         target_tokens(&snap),
-        vec![";todo", ";cal", ";note", ";social", ";link"]
+        vec![";todo", ";note", ";link", ";snippet", ";cal", ";social"]
     );
     assert_eq!(
         target_titles(&snap),
         vec![
             "Todo inbox",
+            "Note",
+            "Saved link",
+            "Snippet",
             "Calendar event",
-            "Daily note",
             "Social draft",
-            "Tagged link",
         ]
     );
     assert_eq!(
@@ -114,7 +115,7 @@ fn partial_dai_ranks_daily_note_first() {
     let rows = target_rows(&snap);
 
     assert_eq!(snap.target, None);
-    assert_eq!(rows[0].title, "Daily note");
+    assert_eq!(rows[0].title, "Note");
     assert_eq!(rows[0].token.as_deref(), Some(";note"));
 }
 
@@ -124,7 +125,7 @@ fn partial_daily_ranks_daily_note_first() {
     let snap = snapshot(";daily", &ctx);
     let rows = target_rows(&snap);
 
-    assert_eq!(rows[0].title, "Daily note");
+    assert_eq!(rows[0].title, "Note");
     assert_eq!(rows[0].token.as_deref(), Some(";note"));
 }
 
@@ -165,7 +166,44 @@ fn daily_does_not_leave_todo_first() {
     let rows = target_rows(&snap);
 
     assert_ne!(rows[0].token.as_deref(), Some(";todo"));
-    assert_eq!(rows[0].title, "Daily note");
+    assert_eq!(rows[0].title, "Note");
+}
+
+#[test]
+fn typed_search_finds_todo_aliases_without_showing_them_by_default() {
+    let ctx = TriggerPickerContext::default();
+    let bare = snapshot(";", &ctx);
+    assert!(!target_tokens(&bare).contains(&";reminder"));
+    assert!(!target_tokens(&bare).contains(&";snooze"));
+    assert!(!target_tokens(&bare).contains(&";defer"));
+
+    let rem = snapshot(";rem", &ctx);
+    let rows = target_rows(&rem);
+    assert_eq!(rows[0].token.as_deref(), Some(";reminder"));
+    assert_eq!(rows[0].title, "Todo reminder");
+
+    let snooze = snapshot(";sno", &ctx);
+    let rows = target_rows(&snooze);
+    assert_eq!(rows[0].token.as_deref(), Some(";snooze"));
+    assert_eq!(rows[0].title, "Todo snooze");
+
+    let defer = snapshot(";def", &ctx);
+    let rows = target_rows(&defer);
+    assert_eq!(rows[0].token.as_deref(), Some(";defer"));
+    assert_eq!(rows[0].title, "Todo defer");
+}
+
+#[test]
+fn typed_search_finds_notes_compat_alias_without_showing_it_by_default() {
+    let ctx = TriggerPickerContext::default();
+    let bare = snapshot(";", &ctx);
+    assert!(!target_tokens(&bare).contains(&";notes"));
+
+    let snap = snapshot(";notes", &ctx);
+    let rows = target_rows(&snap);
+    assert_eq!(snap.target.as_deref(), Some("notes"));
+    assert_eq!(rows[0].token.as_deref(), Some(";notes"));
+    assert_eq!(rows[0].title, "Note compatibility alias");
 }
 
 #[test]

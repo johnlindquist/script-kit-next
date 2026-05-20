@@ -917,7 +917,11 @@ pub(crate) fn builtin_capture_accepts_for_target(target: &str) -> Vec<String> {
                 "yearly",
                 "kv",
             ]
-        } else if target.eq_ignore_ascii_case("todo") {
+        } else if target.eq_ignore_ascii_case("todo")
+            || target.eq_ignore_ascii_case("reminder")
+            || target.eq_ignore_ascii_case("snooze")
+            || target.eq_ignore_ascii_case("defer")
+        {
             &[
                 "tags",
                 "date",

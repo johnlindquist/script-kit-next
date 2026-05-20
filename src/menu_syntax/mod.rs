@@ -85,7 +85,8 @@ pub use grammar_payload::{
 #[allow(unused_imports)]
 pub use handler_index::{
     explain_capture_handler_ranking, rank_handlers_for_target, rank_scripts_handling_capture,
-    CaptureHandlerRankingExplanation, CaptureHandlerRankingRow, HandlerScore, RankedHandler,
+    ranked_handler_is_user_authored, CaptureHandlerRankingExplanation, CaptureHandlerRankingRow,
+    HandlerScore, RankedHandler,
 };
 #[allow(unused_imports)]
 pub use history::{
@@ -108,9 +109,10 @@ pub use mode::{
 pub use parse::{parse, MenuSyntaxParse};
 #[allow(unused_imports)]
 pub use payload::{
-    source_for_head, AdvancedQuery, ArgvInvocation, CaptureInvocation, FilterIndicator,
-    FilterIndicatorTone, MenuSyntaxHandlerSpec, RootUnifiedSourceFilter,
-    RootUnifiedSourceFilterSet, SourceHeadSpec, SOURCE_HEAD_SPECS,
+    source_for_head, ActiveObjectSelector, AdvancedQuery, ArgvInvocation, CanonicalCaptureTarget,
+    CaptureInvocation, CaptureObjectKind, CaptureObjectRef, CaptureOperation,
+    CaptureTargetResolution, FilterIndicator, FilterIndicatorTone, MenuSyntaxHandlerSpec,
+    RootUnifiedSourceFilter, RootUnifiedSourceFilterSet, SourceHeadSpec, SOURCE_HEAD_SPECS,
 };
 #[allow(unused_imports)]
 pub use query::parse_advanced_query;

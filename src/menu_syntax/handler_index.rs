@@ -261,6 +261,13 @@ fn script_is_user_authored(script: &Script) -> bool {
     !script.plugin_id.eq_ignore_ascii_case("main")
 }
 
+/// Public predicate for launcher execution routing. App-owned capture targets
+/// may preempt shipped compatibility handlers, but a user-authored handler for
+/// the same grammar must continue to win.
+pub fn ranked_handler_is_user_authored(entry: &RankedHandler) -> bool {
+    script_is_user_authored(&entry.script)
+}
+
 fn accepts_boost_for(spec: &MenuSyntaxHandlerSpec, invocation: &CaptureInvocation) -> u8 {
     if spec.accepts.is_empty() {
         return 0;

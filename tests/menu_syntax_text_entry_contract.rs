@@ -6,10 +6,10 @@ fn capture_composer_suppresses_main_list_before_capture_grouping() {
         .expect("Failed to read src/app_impl/filtering_cache.rs");
 
     let ownership_gate = source
-        .find("capture_composer_owns_input_for(raw_filter_text)")
+        .find("capture_composer_owns_input_for(&raw_filter_text)")
         .expect("filtering cache must gate capture composer ownership");
     let capture_grouping = source
-        .find("capture_for(raw_filter_text)")
+        .find("capture_for(&raw_filter_text)")
         .expect("filtering cache must keep capture grouping for non-composer paths");
 
     assert!(
@@ -81,7 +81,8 @@ fn menu_syntax_hint_surface_has_dedicated_scroll_and_arrow_routing() {
         arrow.contains("let menu_syntax_owns_main_list =")
             && arrow.contains("capture_composer_owns_input_for(&this.filter_text)")
             && arrow.contains("command_owns_input_for(&this.filter_text)")
-            && arrow.contains("this.scroll_menu_syntax_main_hint(if is_down { 1.0 } else { -1.0 });"),
+            && arrow
+                .contains("this.scroll_menu_syntax_main_hint(if is_down { 1.0 } else { -1.0 });"),
         "ScriptList Up/Down should scroll the owned menu syntax panel before normal history/list navigation"
     );
 }
@@ -222,7 +223,8 @@ fn popup_footer_rows_and_visible_page_follow_inline_picker_contracts() {
     assert!(
         popup_window.contains("fn set_snapshot(&mut self, mut snapshot:")
             && popup_window.contains("snapshot.visible_start = self.visible_range().start;")
-            && popup_window.contains("visible_start: self.menu_syntax_trigger_popup_state.visible_start")
+            && popup_window
+                .contains("visible_start: self.menu_syntax_trigger_popup_state.visible_start")
             && popup_window.contains("trigger_popup_visible_start_for_selection(")
             && popup_window.contains("inline_dropdown_visible_range_from_start("),
         "menu-syntax popup updates should preserve the current visible page through the shared inline-dropdown range helper"
@@ -243,7 +245,8 @@ fn popup_footer_rows_and_visible_page_follow_inline_picker_contracts() {
             && popup_window.contains("register_attached_popup(")
             && popup_window.contains("menuSyntaxTriggerPopup")
             && popup_window.contains("set_automation_bounds(")
-            && popup_window.contains("remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID)"),
+            && popup_window
+                .contains("remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID)"),
         "menu-syntax popup should register as an attached automation popup so screenshots and layout probes can target it directly"
     );
 }
@@ -316,7 +319,7 @@ fn enter_in_capture_composer_executes_capture_not_main_selection() {
         .expect("Failed to read src/app_impl/selection_fallback.rs");
 
     let capture_route = source
-        .find("self.menu_syntax_mode.capture_for(&self.filter_text)")
+        .find("capture_for(&self.filter_text)")
         .expect("execute_selected must first check for capture composer input");
     let grouped_results = source
         .find("self.get_grouped_results_cached()")
@@ -327,7 +330,7 @@ fn enter_in_capture_composer_executes_capture_not_main_selection() {
         "Enter in capture composer must route to capture execution before main-list selection"
     );
     assert!(
-        source.contains("rank_scripts_handling_capture")
+        source.contains("rank_handlers_for_target")
             && source.contains("execute_menu_syntax_capture_script"),
         "capture composer Enter should execute the ranked capture handler"
     );
@@ -344,12 +347,12 @@ fn command_invocation_suppresses_main_list_and_routes_without_shell() {
 
     assert!(
         filtering_cache.contains("command_owns_input_for(filter_text)")
-            && filtering_cache.contains("command_owns_input_for(raw_filter_text)"),
+            && filtering_cache.contains("command_owns_input_for(&raw_filter_text)"),
         "`!` command composition must blank normal launcher results"
     );
 
     let command_route = selection
-        .find("self.menu_syntax_mode.command_for(&self.filter_text)")
+        .find("command_for(&self.filter_text)")
         .expect("execute_selected must first check command invocation input");
     let grouped_results = selection
         .find("self.get_grouped_results_cached()")
@@ -389,8 +392,8 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
     );
     assert!(
         trigger_picker.contains("title: \"Filter by tag\"")
-            && trigger_picker.contains("insert: \":#\"")
-            && trigger_picker.contains("insert: \":tag:\"")
+            && trigger_picker.contains("insert: \"#\"")
+            && trigger_picker.contains("insert: \"tag:\"")
             && trigger_picker.contains("keep_open: true"),
         "`:` popup should teach both :#tag sugar and canonical tag: filters, keeping the popup open for a tag name"
     );
@@ -431,8 +434,8 @@ fn registered_capture_targets_extend_parser_popup_and_input_highlight() {
     );
     assert!(
         trigger_picker.contains("registered_capture_targets(ctx)")
-            && trigger_picker.contains("capture_target_catalog(ctx)"),
-        "the popup should show registered capture target rows"
+            && trigger_picker.contains("capture_target_catalog(ctx, filter.is_some())"),
+        "the popup should show registered capture target rows and hidden aliases only when filtering"
     );
     assert!(
         mode.contains("prefix_span_for_input_with_targets")
@@ -510,7 +513,8 @@ fn has_shortcut_accept_transition_cannot_reopen_popup() {
             && dispatcher.contains("self.set_menu_syntax_mode_from_filter(&text);")
             && dispatcher.contains("self.invalidate_grouped_cache();")
             && dispatcher.contains("close_menu_syntax_trigger_popup_window(cx);")
-            && dispatcher.contains("self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());"),
+            && dispatcher
+                .contains("self.menu_syntax_trigger_popup_suppressed_filter = Some(text.clone());"),
         "Accept must atomically replace input, advance parser/cache state, close automation popup, and suppress immediate reopen"
     );
     assert!(
@@ -599,8 +603,9 @@ fn state_result_exposes_menu_syntax_main_hint_for_agentic_tests() {
         "stateResult should expose the same grammar hint snapshot the main menu renders"
     );
     assert!(
-        constructors.contains("menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>")
-            && constructors.contains("            menu_syntax_main_hint,"),
+        constructors.contains(
+            "menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>"
+        ) && constructors.contains("            menu_syntax_main_hint,"),
         "Message::state_result should forward menu_syntax_main_hint without ad hoc protocol construction"
     );
     assert!(

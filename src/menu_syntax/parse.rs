@@ -1,4 +1,5 @@
 use super::capture::{is_capture_target_registered, parse_capture_with_targets, CaptureParse};
+use super::payload::picker_visible_capture_targets;
 use super::payload::{
     AdvancedQuery, ArgvInvocation, CaptureInvocation, IncompleteKind, IncompleteSyntax,
 };
@@ -77,7 +78,10 @@ pub fn parse_with_config_and_capture_targets(
             if rest.is_empty() {
                 return MenuSyntaxParse::Incomplete(IncompleteSyntax {
                     kind: IncompleteKind::BareCapturePrefix,
-                    hint: "Choose a capture target: todo, cal, note, social, link".to_string(),
+                    hint: format!(
+                        "Choose a capture target: {}",
+                        picker_visible_capture_targets().join(", ")
+                    ),
                 });
             }
             let head_end = rest.find(char::is_whitespace).unwrap_or(rest.len());

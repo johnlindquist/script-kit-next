@@ -460,6 +460,141 @@ pub struct CaptureInvocation {
     pub raw: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureOperation {
+    Create,
+    Update,
+    Delete,
+    Open,
+    Remind,
+    Snooze,
+    Defer,
+    Append,
+    Save,
+}
+
+impl CaptureOperation {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Create => "create",
+            Self::Update => "update",
+            Self::Delete => "delete",
+            Self::Open => "open",
+            Self::Remind => "remind",
+            Self::Snooze => "snooze",
+            Self::Defer => "defer",
+            Self::Append => "append",
+            Self::Save => "save",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CanonicalCaptureTarget {
+    Todo,
+    Note,
+    Link,
+    Snippet,
+    Cal,
+    Social,
+    Mcal,
+}
+
+impl CanonicalCaptureTarget {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Todo => "todo",
+            Self::Note => "note",
+            Self::Link => "link",
+            Self::Snippet => "snippet",
+            Self::Cal => "cal",
+            Self::Social => "social",
+            Self::Mcal => "mcal",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureTargetResolution {
+    pub raw_target: String,
+    pub canonical_target: CanonicalCaptureTarget,
+    pub target_alias_of: Option<CanonicalCaptureTarget>,
+    pub operation: CaptureOperation,
+    pub product_owned: bool,
+    pub picker_visible: bool,
+    pub title: &'static str,
+    pub detail: &'static str,
+}
+
+impl CaptureTargetResolution {
+    pub fn canonical_target_str(&self) -> &'static str {
+        self.canonical_target.as_str()
+    }
+
+    pub fn target_alias_of_str(&self) -> Option<&'static str> {
+        self.target_alias_of.map(CanonicalCaptureTarget::as_str)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaptureObjectKind {
+    Todo,
+    Note,
+    Link,
+    Snippet,
+}
+
+impl CaptureObjectKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Todo => "todo",
+            Self::Note => "note",
+            Self::Link => "link",
+            Self::Snippet => "snippet",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveObjectSelector {
+    pub kind: CaptureObjectKind,
+    pub query: String,
+    pub range: (usize, usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureObjectRef {
+    pub role: String,
+    pub kind: CaptureObjectKind,
+    pub id: String,
+    pub label: String,
+    pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub range: Option<(usize, usize)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
+    pub resolved: bool,
+}
+
+pub fn object_kind_for_capture_target(target: &str) -> Option<CaptureObjectKind> {
+    match resolve_capture_target(target)?.canonical_target {
+        CanonicalCaptureTarget::Todo => Some(CaptureObjectKind::Todo),
+        CanonicalCaptureTarget::Note => Some(CaptureObjectKind::Note),
+        CanonicalCaptureTarget::Link => Some(CaptureObjectKind::Link),
+        CanonicalCaptureTarget::Snippet => Some(CaptureObjectKind::Snippet),
+        CanonicalCaptureTarget::Cal
+        | CanonicalCaptureTarget::Mcal
+        | CanonicalCaptureTarget::Social => None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DateRole {
@@ -501,15 +636,126 @@ pub struct IncompleteSyntax {
     pub hint: String,
 }
 
-pub const KNOWN_CAPTURE_TARGETS: &[&str] = &["todo", "cal", "note", "social", "link"];
+pub const PICKER_VISIBLE_CAPTURE_TARGETS: &[&str] =
+    &["todo", "note", "link", "snippet", "cal", "social"];
+
+pub const KNOWN_CAPTURE_TARGETS: &[&str] = &[
+    "todo", "note", "link", "snippet", "cal", "social", "reminder", "snooze", "defer", "notes",
+];
 
 pub fn is_known_capture_target(target: &str) -> bool {
-    if target.eq_ignore_ascii_case("mcal") {
-        return true;
-    }
-    KNOWN_CAPTURE_TARGETS
-        .iter()
-        .any(|k| k.eq_ignore_ascii_case(target))
+    resolve_capture_target(target).is_some()
+}
+
+pub fn picker_visible_capture_targets() -> &'static [&'static str] {
+    PICKER_VISIBLE_CAPTURE_TARGETS
+}
+
+pub fn resolve_capture_target(target: &str) -> Option<CaptureTargetResolution> {
+    let raw_target = target.trim().to_ascii_lowercase();
+    let (canonical_target, target_alias_of, operation, picker_visible, title, detail) =
+        match raw_target.as_str() {
+            "todo" => (
+                CanonicalCaptureTarget::Todo,
+                None,
+                CaptureOperation::Create,
+                true,
+                "Todo inbox",
+                "Create or update a Todo task",
+            ),
+            "reminder" => (
+                CanonicalCaptureTarget::Todo,
+                Some(CanonicalCaptureTarget::Todo),
+                CaptureOperation::Remind,
+                false,
+                "Todo reminder",
+                "Todo alias: set a reminder time",
+            ),
+            "snooze" => (
+                CanonicalCaptureTarget::Todo,
+                Some(CanonicalCaptureTarget::Todo),
+                CaptureOperation::Snooze,
+                false,
+                "Todo snooze",
+                "Todo alias: hide until a wake time",
+            ),
+            "defer" => (
+                CanonicalCaptureTarget::Todo,
+                Some(CanonicalCaptureTarget::Todo),
+                CaptureOperation::Defer,
+                false,
+                "Todo defer",
+                "Todo alias: defer until a start date",
+            ),
+            "note" => (
+                CanonicalCaptureTarget::Note,
+                None,
+                CaptureOperation::Create,
+                true,
+                "Note",
+                "Create or update a Note",
+            ),
+            "notes" => (
+                CanonicalCaptureTarget::Note,
+                Some(CanonicalCaptureTarget::Note),
+                CaptureOperation::Create,
+                false,
+                "Note compatibility alias",
+                "Compatibility alias of ;note",
+            ),
+            "link" => (
+                CanonicalCaptureTarget::Link,
+                None,
+                CaptureOperation::Save,
+                true,
+                "Saved link",
+                "Save or update a tagged link",
+            ),
+            "snippet" => (
+                CanonicalCaptureTarget::Snippet,
+                None,
+                CaptureOperation::Create,
+                true,
+                "Snippet",
+                "Create, update, or remove a snippet",
+            ),
+            "cal" => (
+                CanonicalCaptureTarget::Cal,
+                None,
+                CaptureOperation::Create,
+                true,
+                "Calendar event",
+                "Create a calendar event",
+            ),
+            "mcal" => (
+                CanonicalCaptureTarget::Mcal,
+                None,
+                CaptureOperation::Create,
+                false,
+                "macOS Calendar event",
+                "Schema-known Calendar target",
+            ),
+            "social" => (
+                CanonicalCaptureTarget::Social,
+                None,
+                CaptureOperation::Create,
+                true,
+                "Social draft",
+                "Create a social draft",
+            ),
+            _ => return None,
+        };
+
+    Some(CaptureTargetResolution {
+        raw_target,
+        canonical_target,
+        target_alias_of,
+        operation,
+        product_owned: true,
+        picker_visible,
+        title,
+        detail,
+    })
 }
 
 #[cfg(test)]
@@ -519,16 +765,17 @@ mod capture_target_taxonomy_tests {
     #[test]
     fn core_capture_targets_are_stable_taxonomy() {
         assert_eq!(
-            KNOWN_CAPTURE_TARGETS,
-            &["todo", "cal", "note", "social", "link"]
+            PICKER_VISIBLE_CAPTURE_TARGETS,
+            &["todo", "note", "link", "snippet", "cal", "social"]
         );
     }
 
     #[test]
-    fn known_capture_targets_are_case_insensitive_for_core_and_mcal() {
+    fn known_capture_targets_are_case_insensitive_for_product_targets_aliases_and_mcal() {
         for target in [
             "todo", "TODO", "cal", "CAL", "note", "NOTE", "social", "SOCIAL", "link", "LINK",
-            "mcal", "MCAL",
+            "snippet", "SNIPPET", "mcal", "MCAL", "reminder", "REMINDER", "snooze", "SNOOZE",
+            "defer", "DEFER", "notes", "NOTES",
         ] {
             assert!(
                 is_known_capture_target(target),
@@ -539,14 +786,38 @@ mod capture_target_taxonomy_tests {
 
     #[test]
     fn shipped_dynamic_targets_are_not_parser_known_without_metadata() {
-        for target in [
-            "gcal", "github", "expense", "snippet", "fixture", "reminder", "snooze", "defer",
-        ] {
+        for target in ["gcal", "github", "expense", "fixture"] {
             assert!(
                 !is_known_capture_target(target),
                 "`{target}` should stay metadata-driven until registered"
             );
         }
+    }
+
+    #[test]
+    fn resolves_todo_alias_targets_to_canonical_todo_operations() {
+        for (target, operation) in [
+            ("reminder", CaptureOperation::Remind),
+            ("snooze", CaptureOperation::Snooze),
+            ("defer", CaptureOperation::Defer),
+        ] {
+            let resolved = resolve_capture_target(target).expect("target should resolve");
+            assert_eq!(resolved.raw_target, target);
+            assert_eq!(resolved.canonical_target, CanonicalCaptureTarget::Todo);
+            assert_eq!(resolved.target_alias_of, Some(CanonicalCaptureTarget::Todo));
+            assert_eq!(resolved.operation, operation);
+            assert!(!resolved.picker_visible);
+        }
+    }
+
+    #[test]
+    fn resolves_notes_alias_to_note_but_preserves_raw_target() {
+        let resolved = resolve_capture_target("notes").expect("notes alias should resolve");
+        assert_eq!(resolved.raw_target, "notes");
+        assert_eq!(resolved.canonical_target, CanonicalCaptureTarget::Note);
+        assert_eq!(resolved.target_alias_of, Some(CanonicalCaptureTarget::Note));
+        assert_eq!(resolved.operation, CaptureOperation::Create);
+        assert!(!resolved.picker_visible);
     }
 }
 

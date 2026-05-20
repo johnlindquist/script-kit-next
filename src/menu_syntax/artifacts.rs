@@ -351,6 +351,19 @@ fn todo_hit_from_artifact(artifact: CaptureArtifact) -> Option<RootTodoSearchHit
         return None;
     }
     let parsed = serde_json::from_str::<serde_json::Value>(&artifact.raw_line).ok()?;
+    if parsed
+        .get("deletedAt")
+        .and_then(|value| value.as_str())
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false)
+        || parsed
+            .get("status")
+            .and_then(|value| value.as_str())
+            .map(|value| value.eq_ignore_ascii_case("deleted"))
+            .unwrap_or(false)
+    {
+        return None;
+    }
     let body = parsed
         .get("body")
         .and_then(|value| value.as_str())
@@ -609,6 +622,26 @@ mod tests {
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].priority, Some(1));
         assert_eq!(hits[0].line_number, Some(1));
+    }
+
+    #[test]
+    fn search_root_todos_ignores_deleted_app_owned_rows() {
+        let tmp = TempDir::new().expect("tempdir");
+        let base = tmp.path().join("menu-syntax");
+        write_file(
+            &base,
+            "todos.jsonl",
+            r#"{"body":"old hidden task","status":"deleted","createdAt":"2026-05-19T10:00:00Z"}
+{"body":"new hidden task","deletedAt":"2026-05-19T11:00:00Z","createdAt":"2026-05-19T11:00:00Z"}
+{"body":"visible task","status":"open","createdAt":"2026-05-19T12:00:00Z"}
+"#,
+        );
+
+        let hits =
+            search_root_todos_in_sk_path("task", RootTodoSectionOptions::default(), tmp.path());
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].title, "visible task");
     }
 
     #[test]

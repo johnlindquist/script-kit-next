@@ -1,6 +1,7 @@
 use super::payload::{
-    is_known_capture_target, CaptureAlias, CaptureInvocation, DatePhrase, DateRole, IncompleteKind,
-    IncompleteSyntax, KNOWN_CAPTURE_TARGETS,
+    is_known_capture_target, object_kind_for_capture_target, picker_visible_capture_targets,
+    ActiveObjectSelector, CaptureAlias, CaptureInvocation, DatePhrase, DateRole, IncompleteKind,
+    IncompleteSyntax,
 };
 
 pub enum CaptureParse {
@@ -20,7 +21,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
                 kind: IncompleteKind::BareCapturePrefix,
                 hint: format!(
                     "Choose a capture target: {}",
-                    KNOWN_CAPTURE_TARGETS.join(", ")
+                    picker_visible_capture_targets().join(", ")
                 ),
             });
         }
@@ -31,7 +32,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
             kind: IncompleteKind::UnknownCaptureTarget(target.clone()),
             hint: format!(
                 "Unknown capture target '{target}'. Known: {}",
-                KNOWN_CAPTURE_TARGETS.join(", ")
+                picker_visible_capture_targets().join(", ")
             ),
         });
     }
@@ -49,8 +50,16 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
     let mut date_phrases: Vec<DatePhrase> = Vec::new();
 
     for tok in tokens {
+        if tok.text == "--" {
+            let tail = input[tok.span.1..].trim_start();
+            if !tail.is_empty() {
+                body_parts.push(tail.to_string());
+            }
+            break;
+        }
+
         if let Some(tag) = tok.text.strip_prefix('#') {
-            if !tag.is_empty() {
+            if !tag.is_empty() && !tag.chars().all(|ch| ch.is_ascii_digit()) {
                 tags.push(tag.to_string());
                 continue;
             }
@@ -89,7 +98,10 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
                     duration = Some(unquote(&value));
                     continue;
                 }
-                _ => {}
+                _ => {
+                    kv.push((key.to_string(), unquote(&value)));
+                    continue;
+                }
             }
         }
 
@@ -113,6 +125,37 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
         date_phrases,
         raw,
     })
+}
+
+pub fn active_object_selector_for_input(
+    input: &str,
+    registered_targets: &[String],
+) -> Option<ActiveObjectSelector> {
+    let (target, body_start, _) = split_target(input)?;
+    if !is_capture_target_registered(&target, registered_targets) {
+        return None;
+    }
+    let kind = object_kind_for_capture_target(&target)?;
+    let body = &input[body_start..];
+    let body_base = body_start;
+    let mut offset = 0;
+    for segment in body.split_whitespace() {
+        let rel_start = body[offset..].find(segment)? + offset;
+        let rel_end = rel_start + segment.len();
+        offset = rel_end;
+        let Some(query) = segment.strip_prefix('@') else {
+            continue;
+        };
+        if segment.starts_with("@@") || segment.starts_with("\\@") {
+            continue;
+        }
+        return Some(ActiveObjectSelector {
+            kind,
+            query: query.to_string(),
+            range: (body_base + rel_start, body_base + rel_end),
+        });
+    }
+    None
 }
 
 pub fn is_capture_target_registered(target: &str, registered_targets: &[String]) -> bool {
@@ -382,5 +425,51 @@ mod tests {
         let inv = ok(";note Decision #menu-syntax #");
         assert_eq!(inv.tags, vec!["menu-syntax".to_string()]);
         assert!(inv.body.ends_with('#'));
+    }
+
+    #[test]
+    fn numeric_issue_refs_stay_in_body_instead_of_tags() {
+        let inv = ok(";snooze in 30 minutes Review PR #432");
+        assert!(inv.tags.is_empty());
+        assert!(inv.body.contains("Review PR #432"));
+    }
+
+    #[test]
+    fn snippet_body_separator_preserves_code_like_text() {
+        let inv = ok(
+            ";snippet add fetch-json trigger:fj lang:ts -- const url = \"https://x.test?a=b#hash\"; await fetch(url)",
+        );
+        assert_eq!(inv.target, "snippet");
+        assert_eq!(
+            inv.kv,
+            vec![
+                ("trigger".to_string(), "fj".to_string()),
+                ("lang".to_string(), "ts".to_string())
+            ]
+        );
+        assert!(inv.body.starts_with("add fetch-json const url ="));
+        assert!(inv.body.contains("https://x.test?a=b#hash"));
+    }
+
+    #[test]
+    fn detects_active_note_object_selector() {
+        let selector = active_object_selector_for_input(";note @Project due:tomorrow", &[])
+            .expect("note object selector should be detected");
+        assert_eq!(
+            selector.kind,
+            super::super::payload::CaptureObjectKind::Note
+        );
+        assert_eq!(selector.query, "Project");
+    }
+
+    #[test]
+    fn detects_active_todo_object_selector_for_snooze_alias() {
+        let selector = active_object_selector_for_input(";snooze @Review in 30 minutes", &[])
+            .expect("snooze object selector should be detected");
+        assert_eq!(
+            selector.kind,
+            super::super::payload::CaptureObjectKind::Todo
+        );
+        assert_eq!(selector.query, "Review");
     }
 }
