@@ -870,7 +870,7 @@ fn dispatch_notes_acp_action(
         }
         "acp_expand_all" => {
             acp_entity.update(cx, |chat, cx| {
-                let ids: Vec<u64> = chat
+                let _ids: Vec<u64> = chat
                     .live_thread()
                     .read(cx)
                     .messages

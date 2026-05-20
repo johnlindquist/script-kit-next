@@ -1091,7 +1091,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         "acp_expand_all" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
-                    let ids: Vec<u64> = chat
+                    let _ids: Vec<u64> = chat
                         .live_thread()
                         .read(cx)
                         .messages

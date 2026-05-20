@@ -1,4 +1,3 @@
-use gpui::WeakEntity;
 use super::*;
 
 const INLINE_CALCULATOR_SECTION_LABEL: &str = "Calculator";
@@ -223,7 +222,9 @@ impl ScriptListApp {
             ) {
             // Always use cached snapshot in the unified search loop.
             // Background refresh is handled by ScriptListApp::maybe_start_root_browser_history_refresh.
-            let candidates = crate::browser_history::cached_root_browser_history_snapshot(browser_history_options.cache_ttl_ms);
+            let candidates = crate::browser_history::cached_root_browser_history_snapshot(
+                browser_history_options.cache_ttl_ms,
+            );
             crate::browser_history::root_fuzzy_search_browser_history_hits(
                 &candidates,
                 search_text,

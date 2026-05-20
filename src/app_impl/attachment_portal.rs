@@ -1,5 +1,4 @@
 use super::*;
-use gpui::{AsyncApp, WeakEntity};
 
 const ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON: f32 = 1.0;
 
@@ -287,7 +286,7 @@ impl ScriptListApp {
                 self.open_file_search(portal_query, cx);
             }
             PortalKind::BrowserHistory => {
-                cx.spawn(async move |this, mut cx| {
+                cx.spawn(async move |this, cx| {
                     let result = crate::browser_history::list_recent_history(500);
                     this.update(cx, |this, cx| {
                         if let Ok(entries) = result {
@@ -416,9 +415,7 @@ impl ScriptListApp {
         // can only have been opened from an embedded ACP host, so
         // EmbeddedOpened from a non-chat return means host state has
         // drifted; downgrade to Hidden rather than a silent no-op.
-        self.transition_acp_surface(
-            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed,
-        );
+        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed);
         if !matches!(return_view, AppView::AcpChatView { .. }) {
             self.transition_acp_surface(
                 crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
@@ -463,9 +460,7 @@ impl ScriptListApp {
         // Same split as the accept path: PortalClosed first (the
         // default return lands back in Embedded), then EmbeddedClosed
         // if the restored view is not the ACP chat.
-        self.transition_acp_surface(
-            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed,
-        );
+        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed);
         if !matches!(return_view, AppView::AcpChatView { .. }) {
             self.transition_acp_surface(
                 crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
