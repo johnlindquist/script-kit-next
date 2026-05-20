@@ -84,11 +84,20 @@ fn test_script_list_arrow_history_navigation_uses_top_of_grouped_items_boundary(
         "Up arrow handler should treat missing items as top-of-list"
     );
     assert!(
-        source.contains("if in_history || at_top_of_list {")
+        source.contains("let filter_has_text = !this.filter_text.is_empty()")
+            && source.contains("filter_has_text,")
+            && source.contains("\"filter_text_up_noop\"")
+            && source.contains("if !source_filter_mode && filter_has_text {")
+            && source.contains("cx.stop_propagation();")
+            && source.contains("return;"),
+        "Up arrow handler should consume and noop when the main menu filter has text"
+    );
+    assert!(
+        source.contains("if !source_filter_mode && (in_history || at_top_of_list) {")
             && source.contains("if let Some(text) = this.input_history.navigate_up() {")
             && source.contains("cx.stop_propagation();")
             && source.contains("return;"),
-        "Up arrow handler should route to history recall and consume the event when in history or at top"
+        "Up arrow handler should route to history recall and consume the event only when the filter is empty and in history or at top"
     );
     assert!(
         source.contains("let in_history =")

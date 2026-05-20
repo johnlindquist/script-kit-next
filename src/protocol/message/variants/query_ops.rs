@@ -109,6 +109,13 @@ macro_rules! protocol_message_variants_query_ops {
             skip_serializing_if = "Option::is_none"
         )]
         active_footer: Option<crate::protocol::ActiveFooterSnapshot>,
+        /// Last submit owner/route diagnostic for state-first double-submit proof.
+        #[serde(
+            rename = "submitDiagnostics",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        submit_diagnostics: Option<serde_json::Value>,
         /// Placeholder text if applicable
         #[serde(skip_serializing_if = "Option::is_none")]
         placeholder: Option<String>,

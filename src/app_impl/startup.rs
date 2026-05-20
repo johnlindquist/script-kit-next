@@ -749,6 +749,9 @@ impl ScriptListApp {
             menu_syntax_object_selector_state:
                 crate::menu_syntax::MenuSyntaxObjectSelectorState::default(),
             menu_syntax_form_focused_index: 0,
+            menu_syntax_form_input_active: false,
+            menu_syntax_form_draft_field_id: None,
+            menu_syntax_form_draft_value: String::new(),
             pending_menu_syntax_ai_proposal: None,
             menu_syntax_trigger_popup_suppressed_filter: None,
             // Scroll stabilization: start with no last scrolled index
@@ -1151,6 +1154,19 @@ impl ScriptListApp {
                                     cx.stop_propagation();
                                     return;
                                 }
+                            }
+
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && this.handle_menu_syntax_form_key_input(
+                                    key,
+                                    event.keystroke.key_char.as_deref(),
+                                    &event.keystroke.modifiers,
+                                    window,
+                                    cx,
+                                )
+                            {
+                                cx.stop_propagation();
+                                return;
                             }
 
                             if this.menu_syntax_capture_form_owns_input() {
@@ -1880,6 +1896,8 @@ impl ScriptListApp {
                                             this.input_history.current_index().is_some();
                                         let source_filter_mode =
                                             this.source_filter_mode_blocks_input_history_recall();
+                                        let filter_has_text = !this.filter_text.is_empty()
+                                            || !this.computed_filter_text.is_empty();
 
                                         tracing::info!(
                                             target: "script_kit::input_history",
@@ -1892,16 +1910,24 @@ impl ScriptListApp {
                                             at_top_of_list,
                                             in_history,
                                             source_filter_mode,
+                                            filter_has_text,
                                             history_index = ?this.input_history.current_index(),
                                             grouped_item_count = grouped_items.len(),
                                             route = if source_filter_mode {
                                                 "source_filter_list_up"
+                                            } else if filter_has_text {
+                                                "filter_text_up_noop"
                                             } else if in_history || at_top_of_list {
                                                 "history_up"
                                             } else {
                                                 "list_up"
                                             },
                                         );
+                                        if !source_filter_mode && filter_has_text {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+
                                         if !source_filter_mode && (in_history || at_top_of_list) {
                                             if let Some(text) = this.input_history.navigate_up() {
                                                 let safe = logging::log_user_value(&text);

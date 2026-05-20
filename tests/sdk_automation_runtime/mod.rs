@@ -129,6 +129,7 @@ fn state_result_serializes_all_fields() {
         capture_validation: None,
         unresolved_dates: Vec::new(),
         menu_syntax_ai_proposal: None,
+        form: None,
         rows: Vec::new(),
         fragment_preview: None,
         primary_hint: Some("Press Enter to capture.".to_string()),
@@ -144,6 +145,7 @@ fn state_result_serializes_all_fields() {
         "gs-1".to_string(),
         "arg".to_string(),
         Some("prompt-1".to_string()),
+        None,
         None,
         None,
         None,
@@ -215,6 +217,7 @@ fn state_result_round_trips() {
     let msg = Message::state_result(
         "gs-rt".to_string(),
         "none".to_string(),
+        None,
         None,
         None,
         None,
