@@ -302,33 +302,33 @@ pub fn parse_request(json: &str) -> Result<JsonRpcRequest, JsonRpcResponse> {
     })
 }
 /// Handle an MCP JSON-RPC request and return a response
-pub fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
+pub async fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
     // Use empty scripts list for stateless handler
-    handle_request_with_scripts(request, &[])
+    handle_request_with_scripts(request, &[]).await
 }
 /// Handle an MCP JSON-RPC request with script context
 /// This allows script tools to be dynamically included based on loaded scripts
-pub fn handle_request_with_scripts(
+pub async fn handle_request_with_scripts(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
     // Use empty scriptlets list for backwards compatibility
-    handle_request_with_context(request, scripts, &[], None)
+    handle_request_with_context(request, scripts, &[], None).await
 }
 /// Handle an MCP JSON-RPC request with full context
 /// This allows script tools and resources to be dynamically included
 ///
 /// H1 Optimization: Accepts Arc<Script> and Arc<Scriptlet> to work with Arc storage.
-pub fn handle_request_with_context(
+pub async fn handle_request_with_context(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
     scriptlets: &[std::sync::Arc<Scriptlet>],
     app_state: Option<&mcp_resources::AppStateResource>,
 ) -> JsonRpcResponse {
-    handle_request_with_runtime_context(request, scripts, scriptlets, app_state, None)
+    handle_request_with_runtime_context(request, scripts, scriptlets, app_state, None).await
 }
 
-pub fn handle_request_with_runtime_context(
+pub async fn handle_request_with_runtime_context(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
     scriptlets: &[std::sync::Arc<Scriptlet>],
@@ -349,7 +349,7 @@ pub fn handle_request_with_runtime_context(
         Some(McpMethod::Initialize) => handle_initialize(request),
         Some(McpMethod::ToolsList) => handle_tools_list_with_scripts(request, scripts),
         Some(McpMethod::ToolsCall) => {
-            handle_tools_call_with_runtime_context(request, scripts, runtime_context)
+            handle_tools_call_with_runtime_context(request, scripts, runtime_context).await
         }
         Some(McpMethod::ResourcesList) => handle_resources_list(request),
         Some(McpMethod::ResourcesRead) => {
@@ -427,22 +427,22 @@ pub fn handle_tools_list_with_scripts(
 }
 /// Handle tools/call request (no script context)
 #[allow(dead_code)]
-fn handle_tools_call(request: JsonRpcRequest) -> JsonRpcResponse {
+async fn handle_tools_call(request: JsonRpcRequest) -> JsonRpcResponse {
     // Use empty scripts list for stateless handler
-    handle_tools_call_with_scripts(request, &[])
+    handle_tools_call_with_scripts(request, &[]).await
 }
 /// Handle tools/call request with script context
 /// This allows handling scripts/* namespace tool calls
 ///
 /// H1 Optimization: Accepts Arc<Script> to work with Arc storage.
-pub fn handle_tools_call_with_scripts(
+pub async fn handle_tools_call_with_scripts(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
-    handle_tools_call_with_runtime(request, scripts, None)
+    handle_tools_call_with_runtime(request, scripts, None).await
 }
 
-pub fn handle_tools_call_with_runtime(
+pub async fn handle_tools_call_with_runtime(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
     computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
@@ -456,9 +456,10 @@ pub fn handle_tools_call_with_runtime(
         legacy_all_scopes(),
         uuid::Uuid::new_v4().to_string(),
     )
+    .await
 }
 
-pub fn handle_tools_call_with_runtime_context(
+pub async fn handle_tools_call_with_runtime_context(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
     runtime_context: Option<&McpRuntimeContext>,
@@ -486,9 +487,10 @@ pub fn handle_tools_call_with_runtime_context(
         token_scopes,
         trace_id,
     )
+    .await
 }
 
-fn handle_tools_call_with_runtime_parts(
+async fn handle_tools_call_with_runtime_parts(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
     computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
@@ -536,7 +538,10 @@ fn handle_tools_call_with_runtime_parts(
             notes_bridge,
         };
         let registry = mcp_control::build_default_mutation_registry();
-        if let Some(result) = registry.call(tool_name, arguments.clone(), &mutation_context) {
+        if let Some(result) = registry
+            .call(tool_name, arguments.clone(), &mutation_context)
+            .await
+        {
             return JsonRpcResponse::success(
                 request.id,
                 serde_json::to_value(result).unwrap_or(serde_json::json!({})),
@@ -690,6 +695,53 @@ mod tests {
     /// Helper to wrap Vec<Scriptlet> into Vec<Arc<Scriptlet>> for tests
     fn wrap_scriptlets(scriptlets: Vec<Scriptlet>) -> Vec<Arc<Scriptlet>> {
         scriptlets.into_iter().map(Arc::new).collect()
+    }
+
+    fn block_on_response<F>(future: F) -> JsonRpcResponse
+    where
+        F: std::future::Future<Output = JsonRpcResponse>,
+    {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("build test runtime");
+        runtime.block_on(future)
+    }
+
+    fn handle_request(request: JsonRpcRequest) -> JsonRpcResponse {
+        block_on_response(super::handle_request(request))
+    }
+
+    fn handle_request_with_scripts(
+        request: JsonRpcRequest,
+        scripts: &[Arc<Script>],
+    ) -> JsonRpcResponse {
+        block_on_response(super::handle_request_with_scripts(request, scripts))
+    }
+
+    fn handle_request_with_context(
+        request: JsonRpcRequest,
+        scripts: &[Arc<Script>],
+        scriptlets: &[Arc<Scriptlet>],
+        app_state: Option<&mcp_resources::AppStateResource>,
+    ) -> JsonRpcResponse {
+        block_on_response(super::handle_request_with_context(
+            request, scripts, scriptlets, app_state,
+        ))
+    }
+
+    fn handle_tools_call_with_runtime(
+        request: JsonRpcRequest,
+        scripts: &[Arc<Script>],
+        computer_runtime: Option<
+            &dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge,
+        >,
+    ) -> JsonRpcResponse {
+        block_on_response(super::handle_tools_call_with_runtime(
+            request,
+            scripts,
+            computer_runtime,
+        ))
     }
     // =======================================================
     // TDD Tests - Written FIRST per spec requirements

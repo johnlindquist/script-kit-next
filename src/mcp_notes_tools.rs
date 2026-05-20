@@ -115,8 +115,9 @@ pub struct NotesMutationResult {
     pub permanent: bool,
 }
 
+#[async_trait::async_trait]
 pub trait McpNotesMutationBridge: Send + Sync + 'static {
-    fn mutate_notes(
+    async fn mutate_notes(
         &self,
         request: NotesMutationRequest,
     ) -> Result<NotesMutationResult, NotesMutationError>;
@@ -149,7 +150,10 @@ pub fn get_notes_tool_definitions() -> Vec<ToolDefinition> {
                     "open": { "type": "boolean", "default": false },
                     "select": { "type": "boolean", "default": false }
                 },
-                "required": ["body"]
+                "anyOf": [
+                    { "required": ["body"] },
+                    { "required": ["content"] }
+                ]
             }),
         },
         ToolDefinition {
@@ -234,7 +238,7 @@ pub fn parse_notes_mutation_request(
     }
 }
 
-pub fn handle_notes_tool_call(
+pub async fn handle_notes_tool_call(
     bridge: Option<&dyn McpNotesMutationBridge>,
     name: &str,
     arguments: Value,
@@ -254,7 +258,7 @@ pub fn handle_notes_tool_call(
         );
     };
 
-    match bridge.mutate_notes(request) {
+    match bridge.mutate_notes(request).await {
         Ok(result) => success_tool_result(name, result),
         Err(error) => error_tool_result(name, error),
     }

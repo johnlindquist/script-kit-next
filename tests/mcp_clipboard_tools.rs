@@ -2,7 +2,7 @@ use script_kit_gpui::clipboard_history::{
     add_entry, clear_history, get_clipboard_history_meta, get_entry_content, ContentType,
 };
 use script_kit_gpui::mcp_protocol::{
-    handle_request_with_runtime_context, JsonRpcRequest, McpRuntimeContext,
+    handle_request_with_runtime_context, JsonRpcRequest, JsonRpcResponse, McpRuntimeContext,
 };
 use serde_json::{json, Value};
 use std::sync::{Mutex, OnceLock};
@@ -10,6 +10,20 @@ use tempfile::TempDir;
 
 static CLIPBOARD_TEST_LOCK: Mutex<()> = Mutex::new(());
 static CLIPBOARD_TEST_HOME: OnceLock<TempDir> = OnceLock::new();
+
+fn handle_request(request: JsonRpcRequest, context: Option<&McpRuntimeContext>) -> JsonRpcResponse {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    runtime.block_on(handle_request_with_runtime_context(
+        request,
+        &[],
+        &[],
+        None,
+        context,
+    ))
+}
 
 fn test_home() -> &'static std::path::Path {
     CLIPBOARD_TEST_HOME
@@ -43,7 +57,7 @@ fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) 
             "arguments": arguments,
         }),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, context);
+    let response = handle_request(request, context);
     response
         .result
         .expect("tools/call should return a JSON-RPC success envelope")
@@ -71,7 +85,7 @@ fn clipboard_tools_are_listed_before_generic_kit_fallback() {
         method: "tools/list".to_string(),
         params: json!({}),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, None);
+    let response = handle_request(request, None);
     let tools = response.result.unwrap()["tools"]
         .as_array()
         .unwrap()
@@ -108,6 +122,8 @@ fn clipboard_mutations_require_clipboard_write_scope() {
     );
     let payload = first_tool_text(&result);
     assert_eq!(result["isError"], true);
+    assert_eq!(payload["action"], "kit/clipboard_pin");
+    assert_eq!(payload["error"]["code"], "scope_denied");
     assert!(
         payload["error"]["message"]
             .as_str()

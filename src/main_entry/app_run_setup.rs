@@ -528,7 +528,7 @@ app.run(move |cx: &mut App| {
         let (mcp_computer_ui_tx, mcp_computer_ui_rx) = async_channel::bounded(16);
         mcp_computer_runtime.install(mcp_computer_ui_tx);
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            while let Ok(command) = mcp_notes_ui_rx.recv().await {
+            while let Ok(command) = async_channel::Receiver::recv(&mcp_notes_ui_rx).await {
                 let result = cx.update(|cx| {
                     crate::notes::apply_mcp_notes_mutation_on_main_thread(command.request, cx)
                 });

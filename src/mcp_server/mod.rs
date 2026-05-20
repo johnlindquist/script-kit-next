@@ -513,14 +513,19 @@ fn handle_rpc_request(
 
     // Parse and handle request with full context
     let response = match mcp_protocol::parse_request(&body_str) {
-        Ok(request) => mcp_protocol::handle_request_with_runtime_context(
-            request,
-            &scripts,
-            &scriptlets,
-            None,
-            Some(&runtime_context),
-        ),
-        Err(error_response) => error_response,
+        Ok(request) => {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()?;
+            runtime.block_on(mcp_protocol::handle_request_with_runtime_context(
+                request,
+                &scripts,
+                &scriptlets,
+                None,
+                Some(&runtime_context),
+            ))
+        }
+        Err(e) => e,
     };
 
     let response_body = serde_json::to_string(&response)?;

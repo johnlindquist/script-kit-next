@@ -1,7 +1,21 @@
 use script_kit_gpui::mcp_protocol::{
-    handle_request_with_runtime_context, JsonRpcRequest, McpRuntimeContext,
+    handle_request_with_runtime_context, JsonRpcRequest, JsonRpcResponse, McpRuntimeContext,
 };
 use serde_json::{json, Value};
+
+fn handle_request(request: JsonRpcRequest, context: Option<&McpRuntimeContext>) -> JsonRpcResponse {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .expect("build test runtime");
+    runtime.block_on(handle_request_with_runtime_context(
+        request,
+        &[],
+        &[],
+        None,
+        context,
+    ))
+}
 
 fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) -> Value {
     let request = JsonRpcRequest {
@@ -13,7 +27,7 @@ fn call_tool(name: &str, arguments: Value, context: Option<&McpRuntimeContext>) 
             "arguments": arguments,
         }),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, context);
+    let response = handle_request(request, context);
     response
         .result
         .expect("tools/call should return a JSON-RPC success envelope")
@@ -34,7 +48,7 @@ fn notes_tools_are_listed_before_generic_kit_fallback() {
         method: "tools/list".to_string(),
         params: json!({}),
     };
-    let response = handle_request_with_runtime_context(request, &[], &[], None, None);
+    let response = handle_request(request, None);
     let tools = response.result.unwrap()["tools"]
         .as_array()
         .unwrap()
@@ -72,6 +86,28 @@ fn notes_tools_are_listed_before_generic_kit_fallback() {
             .contains("Unknown kit tool"),
         "kit/notes_create should not be swallowed by generic kit/* fallback"
     );
+
+    let create_schema = tools
+        .iter()
+        .find(|tool| tool["name"] == "kit/notes_create")
+        .and_then(|tool| tool["inputSchema"].as_object())
+        .expect("kit/notes_create should expose an input schema");
+    let any_of = create_schema
+        .get("anyOf")
+        .and_then(|value| value.as_array())
+        .expect("notes_create schema should accept body or content");
+    assert!(
+        any_of
+            .iter()
+            .any(|entry| entry["required"] == json!(["body"])),
+        "notes_create schema should require body in one branch"
+    );
+    assert!(
+        any_of
+            .iter()
+            .any(|entry| entry["required"] == json!(["content"])),
+        "notes_create schema should require content in one branch"
+    );
 }
 
 #[test]
@@ -80,6 +116,14 @@ fn malformed_notes_payload_returns_tool_level_invalid_params() {
     let payload = first_tool_text(&result);
     assert_eq!(result["isError"], true);
     assert_eq!(payload["error"]["code"], "invalid_params");
+}
+
+#[test]
+fn notes_create_accepts_content_alias_before_runtime_dispatch() {
+    let result = call_tool("kit/notes_create", json!({ "content": "alias body" }), None);
+    let payload = first_tool_text(&result);
+    assert_eq!(result["isError"], true);
+    assert_eq!(payload["error"]["code"], "missing_runtime");
 }
 
 #[test]
@@ -95,7 +139,8 @@ fn notes_tool_scope_denial_returns_tool_error() {
     );
     let payload = first_tool_text(&result);
     assert_eq!(result["isError"], true);
-    assert_eq!(payload["error"]["code"], "invalid_params");
+    assert_eq!(payload["action"], "kit/notes_create");
+    assert_eq!(payload["error"]["code"], "scope_denied");
     assert!(
         payload["error"]["message"]
             .as_str()
