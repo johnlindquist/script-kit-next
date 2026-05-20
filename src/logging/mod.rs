@@ -62,6 +62,11 @@ pub fn filter_perf_trace_enabled() -> bool {
     static ENABLED: OnceLock<bool> = OnceLock::new();
     *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_FILTER_PERF_LOG").is_some())
 }
+
+pub fn preflight_deep_log_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SCRIPT_KIT_PREFLIGHT_DEEP_LOG").is_some())
+}
 // =============================================================================
 // SESSION IDENTITY & LOG PATHS
 // =============================================================================
@@ -998,6 +1003,8 @@ pub fn log_path() -> PathBuf {
 /// tracing::info!(category = "UI", duration_ms = 42, "Button clicked");
 /// ```
 pub fn log(category: &str, message: &str) {
+    let message = bounded_legacy_log_message(category, message);
+    let message = message.as_ref();
     // Add to legacy buffer for UI display
     add_to_buffer(category, message);
 
@@ -1056,6 +1063,26 @@ pub fn log(category: &str, message: &str) {
             message
         ),
     }
+}
+
+fn bounded_legacy_log_message<'a>(category: &str, message: &'a str) -> std::borrow::Cow<'a, str> {
+    const FILTER_PERF_MAX_BYTES: usize = 1536;
+    if !filter_perf_trace_enabled() || !category.eq_ignore_ascii_case("FILTER_PERF") {
+        return std::borrow::Cow::Borrowed(message);
+    }
+    if message.len() <= FILTER_PERF_MAX_BYTES {
+        return std::borrow::Cow::Borrowed(message);
+    }
+
+    let mut end = FILTER_PERF_MAX_BYTES;
+    while !message.is_char_boundary(end) {
+        end -= 1;
+    }
+    std::borrow::Cow::Owned(format!(
+        "{} ... [truncated=true raw_len={}]",
+        &message[..end],
+        message.len()
+    ))
 }
 /// Add a log entry to the in-memory buffer for UI display
 fn add_to_buffer(category: &str, message: &str) {

@@ -16,7 +16,7 @@ type Json = Record<string, any>;
 
 const repoRoot = resolve(import.meta.dir, "../..");
 const sessionScript = join(repoRoot, "scripts/agentic/session.sh");
-const outputDir = join(repoRoot, ".test-output", "root-delete-key-benchmark");
+const outputDir = join(repoRoot, ".test-output", "root-typing-lag-benchmark");
 const homeDir = join(outputDir, "home");
 const kitDir = join(homeDir, ".scriptkit");
 const dbDir = join(kitDir, "db");
@@ -24,16 +24,20 @@ const sessionRoot = join(outputDir, "sessions");
 const chromeDir = join(homeDir, "Library/Application Support/Google/Chrome/Default");
 const agentBinary = join(repoRoot, "target-agent", "pools", "agent-debug", "debug", "script-kit-gpui");
 
-const session = argValue("--session", "root-delete-key-benchmark");
-const samples = Number(argValue("--samples", "8"));
-const deleteCount = Number(argValue("--delete-count", "24"));
+const session = argValue("--session", "root-typing-lag-benchmark");
+const samples = Number(argValue("--samples", "6"));
 const cadenceMs = Number(argValue("--cadence", "18"));
-const burstSamples = Number(argValue("--burst-samples", "5"));
-const stateProbeEvery = Number(argValue("--state-probe-every", "0"));
 const timeoutMs = Number(argValue("--timeout", "12000"));
 const pollMs = Number(argValue("--poll", "4"));
-const query = argValue("--query", `amazon-delete-${Date.now()}`);
-const enforce = !process.argv.includes("--no-enforce");
+const stateProbeEvery = Number(argValue("--state-probe-every", "1"));
+const enforce = process.argv.includes("--enforce");
+const traceEnabled = !process.argv.includes("--no-trace");
+const passiveRefreshOverlap = process.argv.includes("--passive-refresh-overlap");
+const forceBrowserTabFailure = process.argv.includes("--force-browser-tabs-failure");
+const scenarios = argValue("--scenarios", "amz,dictat,this is the f,Hae")
+  .split(",")
+  .map((scenario) => scenario.trim())
+  .filter(Boolean);
 
 let sessionStatus: Json | null = null;
 
@@ -44,53 +48,67 @@ process.env.SCRIPT_KIT_SESSION_READY_TIMEOUT_MS = "10000";
 if (!process.env.SCRIPT_KIT_GPUI_BINARY && fileExists(agentBinary)) {
   process.env.SCRIPT_KIT_GPUI_BINARY = agentBinary;
 }
+if (traceEnabled) process.env.SCRIPT_KIT_FILTER_PERF_LOG = "1";
+delete process.env.SCRIPT_KIT_PREFLIGHT_DEEP_LOG;
 process.env.SCRIPT_KIT_ROOT_FILE_SEARCH_TEST_PROVIDER = JSON.stringify({
   passthroughUnmatched: false,
-  fixtures: [
-    {
-      query,
-      delayMs: 0,
-      results: [
-        {
-          path: `/tmp/${query}-file-result.txt`,
-          name: `${query}-file-result.txt`,
-          fileType: "document",
-          size: 42,
-          modified: Date.now(),
-        },
-      ],
-    },
-  ],
+  fixtures: scenarios.map((query) => ({
+    query,
+    delayMs: 0,
+    results: [
+      {
+        path: `/tmp/root-typing-${slug(query)}.txt`,
+        name: `${query} file result.txt`,
+        fileType: "document",
+        size: 42,
+        modified: Date.now(),
+      },
+    ],
+  })),
 });
-process.env.SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER = JSON.stringify([
-  {
-    browser_name: "Google Chrome",
-    browser_bundle_id: "com.google.Chrome",
-    window_index: 1,
-    tab_index: 1,
-    title: `${query} browser tab`,
-    url: `https://example.invalid/${query}/tab`,
-  },
-]);
-process.env.SCRIPT_KIT_AI_VAULT_TEST_PROVIDER = JSON.stringify([
-  {
+process.env.SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER = JSON.stringify(
+  forceBrowserTabFailure
+    ? {
+        delayMs: passiveRefreshOverlap ? 350 : 0,
+        fail: true,
+        error: "root typing benchmark forced browser tabs failure",
+        tabs: [],
+      }
+    : {
+        delayMs: passiveRefreshOverlap ? 350 : 0,
+        tabs: scenarios.map((query, index) => ({
+          browser_name: "Google Chrome",
+          browser_bundle_id: "com.google.Chrome",
+          window_index: 1,
+          tab_index: index + 1,
+          title: `${query} benchmark browser tab`,
+          url: `https://example.invalid/${slug(query)}/tab`,
+        })),
+      },
+);
+process.env.SCRIPT_KIT_AI_VAULT_TEST_PROVIDER = JSON.stringify(
+  scenarios.map((query) => ({
     provider: "codex",
     providerDisplayName: "Codex",
-    sessionId: "delete-key-benchmark-vault",
+    sessionId: `root-typing-${slug(query)}`,
     sourceKind: "cli",
     safeTitle: `${query} vault session`,
-    workspacePath: `/tmp/${query}-workspace`,
+    workspacePath: `/tmp/root-typing-${slug(query)}-workspace`,
     model: "fixture-model",
     modifiedAt: new Date().toISOString(),
     matchedField: "title",
-    stableKey: "ai-vault/codex/cli/delete-key-benchmark-vault",
+    stableKey: `ai-vault/codex/cli/root-typing-${slug(query)}`,
     score: 100,
-  },
-]);
+  })),
+);
 
 function argValue(name: string, fallback: string): string {
   const index = process.argv.indexOf(name);
   return index >= 0 && process.argv[index + 1] ? process.argv[index + 1] : fallback;
+}
+
+function slug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "empty";
 }
 
 function run(command: string, args: string[], options: { input?: string } = {}): string {
@@ -112,9 +130,7 @@ function runSession(args: string[]): Json {
   const stdout = run(sessionScript, args).trim();
   if (!stdout) throw new Error(`session.sh ${args.join(" ")} produced no stdout`);
   const parsed = JSON.parse(stdout);
-  if (parsed.status === "error") {
-    throw new Error(`session.sh ${args.join(" ")} failed: ${stdout}`);
-  }
+  if (parsed.status === "error") throw new Error(`session.sh ${args.join(" ")} failed: ${stdout}`);
   return parsed;
 }
 
@@ -159,7 +175,7 @@ function directWrite(command: Json) {
 }
 
 function directRpc(command: Json, expect: string, timeout = timeoutMs): Json {
-  command.requestId ??= `root-delete-rpc-${Date.now()}`;
+  command.requestId ??= `root-typing-rpc-${Date.now()}`;
   const responses = String(sessionStatus?.responses ?? "");
   const responseOffset = fileSize(responses);
   const protocolResponses = String(sessionStatus?.protocolResponses ?? "");
@@ -168,18 +184,13 @@ function directRpc(command: Json, expect: string, timeout = timeoutMs): Json {
   const logOffset = fileSize(logPath);
   directWrite(command);
   const envelope = waitUntil(timeout, () => {
-    for (const tail of [
-      readFrom(responses, responseOffset),
-      readFrom(protocolResponses, protocolOffset),
-    ]) {
+    for (const tail of [readFrom(responses, responseOffset), readFrom(protocolResponses, protocolOffset)]) {
       for (const line of tail.split("\n")) {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
           if (parsed.requestId === command.requestId) return parsed;
-        } catch {
-          continue;
-        }
+        } catch {}
       }
     }
     const logTail = readFrom(logPath, logOffset);
@@ -191,9 +202,7 @@ function directRpc(command: Json, expect: string, timeout = timeoutMs): Json {
         if (parsed.requestId === command.requestId && parsed.type === expect) {
           return { status: "ok", responseType: expect, response: parsed };
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
     return null;
   });
@@ -224,14 +233,8 @@ function waitForInput(input: string): number {
   directRpc(
     {
       type: "waitFor",
-      requestId: `root-delete-wait-${Date.now()}`,
-      condition: {
-        type: "stateMatch",
-        state: {
-          promptType: "none",
-          inputValue: input,
-        },
-      },
+      requestId: `root-typing-wait-${Date.now()}`,
+      condition: { type: "stateMatch", state: { promptType: "none", inputValue: input } },
       timeout: timeoutMs,
       pollInterval: pollMs,
     },
@@ -241,10 +244,7 @@ function waitForInput(input: string): number {
 }
 
 function getState(tag: string): Json {
-  return directRpc(
-    { type: "getState", requestId: `root-delete-state-${tag}-${Date.now()}` },
-    "stateResult",
-  );
+  return directRpc({ type: "getState", requestId: `root-typing-state-${tag}-${Date.now()}` }, "stateResult");
 }
 
 function sleepSync(ms: number) {
@@ -263,12 +263,14 @@ function seedFixtures() {
   mkdirSync(chromeDir, { recursive: true });
   mkdirSync(join(kitDir, "plugins", "main", "scripts"), { recursive: true });
 
-  writeFileSync(
-    join(kitDir, "plugins", "main", "scripts", `${query}.ts`),
-    `// Name: ${query} script\nconsole.log("fixture");\n`,
-  );
-
   const now = new Date().toISOString();
+  for (const query of scenarios) {
+    writeFileSync(
+      join(kitDir, "plugins", "main", "scripts", `${slug(query)}.ts`),
+      `// Name: ${query} script\nconsole.log("fixture");\n`,
+    );
+  }
+
   sql(
     join(dbDir, "notes.sqlite"),
     `
@@ -283,8 +285,12 @@ CREATE TABLE notes (
   sort_order INTEGER NOT NULL DEFAULT 0
 );
 CREATE VIRTUAL TABLE notes_fts USING fts5(title, content, content='notes', content_rowid='rowid');
-INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order)
-VALUES ('33333333-3333-4333-8333-333333333333', '${query} note', '${query} note content', '${now}', '${now}', NULL, 0, 0);
+${scenarios
+  .map(
+    (query, index) =>
+      `INSERT INTO notes (id, title, content, created_at, updated_at, deleted_at, is_pinned, sort_order) VALUES ('${index}3333333-3333-4333-8333-333333333333', '${query} note', '${query} note content', '${now}', '${now}', NULL, 0, ${index});`,
+  )
+  .join("\n")}
 INSERT INTO notes_fts(rowid, title, content) SELECT rowid, title, content FROM notes;
 `,
   );
@@ -305,36 +311,46 @@ CREATE TABLE history (
   image_height INTEGER,
   byte_size INTEGER
 );
-INSERT INTO history VALUES (
-  'clip-delete-key-benchmark', '${query} clipboard text', 'fixture-hash', 'text',
-  ${Date.now()}, 0, NULL, '${query} clipboard text', NULL, NULL, ${query.length + 15}
-);
+${scenarios
+  .map(
+    (query, index) =>
+      `INSERT INTO history VALUES ('clip-root-typing-${index}', '${query} clipboard text', 'fixture-hash-${index}', 'text', ${Date.now() + index}, 0, NULL, '${query} clipboard text', NULL, NULL, ${query.length + 15});`,
+  )
+  .join("\n")}
 `,
   );
 
   writeFileSync(
     join(kitDir, "dictation-history.jsonl"),
-    `${JSON.stringify({
-      id: "dictation-delete-key-benchmark",
-      timestamp: now,
-      transcript: `${query} dictation transcript`,
-      preview: `${query} dictation transcript`,
-      target: "Main Filter",
-      audio_duration_ms: 1200,
-    })}\n`,
+    scenarios
+      .map((query) =>
+        JSON.stringify({
+          id: `dictation-root-typing-${slug(query)}`,
+          timestamp: now,
+          transcript: `${query} dictation transcript`,
+          preview: `${query} dictation transcript`,
+          target: "Main Filter",
+          audio_duration_ms: 1200,
+        }),
+      )
+      .join("\n") + "\n",
   );
 
   writeFileSync(
     join(kitDir, "acp-history.jsonl"),
-    `${JSON.stringify({
-      timestamp: now,
-      first_message: `${query} conversation prompt`,
-      message_count: 2,
-      session_id: "acp-delete-key-benchmark",
-      title: `${query} conversation prompt`,
-      preview: `${query} conversation reply`,
-      search_text: `${query} conversation prompt ${query} conversation reply`,
-    })}\n`,
+    scenarios
+      .map((query) =>
+        JSON.stringify({
+          timestamp: now,
+          first_message: `${query} conversation prompt`,
+          message_count: 2,
+          session_id: `acp-root-typing-${slug(query)}`,
+          title: `${query} conversation prompt`,
+          preview: `${query} conversation reply`,
+          search_text: `${query} conversation prompt ${query} conversation reply`,
+        }),
+      )
+      .join("\n") + "\n",
   );
 
   const chromeTime = (Math.floor(Date.now() / 1000) + 11644473600) * 1000000;
@@ -349,7 +365,12 @@ CREATE TABLE urls (
   typed_count INTEGER NOT NULL DEFAULT 0,
   last_visit_time INTEGER NOT NULL DEFAULT 0
 );
-INSERT INTO urls VALUES (1, 'https://example.invalid/${query}/history', '${query} browser history', 7, 2, ${chromeTime});
+${scenarios
+  .map(
+    (query, index) =>
+      `INSERT INTO urls VALUES (${index + 1}, 'https://example.invalid/${slug(query)}/history', '${query} browser history', 7, 2, ${chromeTime + index});`,
+  )
+  .join("\n")}
 `,
   );
 }
@@ -375,11 +396,7 @@ function hash(value: unknown): string {
 }
 
 function setFilter(text: string, tag: string) {
-  const parseMs = directSend({
-    type: "setFilter",
-    text,
-    requestId: `root-delete-set-${tag}-${Date.now()}`,
-  });
+  const parseMs = directSend({ type: "setFilter", text, requestId: `root-typing-set-${tag}-${Date.now()}` });
   const echoWaitMs = waitForInput(text);
   return {
     text,
@@ -388,114 +405,88 @@ function setFilter(text: string, tag: string) {
   };
 }
 
-function sendBackspace(tag: string) {
-  const start = performance.now();
-  const response = directRpc(
-    {
-      type: "simulateGpuiEvent",
-      requestId: `root-delete-key-${tag}-${Date.now()}`,
-      target: { type: "main" },
-      event: { type: "keyDown", key: "backspace", modifiers: [] },
-    },
-    "simulateGpuiEventResult",
-  );
-  const dispatchMs = performance.now() - start;
-  if (response.success !== true) {
-    throw new Error(`backspace dispatch failed: ${JSON.stringify(response)}`);
-  }
-  return Number(dispatchMs.toFixed(3));
-}
-
-function measureDeleteEcho(sampleIndex: number) {
-  const initial = `${query}-sample-${sampleIndex}`;
-  setFilter(initial, `sample-${sampleIndex}-start`);
-
+function typeScenario(query: string, sampleIndex: number) {
+  setFilter("", `${slug(query)}-${sampleIndex}-clear`);
   const events = [];
-  let current = initial;
+  let current = "";
   let cadenceOverrunMaxMs = 0;
-  const count = Math.min(deleteCount, initial.length);
-  for (let index = 0; index < count; index += 1) {
-    const expected = current.slice(0, -1);
+  for (let index = 0; index < query.length; index += 1) {
+    current += query[index];
     const tickStarted = performance.now();
-    const dispatchMs = sendBackspace(`${sampleIndex}-${index}`);
-    const echoWaitMs = waitForInput(expected);
-    const inputEchoMs = performance.now() - tickStarted;
-    const cadenceElapsedMs = inputEchoMs;
-    const shouldProbeState = stateProbeEvery > 0 && index % stateProbeEvery === 0;
-    const state = shouldProbeState ? getState(`${sampleIndex}-${index}`) : null;
-    const computedMatchesInput = state
-      ? state.mainWindowPreflight?.computedSearchText === expected
-      : null;
+    const event = setFilter(current, `${slug(query)}-${sampleIndex}-${index}`);
+    const echoElapsed = performance.now() - tickStarted;
+    const state = stateProbeEvery > 0 && index % stateProbeEvery === 0 ? getState(`${slug(query)}-${sampleIndex}-${index}`) : null;
+    const elapsed = performance.now() - tickStarted;
+    cadenceOverrunMaxMs = Math.max(cadenceOverrunMaxMs, echoElapsed - cadenceMs);
     events.push({
       index,
-      expectedLength: expected.length,
-      dispatchMs,
-      echoWaitMs: Number(echoWaitMs.toFixed(3)),
-      inputEchoMs: Number(inputEchoMs.toFixed(3)),
-      computedMatchesInput,
+      expected: current,
+      expectedLength: current.length,
+      ...event,
+      computedMatchesInput: state ? state.mainWindowPreflight?.computedSearchText === current : null,
       visibleResultCount: state?.mainWindowPreflight?.visibleResults?.length ?? null,
       preflightFingerprint: state ? hash(state.mainWindowPreflight?.visibleResults ?? []) : null,
     });
-    current = expected;
-    cadenceOverrunMaxMs = Math.max(cadenceOverrunMaxMs, cadenceElapsedMs - cadenceMs);
-    const elapsed = performance.now() - tickStarted;
     if (elapsed < cadenceMs) sleepSync(cadenceMs - elapsed);
   }
   return {
-    kind: "delete-echo",
+    kind: "typing",
+    query,
     sampleIndex,
-    initial,
-    final: current,
     cadenceOverrunMaxMs: Number(cadenceOverrunMaxMs.toFixed(3)),
     events,
   };
 }
 
-function measureDeleteBurst(sampleIndex: number) {
-  const initial = `${query}-burst-${sampleIndex}`;
-  setFilter(initial, `burst-${sampleIndex}-start`);
-  const count = Math.min(deleteCount, initial.length);
-  const expected = initial.slice(0, initial.length - count);
-  const dispatches = [];
-  const start = performance.now();
-  for (let index = 0; index < count; index += 1) {
-    dispatches.push(sendBackspace(`burst-${sampleIndex}-${index}`));
-  }
-  const dispatchTotalMs = performance.now() - start;
-  const echoWaitMs = waitForInput(expected);
-  const totalMs = performance.now() - start;
-  const state = getState(`burst-${sampleIndex}-final`);
+function duplicateEmptyInput(sampleIndex: number) {
+  const first = setFilter("", `empty-${sampleIndex}-first`);
+  const second = setFilter("", `empty-${sampleIndex}-second`);
+  const state = getState(`empty-${sampleIndex}`);
   return {
-    kind: "delete-burst",
+    kind: "duplicate-empty",
     sampleIndex,
-    initial,
-    expected,
-    dispatchTotalMs: Number(dispatchTotalMs.toFixed(3)),
-    echoWaitMs: Number(echoWaitMs.toFixed(3)),
-    totalMs: Number(totalMs.toFixed(3)),
-    dispatch: stats(dispatches),
-    finalInput: state.inputValue,
+    first,
+    second,
+    inputValue: state.inputValue,
     computedSearchText: state.mainWindowPreflight?.computedSearchText ?? null,
-    visibleResultCount: state.mainWindowPreflight?.visibleResults?.length ?? null,
   };
+}
+
+function maxLogLineBytes(log: string): number {
+  return Math.max(
+    0,
+    ...log
+      .split("\n")
+      .filter((line) => {
+        if (line.includes('"type":"stateResult"')) return false;
+        if (line.includes('"type":"elementsResult"')) return false;
+        if (line.includes('"type":"layoutInfoResult"')) return false;
+        return true;
+      })
+      .map((line) => Buffer.byteLength(line)),
+  );
 }
 
 function parsePerfLogs(logPath: string) {
   const log = readFileSync(logPath, "utf8");
-  const applyDurations = [...log.matchAll(/APPLY_FILTER_DONE in ([0-9.]+)ms/g)].map((match) =>
-    Number(match[1]),
-  );
-  const handlerDurations = [...log.matchAll(/handle_filter_input_change took ([0-9.]+)ms/g)].map(
-    (match) => Number(match[1]),
-  );
-  const groupDurations = [...log.matchAll(/GROUP_DONE in ([0-9.]+)ms/g)].map((match) =>
-    Number(match[1]),
-  );
+  const numbers = (regex: RegExp) => [...log.matchAll(regex)].map((match) => Number(match[1]));
+  const handlerDurations = numbers(/handle_filter_input_change took ([0-9.]+)ms/g);
+  const applyDurations = numbers(/APPLY_FILTER_DONE in ([0-9.]+)ms/g);
+  const groupDurations = numbers(/GROUP_DONE '?[^'\n]*'? in ([0-9.]+)ms/g);
+  const searchDurations = numbers(/SEARCH_TOTAL[^:]*: sort=[0-9.]+ms total=([0-9.]+)ms/g);
+  const refreshStarted = (log.match(/root_passive_snapshot_refresh_started/g) ?? []).length;
+  const refreshFailed = (log.match(/root_passive_snapshot_refresh_failed/g) ?? []).length;
+  const preflightDeepLineCount = (log.match(/visible_row_fingerprint":"(?:[^"]{512,})/g) ?? []).length;
   return {
     applyFilterDone: stats(applyDurations),
-    handlerSlow: stats(handlerDurations),
     groupDone: stats(groupDurations),
+    searchTotal: stats(searchDurations),
+    handlerSlow: stats(handlerDurations),
     handlerSlowCount: handlerDurations.length,
+    browserTabsRefreshStartCount: refreshStarted,
+    browserTabsRefreshFailedCount: refreshFailed,
+    preflightDeepLineCount,
+    maxLogLineBytes: maxLogLineBytes(log),
   };
 }
 
@@ -505,76 +496,72 @@ async function main() {
   runSession(["start", session]);
   sessionStatus = runSession(["status", session]);
 
-  setFilter(query, "warm");
+  setFilter(scenarios[0] ?? "warm", "warm");
 
-  const echoReceipts = [];
+  const typingReceipts = [];
   for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
-    echoReceipts.push(measureDeleteEcho(sampleIndex));
-  }
-  const burstReceipts = [];
-  for (let sampleIndex = 0; sampleIndex < burstSamples; sampleIndex += 1) {
-    burstReceipts.push(measureDeleteBurst(sampleIndex));
+    for (const query of scenarios) {
+      typingReceipts.push(typeScenario(query, sampleIndex));
+    }
   }
 
-  const echoEvents = echoReceipts.flatMap((receipt) => receipt.events);
-  const computedMismatchCount = echoEvents.filter(
-    (event) => event.computedMatchesInput === false,
+  const emptyReceipts = [];
+  for (let sampleIndex = 0; sampleIndex < samples; sampleIndex += 1) {
+    emptyReceipts.push(duplicateEmptyInput(sampleIndex));
+  }
+
+  const events = typingReceipts.flatMap((receipt) => receipt.events);
+  const computedMismatchCount = events.filter((event) => event.computedMatchesInput === false).length;
+  const emptyMismatchCount = emptyReceipts.filter(
+    (receipt) => receipt.inputValue !== "" || receipt.computedSearchText !== "",
   ).length;
-  const burstFinalMismatchCount = burstReceipts.filter(
-    (receipt) =>
-      receipt.finalInput !== receipt.expected || receipt.computedSearchText !== receipt.expected,
-  ).length;
+  const perfLogs = parsePerfLogs(String(sessionStatus.log));
   const summary = {
-    deleteEcho: {
-      inputEcho: stats(echoEvents.map((event) => event.inputEchoMs)),
-      dispatch: stats(echoEvents.map((event) => event.dispatchMs)),
-      echoWait: stats(echoEvents.map((event) => event.echoWaitMs)),
+    typing: {
+      inputEcho: stats(events.map((event) => event.inputEchoMs)),
+      parse: stats(events.map((event) => event.parseMs)),
       cadenceMs,
-      cadenceOverrunMaxMs: Number(Math.max(
-        0,
-        ...echoReceipts.map((receipt) => receipt.cadenceOverrunMaxMs),
-      ).toFixed(3)),
+      cadenceOverrunMaxMs: Number(Math.max(0, ...typingReceipts.map((receipt) => receipt.cadenceOverrunMaxMs)).toFixed(3)),
       computedMismatchCount,
     },
-    deleteBurst: {
-      total: stats(burstReceipts.map((receipt) => receipt.totalMs)),
-      dispatchTotal: stats(burstReceipts.map((receipt) => receipt.dispatchTotalMs)),
-      echoWait: stats(burstReceipts.map((receipt) => receipt.echoWaitMs)),
-      finalMismatchCount: burstFinalMismatchCount,
+    duplicateEmpty: {
+      inputEcho: stats(emptyReceipts.flatMap((receipt) => [receipt.first.inputEchoMs, receipt.second.inputEchoMs])),
+      mismatchCount: emptyMismatchCount,
     },
-    perfLogs: parsePerfLogs(String(sessionStatus.log)),
+    perfLogs,
   };
 
   const failures = [];
-  if (summary.deleteEcho.inputEcho.p50Ms > 25) failures.push("delete inputEcho p50 > 25ms");
-  if (summary.deleteEcho.inputEcho.p95Ms > 75) failures.push("delete inputEcho p95 > 75ms");
-  if (summary.deleteEcho.inputEcho.maxMs > 200) failures.push("delete inputEcho max > 200ms");
-  if (summary.deleteEcho.cadenceOverrunMaxMs > 75) {
-    failures.push("delete cadence overrun max > 75ms");
-  }
-  if (summary.deleteEcho.computedMismatchCount !== 0) {
-    failures.push("delete computedSearchText mismatch");
-  }
-  if (summary.deleteBurst.total.p95Ms > 500) failures.push("delete burst total p95 > 500ms");
-  if (summary.deleteBurst.finalMismatchCount !== 0) failures.push("delete burst final mismatch");
-  if (summary.perfLogs.handlerSlowCount > 0) failures.push("handler slow logs present");
+  if (summary.typing.inputEcho.p50Ms > 20) failures.push("typing inputEcho p50 > 20ms");
+  if (summary.typing.inputEcho.p95Ms > 50) failures.push("typing inputEcho p95 > 50ms");
+  if (summary.typing.inputEcho.maxMs > 150) failures.push("typing inputEcho max > 150ms");
+  if (summary.typing.cadenceOverrunMaxMs > 75) failures.push("typing cadence overrun max > 75ms");
+  if (summary.typing.computedMismatchCount !== 0) failures.push("computedSearchText mismatch");
+  if (summary.duplicateEmpty.mismatchCount !== 0) failures.push("duplicate empty final mismatch");
+  if (summary.perfLogs.handlerSlowCount !== 0) failures.push("handler slow logs present");
+  if (summary.perfLogs.groupDone.p95Ms > 35) failures.push("GROUP_DONE p95 > 35ms");
+  if (summary.perfLogs.searchTotal.p95Ms > 15) failures.push("SEARCH_TOTAL p95 > 15ms");
+  if (summary.perfLogs.maxLogLineBytes > 2048) failures.push("max log line bytes > 2048");
+  if (summary.perfLogs.preflightDeepLineCount !== 0) failures.push("deep preflight lines present");
 
   const receipt = {
     schemaVersion: 1,
     status: failures.length === 0 ? "pass" : "fail",
-    query,
+    scenarios,
     samples,
-    deleteCount,
-      burstSamples,
-      stateProbeEvery,
-      thresholds: {
-      deleteInputEchoP50Ms: 25,
-      deleteInputEchoP95Ms: 75,
-      deleteInputEchoMaxMs: 200,
+    cadenceMs,
+    traceEnabled,
+    passiveRefreshOverlap,
+    forceBrowserTabFailure,
+    enforce,
+    thresholds: {
+      inputEchoP50Ms: 20,
+      inputEchoP95Ms: 50,
+      inputEchoMaxMs: 150,
       cadenceOverrunMaxMs: 75,
-      deleteBurstTotalP95Ms: 500,
-      handlerSlowCount: 0,
-      enforced: enforce,
+      groupDoneP95Ms: 35,
+      searchTotalP95Ms: 15,
+      maxLogLineBytes: 2048,
       failures,
     },
     session: {
@@ -583,8 +570,8 @@ async function main() {
       responsesPath: sessionStatus.responses,
     },
     summary,
-    echoReceipts,
-    burstReceipts,
+    typingReceipts,
+    emptyReceipts,
   };
 
   mkdirSync(outputDir, { recursive: true });

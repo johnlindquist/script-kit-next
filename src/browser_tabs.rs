@@ -10,6 +10,9 @@ const FIELD_SEPARATOR: char = '\u{1e}';
 const RECORD_SEPARATOR: char = '\u{1f}';
 const BROWSER_TIMEOUT: Duration = Duration::from_secs(3);
 const BROWSER_RUNNING_TIMEOUT: Duration = Duration::from_secs(1);
+const ROOT_BROWSER_TABS_MIN_REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+const ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE: Duration = Duration::from_secs(15);
+const ROOT_BROWSER_TABS_FAILURE_BACKOFF_MAX: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BrowserFamily {
@@ -156,6 +159,10 @@ struct RootBrowserTabSnapshotState {
     refresh_in_flight: bool,
     generation: u64,
     last_refresh_error: Option<String>,
+    last_attempt_at: Option<Instant>,
+    last_success_at: Option<Instant>,
+    next_refresh_after: Option<Instant>,
+    failure_count: u32,
 }
 
 #[allow(dead_code)]
@@ -163,14 +170,58 @@ static ROOT_BROWSER_TAB_SNAPSHOT: LazyLock<Mutex<RootBrowserTabSnapshotState>> =
     LazyLock::new(|| Mutex::new(RootBrowserTabSnapshotState::default()));
 
 pub fn list_open_tabs() -> Result<Vec<BrowserTabInfo>> {
+    list_open_tabs_for_root_providers(&[])
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BrowserTabsTestProvider {
+    Rows(Vec<BrowserTabInfo>),
+    Config {
+        #[serde(default, rename = "delayMs")]
+        delay_ms: u64,
+        #[serde(default)]
+        fail: bool,
+        #[serde(default)]
+        error: Option<String>,
+        #[serde(default)]
+        tabs: Vec<BrowserTabInfo>,
+    },
+}
+
+fn list_open_tabs_for_root_providers(
+    providers: &[crate::config::BrowserTabProvider],
+) -> Result<Vec<BrowserTabInfo>> {
     let _span = tracing::info_span!("list_open_tabs").entered();
 
     if let Ok(raw) = std::env::var("SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER") {
-        return serde_json::from_str(&raw).context("parse SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER");
+        let provider: BrowserTabsTestProvider =
+            serde_json::from_str(&raw).context("parse SCRIPT_KIT_BROWSER_TABS_TEST_PROVIDER")?;
+        return match provider {
+            BrowserTabsTestProvider::Rows(rows) => Ok(rows),
+            BrowserTabsTestProvider::Config {
+                delay_ms,
+                fail,
+                error,
+                tabs,
+            } => {
+                if delay_ms > 0 {
+                    std::thread::sleep(Duration::from_millis(delay_ms));
+                }
+                if fail {
+                    bail!(
+                        "{}",
+                        error.unwrap_or_else(|| "browser tabs test provider failure".to_string())
+                    );
+                }
+                Ok(tabs)
+            }
+        };
     }
 
     let results: Vec<Result<Vec<BrowserTabInfo>>> = SUPPORTED_BROWSERS
         .par_iter()
+        .filter(|browser| root_supported_browser_provider_is_enabled(browser, providers))
         .map(|browser| {
             let _browser_span =
                 tracing::info_span!("list_tabs_for_browser", browser = browser.app_name).entered();
@@ -413,6 +464,7 @@ fn search_root_browser_tabs_internal(
         } else {
             "root_search_query"
         },
+        options.providers.clone(),
     );
 
     let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms);
@@ -444,7 +496,7 @@ fn search_root_browser_tabs_internal(
 #[allow(dead_code)]
 fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Arc<Vec<BrowserTabInfo>> {
     let ttl = Duration::from_millis(cache_ttl_ms);
-    if let Ok(cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
+    if let Ok(cache) = ROOT_BROWSER_TAB_SNAPSHOT.try_lock() {
         if let Some(snapshot) = cache.snapshot.as_ref() {
             let _expired = snapshot.captured_at.elapsed() > ttl;
             return snapshot.tabs.clone();
@@ -457,7 +509,7 @@ fn cached_root_browser_tabs_snapshot(cache_ttl_ms: u64) -> Arc<Vec<BrowserTabInf
 #[allow(dead_code)]
 pub(crate) fn root_browser_tabs_snapshot_status() -> RootPassiveSnapshotStatus {
     ROOT_BROWSER_TAB_SNAPSHOT
-        .lock()
+        .try_lock()
         .map(|cache| RootPassiveSnapshotStatus {
             generation: cache.generation,
             refreshing: cache.refresh_in_flight,
@@ -475,20 +527,30 @@ pub(crate) fn root_browser_tabs_snapshot_status() -> RootPassiveSnapshotStatus {
 }
 
 #[allow(dead_code)]
-fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
+fn ensure_root_browser_tabs_refresh(
+    cache_ttl_ms: u64,
+    reason: &'static str,
+    providers: Vec<crate::config::BrowserTabProvider>,
+) {
     let ttl = Duration::from_millis(cache_ttl_ms);
     let generation = {
-        let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() else {
+        let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.try_lock() else {
             return;
         };
+        let now = Instant::now();
         let is_fresh = cache
             .snapshot
             .as_ref()
             .is_some_and(|snapshot| snapshot.captured_at.elapsed() <= ttl);
-        if is_fresh || cache.refresh_in_flight {
+        let too_soon = cache
+            .last_attempt_at
+            .is_some_and(|last| now.duration_since(last) < ROOT_BROWSER_TABS_MIN_REFRESH_INTERVAL);
+        let in_backoff = cache.next_refresh_after.is_some_and(|next| now < next);
+        if is_fresh || cache.refresh_in_flight || too_soon || in_backoff {
             return;
         }
         cache.refresh_in_flight = true;
+        cache.last_attempt_at = Some(now);
         cache.generation = cache.generation.wrapping_add(1);
         let generation = cache.generation;
         let cache_age_ms = cache
@@ -508,6 +570,7 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
             ttl_ms = cache_ttl_ms,
             row_count,
             reason,
+            provider_count = providers.len(),
             "root_passive_snapshot_refresh_started"
         );
         generation
@@ -515,7 +578,7 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
 
     std::thread::spawn(move || {
         let started = Instant::now();
-        let result = list_open_tabs();
+        let result = list_open_tabs_for_root_providers(&providers);
         let elapsed_ms = started.elapsed().as_millis() as u64;
 
         let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() else {
@@ -533,6 +596,9 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
                     tabs: Arc::new(tabs.clone()),
                 });
                 cache.last_refresh_error = None;
+                cache.last_success_at = Some(Instant::now());
+                cache.next_refresh_after = None;
+                cache.failure_count = 0;
 
                 // Trigger favicon fetch in background
                 let urls: Vec<String> = tabs.iter().map(|t| t.url.to_string()).collect();
@@ -550,11 +616,16 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
                 );
             }
             Err(error) => {
+                cache.failure_count = cache.failure_count.saturating_add(1);
+                let backoff = root_browser_tabs_failure_backoff(cache.failure_count);
+                cache.next_refresh_after = Some(Instant::now() + backoff);
                 cache.last_refresh_error = Some(error.to_string());
                 tracing::warn!(
                     source = "browser_tabs",
                     generation,
                     elapsed_ms,
+                    failure_count = cache.failure_count,
+                    backoff_ms = backoff.as_millis() as u64,
                     error = %error,
                     "root_passive_snapshot_refresh_failed"
                 );
@@ -562,6 +633,14 @@ fn ensure_root_browser_tabs_refresh(cache_ttl_ms: u64, reason: &'static str) {
         }
         cache.refresh_in_flight = false;
     });
+}
+
+fn root_browser_tabs_failure_backoff(failure_count: u32) -> Duration {
+    let exponent = failure_count.saturating_sub(1).min(8);
+    let multiplier = 1u32.checked_shl(exponent).unwrap_or(u32::MAX);
+    ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE
+        .saturating_mul(multiplier)
+        .min(ROOT_BROWSER_TABS_FAILURE_BACKOFF_MAX)
 }
 
 #[cfg(test)]
@@ -711,6 +790,19 @@ fn root_tab_provider_is_enabled(
         return false;
     };
     providers.is_empty() || providers.contains(&provider)
+}
+
+fn root_supported_browser_provider_is_enabled(
+    browser: &SupportedBrowser,
+    providers: &[crate::config::BrowserTabProvider],
+) -> bool {
+    if providers.is_empty() {
+        return true;
+    }
+    let Some(provider) = browser_tab_provider_for_bundle_id(browser.bundle_id) else {
+        return false;
+    };
+    providers.contains(&provider)
 }
 
 #[allow(dead_code)]
@@ -1079,6 +1171,48 @@ mod tests {
     }
 
     #[test]
+    fn root_browser_tabs_failure_backoff_is_exponential_and_capped() {
+        assert_eq!(
+            root_browser_tabs_failure_backoff(1),
+            ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE
+        );
+        assert_eq!(
+            root_browser_tabs_failure_backoff(2),
+            ROOT_BROWSER_TABS_FAILURE_BACKOFF_BASE * 2
+        );
+        assert_eq!(
+            root_browser_tabs_failure_backoff(99),
+            ROOT_BROWSER_TABS_FAILURE_BACKOFF_MAX
+        );
+    }
+
+    #[test]
+    fn cached_root_browser_tabs_snapshot_does_not_block_on_refresh_lock() {
+        reset_root_browser_tabs_snapshot_for_test();
+        let _guard = ROOT_BROWSER_TAB_SNAPSHOT.lock().expect("snapshot lock");
+        let started = Instant::now();
+        let rows = cached_root_browser_tabs_snapshot(1);
+        assert!(rows.is_empty());
+        assert!(
+            started.elapsed() < Duration::from_millis(25),
+            "foreground snapshot read should not wait on refresh lock"
+        );
+    }
+
+    #[test]
+    fn root_browser_tabs_refresh_uses_configured_providers_only() {
+        let providers = vec![crate::config::BrowserTabProvider::Chrome];
+        assert!(root_supported_browser_provider_is_enabled(
+            &SUPPORTED_BROWSERS[1],
+            &providers
+        ));
+        assert!(!root_supported_browser_provider_is_enabled(
+            &SUPPORTED_BROWSERS[0],
+            &providers
+        ));
+    }
+
+    #[test]
     fn build_list_tabs_script_uses_browser_specific_title_property() {
         let safari_script = build_list_tabs_script(&SUPPORTED_BROWSERS[0]);
         let chrome_script = build_list_tabs_script(&SUPPORTED_BROWSERS[1]);
@@ -1094,9 +1228,9 @@ mod tests {
         let safari_script = build_list_tabs_jxa(&SUPPORTED_BROWSERS[0]);
         let chrome_script = build_list_tabs_jxa(&SUPPORTED_BROWSERS[1]);
 
-        assert!(safari_script.contains(r#"tabs[t].name()"#));
-        assert!(chrome_script.contains(r#"tabs[t].title()"#));
-        assert!(chrome_script.contains(r#"tabs[t].url()"#));
+        assert!(safari_script.contains(r#"win.tabs.name()"#));
+        assert!(chrome_script.contains(r#"win.tabs.title()"#));
+        assert!(chrome_script.contains(r#"win.tabs.url()"#));
         // Verify it targets the correct app
         assert!(safari_script.contains(r#"Application("Safari")"#));
         assert!(chrome_script.contains(r#"Application("Google Chrome")"#));

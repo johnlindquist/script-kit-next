@@ -6,6 +6,7 @@ use crate::main_window_preflight::types::{
 };
 use crate::scripts::SearchResult;
 use crate::AppView;
+use std::hash::{Hash, Hasher};
 
 fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchResult> {
     use crate::scripts::*;
@@ -458,19 +459,40 @@ pub(crate) fn build_main_window_preflight_receipt(
 }
 
 pub(crate) fn log_main_window_preflight_receipt(receipt: &MainWindowPreflightReceipt) {
+    let key_fingerprint_log = if crate::logging::preflight_deep_log_enabled() {
+        receipt.visible_result_key_fingerprint.clone()
+    } else {
+        compact_log_fingerprint(&receipt.visible_result_key_fingerprint)
+    };
+    let row_fingerprint_log = if crate::logging::preflight_deep_log_enabled() {
+        receipt.visible_row_fingerprint.clone()
+    } else {
+        compact_log_fingerprint(&receipt.visible_row_fingerprint)
+    };
+    let enter_subject = receipt
+        .enter_action
+        .as_ref()
+        .map(|a| crate::logging::log_user_value_with_limit(&a.subject, 160).to_string())
+        .unwrap_or_else(|| "none".to_string());
     tracing::info!(
         event = "main_window_preflight_receipt",
         selected_index = receipt.selected_index,
         selected_result_key = ?receipt.selected_result_key,
         selected_result_role = ?receipt.selected_result_role,
-        visible_result_key_fingerprint = %receipt.visible_result_key_fingerprint,
-        visible_row_fingerprint = %receipt.visible_row_fingerprint,
+        visible_result_key_fingerprint = %key_fingerprint_log,
+        visible_row_fingerprint = %row_fingerprint_log,
         visible_result_count = receipt.visible_result_count,
         enter_label = %receipt.enter_action.as_ref().map(|a| a.label.as_str()).unwrap_or("none"),
-        enter_subject = %receipt.enter_action.as_ref().map(|a| a.subject.as_str()).unwrap_or("none"),
+        enter_subject = %enter_subject,
         enter_type = %receipt.enter_action.as_ref().map(|a| a.type_label.as_str()).unwrap_or("none"),
         tab_enabled = receipt.tab_action.is_some(),
         warnings = ?receipt.warnings,
         "Built main window preflight receipt"
     );
+}
+
+fn compact_log_fingerprint(value: &str) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    value.hash(&mut hasher);
+    format!("len:{}:hash:{:016x}", value.len(), hasher.finish())
 }
