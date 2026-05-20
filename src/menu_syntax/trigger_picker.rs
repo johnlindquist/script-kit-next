@@ -341,6 +341,9 @@ fn advanced_query_active_token(input: &str) -> String {
 
 fn should_show_has_field_completion(input: &str) -> bool {
     let active = advanced_query_active_token(input);
+    if active == "has" {
+        return true;
+    }
     let Some(value) = active.strip_prefix("has:") else {
         return false;
     };
@@ -368,13 +371,17 @@ fn is_complete_has_field_query(input: &str) -> bool {
 }
 
 fn has_field_value_rows_for_active_token(active: &str) -> Option<Vec<TriggerPickerRow>> {
-    let partial = active.strip_prefix("has:")?;
+    let partial = if active == "has" {
+        ""
+    } else {
+        active.strip_prefix("has:")?
+    };
     Some(
         crate::menu_syntax::has_fields::HAS_FIELD_SPECS
             .iter()
             .filter(|spec| {
                 partial.is_empty()
-                    || spec.token.to_ascii_lowercase().starts_with(active)
+                    || spec.token.to_ascii_lowercase().starts_with(partial)
                     || spec
                         .aliases
                         .iter()
@@ -857,26 +864,6 @@ fn static_qualifier_rows() -> Vec<TriggerPickerRow> {
             display_token: "tag:",
             example: "tag:client/acme type:issue",
             insert: "tag:",
-            keep_open: true,
-        },
-        StaticQualifierRow {
-            token: "has:menuSyntax",
-            title: "Has menuSyntax metadata",
-            subtitle: None,
-            detail: None,
-            display_token: "has:menuSyntax",
-            example: "has:menuSyntax",
-            insert: "has:menuSyntax",
-            keep_open: false,
-        },
-        StaticQualifierRow {
-            token: "has:",
-            title: "Has metadata field",
-            subtitle: None,
-            detail: None,
-            display_token: "has:",
-            example: "has:shortcut",
-            insert: "has:",
             keep_open: true,
         },
         StaticQualifierRow {
@@ -2248,5 +2235,56 @@ mod tests {
         assert!(!within_one_edit("", "type"));
         assert!(!within_one_edit("foo", "type"));
         assert!(!within_one_edit("typeabc", "type"));
+    }
+
+    #[test]
+    fn has_filter_completion_shows_first_class_fields_only() {
+        let ctx = TriggerPickerContext::default();
+        let snap = build_trigger_picker_snapshot(":has", &ctx).expect("snapshot");
+
+        assert_eq!(snap.mode, TriggerPickerMode::AdvancedQuery);
+        let tokens: Vec<&str> = snap
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+
+        // Should contain first-class fields from HAS_FIELD_SPECS
+        assert!(tokens.contains(&"has:shortcut"));
+        assert!(tokens.contains(&"has:alias"));
+        assert!(tokens.contains(&"has:menuSyntax"));
+
+        // Should NOT contain the old static examples that just happened to match "Has"
+        assert!(!tokens.contains(&"shortcut:any"));
+        assert!(!tokens.contains(&"shortcut:none"));
+    }
+
+    #[test]
+    fn has_filter_completion_progressively_filters_fields() {
+        let ctx = TriggerPickerContext::default();
+        let all_rows = build_trigger_picker_snapshot(":has:", &ctx).expect("snapshot");
+        let all_tokens: Vec<&str> = all_rows
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+        assert!(all_tokens.contains(&"has:shortcut"));
+        assert!(all_tokens.contains(&"has:alias"));
+        assert!(all_tokens.contains(&"has:menuSyntax"));
+
+        let menu_rows = build_trigger_picker_snapshot(":has:men", &ctx).expect("snapshot");
+        let menu_tokens: Vec<&str> = menu_rows
+            .rows
+            .iter()
+            .filter_map(|row| row.token.as_deref())
+            .collect();
+        assert!(menu_tokens.contains(&"has:menuSyntax"));
+        assert!(!menu_tokens.contains(&"has:shortcut"));
+        assert!(!menu_tokens.contains(&"has:alias"));
+
+        assert!(
+            build_trigger_picker_snapshot(":has:shortcut", &ctx).is_none(),
+            "completed has:shortcut should be terminal search input, not a completion state"
+        );
     }
 }
