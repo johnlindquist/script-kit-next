@@ -827,6 +827,11 @@ impl ScriptListApp {
             .filter(|value| !value.is_empty());
         let source_view = self.current_view.clone();
 
+        let trigger = self.tab_ai_harness_script_list_trigger;
+        entity.update(cx, |chat, _cx| {
+            chat.opened_via_transient_trigger = trigger;
+        });
+
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
         self.enter_embedded_acp_chat_surface(entity.clone(), cx);
