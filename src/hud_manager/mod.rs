@@ -288,6 +288,9 @@ impl Render for HudView {
 
         // Extract colors for use in closures (Copy trait)
         let colors = self.colors;
+        let theme = get_cached_theme();
+        let theme_background_gradients =
+            crate::ui_foundation::theme_background_gradient_layers("hud-bg-layer", &theme);
         let hud_label_text = self.text.clone();
 
         // HUD pill styling: matches main window theme, minimal and clean
@@ -302,8 +305,11 @@ impl Render for HudView {
             .px(px(16.))
             .py(px(8.))
             .gap(px(12.))
+            .relative()
+            .overflow_hidden()
             // Use the same theme background and opacity as the main window.
             .bg(rgba(colors.background_rgba))
+            .children(theme_background_gradients)
             .rounded(px(8.)) // Rounded corners matching main window
             // Text styling - system font, smaller size, theme text color, centered
             .child(

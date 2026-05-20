@@ -325,7 +325,7 @@ fn script_list_scrollbar_overlay_uses_footer_safe_viewport_and_content_height() 
         "script list scrollbar overlay must clip itself to the footer-safe viewport height"
     );
     assert!(
-        content.contains(".map(|item| match item {")
+        content.contains(".map(|(ix, item)| match item {")
             && content.contains("GroupedListItem::SectionHeader(..)")
             && content.contains("GroupedListItem::Item(..)"),
         "script list scrollbar overlay must size against real grouped row heights"

@@ -154,8 +154,10 @@ impl Render for NotesApp {
         let show_actions =
             self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
 
-        let vibrancy_bg =
-            crate::ui_foundation::get_vibrancy_background(&crate::theme::get_cached_theme());
+        let theme = crate::theme::get_cached_theme();
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&theme);
+        let theme_background_gradients =
+            crate::ui_foundation::theme_background_gradient_layers("notes-bg-layer", &theme);
 
         let in_acp_mode = self.surface_mode == NotesSurfaceMode::Acp;
 
@@ -166,6 +168,7 @@ impl Render for NotesApp {
             .size_full()
             .relative()
             .when_some(vibrancy_bg, |d, bg| d.bg(bg))
+            .children(theme_background_gradients)
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))

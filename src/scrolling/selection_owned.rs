@@ -2,9 +2,15 @@ use crate::list_item::{coerce_selection, GroupedListItem};
 use gpui::{ListOffset, Pixels};
 
 #[allow(dead_code)] // Shared with the launcher binary; the library target compiles this module without the owning call sites.
-fn row_height(row: &GroupedListItem) -> f32 {
+fn row_height(row: &GroupedListItem, ix: usize) -> f32 {
     match row {
-        GroupedListItem::SectionHeader(..) => crate::list_item::effective_section_header_height(),
+        GroupedListItem::SectionHeader(..) => {
+            if ix == 0 {
+                crate::list_item::effective_first_section_header_height()
+            } else {
+                crate::list_item::effective_section_header_height()
+            }
+        }
         GroupedListItem::Status(..) => crate::list_item::effective_source_status_row_height(),
         GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
     }
@@ -25,7 +31,7 @@ pub(crate) fn visible_grouped_row_range(
     let mut last = first;
 
     while last < rows.len() {
-        consumed += row_height(&rows[last]);
+        consumed += row_height(&rows[last], last);
         if consumed >= viewport_height.as_f32() || last == rows.len() - 1 {
             break;
         }

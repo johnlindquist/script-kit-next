@@ -121,6 +121,12 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font().to_string();
 
         // Use theme colors for consistency with main menu
         let opacity = self.theme.get_opacity();
@@ -428,14 +434,10 @@ impl ScriptListApp {
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
-            div()
-                .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgb(self.theme.colors.text.muted))
-                .font_family(design_typography.font_family)
-                .child(ClipboardHistoryEmptyState::from_filter(&filter).message())
-                .into_any_element()
+            let state = ClipboardHistoryEmptyState::from_filter(&filter);
+            crate::list_item::EmptyState::new(state.message(), empty_text_color, &empty_font_family)
+                .icon(crate::designs::icon_variations::IconName::Copy)
+                .into_element()
         } else {
             // Clone data for the closure
             let entries_for_closure: Vec<_> = filtered_entries

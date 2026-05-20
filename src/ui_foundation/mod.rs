@@ -38,8 +38,8 @@
 use crate::designs::{get_tokens, DesignColors, DesignSpacing, DesignVariant};
 use crate::theme::{ColorScheme, Theme};
 use gpui::{
-    linear_color_stop, linear_gradient, px, rgba, Background, Div, Hsla, InteractiveElement, Rgba,
-    Stateful, Styled,
+    div, linear_color_stop, linear_gradient, px, rgba, Background, Div, ElementId, Hsla,
+    InteractiveElement, Rgba, Stateful, Styled,
 };
 /// Convert a hex color (u32) to RGBA with specified opacity.
 ///
@@ -221,6 +221,24 @@ pub fn get_theme_background_gradients(theme: &Theme) -> Vec<Background> {
         }
     }
     backgrounds
+}
+
+/// Build absolute background layers for an active theme gradient.
+pub fn theme_background_gradient_layers(
+    id_prefix: &'static str,
+    theme: &Theme,
+) -> Vec<Stateful<Div>> {
+    get_theme_background_gradients(theme)
+        .into_iter()
+        .enumerate()
+        .map(|(i, bg)| {
+            div()
+                .id(ElementId::NamedInteger(id_prefix.into(), i as u64))
+                .absolute()
+                .inset_0()
+                .bg(bg)
+        })
+        .collect()
 }
 /// Get container background with optional opacity for semi-transparent areas.
 ///

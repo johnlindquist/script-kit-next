@@ -69,6 +69,12 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let _design_visual = tokens.visual();
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font().to_string();
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
@@ -330,14 +336,10 @@ impl ScriptListApp {
         let list_colors = ListItemColors::from_theme(&self.theme);
 
         let list_element: AnyElement = if filtered_len == 0 {
-            div()
-                .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .text_color(rgb(text_muted))
-                .font_family(design_typography.font_family)
-                .child(AcpHistoryEmptyState::from_filter(&filter).message())
-                .into_any_element()
+            let state = AcpHistoryEmptyState::from_filter(&filter);
+            crate::list_item::EmptyState::new(state.message(), empty_text_color, &empty_font_family)
+                .icon(crate::designs::icon_variations::IconName::MessageCircle)
+                .into_element()
         } else {
             let entries_for_closure: Vec<crate::ai::acp::history::AcpHistoryEntry> =
                 filtered_entries.clone();

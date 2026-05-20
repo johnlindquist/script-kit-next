@@ -82,6 +82,12 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let typography_resolver =
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
+        let empty_text_color = color_resolver.empty_text_color();
+        let empty_font_family = typography_resolver.primary_font().to_string();
 
         let chrome = theme::AppChromeColors::from_theme(&self.theme);
 
@@ -243,24 +249,10 @@ impl ScriptListApp {
                 "current_app_commands.render_empty_state"
             );
 
-            div()
-                .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
-                .font_family(design_typography.font_family)
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(chrome.text_primary_hex))
-                        .child(empty_title),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgba(chrome.text_hint_rgba))
-                        .child(empty_detail),
-                )
-                .into_any_element()
+            crate::list_item::EmptyState::new(empty_title, empty_text_color, &empty_font_family)
+                .hint(empty_detail)
+                .icon(crate::designs::icon_variations::IconName::Terminal)
+                .into_element()
         } else {
             let entries_for_closure: Vec<(usize, builtins::BuiltInEntry)> = filtered_entries
                 .iter()

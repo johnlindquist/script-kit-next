@@ -84,7 +84,37 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
     assert!(user_themes.contains(".get(\"selected\")"));
     assert!(theme_types.contains("pub struct BackgroundGradient"));
     assert!(theme_types.contains("pub fn active_background_gradient(&self)"));
-    assert!(render_impl.contains("get_theme_background_gradients(&self.theme)"));
+    assert!(render_impl.contains("theme_background_gradient_layers(\"bg-layer\", &self.theme)"));
+}
+
+#[test]
+fn theme_gradients_propagate_to_secondary_windows() {
+    let ui_foundation = read_source("src/ui_foundation/mod.rs");
+    let main_window = read_source("src/main_sections/render_impl.rs");
+    let notes = read_source("src/notes/window/render.rs");
+    let hud = read_source("src/hud_manager/mod.rs");
+    let dictation = read_source("src/dictation/window.rs");
+
+    assert!(ui_foundation.contains("pub fn get_theme_background_gradients(theme: &Theme)"));
+    assert!(ui_foundation.contains("pub fn theme_background_gradient_layers("));
+    assert!(ui_foundation.contains("theme.active_background_gradient()"));
+
+    for (surface, source, id_prefix) in [
+        ("main window", main_window.as_str(), "\"bg-layer\""),
+        ("Notes", notes.as_str(), "\"notes-bg-layer\""),
+        ("HUD", hud.as_str(), "\"hud-bg-layer\""),
+        ("Dictation", dictation.as_str(), "\"dictation-bg-layer\""),
+    ] {
+        assert!(
+            source.contains("theme_background_gradient_layers(") && source.contains(id_prefix),
+            "{surface} must render the active theme gradient through the shared layer helper"
+        );
+    }
+
+    assert!(
+        dictation.contains("\"dictation-preview-bg-layer\""),
+        "Dictation Storybook/static preview must use the same active theme gradient path"
+    );
 }
 
 #[test]
