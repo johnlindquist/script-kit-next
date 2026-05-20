@@ -137,7 +137,7 @@ pub(crate) enum FooterDotStatus {
 }
 
 /// Optional left-side info for the native footer (status dot + model name).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct FooterLeftInfo {
     /// Controls dot color and animation.
     pub dot_status: FooterDotStatus,
@@ -148,7 +148,7 @@ pub(crate) struct FooterLeftInfo {
     pub prefer_accent_for_active_states: bool,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainWindowFooterConfig {
     pub surface: &'static str,
     pub buttons: Vec<FooterButtonConfig>,
@@ -220,6 +220,31 @@ static MAIN_WINDOW_FOOTER_HOST_STATE: std::sync::Mutex<MainWindowFooterHostSnaps
         native_host_installed: false,
     });
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MainWindowFooterRefreshSignature {
+    config: MainWindowFooterConfig,
+    content_width_bits: u64,
+    dark: bool,
+    material: crate::theme::VibrancyMaterial,
+    divider_rgba: u32,
+    text_primary_hex: u32,
+    background_hex: u32,
+    accent_hex: u32,
+    selection_rgba: u32,
+    hover_rgba: u32,
+    left_dot_hex: Option<u32>,
+}
+
+static MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE: std::sync::Mutex<
+    Option<MainWindowFooterRefreshSignature>,
+> = std::sync::Mutex::new(None);
+
+fn clear_main_window_footer_refresh_signature() {
+    *MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner()) = None;
+}
+
 fn update_main_window_footer_host_state(
     requested_surface: Option<&'static str>,
     installed_surface: Option<&'static str>,
@@ -273,15 +298,23 @@ pub(crate) fn sync_main_footer_popup(
         // SAFETY: `ns_window` comes from the live GPUI main window currently
         // being rendered/observed on the AppKit thread.
         unsafe {
+            use objc::{msg_send, sel, sel_impl};
             if let Some(config) = config {
-                let installed = ensure_main_footer_host(ns_window)
-                    && refresh_main_footer_host(ns_window, config);
+                let content_view: id = msg_send![ns_window, contentView];
+                let existed = content_view != nil
+                    && find_subview_by_identifier(content_view, FOOTER_EFFECT_ID) != nil;
+                let installed_host = ensure_main_footer_host(ns_window);
+                if installed_host && !existed {
+                    clear_main_window_footer_refresh_signature();
+                }
+                let installed = installed_host && refresh_main_footer_host(ns_window, config);
                 update_main_window_footer_host_state(
                     requested_surface,
                     installed.then_some(config.surface),
                     installed,
                 );
             } else {
+                clear_main_window_footer_refresh_signature();
                 remove_main_footer_host(ns_window);
                 update_main_window_footer_host_state(None, None, false);
             }
@@ -317,6 +350,7 @@ pub(crate) fn notify_main_footer_popup(
                     installed,
                 );
             } else {
+                clear_main_window_footer_refresh_signature();
                 remove_main_footer_host(ns_window);
                 update_main_window_footer_host_state(None, None, false);
             }
@@ -328,6 +362,7 @@ pub(crate) fn notify_main_footer_popup(
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
+    clear_main_window_footer_refresh_signature();
     update_main_window_footer_host_state(None, None, false);
 
     let Some(window_handle) = crate::get_main_window_handle() else {
@@ -512,6 +547,41 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
             crate::platform::ns_visual_effect_material::CONTENT_BACKGROUND
         }
     };
+    let content_bounds: NSRect = msg_send![content_view, bounds];
+    let left_dot_hex = config.left_info.as_ref().and_then(|info| {
+        if matches!(info.dot_status, FooterDotStatus::Hidden) {
+            None
+        } else {
+            Some(footer_dot_hex(
+                info.dot_status,
+                &theme,
+                info.prefer_accent_for_active_states,
+            ))
+        }
+    });
+    let signature = MainWindowFooterRefreshSignature {
+        config: config.clone(),
+        content_width_bits: content_bounds.size.width.to_bits(),
+        dark: is_dark,
+        material: theme.get_vibrancy().material,
+        divider_rgba: chrome.divider_rgba,
+        text_primary_hex: theme.colors.text.primary,
+        background_hex: theme.colors.background.main,
+        accent_hex: chrome.accent_hex,
+        selection_rgba: chrome.selection_rgba,
+        hover_rgba: chrome.hover_rgba,
+        left_dot_hex,
+    };
+    {
+        let mut guard = MAIN_WINDOW_FOOTER_REFRESH_SIGNATURE
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+        if guard.as_ref() == Some(&signature) {
+            update_main_window_footer_host_state(Some(config.surface), Some(config.surface), true);
+            return true;
+        }
+        *guard = Some(signature);
+    }
 
     let appearance_name = if is_dark {
         ns_string("NSAppearanceNameVibrantDark")
@@ -531,7 +601,6 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     let _: () = msg_send![footer_view, setEmphasized: is_dark];
     let _: () = msg_send![footer_view, setNeedsDisplay: YES];
 
-    let content_bounds: NSRect = msg_send![content_view, bounds];
     let footer_frame = NSRect::new(
         NSPoint::new(0.0, 0.0),
         NSSize::new(content_bounds.size.width, footer_height()),
@@ -603,6 +672,8 @@ unsafe fn remove_main_footer_host(ns_window: id) {
     if crate::platform::require_main_thread("remove_main_footer_host") {
         return;
     }
+
+    clear_main_window_footer_refresh_signature();
 
     let content_view: id = msg_send![ns_window, contentView];
     if content_view == nil {
