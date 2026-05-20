@@ -574,7 +574,10 @@ fn reset_root_browser_tabs_snapshot_for_test() {
 #[cfg(test)]
 fn store_root_browser_tabs_snapshot_for_test(captured_at: Instant, tabs: Vec<BrowserTabInfo>) {
     if let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
-        cache.snapshot = Some(RootBrowserTabSnapshot { captured_at, tabs });
+        cache.snapshot = Some(RootBrowserTabSnapshot {
+            captured_at,
+            tabs: Arc::new(tabs),
+        });
         cache.refresh_in_flight = false;
     }
 }
@@ -1011,38 +1014,39 @@ mod tests {
 
         let rows = parse_tab_rows(browser, &output).expect("parse rows");
         assert_eq!(rows.len(), 2);
-        assert_eq!(rows[0].browser_name, "Google Chrome");
+        assert_eq!(rows[0].browser_name.as_ref(), "Google Chrome");
         assert_eq!(rows[0].window_index, 1);
         assert_eq!(rows[0].tab_index, 1);
-        assert_eq!(rows[0].title, "Docs");
-        assert_eq!(rows[1].url, "https://chat.openai.com");
+        assert_eq!(rows[0].title.as_ref(), "Docs");
+        assert_eq!(rows[1].url.as_ref(), "https://chat.openai.com");
     }
 
     #[test]
     fn fuzzy_search_browser_tabs_prefers_title_match() {
         let tabs = vec![
             BrowserTabInfo {
-                browser_name: "Safari".to_string(),
-                browser_bundle_id: "com.apple.Safari".to_string(),
+                browser_name: "Safari".into(),
+                browser_bundle_id: "com.apple.Safari".into(),
                 window_index: 1,
                 tab_index: 1,
-                title: "Build a Claude Managed Agent".to_string(),
-                url: "https://vercel.com/kb/guide".to_string(),
+                title: "Build a Claude Managed Agent".into(),
+                url: "https://vercel.com/kb/guide".into(),
             },
             BrowserTabInfo {
-                browser_name: "Google Chrome".to_string(),
-                browser_bundle_id: "com.google.Chrome".to_string(),
+                browser_name: "Google Chrome".into(),
+                browser_bundle_id: "com.google.Chrome".into(),
                 window_index: 1,
                 tab_index: 2,
-                title: "Home".to_string(),
-                url: "https://claude-managed-agent.example.com".to_string(),
+                title: "Home".into(),
+                url: "https://claude-managed-agent.example.com".into(),
             },
         ];
 
         let matches = fuzzy_search_browser_tabs(&tabs, "managed agent");
         assert_eq!(matches.len(), 2);
         assert_eq!(
-            matches[0].tab.title, "Build a Claude Managed Agent",
+            matches[0].tab.title.as_ref(),
+            "Build a Claude Managed Agent",
             "title hit should outrank URL-only hit"
         );
     }
@@ -1051,12 +1055,12 @@ mod tests {
     fn expired_root_browser_tab_snapshot_returns_stale_rows() {
         reset_root_browser_tabs_snapshot_for_test();
         let tab = BrowserTabInfo {
-            browser_name: "Google Chrome".to_string(),
-            browser_bundle_id: "com.google.Chrome".to_string(),
+            browser_name: "Google Chrome".into(),
+            browser_bundle_id: "com.google.Chrome".into(),
             window_index: 1,
             tab_index: 1,
-            title: "Root Passive Snapshot".to_string(),
-            url: "https://example.com/root-passive-snapshot".to_string(),
+            title: "Root Passive Snapshot".into(),
+            url: "https://example.com/root-passive-snapshot".into(),
         };
         store_root_browser_tabs_snapshot_for_test(
             Instant::now() - Duration::from_millis(500),
@@ -1064,7 +1068,7 @@ mod tests {
         );
 
         let rows = cached_root_browser_tabs_snapshot(1);
-        assert_eq!(rows, vec![tab]);
+        assert_eq!(rows.as_ref(), &vec![tab]);
         reset_root_browser_tabs_snapshot_for_test();
     }
 

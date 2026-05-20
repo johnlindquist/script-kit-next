@@ -2073,18 +2073,18 @@ mod advanced_query_tests {
         crate::browser_tabs::RootBrowserTabSearchHit {
             stable_key: stable_key.to_string(),
             tab: crate::browser_tabs::BrowserTabInfo {
-                browser_name: "Safari".to_string(),
-                browser_bundle_id: "com.apple.Safari".to_string(),
+                browser_name: "Safari".into(),
+                browser_bundle_id: "com.apple.Safari".into(),
                 window_index: 1,
                 tab_index: 1,
-                title: title.to_string(),
-                url: "https://example.com/design".to_string(),
+                title: title.into(),
+                url: "https://example.com/design".into(),
             },
             title: title.to_string(),
             url: "https://example.com/design".to_string(),
             domain: "example.com".to_string(),
             provider_label: "Safari".to_string(),
-            score: 100,
+            score: 100.0,
         }
     }
 

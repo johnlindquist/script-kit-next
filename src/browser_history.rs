@@ -1524,30 +1524,33 @@ mod tests {
     fn fuzzy_search_prefers_title_match_over_browser_name_only() {
         let entries = vec![
             BrowserHistoryEntry {
-                browser_name: "Google Chrome".to_string(),
-                browser_bundle_id: "com.google.Chrome".to_string(),
-                title: "Script Kit browser history portal".to_string(),
-                url: "https://example.com/script-kit".to_string(),
-                host: "example.com".to_string(),
+                browser_name: "Google Chrome".into(),
+                browser_bundle_id: "com.google.Chrome".into(),
+                title: "Script Kit browser history portal".into(),
+                url: "https://example.com/script-kit".into(),
+                host: "example.com".into(),
                 last_visited_at_ms: Utc::now().timestamp_millis(),
                 visit_count: 3,
-                profile: "Default".to_string(),
+                profile: "Default".into(),
             },
             BrowserHistoryEntry {
-                browser_name: "Chrome".to_string(),
-                browser_bundle_id: "com.google.Chrome".to_string(),
-                title: "Home".to_string(),
-                url: "https://example.com/browser-portal".to_string(),
-                host: "example.com".to_string(),
+                browser_name: "Chrome".into(),
+                browser_bundle_id: "com.google.Chrome".into(),
+                title: "Home".into(),
+                url: "https://example.com/browser-portal".into(),
+                host: "example.com".into(),
                 last_visited_at_ms: Utc::now().timestamp_millis(),
                 visit_count: 2,
-                profile: "Default".to_string(),
+                profile: "Default".into(),
             },
         ];
 
         let matches = fuzzy_search_browser_history(&entries, "portal");
         assert_eq!(matches.len(), 2);
-        assert_eq!(matches[0].entry.title, "Script Kit browser history portal");
+        assert_eq!(
+            matches[0].entry.title.as_ref(),
+            "Script Kit browser history portal"
+        );
     }
 
     #[test]
