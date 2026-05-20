@@ -1588,7 +1588,9 @@ impl ScriptListApp {
                             thread.clear_messages(cx);
                         });
                     }
-                    chat.collapsed_ids.clear();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+                    }
                     cx.notify();
                 });
                 DispatchOutcome::success()
@@ -2108,10 +2110,12 @@ impl ScriptListApp {
             "acp_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.list_state.scroll_to(gpui::ListOffset {
-                        item_ix: 0,
-                        offset_in_item: gpui::px(0.),
-                    });
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.read(cx).scroll_to(gpui::ListOffset {
+                            item_ix: 0,
+                            offset_in_item: gpui::px(0.),
+                        });
+                    }
                     cx.notify();
                 });
                 DispatchOutcome::success()
@@ -2119,7 +2123,9 @@ impl ScriptListApp {
             "acp_scroll_to_bottom" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.list_state.scroll_to_end();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.read(cx).scroll_to_end();
+                    }
                     cx.notify();
                 });
                 DispatchOutcome::success()
@@ -2143,8 +2149,8 @@ impl ScriptListApp {
                             .map(|m| m.id)
                             .collect()
                     });
-                    for id in ids {
-                        chat.collapsed_ids.insert(id);
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.update(cx, |t, cx| t.expand_ids(ids, cx));
                     }
                     cx.notify();
                 });
@@ -2153,7 +2159,9 @@ impl ScriptListApp {
             "acp_collapse_all" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.collapsed_ids.clear();
+                    if let Some(transcript) = &chat.transcript {
+                        transcript.update(cx, |t, cx| t.clear_collapsed_ids(cx));
+                    }
                     cx.notify();
                 });
                 DispatchOutcome::success()

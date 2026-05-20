@@ -75,6 +75,11 @@ impl AcpTranscript {
         cx.notify();
     }
 
+    pub fn expand_ids(&mut self, ids: Vec<u64>, cx: &mut Context<Self>) {
+        self.collapsed_ids.extend(ids);
+        cx.notify();
+    }
+
     pub fn scroll_to_reveal_item(&self, index: usize) {
         self.list_state.scroll_to_reveal_item(index);
     }
