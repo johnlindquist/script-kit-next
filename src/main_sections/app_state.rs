@@ -838,6 +838,8 @@ struct ScriptListApp {
     main_menu_fallback_state: MainMenuFallbackState,
     // Theme before chooser was opened (for cancel/restore)
     theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
+    /// Theme Chooser's cached view-local component controls (Sliders & ColorPickers)
+    pub(crate) theme_chooser_controls: Option<ThemeChooserControls>,
     /// Main script-list render diagnostics and input-to-render timing receipts.
     main_menu_render_diagnostics: MainMenuRenderDiagnosticsState,
     // Pending path action - when set, show ActionsDialog for this path

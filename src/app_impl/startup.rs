@@ -734,6 +734,7 @@ impl ScriptListApp {
             input_mode: InputMode::Mouse,
             main_menu_fallback_state: MainMenuFallbackState::default(),
             theme_before_chooser: None,
+            theme_chooser_controls: None,
             main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
             pending_path_action: Arc::new(Mutex::new(None)),
