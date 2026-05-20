@@ -1,19 +1,17 @@
 import "@scriptkit/sdk";
-import { mkdir, readFile, writeFile, appendFile } from "node:fs/promises";
-import { join } from "node:path";
 
 export const metadata = {
-  name: "Todoist Demo",
+  name: "Todo App",
   description:
-    "Todoist-style task manager: projects, labels, priorities, due dates, Today/Upcoming views, and ;todo capture sync",
-  alias: "todoist",
+    "Todo app: projects, labels, priorities, due dates, Today/Upcoming views, and ;todo capture sync",
+  alias: "todo",
   icon: "list-todo",
   menuSyntax: [
     {
       family: "capture.v1",
       targets: ["todo"],
       accepts: ["tags", "date", "relativeDate", "recurrence", "daily", "multiWeekday", "priority", "url", "kv"],
-      label: "Add to Todoist Demo",
+      label: "Add to Todo App",
       payloadSchema: "kit://schema/menu-syntax/payload-v1",
       defaultHandler: false,
     },
@@ -61,13 +59,27 @@ type Store = {
 };
 
 function storeFilePath(): string {
-  return process.env.TODOIST_DEMO_STORE_PATH || skPath("todoist-demo", "store.json");
+  return process.env.TODO_APP_STORE_PATH || skPath("todo-app", "store.json");
 }
 
 const CAPTURE_LOG = skPath("menu-syntax", "todos.jsonl");
 
 const PROJECT_COLORS = ["#db4034", "#ff9933", "#fad000", "#7ecc49", "#299438", "#6accbc", "#158fad", "#14aaf5", "#884dff", "#af38eb", "#eb96eb", "#e05194"];
 const LABEL_COLORS = ["#eb96eb", "#14aaf5", "#7ecc49", "#ff9933", "#db4034"];
+
+async function readText(filePath: string): Promise<string> {
+  return await Bun.file(filePath).text();
+}
+
+async function writeText(filePath: string, content: string): Promise<void> {
+  await Bun.write(filePath, content);
+}
+
+async function appendText(filePath: string, content: string): Promise<void> {
+  const file = Bun.file(filePath);
+  const previous = await file.exists() ? await file.text() : "";
+  await writeText(filePath, previous + content);
+}
 
 function uid(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -87,7 +99,7 @@ function defaultStore(): Store {
     tasks: [
       {
         id: uid("task"),
-        title: "Welcome to Todoist Demo",
+        title: "Welcome to Todo App",
         notes: "Use Today, Upcoming, or Projects from the main menu. Capture tasks from the launcher with `;todo Buy milk p1 tomorrow #errands`.",
         projectId: inbox.id,
         labelIds: [],
@@ -127,7 +139,7 @@ function defaultStore(): Store {
 
 async function loadStore(): Promise<Store> {
   try {
-    const raw = await readFile(storeFilePath(), "utf8");
+    const raw = await readText(storeFilePath());
     const parsed = JSON.parse(raw) as Store;
     if (parsed?.version === 1 && Array.isArray(parsed.tasks)) return parsed;
   } catch {
@@ -139,12 +151,11 @@ async function loadStore(): Promise<Store> {
 }
 
 async function saveStore(store: Store): Promise<void> {
-  await mkdir(skPath("todoist-demo"), { recursive: true });
-  await writeFile(storeFilePath(), JSON.stringify(store, null, 2));
+  await writeText(storeFilePath(), JSON.stringify(store, null, 2));
 }
 
 // ---------------------------------------------------------------------------
-// Dates (Todoist-style shorthand subset)
+// Dates (Todo shorthand subset)
 // ---------------------------------------------------------------------------
 
 function startOfDay(d: Date): Date {
@@ -312,7 +323,7 @@ function escapeHtml(s: string): string {
 async function importMenuSyntaxCaptures(store: Store): Promise<{ added: number; store: Store }> {
   let added = 0;
   try {
-    const raw = await readFile(CAPTURE_LOG, "utf8");
+    const raw = await readText(CAPTURE_LOG);
     const lines = raw.split("\n").filter(Boolean);
     const inbox = store.projects.find((p) => p.id === "inbox") ?? store.projects[0];
     for (const line of lines) {
@@ -574,7 +585,7 @@ async function showDashboard(store: Store): Promise<void> {
 
   await div(`
     <motion.div class="p-8 space-y-6">
-      <motion.h1 class="text-2xl font-bold text-white">Todoist Demo</motion.h1>
+      <motion.h1 class="text-2xl font-bold text-white">Todo App</motion.h1>
       <motion.p class="text-gray-400 text-sm">Proof that Script Kit can host a full task manager: projects, labels, priorities, due dates, views, capture sync, and CRUD.</motion.p>
       <motion.div class="grid grid-cols-2 gap-4">
         <motion.div class="rounded-xl p-4" style="background:#db403422;border:1px solid #db403455">
@@ -616,7 +627,7 @@ async function runMenuSyntaxCapture(store: Store): Promise<Store> {
     return store;
   }
 
-  const payload = JSON.parse(await readFile(payloadPath, "utf8")) as {
+  const payload = JSON.parse(await readText(payloadPath)) as {
     body?: string;
     tags?: string[];
     priority?: number;
@@ -624,8 +635,7 @@ async function runMenuSyntaxCapture(store: Store): Promise<Store> {
     raw?: string;
   };
 
-  await mkdir(skPath("menu-syntax"), { recursive: true });
-  await appendFile(
+  await appendText(
     CAPTURE_LOG,
     JSON.stringify({
       body: payload.body,
@@ -647,13 +657,12 @@ async function runMenuSyntaxCapture(store: Store): Promise<Store> {
 // ---------------------------------------------------------------------------
 
 async function runVerify(): Promise<void> {
-  const verifyPath = skPath("todoist-demo", "verify-store.json");
-  process.env.TODOIST_DEMO_STORE_PATH = verifyPath;
+  const verifyPath = skPath("todo-app", "verify-store.json");
+  process.env.TODO_APP_STORE_PATH = verifyPath;
 
   const store = defaultStore();
   store.tasks = [];
-  await mkdir(skPath("todoist-demo"), { recursive: true });
-  await writeFile(verifyPath, JSON.stringify(store, null, 2));
+  await writeText(verifyPath, JSON.stringify(store, null, 2));
 
   const inbox = store.projects[0].id;
   store.tasks.push({
@@ -668,15 +677,15 @@ async function runVerify(): Promise<void> {
     createdAt: new Date().toISOString(),
     completedAt: null,
   });
-  await writeFile(verifyPath, JSON.stringify(store, null, 2));
+  await writeText(verifyPath, JSON.stringify(store, null, 2));
 
-  const loaded = JSON.parse(await readFile(verifyPath, "utf8")) as Store;
+  const loaded = JSON.parse(await readText(verifyPath)) as Store;
   const task = loaded.tasks[0];
   task.completed = true;
   task.completedAt = new Date().toISOString();
-  await writeFile(verifyPath, JSON.stringify(loaded, null, 2));
+  await writeText(verifyPath, JSON.stringify(loaded, null, 2));
 
-  const finalStore = JSON.parse(await readFile(verifyPath, "utf8")) as Store;
+  const finalStore = JSON.parse(await readText(verifyPath)) as Store;
   const dueOk = parseDue("tomorrow") !== null && parseDue("+3d") !== null;
   const todayCount = finalStore.tasks.filter((t) => t.completed).length;
 
@@ -712,7 +721,7 @@ if (isVerify) {
       const todayCount = open.filter((t) => isDueTodayOrOverdue(t)).length;
       const upcomingCount = open.filter((t) => isUpcoming(t)).length;
 
-      const action = await arg("Todoist Demo", [
+      const action = await arg("Todo App", [
         {
           name: "Today",
           value: "today",

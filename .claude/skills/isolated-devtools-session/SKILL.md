@@ -20,12 +20,12 @@ Pair with `$script-kit-devtools` for inspect/act primitives after bootstrap.
 ```bash
 # 1. Classify mode (script-only vs reuse-dev-watch vs isolated)
 bash scripts/agentic/devtools-session.sh classify \
-  --script kit-init/examples/scripts/todoist-demo.ts \
+  --script kit-init/examples/scripts/todo-app.ts \
   --mode auto
 
 # 2. Bun-only proof first (no GPUI, no cargo) when script supports SK_VERIFY
 bash scripts/agentic/devtools-session.sh verify-script \
-  --script kit-init/examples/scripts/todoist-demo.ts
+  --script kit-init/examples/scripts/todo-app.ts
 
 # 3. Start isolated session (JSON on stdout; progress on stderr)
 SESSION="dt-agent-$(date +%s)"

@@ -771,7 +771,6 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
     assert!(submission.contains("~/.scriptkit/plugins/main/scriptlets/<name>.md"));
     assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
-    assert!(submission.contains("~/.scriptkit/plugins/examples/scriptlets/"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
 
@@ -918,11 +917,13 @@ fn embedded_script_authoring_skill_requires_bun_fix_loop() {
 }
 
 #[test]
-fn embedded_hello_world_starter_is_verification_friendly() {
-    let starter = include_str!("../kit-init/examples/scripts/hello-world.ts");
+fn embedded_todo_app_starter_is_verification_friendly() {
+    let starter = include_str!("../kit-init/examples/scripts/todo-app.ts");
     assert!(starter.contains("process.env.SK_VERIFY === \"1\""));
-    assert!(starter.contains("console.log(JSON.stringify({ ok: true, greeting }))"));
-    assert!(starter.contains("await arg(\"Who should I greet?\")"));
+    assert!(starter.contains("console.log("));
+    assert!(starter.contains("ok: dueOk && todayCount === 1"));
+    assert!(starter.contains("name: \"Todo App\""));
+    assert!(!starter.contains("Todoist"));
 }
 
 // =========================================================================

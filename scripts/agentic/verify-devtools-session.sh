@@ -12,22 +12,19 @@ pass() { echo "[verify-devtools-session] PASS: $*" >&2; }
 fail() { echo "[verify-devtools-session] FAIL: $*" >&2; FAIL=1; }
 
 echo "[verify-devtools-session] === 1. Bun-only SK_VERIFY (no GPUI) ===" >&2
-TODOIST_SCRIPT="${HOME}/.scriptkit/plugins/main/scripts/todoist-demo.ts"
-if [[ ! -f "$TODOIST_SCRIPT" ]]; then
-  TODOIST_SCRIPT="kit-init/examples/scripts/todoist-demo.ts"
-fi
+TODO_APP_SCRIPT="${TODO_APP_SCRIPT:-kit-init/examples/scripts/todo-app.ts}"
 
-if out="$(SK_VERIFY=1 timeout 5 bun "$TODOIST_SCRIPT" 2>&1)"; then
+if out="$(SK_VERIFY=1 timeout 5 bun "$TODO_APP_SCRIPT" 2>&1)"; then
   if printf '%s' "$out" | grep -q '"ok":true'; then
-    pass "todoist-demo SK_VERIFY"
+    pass "todo-app SK_VERIFY"
   else
-    echo "[verify-devtools-session] SKIP todoist-demo: missing ok:true: $out" >&2
+    fail "todo-app SK_VERIFY missing ok:true: $out"
   fi
 else
-  echo "[verify-devtools-session] SKIP todoist-demo SK_VERIFY exit $? ($TODOIST_SCRIPT)" >&2
+  fail "todo-app SK_VERIFY exit $? ($TODO_APP_SCRIPT)"
 fi
 
-if json="$(bash scripts/agentic/devtools-session.sh verify-script --script "$TODOIST_SCRIPT" 2>/dev/null)"; then
+if json="$(bash scripts/agentic/devtools-session.sh verify-script --script "$TODO_APP_SCRIPT" 2>/dev/null)"; then
   if printf '%s' "$json" | grep -q '"status":"ok"'; then
     pass "devtools-session verify-script JSON"
   else
@@ -52,7 +49,7 @@ else
 fi
 
 echo "[verify-devtools-session] === 3. classify ===" >&2
-if json="$(bash scripts/agentic/devtools-session.sh classify --script kit-init/examples/scripts/todoist-demo.ts 2>/dev/null)"; then
+if json="$(bash scripts/agentic/devtools-session.sh classify --script kit-init/examples/scripts/todo-app.ts 2>/dev/null)"; then
   if printf '%s' "$json" | grep -q '"status":"ok"'; then
     pass "classify JSON"
   else

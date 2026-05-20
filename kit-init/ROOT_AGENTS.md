@@ -50,10 +50,7 @@ Use this plain-text route first:
 - Bundle details → `~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md`
 - Skills overview → `~/.scriptkit/plugins/scriptkit/skills/README.md`
 - Agent details (compatibility) → `~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md`
-- Script example → `~/.scriptkit/plugins/examples/scripts/hello-world.ts`
-- Skill examples → `~/.scriptkit/plugins/examples/skills/`
-- Bundle starter → `~/.scriptkit/plugins/examples/scriptlets/starter.md`
-- Agent example → `~/.scriptkit/plugins/examples/agents/review-pr.claude.md`
+- Script example → `~/.scriptkit/plugins/examples/scripts/todo-app.ts`
 
 ## Artifact-Specific Rules
 
@@ -330,9 +327,6 @@ export default {
 | Logs | `~/.scriptkit/logs/` |
 | Bundled skills | `~/.scriptkit/plugins/scriptkit/skills/` |
 | Examples (scripts) | `~/.scriptkit/plugins/examples/scripts/` |
-| Examples (skills) | `~/.scriptkit/plugins/examples/skills/` |
-| Examples (scriptlets) | `~/.scriptkit/plugins/examples/scriptlets/` |
-| Examples (agents) | `~/.scriptkit/plugins/examples/agents/` |
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 
