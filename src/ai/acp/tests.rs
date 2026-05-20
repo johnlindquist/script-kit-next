@@ -2887,3 +2887,38 @@ fn at_inline_portal_window_cannot_outlive_owner() {
         "reset_to_script_list must close detached popup windows so they cannot survive a return to the main script list"
     );
 }
+
+#[test]
+fn acp_transient_trigger_exit_on_empty_composer() {
+    let acp_launch_source = include_str!("../../app_impl/tab_ai_mode/acp_launch.rs");
+    let tab_ai_mode_source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
+
+    // 1. AcpChatView has the opened_via_transient_trigger field
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) opened_via_transient_trigger: Option<char>,"),
+        "AcpChatView must have opened_via_transient_trigger field"
+    );
+
+    // 2. AcpChatView implements check_for_transient_exit helper
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn check_for_transient_exit("),
+        "AcpChatView must implement check_for_transient_exit"
+    );
+
+    // 3. handle_key_down calls check_for_transient_exit
+    assert!(
+        ACP_VIEW_SOURCE.contains("self.check_for_transient_exit(window, cx);"),
+        "AcpChatView::handle_key_down must call check_for_transient_exit"
+    );
+
+    // 4. ACP launch and reuse set the opened_via_transient_trigger field
+    assert!(
+        acp_launch_source
+            .contains("view.opened_via_transient_trigger = pending_script_list_trigger;"),
+        "ACP launch path must set opened_via_transient_trigger"
+    );
+    assert!(
+        tab_ai_mode_source.contains("chat.opened_via_transient_trigger = trigger;"),
+        "ACP reuse path must set opened_via_transient_trigger"
+    );
+}

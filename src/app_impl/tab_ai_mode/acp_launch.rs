@@ -384,6 +384,9 @@ impl ScriptListApp {
 
         // --- View switch FIRST: user sees the ACP chat surface immediately ---
         let view_entity_for_staging = view_entity.clone();
+        view_entity_for_staging.update(cx, |view, _cx| {
+            view.opened_via_transient_trigger = pending_script_list_trigger;
+        });
         self.enter_embedded_acp_chat_surface(view_entity, cx);
         cx.notify();
 

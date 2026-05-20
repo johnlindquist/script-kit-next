@@ -460,6 +460,8 @@ pub(crate) struct AcpChatView {
     /// Setup-mode agent selection picker state (managed by AcpChatView until
     /// fully migrated to AcpSetupCard).
     pub(crate) setup_agent_picker: Option<AcpSetupAgentPickerState>,
+    /// The transient trigger character that initiated this session from the main menu.
+    pub(crate) opened_via_transient_trigger: Option<char>,
     /// Most recently accepted picker item (for telemetry/testing).
     last_accepted_item: Option<crate::protocol::AcpAcceptedItem>,
     /// Bounded test probe ring buffer for agentic verification.
@@ -1508,6 +1510,7 @@ impl AcpChatView {
         self.permission_options_open = false;
         self.clear_composer_picker(AcpComposerPickerDismissReason::HostHide, cx);
         self.history_menu = None;
+        self.opened_via_transient_trigger = None;
         if let Some(card) = &self.setup_card {
             card.update(cx, |view, cx| view.set_agent_picker(None, cx));
         }
@@ -1529,6 +1532,23 @@ impl AcpChatView {
         }
         self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
+    }
+
+    fn check_for_transient_exit(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.opened_via_transient_trigger.is_some() {
+            let is_empty = if let AcpChatSession::Live(thread) = &self.session {
+                let thread_ref = thread.read(cx);
+                thread_ref.messages.is_empty() && thread_ref.input.text().is_empty()
+            } else {
+                false
+            };
+            if is_empty {
+                self.opened_via_transient_trigger = None;
+                self.trigger_close_requested(window, cx);
+                return true;
+            }
+        }
+        false
     }
 
     pub(crate) fn prepare_for_attachment_portal_open(&mut self, cx: &mut Context<Self>) {
@@ -2775,6 +2795,7 @@ impl AcpChatView {
             toolbar: None,
             transcript: None,
             setup_agent_picker: None,
+            opened_via_transient_trigger: None,
 
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
@@ -2835,6 +2856,7 @@ impl AcpChatView {
             toolbar: None,
             transcript: None,
             setup_agent_picker: None,
+            opened_via_transient_trigger: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
             pending_retry_request: None,
@@ -7384,6 +7406,7 @@ impl AcpChatView {
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
+                self.check_for_transient_exit(window, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -7405,6 +7428,7 @@ impl AcpChatView {
                 self.sync_pasted_clipboard_tokens(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
+                self.check_for_transient_exit(window, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -7433,6 +7457,7 @@ impl AcpChatView {
                 self.refresh_mention_session(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
+                self.check_for_transient_exit(window, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -7460,6 +7485,7 @@ impl AcpChatView {
             self.sync_pasted_clipboard_tokens(cx);
             self.refresh_mention_session(cx);
             self.sync_inline_mentions(cx);
+            self.check_for_transient_exit(window, cx);
             cx.stop_propagation();
         } else {
             cx.propagate();
@@ -7780,7 +7806,16 @@ impl Render for AcpChatView {
             })
             // ── BOTTOM: Toolbar ─────────────────────
             .when(!self.uses_external_footer_host(), |d| {
-                d.child(self.ensure_toolbar(cx).into_any_element())
+                let is_main_window = crate::get_main_window_handle()
+                    .is_some_and(|handle| handle == window.window_handle());
+                let active_surface = crate::footer_popup::active_main_window_footer_surface();
+                let use_native_footer_spacer = is_main_window && active_surface == Some("acp_chat");
+
+                if use_native_footer_spacer {
+                    d.child(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+                } else {
+                    d.child(self.ensure_toolbar(cx).into_any_element())
+                }
             })
             .into_any_element()
     }
