@@ -1,12 +1,47 @@
 use std::cmp::Ordering;
 
-use crate::builtins::{BuiltInEntry, BuiltInGroup};
+use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 
 use super::super::types::BuiltInMatch;
 use super::{
     contains_ignore_ascii_case, find_ignore_ascii_case, is_exact_name_match,
     is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
 };
+
+fn restricted_builtin_alias_score(entry: &BuiltInEntry, query_lower: &str) -> Option<i32> {
+    if !matches!(entry.feature, BuiltInFeature::AiVault) {
+        return None;
+    }
+
+    let mut best = None::<i32>;
+    let mut score_candidate = |candidate: &str| {
+        if !candidate.is_ascii() {
+            return;
+        }
+
+        let candidate_lower = candidate.to_lowercase();
+        let score = if candidate_lower == query_lower {
+            Some(500)
+        } else if query_lower.len() >= 3 && candidate_lower.starts_with(query_lower) {
+            Some(220)
+        } else if query_lower.len() >= 3 && candidate_lower.contains(query_lower) {
+            Some(160)
+        } else {
+            None
+        };
+
+        if let Some(score) = score {
+            best = Some(best.map_or(score, |current| current.max(score)));
+        }
+    };
+
+    score_candidate(&entry.name);
+    for keyword in &entry.keywords {
+        score_candidate(keyword);
+    }
+
+    best
+}
 
 /// Fuzzy search built-in entries by query string
 /// Searches across name, description, and keywords
@@ -44,6 +79,16 @@ pub fn fuzzy_search_builtins(entries: &[BuiltInEntry], query: &str) -> Vec<Built
     let use_nucleo = query_lower.len() >= MIN_FUZZY_QUERY_LEN;
 
     for entry in entries {
+        if matches!(entry.feature, BuiltInFeature::AiVault) {
+            if let Some(score) = restricted_builtin_alias_score(entry, &query_lower) {
+                matches.push(BuiltInMatch {
+                    entry: entry.clone(),
+                    score,
+                });
+            }
+            continue;
+        }
+
         let mut score = 0i32;
         let mut name_matched = false;
         let mut leaf_name_matched = false;

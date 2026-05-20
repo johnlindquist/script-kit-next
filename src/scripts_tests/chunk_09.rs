@@ -110,6 +110,56 @@ fn test_fuzzy_search_builtins_no_match() {
     assert!(results.is_empty());
 }
 
+#[test]
+fn test_ai_vault_builtin_requires_direct_alias_match() {
+    use crate::builtins::{BuiltInFeature, BuiltInGroup};
+
+    let builtins = vec![BuiltInEntry {
+        id: "builtin/vault".to_string(),
+        name: "AI Vault".to_string(),
+        description: "Search past AI conversations and resume the selected one".to_string(),
+        keywords: vec![
+            "vault".to_string(),
+            "ai".to_string(),
+            "aivault".to_string(),
+            "ai-vault".to_string(),
+            "cmux".to_string(),
+            "conversation".to_string(),
+            "sessions".to_string(),
+        ],
+        feature: BuiltInFeature::AiVault,
+        icon: Some("vault".to_string()),
+        group: BuiltInGroup::Core,
+    }];
+
+    assert!(fuzzy_search_builtins(&builtins, "ignorance").is_empty());
+    assert!(fuzzy_search_builtins(&builtins, "random words").is_empty());
+
+    let vault_results = fuzzy_search_builtins(&builtins, "vault");
+    assert_eq!(vault_results[0].entry.id, "builtin/vault");
+
+    let prefix_results = fuzzy_search_builtins(&builtins, "vau");
+    assert_eq!(prefix_results[0].entry.id, "builtin/vault");
+
+    let alias_results = fuzzy_search_builtins(&builtins, "ai-vault");
+    assert_eq!(alias_results[0].entry.id, "builtin/vault");
+}
+
+#[test]
+fn test_default_ai_vault_builtin_does_not_match_random_main_search_text() {
+    let builtins = crate::builtins::get_builtin_entries(&crate::config::BuiltInConfig::default());
+
+    let random_results = fuzzy_search_builtins(&builtins, "ignorance");
+    assert!(random_results
+        .iter()
+        .all(|result| result.entry.id != "builtin/vault"));
+
+    let vault_results = fuzzy_search_builtins(&builtins, "vault");
+    assert!(vault_results
+        .iter()
+        .any(|result| result.entry.id == "builtin/vault"));
+}
+
 /// Test that name matches are prioritized over keyword matches
 /// This is critical: when searching "scr", "Scratch Pad" (name starts with "Scr")
 /// should rank higher than "Lock Screen" (keyword "screen" contains "scr")
@@ -323,4 +373,3 @@ fn test_builtin_fuzzy_keyword_matching() {
     assert!(!results.is_empty());
     assert_eq!(results[0].entry.name, "Clipboard History");
 }
-
