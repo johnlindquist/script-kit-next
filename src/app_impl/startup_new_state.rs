@@ -169,6 +169,8 @@
             menu_syntax_form_input_active: false,
             menu_syntax_form_draft_field_id: None,
             menu_syntax_form_draft_value: String::new(),
+            menu_syntax_form_suggestion_field_id: None,
+            menu_syntax_form_suggestion_selected_index: None,
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render
@@ -192,6 +194,7 @@
             input_mode: InputMode::Mouse,
             main_menu_fallback_state: MainMenuFallbackState::default(),
             theme_before_chooser: None,
+            theme_chooser_management: None,
             theme_chooser_controls: None,
             main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)

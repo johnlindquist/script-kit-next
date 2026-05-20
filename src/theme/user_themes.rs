@@ -49,6 +49,26 @@ pub struct UserTheme {
     pub path: PathBuf,
 }
 
+/// Preview of the slug/display-name a save-copy operation will use.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserThemeNameResolution {
+    pub requested_name: String,
+    pub display_name: String,
+    pub slug: String,
+    pub path: PathBuf,
+    pub collision_count: usize,
+}
+
+/// Backup returned by a staged delete so Theme Designer can offer a one-step
+/// restore during the same session.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeletedUserThemeBackup {
+    pub slug: String,
+    pub name: String,
+    pub contents: String,
+    pub path: PathBuf,
+}
+
 /// Lists every user theme under [`user_themes_dir`]. Corrupt or unreadable
 /// files are skipped so one bad file cannot hide the rest.
 pub fn list_user_themes() -> Vec<UserTheme> {
@@ -116,6 +136,53 @@ pub fn slugify(name: &str) -> String {
     slug
 }
 
+fn normalize_user_theme_display_name(name: &str) -> String {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        "Custom Theme".to_string()
+    } else {
+        trimmed.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+}
+
+fn ensure_safe_user_theme_slug(slug: &str) -> Result<()> {
+    if slug.is_empty()
+        || slug.contains('/')
+        || slug.contains('\\')
+        || slug.contains("..")
+        || slug != slugify(slug)
+    {
+        anyhow::bail!("unsafe user theme slug: {slug}");
+    }
+    Ok(())
+}
+
+/// Resolves a human name into the unique display name and slug that will be
+/// written if the user saves a copy right now.
+pub fn resolve_user_theme_name(name: &str) -> UserThemeNameResolution {
+    let requested_name = normalize_user_theme_display_name(name);
+    let base_slug = slugify(&requested_name);
+    let mut slug = base_slug.clone();
+    let mut collision_count = 0usize;
+    while user_themes_dir().join(format!("{slug}.json")).exists() {
+        collision_count += 1;
+        slug = format!("{base_slug}-{}", collision_count + 1);
+    }
+    let display_name = if collision_count == 0 {
+        requested_name.clone()
+    } else {
+        format!("{} {}", requested_name, collision_count + 1)
+    };
+
+    UserThemeNameResolution {
+        requested_name,
+        display_name,
+        path: user_themes_dir().join(format!("{slug}.json")),
+        slug,
+        collision_count,
+    }
+}
+
 /// Saves a user theme JSON payload to disk after validating the row-state
 /// opacity contract in [`crate::theme::validation`]. Returns the saved
 /// [`UserTheme`] metadata on success.
@@ -151,21 +218,11 @@ pub fn save_user_theme(name: &str, payload: &Value) -> Result<UserTheme> {
 /// Saves a user theme without overwriting an existing slug.
 pub fn save_user_theme_unique(name: &str, payload: &Value) -> Result<UserTheme> {
     ensure_user_themes_dir()?;
-    let base_slug = slugify(name);
-    let mut slug = base_slug.clone();
-    let mut suffix = 2usize;
-    while user_themes_dir().join(format!("{slug}.json")).exists() {
-        slug = format!("{base_slug}-{suffix}");
-        suffix += 1;
-    }
-    let display_name = if slug == base_slug {
-        name.to_string()
-    } else {
-        format!("{name} {}", suffix - 1)
-    };
+    let resolution = resolve_user_theme_name(name);
+    let display_name = resolution.display_name.clone();
 
     validate_payload(payload).context("validating theme before save")?;
-    let path = user_themes_dir().join(format!("{slug}.json"));
+    let path = resolution.path.clone();
     let mut enriched = payload.clone();
     if let Value::Object(map) = &mut enriched {
         map.insert("name".to_string(), Value::String(display_name.clone()));
@@ -175,7 +232,7 @@ pub fn save_user_theme_unique(name: &str, payload: &Value) -> Result<UserTheme> 
     atomic_write(&path, &serialized)?;
 
     Ok(UserTheme {
-        slug,
+        slug: resolution.slug,
         name: display_name,
         path,
     })
@@ -187,15 +244,87 @@ pub fn save_theme_as_user_theme(name: &str, theme: &Theme) -> Result<UserTheme> 
     save_user_theme_unique(name, &payload)
 }
 
+/// Overwrites a specific user theme slug with the provided in-memory theme.
+pub fn save_theme_to_user_theme_slug(slug: &str, name: &str, theme: &Theme) -> Result<UserTheme> {
+    ensure_safe_user_theme_slug(slug)?;
+    ensure_user_themes_dir()?;
+    let payload = serde_json::to_value(theme).context("serializing current theme")?;
+    validate_payload(&payload).context("validating theme before save")?;
+    let path = user_themes_dir().join(format!("{slug}.json"));
+    let mut enriched = payload;
+    if let Value::Object(map) = &mut enriched {
+        map.insert("name".to_string(), Value::String(name.to_string()));
+    }
+    let serialized =
+        serde_json::to_string_pretty(&enriched).context("serializing user theme json")?;
+    atomic_write(&path, &serialized)?;
+
+    Ok(UserTheme {
+        slug: slug.to_string(),
+        name: name.to_string(),
+        path,
+    })
+}
+
 /// Deletes a user theme by slug. Missing files are treated as success so the
 /// caller does not need to guard against pre-existing deletion races.
 pub fn delete_user_theme(slug: &str) -> Result<()> {
+    ensure_safe_user_theme_slug(slug)?;
     let path = user_themes_dir().join(format!("{slug}.json"));
     if path.exists() {
         fs::remove_file(&path)
             .with_context(|| format!("deleting user theme {}", path.display()))?;
     }
     Ok(())
+}
+
+/// Deletes a user theme and returns the removed JSON so callers can restore it.
+pub fn delete_user_theme_with_backup(slug: &str) -> Result<Option<DeletedUserThemeBackup>> {
+    ensure_safe_user_theme_slug(slug)?;
+    let path = user_themes_dir().join(format!("{slug}.json"));
+    if !path.exists() {
+        return Ok(None);
+    }
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("reading user theme before delete {}", path.display()))?;
+    let name = serde_json::from_str::<Value>(&contents)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(str::to_string)
+        })
+        .unwrap_or_else(|| slug.to_string());
+    fs::remove_file(&path).with_context(|| format!("deleting user theme {}", path.display()))?;
+    Ok(Some(DeletedUserThemeBackup {
+        slug: slug.to_string(),
+        name,
+        contents,
+        path,
+    }))
+}
+
+/// Restores a previously deleted user theme backup if the slug is still free.
+pub fn restore_user_theme_backup(backup: &DeletedUserThemeBackup) -> Result<UserTheme> {
+    ensure_safe_user_theme_slug(&backup.slug)?;
+    ensure_user_themes_dir()?;
+    let value: Value =
+        serde_json::from_str(&backup.contents).context("parsing deleted user theme backup")?;
+    validate_payload(&value).context("validating deleted user theme backup")?;
+    let path = user_themes_dir().join(format!("{}.json", backup.slug));
+    if path.exists() {
+        anyhow::bail!(
+            "cannot restore user theme {}; slug already exists",
+            backup.slug
+        );
+    }
+    atomic_write(&path, &backup.contents)?;
+    Ok(UserTheme {
+        slug: backup.slug.clone(),
+        name: backup.name.clone(),
+        path,
+    })
 }
 
 fn atomic_write(path: &Path, contents: &str) -> Result<()> {
@@ -253,6 +382,22 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn with_temp_themes_dir(test: impl FnOnce()) {
+        let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let temp = tempfile::tempdir().expect("tempdir");
+        let previous = std::env::var_os(crate::setup::SK_PATH_ENV);
+        std::env::set_var(crate::setup::SK_PATH_ENV, temp.path());
+        test();
+        if let Some(previous) = previous {
+            std::env::set_var(crate::setup::SK_PATH_ENV, previous);
+        } else {
+            std::env::remove_var(crate::setup::SK_PATH_ENV);
+        }
+    }
+
     #[test]
     fn slugify_normalizes_names() {
         assert_eq!(slugify("My Theme"), "my-theme");
@@ -283,5 +428,55 @@ mod tests {
             "opacity": { "hover": 0.25, "selected": 0.23 }
         });
         assert!(validate_payload(&bad).is_err());
+    }
+
+    #[test]
+    fn resolve_user_theme_name_reports_collisions() {
+        with_temp_themes_dir(|| {
+            ensure_user_themes_dir().expect("themes dir");
+            let first = resolve_user_theme_name("Night Work");
+            assert_eq!(first.display_name, "Night Work");
+            assert_eq!(first.slug, "night-work");
+
+            fs::write(user_themes_dir().join("night-work.json"), "{}").expect("write first");
+            let second = resolve_user_theme_name(" Night   Work ");
+            assert_eq!(second.display_name, "Night Work 2");
+            assert_eq!(second.slug, "night-work-2");
+            assert_eq!(second.collision_count, 1);
+
+            fs::write(user_themes_dir().join("night-work-2.json"), "{}").expect("write second");
+            let third = resolve_user_theme_name("Night Work");
+            assert_eq!(third.display_name, "Night Work 3");
+            assert_eq!(third.slug, "night-work-3");
+        });
+    }
+
+    #[test]
+    fn update_delete_and_restore_user_theme_by_slug() {
+        with_temp_themes_dir(|| {
+            let mut theme = Theme::default();
+            theme.colors.accent.selected = 0x123456;
+            let saved = save_theme_to_user_theme_slug("night-work", "Night Work", &theme)
+                .expect("save theme");
+            assert_eq!(saved.slug, "night-work");
+
+            theme.colors.accent.selected = 0x654321;
+            let updated = save_theme_to_user_theme_slug("night-work", "Night Work", &theme)
+                .expect("update theme");
+            assert_eq!(updated.name, "Night Work");
+            let loaded = load_user_theme("night-work").expect("load updated");
+            assert_eq!(loaded.colors.accent.selected, 0x654321);
+
+            assert!(save_theme_to_user_theme_slug("../bad", "Bad", &theme).is_err());
+
+            let backup = delete_user_theme_with_backup("night-work")
+                .expect("delete")
+                .expect("backup");
+            assert!(!user_themes_dir().join("night-work.json").exists());
+            let restored = restore_user_theme_backup(&backup).expect("restore");
+            assert_eq!(restored.slug, "night-work");
+            assert!(user_themes_dir().join("night-work.json").exists());
+            assert!(restore_user_theme_backup(&backup).is_err());
+        });
     }
 }

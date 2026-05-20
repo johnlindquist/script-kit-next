@@ -55,6 +55,84 @@ pub(crate) struct ThemeChooserControls {
     subscriptions: Vec<Subscription>,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) enum ThemeChooserBase {
+    BuiltIn {
+        index: usize,
+        name: String,
+        fingerprint: u64,
+    },
+    User {
+        slug: String,
+        name: String,
+        fingerprint: u64,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ThemeChooserSaveReceipt {
+    pub(crate) slug: String,
+    pub(crate) name: String,
+    pub(crate) fingerprint: u64,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ThemeChooserDeleteCandidate {
+    pub(crate) slug: String,
+    pub(crate) name: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ThemeChooserDeletedTheme {
+    pub(crate) slug: String,
+    pub(crate) name: String,
+    pub(crate) contents: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum ThemeChooserManagementStatus {
+    Clean,
+    Dirty,
+    Saved { name: String },
+    DuplicateName { requested: String, resolved: String },
+    DeleteNeedsConfirmation { name: String },
+    DeletedCanRestore { name: String },
+    Error { message: String },
+}
+
+impl Default for ThemeChooserManagementStatus {
+    fn default() -> Self {
+        Self::Clean
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ThemeChooserManagementState {
+    pub(crate) selected_base: Option<ThemeChooserBase>,
+    pub(crate) draft_name: Option<String>,
+    pub(crate) last_saved: Option<ThemeChooserSaveReceipt>,
+    pub(crate) pending_delete: Option<ThemeChooserDeleteCandidate>,
+    pub(crate) last_deleted: Option<ThemeChooserDeletedTheme>,
+    pub(crate) status: ThemeChooserManagementStatus,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ThemeChooserManagementSnapshot {
+    pub(crate) status_label: String,
+    pub(crate) status_value: String,
+    pub(crate) status_kind: String,
+    pub(crate) is_dirty: bool,
+    pub(crate) save_name: String,
+    pub(crate) resolved_save_name: String,
+    pub(crate) duplicate_status_kind: Option<String>,
+    pub(crate) base_name: Option<String>,
+    pub(crate) base_slug: Option<String>,
+    pub(crate) can_update: bool,
+    pub(crate) update_disabled: Option<String>,
+    pub(crate) delete_disabled: Option<String>,
+    pub(crate) restore_disabled: Option<String>,
+}
+
 const THEME_LIST_PAGE_SIZE: usize = 5;
 /// Unified Theme Designer preview sync.
 /// Slider drags can skip native window material churn while commit-style paths
@@ -637,7 +715,13 @@ impl ScriptListApp {
                 .trim()
                 .trim_end_matches('%')
                 .parse::<f32>()
-                .map(|parsed| if value.trim().ends_with('%') { parsed / 100.0 } else { parsed })
+                .map(|parsed| {
+                    if value.trim().ends_with('%') {
+                        parsed / 100.0
+                    } else {
+                        parsed
+                    }
+                })
                 .map_err(|_| anyhow::anyhow!("invalid numeric value '{value}'"))
         };
         let bool_value = || match value.trim().to_ascii_lowercase().as_str() {
@@ -694,6 +778,26 @@ impl ScriptListApp {
                     SliderValue::Single(float_value()?),
                     cx,
                 );
+            }
+            "save-name" => {
+                let next_name = value.trim();
+                if next_name.is_empty() {
+                    return Err(anyhow::anyhow!("theme save name cannot be empty"));
+                }
+                let resolution = theme::user_themes::resolve_user_theme_name(next_name);
+                let is_dirty = self.theme_chooser_is_dirty();
+                let state = self.theme_chooser_management_mut();
+                state.draft_name = Some(next_name.to_string());
+                state.status = if resolution.collision_count > 0 {
+                    ThemeChooserManagementStatus::DuplicateName {
+                        requested: resolution.requested_name,
+                        resolved: resolution.display_name,
+                    }
+                } else if is_dirty {
+                    ThemeChooserManagementStatus::Dirty
+                } else {
+                    ThemeChooserManagementStatus::Clean
+                };
             }
             "accent-color" => {
                 let color = Self::theme_chooser_hex_to_hsla(hex_value()?);
@@ -1309,13 +1413,7 @@ impl ScriptListApp {
         mode: ThemeChooserSliderApplyMode,
         cx: &mut Context<Self>,
     ) {
-        self.apply_theme_chooser_theme_preview(
-            next_theme,
-            reason,
-            false,
-            mode.notify_parent(),
-            cx,
-        );
+        self.apply_theme_chooser_theme_preview(next_theme, reason, false, mode.notify_parent(), cx);
     }
 
     fn apply_theme_chooser_theme_preview(
@@ -1439,6 +1537,7 @@ impl ScriptListApp {
         self.theme_chooser_list_state
             .scroll_to_reveal_item(filtered_selected_index);
         let next_theme = (*entry.theme).clone();
+        self.update_theme_chooser_selected_base(entry);
         if persist {
             self.apply_and_persist_theme(next_theme, reason, cx);
         } else {
@@ -1447,17 +1546,81 @@ impl ScriptListApp {
     }
 
     fn save_current_theme_as_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
-        let name = format!(
-            "Custom Theme {}",
-            chrono::Local::now().format("%Y-%m-%d %H.%M.%S")
-        );
-        match theme::user_themes::save_theme_as_user_theme(&name, self.theme.as_ref()) {
+        let selected_entry = self.selected_theme_chooser_catalog_entry();
+        let snapshot = self.theme_chooser_management_snapshot(selected_entry.as_ref());
+        match theme::user_themes::save_theme_as_user_theme(&snapshot.save_name, self.theme.as_ref())
+        {
             Ok(saved) => {
                 tracing::info!(slug = %saved.slug, path = %saved.path.display(), reason, "theme_chooser_saved_user_theme");
+                let fingerprint = Self::theme_chooser_theme_fingerprint(self.theme.as_ref());
+                let state = self.theme_chooser_management_mut();
+                state.selected_base = Some(ThemeChooserBase::User {
+                    slug: saved.slug.clone(),
+                    name: saved.name.clone(),
+                    fingerprint,
+                });
+                state.draft_name = None;
+                state.last_saved = Some(ThemeChooserSaveReceipt {
+                    slug: saved.slug,
+                    name: saved.name.clone(),
+                    fingerprint,
+                });
+                state.pending_delete = None;
+                state.status = ThemeChooserManagementStatus::Saved { name: saved.name };
                 cx.notify();
             }
             Err(error) => {
+                self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                    message: format!("Save failed: {error}"),
+                };
                 tracing::warn!(%error, reason, "theme_chooser_save_user_theme_failed");
+                cx.notify();
+            }
+        }
+    }
+
+    fn update_selected_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let Some(ThemeChooserBase::User { slug, name, .. }) = self
+            .theme_chooser_management
+            .as_ref()
+            .and_then(|state| state.selected_base.clone())
+        else {
+            self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                message: "Built-in themes cannot be updated".to_string(),
+            };
+            cx.notify();
+            return;
+        };
+        if !self.theme_chooser_is_dirty() {
+            self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Clean;
+            cx.notify();
+            return;
+        }
+        match theme::user_themes::save_theme_to_user_theme_slug(&slug, &name, self.theme.as_ref()) {
+            Ok(saved) => {
+                let fingerprint = Self::theme_chooser_theme_fingerprint(self.theme.as_ref());
+                let state = self.theme_chooser_management_mut();
+                state.selected_base = Some(ThemeChooserBase::User {
+                    slug: saved.slug.clone(),
+                    name: saved.name.clone(),
+                    fingerprint,
+                });
+                state.last_saved = Some(ThemeChooserSaveReceipt {
+                    slug: saved.slug,
+                    name: saved.name.clone(),
+                    fingerprint,
+                });
+                state.pending_delete = None;
+                state.status = ThemeChooserManagementStatus::Saved { name: saved.name };
+                tracing::info!(slug, reason, "theme_chooser_updated_user_theme");
+                cx.notify();
+            }
+            Err(error) => {
+                self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                    message: format!("Update failed: {error}"),
+                };
+                tracing::warn!(slug, %error, reason, "theme_chooser_update_user_theme_failed");
+                cx.notify();
             }
         }
     }
@@ -1475,14 +1638,108 @@ impl ScriptListApp {
             return;
         };
         if let ThemeChooserCatalogKind::User { slug } = &entry.kind {
-            match theme::user_themes::delete_user_theme(slug) {
-                Ok(()) => {
-                    tracing::info!(slug, reason, "theme_chooser_deleted_user_theme");
-                    cx.notify();
-                }
-                Err(error) => {
-                    tracing::warn!(slug, %error, reason, "theme_chooser_delete_user_theme_failed");
-                }
+            let candidate = ThemeChooserDeleteCandidate {
+                slug: slug.clone(),
+                name: entry.name.clone(),
+            };
+            let already_pending = self
+                .theme_chooser_management
+                .as_ref()
+                .and_then(|state| state.pending_delete.as_ref())
+                .map(|pending| pending.slug == candidate.slug)
+                .unwrap_or(false);
+            if already_pending {
+                self.confirm_delete_selected_user_theme(reason, cx);
+            } else {
+                let state = self.theme_chooser_management_mut();
+                state.pending_delete = Some(candidate.clone());
+                state.status = ThemeChooserManagementStatus::DeleteNeedsConfirmation {
+                    name: candidate.name,
+                };
+                cx.notify();
+            }
+        } else {
+            self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                message: "Built-in themes cannot be deleted".to_string(),
+            };
+            cx.notify();
+        }
+    }
+
+    fn confirm_delete_selected_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let Some(candidate) = self
+            .theme_chooser_management
+            .as_ref()
+            .and_then(|state| state.pending_delete.clone())
+        else {
+            return;
+        };
+        match theme::user_themes::delete_user_theme_with_backup(&candidate.slug) {
+            Ok(Some(deleted)) => {
+                let state = self.theme_chooser_management_mut();
+                state.pending_delete = None;
+                state.last_deleted = Some(ThemeChooserDeletedTheme {
+                    slug: deleted.slug,
+                    name: deleted.name.clone(),
+                    contents: deleted.contents,
+                });
+                state.selected_base = None;
+                state.status =
+                    ThemeChooserManagementStatus::DeletedCanRestore { name: deleted.name };
+                tracing::info!(slug = %candidate.slug, reason, "theme_chooser_deleted_user_theme");
+                cx.notify();
+            }
+            Ok(None) => {
+                self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                    message: "Theme was already deleted".to_string(),
+                };
+                cx.notify();
+            }
+            Err(error) => {
+                self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                    message: format!("Delete failed: {error}"),
+                };
+                tracing::warn!(slug = %candidate.slug, %error, reason, "theme_chooser_delete_user_theme_failed");
+                cx.notify();
+            }
+        }
+    }
+
+    fn restore_last_deleted_user_theme(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let Some(deleted) = self
+            .theme_chooser_management
+            .as_ref()
+            .and_then(|state| state.last_deleted.clone())
+        else {
+            self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                message: "No deleted theme to restore".to_string(),
+            };
+            cx.notify();
+            return;
+        };
+        let backup = theme::user_themes::DeletedUserThemeBackup {
+            path: theme::user_themes::user_themes_dir().join(format!("{}.json", deleted.slug)),
+            slug: deleted.slug,
+            name: deleted.name,
+            contents: deleted.contents,
+        };
+        match theme::user_themes::restore_user_theme_backup(&backup) {
+            Ok(restored) => {
+                let state = self.theme_chooser_management_mut();
+                state.last_deleted = None;
+                state.pending_delete = None;
+                state.status = ThemeChooserManagementStatus::Saved {
+                    name: restored.name.clone(),
+                };
+                tracing::info!(slug = %restored.slug, reason, "theme_chooser_restored_user_theme");
+                cx.notify();
+            }
+            Err(error) => {
+                self.theme_chooser_management_mut().status = ThemeChooserManagementStatus::Error {
+                    message: format!("Restore failed: {error}"),
+                };
+                tracing::warn!(%error, reason, "theme_chooser_restore_user_theme_failed");
+                cx.notify();
             }
         }
     }
@@ -1827,6 +2084,208 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn theme_chooser_theme_fingerprint(theme: &crate::theme::Theme) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let bytes = serde_json::to_vec(theme).unwrap_or_default();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        bytes.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    fn theme_chooser_base_from_entry(entry: &ThemeChooserCatalogEntry) -> ThemeChooserBase {
+        let fingerprint = Self::theme_chooser_theme_fingerprint(entry.theme.as_ref());
+        match &entry.kind {
+            ThemeChooserCatalogKind::BuiltIn(index) => ThemeChooserBase::BuiltIn {
+                index: *index,
+                name: entry.name.clone(),
+                fingerprint,
+            },
+            ThemeChooserCatalogKind::User { slug } => ThemeChooserBase::User {
+                slug: slug.clone(),
+                name: entry.name.clone(),
+                fingerprint,
+            },
+        }
+    }
+
+    fn theme_chooser_management_mut(&mut self) -> &mut ThemeChooserManagementState {
+        self.theme_chooser_management
+            .get_or_insert_with(ThemeChooserManagementState::default)
+    }
+
+    fn theme_chooser_selected_entry<'a>(
+        catalog: &'a [ThemeChooserCatalogEntry],
+        filtered_indices: &[usize],
+        selected_index: usize,
+    ) -> Option<&'a ThemeChooserCatalogEntry> {
+        filtered_indices
+            .get(selected_index)
+            .and_then(|catalog_index| catalog.get(*catalog_index))
+    }
+
+    fn selected_theme_chooser_catalog_entry(&self) -> Option<ThemeChooserCatalogEntry> {
+        let (filter, selected_index) = self.current_theme_chooser_selection()?;
+        let catalog = Self::theme_chooser_catalog();
+        let filtered = Self::theme_chooser_catalog_filtered_indices(&filter, &catalog);
+        Self::theme_chooser_selected_entry(&catalog, &filtered, selected_index).cloned()
+    }
+
+    fn update_theme_chooser_selected_base(&mut self, entry: &ThemeChooserCatalogEntry) {
+        let base = Self::theme_chooser_base_from_entry(entry);
+        let state = self.theme_chooser_management_mut();
+        state.selected_base = Some(base);
+        state.draft_name = None;
+        state.pending_delete = None;
+        state.status = ThemeChooserManagementStatus::Clean;
+    }
+
+    pub(crate) fn theme_chooser_is_dirty(&self) -> bool {
+        let current = Self::theme_chooser_theme_fingerprint(self.theme.as_ref());
+        let base = self.theme_chooser_management.as_ref().and_then(|state| {
+            state.selected_base.as_ref().map(|base| match base {
+                ThemeChooserBase::BuiltIn { fingerprint, .. }
+                | ThemeChooserBase::User { fingerprint, .. } => fingerprint,
+            })
+        });
+        base.map(|fingerprint| *fingerprint != current)
+            .unwrap_or(false)
+    }
+
+    fn suggested_theme_chooser_save_name(
+        &self,
+        selected_entry: Option<&ThemeChooserCatalogEntry>,
+    ) -> String {
+        let base = selected_entry
+            .map(|entry| entry.name.trim())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("Theme");
+        let suffix = if self.theme_chooser_is_dirty() {
+            " Remix"
+        } else {
+            " Copy"
+        };
+        format!("{base}{suffix}")
+    }
+
+    pub(crate) fn theme_chooser_management_snapshot(
+        &self,
+        selected_entry: Option<&ThemeChooserCatalogEntry>,
+    ) -> ThemeChooserManagementSnapshot {
+        let fallback_base = selected_entry.map(Self::theme_chooser_base_from_entry);
+        let management = self.theme_chooser_management.as_ref();
+        let base = management
+            .and_then(|state| state.selected_base.as_ref())
+            .cloned()
+            .or(fallback_base);
+        let current = Self::theme_chooser_theme_fingerprint(self.theme.as_ref());
+        let base_fingerprint = base.as_ref().map(|base| match base {
+            ThemeChooserBase::BuiltIn { fingerprint, .. }
+            | ThemeChooserBase::User { fingerprint, .. } => fingerprint,
+        });
+        let is_dirty = base_fingerprint
+            .map(|fingerprint| *fingerprint != current)
+            .unwrap_or(false);
+        let suggested = management
+            .and_then(|state| state.draft_name.clone())
+            .unwrap_or_else(|| self.suggested_theme_chooser_save_name(selected_entry));
+        let resolution = theme::user_themes::resolve_user_theme_name(&suggested);
+        let duplicate_status_kind =
+            (resolution.collision_count > 0).then_some("duplicate".to_string());
+
+        let (base_name, base_slug, is_user_base) = match base {
+            Some(ThemeChooserBase::BuiltIn { index, name, .. }) => {
+                (Some(name), Some(format!("builtin:{index}")), false)
+            }
+            Some(ThemeChooserBase::User { slug, name, .. }) => (Some(name), Some(slug), true),
+            None => (None, None, false),
+        };
+
+        let (mut status_label, mut status_value, mut status_kind) = if is_dirty {
+            (
+                "Unsaved edits".to_string(),
+                "dirty".to_string(),
+                "dirty".to_string(),
+            )
+        } else if is_user_base {
+            (
+                "User theme saved".to_string(),
+                "clean-user".to_string(),
+                "clean".to_string(),
+            )
+        } else {
+            (
+                "Built-in preset".to_string(),
+                "clean-built-in".to_string(),
+                "clean".to_string(),
+            )
+        };
+
+        if resolution.collision_count > 0 {
+            status_label = format!("Will save as {}", resolution.display_name);
+            status_value = resolution.display_name.clone();
+            status_kind = "duplicate".to_string();
+        }
+
+        if let Some(state) = management {
+            match &state.status {
+                ThemeChooserManagementStatus::Saved { name } => {
+                    status_label = format!("Saved as {name}");
+                    status_value = name.clone();
+                    status_kind = "saved".to_string();
+                }
+                ThemeChooserManagementStatus::DuplicateName {
+                    requested,
+                    resolved,
+                } => {
+                    status_label = format!("Will save {requested} as {resolved}");
+                    status_value = resolved.clone();
+                    status_kind = "duplicate".to_string();
+                }
+                ThemeChooserManagementStatus::DeleteNeedsConfirmation { name } => {
+                    status_label = format!("Press Delete again to remove {name}");
+                    status_value = name.clone();
+                    status_kind = "delete-confirm".to_string();
+                }
+                ThemeChooserManagementStatus::DeletedCanRestore { name } => {
+                    status_label = format!("Deleted {name}. Restore is available");
+                    status_value = name.clone();
+                    status_kind = "deleted".to_string();
+                }
+                ThemeChooserManagementStatus::Error { message } => {
+                    status_label = message.clone();
+                    status_value = message.clone();
+                    status_kind = "error".to_string();
+                }
+                ThemeChooserManagementStatus::Clean | ThemeChooserManagementStatus::Dirty => {}
+            }
+        }
+
+        ThemeChooserManagementSnapshot {
+            status_label,
+            status_value,
+            status_kind,
+            is_dirty,
+            save_name: suggested,
+            resolved_save_name: resolution.display_name,
+            duplicate_status_kind,
+            base_name,
+            base_slug,
+            can_update: is_user_base && is_dirty,
+            update_disabled: if !is_user_base {
+                Some("built_in_theme".to_string())
+            } else if !is_dirty {
+                Some("no_changes".to_string())
+            } else {
+                None
+            },
+            delete_disabled: (!is_user_base).then_some("built_in_theme".to_string()),
+            restore_disabled: management
+                .and_then(|state| state.last_deleted.as_ref())
+                .is_none()
+                .then_some("no_deleted_theme".to_string()),
+        }
+    }
+
     fn preview_current_theme_chooser_preset(
         &mut self,
         reason: &'static str,
@@ -1988,8 +2447,17 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            "theme_chooser_update_user_theme" => {
+                self.update_selected_user_theme("theme_chooser_action_update_user_theme", cx);
+            }
             "theme_chooser_delete_user_theme" => {
                 self.delete_selected_user_theme("theme_chooser_action_delete_user_theme", cx);
+            }
+            "theme_chooser_restore_deleted_user_theme" => {
+                self.restore_last_deleted_user_theme(
+                    "theme_chooser_action_restore_deleted_user_theme",
+                    cx,
+                );
             }
             "theme_chooser_gradient_cycle" => {
                 self.cycle_theme_chooser_gradient("theme_chooser_action_gradient_cycle", cx);
@@ -2706,9 +3174,12 @@ impl ScriptListApp {
             .gap(px(header_gap))
             .child(
                 div().flex().flex_row().items_center().child(
-                    div().flex_1().flex().flex_row().items_center().child(
-                        self.render_search_input()
-                    ),
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .child(self.render_search_input()),
                 ),
             );
 
@@ -2718,6 +3189,9 @@ impl ScriptListApp {
             .and_then(|idx| catalog.get(*idx))
             .map(|entry| entry.name.as_str())
             .unwrap_or("Theme Preview");
+        let selected_catalog_entry =
+            Self::theme_chooser_selected_entry(&catalog, &filtered_indices, selected_index);
+        let management_snapshot = self.theme_chooser_management_snapshot(selected_catalog_entry);
 
         // Resolve contrast-safe semantic chip colors
         let success_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_success);
@@ -2735,6 +3209,173 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let fonts = self.theme.get_fonts();
         let accent_name_str = Self::accent_color_name(accent_color);
+
+        let save_click_entity = entity_handle_for_customize.clone();
+        let update_click_entity = entity_handle_for_customize.clone();
+        let delete_click_entity = entity_handle_for_customize.clone();
+        let restore_click_entity = entity_handle_for_customize.clone();
+        let update_disabled = management_snapshot.update_disabled.is_some();
+        let delete_disabled = management_snapshot.delete_disabled.is_some();
+        let restore_disabled = management_snapshot.restore_disabled.is_some();
+        let management_section = Self::render_theme_chooser_customize_section(
+            "SAVE & MANAGE",
+            Some("Library status and custom theme actions"),
+            &chrome,
+            vec![
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(if management_snapshot.is_dirty {
+                                accent_color
+                            } else {
+                                text_secondary
+                            }))
+                            .child(management_snapshot.status_label.clone()),
+                    )
+                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
+                        "Save copy name: {}",
+                        management_snapshot.resolved_save_name
+                    )))
+                    .into_any_element(),
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .id("theme-chooser-save-copy-button")
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(accent_badge_border)
+                            .bg(accent_badge_bg)
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(accent_badge_text)
+                            .cursor_pointer()
+                            .child("Save Copy")
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                if let Some(app) = save_click_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.save_current_theme_as_user_theme(
+                                            "theme_chooser_save_copy_click",
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("theme-chooser-update-user-theme-button")
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(badge_border_bg)
+                            .bg(rgba(chrome.panel_surface_rgba))
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(if update_disabled {
+                                text_muted
+                            } else {
+                                text_primary
+                            }))
+                            .when(!update_disabled, |button| button.cursor_pointer())
+                            .child("Update")
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                if update_disabled {
+                                    return;
+                                }
+                                if let Some(app) = update_click_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.update_selected_user_theme(
+                                            "theme_chooser_update_user_theme_click",
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("theme-chooser-delete-user-theme-button")
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(badge_border_bg)
+                            .bg(rgba(chrome.panel_surface_rgba))
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(if delete_disabled {
+                                text_muted
+                            } else {
+                                ui_error
+                            }))
+                            .when(!delete_disabled, |button| button.cursor_pointer())
+                            .child("Delete")
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                if delete_disabled {
+                                    return;
+                                }
+                                if let Some(app) = delete_click_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.delete_selected_user_theme(
+                                            "theme_chooser_delete_user_theme_click",
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .child(
+                        div()
+                            .id("theme-chooser-restore-user-theme-button")
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(badge_border_bg)
+                            .bg(rgba(chrome.panel_surface_rgba))
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(if restore_disabled {
+                                text_muted
+                            } else {
+                                text_primary
+                            }))
+                            .when(!restore_disabled, |button| button.cursor_pointer())
+                            .child("Restore")
+                            .on_click(move |_, _, cx| {
+                                cx.stop_propagation();
+                                if restore_disabled {
+                                    return;
+                                }
+                                if let Some(app) = restore_click_entity.upgrade() {
+                                    app.update(cx, |this, cx| {
+                                        this.restore_last_deleted_user_theme(
+                                            "theme_chooser_restore_deleted_user_theme_click",
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )
+                    .into_any_element(),
+            ],
+        );
 
         // 1. COLORS SECTION
         let colors_section = Self::render_theme_chooser_customize_section(
@@ -3021,6 +3662,7 @@ impl ScriptListApp {
             .flex_col()
             .gap(px(16.0))
             .overflow_y_scrollbar()
+            .child(management_section)
             .child(colors_section)
             .child(opacity_section)
             .child(backgrounds_section)

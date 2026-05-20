@@ -72,7 +72,9 @@ pub(crate) struct RootPassiveFrameKey {
     pub(crate) ai_vault_options: crate::ai_vault::RootAiVaultSectionOptions,
     pub(crate) ai_vault_snapshot_generation: u64,
     pub(crate) browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
+    pub(crate) browser_tabs_snapshot_generation: u64,
     pub(crate) browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
+    pub(crate) browser_history_snapshot_generation: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -851,6 +853,11 @@ struct ScriptListApp {
     /// continuously rewritten from parser-backed field edits.
     menu_syntax_form_draft_field_id: Option<String>,
     menu_syntax_form_draft_value: String,
+    /// Selected inline autocomplete suggestion for the active handler form
+    /// field. Kept separate from popup object-selector state so handler form
+    /// autocomplete does not claim the main result list.
+    menu_syntax_form_suggestion_field_id: Option<String>,
+    menu_syntax_form_suggestion_selected_index: Option<usize>,
     /// Run 12 Pass 11 — pending Cmd+Enter inline AI proposal for
     /// `cmd-enter-inline-ai-proposal`. Set by the Cmd+Enter handler when the
     /// user is composing power syntax; threaded into the snapshot so the hint
@@ -900,6 +907,8 @@ struct ScriptListApp {
     main_menu_fallback_state: MainMenuFallbackState,
     // Theme before chooser was opened (for cancel/restore)
     theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
+    /// Theme Designer save/manage status for user-authored themes.
+    pub(crate) theme_chooser_management: Option<ThemeChooserManagementState>,
     /// Theme Chooser's cached view-local component controls (Sliders & ColorPickers)
     pub(crate) theme_chooser_controls: Option<ThemeChooserControls>,
     /// Main script-list render diagnostics and input-to-render timing receipts.

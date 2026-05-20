@@ -190,23 +190,45 @@ impl ScriptListApp {
             .with_icon(IconName::Refresh),
             Action::new(
                 "theme_chooser_save_as_user_theme",
-                "Save as User Theme",
-                Some("Save the current Theme Designer state under ~/.scriptkit/themes".to_string()),
+                "Save Copy as User Theme",
+                Some("Save the current Theme Designer state as a new user theme".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_section("Manage")
             .with_icon(IconName::Plus),
             Action::new(
+                "theme_chooser_update_user_theme",
+                "Update Selected User Theme",
+                Some(
+                    "Overwrite the selected user theme with the current Theme Designer state"
+                        .to_string(),
+                ),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Manage")
+            .with_icon(IconName::Check),
+            Action::new(
                 "theme_chooser_delete_user_theme",
                 "Delete Selected User Theme",
                 Some(
-                    "Delete the selected user-authored theme; built-in themes are read-only"
+                    "Stage deletion; run again to confirm. Built-in themes are read-only"
                         .to_string(),
                 ),
                 ActionCategory::ScriptContext,
             )
             .with_section("Manage")
             .with_icon(IconName::Trash),
+            Action::new(
+                "theme_chooser_restore_deleted_user_theme",
+                "Restore Deleted User Theme",
+                Some(
+                    "Restore the most recently deleted user theme from this Theme Designer session"
+                        .to_string(),
+                ),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Manage")
+            .with_icon(IconName::Refresh),
             Action::new(
                 "theme_chooser_gradient_cycle",
                 "Cycle Background Gradient",
