@@ -674,13 +674,16 @@ impl ScriptListApp {
             None
         };
 
-        // Key handler: Escape -> back to ScriptList; Enter -> Fix in Agent; Cmd+C -> copy diagnostics text.
-        let entity = cx.entity().downgrade();
+        // Key handler: Escape/Cmd+W -> back to ScriptList; Enter -> Fix in Agent; Cmd+C -> copy diagnostics text.
         let report_for_keys = report.clone();
         let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
             let key = event.keystroke.key.as_str();
             let has_cmd = event.keystroke.modifiers.platform;
             if crate::ui_foundation::is_key_escape(key) {
+                this.go_back_or_close(window, cx);
+                return;
+            }
+            if has_cmd && key.eq_ignore_ascii_case("w") {
                 this.go_back_or_close(window, cx);
                 return;
             }
@@ -694,23 +697,7 @@ impl ScriptListApp {
                 return;
             }
             if has_cmd && key.eq_ignore_ascii_case("c") {
-                let text = Self::format_script_issues_diagnostics(&report_for_keys);
-                match crate::platform::copy_text_to_clipboard(&text) {
-                    Ok(()) => {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.show_hud(
-                                    "Diagnostics copied".to_string(),
-                                    Some(2000),
-                                    cx,
-                                );
-                            });
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!(error = %e, "script_issues copy_text_to_clipboard failed");
-                    }
-                }
+                this.copy_script_issues_to_clipboard(&report_for_keys, cx);
             }
         });
 
@@ -847,6 +834,22 @@ impl ScriptListApp {
             "Fix these Script Kit script validation issues. Inspect each script path, repair the metadata collisions or validation failures, and summarize what changed.\n\n{}",
             Self::format_script_issues_diagnostics(report)
         )
+    }
+
+    pub(crate) fn copy_script_issues_to_clipboard(
+        &mut self,
+        report: &crate::scripts::ValidationReport,
+        cx: &mut Context<Self>,
+    ) {
+        let text = Self::format_script_issues_diagnostics(report);
+        match crate::platform::copy_text_to_clipboard(&text) {
+            Ok(()) => {
+                self.show_hud("Issues copied".to_string(), Some(2000), cx);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "script_issues copy_text_to_clipboard failed");
+            }
+        }
     }
 
     pub(crate) fn fix_script_issues_in_agent(

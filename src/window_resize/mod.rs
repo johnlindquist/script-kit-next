@@ -26,9 +26,10 @@ const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
 const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 440.0;
 const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 440.0;
-const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;
+const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 =
+    crate::panel::HEADER_TOTAL_HEIGHT - crate::panel::HEADER_DIVIDER_HEIGHT;
 const MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
-const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = 1.0;
+const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = crate::panel::HEADER_DIVIDER_HEIGHT;
 const MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
 pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
 
@@ -83,9 +84,9 @@ pub(crate) fn capped_mini_main_window_selectable_rows(visible_section_headers: u
 #[allow(dead_code)]
 pub(crate) mod mini_layout {
     /// Horizontal padding for the mini header area.
-    pub const HEADER_PADDING_X: f32 = 12.0;
+    pub const HEADER_PADDING_X: f32 = 16.0;
     /// Vertical padding for the mini header area.
-    pub const HEADER_PADDING_Y: f32 = 10.0;
+    pub const HEADER_PADDING_Y: f32 = 8.0;
     /// Horizontal padding for the mini hint strip footer.
     pub const HINT_STRIP_PADDING_X: f32 = 14.0;
     /// Vertical padding for the mini hint strip footer.

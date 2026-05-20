@@ -22,6 +22,9 @@ pub const HEADER_BUTTON_HEIGHT: f32 = 28.0;
 /// Divider height below header (px)
 pub const HEADER_DIVIDER_HEIGHT: f32 = 1.0;
 
+/// Divider horizontal margin (px) - matches header padding
+pub const HEADER_DIVIDER_MARGIN: f32 = 16.0;
+
 /// Total header height including padding and divider (45px)
 /// Calculated as: HEADER_PADDING_Y * 2 + HEADER_BUTTON_HEIGHT + HEADER_DIVIDER_HEIGHT
 /// This is the y-offset where content begins below the header.
