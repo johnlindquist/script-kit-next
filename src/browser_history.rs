@@ -139,7 +139,8 @@ impl BrowserHistoryEntry {
         format!("{}:{}:{}", self.browser_bundle_id, self.profile, self.url)
     }
 
-    pub fn convert_to_root_hit(&self) -> RootBrowserHistorySearchHit {
+    #[allow(dead_code)]
+    pub(crate) fn convert_to_root_hit(&self) -> RootBrowserHistorySearchHit {
         RootBrowserHistorySearchHit {
             stable_key: self.history_key(),
             provider_label: self.browser_name.to_string(),
@@ -486,6 +487,7 @@ pub(crate) fn ensure_root_browser_history_refresh(
     });
 }
 
+#[allow(dead_code)]
 pub(crate) fn mark_root_browser_history_refresh_in_flight() -> bool {
     if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         if cache.refresh_in_flight {
@@ -498,6 +500,7 @@ pub(crate) fn mark_root_browser_history_refresh_in_flight() -> bool {
     false
 }
 
+#[allow(dead_code)]
 pub(crate) fn update_root_browser_history_snapshot(hits: Vec<RootBrowserHistorySearchHit>) {
     if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         cache.snapshot = Some(RootBrowserHistorySnapshot {
@@ -510,6 +513,7 @@ pub(crate) fn update_root_browser_history_snapshot(hits: Vec<RootBrowserHistoryS
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn clear_root_browser_history_refresh_in_flight(error: Option<String>) {
     if let Ok(mut cache) = ROOT_BROWSER_HISTORY_SNAPSHOT.lock() {
         cache.refresh_in_flight = false;

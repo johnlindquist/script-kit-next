@@ -25,7 +25,7 @@ pub struct AcpTranscript {
 }
 
 impl AcpTranscript {
-    pub fn new(messages: Vec<AcpThreadMessage>, cx: &mut Context<Self>) -> Self {
+    pub fn new(messages: Vec<AcpThreadMessage>, _cx: &mut Context<Self>) -> Self {
         let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
         list_state.set_follow_tail(true);
 
@@ -301,7 +301,7 @@ impl AcpTranscript {
     fn render_assistant_activity_row_static() -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let accent = rgb(theme.colors.accent.selected);
-        let pulse_duration = Duration::from_millis(1100);
+        let _pulse_duration = Duration::from_millis(1100);
         let dot = div().size(px(6.0)).rounded_full().bg(accent).opacity(0.7);
 
         div()
@@ -338,7 +338,7 @@ impl AcpTranscript {
 }
 
 impl Render for AcpTranscript {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
 

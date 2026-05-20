@@ -6502,7 +6502,7 @@ impl AcpChatView {
                 if let Some(card) = &self.setup_card {
                     success = card.update(cx, |view, cx| {
                         if view.select_agent_by_id(target_id, cx) {
-                            if let Some(agent) = view
+                            if let Some(_agent) = view
                                 .agent_picker
                                 .as_ref()
                                 .and_then(|p| p.items.get(p.selected_index).cloned())
@@ -7513,7 +7513,7 @@ impl Render for AcpChatView {
         let attached_parts = thread.pending_context_parts().to_vec();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let history_popup_open = self.history_menu.is_some();
-        let colors = Self::prompt_colors();
+        let _colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
         let chrome = AppChromeColors::from_theme(&theme);
         let placeholder_text = rgba(chrome.placeholder_text_rgba);
