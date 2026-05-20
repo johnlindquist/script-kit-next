@@ -509,6 +509,148 @@ impl ScriptListApp {
                     action_disabled: None,
                 });
 
+                let opacity = self.theme.get_opacity();
+                let fonts = self.theme.get_fonts();
+                let gradient = self.theme.background_gradient.clone().unwrap_or_default();
+                let vibrancy_enabled = self
+                    .theme
+                    .vibrancy
+                    .as_ref()
+                    .map(|vibrancy| vibrancy.enabled)
+                    .unwrap_or(false);
+                let mut push_theme_control = |
+                    semantic_id: String,
+                    element_type: protocol::ElementType,
+                    text: &str,
+                    value: String,
+                    kind: &str,
+                | {
+                    elements.push(protocol::ElementInfo {
+                        semantic_id,
+                        element_type,
+                        text: Some(text.to_string()),
+                        value: Some(value),
+                        selected: None,
+                        focused: None,
+                        index: None,
+                        role: Some("theme-control".to_string()),
+                        kind: Some(kind.to_string()),
+                        source: None,
+                        source_name: None,
+                        selectable: Some(true),
+                        status_kind: None,
+                        action_disabled: None,
+                    });
+                };
+                push_theme_control(
+                    "control:theme-chooser:accent-color".to_string(),
+                    protocol::ElementType::ColorPicker,
+                    "Accent Color",
+                    format!("#{:06X}", self.theme.colors.accent.selected),
+                    "accent-color",
+                );
+                push_theme_control(
+                    "control:theme-chooser:surface-opacity".to_string(),
+                    protocol::ElementType::Slider,
+                    "Surface Opacity",
+                    format!("{:.2}", opacity.main),
+                    "surface-opacity",
+                );
+                push_theme_control(
+                    "control:theme-chooser:secondary-text-opacity".to_string(),
+                    protocol::ElementType::Slider,
+                    "Typography Hint Opacity",
+                    format!("{:.2}", opacity.text_placeholder),
+                    "secondary-text-opacity",
+                );
+                push_theme_control(
+                    "control:theme-chooser:focused-background-opacity".to_string(),
+                    protocol::ElementType::Slider,
+                    "Focused Row Opacity",
+                    format!("{:.2}", opacity.selected),
+                    "focused-background-opacity",
+                );
+                push_theme_control(
+                    "control:theme-chooser:vibrancy-enabled".to_string(),
+                    protocol::ElementType::Toggle,
+                    "Vibrancy",
+                    vibrancy_enabled.to_string(),
+                    "vibrancy-enabled",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-enabled".to_string(),
+                    protocol::ElementType::Toggle,
+                    "Backdrop Gradient",
+                    gradient.enabled.to_string(),
+                    "gradient-enabled",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-base-from".to_string(),
+                    protocol::ElementType::ColorPicker,
+                    "Gradient Base From",
+                    format!("#{:06X}", gradient.from),
+                    "gradient-base-from",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-base-to".to_string(),
+                    protocol::ElementType::ColorPicker,
+                    "Gradient Base To",
+                    format!("#{:06X}", gradient.to),
+                    "gradient-base-to",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-base-angle".to_string(),
+                    protocol::ElementType::Slider,
+                    "Gradient Base Angle",
+                    format!("{:.0}", gradient.angle),
+                    "gradient-base-angle",
+                );
+                push_theme_control(
+                    "control:theme-chooser:gradient-base-opacity".to_string(),
+                    protocol::ElementType::Slider,
+                    "Gradient Base Opacity",
+                    format!("{:.2}", gradient.opacity),
+                    "gradient-base-opacity",
+                );
+                push_theme_control(
+                    "control:theme-chooser:ui-font-size".to_string(),
+                    protocol::ElementType::Slider,
+                    "UI Font Size",
+                    format!("{:.1}", fonts.ui_size),
+                    "ui-font-size",
+                );
+                for (layer_index, layer) in gradient.layers.iter().enumerate() {
+                    let ordinal = layer_index + 1;
+                    push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-from"),
+                        protocol::ElementType::ColorPicker,
+                        &format!("Gradient Layer {ordinal} From"),
+                        format!("#{:06X}", layer.from),
+                        &format!("gradient-layer-{ordinal}-from"),
+                    );
+                    push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-to"),
+                        protocol::ElementType::ColorPicker,
+                        &format!("Gradient Layer {ordinal} To"),
+                        format!("#{:06X}", layer.to),
+                        &format!("gradient-layer-{ordinal}-to"),
+                    );
+                    push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-angle"),
+                        protocol::ElementType::Slider,
+                        &format!("Gradient Layer {ordinal} Angle"),
+                        format!("{:.0}", layer.angle),
+                        &format!("gradient-layer-{ordinal}-angle"),
+                    );
+                    push_theme_control(
+                        format!("control:theme-chooser:gradient-layer-{ordinal}-opacity"),
+                        protocol::ElementType::Slider,
+                        &format!("Gradient Layer {ordinal} Opacity"),
+                        format!("{:.2}", layer.opacity),
+                        &format!("gradient-layer-{ordinal}-opacity"),
+                    );
+                }
+
                 for (visible_index, catalog_index) in filtered.into_iter().enumerate() {
                     let Some(entry) = catalog.get(catalog_index) else {
                         continue;

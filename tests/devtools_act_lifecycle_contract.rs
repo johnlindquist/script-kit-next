@@ -133,3 +133,20 @@ fn printable_text_keys_use_input_ladder_not_simulatekey_allowlist_block() {
         );
     }
 }
+
+#[test]
+fn act_exposes_theme_designer_control_setter() {
+    for needle in [
+        "\"set-theme-control\"",
+        "arg === \"--text\" || arg === \"--value\"",
+        "set-theme-control requires --control",
+        "commands: [{ type: \"setThemeControl\", control: args.control, value: args.value }]",
+        "control: args.actionKind === \"set-theme-control\" ? args.control : null",
+        "value: args.actionKind === \"set-theme-control\" ? args.value : null",
+    ] {
+        assert!(
+            ACT_TS.contains(needle),
+            "act.ts must expose Theme Designer control setter marker {needle}"
+        );
+    }
+}

@@ -282,7 +282,7 @@ cleanup_orphan_session_forwarders() {
 send_startup_keepalive() {
   local input_fifo="$1"
   local app_pid="$2"
-  printf '{"type":"getState","requestId":"session-start-%s"}\n' "$app_pid" > "$input_fifo" 2>/dev/null
+  timeout 2 bash -c 'printf "{\"type\":\"getState\",\"requestId\":\"session-start-%s\"}\n" "$2" > "$1"' _ "$input_fifo" "$app_pid" 2>/dev/null
 }
 
 # --- start ------------------------------------------------------------------
@@ -404,17 +404,21 @@ cmd_start() {
   # Background forwarder: reads from input_fifo and writes to pipe.
   # It is started before the app so the app's read-open on the primary FIFO
   # does not block forever waiting for a writer.
-  nohup bash -c '
+  nohup python3 -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' bash -c '
+    trap "" HUP
     pipe_path="$1"
     input_fifo="$2"
 
-    # One background process owns the primary pipe writer for the app, while
-    # repeatedly reopening input_fifo after each sender disconnects. Avoid
-    # process substitution here: its helper can die when the start shell exits,
-    # closing the app stdin pipe immediately after startup.
+    # One background process owns the primary pipe writer for the app. Keep
+    # input_fifo open read-write so one-shot senders can disconnect without
+    # delivering EOF through the app stdin pipe.
+    exec 3<>"$input_fifo"
     while [ -p "$input_fifo" ]; do
-      cat "$input_fifo" 2>/dev/null || true
-      sleep 0.05
+      if IFS= read -r line <&3; then
+        printf "%s\n" "$line"
+      else
+        sleep 0.05
+      fi
     done > "$pipe_path"
   ' _ "$pipe_path" "$input_fifo" </dev/null >/dev/null 2>&1 &
   local fwd_pid=$!
@@ -424,12 +428,19 @@ cmd_start() {
   # write end, otherwise the shell can deadlock opening the read end.
   local session_generation
   session_generation="$(tr -d '\n' < "$generation_path")"
+  local launch_prefix=()
+  if command -v python3 >/dev/null 2>&1; then
+    launch_prefix=(python3 -c 'import os, sys; os.setsid(); os.execvpe(sys.argv[1], sys.argv[1:], os.environ)' "$BINARY")
+  else
+    launch_prefix=("$BINARY")
+  fi
+
   nohup env \
     SCRIPT_KIT_AI_LOG=1 \
     SCRIPT_KIT_AGENTIC_PROTOCOL_RESPONSES_PATH="$protocol_responses_path" \
     SCRIPT_KIT_AGENTIC_SESSION_NAME="$name" \
     SCRIPT_KIT_AGENTIC_SESSION_GENERATION="$session_generation" \
-    "$BINARY" < "$pipe_path" > "$log_path" 2>&1 &
+    "${launch_prefix[@]}" < "$pipe_path" > "$log_path" 2>&1 &
   local app_pid=$!
   echo "$app_pid" > "$pid_path"
   local startup_keepalive=false

@@ -3,17 +3,18 @@ use super::read_source;
 #[test]
 fn theme_chooser_customize_opacity_controls_are_single_select() {
     let source = read_source("src/render_builtins/theme_chooser.rs");
+    let customize_controls = read_source("src/render_builtins/theme_chooser_customize_controls.rs");
 
     assert!(!source.contains("OPACITY_MATCH_TOLERANCE"));
     assert!(source.contains("fn closest_float_preset_index("));
-    assert!(source.contains("let current_text_opacity_index = Self::closest_float_preset_index("));
-    assert!(source.contains("let is_current = i == current_text_opacity_index;"));
-    assert!(source.contains(
-        "let current_focused_background_opacity_index = Self::closest_float_preset_index("
-    ));
-    assert!(source.contains("let is_current = i == current_focused_background_opacity_index;"));
-    assert!(source.contains("let current_opacity_index = Self::find_opacity_preset_index("));
-    assert!(source.contains("let is_current = i == current_opacity_index;"));
+    assert!(source.contains("ThemeChooserSliderBinding::SecondaryTextOpacity"));
+    assert!(source.contains("Self::apply_text_opacity_preset("));
+    assert!(source.contains("ThemeChooserSliderBinding::FocusedBackgroundOpacity"));
+    assert!(source.contains("Self::apply_focused_background_opacity_preset("));
+    assert!(
+        customize_controls.contains("let current_opacity_index = Self::find_opacity_preset_index(")
+    );
+    assert!(customize_controls.contains("let is_current = i == current_opacity_index;"));
 }
 
 #[test]
@@ -83,5 +84,55 @@ fn theme_chooser_exposes_user_theme_management_and_gradient_actions() {
     assert!(user_themes.contains(".get(\"selected\")"));
     assert!(theme_types.contains("pub struct BackgroundGradient"));
     assert!(theme_types.contains("pub fn active_background_gradient(&self)"));
-    assert!(render_impl.contains("get_theme_background_gradient(&self.theme)"));
+    assert!(render_impl.contains("get_theme_background_gradients(&self.theme)"));
+}
+
+#[test]
+fn theme_chooser_controls_are_devtools_visible_and_drivable() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let collector = read_source("src/app_layout/collect_elements.rs");
+    let prompt_handler = read_source("src/prompt_handler/mod.rs");
+    let protocol = read_source("src/protocol/types/batch_wait.rs");
+
+    for control in [
+        "accent-color",
+        "surface-opacity",
+        "secondary-text-opacity",
+        "focused-background-opacity",
+        "vibrancy-enabled",
+        "gradient-enabled",
+        "gradient-base-from",
+        "gradient-base-to",
+        "gradient-base-angle",
+        "gradient-base-opacity",
+        "ui-font-size",
+        "gradient-layer-",
+    ] {
+        assert!(
+            collector.contains(control),
+            "getElements must expose Theme Designer control `{control}`"
+        );
+        assert!(
+            chooser.contains(control),
+            "Theme Designer devtools setter must handle control `{control}`"
+        );
+    }
+
+    for element_type in [
+        "ElementType::Slider",
+        "ElementType::ColorPicker",
+        "ElementType::Toggle",
+    ] {
+        assert!(
+            collector.contains(element_type),
+            "Theme Designer controls must expose semantic {element_type} elements"
+        );
+    }
+
+    assert!(protocol.contains("SetThemeControl"));
+    assert!(chooser.contains("strip_prefix(\"control:theme-chooser:\")"));
+    assert!(prompt_handler.contains("set_theme_chooser_control_from_devtools"));
+    assert!(prompt_handler.contains("\"setThemeControl\".to_string()"));
+    assert!(prompt_handler.contains("setThemeControl requires ThemeChooserView"));
+    assert!(!prompt_handler.contains(".set_theme_chooser_control_from_devtools(&control, &value, cx)\n                                                .ok()"));
 }

@@ -2,14 +2,16 @@
 
 type JsonObject = Record<string, unknown>;
 
-type ActionKind = "set-input" | "select" | "key" | "open-actions";
+type ActionKind = "set-input" | "select" | "key" | "open-actions" | "set-theme-control";
 
 type Args = {
   actionKind: ActionKind;
   session: string;
   target?: JsonObject;
   text: string;
+  value: string;
   semanticId: string;
+  control: string;
   key: string;
   modifiers: string[];
   allowSubmit: boolean;
@@ -73,6 +75,7 @@ function usage() {
     "  bun scripts/devtools/act.ts select --semantic-id <id> [--allow-submit] [target args]",
     "  bun scripts/devtools/act.ts key --key <name-or-character> [--modifiers cmd,shift] [--allow-submit] [target args]",
     "  bun scripts/devtools/act.ts open-actions [target args]",
+    "  bun scripts/devtools/act.ts set-theme-control --control <id> --value <value> --surface ThemeChooser [target args]",
     "",
     "Target args match scripts/devtools/targets.ts inspect, e.g. --session <name> --main --strict --surface ScriptList.",
   ].join("\n");
@@ -85,7 +88,7 @@ function parseArgs(argv: string[]): Args {
   }
 
   const command = argv[0] as ActionKind | undefined;
-  if (!command || !["set-input", "select", "key", "open-actions"].includes(command)) {
+  if (!command || !["set-input", "select", "key", "open-actions", "set-theme-control"].includes(command)) {
     console.error(usage());
     process.exit(2);
   }
@@ -94,7 +97,9 @@ function parseArgs(argv: string[]): Args {
     actionKind: command,
     session: "default",
     text: "",
+    value: "",
     semanticId: "",
+    control: "",
     key: "",
     modifiers: [],
     allowSubmit: false,
@@ -142,8 +147,11 @@ function parseArgs(argv: string[]): Args {
       args.forwarded.push("--strict");
     } else if (arg === "--text" || arg === "--value") {
       args.text = argv[++index] ?? "";
+      args.value = args.text;
     } else if (arg === "--semantic-id") {
       args.semanticId = argv[++index] ?? "";
+    } else if (arg === "--control") {
+      args.control = argv[++index] ?? "";
     } else if (arg === "--key") {
       args.key = argv[++index] ?? "";
     } else if (arg === "--modifiers") {
@@ -256,6 +264,12 @@ function safety(args: Args) {
   if (args.actionKind === "select" && !args.semanticId) {
     errors.push("select requires --semantic-id");
   }
+  if (args.actionKind === "set-theme-control" && !args.control) {
+    errors.push("set-theme-control requires --control");
+  }
+  if (args.actionKind === "set-theme-control" && args.text.length === 0) {
+    errors.push("set-theme-control requires --value");
+  }
   if (args.actionKind === "key" && !args.key) {
     errors.push("key requires --key");
   }
@@ -316,6 +330,16 @@ function actionPayload(args: Args, selector: JsonObject) {
       requestId: requestId("open-actions"),
       target: selector,
       commands: [{ type: "openActions" }],
+      options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
+      trace: "on",
+    };
+  }
+  if (args.actionKind === "set-theme-control") {
+    return {
+      type: "batch",
+      requestId: requestId("set-theme-control"),
+      target: selector,
+      commands: [{ type: "setThemeControl", control: args.control, value: args.value }],
       options: { stopOnError: true, rollbackOnError: false, timeout: args.timeoutMs },
       trace: "on",
     };
@@ -723,6 +747,8 @@ async function main() {
     input: {
       text: args.actionKind === "set-input" ? args.text : null,
       semanticId: args.actionKind === "select" ? args.semanticId : null,
+      control: args.actionKind === "set-theme-control" ? args.control : null,
+      value: args.actionKind === "set-theme-control" ? args.value : null,
       key: args.actionKind === "key" ? args.key : null,
       modifiers: args.actionKind === "key" ? args.modifiers : [],
     },

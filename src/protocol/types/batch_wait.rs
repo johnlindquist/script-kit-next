@@ -170,6 +170,10 @@ pub enum BatchCommand {
         #[serde(default)]
         submit: bool,
     },
+    SetThemeControl {
+        control: String,
+        value: String,
+    },
     FilterAndSelect {
         filter: String,
         #[serde(rename = "selectFirst", default)]
