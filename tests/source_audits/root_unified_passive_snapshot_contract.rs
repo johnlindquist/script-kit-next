@@ -284,6 +284,35 @@ fn root_defaults_benchmark_enforces_input_echo_and_staleness() {
 }
 
 #[test]
+fn root_delete_key_benchmark_enforces_key_repeat_responsiveness() {
+    let proof = include_str!("../../scripts/agentic/root-delete-key-benchmark.ts");
+    for required in [
+        "simulateGpuiEvent",
+        "key: \"backspace\"",
+        "measureDeleteEcho",
+        "measureDeleteBurst",
+        "cadenceOverrunMaxMs",
+        "computedSearchText",
+        "handlerSlowCount",
+        "deleteInputEchoP95Ms",
+        "deleteBurstTotalP95Ms",
+    ] {
+        assert!(
+            proof.contains(required),
+            "delete-key benchmark should enforce `{required}`"
+        );
+    }
+    assert!(
+        proof.contains("waitForInput(expected)") && proof.contains("computedMatchesInput"),
+        "delete-key proof must wait for the real input echo and computed query after backspace"
+    );
+    assert!(
+        !proof.contains("captureScreenshot") && !proof.contains("simulateClick"),
+        "delete-key responsiveness proof should stay state/protocol-first"
+    );
+}
+
+#[test]
 fn root_file_test_provider_supports_multi_query_cancellation_fixture() {
     let root_file = include_str!("../../src/app_impl/root_file_search.rs");
     for required in [

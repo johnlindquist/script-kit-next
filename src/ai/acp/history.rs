@@ -374,13 +374,15 @@ pub(crate) fn search_history_cached(query: &str, limit: usize) -> Vec<AcpHistory
     };
 
     let hits = rank_history_entries(entries, query, limit);
-    tracing::info!(
-        target: "script_kit::tab_ai",
-        event = "root_acp_history_search_cache_hit",
-        query_len = query.trim().chars().count(),
-        limit,
-        hit_count = hits.len(),
-    );
+    if crate::logging::filter_perf_trace_enabled() {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "root_acp_history_search_cache_hit",
+            query_len = query.trim().chars().count(),
+            limit,
+            hit_count = hits.len(),
+        );
+    }
     hits
 }
 

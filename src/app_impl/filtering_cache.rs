@@ -608,18 +608,20 @@ impl ScriptListApp {
             .has_filtered_results_for(&self.filter_text)
         {
             let filter_text = self.filter_text.clone();
-            logging::log(
-                "FILTER_PERF",
-                &format!(
-                    "[4a/5] SEARCH_START for '{}' (scripts={}, scriptlets={}, builtins={}, apps={}, skills={})",
-                    filter_text,
-                    self.scripts.len(),
-                    self.scriptlets.len(),
-                    self.builtin_entries.len(),
-                    self.apps.len(),
-                    self.skills.len(),
-                ),
-            );
+            if logging::filter_perf_trace_enabled() {
+                logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[4a/5] SEARCH_START for '{}' (scripts={}, scriptlets={}, builtins={}, apps={}, skills={})",
+                        filter_text,
+                        self.scripts.len(),
+                        self.scriptlets.len(),
+                        self.builtin_entries.len(),
+                        self.apps.len(),
+                        self.skills.len(),
+                    ),
+                );
+            }
             let search_start = std::time::Instant::now();
             let filtered_results = self.recompute_filtered_results(&filter_text);
             let filtered_result_count = filtered_results.len();
@@ -627,16 +629,20 @@ impl ScriptListApp {
                 .store_filtered_results(filter_text.clone(), filtered_results);
             let search_elapsed = search_start.elapsed();
 
-            logging::log(
-                "FILTER_PERF",
-                &format!(
-                    "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results (skills={})",
-                    filter_text,
-                    search_elapsed.as_secs_f64() * 1000.0,
-                    filtered_result_count,
-                    self.skills.len(),
-                ),
-            );
+            if logging::filter_perf_trace_enabled()
+                || search_elapsed >= std::time::Duration::from_millis(8)
+            {
+                logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results (skills={})",
+                        filter_text,
+                        search_elapsed.as_secs_f64() * 1000.0,
+                        filtered_result_count,
+                        self.skills.len(),
+                    ),
+                );
+            }
         }
         // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
         self.main_menu_result_caches.filtered_results()
@@ -793,10 +799,12 @@ impl ScriptListApp {
         }
 
         // Cache miss - need to recompute
-        logging::log(
-            "FILTER_PERF",
-            &format!("[4b/5] GROUP_START for '{}'", self.computed_filter_text),
-        );
+        if logging::filter_perf_trace_enabled() {
+            logging::log(
+                "FILTER_PERF",
+                &format!("[4b/5] GROUP_START for '{}'", self.computed_filter_text),
+            );
+        }
 
         let start = std::time::Instant::now();
         let suggested_config = self.config.get_suggested();
@@ -821,15 +829,17 @@ impl ScriptListApp {
             Option<String>,
         ) = (Vec::new(), None);
 
-        logging::log(
-            "APP",
-            &format!(
-                "get_grouped_results: filter='{}', menu_bar_items={}, bundle_id={:?}",
-                self.computed_filter_text,
-                menu_bar_items.len(),
-                menu_bar_bundle_id
-            ),
-        );
+        if logging::filter_perf_trace_enabled() {
+            logging::log(
+                "APP",
+                &format!(
+                    "get_grouped_results: filter='{}', menu_bar_items={}, bundle_id={:?}",
+                    self.computed_filter_text,
+                    menu_bar_items.len(),
+                    menu_bar_bundle_id
+                ),
+            );
+        }
         let raw_filter_text = self.computed_filter_text.clone();
         let menu_syntax_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
             || self.menu_syntax_trigger_popup_state.owns_main_list()
@@ -1111,28 +1121,34 @@ impl ScriptListApp {
             last_selectable_index,
         );
 
-        logging::log(
-            "FILTER_PERF",
-            &format!(
-                "[4b/5] GROUP_DONE '{}' in {:.2}ms -> {} items (from {} results)",
-                self.computed_filter_text,
-                elapsed.as_secs_f64() * 1000.0,
-                self.main_menu_result_caches.grouped_items().len(),
-                self.main_menu_result_caches.grouped_flat_result_count()
-            ),
-        );
+        if logging::filter_perf_trace_enabled() || elapsed >= std::time::Duration::from_millis(8) {
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[4b/5] GROUP_DONE '{}' in {:.2}ms -> {} items (from {} results)",
+                    self.computed_filter_text,
+                    elapsed.as_secs_f64() * 1000.0,
+                    self.main_menu_result_caches.grouped_items().len(),
+                    self.main_menu_result_caches.grouped_flat_result_count()
+                ),
+            );
+        }
 
         // Log total time from input to grouped results if we have the start time
         if let Some(perf_start) = self.main_menu_render_diagnostics.filter_perf_start {
             let total_elapsed = perf_start.elapsed();
-            logging::log(
-                "FILTER_PERF",
-                &format!(
-                    "[5/5] TOTAL_TIME '{}': {:.2}ms (input->grouped)",
-                    self.computed_filter_text,
-                    total_elapsed.as_secs_f64() * 1000.0
-                ),
-            );
+            if logging::filter_perf_trace_enabled()
+                || total_elapsed >= std::time::Duration::from_millis(16)
+            {
+                logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[5/5] TOTAL_TIME '{}': {:.2}ms (input->grouped)",
+                        self.computed_filter_text,
+                        total_elapsed.as_secs_f64() * 1000.0
+                    ),
+                );
+            }
         }
 
         self.main_menu_result_caches.clone_grouped_results()

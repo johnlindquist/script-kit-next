@@ -603,7 +603,7 @@ impl ScriptListApp {
         // Capture item count for deferred state update
         let item_count_for_log = grouped_items.len();
 
-        if state_changed {
+        if state_changed && logging::filter_perf_trace_enabled() {
             logging::log(
                 "RENDER_PERF",
                 &format!(

@@ -168,7 +168,7 @@ pub fn fuzzy_search_unified_all_with_skills(
     let skills_elapsed = skills_start.elapsed();
 
     // Log search timing breakdown
-    if !query.is_empty() {
+    if !query.is_empty() && logging::filter_perf_trace_enabled() {
         logging::log(
             "FILTER_PERF",
             &format!(
@@ -242,16 +242,20 @@ pub fn fuzzy_search_unified_all_with_skills(
     if !query.is_empty() {
         let sort_elapsed = sort_start.elapsed();
         let total_elapsed = total_start.elapsed();
-        logging::log(
-            "FILTER_PERF",
-            &format!(
-                "[SEARCH_TOTAL] '{}': sort={:.2}ms total={:.2}ms ({} results)",
-                query,
-                sort_elapsed.as_secs_f64() * 1000.0,
-                total_elapsed.as_secs_f64() * 1000.0,
-                results.len()
-            ),
-        );
+        if logging::filter_perf_trace_enabled()
+            || total_elapsed >= std::time::Duration::from_millis(8)
+        {
+            logging::log(
+                "FILTER_PERF",
+                &format!(
+                    "[SEARCH_TOTAL] '{}': sort={:.2}ms total={:.2}ms ({} results)",
+                    query,
+                    sort_elapsed.as_secs_f64() * 1000.0,
+                    total_elapsed.as_secs_f64() * 1000.0,
+                    results.len()
+                ),
+            );
+        }
     }
 
     results

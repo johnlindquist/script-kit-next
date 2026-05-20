@@ -479,15 +479,17 @@ impl ScriptListApp {
                         cx.notify();
                     } else {
                         let input_received_at = std::time::Instant::now();
-                        logging::log(
-                            "FILTER_PERF",
-                            &format!(
-                                "[1/5] INPUT_CHANGE value='{}' len={} at {:?}",
-                                current_value,
-                                current_value.len(),
-                                input_received_at
-                            ),
-                        );
+                        if logging::filter_perf_trace_enabled() {
+                            logging::log(
+                                "FILTER_PERF",
+                                &format!(
+                                    "[1/5] INPUT_CHANGE value='{}' len={} at {:?}",
+                                    current_value,
+                                    current_value.len(),
+                                    input_received_at
+                                ),
+                            );
+                        }
                         this.main_menu_render_diagnostics.filter_perf_start =
                             Some(input_received_at);
                         this.handle_filter_input_change(window, cx);

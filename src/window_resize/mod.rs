@@ -181,6 +181,10 @@ pub(crate) fn log_mini_window_sizing(
     sizing: MiniMainWindowSizing,
     target_height_px: f32,
 ) {
+    if !crate::logging::filter_perf_trace_enabled() {
+        return;
+    }
+
     info!(
         target: "MINI_WINDOW",
         ?reason,

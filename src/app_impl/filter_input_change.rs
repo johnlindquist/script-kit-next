@@ -46,24 +46,26 @@ impl ScriptListApp {
         let new_text_safe = logging::log_user_value(&new_text);
         let canonical_filter_safe = logging::log_user_value(&self.filter_text);
 
-        tracing::info!(
-            target: "script_kit::do_in_trace",
-            event = "DO_IN_TRACE filter_change.entry",
-            current_view = ?self.current_view,
-            new_text_preview = %new_text_safe,
-            new_text_bytes = new_text_safe.raw_bytes,
-            new_text_safe_bytes = new_text_safe.safe_bytes,
-            new_text_truncated = new_text_safe.truncated,
-            canonical_filter_preview = %canonical_filter_safe,
-            canonical_filter_bytes = canonical_filter_safe.raw_bytes,
-            canonical_filter_safe_bytes = canonical_filter_safe.safe_bytes,
-            canonical_filter_truncated = canonical_filter_safe.truncated,
-            shared_filter_view,
-            show_actions_popup = self.show_actions_popup,
-            pending_filter_sync = self.pending_filter_sync,
-            input_mode = ?self.input_mode,
-            "DO_IN_TRACE filter_change.entry"
-        );
+        if logging::filter_perf_trace_enabled() {
+            tracing::info!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE filter_change.entry",
+                current_view = ?self.current_view,
+                new_text_preview = %new_text_safe,
+                new_text_bytes = new_text_safe.raw_bytes,
+                new_text_safe_bytes = new_text_safe.safe_bytes,
+                new_text_truncated = new_text_safe.truncated,
+                canonical_filter_preview = %canonical_filter_safe,
+                canonical_filter_bytes = canonical_filter_safe.raw_bytes,
+                canonical_filter_safe_bytes = canonical_filter_safe.safe_bytes,
+                canonical_filter_truncated = canonical_filter_safe.truncated,
+                shared_filter_view,
+                show_actions_popup = self.show_actions_popup,
+                pending_filter_sync = self.pending_filter_sync,
+                input_mode = ?self.input_mode,
+                "DO_IN_TRACE filter_change.entry"
+            );
+        }
 
         // Skip filter updates when actions popup is open
         // (text input should go to actions dialog search, not main filter)
@@ -834,7 +836,7 @@ impl ScriptListApp {
 
         // Log handler timing
         let handler_elapsed = handler_start.elapsed();
-        if handler_elapsed.as_millis() > 5 {
+        if handler_elapsed >= std::time::Duration::from_millis(16) {
             logging::log(
                 "FILTER_PERF",
                 &format!(

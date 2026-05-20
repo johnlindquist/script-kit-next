@@ -49,14 +49,20 @@ impl ScriptListApp {
         self.scroll_to_selected_if_needed(reason);
 
         // Preflight depends on filter + selection and must stay out of render().
-        self.rebuild_main_window_preflight_if_needed();
+        // The immediate typing path restores root-file handoff selection after
+        // reconciliation, so it rebuilds once after the final row is known.
+        if reason != "filter_immediate" {
+            self.rebuild_main_window_preflight_if_needed();
+        }
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
-        logging::log(
-            "FILTER_PERF",
-            &format!("[2/5] APPLY_FILTER value='{}' len={}", value, value.len()),
-        );
+        if logging::filter_perf_trace_enabled() {
+            logging::log(
+                "FILTER_PERF",
+                &format!("[2/5] APPLY_FILTER value='{}' len={}", value, value.len()),
+            );
+        }
         if self.computed_filter_text != value {
             let update_start = std::time::Instant::now();
             let selection_before = if matches!(self.current_view, AppView::ScriptList) {
@@ -72,19 +78,23 @@ impl ScriptListApp {
             if let Some(snapshot) = selection_before.as_ref() {
                 if self.restore_root_file_handoff_selection_from_snapshot(snapshot) {
                     self.scroll_to_selected_if_needed("filter_immediate_restore_root_file_handoff");
-                    self.rebuild_main_window_preflight_if_needed();
                 }
             }
+            self.rebuild_main_window_preflight_if_needed();
             self.update_window_size();
             let update_elapsed = update_start.elapsed();
-            logging::log(
-                "FILTER_PERF",
-                &format!(
-                    "[3/5] APPLY_FILTER_DONE in {:.2}ms for '{}'",
-                    update_elapsed.as_secs_f64() * 1000.0,
-                    value
-                ),
-            );
+            if logging::filter_perf_trace_enabled()
+                || update_elapsed >= std::time::Duration::from_millis(8)
+            {
+                logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[3/5] APPLY_FILTER_DONE in {:.2}ms for '{}'",
+                        update_elapsed.as_secs_f64() * 1000.0,
+                        value
+                    ),
+                );
+            }
             cx.notify();
         }
     }
