@@ -2017,7 +2017,13 @@ impl ScriptListApp {
             .iter()
             .filter(|item| matches!(item, crate::list_item::GroupedListItem::Item(_)))
             .count();
-        let total_count = total_rows + source_statuses.len() + 2;
+        let handler_form = self
+            .menu_syntax_main_hint_snapshot(&self.filter_text, false)
+            .and_then(|snapshot| snapshot.form);
+        let handler_form_field_count = handler_form
+            .as_ref()
+            .map_or(0usize, |form| form.fields.len());
+        let total_count = total_rows + source_statuses.len() + handler_form_field_count + 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
         Self::push_limited_element(
@@ -2034,6 +2040,30 @@ impl ScriptListApp {
             limit,
             protocol::ElementInfo::list("results", total_rows),
         );
+
+        if let Some(form) = handler_form.as_ref() {
+            for (index, field) in form.fields.iter().enumerate() {
+                if elements.len() >= limit {
+                    break;
+                }
+                elements.push(protocol::ElementInfo {
+                    semantic_id: format!("handler-form:{}:{}", form.target, field.id),
+                    element_type: protocol::ElementType::Input,
+                    text: Some(field.label.clone()),
+                    value: Some(field.value.clone()),
+                    selected: Some(false),
+                    focused: Some(field.focused && self.menu_syntax_form_input_active),
+                    index: Some(index),
+                    role: Some("textbox".to_string()),
+                    kind: Some("handlerFormField".to_string()),
+                    source: Some("menuSyntaxMainHint.form".to_string()),
+                    source_name: Some(form.target.clone()),
+                    selectable: Some(false),
+                    status_kind: None,
+                    action_disabled: None,
+                });
+            }
+        }
 
         let mut row_index = 0usize;
         for (grouped_index, item) in grouped_items.iter().enumerate() {

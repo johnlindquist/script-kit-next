@@ -446,12 +446,45 @@ fn handler_form_control_keys_preserve_standard_form_navigation() {
         .expect("printable key handler must still exist");
     let control_body = &app[control_start..key_input_start];
     assert!(
-        control_body.contains("\"up\" | \"arrowup\"")
+        control_body.contains("is_menu_syntax_form_tab_key")
+            && control_body.contains("focus_previous_menu_syntax_form_field")
+            && control_body.contains("focus_next_menu_syntax_form_field")
+            && control_body.contains("\"up\" | \"arrowup\"")
             && control_body.contains("\"down\" | \"arrowdown\"")
             && control_body.contains("\"enter\" | \"return\"")
-            && control_body.contains("\"escape\" | \"esc\"")
-            && !control_body.contains("\"tab\""),
-        "Arrow/Enter/Escape may control form suggestions, but Tab must remain normal form traversal"
+            && control_body.contains("\"escape\" | \"esc\""),
+        "Tab/Shift+Tab must be consumed as active-field form navigation while Arrow/Enter/Escape keep controlling form suggestions"
+    );
+    let tab_pos = control_body
+        .find("is_menu_syntax_form_tab_key")
+        .expect("Tab control check must exist");
+    let snapshot_pos = control_body
+        .find("menu_syntax_main_hint_snapshot")
+        .expect("suggestion snapshot lookup must still exist");
+    assert!(
+        tab_pos < snapshot_pos,
+        "Tab must be consumed before suggestion snapshot lookup so it cannot fall through as printable text"
+    );
+
+    let move_start = app
+        .find("fn move_menu_syntax_form_focus(")
+        .expect("focus move helper must exist");
+    let key_body = &app[key_input_start..move_start];
+    assert!(
+        key_body.contains("handle_menu_syntax_form_control_key_input(")
+            && key_body.contains("key_char")
+            && key_body.contains("is_control"),
+        "handler form text input must route control keys first and reject literal control characters like tab"
+    );
+
+    let elements = read("src/app_layout/collect_elements.rs");
+    assert!(
+        elements.contains("handler-form:{}:{}")
+            && elements.contains("menuSyntaxMainHint.form")
+            && elements.contains("handlerFormField")
+            && elements.contains("field.focused && self.menu_syntax_form_input_active")
+            && elements.contains("field.value.clone()"),
+        "getElements must expose focused handler form fields so DevTools can prove Tab focus movement"
     );
 
     let state = read("src/main_sections/app_state.rs");
