@@ -20,7 +20,7 @@ const FOOTER_HINT_PADDING_X: f64 = 4.0;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_PADDING_Y: f64 = 2.0;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_RADIUS: f64 = 4.0;
+const FOOTER_HINT_RADIUS: f64 = crate::ui::chrome::TAHOE_CHROME_METRICS.control_sm_radius as f64;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_FONT_SIZE: f64 = 12.5;
 #[cfg(target_os = "macos")]
@@ -430,10 +430,7 @@ unsafe fn ensure_main_footer_host(ns_window: id) -> bool {
     }
 
     let content_bounds: NSRect = msg_send![content_view, bounds];
-    let footer_frame = NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(content_bounds.size.width, footer_height()),
-    );
+    let footer_frame = footer_effect_frame(content_bounds.size.width);
 
     let footer_cls = footer_effect_view_class();
     let footer_view: id = msg_send![footer_cls, alloc];
@@ -601,23 +598,23 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
     let _: () = msg_send![footer_view, setEmphasized: is_dark];
     let _: () = msg_send![footer_view, setNeedsDisplay: YES];
 
-    let footer_frame = NSRect::new(
-        NSPoint::new(0.0, 0.0),
-        NSSize::new(content_bounds.size.width, footer_height()),
-    );
+    let footer_frame = footer_effect_frame(content_bounds.size.width);
     let _: () = msg_send![footer_view, setFrame: footer_frame];
 
     let footer_layer: id = msg_send![footer_view, layer];
     if footer_layer != nil {
-        let _: () = msg_send![footer_layer, setCornerRadius: 0.0_f64];
+        let _: () = msg_send![
+            footer_layer,
+            setCornerRadius: crate::ui::chrome::TAHOE_CHROME_METRICS.panel_radius as f64
+        ];
         let _: () = msg_send![footer_layer, setMasksToBounds: YES];
     }
 
     let divider_view = find_subview_by_identifier(footer_view, FOOTER_DIVIDER_ID);
     if divider_view != nil {
         let divider_frame = NSRect::new(
-            NSPoint::new(0.0, footer_height() - 1.0),
-            NSSize::new(content_bounds.size.width, 1.0),
+            NSPoint::new(0.0, footer_frame.size.height - 1.0),
+            NSSize::new(footer_frame.size.width, 1.0),
         );
         let _: () = msg_send![divider_view, setFrame: divider_frame];
         let divider_layer: id = msg_send![divider_view, layer];
@@ -727,10 +724,32 @@ fn footer_height() -> f64 {
 }
 
 #[cfg(target_os = "macos")]
+fn footer_effect_frame(width: f64) -> cocoa::foundation::NSRect {
+    let inset_x = crate::ui::chrome::TAHOE_CHROME_METRICS.footer_inset_x as f64;
+    let inset_y = crate::ui::chrome::TAHOE_CHROME_METRICS.footer_inset_y as f64;
+    cocoa::foundation::NSRect::new(
+        cocoa::foundation::NSPoint::new(inset_x, inset_y),
+        cocoa::foundation::NSSize::new(
+            (width - inset_x * 2.0).max(0.0),
+            footer_effect_content_height(),
+        ),
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn footer_effect_content_height() -> f64 {
+    let inset_y = crate::ui::chrome::TAHOE_CHROME_METRICS.footer_inset_y as f64;
+    (footer_height() - inset_y).max(0.0)
+}
+
+#[cfg(target_os = "macos")]
 fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
     cocoa::foundation::NSRect::new(
         cocoa::foundation::NSPoint::new(FOOTER_HINT_SIDE_INSET, 0.0),
-        cocoa::foundation::NSSize::new(width - (FOOTER_HINT_SIDE_INSET * 2.0), footer_height()),
+        cocoa::foundation::NSSize::new(
+            width - (FOOTER_HINT_SIDE_INSET * 2.0),
+            footer_effect_content_height(),
+        ),
     )
 }
 
@@ -738,7 +757,7 @@ fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
 fn footer_left_info_frame(width: f64) -> cocoa::foundation::NSRect {
     cocoa::foundation::NSRect::new(
         cocoa::foundation::NSPoint::new(FOOTER_HINT_SIDE_INSET, 0.0),
-        cocoa::foundation::NSSize::new(width / 2.0, footer_height()),
+        cocoa::foundation::NSSize::new(width / 2.0, footer_effect_content_height()),
     )
 }
 
@@ -1146,7 +1165,10 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let container: id = msg_send![class!(NSView), alloc];
     let container: id = msg_send![
         container,
-        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(0.0, footer_effect_content_height())
+        )
     ];
     if container == nil {
         return nil;
@@ -1176,7 +1198,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let item_width = footer_hint_slot_width(button_cfg.action)
         .max(min_content_width)
         .max(intrinsic_width);
-    let item_height = footer_height();
+    let item_height = footer_effect_content_height();
     let content_height = key_size.height.max(label_size.height) + (FOOTER_HINT_PADDING_Y * 2.0);
     let content_y = ((item_height - content_height) / 2.0).round();
     let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();

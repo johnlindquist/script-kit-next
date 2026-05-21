@@ -81,7 +81,7 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
         selection_opacity: 1.0,
         hover_opacity: 1.0,
         row_height: 30.0,
-        row_radius: 6.0,
+        row_radius: crate::ui::chrome::TAHOE_CHROME_METRICS.action_row_radius,
         shortcut_visible: true,
         mono_font: false,
         prefix_marker: None,
@@ -4133,7 +4133,9 @@ impl Render for ActionsDialog {
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height including footer
             .bg(main_bg) // Always apply background with vibrancy-aware opacity
-            .rounded(px(0.0))
+            .rounded(px(
+                crate::ui::chrome::TAHOE_CHROME_METRICS.popup_shell_radius
+            ))
             .overflow_hidden()
             .text_color(container_text)
             .text_color(container_text)

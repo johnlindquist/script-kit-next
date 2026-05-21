@@ -224,6 +224,9 @@ mod timestamp_formatting_contract;
 #[path = "source_audits/theme_chooser_single_select_controls.rs"]
 mod theme_chooser_single_select_controls;
 
+#[path = "source_audits/tahoe_liquid_glass_contract.rs"]
+mod tahoe_liquid_glass_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.
