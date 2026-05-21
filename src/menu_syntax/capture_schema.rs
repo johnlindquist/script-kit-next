@@ -113,13 +113,17 @@ fn url_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
     if !payload.target.eq_ignore_ascii_case("link") {
         return false;
     }
-    if !matches!(
-        first_app_owned_operation_word(&payload.body),
-        Some("update" | "delete")
-    ) {
-        return false;
+    if let Ok(draft) = crate::menu_syntax::parse_link_scriptlet_capture(payload) {
+        return matches!(
+            draft.operation,
+            crate::menu_syntax::LinkScriptletOperation::Update
+                | crate::menu_syntax::LinkScriptletOperation::Delete
+        ) && matches!(
+            draft.lookup,
+            Some(crate::menu_syntax::LinkLookup::SelectedRef(_))
+        );
     }
-    has_resolved_object_ref(payload, Some(CaptureObjectKind::Link))
+    false
 }
 
 fn snippet_trigger_or_selection_requirement_is_satisfied(payload: &CaptureInvocation) -> bool {
@@ -173,7 +177,7 @@ fn selected_link_ref_url(payload: &CaptureInvocation) -> Option<String> {
         return None;
     }
     if !matches!(
-        first_app_owned_operation_word(&payload.body),
+        first_capture_operation_word_from_raw(&payload.raw),
         Some("update" | "delete")
     ) {
         return None;
@@ -186,6 +190,12 @@ fn selected_link_ref_url(payload: &CaptureInvocation) -> Option<String> {
                 && object_ref.kind == CaptureObjectKind::Link
         })
         .map(|object_ref| object_ref.id)
+}
+
+fn first_capture_operation_word_from_raw(raw: &str) -> Option<&'static str> {
+    let rest = raw.strip_prefix(';').or_else(|| raw.strip_prefix('+'))?;
+    let (_, body) = rest.split_once(char::is_whitespace)?;
+    first_app_owned_operation_word(body)
 }
 
 fn first_app_owned_operation_word(body: &str) -> Option<&'static str> {
@@ -297,6 +307,16 @@ pub fn builtin_schema(target: &str) -> Option<CaptureFieldSchema> {
                 FieldRequirement::Body,
                 FieldRequirement::Tag,
                 FieldRequirement::Kv("title".to_string()),
+                FieldRequirement::Kv("description".to_string()),
+                FieldRequirement::Kv("alias".to_string()),
+                FieldRequirement::Kv("shortcut".to_string()),
+                FieldRequirement::Kv("author".to_string()),
+                FieldRequirement::Kv("icon".to_string()),
+                FieldRequirement::Kv("hidden".to_string()),
+                FieldRequirement::Kv("background".to_string()),
+                FieldRequirement::Kv("system".to_string()),
+                FieldRequirement::Kv("tags".to_string()),
+                FieldRequirement::Kv("watch".to_string()),
                 FieldRequirement::ObjectSelection,
             ],
             forbidden: vec![FieldRequirement::Priority, FieldRequirement::Duration],
@@ -685,6 +705,24 @@ mod tests {
         inv.kv.push(("title".to_string(), "New".to_string()));
 
         assert_eq!(validate(&inv, &schema), ValidationResult::Ready);
+    }
+
+    #[test]
+    fn link_schema_requires_url_and_accepts_link_metadata_fields() {
+        let schema = builtin_schema("link").expect("link schema");
+
+        assert!(schema.required.contains(&FieldRequirement::Url));
+        assert!(schema.optional.contains(&FieldRequirement::Body));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("title".to_string())));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("description".to_string())));
+        assert!(schema
+            .optional
+            .contains(&FieldRequirement::Kv("tags".to_string())));
+        assert!(schema.optional.contains(&FieldRequirement::ObjectSelection));
     }
 
     #[test]

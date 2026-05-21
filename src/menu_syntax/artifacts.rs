@@ -370,15 +370,37 @@ pub fn search_root_object_candidates_in_sk_path(
                 .collect()
         }
         crate::menu_syntax::CaptureObjectKind::Note => Vec::new(),
-        crate::menu_syntax::CaptureObjectKind::Link => search_jsonl_object_candidates(
-            sk_path,
-            CaptureArtifactKind::Bookmark,
-            kind,
-            query,
-            max_results,
-            "url",
-            "title",
-        ),
+        crate::menu_syntax::CaptureObjectKind::Link => {
+            let needle = normalize_match_text(query);
+            let mut candidates =
+                crate::scriptlets::link_markdown_store::link_object_candidates_from_markdown(
+                    sk_path,
+                )
+                .unwrap_or_default();
+            candidates.extend(search_jsonl_object_candidates(
+                sk_path,
+                CaptureArtifactKind::Bookmark,
+                kind,
+                query,
+                max_results,
+                "url",
+                "title",
+            ));
+            candidates
+                .into_iter()
+                .filter(|candidate| {
+                    if needle.is_empty() {
+                        return true;
+                    }
+                    let haystack = format!(
+                        "{} {} {}",
+                        candidate.id, candidate.label, candidate.subtitle
+                    );
+                    normalize_match_text(&haystack).contains(&needle)
+                })
+                .take(max_results)
+                .collect()
+        }
         crate::menu_syntax::CaptureObjectKind::Snippet => {
             let needle = normalize_match_text(query);
             crate::scriptlets::snippet_markdown_store::snippet_object_candidates_from_markdown(

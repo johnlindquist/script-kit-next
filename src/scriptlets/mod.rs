@@ -15,6 +15,7 @@
 //! - Variable substitution with named inputs, positional args, and conditionals
 
 // --- merged from part_000.rs ---
+pub mod link_markdown_store;
 pub mod snippet_markdown_store;
 
 use crate::metadata_parser::TypedMetadata;

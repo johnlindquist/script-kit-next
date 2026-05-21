@@ -132,6 +132,8 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
     };
     if invocation.target.eq_ignore_ascii_case("snippet") {
         super::snippet_scriptlet::normalize_snippet_capture_invocation(&mut invocation);
+    } else if invocation.target.eq_ignore_ascii_case("link") {
+        super::link_scriptlet::normalize_link_capture_invocation(&mut invocation);
     }
     CaptureParse::Ok(invocation)
 }

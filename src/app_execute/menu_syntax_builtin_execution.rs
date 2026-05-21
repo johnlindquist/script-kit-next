@@ -208,117 +208,26 @@ fn write_app_owned_link_capture_in_sk_path(
     invocation: &crate::menu_syntax::CaptureInvocation,
     sk_path: &std::path::Path,
 ) -> Result<String, String> {
-    let object_refs = crate::menu_syntax::payload::object_refs_for_raw_capture(
-        &invocation.target,
-        &invocation.raw,
-    );
-    let (operation, body) = split_operation_word(
-        &invocation.body,
-        &["add", "create", "save", "update", "remove", "rm", "delete"],
-    );
-    let operation = match operation.as_deref() {
-        Some("remove" | "rm" | "delete") => "delete",
-        Some("update") => "update",
-        _ => "create",
+    let draft = crate::menu_syntax::parse_link_scriptlet_capture(invocation)?;
+    let outcome = match draft.operation {
+        crate::menu_syntax::LinkScriptletOperation::Create
+        | crate::menu_syntax::LinkScriptletOperation::Update => {
+            crate::scriptlets::link_markdown_store::upsert_link_section(sk_path, &draft)?
+        }
+        crate::menu_syntax::LinkScriptletOperation::Delete => {
+            crate::scriptlets::link_markdown_store::delete_link_section(sk_path, &draft)?
+        }
     };
-    let selected_link = primary_resolved_object_ref(
-        &object_refs,
-        crate::menu_syntax::CaptureObjectKind::Link,
-    )?;
-    let explicit_url = invocation.url.clone().or_else(|| first_http_url(&body));
-    let selected_url = selected_link.as_ref().map(|object_ref| object_ref.id.clone());
-    if let Some(selected_url) = selected_url.as_deref() {
-        if !is_http_url(selected_url) {
-            return Err(format!(
-                "URL must start with http:// or https://, got `{selected_url}`"
-            ));
+    Ok(match outcome.operation {
+        crate::scriptlets::link_markdown_store::LinkStoreOperation::Created => {
+            "Saved link".to_string()
         }
-    }
-    if let (Some(explicit_url), Some(selected_url)) = (explicit_url.as_deref(), selected_url.as_deref()) {
-        if explicit_url != selected_url {
-            return Err("Selected link does not match the explicit URL.".to_string());
+        crate::scriptlets::link_markdown_store::LinkStoreOperation::Updated => {
+            "Updated link".to_string()
         }
-    }
-    let url = explicit_url
-        .or_else(|| matches!(operation, "update" | "delete").then(|| selected_url).flatten())
-        .ok_or_else(|| "Add a valid http:// or https:// URL.".to_string())?;
-    let existing = read_active_app_owned_jsonl_record_by_key_in_sk_path(
-        sk_path,
-        "bookmarks.jsonl",
-        "url",
-        &url,
-    );
-    if matches!(operation, "update" | "delete") && existing.is_none() {
-        return Err("Link not found.".to_string());
-    }
-    let kv = invocation
-        .kv
-        .iter()
-        .map(|(k, v)| (k.to_ascii_lowercase(), v.clone()))
-        .collect::<std::collections::HashMap<_, _>>();
-    let title_from_body = body
-        .split_whitespace()
-        .filter(|part| !part.eq(&url) && !part.starts_with('@'))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let title = kv
-        .get("title")
-        .cloned()
-        .or_else(|| {
-            (!title_from_body.trim().is_empty()).then(|| title_from_body.trim().to_string())
-        })
-        .or_else(|| {
-            existing
-                .as_ref()
-                .and_then(|value| value.get("title"))
-                .and_then(|value| value.as_str())
-                .map(ToString::to_string)
-        });
-    let now = chrono::Local::now().to_rfc3339();
-    let record = serde_json::json!({
-        "schema": "menu-syntax.bookmark.v1",
-        "kind": "bookmark",
-        "id": existing
-            .as_ref()
-            .and_then(|value| value.get("id"))
-            .and_then(|value| value.as_str())
-            .map(ToString::to_string)
-            .unwrap_or_else(|| app_owned_id("bookmark")),
-        "url": url,
-        "title": title
-            .filter(|title| !title.trim().is_empty())
-            .map(|title| serde_json::Value::String(title.trim().to_string()))
-            .unwrap_or(serde_json::Value::Null),
-        "body": existing
-            .as_ref()
-            .and_then(|value| value.get("body"))
-            .cloned()
-            .unwrap_or(serde_json::Value::Null),
-        "tags": if invocation.tags.is_empty() {
-            existing
-                .as_ref()
-                .and_then(|value| value.get("tags"))
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!([]))
-        } else {
-            serde_json::to_value(&invocation.tags).unwrap_or_else(|_| serde_json::json!([]))
-        },
-        "createdAt": existing
-            .as_ref()
-            .and_then(|value| value.get("createdAt"))
-            .and_then(|value| value.as_str())
-            .map(ToString::to_string)
-            .unwrap_or_else(|| now.clone()),
-        "updatedAt": now,
-        "deletedAt": if operation == "delete" { serde_json::Value::String(now.clone()) } else { serde_json::Value::Null },
-        "objectRefs": object_refs,
-        "source": app_owned_source(invocation, "link", operation),
-    });
-    upsert_app_owned_jsonl_by_key_in_sk_path(sk_path, "bookmarks.jsonl", "url", &url, &record)?;
-    Ok(match operation {
-        "update" => "Updated link".to_string(),
-        "delete" => "Removed link".to_string(),
-        _ => "Saved link".to_string(),
+        crate::scriptlets::link_markdown_store::LinkStoreOperation::Deleted => {
+            "Removed link".to_string()
+        }
     })
 }
 
@@ -760,29 +669,42 @@ mod menu_syntax_builtin_execution_tests {
     }
 
     #[test]
-    fn link_update_uses_selected_link_ref_when_url_is_omitted() {
+    fn link_create_writes_main_plugin_links_markdown() {
         let tmp = TempDir::new().expect("tempdir");
-        let dir = tmp.path().join("menu-syntax");
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        std::fs::write(
-            dir.join("bookmarks.jsonl"),
-            r#"{"schema":"menu-syntax.bookmark.v1","kind":"bookmark","id":"bookmark_existing","url":"https://example.com","title":"Old Example","tags":["docs"],"createdAt":"2026-05-20T10:00:00Z","updatedAt":"2026-05-20T10:00:00Z","deletedAt":null}
-"#,
+        let invocation = invocation(";link https://example.com Example description:Docs #docs");
+        let message =
+            write_app_owned_link_capture_in_sk_path(&invocation, tmp.path()).expect("create link");
+
+        assert_eq!(message, "Saved link");
+        let content = std::fs::read_to_string(
+            crate::scriptlets::link_markdown_store::links_markdown_path(tmp.path()),
         )
-        .expect("seed bookmark");
+        .expect("read links.md");
+        assert!(content.contains("# Links"));
+        assert!(content.contains("## Example"));
+        assert!(content.contains(r#""url": "https://example.com""#));
+        assert!(content.contains(r#""tool": "open""#));
+        assert!(!tmp.path().join("menu-syntax/bookmarks.jsonl").exists());
+    }
+
+    #[test]
+    fn link_update_selected_markdown_ref_updates_existing_section() {
+        let tmp = TempDir::new().expect("tempdir");
+        let create = invocation(";link https://example.com Old Example #docs");
+        write_app_owned_link_capture_in_sk_path(&create, tmp.path()).expect("create link");
 
         let invocation = invocation(r#";link update @link:https://example.com title:"New Example""#);
         let message =
             write_app_owned_link_capture_in_sk_path(&invocation, tmp.path()).expect("update link");
 
         assert_eq!(message, "Updated link");
-        let rows = read_jsonl(&tmp, "bookmarks.jsonl");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["url"], "https://example.com");
-        assert_eq!(rows[0]["title"], "New Example");
-        assert_eq!(rows[0]["tags"][0], "docs");
-        assert_eq!(rows[0]["source"]["operation"], "update");
-        assert_eq!(rows[0]["objectRefs"][0]["id"], "https://example.com");
+        let sections = crate::scriptlets::link_markdown_store::load_link_sections(
+            &crate::scriptlets::link_markdown_store::links_markdown_path(tmp.path()),
+        )
+        .expect("sections");
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].url.as_deref(), Some("https://example.com"));
+        assert_eq!(sections[0].title, "New Example");
     }
 
     #[test]
@@ -793,7 +715,7 @@ mod menu_syntax_builtin_execution_tests {
             .expect_err("missing selected link should fail");
 
         assert_eq!(err, "Link not found.");
-        let path = tmp.path().join("menu-syntax").join("bookmarks.jsonl");
+        let path = crate::scriptlets::link_markdown_store::links_markdown_path(tmp.path());
         assert!(!path.exists(), "missing selected link must not create a row");
     }
 

@@ -18,6 +18,7 @@ pub mod handler_index;
 pub mod has_fields;
 pub mod history;
 pub mod ics;
+pub mod link_scriptlet;
 pub mod main_hint;
 pub mod metadata;
 pub mod mode;
@@ -105,6 +106,12 @@ pub use history::{
     read_tag_pool, record_argv, record_tags, ArgvFrequency, ArgvHistoryEntry, CommandHistoryStore,
     HistoryStore, TagFrequency, TagHistoryEntry, ValueFrequency, ValueHistoryEntry,
     ARGV_HISTORY_FILENAME, COMMANDS_DIR, KEYS_DIR, KEY_HISTORY_SUFFIX, TAG_HISTORY_FILENAME,
+};
+#[allow(unused_imports)]
+pub use link_scriptlet::{
+    active_link_capture_field_selector_for_input, canonical_link_metadata_key,
+    link_metadata_field_specs, normalize_link_capture_invocation, parse_link_scriptlet_capture,
+    LinkLookup, LinkScriptletDraft, LinkScriptletOperation,
 };
 #[allow(unused_imports)]
 pub use main_hint::{

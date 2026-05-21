@@ -546,6 +546,8 @@ fn form_field_for_requirement(
             "body".to_string(),
             if schema.target.eq_ignore_ascii_case("snippet") {
                 "Snippet".to_string()
+            } else if schema.target.eq_ignore_ascii_case("link") {
+                "Title".to_string()
             } else {
                 "Task".to_string()
             },
@@ -553,6 +555,8 @@ fn form_field_for_requirement(
             invocation.body.clone(),
             if schema.target.eq_ignore_ascii_case("snippet") {
                 "Text to paste/expand".to_string()
+            } else if schema.target.eq_ignore_ascii_case("link") {
+                "Optional link title".to_string()
             } else {
                 format!("What should ;{} capture?", schema.target)
             },
@@ -1134,6 +1138,39 @@ mod tests {
             .iter()
             .any(|field| field.id == "kv:description"));
         assert!(!snapshot.fields.iter().any(|field| field.id == "trigger"));
+        assert!(snapshot.can_submit);
+    }
+
+    #[test]
+    fn link_form_labels_body_as_title_and_exposes_metadata_fields() {
+        let schema = builtin_schema("link").expect("link schema");
+        let invocation = todo_invocation(";link https://example.com Example description:Docs");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            0,
+            &validation,
+            MenuSyntaxFormSuggestionPools::default(),
+        );
+
+        let body = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "body")
+            .expect("body field");
+        assert_eq!(body.label, "Title");
+        assert_eq!(body.placeholder, "Optional link title");
+        assert!(snapshot
+            .fields
+            .iter()
+            .any(|field| field.id == "url" && field.required));
+        assert!(snapshot.fields.iter().any(|field| field.id == "kv:title"));
+        assert!(snapshot
+            .fields
+            .iter()
+            .any(|field| field.id == "kv:description"));
+        assert!(snapshot.fields.iter().any(|field| field.id == "kv:tags"));
         assert!(snapshot.can_submit);
     }
 }
