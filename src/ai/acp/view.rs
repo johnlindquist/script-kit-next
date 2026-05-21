@@ -769,7 +769,7 @@ impl AcpChatView {
             dot_status: self.footer_dot_status(cx),
             model_display: thread.selected_model_display().to_string(),
             status_text: self.footer_status_text(cx),
-            buttons: self.footer_buttons_for_thread(&thread),
+            buttons: self.footer_buttons_for_thread(thread),
         }
     }
 
@@ -1063,8 +1063,7 @@ impl AcpChatView {
         let status_text = snapshot.status_text;
         let hints = snapshot
             .buttons
-            .iter()
-            .cloned()
+            .into_iter()
             .map(|button| {
                 let button_view = weak_view.clone();
                 crate::components::SelectableHint::new(
@@ -2744,7 +2743,7 @@ impl AcpChatView {
                 let thread_ref = thread.read(cx);
                 let activity = thread_ref.awaiting_first_assistant_text();
                 let msgs = thread_ref.messages.clone();
-                let st = thread_ref.status.clone();
+                let st = thread_ref.status;
                 let md = thread_ref.selected_model_display().to_string();
                 let ready = thread_ref
                     .messages
@@ -4351,8 +4350,6 @@ impl AcpChatView {
             )
             .into_any_element()
     }
-
-    /// Render a virtual assistant row before the first text delta arrives.
 
     fn render_permission_section(title: &'static str, text: String) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
@@ -6070,7 +6067,7 @@ impl AcpChatView {
         }
 
         let thread_ref = self.live_thread().read(cx);
-        let status = thread_ref.status.clone();
+        let status = thread_ref.status;
         let model_name = thread_ref.selected_model_display().to_string();
 
         let toolbar = cx.new(|cx| AcpToolbar::new(status, model_name, cx));
@@ -7432,7 +7429,7 @@ impl AcpChatView {
                         thread.status,
                         AcpThreadStatus::Idle | AcpThreadStatus::Error
                     )
-                    && Self::has_pastable_assistant_response(&thread)
+                    && Self::has_pastable_assistant_response(thread)
             };
             if should_paste_response {
                 self.trigger_paste_response_requested(window, cx);

@@ -41,12 +41,14 @@ pub struct AppInfo {
     pub icon: Option<DecodedIcon>,
 }
 
+#[allow(dead_code)]
 pub(crate) struct AppIconLookup {
     by_bundle_id: HashMap<String, DecodedIcon>,
     by_path: HashMap<PathBuf, DecodedIcon>,
     by_name: HashMap<String, DecodedIcon>,
 }
 
+#[allow(dead_code)]
 impl AppIconLookup {
     pub(crate) fn from_apps(apps: &[AppInfo]) -> Self {
         let mut by_bundle_id = HashMap::new();

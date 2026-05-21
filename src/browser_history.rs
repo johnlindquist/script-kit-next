@@ -1124,7 +1124,7 @@ fn load_history_from_db(
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("History");
-    let copied_db = copy_sqlite_db_snapshot(db_path, &browser.app_name, profile)?;
+    let copied_db = copy_sqlite_db_snapshot(db_path, browser.app_name, profile)?;
     let conn = Connection::open_with_flags(
         &copied_db,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI,
