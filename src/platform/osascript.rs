@@ -4,12 +4,11 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 
 #[cfg(target_os = "macos")]
-#[cfg(target_os = "macos")]
 static OSASCRIPT_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .expect("Failed to create tokio runtime for osascript")
+        .unwrap_or_else(|err| panic!("Failed to create tokio runtime for osascript: {err}"))
 });
 
 #[cfg(target_os = "macos")]

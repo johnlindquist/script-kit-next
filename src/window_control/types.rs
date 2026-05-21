@@ -94,19 +94,20 @@ pub(super) struct WindowInfoInit {
 }
 
 /// Provider state for root unified window search.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum RootWindowsProviderStatus {
+    #[default]
     Unknown,
-    Refreshing { count: usize },
-    Ready { count: usize },
+    Refreshing {
+        count: usize,
+    },
+    Ready {
+        count: usize,
+    },
     PermissionRequired,
-    ProviderError { message: String },
-}
-
-impl Default for RootWindowsProviderStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
+    ProviderError {
+        message: String,
+    },
 }
 
 impl WindowInfo {
@@ -177,6 +178,7 @@ impl WindowInfo {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_window_descriptor(
     app: &str,
     pid: i32,

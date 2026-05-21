@@ -19,6 +19,7 @@ pub struct AcpSetupAgentPickerState {
     pub visible_start: usize,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum AcpSetupCardEvent {
     ConfirmAgent(AcpAgentCatalogEntry),
     CancelPicker,

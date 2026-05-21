@@ -39,7 +39,7 @@ pub fn get_or_fetch_favicon(url: &str) -> Option<Arc<RenderImage>> {
             // Not fetching yet. Spawn a background thread to fetch it.
             let domain_clone = domain.to_string();
             std::thread::spawn(move || {
-                fetch_favicons_blocking(&[domain_clone.clone()]);
+                fetch_favicons_blocking(std::slice::from_ref(&domain_clone));
                 // Remove from fetching set when done
                 if let Ok(mut fetching) = FETCHING_DOMAINS.lock() {
                     fetching.remove(&domain_clone);

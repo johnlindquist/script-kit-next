@@ -466,25 +466,25 @@ fn list_core_graphics_windows_all_spaces() -> Result<Vec<CoreGraphicsWindowInfo>
             CFDictionary::<CFString, core_foundation::base::CFType>::wrap_under_get_rule(value as _)
         };
         let x = bounds_dict
-            .find(&CFString::new("X"))
+            .find(CFString::new("X"))
             .and_then(|value| unsafe {
                 core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
                     .to_f64()
             })?;
         let y = bounds_dict
-            .find(&CFString::new("Y"))
+            .find(CFString::new("Y"))
             .and_then(|value| unsafe {
                 core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
                     .to_f64()
             })?;
         let width = bounds_dict
-            .find(&CFString::new("Width"))
+            .find(CFString::new("Width"))
             .and_then(|value| unsafe {
                 core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
                     .to_f64()
             })?;
         let height = bounds_dict
-            .find(&CFString::new("Height"))
+            .find(CFString::new("Height"))
             .and_then(|value| unsafe {
                 core_foundation::number::CFNumber::wrap_under_get_rule(value.as_CFTypeRef() as _)
                     .to_f64()
