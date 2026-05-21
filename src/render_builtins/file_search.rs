@@ -1347,22 +1347,16 @@ impl ScriptListApp {
         };
         let render_empty_list_state = || {
             div()
-                .max_w(px(360.0))
-                .px(px(design_spacing.padding_lg))
+                .max_w(px(320.0))
+                .px(px(18.0))
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap(px(10.0))
+                .gap(px(8.0))
                 .child(
                     div()
-                        .w(px(56.0))
-                        .h(px(10.0))
-                        .rounded(px(5.0))
-                        .bg(rgb(accent_color)),
-                )
-                .child(
-                    div()
-                        .text_sm()
+                        .text_size(px(19.0))
+                        .line_height(px(24.0))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
                         .text_color(rgb(text_primary))
                         .text_center()
@@ -1370,8 +1364,9 @@ impl ScriptListApp {
                 )
                 .child(
                     div()
-                        .text_xs()
-                        .text_color(rgb(text_muted))
+                        .text_size(px(13.0))
+                        .line_height(px(19.0))
+                        .text_color(rgba((self.theme.colors.text.secondary << 8) | 0xD9))
                         .text_center()
                         .child(empty_subtitle),
                 )
