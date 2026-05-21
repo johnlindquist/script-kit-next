@@ -15,7 +15,6 @@ impl ScriptListApp {
         let text_secondary = self.theme.colors.text.secondary;
         let text_dimmed = self.theme.colors.text.dimmed;
         let bg_search_box = self.theme.colors.background.search_box;
-        let accent = self.theme.colors.accent.selected;
 
         let opacity = self.theme.get_opacity();
         let panel_alpha = (opacity.main * 255.0 * 0.30) as u8;
@@ -39,73 +38,55 @@ impl ScriptListApp {
 
         match selected_entry {
             Some(entry) => {
-                let mut header = div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(spacing.gap_sm))
-                    .child(
-                        div()
-                            .px(px(spacing.padding_sm))
-                            .py(px(spacing.padding_xs / 2.0))
-                            .rounded(px(visual.radius_sm))
-                            .bg(rgba(
-                                (accent << 8) | u32::from(ui_foundation::ALPHA_BORDER_SUBTLE),
-                            ))
-                            .text_xs()
-                            .text_color(rgb(accent))
-                            .child(
-                                clipboard_preview_helpers::content_type_label(&entry.content_type)
-                                    .to_string(),
-                            ),
-                    );
-
-                if entry.pinned {
-                    header = header.child(
-                        div()
-                            .px(px(spacing.padding_sm))
-                            .py(px(spacing.padding_xs / 2.0))
-                            .rounded(px(visual.radius_sm))
-                            .bg(rgba(
-                                (accent << 8) | u32::from(ui_foundation::ALPHA_TINT_SUBTLE),
-                            ))
-                            .text_xs()
-                            .text_color(rgb(accent))
-                            .child("Pinned"),
-                    );
-                }
-
                 let relative_time = clipboard_preview_helpers::relative_time(
                     chrono::Utc::now().timestamp(),
                     entry.timestamp,
                 );
                 let absolute_time = clipboard_preview_helpers::absolute_time(entry.timestamp);
+                let type_label =
+                    clipboard_preview_helpers::content_type_label(&entry.content_type).to_string();
+                let pinned_label = if entry.pinned { "Yes" } else { "No" }.to_string();
 
-                panel = panel
-                    .child(header)
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child(format!("{relative_time} \u{00b7} {absolute_time}")),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(visual.border_thin))
-                            .bg(rgba(
-                                (ui_border << 8) | u32::from(ui_foundation::ALPHA_DIVIDER),
-                            )),
-                    )
+                let info_row = |label: &'static str, value: String| {
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(spacing.gap_md))
+                        .child(div().text_xs().text_color(rgb(text_muted)).child(label))
+                        .child(div().text_xs().text_color(rgb(text_primary)).child(value))
+                };
+
+                let mut information = div()
+                    .id("clipboard-preview-information")
+                    .w_full()
+                    .flex_none()
+                    .border_t_1()
+                    .border_color(rgba(
+                        (ui_border << 8) | u32::from(ui_foundation::ALPHA_DIVIDER),
+                    ))
+                    .pt(px(spacing.padding_md))
+                    .flex()
+                    .flex_col()
+                    .gap(px(spacing.gap_sm))
                     .child(
                         div()
                             .text_xs()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_muted))
-                            .child("Preview"),
-                    );
+                            .text_color(rgb(text_secondary))
+                            .child("Information"),
+                    )
+                    .child(info_row("Type", type_label))
+                    .child(info_row(
+                        "Copied",
+                        format!("{relative_time} \u{00b7} {absolute_time}"),
+                    ))
+                    .child(info_row("Size", format!("{} bytes", entry.byte_size)))
+                    .child(info_row("Pinned", pinned_label));
 
-                match entry.content_type {
+                let content_area: AnyElement = match entry.content_type {
                     clipboard_history::ContentType::Text
                     | clipboard_history::ContentType::Link
                     | clipboard_history::ContentType::File
@@ -118,49 +99,58 @@ impl ScriptListApp {
 
                         let char_count = content.chars().count();
                         let line_count = content.lines().count().max(1);
-
-                        panel = panel
-                            .child(
-                                div()
-                                    .id("clipboard-preview-content")
-                                    .w_full()
-                                    .flex_1()
-                                    .p(px(spacing.padding_md))
-                                    .rounded(px(visual.radius_md))
-                                    .bg(rgba((bg_search_box << 8) | content_alpha))
-                                    .overflow_y_scroll()
-                                    .child(
-                                        div()
-                                            .w_full()
-                                            .font_family(typography.font_family_mono)
-                                            .text_sm()
-                                            .text_color(rgb(text_primary))
-                                            .child(content),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(text_secondary))
-                                    .child(format!(
-                                        "{} characters \u{2022} {} lines",
-                                        char_count, line_count
-                                    )),
-                            );
+                        information = information
+                            .child(info_row("Characters", char_count.to_string()))
+                            .child(info_row("Lines", line_count.to_string()));
 
                         if is_partial {
-                            panel = panel.child(
+                            information = information.child(
                                 div()
                                     .text_xs()
                                     .text_color(rgb(text_muted))
                                     .child("Showing cached preview because the full clipboard payload is unavailable."),
                             );
                         }
+
+                        div()
+                            .id("clipboard-preview-content-area")
+                            .w_full()
+                            .flex_1()
+                            .min_h(px(0.0))
+                            .p(px(spacing.padding_md))
+                            .rounded(px(visual.radius_md))
+                            .bg(rgba((bg_search_box << 8) | content_alpha))
+                            .overflow_y_scroll()
+                            .child(
+                                div()
+                                    .w_full()
+                                    .font_family(typography.font_family_mono)
+                                    .text_sm()
+                                    .text_color(rgb(text_primary))
+                                    .child(content),
+                            )
+                            .into_any_element()
                     }
                     clipboard_history::ContentType::Image => {
                         let width = entry.image_width.unwrap_or(0);
                         let height = entry.image_height.unwrap_or(0);
                         let cached_image = image_cache.get(&entry.id).cloned();
+                        let dimensions = if width > 0 && height > 0 {
+                            format!("{}×{} pixels", width, height)
+                        } else {
+                            "Unknown".to_string()
+                        };
+                        let ocr_status = entry
+                            .ocr_text
+                            .as_ref()
+                            .filter(|text| !text.is_empty())
+                            .map(|_| "Available")
+                            .unwrap_or("Not available")
+                            .to_string();
+
+                        information = information
+                            .child(info_row("Dimensions", dimensions))
+                            .child(info_row("OCR", ocr_status));
 
                         let image_container = if let Some(render_image) = cached_image {
                             let max_size: f32 = 300.0;
@@ -173,62 +163,43 @@ impl ScriptListApp {
                                 (max_size, max_size)
                             };
 
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap(px(spacing.gap_sm))
-                                .child(
-                                    gpui::img(move |_window: &mut Window, _cx: &mut App| {
-                                        Some(Ok(render_image.clone()))
-                                    })
-                                    .w(px(display_w))
-                                    .h(px(display_h))
-                                    .object_fit(gpui::ObjectFit::Contain)
-                                    .rounded(px(visual.radius_sm)),
-                                )
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(rgb(text_secondary))
-                                        .child(format!("{}×{} pixels", width, height)),
-                                )
+                            div().flex().flex_col().items_center().child(
+                                gpui::img(move |_window: &mut Window, _cx: &mut App| {
+                                    Some(Ok(render_image.clone()))
+                                })
+                                .w(px(display_w))
+                                .h(px(display_h))
+                                .object_fit(gpui::ObjectFit::Contain)
+                                .rounded(px(visual.radius_sm)),
+                            )
                         } else {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .gap(px(spacing.gap_sm))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgb(text_primary))
-                                        .child("Image preview loading"),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(text_muted))
-                                        .child(format!("{}×{} pixels", width, height)),
-                                )
+                            div().flex().flex_col().items_center().child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(text_primary))
+                                    .child("Image preview loading"),
+                            )
                         };
 
-                        panel = panel.child(
-                            div()
-                                .w_full()
-                                .flex_1()
-                                .p(px(spacing.padding_lg))
-                                .rounded(px(visual.radius_md))
-                                .bg(rgba((bg_search_box << 8) | image_bg_alpha))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .overflow_hidden()
-                                .child(image_container),
-                        );
+                        div()
+                            .id("clipboard-preview-content-area")
+                            .w_full()
+                            .flex_1()
+                            .min_h(px(0.0))
+                            .p(px(spacing.padding_lg))
+                            .rounded(px(visual.radius_md))
+                            .bg(rgba((bg_search_box << 8) | image_bg_alpha))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .overflow_hidden()
+                            .child(image_container)
+                            .into_any_element()
                     }
-                }
+                };
+
+                panel = panel.child(content_area).child(information);
             }
             None => {
                 panel = panel.child(

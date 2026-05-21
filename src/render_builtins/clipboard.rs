@@ -46,8 +46,89 @@ impl ClipboardHistoryEmptyState {
     }
 }
 
-impl ScriptListApp {
-    fn clipboard_history_matches_filter(
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ClipboardHistoryFilterQuery {
+    content_types: Vec<clipboard_history::ContentType>,
+    text: String,
+    has_structured_filter: bool,
+}
+
+impl ClipboardHistoryFilterQuery {
+    fn parse(raw: &str) -> Self {
+        let raw_lower = raw.to_lowercase();
+        let tokens: Vec<&str> = raw_lower.split_whitespace().collect();
+        let mut content_types = Vec::new();
+        let mut text_tokens = Vec::new();
+        let mut has_structured_filter = false;
+        let mut index = 0;
+
+        while index < tokens.len() {
+            let token = tokens[index];
+            if let Some(value) = token
+                .strip_prefix("type:")
+                .or_else(|| token.strip_prefix("kind:"))
+            {
+                let (value, consumed_next) = if value.is_empty() {
+                    match tokens.get(index + 1) {
+                        Some(next) => (*next, true),
+                        None => ("", false),
+                    }
+                } else {
+                    (value, false)
+                };
+
+                if let Some(content_type) = Self::parse_content_type(value) {
+                    if !content_types.contains(&content_type) {
+                        content_types.push(content_type);
+                    }
+                    has_structured_filter = true;
+                    index += if consumed_next { 2 } else { 1 };
+                    continue;
+                }
+            }
+
+            text_tokens.push(token);
+            index += 1;
+        }
+
+        let text = if has_structured_filter {
+            text_tokens.join(" ")
+        } else {
+            raw_lower
+        };
+
+        Self {
+            content_types,
+            text,
+            has_structured_filter,
+        }
+    }
+
+    fn parse_content_type(value: &str) -> Option<clipboard_history::ContentType> {
+        match value {
+            "text" | "texts" => Some(clipboard_history::ContentType::Text),
+            "image" | "images" => Some(clipboard_history::ContentType::Image),
+            "link" | "links" | "url" | "urls" => Some(clipboard_history::ContentType::Link),
+            "file" | "files" => Some(clipboard_history::ContentType::File),
+            "color" | "colors" => Some(clipboard_history::ContentType::Color),
+            _ => None,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        !self.has_structured_filter && self.text.is_empty()
+    }
+
+    fn matches(&self, entry: &clipboard_history::ClipboardEntryMeta) -> bool {
+        let type_matches =
+            self.content_types.is_empty() || self.content_types.contains(&entry.content_type);
+        let text_matches =
+            self.text.is_empty() || Self::entry_text_matches(entry, self.text.as_str());
+
+        type_matches && text_matches
+    }
+
+    fn entry_text_matches(
         entry: &clipboard_history::ClipboardEntryMeta,
         filter_lower: &str,
     ) -> bool {
@@ -59,26 +140,31 @@ impl ScriptListApp {
                 .to_lowercase()
                 .contains(filter_lower)
     }
+}
+
+impl ScriptListApp {
+    pub(crate) fn clipboard_history_visible_rows_for_entries(
+        entries: &[clipboard_history::ClipboardEntryMeta],
+        filter: &str,
+    ) -> Vec<(usize, clipboard_history::ClipboardEntryMeta)> {
+        let query = ClipboardHistoryFilterQuery::parse(filter);
+        if query.is_empty() {
+            entries.iter().cloned().enumerate().collect()
+        } else {
+            entries
+                .iter()
+                .cloned()
+                .enumerate()
+                .filter(|(_, entry)| query.matches(entry))
+                .collect()
+        }
+    }
 
     fn clipboard_history_visible_rows(
         &self,
         filter: &str,
     ) -> Vec<(usize, clipboard_history::ClipboardEntryMeta)> {
-        if filter.is_empty() {
-            self.cached_clipboard_entries
-                .iter()
-                .cloned()
-                .enumerate()
-                .collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.cached_clipboard_entries
-                .iter()
-                .cloned()
-                .enumerate()
-                .filter(|(_, entry)| Self::clipboard_history_matches_filter(entry, &filter_lower))
-                .collect()
-        }
+        Self::clipboard_history_visible_rows_for_entries(&self.cached_clipboard_entries, filter)
     }
 
     fn clipboard_history_selected_visible_row(
@@ -156,24 +242,7 @@ impl ScriptListApp {
         let image_cache = self.clipboard_image_cache.clone();
 
         // Filter entries based on current filter
-        let filtered_entries: Vec<_> = if filter.is_empty() {
-            self.cached_clipboard_entries.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.cached_clipboard_entries
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| {
-                    let matches = e.text_preview.to_lowercase().contains(&filter_lower)
-                        || e.ocr_text
-                            .as_deref()
-                            .unwrap_or("")
-                            .to_lowercase()
-                            .contains(&filter_lower);
-                    matches
-                })
-                .collect()
-        };
+        let filtered_entries = self.clipboard_history_visible_rows(&filter);
         let filtered_len = filtered_entries.len();
 
         // Key handler for clipboard history
@@ -249,35 +318,22 @@ impl ScriptListApp {
                 let in_portal = this.is_in_attachment_portal();
 
                 // P0 FIX: View state only - data comes from this.cached_clipboard_entries
-                if let AppView::ClipboardHistoryView {
+                let view_state = if let AppView::ClipboardHistoryView {
                     filter,
                     selected_index,
-                } = &mut this.current_view
+                } = &this.current_view
                 {
-                    // Apply filter to get current filtered list
-                    // P0 FIX: Reference cached_clipboard_entries from self
-                    let filtered_entries: Vec<_> = if filter.is_empty() {
-                        this.cached_clipboard_entries.iter().enumerate().collect()
-                    } else {
-                        let filter_lower = filter.to_lowercase();
-                        this.cached_clipboard_entries
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, e)| {
-                                let matches = e.text_preview.to_lowercase().contains(&filter_lower)
-                                    || e.ocr_text
-                                        .as_deref()
-                                        .unwrap_or("")
-                                        .to_lowercase()
-                                        .contains(&filter_lower);
-                                matches
-                            })
-                            .collect()
-                    };
+                    Some((filter.clone(), *selected_index))
+                } else {
+                    None
+                };
+
+                if let Some((current_filter, current_selected)) = view_state {
+                    let filtered_entries = this.clipboard_history_visible_rows(&current_filter);
                     let filtered_len = filtered_entries.len();
                     let selected_entry = filtered_entries
-                        .get(*selected_index)
-                        .map(|(_, entry)| (*entry).clone());
+                        .get(current_selected)
+                        .map(|(_, entry)| entry.clone());
                     this.focused_clipboard_entry_id =
                         selected_entry.as_ref().map(|entry| entry.id.clone());
 
@@ -315,7 +371,7 @@ impl ScriptListApp {
 
                     // Space opens Quick Look (macOS Finder behavior)
                     if is_key_space(key)
-                        && filter.is_empty()
+                        && current_filter.is_empty()
                         && !modifiers.platform
                         && !modifiers.control
                         && !modifiers.alt
@@ -332,31 +388,41 @@ impl ScriptListApp {
 
                     match key {
                         _ if is_key_up(key) => {
-                            if *selected_index > 0 {
-                                *selected_index -= 1;
+                            if current_selected > 0 {
+                                let new_selected = current_selected - 1;
+                                if let AppView::ClipboardHistoryView { selected_index, .. } =
+                                    &mut this.current_view
+                                {
+                                    *selected_index = new_selected;
+                                }
                                 // Scroll to keep selection visible
                                 this.clipboard_list_scroll_handle
-                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                    .scroll_to_item(new_selected, ScrollStrategy::Nearest);
                                 this.focused_clipboard_entry_id = filtered_entries
-                                    .get(*selected_index)
+                                    .get(new_selected)
                                     .map(|(_, entry)| entry.id.clone());
                                 cx.notify();
                             }
                         }
                         _ if is_key_down(key) => {
-                            if *selected_index < filtered_len.saturating_sub(1) {
-                                *selected_index += 1;
+                            if current_selected < filtered_len.saturating_sub(1) {
+                                let new_selected = current_selected + 1;
+                                if let AppView::ClipboardHistoryView { selected_index, .. } =
+                                    &mut this.current_view
+                                {
+                                    *selected_index = new_selected;
+                                }
                                 // Scroll to keep selection visible
                                 this.clipboard_list_scroll_handle
-                                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                                    .scroll_to_item(new_selected, ScrollStrategy::Nearest);
                                 this.focused_clipboard_entry_id = filtered_entries
-                                    .get(*selected_index)
+                                    .get(new_selected)
                                     .map(|(_, entry)| entry.id.clone());
                                 cx.notify();
                             }
                         }
                         _ if has_cmd && is_key_enter(key) => {
-                            if filtered_entries.get(*selected_index).is_some() {
+                            if filtered_entries.get(current_selected).is_some() {
                                 drop(filtered_entries);
                                 this.handle_action(
                                     "clipboard_attach_to_ai".to_string(),
@@ -369,7 +435,7 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             // Portal mode: attach the selected entry's content to ACP chat.
                             if in_portal {
-                                if let Some((_, entry)) = filtered_entries.get(*selected_index) {
+                                if let Some((_, entry)) = filtered_entries.get(current_selected) {
                                     let label = if entry.text_preview.len() > 40 {
                                         format!("Clipboard: {}…", &entry.text_preview[..40])
                                     } else {
@@ -387,12 +453,9 @@ impl ScriptListApp {
                             }
 
                             // Copy selected entry to clipboard, hide window, then paste
-                            if let Some((_, entry)) = filtered_entries.get(*selected_index) {
+                            if let Some((_, entry)) = filtered_entries.get(current_selected) {
                                 let paste_action = ClipboardHistoryPasteAction::PasteSelectedEntry;
-                                logging::log(
-                                    "EXEC",
-                                    &paste_action.copy_attempt_log(&entry.id),
-                                );
+                                logging::log("EXEC", &paste_action.copy_attempt_log(&entry.id));
                                 if let Err(e) =
                                     clipboard_history::copy_entry_to_clipboard(&entry.id)
                                 {
@@ -621,9 +684,12 @@ impl ScriptListApp {
             .items_center()
             .gap_3()
             .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    self.render_search_input()
-                ),
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(self.render_search_input()),
             )
             .child(
                 div()
@@ -655,25 +721,8 @@ impl ScriptListApp {
                         return;
                     };
 
-                    let filter_lower = current_filter.to_lowercase();
-                    let entry_matches_filter = |entry: &clipboard_history::ClipboardEntryMeta| {
-                        current_filter.is_empty()
-                            || entry.text_preview.to_lowercase().contains(&filter_lower)
-                            || entry
-                                .ocr_text
-                                .as_deref()
-                                .unwrap_or("")
-                                .to_lowercase()
-                                .contains(&filter_lower)
-                    };
-                    let filtered_len = if current_filter.is_empty() {
-                        this.cached_clipboard_entries.len()
-                    } else {
-                        this.cached_clipboard_entries
-                            .iter()
-                            .filter(|entry| entry_matches_filter(entry))
-                            .count()
-                    };
+                    let filtered_entries = this.clipboard_history_visible_rows(&current_filter);
+                    let filtered_len = filtered_entries.len();
 
                     let Some(new_selected) = this.builtin_scroll_target_from_wheel(
                         event,
@@ -696,11 +745,9 @@ impl ScriptListApp {
                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
                     this.note_builtin_selection_owned_wheel_scroll(new_selected);
                     this.focused_clipboard_entry_id = this
-                        .cached_clipboard_entries
-                        .iter()
-                        .filter(|entry| entry_matches_filter(entry))
-                        .nth(new_selected)
-                        .map(|entry| entry.id.clone());
+                        .clipboard_history_visible_rows(&current_filter)
+                        .get(new_selected)
+                        .map(|(_, entry)| entry.id.clone());
                     Self::log_builtin_scroll_event(
                         "clipboard_history",
                         "scroll_to_item",
