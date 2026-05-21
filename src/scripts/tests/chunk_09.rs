@@ -160,6 +160,49 @@ fn test_default_ai_vault_builtin_does_not_match_random_main_search_text() {
         .any(|result| result.entry.id == "builtin/vault"));
 }
 
+#[test]
+fn test_legacy_ai_vault_script_requires_direct_vault_query() {
+    let scripts = wrap_scripts(vec![
+        Script {
+            name: "Vault".to_string(),
+            path: PathBuf::from("/vault.ts"),
+            extension: "ts".to_string(),
+            description: Some(
+                "Search past AI conversations and resume the selected one in Script Kit"
+                    .to_string(),
+            ),
+            alias: Some("vault".to_string()),
+            body: Some("const amazon = 'body text must not make legacy Vault match';".to_string()),
+            ..Default::default()
+        },
+        Script {
+            name: "Amazon".to_string(),
+            path: PathBuf::from("/amazon.ts"),
+            extension: "ts".to_string(),
+            description: Some("Open Amazon orders".to_string()),
+            ..Default::default()
+        },
+    ]);
+
+    let amazon = fuzzy_search_scripts(&scripts, "amazon");
+    assert!(
+        amazon.iter().any(|result| result.script.name == "Amazon"),
+        "control script should still match amazon"
+    );
+    assert!(
+        amazon.iter().all(|result| result.script.name != "Vault"),
+        "legacy AI Vault wrapper must not match unrelated amazon query"
+    );
+
+    for query in ["vault", "vau", "ai-vault", "aivault"] {
+        let results = fuzzy_search_scripts(&scripts, query);
+        assert!(
+            results.iter().any(|result| result.script.name == "Vault"),
+            "legacy AI Vault wrapper should still match direct query {query:?}"
+        );
+    }
+}
+
 /// Test that name matches are prioritized over keyword matches
 /// This is critical: when searching "scr", "Scratch Pad" (name starts with "Scr")
 /// should rank higher than "Lock Screen" (keyword "screen" contains "scr")
