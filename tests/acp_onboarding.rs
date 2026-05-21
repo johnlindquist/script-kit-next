@@ -41,6 +41,30 @@ fn acp_view_supports_setup_constructor() {
     );
 }
 
+#[test]
+fn acp_setup_mode_blocks_script_list_picker_handoff_before_live_thread() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_picker_trigger_ignored_setup_mode\""),
+        "launcher-triggered @ and / picker handoffs must be ignored in setup mode"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_set_input_ignored_setup_mode\""),
+        "setup-mode ACP input mutation must not call live_thread"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_mention_picker_cleared_setup_mode\""),
+        "setup-mode mention refresh must clear picker state without reading live_thread"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_setup_mode_key_propagated_without_live_thread\""),
+        "unhandled setup-mode keys must return before live-thread keyboard logic"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_escape_cancel_ignored_setup_mode\""),
+        "host-level Escape cancellation must not read live_thread in setup mode"
+    );
+}
+
 // ── Setup surface uses generic ACP copy ────────────────────────────────
 
 #[test]
