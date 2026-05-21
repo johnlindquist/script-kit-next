@@ -105,6 +105,13 @@ pub(crate) enum ThemeChooserManagementStatus {
     Error { message: String },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ThemeChooserManagementButtonKind {
+    Primary,
+    Neutral,
+    Destructive,
+}
+
 impl Default for ThemeChooserManagementStatus {
     fn default() -> Self {
         Self::Clean
@@ -1158,6 +1165,52 @@ impl ScriptListApp {
                     }),
             )
             .children(children)
+            .into_any_element()
+    }
+
+    fn theme_chooser_overlay_token(rgb_hex: u32, alpha_source_rgba: u32) -> u32 {
+        ((rgb_hex & 0x00ff_ffff) << 8) | (alpha_source_rgba & 0xff)
+    }
+
+    fn render_theme_chooser_management_button<F>(
+        id: &'static str,
+        label: &'static str,
+        _kind: ThemeChooserManagementButtonKind,
+        disabled: bool,
+        text_hex: u32,
+        bg_rgba: u32,
+        border_rgba: u32,
+        hover_rgba: u32,
+        on_click: F,
+    ) -> gpui::AnyElement
+    where
+        F: Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
+    {
+        div()
+            .id(id)
+            .px(px(8.0))
+            .py(px(4.0))
+            .rounded(px(5.0))
+            .border_1()
+            .border_color(rgba(border_rgba))
+            .bg(rgba(bg_rgba))
+            .text_xs()
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .text_color(rgb(text_hex))
+            .cursor_default()
+            .child(label)
+            .when(!disabled, |button| {
+                button
+                    .cursor_pointer()
+                    .hover(move |button| button.bg(rgba(hover_rgba)))
+            })
+            .on_click(move |event, window, cx| {
+                cx.stop_propagation();
+                if disabled {
+                    return;
+                }
+                on_click(event, window, cx);
+            })
             .into_any_element()
     }
 
@@ -3359,6 +3412,18 @@ impl ScriptListApp {
         let update_disabled = management_snapshot.update_disabled.is_some();
         let delete_disabled = management_snapshot.delete_disabled.is_some();
         let restore_disabled = management_snapshot.restore_disabled.is_some();
+        let management_button_colors =
+            crate::components::ButtonColors::from_theme(self.theme.as_ref());
+        let save_copy_hover_rgba = crate::components::Button::hover_background_token(
+            crate::components::ButtonVariant::Primary,
+            management_button_colors,
+        );
+        let neutral_hover_rgba = crate::components::Button::hover_background_token(
+            crate::components::ButtonVariant::Ghost,
+            management_button_colors,
+        );
+        let destructive_hover_rgba =
+            Self::theme_chooser_overlay_token(ui_error, management_button_colors.hover_overlay);
         let management_section = Self::render_theme_chooser_customize_section(
             "SAVE & MANAGE",
             Some("Library status and custom theme actions"),
@@ -3390,131 +3455,98 @@ impl ScriptListApp {
                     .flex()
                     .flex_row()
                     .gap(px(8.0))
-                    .child(
-                        div()
-                            .id("theme-chooser-save-copy-button")
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(accent_badge_border)
-                            .bg(accent_badge_bg)
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(accent_badge_text)
-                            .cursor_pointer()
-                            .child("Save Copy")
-                            .on_click(move |_, _, cx| {
-                                cx.stop_propagation();
-                                if let Some(app) = save_click_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.save_current_theme_as_user_theme(
-                                            "theme_chooser_save_copy_click",
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("theme-chooser-update-user-theme-button")
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(badge_border_bg)
-                            .bg(rgba(chrome.panel_surface_rgba))
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(if update_disabled {
-                                text_muted
-                            } else {
-                                text_primary
-                            }))
-                            .when(!update_disabled, |button| button.cursor_pointer())
-                            .child("Update")
-                            .on_click(move |_, _, cx| {
-                                cx.stop_propagation();
-                                if update_disabled {
-                                    return;
-                                }
-                                if let Some(app) = update_click_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.update_selected_user_theme(
-                                            "theme_chooser_update_user_theme_click",
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("theme-chooser-delete-user-theme-button")
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(badge_border_bg)
-                            .bg(rgba(chrome.panel_surface_rgba))
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(if delete_disabled {
-                                text_muted
-                            } else {
-                                ui_error
-                            }))
-                            .when(!delete_disabled, |button| button.cursor_pointer())
-                            .child("Delete")
-                            .on_click(move |_, _, cx| {
-                                cx.stop_propagation();
-                                if delete_disabled {
-                                    return;
-                                }
-                                if let Some(app) = delete_click_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.delete_selected_user_theme(
-                                            "theme_chooser_delete_user_theme_click",
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
-                    .child(
-                        div()
-                            .id("theme-chooser-restore-user-theme-button")
-                            .px(px(8.0))
-                            .py(px(4.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(badge_border_bg)
-                            .bg(rgba(chrome.panel_surface_rgba))
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(if restore_disabled {
-                                text_muted
-                            } else {
-                                text_primary
-                            }))
-                            .when(!restore_disabled, |button| button.cursor_pointer())
-                            .child("Restore")
-                            .on_click(move |_, _, cx| {
-                                cx.stop_propagation();
-                                if restore_disabled {
-                                    return;
-                                }
-                                if let Some(app) = restore_click_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        this.restore_last_deleted_user_theme(
-                                            "theme_chooser_restore_deleted_user_theme_click",
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }),
-                    )
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-save-copy-button",
+                        "Save Copy",
+                        ThemeChooserManagementButtonKind::Primary,
+                        false,
+                        chrome.accent_badge_text_hex,
+                        chrome.accent_badge_bg_rgba,
+                        chrome.accent_badge_border_rgba,
+                        save_copy_hover_rgba,
+                        move |_, _, cx| {
+                            if let Some(app) = save_click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.save_current_theme_as_user_theme(
+                                        "theme_chooser_save_copy_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    ))
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-update-user-theme-button",
+                        "Update",
+                        ThemeChooserManagementButtonKind::Neutral,
+                        update_disabled,
+                        if update_disabled {
+                            text_muted
+                        } else {
+                            text_primary
+                        },
+                        chrome.panel_surface_rgba,
+                        chrome.badge_border_rgba,
+                        neutral_hover_rgba,
+                        move |_, _, cx| {
+                            if let Some(app) = update_click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.update_selected_user_theme(
+                                        "theme_chooser_update_user_theme_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    ))
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-delete-user-theme-button",
+                        "Delete",
+                        ThemeChooserManagementButtonKind::Destructive,
+                        delete_disabled,
+                        if delete_disabled {
+                            text_muted
+                        } else {
+                            ui_error
+                        },
+                        chrome.panel_surface_rgba,
+                        chrome.badge_border_rgba,
+                        destructive_hover_rgba,
+                        move |_, _, cx| {
+                            if let Some(app) = delete_click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.delete_selected_user_theme(
+                                        "theme_chooser_delete_user_theme_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    ))
+                    .child(Self::render_theme_chooser_management_button(
+                        "theme-chooser-restore-user-theme-button",
+                        "Restore",
+                        ThemeChooserManagementButtonKind::Neutral,
+                        restore_disabled,
+                        if restore_disabled {
+                            text_muted
+                        } else {
+                            text_primary
+                        },
+                        chrome.panel_surface_rgba,
+                        chrome.badge_border_rgba,
+                        neutral_hover_rgba,
+                        move |_, _, cx| {
+                            if let Some(app) = restore_click_entity.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.restore_last_deleted_user_theme(
+                                        "theme_chooser_restore_deleted_user_theme_click",
+                                        cx,
+                                    );
+                                });
+                            }
+                        },
+                    ))
                     .into_any_element(),
             ],
         );

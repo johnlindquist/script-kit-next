@@ -169,6 +169,75 @@ fn theme_chooser_exposes_management_status_and_safe_user_theme_actions() {
 }
 
 #[test]
+fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
+    let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let button = read_source("src/components/button/component.rs");
+
+    assert!(
+        button.contains("pub(crate) fn hover_background_token"),
+        "shared Button must continue to expose the hover token used by Theme Designer management buttons"
+    );
+    assert!(
+        chooser.contains("enum ThemeChooserManagementButtonKind"),
+        "Theme Designer should make primary/neutral/destructive management button intent explicit"
+    );
+    assert!(
+        chooser.contains("fn render_theme_chooser_management_button"),
+        "Theme Designer management buttons should share one local helper"
+    );
+
+    let helper = chooser
+        .split("fn render_theme_chooser_management_button")
+        .nth(1)
+        .and_then(|section| section.split("fn ").next())
+        .expect("missing management button helper body");
+    assert!(
+        helper.contains(".when(!disabled")
+            && helper.contains(".hover(")
+            && helper.contains("if disabled"),
+        "management button hover must be enabled-only and disabled clicks must remain guarded"
+    );
+
+    let render_section = chooser
+        .split("let management_section =")
+        .nth(1)
+        .and_then(|section| section.split("let colors_section =").next())
+        .expect("missing Theme Designer management section");
+    assert_eq!(
+        render_section
+            .matches("render_theme_chooser_management_button(")
+            .count(),
+        4,
+        "Save Copy, Update, Delete, and Restore should all use the shared local helper"
+    );
+
+    for id in [
+        "theme-chooser-save-copy-button",
+        "theme-chooser-update-user-theme-button",
+        "theme-chooser-delete-user-theme-button",
+        "theme-chooser-restore-user-theme-button",
+    ] {
+        assert!(
+            render_section.contains(id),
+            "management button id `{id}` must be preserved"
+        );
+    }
+
+    assert!(
+        chooser.contains("ButtonColors::from_theme") && chooser.contains("self.theme.as_ref()"),
+        "hover styling should be derived from the active theme"
+    );
+    assert!(
+        chooser.contains("ButtonVariant::Primary") && chooser.contains("ButtonVariant::Ghost"),
+        "Save Copy should use primary hover semantics and neutral buttons should use ghost hover semantics"
+    );
+    assert!(
+        render_section.contains("destructive_hover_rgba") && render_section.contains("ui_error"),
+        "Delete must keep destructive styling instead of using a plain neutral hover"
+    );
+}
+
+#[test]
 fn theme_gradients_propagate_to_secondary_windows() {
     let ui_foundation = read_source("src/ui_foundation/mod.rs");
     let main_window = read_source("src/main_sections/render_impl.rs");
