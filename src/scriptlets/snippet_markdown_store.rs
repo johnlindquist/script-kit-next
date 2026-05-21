@@ -217,8 +217,37 @@ fn parse_section(content: &str, start: usize, end: usize) -> Option<SnippetMarkd
 }
 
 fn parse_metadata_fence(section: &str) -> Option<Map<String, Value>> {
-    let content = fence_content(section, "metadata")?;
-    serde_json::from_str::<Map<String, Value>>(content.trim()).ok()
+    let content = fence_content(section, "metadata")?.trim();
+    serde_json::from_str::<Map<String, Value>>(content)
+        .ok()
+        .or_else(|| parse_key_value_metadata(content))
+}
+
+fn parse_key_value_metadata(content: &str) -> Option<Map<String, Value>> {
+    let mut metadata = Map::new();
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("//") {
+            continue;
+        }
+        let Some((key, value)) = line.split_once(':') else {
+            return None;
+        };
+        let key = normalize_metadata_key(key.trim());
+        let value = value.trim();
+        if key.is_empty() || value.is_empty() {
+            continue;
+        }
+        metadata.insert(key, Value::String(value.to_string()));
+    }
+    (!metadata.is_empty()).then_some(metadata)
+}
+
+fn normalize_metadata_key(key: &str) -> String {
+    match key.to_ascii_lowercase().as_str() {
+        "expand" | "snippet" => "keyword".to_string(),
+        _ => key.to_ascii_lowercase(),
+    }
 }
 
 fn parse_body_fence(section: &str) -> Option<String> {
@@ -316,12 +345,64 @@ fn replace_or_append_section(
 }
 
 fn render_section(name: &str, metadata: &Map<String, Value>, body: &str) -> Result<String, String> {
-    let metadata_json = serde_json::to_string_pretty(metadata)
-        .map_err(|error| format!("Serialize snippet metadata failed: {error}"))?;
-    let fence = fence_for(&[&metadata_json, body]);
-    Ok(format!(
-        "## {name}\n\n{fence}metadata\n{metadata_json}\n{fence}\n\n{fence}paste\n{body}\n{fence}\n"
-    ))
+    let metadata_lines = render_metadata_lines(metadata)?;
+    let fence = match metadata_lines.as_deref() {
+        Some(metadata_lines) => fence_for(&[metadata_lines, body]),
+        None => fence_for(&[body]),
+    };
+    let mut section = format!("## {name}\n\n");
+    if let Some(metadata_lines) = metadata_lines {
+        section.push_str(&format!("{fence}metadata\n{metadata_lines}\n{fence}\n\n"));
+    }
+    section.push_str(&format!("{fence}paste\n{body}\n{fence}\n"));
+    Ok(section)
+}
+
+fn render_metadata_lines(metadata: &Map<String, Value>) -> Result<Option<String>, String> {
+    let mut lines = Vec::new();
+    for key in ordered_metadata_keys(metadata) {
+        if key == "name" || key == "tool" {
+            continue;
+        }
+        let Some(value) = metadata.get(key) else {
+            continue;
+        };
+        let Some(value) = render_metadata_value(value)? else {
+            continue;
+        };
+        lines.push(format!("{key}: {value}"));
+    }
+    Ok((!lines.is_empty()).then(|| lines.join("\n")))
+}
+
+fn ordered_metadata_keys(metadata: &Map<String, Value>) -> Vec<&str> {
+    let mut keys = Vec::new();
+    for priority in ["keyword", "description"] {
+        if metadata.contains_key(priority) {
+            keys.push(priority);
+        }
+    }
+    let mut rest = metadata
+        .keys()
+        .map(String::as_str)
+        .filter(|key| !matches!(*key, "keyword" | "description"))
+        .collect::<Vec<_>>();
+    rest.sort_unstable();
+    keys.extend(rest);
+    keys
+}
+
+fn render_metadata_value(value: &Value) -> Result<Option<String>, String> {
+    match value {
+        Value::Null => Ok(None),
+        Value::String(value) if value.trim().is_empty() => Ok(None),
+        Value::String(value) => Ok(Some(value.clone())),
+        Value::Bool(value) => Ok(Some(value.to_string())),
+        Value::Number(value) => Ok(Some(value.to_string())),
+        Value::Array(_) | Value::Object(_) => serde_json::to_string(value)
+            .map(Some)
+            .map_err(|error| format!("Serialize snippet metadata failed: {error}")),
+    }
 }
 
 fn fence_for(parts: &[&str]) -> String {
@@ -418,22 +499,118 @@ mod tests {
         crate::menu_syntax::parse_snippet_scriptlet_capture(&invocation).expect("draft")
     }
 
+    fn metadata_block(content: &str) -> &str {
+        fence_content(content, "metadata").expect("metadata block")
+    }
+
     #[test]
     fn create_initializes_plugins_main_scriptlets_snippets_md() {
         let tmp = TempDir::new().unwrap();
         let draft = draft(
-            ";snippet Hello there! keyword:hi! description:Expand hi! to hello! name:Hi to Hello",
+            ";snippet johnlindquist@gmail.com keyword:@gma description:Gmail shortcut name:Email",
         );
 
         let outcome = upsert_snippet_section(tmp.path(), &draft).unwrap();
 
         assert_eq!(outcome.operation, SnippetStoreOperation::Created);
         let content = std::fs::read_to_string(snippets_markdown_path(tmp.path())).unwrap();
-        assert!(content.contains("## Hi to Hello"));
-        assert!(content.contains(r#""keyword": "hi!""#));
-        assert!(content.contains(r#""description": "Expand hi! to hello!""#));
-        assert!(content.contains("````paste\nHello there!\n````"));
+        assert!(content.contains("## Email"));
+        assert!(content.contains("keyword: @gma"));
+        assert!(content.contains("description: Gmail shortcut"));
+        let metadata = metadata_block(&content);
+        assert!(!metadata.contains('{'));
+        assert!(!metadata.contains('}'));
+        assert!(!metadata.contains(r#""keyword""#));
+        assert!(!metadata.contains(r#""description""#));
+        assert!(!metadata.contains(r#""tool""#));
+        assert!(!metadata.contains(r#""name""#));
+        assert!(content.contains("````paste\njohnlindquist@gmail.com\n````"));
         assert!(!tmp.path().join("menu-syntax/snippets.jsonl").exists());
+    }
+
+    #[test]
+    fn parse_key_value_metadata_fence_loads_keyword_description_and_id() {
+        let tmp = TempDir::new().unwrap();
+        let path = snippets_markdown_path(tmp.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "# Snippets\n\n## Email\n\n```metadata\nkeyword: @gma\ndescription: Gmail shortcut\n```\n\n```paste\nopen gmail\n```\n",
+        )
+        .unwrap();
+
+        let sections = load_snippet_sections(&path).unwrap();
+
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].name, "Email");
+        assert_eq!(sections[0].keyword.as_deref(), Some("@gma"));
+        assert_eq!(sections[0].description.as_deref(), Some("Gmail shortcut"));
+        assert_eq!(sections[0].id, "@gma");
+        assert_eq!(sections[0].body, "open gmail");
+    }
+
+    #[test]
+    fn update_existing_key_value_metadata_by_keyword_preserves_body_and_rerenders_clean() {
+        let tmp = TempDir::new().unwrap();
+        let path = snippets_markdown_path(tmp.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "# Snippets\n\n## Email\n\n```metadata\nkeyword: @gma\ndescription: Gmail shortcut\n```\n\n```paste\nopen gmail\n```\n",
+        )
+        .unwrap();
+
+        upsert_snippet_section(
+            tmp.path(),
+            &draft(";snippet update @snippet:@gma description:Updated Gmail shortcut"),
+        )
+        .unwrap();
+        let sections = load_snippet_sections(&path).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let metadata = metadata_block(&content);
+
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].body, "open gmail");
+        assert_eq!(
+            sections[0].description.as_deref(),
+            Some("Updated Gmail shortcut")
+        );
+        assert!(content.contains("keyword: @gma"));
+        assert!(content.contains("description: Updated Gmail shortcut"));
+        assert!(!metadata.contains('{'));
+        assert!(!metadata.contains('}'));
+        assert!(!metadata.contains(r#""keyword""#));
+        assert!(!metadata.contains(r#""description""#));
+    }
+
+    #[test]
+    fn json_metadata_still_loads_and_update_rewrites_as_key_value() {
+        let tmp = TempDir::new().unwrap();
+        let path = snippets_markdown_path(tmp.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "# Snippets\n\n## Email\n\n```metadata\n{\n  \"keyword\": \"@gma\",\n  \"description\": \"Gmail shortcut\",\n  \"tool\": \"paste\"\n}\n```\n\n```paste\nopen gmail\n```\n",
+        )
+        .unwrap();
+
+        let sections = load_snippet_sections(&path).unwrap();
+        assert_eq!(sections[0].keyword.as_deref(), Some("@gma"));
+
+        upsert_snippet_section(
+            tmp.path(),
+            &draft(";snippet update @snippet:@gma description:Updated Gmail shortcut"),
+        )
+        .unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
+        let metadata = metadata_block(&content);
+
+        assert!(content.contains("keyword: @gma"));
+        assert!(content.contains("description: Updated Gmail shortcut"));
+        assert!(!metadata.contains(r#""keyword""#));
+        assert!(!metadata.contains(r#""tool""#));
+        assert!(!metadata.contains('{'));
+        assert!(!metadata.contains('}'));
     }
 
     #[test]
