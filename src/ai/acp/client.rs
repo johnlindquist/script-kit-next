@@ -19,7 +19,7 @@ use agent_client_protocol::{
 };
 use serde_json::json;
 
-use super::config::AcpAgentConfig;
+use super::config::{AcpAgentConfig, CODEX_ACP_AGENT_ID, CODEX_ACP_NPX_PACKAGE};
 use super::events::{AcpCancelCommand, AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 use super::handlers::{ApprovalFn, ScriptKitAcpClient};
 use super::types::AcpSessionBinding;
@@ -250,7 +250,24 @@ async fn run_acp_event_loop(
     approve: Option<ApprovalFn>,
     session_system_prompt: Option<String>,
 ) -> Result<()> {
+    if codex_runtime_uses_disallowed_npx(&agent) {
+        anyhow::bail!("Codex ACP npx runtime fallback is disabled");
+    }
+
     // ── Spawn the agent subprocess ──────────────────────────────────
+    let command_basename = std::path::Path::new(&agent.command)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(agent.command.as_str());
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_spawn_command_resolved",
+        agent_id = %agent.id,
+        command_basename = %command_basename,
+        arg_count = agent.args.len(),
+        uses_codex_npx_package = agent.args.iter().any(|arg| arg == CODEX_ACP_NPX_PACKAGE),
+        npx_runtime_fallback_enabled = false,
+    );
     let mut cmd = tokio::process::Command::new(&agent.command);
     cmd.args(&agent.args)
         .envs(&agent.env)
@@ -454,6 +471,12 @@ async fn run_acp_event_loop(
     }
 
     Ok(())
+}
+
+fn codex_runtime_uses_disallowed_npx(agent: &AcpAgentConfig) -> bool {
+    agent.id == CODEX_ACP_AGENT_ID
+        && agent.command == "npx"
+        && agent.args.iter().any(|arg| arg == CODEX_ACP_NPX_PACKAGE)
 }
 
 /// Ensure an ACP session exists for `ui_thread_id`, emitting `ModelsAvailable`
@@ -909,6 +932,25 @@ mod tests {
             Box::new(|_chunk| true),
         );
         assert!(result.is_err(), "should fail because agent doesn't exist");
+    }
+
+    #[test]
+    fn codex_npx_runtime_fallback_is_rejected_only_for_codex() {
+        let mut config = AcpAgentConfig {
+            id: CODEX_ACP_AGENT_ID.into(),
+            display_name: "Codex".into(),
+            command: "npx".into(),
+            args: vec![CODEX_ACP_NPX_PACKAGE.into()],
+            env: HashMap::new(),
+            models: vec![],
+            install: None,
+            auth: None,
+        };
+
+        assert!(codex_runtime_uses_disallowed_npx(&config));
+
+        config.id = "claude-code".into();
+        assert!(!codex_runtime_uses_disallowed_npx(&config));
     }
 
     #[test]

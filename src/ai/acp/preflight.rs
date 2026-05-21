@@ -92,9 +92,9 @@ fn best_launchable_candidate(
 fn implicit_codex_default_candidate(
     agents: &[AcpAgentCatalogEntry],
     preferred_agent_id: Option<&str>,
-    codex_cli_ready: bool,
+    codex_launch_ready: bool,
 ) -> Option<AcpAgentCatalogEntry> {
-    if preferred_agent_id.is_some() || !codex_cli_ready {
+    if preferred_agent_id.is_some() || !codex_launch_ready {
         return None;
     }
     agents
@@ -889,7 +889,7 @@ mod tests {
     }
 
     #[test]
-    fn default_resolution_keeps_codex_install_blocker_when_adapter_missing() {
+    fn implicit_codex_default_does_not_select_missing_codex_adapter() {
         let agents = vec![
             make_entry(
                 "opencode",
@@ -899,8 +899,8 @@ mod tests {
             ),
             make_entry(
                 "codex-acp",
-                AcpAgentInstallState::NeedsInstall,
-                AcpAgentAuthState::Unknown,
+                AcpAgentInstallState::Unsupported,
+                AcpAgentAuthState::Authenticated,
                 AcpAgentConfigState::Valid,
             ),
         ];
@@ -909,11 +909,11 @@ mod tests {
             &agents,
             None,
             AcpLaunchRequirements::default(),
-            true,
+            false,
         );
 
-        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
-        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentNotInstalled));
+        assert_eq!(result.selected_agent_id(), Some("opencode"));
+        assert!(result.is_ready());
     }
 
     #[test]
@@ -969,6 +969,34 @@ mod tests {
         );
 
         assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+    }
+
+    #[test]
+    fn explicit_codex_preference_keeps_codex_when_adapter_missing_without_install_prompt() {
+        let agents = vec![
+            make_entry(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "codex-acp",
+                AcpAgentInstallState::Unsupported,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+
+        let result = resolve_acp_launch_with_requirements_and_codex_probe(
+            &agents,
+            Some("codex-acp"),
+            AcpLaunchRequirements::default(),
+            false,
+        );
+
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::UnsupportedAgent));
     }
 
     #[test]

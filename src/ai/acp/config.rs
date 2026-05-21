@@ -88,7 +88,34 @@ pub struct AcpModelEntry {
 }
 
 const DEFAULT_CONTEXT_WINDOW: u32 = 128_000;
-const CODEX_ACP_NPX_PACKAGE: &str = "@zed-industries/codex-acp";
+pub(crate) const CODEX_ACP_NPX_PACKAGE: &str = "@zed-industries/codex-acp";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CodexAcpAdapterSource {
+    EnvOverride,
+    BundledApp,
+    RepoLocal,
+    SiblingRepo,
+    Path,
+}
+
+impl CodexAcpAdapterSource {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::EnvOverride => "env_override",
+            Self::BundledApp => "bundled_app",
+            Self::RepoLocal => "repo_local",
+            Self::SiblingRepo => "sibling_repo",
+            Self::Path => "path",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CodexAcpAdapterResolution {
+    path: Option<PathBuf>,
+    source: Option<CodexAcpAdapterSource>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CodexAcpDefaultProbeState {
@@ -96,7 +123,10 @@ pub(crate) struct CodexAcpDefaultProbeState {
     pub npx_ready: bool,
     pub codex_acp_binary_ready: bool,
     pub adapter_ready: bool,
+    pub launch_ready: bool,
     pub should_be_implicit_codex_default: bool,
+    pub npx_runtime_fallback_enabled: bool,
+    adapter_source: Option<CodexAcpAdapterSource>,
 }
 
 fn existing_executable_file(path: PathBuf) -> Option<PathBuf> {
@@ -116,8 +146,13 @@ fn existing_executable_file(path: PathBuf) -> Option<PathBuf> {
     Some(path)
 }
 
+fn env_codex_acp_path() -> Option<PathBuf> {
+    std::env::var_os("SCRIPT_KIT_CODEX_ACP_PATH")
+        .map(PathBuf::from)
+        .and_then(existing_executable_file)
+}
+
 fn bundled_codex_acp_path() -> Option<PathBuf> {
-    // 1. Check relative to current exe (production / bundle)
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(parent) = exe_path.parent() {
             let path = parent.join("codex-acp");
@@ -127,7 +162,10 @@ fn bundled_codex_acp_path() -> Option<PathBuf> {
         }
     }
 
-    // 2. Check sibling development folder fallback (e.g. ../codex-acp/target/release/codex-acp)
+    None
+}
+
+fn sibling_repo_codex_acp_path() -> Option<PathBuf> {
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
         if let Some(parent) = PathBuf::from(manifest_dir).parent() {
             let sibling_dev = parent.join("codex-acp");
@@ -145,14 +183,62 @@ fn bundled_codex_acp_path() -> Option<PathBuf> {
     None
 }
 
+fn repo_local_codex_acp_path() -> Option<PathBuf> {
+    let manifest_dir = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR")?);
+    [
+        manifest_dir.join("target/debug/codex-acp"),
+        manifest_dir.join("target/release/codex-acp"),
+    ]
+    .into_iter()
+    .find_map(existing_executable_file)
+}
+
 fn path_codex_acp_path() -> Option<PathBuf> {
     which::which(CODEX_ACP_AGENT_ID)
         .ok()
         .and_then(existing_executable_file)
 }
 
+fn resolved_codex_acp_adapter() -> CodexAcpAdapterResolution {
+    if let Some(path) = env_codex_acp_path() {
+        return CodexAcpAdapterResolution {
+            path: Some(path),
+            source: Some(CodexAcpAdapterSource::EnvOverride),
+        };
+    }
+    if let Some(path) = bundled_codex_acp_path() {
+        return CodexAcpAdapterResolution {
+            path: Some(path),
+            source: Some(CodexAcpAdapterSource::BundledApp),
+        };
+    }
+    if let Some(path) = sibling_repo_codex_acp_path() {
+        return CodexAcpAdapterResolution {
+            path: Some(path),
+            source: Some(CodexAcpAdapterSource::SiblingRepo),
+        };
+    }
+    if let Some(path) = repo_local_codex_acp_path() {
+        return CodexAcpAdapterResolution {
+            path: Some(path),
+            source: Some(CodexAcpAdapterSource::RepoLocal),
+        };
+    }
+    if let Some(path) = path_codex_acp_path() {
+        return CodexAcpAdapterResolution {
+            path: Some(path),
+            source: Some(CodexAcpAdapterSource::Path),
+        };
+    }
+
+    CodexAcpAdapterResolution {
+        path: None,
+        source: None,
+    }
+}
+
 fn resolved_codex_acp_adapter_path() -> Option<PathBuf> {
-    bundled_codex_acp_path().or_else(path_codex_acp_path)
+    resolved_codex_acp_adapter().path
 }
 
 pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
@@ -162,13 +248,18 @@ pub(crate) fn codex_acp_default_probe_state() -> CodexAcpDefaultProbeState {
             npx_ready: false,
             codex_acp_binary_ready: false,
             adapter_ready: false,
+            launch_ready: false,
             should_be_implicit_codex_default: false,
+            npx_runtime_fallback_enabled: false,
+            adapter_source: None,
         };
     }
+    let adapter = resolved_codex_acp_adapter();
     codex_acp_default_probe_state_from_parts(
         command_exists("codex"),
         command_exists("npx"),
-        resolved_codex_acp_adapter_path().is_some(),
+        adapter.path.is_some(),
+        adapter.source,
     )
 }
 
@@ -176,13 +267,19 @@ fn codex_acp_default_probe_state_from_parts(
     codex_cli_ready: bool,
     npx_ready: bool,
     codex_acp_binary_ready: bool,
+    adapter_source: Option<CodexAcpAdapterSource>,
 ) -> CodexAcpDefaultProbeState {
+    let adapter_ready = codex_acp_binary_ready;
+    let launch_ready = adapter_ready;
     CodexAcpDefaultProbeState {
         codex_cli_ready,
         npx_ready,
         codex_acp_binary_ready,
-        adapter_ready: codex_acp_binary_ready,
-        should_be_implicit_codex_default: true,
+        adapter_ready,
+        launch_ready,
+        should_be_implicit_codex_default: launch_ready,
+        npx_runtime_fallback_enabled: false,
+        adapter_source,
     }
 }
 
@@ -654,6 +751,7 @@ fn normalize_codex_acp_agent_config_with_path(
             .unwrap_or_else(|| CODEX_ACP_AGENT_ID.to_string());
         agent.args = codex_acp_direct_args(&agent.args);
     }
+    agent.install = None;
 
     agent
 }
@@ -674,7 +772,7 @@ fn install_state_from_probe(
     use super::catalog::AcpAgentInstallState;
 
     let ready = if agent.id == CODEX_ACP_AGENT_ID {
-        adapter_ready || command_ready
+        adapter_ready
     } else {
         command_ready
     };
@@ -745,10 +843,7 @@ fn codex_acp_agent_config() -> AcpAgentConfig {
         args: Vec::new(),
         env: HashMap::new(),
         models: Vec::new(),
-        install: Some(AcpAgentInstallSpec {
-            command: "brew".to_string(),
-            args: vec!["install".to_string(), CODEX_ACP_AGENT_ID.to_string()],
-        }),
+        install: None,
         auth: Some(AcpAgentAuthHint {
             summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY.".to_string(),
         }),
@@ -926,7 +1021,13 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
         npx_ready = codex_probe.npx_ready,
         codex_acp_binary_ready = codex_probe.codex_acp_binary_ready,
         adapter_ready = codex_probe.adapter_ready,
+        launch_ready = codex_probe.launch_ready,
         should_be_implicit_codex_default = codex_probe.should_be_implicit_codex_default,
+        npx_runtime_fallback_enabled = codex_probe.npx_runtime_fallback_enabled,
+        codex_adapter_source = codex_probe
+            .adapter_source
+            .map(CodexAcpAdapterSource::as_str)
+            .unwrap_or("none"),
     );
 
     tracing::info!(
@@ -1001,7 +1102,13 @@ pub(crate) fn load_acp_agent_catalog_entries(
                     npx_ready = codex_probe.npx_ready,
                     codex_acp_binary_ready = codex_probe.codex_acp_binary_ready,
                     adapter_ready = codex_probe.adapter_ready,
+                    launch_ready = codex_probe.launch_ready,
                     should_be_implicit_codex_default = codex_probe.should_be_implicit_codex_default,
+                    npx_runtime_fallback_enabled = codex_probe.npx_runtime_fallback_enabled,
+                    codex_adapter_source = codex_probe
+                        .adapter_source
+                        .map(CodexAcpAdapterSource::as_str)
+                        .unwrap_or("none"),
                     install_state = ?install_state,
                     auth_state = ?auth_state,
                     config_state = ?config_state,
@@ -1462,10 +1569,7 @@ mod tests {
         assert_eq!(codex.display_name, "Codex");
         assert_eq!(codex.command, CODEX_ACP_AGENT_ID);
         assert!(codex.args.is_empty());
-        let install = codex.install.expect("codex-acp install hint");
-        assert_ne!(install.command, "npx");
-        assert_eq!(install.command, "brew");
-        assert_eq!(install.args, vec!["install", CODEX_ACP_AGENT_ID]);
+        assert!(codex.install.is_none());
         assert!(codex
             .auth
             .expect("codex-acp auth hint")
@@ -1516,6 +1620,7 @@ mod tests {
             "/Applications/Script Kit.app/Contents/MacOS/codex-acp"
         );
         assert_eq!(normalized.args, vec!["--verbose"]);
+        assert!(normalized.install.is_none());
     }
 
     #[test]
@@ -1536,6 +1641,7 @@ mod tests {
             "/tmp/Script Kit.app/Contents/MacOS/codex-acp"
         );
         assert_eq!(normalized.args, vec!["--verbose"]);
+        assert!(normalized.install.is_none());
     }
 
     #[test]
@@ -1548,6 +1654,7 @@ mod tests {
 
         assert_eq!(normalized.command, CODEX_ACP_AGENT_ID);
         assert!(normalized.args.is_empty());
+        assert!(normalized.install.is_none());
     }
 
     #[test]
@@ -1556,11 +1663,11 @@ mod tests {
 
         assert_eq!(
             install_state_from_probe(&codex, true, false),
-            crate::ai::acp::catalog::AcpAgentInstallState::Ready
+            crate::ai::acp::catalog::AcpAgentInstallState::Unsupported
         );
         assert_eq!(
             install_state_from_probe(&codex, false, false),
-            crate::ai::acp::catalog::AcpAgentInstallState::NeedsInstall
+            crate::ai::acp::catalog::AcpAgentInstallState::Unsupported
         );
 
         let mut legacy = codex_acp_agent_config();
@@ -1574,27 +1681,36 @@ mod tests {
 
     #[test]
     fn codex_default_probe_tracks_cli_and_adapter_separately() {
-        let ready = codex_acp_default_probe_state_from_parts(true, true, false);
+        let ready = codex_acp_default_probe_state_from_parts(true, true, false, None);
         assert!(ready.codex_cli_ready);
         assert!(ready.npx_ready);
         assert!(!ready.codex_acp_binary_ready);
         assert!(!ready.adapter_ready);
-        assert!(ready.should_be_implicit_codex_default);
+        assert!(!ready.launch_ready);
+        assert!(!ready.should_be_implicit_codex_default);
+        assert!(!ready.npx_runtime_fallback_enabled);
 
-        let adapter_blocked = codex_acp_default_probe_state_from_parts(true, false, false);
+        let adapter_blocked = codex_acp_default_probe_state_from_parts(true, false, false, None);
         assert!(adapter_blocked.codex_cli_ready);
         assert!(!adapter_blocked.adapter_ready);
         assert!(
-            adapter_blocked.should_be_implicit_codex_default,
-            "local codex should still own default setup even when adapter install is blocked"
+            !adapter_blocked.should_be_implicit_codex_default,
+            "local codex CLI must not own default setup when the ACP adapter is missing"
         );
 
-        let adapter_ready = codex_acp_default_probe_state_from_parts(false, true, true);
+        let adapter_ready = codex_acp_default_probe_state_from_parts(
+            false,
+            true,
+            true,
+            Some(CodexAcpAdapterSource::BundledApp),
+        );
         assert!(!adapter_ready.codex_cli_ready);
         assert!(adapter_ready.npx_ready);
         assert!(adapter_ready.codex_acp_binary_ready);
         assert!(adapter_ready.adapter_ready);
+        assert!(adapter_ready.launch_ready);
         assert!(adapter_ready.should_be_implicit_codex_default);
+        assert!(!adapter_ready.npx_runtime_fallback_enabled);
     }
 
     #[test]
