@@ -59,7 +59,7 @@ pub fn fuzzy_search_skills(skills: &[Arc<PluginSkill>], query: &str) -> Vec<Skil
 
         // Nucleo fuzzy match in title
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&skill.title) {
+            if let Some(nucleo_s) = nucleo.compact_score(&skill.title, &query_lower) {
                 score += 50 + (nucleo_s / 20) as i32;
             }
         }

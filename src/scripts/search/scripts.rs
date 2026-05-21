@@ -219,7 +219,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Fuzzy character matching in name using nucleo (handles Unicode correctly)
         // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&script.name) {
+            if let Some(nucleo_s) = nucleo.compact_score(&script.name, &query_lower) {
                 let delta = SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
                 score += delta;
                 name_score += delta;
@@ -242,7 +242,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
 
         // Fuzzy character matching in filename using nucleo (handles Unicode)
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&filename) {
+            if let Some(nucleo_s) = nucleo.compact_score(&filename, &query_lower) {
                 let delta =
                     SCORE_FILENAME_FUZZY_BASE + (nucleo_s / SCORE_FILENAME_FUZZY_DIV) as i32;
                 score += delta;
@@ -366,7 +366,7 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
             if use_nucleo {
-                if let Some(nucleo_s) = nucleo.score(desc) {
+                if let Some(nucleo_s) = nucleo.compact_score(desc, &query_lower) {
                     let delta = SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
                     score += delta;
                     description_score += delta;

@@ -97,7 +97,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
         // Fuzzy character matching in name using nucleo (handles Unicode)
         // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
         if use_nucleo {
-            if let Some(nucleo_s) = nucleo.score(&scriptlet.name) {
+            if let Some(nucleo_s) = nucleo.compact_score(&scriptlet.name, &query_lower) {
                 // Scale nucleo score to match existing weights (~50 for fuzzy match)
                 score += SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
             }
@@ -119,7 +119,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
 
             // Fuzzy character matching in file_path using nucleo (handles Unicode)
             if use_nucleo {
-                if let Some(nucleo_s) = nucleo.score(fp) {
+                if let Some(nucleo_s) = nucleo.compact_score(fp, &query_lower) {
                     // Scale nucleo score to match existing weights (~35 for file_path fuzzy match)
                     score +=
                         SCORE_FILE_PATH_FUZZY_BASE + (nucleo_s / SCORE_FILE_PATH_FUZZY_DIV) as i32;
@@ -135,7 +135,7 @@ pub fn fuzzy_search_scriptlets(scriptlets: &[Arc<Scriptlet>], query: &str) -> Ve
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
             if use_nucleo {
-                if let Some(nucleo_s) = nucleo.score(desc) {
+                if let Some(nucleo_s) = nucleo.compact_score(desc, &query_lower) {
                     score += SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
                 }
             }
