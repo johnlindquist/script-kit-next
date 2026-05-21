@@ -67,7 +67,8 @@ const PROMPT_FOOTER_BORDER_OPACITY: u8 = 0x50;
 /// Footer shadow Y-offset.
 const PROMPT_FOOTER_SHADOW_OFFSET_Y_PX: f32 = -1.0;
 /// Footer shadow blur radius.
-const PROMPT_FOOTER_SHADOW_BLUR_PX: f32 = 8.0;
+const PROMPT_FOOTER_SHADOW_BLUR_PX: f32 =
+    crate::ui::chrome::TAHOE_CHROME_METRICS.footer_shadow_blur;
 /// Info label font size delta from base UI font size.
 const PROMPT_FOOTER_INFO_FONT_DELTA_PX: f32 = 4.0;
 /// Minimum info label font size.
@@ -429,7 +430,7 @@ impl PromptFooter {
             .gap(px(6.))
             .px(px(8.))
             .py(px(6.))
-            .rounded(px(4.))
+            .rounded(px(crate::ui::chrome::TAHOE_CHROME_METRICS.control_sm_radius))
             .child(label_element)
             .child(shortcut_element);
 
@@ -871,7 +872,10 @@ mod tests {
 
         assert_eq!(PROMPT_FOOTER_BORDER_OPACITY, 0x50);
         assert_eq!(PROMPT_FOOTER_SHADOW_OFFSET_Y_PX, -1.0);
-        assert_eq!(PROMPT_FOOTER_SHADOW_BLUR_PX, 8.0);
+        assert_eq!(
+            PROMPT_FOOTER_SHADOW_BLUR_PX,
+            crate::ui::chrome::TAHOE_CHROME_METRICS.footer_shadow_blur
+        );
         assert_eq!(PROMPT_FOOTER_INFO_FONT_DELTA_PX, 4.0);
         assert_eq!(PROMPT_FOOTER_INFO_FONT_MIN_PX, 9.0);
         assert_eq!(PROMPT_FOOTER_HELPER_FONT_DELTA_PX, 2.0);

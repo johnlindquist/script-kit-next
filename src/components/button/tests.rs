@@ -139,5 +139,8 @@ fn test_button_layout_tokens_stay_consistent_when_render_spacing_is_updated() {
     assert_eq!(BUTTON_ICON_PADDING_Y, 6.0);
     assert_eq!(BUTTON_CONTENT_GAP_PX, 2.0);
     assert_eq!(BUTTON_SHORTCUT_MARGIN_LEFT_PX, 4.0);
-    assert_eq!(BUTTON_RADIUS_PX, 6.0);
+    assert_eq!(
+        BUTTON_RADIUS_PX,
+        crate::ui::chrome::TAHOE_CHROME_METRICS.control_sm_radius
+    );
 }

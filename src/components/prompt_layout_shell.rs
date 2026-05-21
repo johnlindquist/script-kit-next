@@ -85,7 +85,9 @@ pub(crate) fn prompt_surface(background: Rgba, border: Rgba) -> Div {
         .bg(background)
         .border_1()
         .border_color(border)
-        .rounded(px(8.0))
+        .rounded(px(
+            crate::ui::chrome::TAHOE_CHROME_METRICS.prompt_surface_radius
+        ))
 }
 
 /// Shared intro block for create-flow screens (title + description).
