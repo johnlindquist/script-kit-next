@@ -365,7 +365,7 @@ fn script_list_printable_simulate_key_can_update_filter_text() {
 }
 
 #[test]
-fn handler_form_autocomplete_is_state_first_and_sidebar_owned() {
+fn handler_form_autocomplete_is_state_first_and_trigger_popup_owned() {
     let form = read("src/menu_syntax/form.rs");
     for symbol in [
         "pub struct MenuSyntaxFormSuggestionApplication",
@@ -389,6 +389,7 @@ fn handler_form_autocomplete_is_state_first_and_sidebar_owned() {
     }
 
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    let popup = read("src/app_impl/menu_syntax_trigger_popup_window.rs");
     let object_selector = read("src/app_impl/menu_syntax_object_selector_popup_window.rs");
     for symbol in [
         "handle_menu_syntax_form_control_key_input",
@@ -400,6 +401,9 @@ fn handler_form_autocomplete_is_state_first_and_sidebar_owned() {
         "menu_syntax_form_suggestion_field_id",
         "menu_syntax_form_suggestion_selected_index",
         "sync_menu_syntax_form_suggestions_from_main_input",
+        "build_menu_syntax_form_trigger_popup_snapshot",
+        "sync_menu_syntax_form_trigger_popup_window",
+        "menu_syntax_form_trigger_popup_row_id",
         "main_input_form_completion_field",
         "active_menu_syntax_form_popup_field",
         "search_root_object_candidates_direct",
@@ -423,6 +427,16 @@ fn handler_form_autocomplete_is_state_first_and_sidebar_owned() {
             && !accept_body.contains("menu_syntax_object_selector_state")
             && !accept_body.contains("plan_object_selector_transition"),
         "form suggestion acceptance must stay state-owned and sync through the form field edit path"
+    );
+
+    assert!(
+        popup.contains("accept_menu_syntax_form_trigger_popup_suggestion")
+            && popup.contains("parse_trigger_popup_form_suggestion_row_id")
+            && popup.contains("menu_syntax_trigger_popup_state_is_form_suggestion")
+            && popup.contains("close_menu_syntax_form_trigger_popup")
+            && popup.contains("apply_menu_syntax_form_suggestion")
+            && popup.contains("update_menu_syntax_form_field"),
+        "handler form suggestions must accept through the shared Trigger Popup window and sync through canonical form edits"
     );
 
     assert!(
@@ -543,21 +557,23 @@ fn priority_field_uses_sidebar_autocomplete_not_inline_choice_chips() {
     assert!(
         !render.contains("fn render_menu_syntax_form_choice_field(")
             && !render.contains("handler-form-choice-option")
-            && render.contains("fn render_menu_syntax_form_suggestion_popup(")
-            && render.contains("handler-form-autocomplete-popup")
-            && render.contains("update_menu_syntax_form_field"),
-        "priority must use the shared sidebar autocomplete surface and sync through form-field updates"
+            && !render.contains("fn render_menu_syntax_form_suggestion_popup(")
+            && !render.contains("handler-form-autocomplete-popup")
+            && read("src/app_impl/menu_syntax_main_hint.rs")
+                .contains("build_menu_syntax_form_trigger_popup_snapshot"),
+        "priority must use the shared Trigger Popup surface instead of inline choice chips or a bespoke sidebar"
     );
 
     let elements = read("src/app_layout/collect_elements.rs");
     assert!(
         !elements.contains("handlerFormChoiceField")
-            && !elements.contains("handlerFormChoiceOption")
-            && !elements.contains("\"radiogroup\"")
-            && elements.contains("MenuSyntaxFormFieldKind::Priority")
-            && elements.contains("handlerFormAutocompleteField")
-            && elements.contains("\"option\""),
-        "getElements must expose priority through the same active autocomplete option path as tags"
+        && !elements.contains("handlerFormChoiceOption")
+        && !elements.contains("handlerFormAutocompleteOption")
+        && !elements.contains("\"radiogroup\"")
+        && elements.contains("MenuSyntaxFormFieldKind::Priority")
+        && elements.contains("handlerFormAutocompleteField")
+        && elements.contains("\"combobox\""),
+        "getElements must expose priority as a combobox while popup choices come from the shared Trigger Popup target"
     );
 }
 
@@ -594,35 +610,31 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
             && app.contains("fn open_menu_syntax_form_suggestions_for(")
             && app.contains("fn close_menu_syntax_form_suggestions(")
             && app.contains("menu_syntax_form_suggestion_field_id")
-            && app.contains("close_menu_syntax_form_suggestions();\n                    cx.notify();")
+            && app.contains("close_menu_syntax_form_suggestions_and_trigger_popup(cx);")
             && app.contains("focus_menu_syntax_main_input(window, cx)"),
         "autocomplete popup ownership must be explicit and Escape must dismiss it before returning to the main input"
     );
 
     let render = read("src/render_script_list/mod.rs");
     assert!(
-        render.contains("fn render_menu_syntax_form_suggestion_popup(")
-            && render.contains("handler-form-autocomplete-popup")
-            && render.contains("handler-form-autocomplete-option")
-            && render.contains("apply_menu_syntax_form_suggestion")
-            && render.contains("update_menu_syntax_form_field")
-            && render.contains(".when_some(popup_field"),
-        "tags/object/priority autocomplete must render one owned sidebar list whose options sync through canonical form edits"
+        !render.contains("fn render_menu_syntax_form_suggestion_popup(")
+            && !render.contains("handler-form-autocomplete-popup")
+            && !render.contains("handler-form-autocomplete-option")
+            && !render.contains(".when_some(popup_field"),
+        "tags/object/priority autocomplete must not render a bespoke inline/sidebar list"
     );
 
     let elements = read("src/app_layout/collect_elements.rs");
     assert!(
         elements.contains("handlerFormAutocompleteField")
-            && elements.contains("handlerFormAutocompleteOption")
-            && elements.contains("\"combobox\"")
-            && elements.contains("menu_syntax_form_suggestion_field_id.as_deref()"),
-        "getElements must only expose autocomplete popup options for the active popup owner"
+            && !elements.contains("handlerFormAutocompleteOption")
+            && elements.contains("\"combobox\""),
+        "getElements must expose form combobox fields while popup options are exposed by the shared Trigger Popup automation target"
     );
 
     let layout = read("src/app_layout/build_layout_info.rs");
     assert!(
-        layout.contains("\"surface\": \"handlerFormAutocompleteSidebar\"")
-            && layout.contains("SIDEBAR_WIDTH"),
-        "layout receipts must identify the autocomplete popup as the handler form sidebar surface"
+        layout.contains("\"surface\": \"menuSyntaxTriggerPopup\""),
+        "layout receipts must identify form autocomplete as the shared Trigger Popup surface"
     );
 }

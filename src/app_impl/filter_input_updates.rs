@@ -158,6 +158,7 @@ impl ScriptListApp {
                 self.menu_syntax_trigger_popup_state = Default::default();
                 crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
                 crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                self.sync_menu_syntax_form_inputs_from_filter(window, cx);
             } else {
                 self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
             }

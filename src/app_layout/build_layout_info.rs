@@ -373,11 +373,7 @@ impl ScriptListApp {
         let form_top = content_top + OUTER_PADDING_TOP + TITLE_BLOCK_HEIGHT;
         let content_width = (window_width - (OUTER_PADDING_X * 2.0)).max(0.0);
         let sidebar_field_id = self.menu_syntax_form_suggestion_field_id.as_deref();
-        let field_width = if sidebar_field_id.is_some() {
-            (content_width - SIDEBAR_GAP - SIDEBAR_WIDTH).max(0.0)
-        } else {
-            content_width
-        };
+        let field_width = content_width;
 
         let mut focused_visibility = serde_json::Value::Null;
         let fields = form
@@ -437,7 +433,7 @@ impl ScriptListApp {
                     serde_json::json!({
                         "ownerFieldId": field_id,
                         "role": "listbox",
-                        "surface": "handlerFormAutocompleteSidebar",
+                        "surface": "menuSyntaxTriggerPopup",
                         "bounds": {
                             "x": OUTER_PADDING_X + field_width + SIDEBAR_GAP,
                             "y": form_top - scroll_offset_y,

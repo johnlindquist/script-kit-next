@@ -2020,17 +2020,9 @@ impl ScriptListApp {
         let handler_form = self
             .menu_syntax_main_hint_snapshot(&self.filter_text, false)
             .and_then(|snapshot| snapshot.form);
-        let handler_form_field_count = handler_form.as_ref().map_or(0usize, |form| {
-            let field_count = form.fields.len();
-            let autocomplete_options = form
-                .fields
-                .iter()
-                .find(|field| {
-                    self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str())
-                })
-                .map_or(0, |field| field.suggestions.len().min(6));
-            field_count + autocomplete_options
-        });
+        let handler_form_field_count = handler_form
+            .as_ref()
+            .map_or(0usize, |form| form.fields.len());
         let total_count = total_rows + source_statuses.len() + handler_form_field_count + 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
 
@@ -2086,37 +2078,6 @@ impl ScriptListApp {
                     status_kind: None,
                     action_disabled: None,
                 });
-
-                if self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str()) {
-                    for (suggestion_index, suggestion) in
-                        field.suggestions.iter().take(6).enumerate()
-                    {
-                        if elements.len() >= limit {
-                            break;
-                        }
-                        elements.push(protocol::ElementInfo {
-                            semantic_id: format!(
-                                "handler-form:{}:{}:suggestion:{}",
-                                form.target, field.id, suggestion_index
-                            ),
-                            element_type: protocol::ElementType::Choice,
-                            text: Some(suggestion.label.clone()),
-                            value: Some(suggestion.value.clone()),
-                            selected: Some(
-                                field.selected_suggestion_index == Some(suggestion_index),
-                            ),
-                            focused: None,
-                            index: Some(suggestion_index),
-                            role: Some("option".to_string()),
-                            kind: Some("handlerFormAutocompleteOption".to_string()),
-                            source: Some(suggestion.source.clone()),
-                            source_name: Some(field.id.clone()),
-                            selectable: Some(true),
-                            status_kind: None,
-                            action_disabled: None,
-                        });
-                    }
-                }
             }
         }
 
