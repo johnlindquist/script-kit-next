@@ -8479,6 +8479,10 @@ export interface ActiveFooterSnapshot {
   activeSurface?: string | null;
   nativeFooterHostInstalled: boolean;
   gpuiFallbackVisible: boolean;
+  leftInfo?: {
+    dotStatus: 'hidden' | 'streaming' | 'waitingForPermission' | 'idle' | 'error' | string;
+    modelName: string;
+  } | null;
   buttonCount: number;
   buttons: ActiveFooterButtonSnapshot[];
   mismatch?: string | null;

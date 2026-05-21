@@ -43,8 +43,8 @@ pub use automation_inspect_geometry::{
     target_bounds_in_screenshot_with_main,
 };
 pub use automation_surface::{
-    ActiveFooterButtonSnapshot, ActiveFooterSnapshot, AutomationSurfaceSnapshot,
-    LauncherSurfaceContractSnapshot, ACTIVE_FOOTER_SCHEMA_VERSION,
+    ActiveFooterButtonSnapshot, ActiveFooterLeftInfoSnapshot, ActiveFooterSnapshot,
+    AutomationSurfaceSnapshot, LauncherSurfaceContractSnapshot, ACTIVE_FOOTER_SCHEMA_VERSION,
     AUTOMATION_SURFACE_SCHEMA_VERSION, LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
 };
 pub use automation_window::{

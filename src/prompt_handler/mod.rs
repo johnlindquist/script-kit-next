@@ -8708,6 +8708,16 @@ impl ScriptListApp {
         }
     }
 
+    fn active_footer_dot_status_name(status: crate::footer_popup::FooterDotStatus) -> &'static str {
+        match status {
+            crate::footer_popup::FooterDotStatus::Hidden => "hidden",
+            crate::footer_popup::FooterDotStatus::Streaming => "streaming",
+            crate::footer_popup::FooterDotStatus::WaitingForPermission => "waitingForPermission",
+            crate::footer_popup::FooterDotStatus::Idle => "idle",
+            crate::footer_popup::FooterDotStatus::Error => "error",
+        }
+    }
+
     pub(crate) fn active_footer_snapshot(
         &self,
         cx: &gpui::App,
@@ -8720,7 +8730,10 @@ impl ScriptListApp {
             || self.menu_syntax_object_selector_state.snapshot.is_some()
             || crate::menu_syntax_object_selector_popup_window::is_menu_syntax_object_selector_popup_window_open()
             || crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open();
-        let config = self.main_window_footer_config_with_cx(Some(cx));
+        let mut config = self.main_window_footer_config_with_cx(Some(cx));
+        if let Some(ref mut cfg) = config {
+            self.enrich_footer_config_with_acp_info(cfg);
+        }
         let native_buttons: Vec<_> = config
             .as_ref()
             .map(|cfg| {
@@ -8730,6 +8743,14 @@ impl ScriptListApp {
                     .collect()
             })
             .unwrap_or_default();
+        let left_info = config.as_ref().and_then(|cfg| {
+            cfg.left_info
+                .as_ref()
+                .map(|info| crate::protocol::ActiveFooterLeftInfoSnapshot {
+                    dot_status: Self::active_footer_dot_status_name(info.dot_status).to_string(),
+                    model_name: info.model_name.clone(),
+                })
+        });
 
         let native_ready = expected_surface.is_some()
             && host.native_host_installed
@@ -8799,6 +8820,7 @@ impl ScriptListApp {
             active_surface: host.installed_surface.map(str::to_string),
             native_footer_host_installed: native_ready,
             gpui_fallback_visible: owner == "prompt",
+            left_info,
             button_count: buttons.len(),
             buttons,
             mismatch,
