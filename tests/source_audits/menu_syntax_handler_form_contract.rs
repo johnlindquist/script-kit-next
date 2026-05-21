@@ -68,7 +68,7 @@ fn rendered_capture_composer_uses_form_before_instruction_rows() {
 }
 
 #[test]
-fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
+fn form_mode_hides_ask_ai_hint_and_uses_accent_focus_style() {
     let render = read("src/render_script_list/mod.rs");
     let ask_hint = render
         .find("render_launcher_ask_ai_hint")
@@ -95,17 +95,14 @@ fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
         .expect("handler form renderer must exist");
     let field_renderer = &render[field_start..form_start];
     assert!(
-        !field_renderer.contains("accent.selected")
-            && !field_renderer.contains("rgb(accent)")
-            && !field_renderer.contains("theme.colors.accent")
-            && !field_renderer.contains("accent << 8"),
-        "tabbing through handler fields should not use loud accent focus styling"
+        field_renderer.contains("theme.colors.accent.selected")
+            && field_renderer.contains("theme.colors.ui.border")
+            && field_renderer.contains("theme.colors.background.search_box"),
+        "focused handler fields should show an accent border while preserving the normal field background"
     );
     assert!(
-        field_renderer.contains("theme.colors.ui.border")
-            && field_renderer.contains("theme.colors.background.search_box")
-            && field_renderer.contains("field.required && !field.satisfied"),
-        "handler form focus should use quiet border/background tokens and only show missing required state"
+        field_renderer.contains("field.required && !field.satisfied"),
+        "handler form focus should only add required-state chrome when the schema requires it"
     );
     assert!(
         field_renderer.contains("gpui_component::input::Input::new(&input)")
@@ -126,7 +123,7 @@ fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
         read("src/app_impl/menu_syntax_main_hint.rs")
             .contains("state.set_tab_navigation(handler_form_owns_input, window, cx)")
             && read("src/app_impl/menu_syntax_main_hint.rs").contains(
-                "state.set_tab_navigation_space_as_tab(handler_form_owns_input, window, cx)"
+                "state.set_tab_navigation_space_as_tab(false, window, cx)"
             )
             && read("vendor/gpui-component/crates/ui/src/input/state.rs")
                 .contains("InputEvent::PressTab { secondary: false }")
@@ -135,6 +132,13 @@ fn form_mode_hides_ask_ai_hint_and_uses_quiet_focus_style() {
             && render.contains("sk_is_key_tab(key_str)")
             && render.contains("this.focus_next_menu_syntax_form_field(window, cx);"),
         "main filter input must propagate Tab while handler forms own input so the form can take real cursor focus"
+    );
+
+    let filter_change = read("src/app_impl/filter_input_change.rs");
+    assert!(
+        !filter_change.contains("trim_end_matches(' ').to_string()")
+            && !filter_change.contains("self.focus_next_menu_syntax_form_field(window, cx);\n                return;"),
+        "typing a trailing space in the main input must not trim the command or auto-focus the first handler field"
     );
 }
 
@@ -361,7 +365,7 @@ fn script_list_printable_simulate_key_can_update_filter_text() {
 }
 
 #[test]
-fn handler_form_autocomplete_is_state_first_and_inline() {
+fn handler_form_autocomplete_is_state_first_and_sidebar_owned() {
     let form = read("src/menu_syntax/form.rs");
     for symbol in [
         "pub struct MenuSyntaxFormSuggestionApplication",
@@ -395,10 +399,17 @@ fn handler_form_autocomplete_is_state_first_and_inline() {
         "update_menu_syntax_form_field",
         "menu_syntax_form_suggestion_field_id",
         "menu_syntax_form_suggestion_selected_index",
+        "sync_menu_syntax_form_suggestions_from_main_input",
+        "main_input_form_completion_field",
+        "active_menu_syntax_form_popup_field",
         "search_root_object_candidates_direct",
     ] {
         assert!(app.contains(symbol), "app autocomplete missing `{symbol}`");
     }
+    assert!(
+        app.contains("token.len() == 1 || !token[1..].chars().all"),
+        "a bare # in the main input must open tag autocomplete instead of being treated like a numeric token"
+    );
 
     let accept_start = app
         .find("fn accept_menu_syntax_form_suggestion(")
@@ -411,7 +422,7 @@ fn handler_form_autocomplete_is_state_first_and_inline() {
         accept_body.contains("update_menu_syntax_form_field")
             && !accept_body.contains("menu_syntax_object_selector_state")
             && !accept_body.contains("plan_object_selector_transition"),
-        "form suggestion acceptance must stay inline and sync through the form field edit path"
+        "form suggestion acceptance must stay state-owned and sync through the form field edit path"
     );
 
     assert!(
@@ -519,7 +530,7 @@ fn handler_form_focus_reveal_has_scroll_and_layout_contract() {
 }
 
 #[test]
-fn priority_field_is_choice_control_not_plain_textbox() {
+fn priority_field_uses_sidebar_autocomplete_not_inline_choice_chips() {
     let form = read("src/menu_syntax/form.rs");
     assert!(
         form.contains("MenuSyntaxFormFieldKind::Priority")
@@ -530,20 +541,48 @@ fn priority_field_is_choice_control_not_plain_textbox() {
 
     let render = read("src/render_script_list/mod.rs");
     assert!(
-        render.contains("fn render_menu_syntax_form_choice_field(")
-            && render.contains("handler-form-choice-option")
-            && render.contains("MenuSyntaxFormFieldKind::Priority")
+        !render.contains("fn render_menu_syntax_form_choice_field(")
+            && !render.contains("handler-form-choice-option")
+            && render.contains("fn render_menu_syntax_form_suggestion_popup(")
+            && render.contains("handler-form-autocomplete-popup")
             && render.contains("update_menu_syntax_form_field"),
-        "priority must render as an owned choice control that syncs through form-field updates"
+        "priority must use the shared sidebar autocomplete surface and sync through form-field updates"
     );
 
     let elements = read("src/app_layout/collect_elements.rs");
     assert!(
-        elements.contains("handlerFormChoiceField")
-            && elements.contains("handlerFormChoiceOption")
-            && elements.contains("\"radiogroup\"")
+        !elements.contains("handlerFormChoiceField")
+            && !elements.contains("handlerFormChoiceOption")
+            && !elements.contains("\"radiogroup\"")
+            && elements.contains("MenuSyntaxFormFieldKind::Priority")
+            && elements.contains("handlerFormAutocompleteField")
             && elements.contains("\"option\""),
-        "getElements must expose priority as a choice/radiogroup with selectable options"
+        "getElements must expose priority through the same active autocomplete option path as tags"
+    );
+}
+
+#[test]
+fn handler_form_uses_projected_invocation_for_natural_dates_and_main_input_tokens() {
+    let app = read("src/app_impl/menu_syntax_main_hint.rs");
+    assert!(
+        app.contains("fn menu_syntax_capture_form_invocation_for_form(")
+            && app.contains("project_menu_syntax_main_input_completion")
+            && app.contains("resolve_menu_syntax_form_invocation_dates")
+            && app.contains("builtin_capture_accepts_for_target")
+            && app.contains("crate::menu_syntax::payload::DatePhrase"),
+        "handler form snapshots must project main-input autocomplete tokens and natural dates before building fields"
+    );
+    assert!(
+        app.contains("let invocation_for_form =")
+            && app.contains("self.menu_syntax_capture_form_invocation_for_form(raw_filter_text)")
+            && app.contains("self.menu_syntax_capture_form_invocation_for_form(&self.filter_text)"),
+        "snapshot and form-field edits must share the projected invocation path"
+    );
+    assert!(
+        app.contains("token.to_ascii_lowercase().as_str()")
+            && app.contains("(\"tags\", \"#\")")
+            && app.contains("(\"priority\", \"p\")"),
+        "active main-input completion projection must only strip bare tag/priority fragments from the body"
     );
 }
 
@@ -566,8 +605,9 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
             && render.contains("handler-form-autocomplete-popup")
             && render.contains("handler-form-autocomplete-option")
             && render.contains("apply_menu_syntax_form_suggestion")
-            && render.contains("update_menu_syntax_form_field"),
-        "tags/object autocomplete must render an owned popup list whose options sync through canonical form edits"
+            && render.contains("update_menu_syntax_form_field")
+            && render.contains(".when_some(popup_field"),
+        "tags/object/priority autocomplete must render one owned sidebar list whose options sync through canonical form edits"
     );
 
     let elements = read("src/app_layout/collect_elements.rs");
@@ -577,5 +617,12 @@ fn autocomplete_renders_owned_popup_list_and_escape_dismisses_first() {
             && elements.contains("\"combobox\"")
             && elements.contains("menu_syntax_form_suggestion_field_id.as_deref()"),
         "getElements must only expose autocomplete popup options for the active popup owner"
+    );
+
+    let layout = read("src/app_layout/build_layout_info.rs");
+    assert!(
+        layout.contains("\"surface\": \"handlerFormAutocompleteSidebar\"")
+            && layout.contains("SIDEBAR_WIDTH"),
+        "layout receipts must identify the autocomplete popup as the handler form sidebar surface"
     );
 }

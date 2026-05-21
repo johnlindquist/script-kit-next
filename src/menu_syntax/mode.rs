@@ -337,7 +337,25 @@ pub fn input_span_role_name(role: MenuSyntaxFragmentRole) -> &'static str {
 }
 
 fn capture_accepts_nl_fragments(invocation: &CaptureInvocation) -> bool {
-    invocation.target.eq_ignore_ascii_case("cal") || invocation.target.eq_ignore_ascii_case("mcal")
+    if invocation.target.eq_ignore_ascii_case("cal")
+        || invocation.target.eq_ignore_ascii_case("mcal")
+    {
+        return true;
+    }
+    let Some(schema) = crate::menu_syntax::builtin_schema(&invocation.target) else {
+        return false;
+    };
+    schema
+        .required
+        .iter()
+        .chain(schema.optional.iter())
+        .any(|requirement| {
+            matches!(
+                requirement,
+                super::capture_schema::FieldRequirement::AnyDate
+                    | super::capture_schema::FieldRequirement::DateRole(_)
+            )
+        })
 }
 
 fn capture_body_start(raw: &str) -> Option<usize> {
@@ -819,6 +837,15 @@ mod tests {
         assert!(recurrence
             .iter()
             .any(|span| span.role == MenuSyntaxFragmentRole::Recurrence));
+    }
+
+    #[test]
+    fn input_spans_highlight_todo_natural_date_phrase() {
+        let raw = ";todo Eat lunch tom 3pm #food";
+        let spans = input_spans_for_input(raw);
+        assert!(spans.iter().any(|span| {
+            span.role == MenuSyntaxFragmentRole::Date && &raw[span.range.clone()] == "tom 3pm"
+        }));
     }
 
     #[test]
