@@ -99,7 +99,19 @@ pub(crate) struct AcpFooterButtonSpec {
 pub(crate) struct AcpFooterSnapshot {
     pub(crate) dot_status: crate::footer_popup::FooterDotStatus,
     pub(crate) model_display: String,
+    pub(crate) status_text: Option<&'static str>,
     pub(crate) buttons: Vec<AcpFooterButtonSpec>,
+}
+
+impl AcpFooterSnapshot {
+    pub(crate) fn model_status_label(&self) -> String {
+        match self.status_text {
+            Some(status) if !status.is_empty() => {
+                format!("{} · {}", self.model_display, status)
+            }
+            _ => self.model_display.clone(),
+        }
+    }
 }
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
@@ -756,6 +768,7 @@ impl AcpChatView {
         AcpFooterSnapshot {
             dot_status: self.footer_dot_status(cx),
             model_display: thread.selected_model_display().to_string(),
+            status_text: self.footer_status_text(cx),
             buttons: self.footer_buttons_for_thread(&thread),
         }
     }
@@ -879,6 +892,21 @@ impl AcpChatView {
         }
     }
 
+    pub(crate) fn footer_status_text(&self, cx: &App) -> Option<&'static str> {
+        use crate::ai::acp::thread::AcpThreadStatus;
+
+        if self.context_capture_pending {
+            return Some("Loading context...");
+        }
+
+        match self.live_thread().read(cx).status {
+            AcpThreadStatus::Streaming => Some("Working..."),
+            AcpThreadStatus::WaitingForPermission => Some("Waiting for permission..."),
+            AcpThreadStatus::Error => Some("Error"),
+            AcpThreadStatus::Idle => None,
+        }
+    }
+
     fn footer_dot_element(
         dot_status: crate::footer_popup::FooterDotStatus,
     ) -> Option<gpui::AnyElement> {
@@ -936,6 +964,7 @@ impl AcpChatView {
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
         let mut hints = Vec::new();
+        let status_text = snapshot.status_text;
         for button in snapshot.buttons.iter().cloned() {
             let button_view = weak_view.clone();
             hints.push(crate::components::ClickableHint::new(
@@ -1005,7 +1034,16 @@ impl AcpChatView {
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
                             .child(snapshot.model_display),
-                    ),
+                    )
+                    .when_some(status_text, |d, status| {
+                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgba(hint_text_rgba))
+                                    .child(status),
+                            )
+                    }),
             )
             .child(crate::components::render_hint_icons_clickable(
                 hints,
@@ -1022,6 +1060,7 @@ impl AcpChatView {
         let hint_text_hex = theme.colors.text.primary;
         let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
+        let status_text = snapshot.status_text;
         let hints = snapshot
             .buttons
             .iter()
@@ -1069,7 +1108,16 @@ impl AcpChatView {
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
                             .child(snapshot.model_display),
-                    ),
+                    )
+                    .when_some(status_text, |d, status| {
+                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child("·"))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgba(hint_text_rgba))
+                                    .child(status),
+                            )
+                    }),
             )
             .child(crate::components::render_selectable_hint_icons(
                 hints,

@@ -4,7 +4,6 @@ use gpui::{
 };
 use gpui_component::scroll::ScrollableElement;
 use std::collections::HashSet;
-use std::time::Duration;
 
 use super::super::thread::{AcpThread, AcpThreadMessage, AcpThreadMessageRole};
 use crate::prompts::markdown::render_markdown_with_scope;
@@ -22,13 +21,11 @@ pub struct AcpTranscript {
     list_state: ListState,
     messages: Vec<AcpThreadMessage>,
     collapsed_ids: HashSet<u64>,
-    show_activity_row: bool,
 }
 
 impl AcpTranscript {
     pub fn new(messages: Vec<AcpThreadMessage>, _cx: &mut Context<Self>) -> Self {
-        let show_activity_row = false;
-        let total = messages.len() + usize::from(show_activity_row);
+        let total = messages.len();
         let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0));
         list_state.set_follow_tail(true);
 
@@ -36,7 +33,6 @@ impl AcpTranscript {
             list_state,
             messages,
             collapsed_ids: HashSet::new(),
-            show_activity_row,
         }
     }
 
@@ -45,9 +41,9 @@ impl AcpTranscript {
     }
 
     pub fn set_messages(&mut self, messages: Vec<AcpThreadMessage>, cx: &mut Context<Self>) {
-        let old_count = self.messages.len() + usize::from(self.show_activity_row);
+        let old_count = self.messages.len();
         self.messages = messages;
-        let new_count = self.messages.len() + usize::from(self.show_activity_row);
+        let new_count = self.messages.len();
 
         if new_count != old_count {
             self.list_state.reset(new_count);
@@ -55,12 +51,10 @@ impl AcpTranscript {
         cx.notify();
     }
 
-    pub fn set_show_activity_row(&mut self, show: bool, cx: &mut Context<Self>) {
-        if self.show_activity_row != show {
-            self.show_activity_row = show;
-            let count = self.messages.len() + usize::from(self.show_activity_row);
-            self.list_state.reset(count);
-        }
+    pub fn set_show_activity_row(&mut self, _show: bool, cx: &mut Context<Self>) {
+        // Streaming/loading activity is surfaced by the footer status, not as a
+        // synthetic transcript row. Keep this method as a narrow compatibility
+        // shim for the thread observer.
         cx.notify();
     }
 
@@ -300,44 +294,6 @@ impl AcpTranscript {
             .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
             .into_any_element()
     }
-
-    fn render_assistant_activity_row_static() -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-        let accent = rgb(theme.colors.accent.selected);
-        let _pulse_duration = Duration::from_millis(1100);
-        let dot = div().size(px(6.0)).rounded_full().bg(accent).opacity(0.7);
-
-        div()
-            .id("acp-assistant-activity-row")
-            .w_full()
-            .px(px(8.0))
-            .pb(px(4.0))
-            .child(
-                div()
-                    .w_full()
-                    .px(px(12.0))
-                    .py(px(8.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgba((theme.colors.text.muted << 8) | 0x99))
-                            .child("Assistant"),
-                    )
-                    .child(
-                        div()
-                            .pt(px(4.0))
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .text_sm()
-                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xCC))
-                            .child(dot)
-                            .child("Working..."),
-                    ),
-            )
-            .into_any_element()
-    }
 }
 
 impl Render for AcpTranscript {
@@ -347,7 +303,6 @@ impl Render for AcpTranscript {
 
         let messages_snapshot = self.messages.clone();
         let collapsed_ids = self.collapsed_ids.clone();
-        let show_activity_row = self.show_activity_row;
 
         div()
             .relative()
@@ -356,10 +311,6 @@ impl Render for AcpTranscript {
             .overflow_hidden()
             .child(
                 list(self.list_state.clone(), move |ix, _window, _cx| {
-                    if show_activity_row && ix == messages_snapshot.len() {
-                        return Self::render_assistant_activity_row_static();
-                    }
-
                     let msg = &messages_snapshot[ix];
                     let is_collapsible = matches!(
                         msg.role,

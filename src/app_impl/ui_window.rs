@@ -643,8 +643,9 @@ impl ScriptListApp {
 
             let footer_disabled = self.main_window_footer_buttons_blocked();
             let enabled = !footer_disabled;
-            let buttons =
-                vec![FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel").enabled(enabled)];
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Close, "Esc", "Cancel").enabled(enabled),
+            ];
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_buttons_resolved",
@@ -662,8 +663,7 @@ impl ScriptListApp {
             let enabled = !footer_disabled;
             let buttons = vec![
                 FooterButtonConfig::new(FooterAction::Run, "↵", "Fix in Agent").enabled(enabled),
-                FooterButtonConfig::new(FooterAction::Apply, "⌘C", "Copy Issues")
-                    .enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Apply, "⌘C", "Copy Issues").enabled(enabled),
             ];
             tracing::info!(
                 target: "script_kit::footer_popup",
@@ -1006,7 +1006,7 @@ impl ScriptListApp {
             if let Some(snapshot) = self.acp_footer_snapshot.as_ref() {
                 config.left_info = Some(crate::footer_popup::FooterLeftInfo {
                     dot_status: snapshot.dot_status,
-                    model_name: snapshot.model_display.clone(),
+                    model_name: snapshot.model_status_label(),
                     prefer_accent_for_active_states: true,
                 });
                 return;

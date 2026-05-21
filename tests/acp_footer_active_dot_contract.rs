@@ -4,6 +4,8 @@ const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../src/footer_popup.rs");
+const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
+const PROTOCOL_SURFACE_SOURCE: &str = include_str!("../src/protocol/types/automation_surface.rs");
 
 fn fn_body<'a>(source: &'a str, signature: &str) -> &'a str {
     let start = source.find(signature).expect("signature must exist");
@@ -62,8 +64,8 @@ fn native_footer_uses_cached_acp_status_without_child_entity_reads() {
     assert!(
         body.contains("FooterLeftInfo")
             && body.contains("dot_status,")
-            && body.contains("model_name: model_name.clone()"),
-        "native footer must still publish ACP dot/model info from cached values"
+            && body.contains("model_name: snapshot.model_status_label()"),
+        "native footer must still publish ACP dot/model/status info from cached values"
     );
     assert!(
         !body.contains("entity.read(") && !body.contains(".read(cx)"),
@@ -173,8 +175,8 @@ fn embedded_acp_observer_repaints_parent_for_visible_footer_status_transitions()
     );
     assert!(
         body.contains("let footer_status_changed = if visible_acp_view_changed")
-            && body.contains("self.acp_footer_dot_status = Some(dot_status);")
-            && body.contains("self.acp_footer_model_display = Some(model_display);"),
+            && body.contains("let snapshot = view.footer_snapshot(cx);")
+            && body.contains("self.acp_footer_snapshot = Some(snapshot);"),
         "observer must cache visible ACP footer state so token-by-token child updates do not restart the pulse animation"
     );
     assert!(
@@ -203,5 +205,28 @@ fn embedded_acp_observer_defers_child_entity_reads() {
             && schedule_body.contains("ACP_OBSERVED_STATE_SYNC_GENERATION.load")
             && schedule_body.contains("this.sync_embedded_acp_observed_state(&view_entity, cx);"),
         "observer must debounce child-state reads until the AcpChatView notification burst settles"
+    );
+}
+
+#[test]
+fn get_state_active_footer_exposes_acp_model_status_text() {
+    assert!(
+        PROTOCOL_SURFACE_SOURCE.contains("pub left_info: Option<ActiveFooterLeftInfoSnapshot>")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub struct ActiveFooterLeftInfoSnapshot")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub dot_status: String")
+            && PROTOCOL_SURFACE_SOURCE.contains("pub model_name: String"),
+        "getState.activeFooter must expose the footer model/status label for ACP proof"
+    );
+
+    let body = fn_body(
+        PROMPT_HANDLER_SOURCE,
+        "pub(crate) fn active_footer_snapshot(",
+    );
+    assert!(
+        body.contains("self.enrich_footer_config_with_acp_info(cfg);")
+            && body.contains("left_info = config.as_ref().and_then")
+            && body.contains("dot_status: Self::active_footer_dot_status_name")
+            && body.contains("model_name: info.model_name.clone()"),
+        "active footer snapshots must include ACP-enriched left info, including status text"
     );
 }

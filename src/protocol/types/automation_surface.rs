@@ -71,9 +71,18 @@ pub struct ActiveFooterSnapshot {
     pub active_surface: Option<String>,
     pub native_footer_host_installed: bool,
     pub gpui_fallback_visible: bool,
+    pub left_info: Option<ActiveFooterLeftInfoSnapshot>,
     pub button_count: usize,
     pub buttons: Vec<ActiveFooterButtonSnapshot>,
     pub mismatch: Option<String>,
+}
+
+/// Machine-readable footer status/model text for `getState.activeFooter`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ActiveFooterLeftInfoSnapshot {
+    pub dot_status: String,
+    pub model_name: String,
 }
 
 /// Machine-readable footer button state for `getState.activeFooter`.
