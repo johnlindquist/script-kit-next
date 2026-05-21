@@ -315,7 +315,8 @@ fn build_capture_field_snapshot(
     registered_targets: &[String],
 ) -> Option<TriggerPickerSnapshot> {
     let selector =
-        crate::menu_syntax::active_capture_field_selector_for_input(input, registered_targets)?;
+        crate::menu_syntax::active_capture_field_selector_for_input(input, registered_targets)
+            .or_else(|| crate::menu_syntax::active_link_capture_field_selector_for_input(input))?;
     let rows = selector
         .fields
         .iter()
@@ -1702,6 +1703,42 @@ mod tests {
         match &snap.rows[0].action {
             TriggerPickerAction::ReplaceInput { text } => {
                 assert_eq!(text, ";snippet Hello there! description: ");
+            }
+            other => panic!("expected ReplaceInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn link_capture_field_popup_lists_metadata_fields() {
+        let ctx = TriggerPickerContext::default();
+        let snap = build_trigger_picker_snapshot(";link https://example.com Example :", &ctx)
+            .expect("snapshot");
+
+        assert_eq!(snap.mode, TriggerPickerMode::Capture);
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "url" && row.token.as_deref() == Some("url:")));
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "title" && row.token.as_deref() == Some("title:")));
+        assert!(snap
+            .rows
+            .iter()
+            .any(|row| row.title == "description" && row.token.as_deref() == Some("description:")));
+    }
+
+    #[test]
+    fn link_capture_field_popup_filters_and_replaces_field_token() {
+        let ctx = TriggerPickerContext::default();
+        let snap = build_trigger_picker_snapshot(";link https://example.com Example ti:", &ctx)
+            .expect("snapshot");
+
+        assert_eq!(snap.rows[0].title, "title");
+        match &snap.rows[0].action {
+            TriggerPickerAction::ReplaceInput { text } => {
+                assert_eq!(text, ";link https://example.com Example title: ");
             }
             other => panic!("expected ReplaceInput, got {other:?}"),
         }
