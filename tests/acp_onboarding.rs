@@ -12,6 +12,8 @@ const CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const ACP_CONFIG_SOURCE: &str = include_str!("../src/ai/acp/config.rs");
 const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
 const SETUP_MOD_SOURCE: &str = include_str!("../src/setup/mod.rs");
+const RELEASE_WORKFLOW_SOURCE: &str = include_str!("../.github/workflows/release.yml");
+const VERIFY_MACOS_BUNDLE_SOURCE: &str = include_str!("../scripts/verify-macos-bundle.sh");
 
 // ── Launch path uses catalog, not Claude-only loader ───────────────────
 
@@ -275,6 +277,57 @@ fn codex_detection_uses_local_codex_cli_not_adapter_binary_only() {
             "if command_exists(\"codex-acp\") && !agents.iter().any(|a| a.id == \"codex-acp\")"
         ),
         "Codex must not be discoverable only when codex-acp itself is on PATH"
+    );
+}
+
+#[test]
+fn codex_adapter_discovery_excludes_app_bundled_binary() {
+    assert!(
+        !ACP_CONFIG_SOURCE.contains("BundledApp"),
+        "Codex ACP adapter discovery must not treat the app bundle as an adapter source"
+    );
+    assert!(
+        !ACP_CONFIG_SOURCE.contains("bundled_codex_acp_path"),
+        "Codex ACP adapter discovery must not probe Contents/MacOS/codex-acp"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("EnvOverride")
+            && ACP_CONFIG_SOURCE.contains("SiblingRepo")
+            && ACP_CONFIG_SOURCE.contains("RepoLocal")
+            && ACP_CONFIG_SOURCE.contains("Path"),
+        "Codex ACP adapter discovery must keep external env, dev, and PATH adapter sources"
+    );
+}
+
+#[test]
+fn release_workflow_does_not_embed_or_sign_codex_acp() {
+    for forbidden in [
+        "CODEX_ACP_VERSION",
+        "Fetch and embed codex-acp binary",
+        "scripts/fetch-codex-acp.sh",
+        "Contents/MacOS/codex-acp",
+    ] {
+        assert!(
+            !RELEASE_WORKFLOW_SOURCE.contains(forbidden),
+            "release workflow must not contain bundled codex-acp hook: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn bundle_verifier_rejects_extra_macos_payloads() {
+    assert!(
+        VERIFY_MACOS_BUNDLE_SOURCE.contains("EXPECTED_BIN="),
+        "bundle verifier must still require the main executable"
+    );
+    assert!(
+        !VERIFY_MACOS_BUNDLE_SOURCE.contains("CODEX_ACP_BIN"),
+        "bundle verifier must not require a codex-acp executable"
+    );
+    assert!(
+        VERIFY_MACOS_BUNDLE_SOURCE.contains("! -name 'script-kit-gpui' -print")
+            && !VERIFY_MACOS_BUNDLE_SOURCE.contains("! -name 'codex-acp'"),
+        "bundle verifier must allow only the main executable in Contents/MacOS"
     );
 }
 
