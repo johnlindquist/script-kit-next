@@ -343,130 +343,26 @@ fn write_app_owned_snippet_capture_in_sk_path(
     invocation: &crate::menu_syntax::CaptureInvocation,
     sk_path: &std::path::Path,
 ) -> Result<String, String> {
-    let (operation_word, body) = split_operation_word(
-        &invocation.body,
-        &["add", "create", "update", "remove", "rm", "delete"],
-    );
-    let operation = match operation_word.as_deref() {
-        Some("update") => "update",
-        Some("remove" | "rm" | "delete") => "delete",
-        _ => "create",
+    let draft = crate::menu_syntax::parse_snippet_scriptlet_capture(invocation)?;
+    let outcome = match draft.operation {
+        crate::menu_syntax::SnippetScriptletOperation::Create
+        | crate::menu_syntax::SnippetScriptletOperation::Update => {
+            crate::scriptlets::snippet_markdown_store::upsert_snippet_section(sk_path, &draft)?
+        }
+        crate::menu_syntax::SnippetScriptletOperation::Delete => {
+            crate::scriptlets::snippet_markdown_store::delete_snippet_section(sk_path, &draft)?
+        }
     };
-    let kv = invocation
-        .kv
-        .iter()
-        .map(|(k, v)| (k.to_ascii_lowercase(), v.clone()))
-        .collect::<std::collections::HashMap<_, _>>();
-    let object_refs = crate::menu_syntax::payload::object_refs_for_raw_capture(
-        &invocation.target,
-        &invocation.raw,
-    );
-    let selected_snippet = primary_resolved_object_ref(
-        &object_refs,
-        crate::menu_syntax::CaptureObjectKind::Snippet,
-    )?;
-    let explicit_trigger = kv
-        .get("trigger")
-        .cloned()
-        .filter(|value| !value.trim().is_empty());
-    let trigger = if operation == "create" {
-        explicit_trigger
-    } else {
-        explicit_trigger.or_else(|| selected_snippet.as_ref().map(|object_ref| object_ref.id.clone()))
-    }
-    .ok_or_else(|| "Add trigger:<shortcut> for the snippet.".to_string())?;
-    if operation == "create" && body.trim().is_empty() {
-        return Err("Add snippet body after --.".to_string());
-    }
-    let language = kv.get("lang").or_else(|| kv.get("language")).cloned();
-    let existing = read_active_app_owned_jsonl_record_by_key_in_sk_path(
-        sk_path,
-        "snippets.jsonl",
-        "trigger",
-        &trigger,
-    );
-    if matches!(operation, "update" | "delete") && existing.is_none() {
-        return Err("Snippet not found.".to_string());
-    }
-    let now = chrono::Local::now().to_rfc3339();
-    let next_body = if body.trim().is_empty() {
-        existing
-            .as_ref()
-            .and_then(|value| value.get("body"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string()
-    } else {
-        body.trim().to_string()
-    };
-    let next_body_lines = if body.trim().is_empty() {
-        existing
-            .as_ref()
-            .and_then(|value| value.get("bodyLines"))
-            .cloned()
-            .unwrap_or_else(|| {
-                serde_json::to_value(next_body.lines().collect::<Vec<_>>())
-                    .unwrap_or_else(|_| serde_json::json!([]))
-            })
-    } else {
-        serde_json::to_value(body.lines().collect::<Vec<_>>())
-            .unwrap_or_else(|_| serde_json::json!([]))
-    };
-    let next_name = if body.trim().is_empty() {
-        existing
-            .as_ref()
-            .and_then(|value| value.get("name"))
-            .and_then(|value| value.as_str())
-            .unwrap_or("")
-            .to_string()
-    } else {
-        body.split_whitespace().next().unwrap_or("").to_string()
-    };
-    let record = serde_json::json!({
-        "schema": "menu-syntax.snippet.v1",
-        "kind": "snippet",
-        "id": existing
-            .as_ref()
-            .and_then(|value| value.get("id"))
-            .and_then(|value| value.as_str())
-            .map(ToString::to_string)
-            .unwrap_or_else(|| app_owned_id("snippet")),
-        "trigger": trigger,
-        "language": language.or_else(|| {
-            existing
-                .as_ref()
-                .and_then(|value| value.get("language"))
-                .and_then(|value| value.as_str())
-                .map(ToString::to_string)
-        }),
-        "name": next_name,
-        "body": next_body,
-        "bodyLines": next_body_lines,
-        "tags": if invocation.tags.is_empty() {
-            existing
-                .as_ref()
-                .and_then(|value| value.get("tags"))
-                .cloned()
-                .unwrap_or_else(|| serde_json::json!([]))
-        } else {
-            serde_json::to_value(&invocation.tags).unwrap_or_else(|_| serde_json::json!([]))
-        },
-        "objectRefs": object_refs,
-        "createdAt": existing
-            .as_ref()
-            .and_then(|value| value.get("createdAt"))
-            .and_then(|value| value.as_str())
-            .map(ToString::to_string)
-            .unwrap_or_else(|| now.clone()),
-        "updatedAt": now,
-        "deletedAt": if operation == "delete" { serde_json::Value::String(now.clone()) } else { serde_json::Value::Null },
-        "source": app_owned_source(invocation, "snippet", operation),
-    });
-    upsert_app_owned_jsonl_by_key_in_sk_path(sk_path, "snippets.jsonl", "trigger", &trigger, &record)?;
-    Ok(match operation {
-        "update" => "Updated snippet".to_string(),
-        "delete" => "Removed snippet".to_string(),
-        _ => "Saved snippet".to_string(),
+    Ok(match outcome.operation {
+        crate::scriptlets::snippet_markdown_store::SnippetStoreOperation::Created => {
+            "Saved snippet".to_string()
+        }
+        crate::scriptlets::snippet_markdown_store::SnippetStoreOperation::Updated => {
+            "Updated snippet".to_string()
+        }
+        crate::scriptlets::snippet_markdown_store::SnippetStoreOperation::Deleted => {
+            "Removed snippet".to_string()
+        }
     })
 }
 
@@ -902,32 +798,47 @@ mod menu_syntax_builtin_execution_tests {
     }
 
     #[test]
-    fn snippet_remove_selected_ref_preserves_existing_body_and_sets_deleted_at() {
+    fn snippet_create_writes_main_plugin_markdown() {
         let tmp = TempDir::new().expect("tempdir");
-        let dir = tmp.path().join("menu-syntax");
-        std::fs::create_dir_all(&dir).expect("mkdir");
-        std::fs::write(
-            dir.join("snippets.jsonl"),
-            r#"{"schema":"menu-syntax.snippet.v1","kind":"snippet","id":"snippet_existing","trigger":"fj","language":"ts","name":"fetch","body":"const res = await fetch(url)","bodyLines":["const res = await fetch(url)"],"tags":["code"],"createdAt":"2026-05-20T10:00:00Z","updatedAt":"2026-05-20T10:00:00Z","deletedAt":null}
-"#,
-        )
-        .expect("seed snippet");
-
-        let invocation = invocation(";snippet remove @snippet:fj");
+        let invocation = invocation(
+            ";snippet Hello there! keyword:hi! description:Expand hi! to hello! name:Hi to Hello",
+        );
         let message = write_app_owned_snippet_capture_in_sk_path(&invocation, tmp.path())
-            .expect("remove selected snippet");
+            .expect("create snippet");
 
-        assert_eq!(message, "Removed snippet");
-        let rows = read_jsonl(&tmp, "snippets.jsonl");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0]["trigger"], "fj");
-        assert_eq!(rows[0]["body"], "const res = await fetch(url)");
-        assert_eq!(rows[0]["bodyLines"][0], "const res = await fetch(url)");
-        assert_eq!(rows[0]["language"], "ts");
-        assert_eq!(rows[0]["tags"][0], "code");
-        assert!(rows[0]["deletedAt"].as_str().is_some());
-        assert_eq!(rows[0]["source"]["operation"], "delete");
-        assert_eq!(rows[0]["objectRefs"][0]["id"], "fj");
+        assert_eq!(message, "Saved snippet");
+        let path = tmp
+            .path()
+            .join("plugins")
+            .join("main")
+            .join("scriptlets")
+            .join("snippets.md");
+        let content = std::fs::read_to_string(path).expect("read snippets.md");
+        assert!(content.contains("## Hi to Hello"));
+        assert!(content.contains(r#""keyword": "hi!""#));
+        assert!(content.contains(r#""description": "Expand hi! to hello!""#));
+        assert!(content.contains("Hello there!"));
+        assert!(!tmp.path().join("menu-syntax").join("snippets.jsonl").exists());
+    }
+
+    #[test]
+    fn snippet_update_selected_markdown_ref_updates_existing_section() {
+        let tmp = TempDir::new().expect("tempdir");
+        let create = invocation(";snippet Hello keyword:hi name:Hi");
+        write_app_owned_snippet_capture_in_sk_path(&create, tmp.path()).expect("create snippet");
+
+        let invocation = invocation(";snippet update @snippet:hi description:New desc");
+        let message = write_app_owned_snippet_capture_in_sk_path(&invocation, tmp.path())
+            .expect("update selected snippet");
+
+        assert_eq!(message, "Updated snippet");
+        let sections = crate::scriptlets::snippet_markdown_store::load_snippet_sections(
+            &crate::scriptlets::snippet_markdown_store::snippets_markdown_path(tmp.path()),
+        )
+        .expect("sections");
+        assert_eq!(sections.len(), 1);
+        assert_eq!(sections[0].body, "Hello");
+        assert_eq!(sections[0].description.as_deref(), Some("New desc"));
     }
 
     #[test]
@@ -938,7 +849,12 @@ mod menu_syntax_builtin_execution_tests {
             .expect_err("missing selected snippet should fail");
 
         assert_eq!(err, "Snippet not found.");
-        let path = tmp.path().join("menu-syntax").join("snippets.jsonl");
+        let path = tmp
+            .path()
+            .join("plugins")
+            .join("main")
+            .join("scriptlets")
+            .join("snippets.md");
         assert!(!path.exists(), "missing selected snippet must not create a row");
     }
 }

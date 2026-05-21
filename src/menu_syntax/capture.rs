@@ -118,7 +118,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
         body_parts.push(tok.text);
     }
 
-    CaptureParse::Ok(CaptureInvocation {
+    let mut invocation = CaptureInvocation {
         target,
         alias_form,
         body: body_parts.join(" "),
@@ -129,7 +129,11 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
         kv,
         date_phrases,
         raw,
-    })
+    };
+    if invocation.target.eq_ignore_ascii_case("snippet") {
+        super::snippet_scriptlet::normalize_snippet_capture_invocation(&mut invocation);
+    }
+    CaptureParse::Ok(invocation)
 }
 
 fn push_unique_tag(tags: &mut Vec<String>, tag: &str) {
@@ -490,11 +494,11 @@ mod tests {
         assert_eq!(
             inv.kv,
             vec![
-                ("trigger".to_string(), "fj".to_string()),
-                ("lang".to_string(), "ts".to_string())
+                ("keyword".to_string(), "fj".to_string()),
+                ("tool".to_string(), "ts".to_string())
             ]
         );
-        assert!(inv.body.starts_with("add fetch-json const url ="));
+        assert!(inv.body.starts_with("const url ="));
         assert!(inv.body.contains("https://x.test?a=b#hash"));
     }
 
@@ -525,6 +529,6 @@ mod tests {
     #[test]
     fn snippet_object_ref_token_is_context_not_body() {
         let inv = ok(";snippet update @snippet:fetch-json -- const value = 1");
-        assert_eq!(inv.body, "update const value = 1");
+        assert_eq!(inv.body, "const value = 1");
     }
 }
