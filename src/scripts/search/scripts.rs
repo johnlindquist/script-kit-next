@@ -55,6 +55,69 @@ fn dominant_primary_text_match_kind(
     Some(ScriptMatchKind::Description)
 }
 
+fn is_legacy_ai_vault_wrapper_script(script: &Script) -> bool {
+    let name_is_vault = script.name.trim().eq_ignore_ascii_case("vault");
+    let alias_is_vault = script
+        .alias
+        .as_deref()
+        .is_some_and(|alias| alias.trim().eq_ignore_ascii_case("vault"));
+    let description = script
+        .description
+        .as_deref()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mentions_ai_conversations =
+        description.contains("ai conversation") || description.contains("agent chat conversation");
+
+    name_is_vault
+        && alias_is_vault
+        && mentions_ai_conversations
+        && (description.contains("resume") || description.contains("past"))
+}
+
+fn legacy_ai_vault_direct_match_score(
+    script: &Script,
+    filename: &str,
+    query_lower: &str,
+) -> Option<i32> {
+    if !query_lower.is_ascii() {
+        return None;
+    }
+
+    let mut best = None::<i32>;
+    let mut consider = |candidate: &str| {
+        if !candidate.is_ascii() {
+            return;
+        }
+
+        let candidate = candidate.trim().to_ascii_lowercase();
+        let score = if candidate == query_lower {
+            Some(SCORE_EXACT_NAME_MATCH)
+        } else if query_lower.len() >= 3 && candidate.starts_with(query_lower) {
+            Some(220)
+        } else if query_lower.len() >= 3 && candidate.contains(query_lower) {
+            Some(160)
+        } else {
+            None
+        };
+
+        if let Some(score) = score {
+            best = Some(best.map_or(score, |current| current.max(score)));
+        }
+    };
+
+    consider(&script.name);
+    consider(filename);
+    if let Some(alias) = script.alias.as_deref() {
+        consider(alias);
+    }
+    consider("vault");
+    consider("ai-vault");
+    consider("aivault");
+
+    best
+}
+
 /// Fuzzy search scripts by query string
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
 /// Returns results sorted by relevance score (highest first)
@@ -109,6 +172,21 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         let match_indices = MatchIndices::default();
 
         let filename = extract_filename(&script.path);
+
+        if is_legacy_ai_vault_wrapper_script(script) {
+            if let Some(score) = legacy_ai_vault_direct_match_score(script, &filename, &query_lower)
+            {
+                matches.push(ScriptMatch {
+                    script: Arc::clone(script),
+                    score,
+                    filename,
+                    match_indices,
+                    match_kind: ScriptMatchKind::Name,
+                    content_match: None,
+                });
+            }
+            continue;
+        }
 
         // Exact name match boost: if the query IS the full name, always rank first
         if query_is_ascii

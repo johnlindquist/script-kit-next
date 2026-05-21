@@ -432,6 +432,58 @@ fn test_get_grouped_results_ai_vault_builtin_beats_stale_script_history() {
 }
 
 #[test]
+fn test_get_grouped_results_excludes_legacy_vault_script_for_unrelated_query() {
+    let scripts = wrap_scripts(vec![
+        Script {
+            name: "Amazon".to_string(),
+            path: PathBuf::from("/amazon.ts"),
+            extension: "ts".to_string(),
+            description: Some("Amazon helper".to_string()),
+            ..Default::default()
+        },
+        Script {
+            name: "Vault".to_string(),
+            path: PathBuf::from("/vault.ts"),
+            extension: "ts".to_string(),
+            description: Some(
+                "Search past AI conversations and resume the selected one in Script Kit"
+                    .to_string(),
+            ),
+            alias: Some("vault".to_string()),
+            body: Some("const amazon = 'poison';".to_string()),
+            ..Default::default()
+        },
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
+    let builtins: Vec<BuiltInEntry> = vec![];
+    let apps: Vec<AppInfo> = vec![];
+
+    let (grouped, results) = get_grouped_results(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &FrecencyStore::new(),
+        "amazon",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+    );
+
+    let visible_names: Vec<&str> = grouped
+        .iter()
+        .filter_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(results[*idx].name()),
+            GroupedListItem::SectionHeader(_, _) | GroupedListItem::Status(_) => None,
+        })
+        .collect();
+
+    assert!(visible_names.contains(&"Amazon"));
+    assert!(!visible_names.contains(&"Vault"));
+}
+
+#[test]
 fn test_get_grouped_results_default_suggestions_for_new_users() {
     // When frecency store is empty (new user), items matching DEFAULT_SUGGESTED_ITEMS
     // should appear in the SUGGESTED section to help users discover features.
