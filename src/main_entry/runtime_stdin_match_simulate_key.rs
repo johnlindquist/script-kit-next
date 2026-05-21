@@ -172,7 +172,11 @@
                                         ) {
                                             logging::log(
                                                 "STDIN",
-                                                "SimulateKey: menu-syntax form text input",
+                                                if key_lower == "tab" {
+                                                    "SimulateKey: menu-syntax form control key"
+                                                } else {
+                                                    "SimulateKey: menu-syntax form text input"
+                                                },
                                             );
                                         } else if view.main_menu_fallback_state.is_active() {
                                             // Handle keys in fallback mode

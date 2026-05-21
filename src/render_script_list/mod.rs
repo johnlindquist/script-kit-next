@@ -1316,10 +1316,12 @@ impl ScriptListApp {
                 }
 
                 let key_str = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
                 if matches!(this.current_view, AppView::ScriptList)
                     && this.handle_menu_syntax_form_control_key_input(
                         key_str,
+                        key_char,
                         &event.keystroke.modifiers,
                         window,
                         cx,
@@ -1363,7 +1365,6 @@ impl ScriptListApp {
                 }
 
                 // If actions popup is open, route all keyboard events through the shared router
-                let key_char = event.keystroke.key_char.as_ref().map(|s| s.as_ref());
                 match this.route_key_to_actions_dialog(
                     key_str,
                     key_char,

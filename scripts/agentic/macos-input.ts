@@ -9,7 +9,7 @@
  * separate activation path.
  *
  * Usage:
- *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
+ *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--force-native] [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
  *   bun scripts/agentic/macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
  *   bun scripts/agentic/macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
  *   bun scripts/agentic/macos-input.ts sequence <json-array> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
@@ -682,7 +682,8 @@ async function sendKeyWithLadder(
   modifiers: string[],
   focusEnforced: boolean,
   session: string,
-  targetKind: string | null
+  targetKind: string | null,
+  forceNative: boolean
 ): Promise<KeyResult> {
   const fallbackReasons: ActionReceipt["fallbackReasons"] = [];
 
@@ -690,7 +691,9 @@ async function sendKeyWithLadder(
   fallbackReasons.push({ method: "directBatch", reason: "not_applicable_for_key_events" });
 
   // 2. gpuiDispatch — try in-process GPUI key simulation (no OS focus needed)
-  if (session) {
+  if (forceNative) {
+    fallbackReasons.push({ method: "gpuiDispatch", reason: "force_native_requested" });
+  } else if (session) {
     const gpui = await tryGpuiKeyDispatch(session, targetKind, key, modifiers);
     if (gpui.ok) {
       stderrLog("agentic.input_method_selected", {
@@ -953,6 +956,7 @@ const ensureFocus = hasFlag(args, "--ensure-focus");
 const focusTitle = getStringArg(args, "--focus-title", DEFAULT_FOCUS_TITLE);
 const sessionName = getStringArg(args, "--session", "");
 const targetSurface = getStringArg(args, "--target", "");
+const forceNative = hasFlag(args, "--force-native") || hasFlag(args, "--no-gpui-dispatch");
 
 function emit(data: Envelope<any>) {
   console.log(JSON.stringify(data, null, 2));
@@ -1022,7 +1026,7 @@ try {
           errorEnvelope(
             "key",
             "MISSING_KEY",
-            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--ensure-focus] [--session NAME] [--target SURFACE]"
+            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--force-native] [--ensure-focus] [--session NAME] [--target SURFACE]"
           )
         );
         process.exit(1);
@@ -1035,7 +1039,7 @@ try {
           : [];
       // Use capability ladder when session is available
       const result = sessionName
-        ? await sendKeyWithLadder(keyName, modifiers, focusEnforced, sessionName, targetSurface || null)
+        ? await sendKeyWithLadder(keyName, modifiers, focusEnforced, sessionName, targetSurface || null, forceNative)
         : await sendKey(keyName, modifiers, focusEnforced);
       if (sessionName) result.session = sessionName;
       if (resolvedTarget) result.target = resolvedTarget;
@@ -1151,7 +1155,7 @@ try {
           schemaVersion: 1,
           script: "macos-input",
           commands: [
-            { name: "key", description: "Send a keystroke", flags: ["--modifiers", "--ensure-focus", "--session", "--target", "--json"] },
+            { name: "key", description: "Send a keystroke", flags: ["--modifiers", "--force-native", "--no-gpui-dispatch", "--ensure-focus", "--session", "--target", "--json"] },
             { name: "type", description: "Deliver text input", flags: ["--ensure-focus", "--session", "--target", "--json"] },
             { name: "click", description: "Click at screen coordinates", flags: ["--ensure-focus", "--session", "--target", "--json"] },
             { name: "sequence", description: "Run a sequence of actions", flags: ["--ensure-focus", "--session", "--target", "--json"] },
@@ -1178,6 +1182,8 @@ Focus enforcement:
   --session NAME                 Use session.sh to show window before focusing (more reliable)
   --target SURFACE               Target a specific automation surface (main, acp, actions, notes, ai)
                                  Requires --ensure-focus. Resolves via window.ts list.
+  --force-native                 For key input with --session, bypass GPUI dispatch and deliver OS-level input.
+  --no-gpui-dispatch             Alias for --force-native.
 
 Named keys: enter, tab, escape, space, delete, backspace,
             up, down, left, right, home, end, pageup, pagedown,

@@ -304,9 +304,14 @@ impl ScriptListApp {
         true
     }
 
+    fn is_menu_syntax_form_tab_key(key: &str, key_char: Option<&str>) -> bool {
+        key.eq_ignore_ascii_case("tab") || key_char == Some("\t")
+    }
+
     pub(crate) fn handle_menu_syntax_form_control_key_input(
         &mut self,
         key: &str,
+        key_char: Option<&str>,
         modifiers: &gpui::Modifiers,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -316,6 +321,15 @@ impl ScriptListApp {
         }
         if modifiers.platform || modifiers.alt || modifiers.control {
             return false;
+        }
+
+        if Self::is_menu_syntax_form_tab_key(key, key_char) {
+            if modifiers.shift {
+                self.focus_previous_menu_syntax_form_field(window, cx);
+            } else {
+                self.focus_next_menu_syntax_form_field(window, cx);
+            }
+            return true;
         }
 
         let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
@@ -357,7 +371,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.handle_menu_syntax_form_control_key_input(key, modifiers, window, cx) {
+        if self.handle_menu_syntax_form_control_key_input(key, key_char, modifiers, window, cx) {
             return true;
         }
         if !self.menu_syntax_form_input_active || !self.menu_syntax_capture_form_owns_input() {
@@ -393,7 +407,13 @@ impl ScriptListApp {
             }
         } else if key_lower == "space" {
             value.push(' ');
-        } else if let Some(ch) = key_char.filter(|ch| ch.chars().count() == 1) {
+        } else if let Some(ch) = key_char.filter(|text| {
+            let mut chars = text.chars();
+            let Some(first) = chars.next() else {
+                return false;
+            };
+            chars.next().is_none() && !first.is_control()
+        }) {
             value.push_str(ch);
         } else {
             return false;
