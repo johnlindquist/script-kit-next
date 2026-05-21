@@ -533,6 +533,14 @@ fn quote_token_value(value: &str) -> String {
     }
 }
 
+fn required_form_label(label: String, required: bool) -> String {
+    if required && !label.ends_with(" *") {
+        format!("{label} *")
+    } else {
+        label
+    }
+}
+
 fn form_field_for_requirement(
     schema: &CaptureFieldSchema,
     invocation: &CaptureInvocation,
@@ -705,6 +713,7 @@ fn form_field_for_requirement(
             )
         }
     };
+    let label = required_form_label(label, required);
 
     Some(MenuSyntaxFormFieldSnapshot {
         id,

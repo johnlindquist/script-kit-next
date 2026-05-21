@@ -298,16 +298,7 @@ fn render_menu_syntax_form_field(
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
                         .child(field.label.clone()),
-                )
-                .when(field.required && !field.satisfied, |d| {
-                    d.child(
-                        div()
-                            .text_size(px(10.0))
-                            .line_height(px(12.0))
-                            .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
-                            .child("required"),
-                    )
-                }),
+                ),
         );
 
     field_node = if let Some(input) = input {

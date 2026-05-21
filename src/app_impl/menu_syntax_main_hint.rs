@@ -393,17 +393,35 @@ impl ScriptListApp {
         _cx: &mut Context<Self>,
     ) {
         const APPROX_FIELD_HEIGHT_PX: f32 = 76.0;
+        const APPROX_VISIBLE_FORM_HEIGHT_PX: f32 = APPROX_FIELD_HEIGHT_PX * 4.0;
+        const REVEAL_MARGIN_PX: f32 = 8.0;
 
         let current = self.menu_syntax_main_hint_scroll_handle.offset();
-        let target_y = gpui::px(-((index as f32) * APPROX_FIELD_HEIGHT_PX));
         let max = self.menu_syntax_main_hint_scroll_handle.max_offset();
-        let next_y = if max.y > gpui::px(0.0) {
-            target_y.clamp(-max.y, gpui::px(0.0))
+        if max.y <= gpui::px(0.0) {
+            return;
+        }
+
+        let current_scroll_y = -current.y;
+        let field_top = gpui::px((index as f32) * APPROX_FIELD_HEIGHT_PX);
+        let field_bottom = field_top + gpui::px(APPROX_FIELD_HEIGHT_PX);
+        let visible_top = current_scroll_y + gpui::px(REVEAL_MARGIN_PX);
+        let visible_bottom =
+            current_scroll_y + gpui::px(APPROX_VISIBLE_FORM_HEIGHT_PX - REVEAL_MARGIN_PX);
+
+        let next_scroll_y = if field_top < visible_top {
+            (field_top - gpui::px(REVEAL_MARGIN_PX)).max(gpui::px(0.0))
+        } else if field_bottom > visible_bottom {
+            field_bottom - gpui::px(APPROX_VISIBLE_FORM_HEIGHT_PX - REVEAL_MARGIN_PX)
         } else {
-            target_y
-        };
-        self.menu_syntax_main_hint_scroll_handle
-            .set_offset(gpui::point(current.x, next_y));
+            current_scroll_y
+        }
+        .clamp(gpui::px(0.0), max.y);
+
+        if next_scroll_y != current_scroll_y {
+            self.menu_syntax_main_hint_scroll_handle
+                .set_offset(gpui::point(current.x, -next_scroll_y));
+        }
     }
 
     fn focus_menu_syntax_form_input_at(
