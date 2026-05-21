@@ -737,8 +737,13 @@ mod menu_syntax_builtin_execution_tests {
             .join("snippets.md");
         let content = std::fs::read_to_string(path).expect("read snippets.md");
         assert!(content.contains("## Hi to Hello"));
-        assert!(content.contains(r#""keyword": "hi!""#));
-        assert!(content.contains(r#""description": "Expand hi! to hello!""#));
+        assert!(content.contains("keyword: hi!"));
+        assert!(content.contains("description: Expand hi! to hello!"));
+        assert!(!content.contains(r#""keyword""#));
+        assert!(!content.contains(r#""description""#));
+        assert!(!content.contains(r#""tool""#));
+        assert!(!content.contains('{'));
+        assert!(!content.contains('}'));
         assert!(content.contains("Hello there!"));
         assert!(!tmp.path().join("menu-syntax").join("snippets.jsonl").exists());
     }
