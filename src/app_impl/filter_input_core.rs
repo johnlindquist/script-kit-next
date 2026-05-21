@@ -222,6 +222,47 @@ impl ScriptListApp {
         true
     }
 
+    fn seed_file_search_default_results_for_first_paint(&mut self) -> bool {
+        let mut results = self
+            .recent_file_results_from_frecency(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT);
+        let source = if results.is_empty() {
+            results = crate::file_search::list_directory_with_options(
+                "~/",
+                crate::file_search::DEFAULT_CACHE_LIMIT,
+                false,
+            );
+            "home_directory"
+        } else {
+            "frecency_recent_files"
+        };
+
+        if results.is_empty() {
+            tracing::info!(
+                category = "FILE_SEARCH",
+                "Default file-search first-paint seed found no recent or home-directory rows"
+            );
+            return false;
+        }
+
+        self.cached_file_results = results;
+        self.file_search_current_dir = None;
+        self.file_search_current_dir_show_hidden = false;
+        self.file_search_frozen_filter = None;
+        self.recompute_file_search_display_indices();
+        self.restore_file_search_selection_after_results_change(None);
+        self.file_search_loading = false;
+
+        tracing::info!(
+            category = "FILE_SEARCH",
+            source,
+            cached_count = self.cached_file_results.len(),
+            display_count = self.file_search_display_indices.len(),
+            "Seeded default file-search rows before first paint"
+        );
+
+        true
+    }
+
     fn open_file_search_view_with_result_transition(
         &mut self,
         query: String,
@@ -269,6 +310,13 @@ impl ScriptListApp {
             && presentation == FileSearchPresentation::Mini;
         let seeded_initial_results = stabilize_fresh_mini_directory_entry
             && self.seed_file_search_directory_results_for_first_paint(&query);
+        let seed_fresh_full_default = !preserve_current_results_until_first_batch
+            && !preserve_sort_mode
+            && presentation == FileSearchPresentation::Full
+            && query.trim().is_empty();
+        let seeded_default_results =
+            seed_fresh_full_default && self.seed_file_search_default_results_for_first_paint();
+        let seeded_initial_results = seeded_initial_results || seeded_default_results;
 
         if !preserve_current_results_until_first_batch && !seeded_initial_results {
             self.cached_file_results.clear();
@@ -287,6 +335,12 @@ impl ScriptListApp {
                 presentation,
                 self.file_search_display_indices.len(),
             );
+        }
+
+        if seeded_default_results {
+            let _ = self.begin_file_search_session();
+            cx.notify();
+            return;
         }
 
         let preserve_stream_results =

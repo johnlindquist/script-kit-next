@@ -35,6 +35,39 @@ impl WebcamOpenUtilityAction {
 }
 
 impl ScriptListApp {
+    pub(crate) fn recent_file_results_from_frecency(
+        &self,
+        limit: usize,
+    ) -> Vec<crate::file_search::FileResult> {
+        let mut seen = std::collections::HashSet::new();
+        let mut hydrated: Vec<_> = self
+            .frecency_store
+            .top_file_paths(limit.saturating_mul(3).max(limit))
+            .into_iter()
+            .filter_map(|(path, score)| {
+                if !seen.insert(path.clone()) {
+                    return None;
+                }
+                crate::file_search::file_result_from_existing_path(&path).map(|file| (file, score))
+            })
+            .collect();
+
+        hydrated.sort_by(|(a, a_score), (b, b_score)| {
+            b_score
+                .partial_cmp(a_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| b.modified.cmp(&a.modified))
+                .then_with(|| a.name.cmp(&b.name))
+                .then_with(|| a.path.cmp(&b.path))
+        });
+
+        hydrated
+            .into_iter()
+            .take(limit)
+            .map(|(file, _)| file)
+            .collect()
+    }
+
     fn resolve_file_search_results_with(
         query: &str,
         parse_directory_path: impl Fn(&str) -> Option<crate::file_search::ParsedDirPath>,
