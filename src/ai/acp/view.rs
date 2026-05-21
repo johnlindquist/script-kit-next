@@ -2275,6 +2275,14 @@ impl AcpChatView {
     /// interceptors call this before falling back to "return to main menu",
     /// because focused child routing is not guaranteed for every Escape path.
     pub(crate) fn cancel_streaming_from_escape(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "acp_escape_cancel_ignored_setup_mode",
+            );
+            return false;
+        }
+
         let is_streaming = matches!(
             self.live_thread().read(cx).status,
             AcpThreadStatus::Streaming
@@ -3729,6 +3737,15 @@ impl AcpChatView {
     }
 
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_set_input_ignored_setup_mode",
+                value_len = value.chars().count(),
+            );
+            return;
+        }
+
         self.live_thread()
             .update(cx, |thread, cx| thread.set_input(value, cx));
         self.refresh_mention_session(cx);
@@ -4048,6 +4065,19 @@ impl AcpChatView {
     }
 
     fn open_picker_trigger(&mut self, trigger: &str, cx: &mut Context<Self>) {
+        if self.is_setup_mode() {
+            self.mention_session = None;
+            self.dismissed_mention_trigger = None;
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_picker_trigger_ignored_setup_mode",
+                trigger,
+            );
+            cx.notify();
+            return;
+        }
+
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.history_menu = None;
@@ -4925,6 +4955,20 @@ impl AcpChatView {
     ///
     /// Called after every input mutation and cursor movement.
     pub(super) fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
+        if self.is_setup_mode() {
+            let had_picker = self.mention_session.take().is_some()
+                || self.dismissed_mention_trigger.take().is_some();
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+            if had_picker {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_mention_picker_cleared_setup_mode",
+                );
+                cx.notify();
+            }
+            return;
+        }
+
         let (text, cursor, available_commands) = {
             let thread = self.live_thread().read(cx);
             (
@@ -6829,6 +6873,15 @@ impl AcpChatView {
                 cx.stop_propagation();
                 return;
             }
+        }
+        if self.is_setup_mode() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_mode_key_propagated_without_live_thread",
+                key = %event.keystroke.key,
+            );
+            cx.propagate();
+            return;
         }
 
         // Reset cursor blink on any key press.
