@@ -43,29 +43,15 @@ unsafe fn configure_window_vibrancy_common(
     // Configure NSVisualEffectViews in the window hierarchy.
     let content_view: id = msg_send![window, contentView];
     if !content_view.is_null() {
-        let material = current_window_material();
-        let accessibility = system_appearance_accessibility();
-        let selection = native_material_selection(
-            crate::theme::get_cached_theme().is_vibrancy_enabled(),
-            accessibility,
-        );
         let mut count = 0;
-        configure_visual_effect_views_recursive(
-            content_view,
-            &mut count,
-            is_dark,
-            material,
-            selection,
-        );
+        let material = current_window_material();
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
         let material_name = current_window_material_name(material);
         logging::log(
             log_target,
             &format!(
-                "{}: Configured {} native material view(s) with {} material ({})",
-                window_name,
-                count,
-                material_name,
-                selection.label()
+                "{}: Configured {} NSVisualEffectView(s) with {} material",
+                window_name, count, material_name
             ),
         );
     }
@@ -226,30 +212,23 @@ pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _i
 pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
     configure_actions_popup_window(window, is_dark);
 
-    // Tahoe popups use the shared rounded popup shell even for confirmations.
-    // The pre-Tahoe visual effect fallback stays on the same layer path, so
-    // confirm/prompt popups do not drift from Actions geometry.
+    // SAFETY: `window` is a valid NSWindow. The confirm dialog sits flush
+    // at the bottom of the parent window, so rounded corners look wrong.
+    // Remove them by setting the contentView's layer cornerRadius to 0.
     let content_view: id = msg_send![window, contentView];
     if content_view != nil {
         let layer: id = msg_send![content_view, layer];
         if layer != nil {
-            let _: () = msg_send![
-                layer,
-                setCornerRadius: crate::ui::chrome::TAHOE_CHROME_METRICS.popup_shell_radius as f64
-            ];
-            let _: () = msg_send![layer, setMasksToBounds: true];
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
         }
         let _: () = msg_send![content_view, setWantsLayer: true];
         let layer: id = msg_send![content_view, layer];
         if layer != nil {
-            let _: () = msg_send![
-                layer,
-                setCornerRadius: crate::ui::chrome::TAHOE_CHROME_METRICS.popup_shell_radius as f64
-            ];
-            let _: () = msg_send![layer, setMasksToBounds: true];
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
         }
     }
-    let _: () = msg_send![window, setHasShadow: true];
+    // Also disable the window shadow since it's flush with parent
+    let _: () = msg_send![window, setHasShadow: false];
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -468,26 +447,20 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 if content_view != nil {
                     let mut vev_count = 0;
                     let material = current_window_material();
-                    let selection = native_material_selection(
-                        crate::theme::get_cached_theme().is_vibrancy_enabled(),
-                        system_appearance_accessibility(),
-                    );
                     configure_visual_effect_views_recursive(
                         content_view,
                         &mut vev_count,
                         is_dark,
                         material,
-                        selection,
                     );
                     logging::log(
                         "APPEARANCE",
                         &format!(
-                            "Updated window '{}': cleared window appearance, configured {} native material view(s) for {} using {} ({})",
+                            "Updated window '{}': cleared window appearance, configured {} NSVisualEffectView(s) for {} using {}",
                             title_string,
                             vev_count,
                             if is_dark { "dark" } else { "light" },
                             current_window_material_name(material),
-                            selection.label(),
                         ),
                     );
                 }

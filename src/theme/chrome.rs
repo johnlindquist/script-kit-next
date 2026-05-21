@@ -106,8 +106,6 @@ impl AppChromeColors {
         let accessibility = crate::platform::system_appearance_accessibility();
         let material_policy =
             crate::platform::native_material_policy(theme.is_vibrancy_enabled(), accessibility);
-        let _native_material_selection =
-            crate::platform::native_material_selection(theme.is_vibrancy_enabled(), accessibility);
         let mut opacity = theme.get_opacity();
         if matches!(
             material_policy,

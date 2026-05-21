@@ -26,7 +26,6 @@ include!("vibrancy_swizzle_materials.rs");
 include!("vibrancy_config.rs");
 include!("vibrancy_cycle.rs");
 include!("accessibility_material_policy.rs");
-include!("native_material_bridge.rs");
 include!("secondary_window_config.rs");
 include!("positioning.rs");
 include!("screenshots_window_open.rs");
