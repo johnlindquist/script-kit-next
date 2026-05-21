@@ -1,0 +1,25 @@
+{
+  "source": "tabs",
+  "inputValue": "tabs:",
+  "visibleChoiceCount": 12,
+  "browserTabs": {
+    "enabled": true,
+    "frameCount": 12,
+    "cacheGeneration": 2,
+    "frameGeneration": 2,
+    "refreshing": false
+  },
+  "firstVisible": {
+    "visibleRank": 0,
+    "groupedIndex": 1,
+    "stableKey": "browser-tab/com.google.Chrome/1/1/https://antigravity.google/download",
+    "role": "rootPassive",
+    "actionKind": "switchWindow",
+    "typeLabel": "Browser Tab",
+    "sourceName": "Browser Tabs",
+    "description": "antigravity.google \u00b7 Google Chrome",
+    "leadingIconPresent": false,
+    "leadingIconKind": null,
+    "leadingIconBundleId": null
+  }
+}
