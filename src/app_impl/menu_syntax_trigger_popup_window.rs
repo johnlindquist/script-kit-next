@@ -784,6 +784,20 @@ impl ScriptListApp {
         window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) -> bool {
+        if let Some((field_id, suggestion_index)) =
+            Self::parse_trigger_popup_form_suggestion_row_id(row_id)
+        {
+            let Some(window) = window else {
+                return false;
+            };
+            return self.accept_menu_syntax_form_trigger_popup_suggestion(
+                field_id,
+                suggestion_index,
+                window,
+                cx,
+            );
+        }
+
         let Some(snapshot) = self
             .menu_syntax_trigger_popup_state
             .snapshot
@@ -980,6 +994,80 @@ impl ScriptListApp {
         }
     }
 
+    fn parse_trigger_popup_form_suggestion_row_id(row_id: &str) -> Option<(&str, usize)> {
+        let mut parts = row_id.split(':');
+        match (parts.next(), parts.next(), parts.next(), parts.next(), parts.next()) {
+            (Some("form-suggestion"), Some(_target), Some(field_id), Some(index), None) => {
+                index.parse::<usize>().ok().map(|index| (field_id, index))
+            }
+            _ => None,
+        }
+    }
+
+    fn menu_syntax_trigger_popup_state_is_form_suggestion(&self) -> bool {
+        self.menu_syntax_trigger_popup_state
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.target.as_deref())
+            .is_some_and(|target| target.starts_with("form:"))
+    }
+
+    fn sync_menu_syntax_form_selection_from_trigger_row(&mut self, row_id: Option<&str>) {
+        if let Some((field_id, suggestion_index)) =
+            row_id.and_then(Self::parse_trigger_popup_form_suggestion_row_id)
+        {
+            self.menu_syntax_form_suggestion_field_id = Some(field_id.to_string());
+            self.menu_syntax_form_suggestion_selected_index = Some(suggestion_index);
+        }
+    }
+
+    fn close_menu_syntax_form_trigger_popup(&mut self, cx: &mut Context<Self>) {
+        self.menu_syntax_form_suggestion_field_id = None;
+        self.menu_syntax_form_suggestion_selected_index = None;
+        self.menu_syntax_trigger_popup_state = Default::default();
+        close_menu_syntax_trigger_popup_window(cx);
+        cx.notify();
+    }
+
+    fn accept_menu_syntax_form_trigger_popup_suggestion(
+        &mut self,
+        field_id: &str,
+        suggestion_index: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(snapshot) = self.menu_syntax_main_hint_snapshot(&self.filter_text, false) else {
+            return false;
+        };
+        let Some(form) = snapshot.form else {
+            return false;
+        };
+        let Some(field) = form.fields.iter().find(|field| field.id == field_id) else {
+            return false;
+        };
+        let Some(suggestion) = field.suggestions.get(suggestion_index) else {
+            return false;
+        };
+        let Some(application) =
+            crate::menu_syntax::apply_menu_syntax_form_suggestion(field, suggestion)
+        else {
+            return false;
+        };
+
+        self.menu_syntax_form_draft_field_id = Some(field.id.clone());
+        self.menu_syntax_form_draft_value = application.next_field_value.clone();
+        let updated = self.update_menu_syntax_form_field(
+            Some(&field.id),
+            application.next_field_value,
+            window,
+            cx,
+        );
+        if updated {
+            self.close_menu_syntax_form_trigger_popup(cx);
+        }
+        updated
+    }
+
     /// Re-run the popup state machine against a (possibly new) filter text
     /// and dispatch the resulting transition to the GPUI window. Extracted
     /// here so both `apply_menu_syntax_trigger_popup_intent` (keyboard
@@ -1071,6 +1159,43 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        if self.menu_syntax_trigger_popup_state_is_form_suggestion() {
+            match intent {
+                crate::menu_syntax::InlinePickerKeyIntent::Close => {
+                    self.close_menu_syntax_form_trigger_popup(cx);
+                    return true;
+                }
+                crate::menu_syntax::InlinePickerKeyIntent::Accept
+                | crate::menu_syntax::InlinePickerKeyIntent::Apply => {
+                    let selected_row_id = self
+                        .menu_syntax_trigger_popup_state
+                        .selected_row_id
+                        .clone()
+                        .or_else(|| {
+                            self.menu_syntax_trigger_popup_state
+                                .snapshot
+                                .as_ref()
+                                .and_then(|snapshot| snapshot.rows.first().map(|row| row.id.clone()))
+                        });
+                    let Some(row_id) = selected_row_id else {
+                        return false;
+                    };
+                    if let Some((field_id, suggestion_index)) =
+                        Self::parse_trigger_popup_form_suggestion_row_id(&row_id)
+                    {
+                        return self.accept_menu_syntax_form_trigger_popup_suggestion(
+                            field_id,
+                            suggestion_index,
+                            window,
+                            cx,
+                        );
+                    }
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
         let Some(snapshot) = self
             .menu_syntax_trigger_popup_state
             .snapshot
@@ -1100,6 +1225,8 @@ impl ScriptListApp {
                         snapshot.rows.len(),
                     );
                 self.menu_syntax_trigger_popup_state.selected_row_id = next_row_id;
+                let selected_row_id = self.menu_syntax_trigger_popup_state.selected_row_id.clone();
+                self.sync_menu_syntax_form_selection_from_trigger_row(selected_row_id.as_deref());
                 // Re-sync so the popup re-renders with the new selection.
                 self.sync_menu_syntax_trigger_popup_window(window, cx);
                 cx.notify();

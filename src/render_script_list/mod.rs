@@ -357,105 +357,17 @@ fn render_menu_syntax_form_field(
     field_node.into_any_element()
 }
 
-fn render_menu_syntax_form_suggestion_popup(
-    theme: &crate::theme::Theme,
-    field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
-    cx: &mut Context<ScriptListApp>,
-) -> AnyElement {
-    div()
-        .id(format!("handler-form-autocomplete-popup-{}", field.id))
-        .w(px(180.0))
-        .max_w(px(180.0))
-        .flex_shrink_0()
-        .self_start()
-        .flex()
-        .flex_col()
-        .gap(px(2.0))
-        .rounded(px(6.0))
-        .border_1()
-        .border_color(rgba((theme.colors.ui.border << 8) | 0x99))
-        .bg(rgba((theme.colors.background.search_box << 8) | 0xE6))
-        .p(px(4.0))
-        .children(
-            field
-                .suggestions
-                .iter()
-                .take(6)
-                .enumerate()
-                .map(|(index, suggestion)| {
-                    let selected = field.selected_suggestion_index == Some(index);
-                    let field_id = field.id.clone();
-                    let next_value =
-                        crate::menu_syntax::apply_menu_syntax_form_suggestion(field, suggestion)
-                            .map(|application| application.next_field_value)
-                            .unwrap_or_else(|| suggestion.value.clone());
-                    let detail = suggestion.detail.clone();
-                    div()
-                        .id(format!(
-                            "handler-form-autocomplete-option-{}-{}",
-                            field.id, index
-                        ))
-                        .w_full()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.0))
-                        .px(px(7.0))
-                        .py(px(4.0))
-                        .rounded(px(5.0))
-                        .bg(if selected {
-                            rgba((theme.colors.text.muted << 8) | 0x22)
-                        } else {
-                            rgba((theme.colors.text.muted << 8) | 0x00)
-                        })
-                        .text_size(px(11.0))
-                        .line_height(px(14.0))
-                        .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
-                        .child(
-                            div()
-                                .min_w(px(0.0))
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .child(suggestion.label.clone()),
-                        )
-                        .when_some(detail, |d, detail| {
-                            d.child(
-                                div()
-                                    .flex_shrink_0()
-                                    .text_size(px(10.0))
-                                    .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
-                                    .child(detail),
-                            )
-                        })
-                        .on_click(cx.listener(move |this, _event, window, cx| {
-                            this.update_menu_syntax_form_field(
-                                Some(&field_id),
-                                next_value.clone(),
-                                window,
-                                cx,
-                            );
-                        }))
-                }),
-        )
-        .into_any_element()
-}
-
 fn render_menu_syntax_form(
     theme: &crate::theme::Theme,
     form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
-    cx: &mut Context<ScriptListApp>,
+    _cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
-    let popup_field = form
-        .fields
-        .iter()
-        .find(|field| field.selected_suggestion_index.is_some());
     div()
         .id("menu-syntax-handler-form")
         .w_full()
         .flex()
         .items_start()
-        .gap(px(8.0))
         .child(
             div()
                 .id("menu-syntax-handler-form-fields")
@@ -471,9 +383,6 @@ fn render_menu_syntax_form(
                     render_menu_syntax_form_field(theme, field, input)
                 })),
         )
-        .when_some(popup_field, |d, field| {
-            d.child(render_menu_syntax_form_suggestion_popup(theme, field, cx))
-        })
         .into_any_element()
 }
 

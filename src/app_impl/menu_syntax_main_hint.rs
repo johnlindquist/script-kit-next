@@ -45,6 +45,7 @@ impl ScriptListApp {
         if !self.menu_syntax_form_input_active {
             self.sync_menu_syntax_form_suggestions_from_main_input(&form);
         }
+        self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);
     }
 
     fn clear_menu_syntax_form_inputs(&mut self) {
@@ -226,6 +227,153 @@ impl ScriptListApp {
         self.menu_syntax_form_suggestion_selected_index = None;
     }
 
+    fn menu_syntax_form_trigger_popup_target(
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        field_id: &str,
+    ) -> String {
+        format!("form:{}:{field_id}", form.target)
+    }
+
+    fn menu_syntax_form_trigger_popup_row_id(
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        field_id: &str,
+        index: usize,
+    ) -> String {
+        format!(
+            "form-suggestion:{}:{field_id}:{index}",
+            form.target
+        )
+    }
+
+    fn parse_menu_syntax_form_trigger_popup_row_id(row_id: &str) -> Option<(&str, usize)> {
+        let mut parts = row_id.split(':');
+        match (parts.next(), parts.next(), parts.next(), parts.next(), parts.next()) {
+            (Some("form-suggestion"), Some(_target), Some(field_id), Some(index), None) => {
+                index.parse::<usize>().ok().map(|index| (field_id, index))
+            }
+            _ => None,
+        }
+    }
+
+    fn trigger_popup_state_is_menu_syntax_form_suggestion(&self) -> bool {
+        self.menu_syntax_trigger_popup_state
+            .snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.target.as_deref())
+            .is_some_and(|target| target.starts_with("form:"))
+    }
+
+    fn selected_menu_syntax_form_trigger_popup_index(&self) -> Option<usize> {
+        self.menu_syntax_trigger_popup_state
+            .selected_row_id
+            .as_deref()
+            .and_then(Self::parse_menu_syntax_form_trigger_popup_row_id)
+            .map(|(_, index)| index)
+    }
+
+    fn selected_menu_syntax_form_trigger_popup_row_id(
+        &self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
+    ) -> Option<String> {
+        let selected = self
+            .selected_menu_syntax_form_trigger_popup_index()
+            .or(self.menu_syntax_form_suggestion_selected_index)
+            .unwrap_or(0)
+            .min(field.suggestions.len().saturating_sub(1));
+        Some(Self::menu_syntax_form_trigger_popup_row_id(
+            form,
+            &field.id,
+            selected,
+        ))
+    }
+
+    fn build_menu_syntax_form_trigger_popup_snapshot(
+        &self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+    ) -> Option<(
+        crate::menu_syntax::TriggerPickerSnapshot,
+        Option<String>,
+    )> {
+        let field = self.active_menu_syntax_form_popup_field(form)?;
+        if field.suggestions.is_empty() {
+            return None;
+        }
+
+        let target = Self::menu_syntax_form_trigger_popup_target(form, &field.id);
+        let rows = field
+            .suggestions
+            .iter()
+            .enumerate()
+            .map(|(index, suggestion)| crate::menu_syntax::TriggerPickerRow {
+                id: Self::menu_syntax_form_trigger_popup_row_id(form, &field.id, index),
+                mode: crate::menu_syntax::TriggerPickerMode::Capture,
+                kind: crate::menu_syntax::TriggerPickerRowKind::CaptureArtifact,
+                title: suggestion.label.clone(),
+                token: Some(suggestion.value.clone()),
+                subtitle: Some(field.label.clone()),
+                detail: suggestion.detail.clone(),
+                example: None,
+                badges: vec![suggestion.source.clone()],
+                action: crate::menu_syntax::TriggerPickerAction::InsertToken {
+                    token: suggestion.value.clone(),
+                    keep_open: false,
+                },
+                enabled: true,
+            })
+            .collect::<Vec<_>>();
+
+        let selected_row_id = self.selected_menu_syntax_form_trigger_popup_row_id(form, field);
+        Some((
+            crate::menu_syntax::TriggerPickerSnapshot {
+                mode: crate::menu_syntax::TriggerPickerMode::Capture,
+                target: Some(target),
+                rows,
+            },
+            selected_row_id,
+        ))
+    }
+
+    fn sync_menu_syntax_form_trigger_popup_window(
+        &mut self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some((snapshot, selected_row_id)) =
+            self.build_menu_syntax_form_trigger_popup_snapshot(form)
+        {
+            let selected_index = selected_row_id
+                .as_deref()
+                .and_then(|id| snapshot.rows.iter().position(|row| row.id == id))
+                .unwrap_or(0);
+            self.menu_syntax_form_suggestion_selected_index = Some(selected_index);
+            let row_count = snapshot.rows.len();
+            self.menu_syntax_trigger_popup_state =
+                crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                    snapshot: Some(snapshot),
+                    selected_row_id,
+                    visible_start: crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
+                        self.menu_syntax_trigger_popup_state.visible_start,
+                        selected_index,
+                        row_count,
+                    ),
+                };
+            self.sync_menu_syntax_trigger_popup_window_for_filter(self.filter_text.clone(), window, cx);
+        } else if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
+            self.menu_syntax_trigger_popup_state = Default::default();
+            crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+        }
+    }
+
+    fn close_menu_syntax_form_suggestions_and_trigger_popup(&mut self, cx: &mut Context<Self>) {
+        self.close_menu_syntax_form_suggestions();
+        if self.trigger_popup_state_is_menu_syntax_form_suggestion() {
+            self.menu_syntax_trigger_popup_state = Default::default();
+            crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+        }
+    }
+
     fn open_menu_syntax_form_suggestions_for(
         &mut self,
         field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
@@ -285,6 +433,7 @@ impl ScriptListApp {
             state.set_selection(len, len, window, cx);
             state.focus(window, cx);
         });
+        self.sync_menu_syntax_form_trigger_popup_window(form, window, cx);
         cx.notify();
     }
 
@@ -292,7 +441,7 @@ impl ScriptListApp {
         self.menu_syntax_form_input_active = false;
         self.menu_syntax_form_draft_field_id = None;
         self.menu_syntax_form_draft_value.clear();
-        self.close_menu_syntax_form_suggestions();
+        self.close_menu_syntax_form_suggestions_and_trigger_popup(cx);
         self.gpui_input_state
             .update(cx, |state, cx| state.focus(window, cx));
         cx.notify();
@@ -385,6 +534,7 @@ impl ScriptListApp {
                 self.focus_menu_syntax_form_input_at(index, &form, window, cx);
                 self.menu_syntax_form_draft_field_id = Some(resolved_field_id.clone());
                 self.menu_syntax_form_draft_value = value.clone();
+                self.sync_menu_syntax_form_trigger_popup_window(&form, window, cx);
             }
         }
         tracing::info!(
@@ -437,11 +587,11 @@ impl ScriptListApp {
 
         match key.to_ascii_lowercase().as_str() {
             "up" | "arrowup" => {
-                self.move_menu_syntax_form_suggestion_selection(-1, &form, cx);
+                self.move_menu_syntax_form_suggestion_selection(-1, &form, window, cx);
                 true
             }
             "down" | "arrowdown" => {
-                self.move_menu_syntax_form_suggestion_selection(1, &form, cx);
+                self.move_menu_syntax_form_suggestion_selection(1, &form, window, cx);
                 true
             }
             "enter" | "return" => {
@@ -453,7 +603,7 @@ impl ScriptListApp {
             }
             "escape" | "esc" => {
                 if self.menu_syntax_form_suggestion_field_id.is_some() {
-                    self.close_menu_syntax_form_suggestions();
+                    self.close_menu_syntax_form_suggestions_and_trigger_popup(cx);
                     cx.notify();
                 } else {
                     self.focus_menu_syntax_main_input(window, cx);
@@ -611,6 +761,7 @@ impl ScriptListApp {
         &mut self,
         delta: isize,
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(field) = self.active_menu_syntax_form_popup_field(form) else {
@@ -638,6 +789,7 @@ impl ScriptListApp {
         };
         self.menu_syntax_form_suggestion_field_id = Some(field.id.clone());
         self.menu_syntax_form_suggestion_selected_index = Some(next);
+        self.sync_menu_syntax_form_trigger_popup_window(form, window, cx);
         cx.notify();
     }
 
