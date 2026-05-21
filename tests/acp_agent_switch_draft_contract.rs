@@ -13,6 +13,16 @@
 const VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const ACP_LAUNCH_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/acp_launch.rs");
+const ACP_CONTEXT_STAGING_SOURCE: &str =
+    include_str!("../src/app_impl/tab_ai_mode/acp_context_staging.rs");
+
+fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    let start_idx = source.find(start).expect("start marker should exist");
+    let rest = &source[start_idx..];
+    let end_idx = rest.find(end).unwrap_or(rest.len());
+    &rest[..end_idx]
+}
 
 // doc-anchor-removed: [[removed-docs Chat#Agent switching]]
 #[test]
@@ -22,7 +32,9 @@ fn agent_switch_dispatch_stages_retry_payload_before_relaunch() {
         "handle_action must dispatch on the `acp_switch_agent:<id>` prefix"
     );
     assert!(
-        HANDLE_ACTION_SOURCE.contains("view.stage_agent_switch_retry(next_agent_id.clone(), cx);"),
+        HANDLE_ACTION_SOURCE.contains(
+            "view.relaunch_for_agent_switch_preserving_draft(next_agent_id.clone(), cx);"
+        ),
         "handle_action must stage the retry payload on the ACP view before relaunch"
     );
     assert!(
@@ -77,13 +89,40 @@ fn agent_switch_relaunch_restores_input_cursor_and_context_parts() {
         VIEW_SOURCE.contains("thread.input.set_cursor(input_cursor);"),
         "draft cursor position must be restored onto the new session's composer"
     );
+    let restore_body = source_between(
+        VIEW_SOURCE,
+        "pub(crate) fn restore_retry_draft_state(",
+        "pub(crate) fn stage_agent_switch_retry(",
+    );
     assert!(
-        VIEW_SOURCE.contains("self.sync_inline_mentions(cx);"),
-        "inline @mentions must re-sync so preserved context parts render as chips"
+        !restore_body.contains("self.sync_inline_mentions(cx);"),
+        "agent switching must restore the exact draft snapshot without re-running mention sync, \
+         otherwise switching agents can add/remove @ context parts the user did not change"
     );
     assert!(
         VIEW_SOURCE.contains("event = \"acp_switch_agent_retry_draft_restored\","),
         "draft restore must emit the telemetry span confirming the payload consumed"
+    );
+}
+
+// doc-anchor-removed: [[removed-docs Chat#Agent switching]]
+#[test]
+fn retry_draft_restore_suppresses_authoring_slash_prime() {
+    let staging_body = source_between(
+        ACP_CONTEXT_STAGING_SOURCE,
+        "pub(super) fn stage_acp_initial_context_parts(",
+        "pub(super) fn spawn_acp_deferred_context_staging",
+    );
+    assert!(
+        staging_body.contains("let has_retry_draft_state = retry_draft_state.is_some();"),
+        "context staging must compute whether this open is restoring an agent-switch draft"
+    );
+    assert!(
+        staging_body.contains(
+            "if !has_retry_draft_state\n            && Self::should_prime_script_authoring_slash("
+        ),
+        "agent switching must not prime `/new-script` after restoring a draft, otherwise \
+         changing agents mutates the main ACP composer"
     );
 }
 
@@ -187,17 +226,17 @@ fn cached_retry_request_forces_fresh_open_not_view_reuse() {
 #[test]
 fn explicit_agent_switch_resolution_does_not_fallback_to_ready_agent() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("resolve_explicit_acp_launch_with_requirements"),
+        ACP_LAUNCH_SOURCE.contains("resolve_explicit_acp_launch_with_requirements"),
         "retry-backed agent switches must use explicit resolution so selecting Codex \
          cannot silently fall back to OpenCode"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("if retry_request.is_some()"),
+        ACP_LAUNCH_SOURCE.contains("if retry_request.is_some()"),
         "the ACP open path must distinguish explicit retry/switch launches from \
          ordinary preference-based launches"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("resolve_acp_launch_with_requirements"),
+        ACP_LAUNCH_SOURCE.contains("resolve_acp_launch_with_requirements"),
         "ordinary preference launches should keep the capability-aware fallback resolver"
     );
 }

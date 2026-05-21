@@ -257,9 +257,18 @@ fn codex_detection_uses_local_codex_cli_not_adapter_binary_only() {
         "Codex must record that npx runtime fallback is disabled"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains("let launch_ready = adapter_ready;")
+        ACP_CONFIG_SOURCE.contains("let launch_ready = adapter_ready && codex_cli_ready;")
             && ACP_CONFIG_SOURCE.contains("should_be_implicit_codex_default: launch_ready"),
-        "Codex launch readiness must come from the resolved adapter, not npx or codex CLI alone"
+        "Codex launch readiness must require both the resolved adapter and local codex CLI, \
+         never npx or codex CLI alone"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("sibling_repo_codex_acp_search_roots")
+            && ACP_CONFIG_SOURCE.contains("std::env::current_exe()")
+            && ACP_CONFIG_SOURCE.contains("std::env::current_dir()")
+            && ACP_CONFIG_SOURCE.contains("parent_name == Some(\"target-agent\")"),
+        "Codex adapter discovery must work in the launched app, where CARGO_MANIFEST_DIR is \
+         not a reliable source of the sibling dev checkout"
     );
     assert!(
         !ACP_CONFIG_SOURCE.contains(
