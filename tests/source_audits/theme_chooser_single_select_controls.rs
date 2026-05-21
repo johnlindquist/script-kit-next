@@ -1,5 +1,13 @@
 use super::read_source;
 
+fn source_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
+    source
+        .split(start)
+        .nth(1)
+        .and_then(|section| section.split(end).next())
+        .unwrap_or_else(|| panic!("missing source section between `{start}` and `{end}`"))
+}
+
 #[test]
 fn theme_chooser_customize_opacity_controls_are_single_select() {
     let source = read_source("src/render_builtins/theme_chooser.rs");
@@ -305,19 +313,48 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     let collector = read_source("src/app_layout/collect_elements.rs");
     let prompt_handler = read_source("src/prompt_handler/mod.rs");
     let protocol = read_source("src/protocol/types/batch_wait.rs");
+    let color_picker = read_source("vendor/gpui-component/crates/ui/src/color_picker.rs");
+
+    for (picker_control, hex_control, label) in [
+        ("accent-color", "accent-color-hex", "Accent Color"),
+        (
+            "gradient-base-from",
+            "gradient-base-from-hex",
+            "Gradient Base From",
+        ),
+        (
+            "gradient-base-to",
+            "gradient-base-to-hex",
+            "Gradient Base To",
+        ),
+    ] {
+        assert!(
+            collector.contains(&format!(
+                "\"control:theme-chooser:{picker_control}\".to_string()"
+            )) && collector.contains("protocol::ElementType::ColorPicker")
+                && collector.contains(&format!("\"{label}\"")),
+            "getElements must expose Theme Designer color picker `{picker_control}`"
+        );
+        assert!(
+            collector.contains(&format!(
+                "\"control:theme-chooser:{hex_control}\".to_string()"
+            )) && collector.contains("protocol::ElementType::Input")
+                && collector.contains(&format!("\"{label} Hex\"")),
+            "getElements must expose Theme Designer typed hex input `{hex_control}` beside `{picker_control}`"
+        );
+        assert!(
+            chooser.contains(&format!("\"{picker_control}\""))
+                && chooser.contains(&format!("\"{hex_control}\"")),
+            "Theme Designer devtools setter must handle `{picker_control}` and `{hex_control}`"
+        );
+    }
 
     for control in [
-        "accent-color",
-        "accent-color-hex",
         "surface-opacity",
         "secondary-text-opacity",
         "focused-background-opacity",
         "vibrancy-enabled",
         "gradient-enabled",
-        "gradient-base-from",
-        "gradient-base-from-hex",
-        "gradient-base-to",
-        "gradient-base-to-hex",
         "gradient-base-angle",
         "gradient-base-opacity",
         "ui-font-size",
@@ -332,6 +369,16 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
             "Theme Designer devtools setter must handle control `{control}`"
         );
     }
+
+    assert!(
+        collector.contains("format!(\"control:theme-chooser:gradient-layer-{ordinal}-from\")")
+            && collector
+                .contains("format!(\"control:theme-chooser:gradient-layer-{ordinal}-from-hex\")")
+            && collector.contains("format!(\"control:theme-chooser:gradient-layer-{ordinal}-to\")")
+            && collector
+                .contains("format!(\"control:theme-chooser:gradient-layer-{ordinal}-to-hex\")"),
+        "dynamic gradient layer color rows must expose both picker and typed hex controls"
+    );
 
     for element_type in [
         "ElementType::Slider",
@@ -351,11 +398,33 @@ fn theme_chooser_controls_are_devtools_visible_and_drivable() {
     assert!(prompt_handler.contains("\"setThemeControl\".to_string()"));
     assert!(prompt_handler.contains("setThemeControl requires ThemeChooserView"));
     assert!(!prompt_handler.contains(".set_theme_chooser_control_from_devtools(&control, &value, cx)\n                                                .ok()"));
+    assert!(
+        color_picker.contains("pub enum ColorPickerEvent")
+            && color_picker.contains("Change(Option<Hsla>)")
+            && color_picker.contains(".open(state.open)")
+            && color_picker.contains(".on_open_change("),
+        "Theme Designer should keep relying on gpui-component ColorPicker popup open/close and change semantics"
+    );
 }
 
 #[test]
 fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
     let chooser = read_source("src/render_builtins/theme_chooser.rs");
+    let new_controls = source_between(
+        &chooser,
+        "fn new_theme_chooser_color_controls(",
+        "fn new_theme_chooser_gradient_controls(",
+    );
+    let render_row = source_between(
+        &chooser,
+        "fn render_theme_chooser_color_picker_row(",
+        "pub(crate) fn submit_theme_chooser_from_input_enter(",
+    );
+    let sync_color = source_between(
+        &chooser,
+        "fn sync_color_control_value(",
+        "fn sync_gradient_controls_from_theme(",
+    );
 
     assert!(chooser.contains("pub(crate) struct ThemeChooserColorControls"));
     assert!(chooser.contains("picker: Entity<ColorPickerState>"));
@@ -365,14 +434,75 @@ fn theme_chooser_color_rows_use_single_picker_with_typed_hex_input() {
     assert!(chooser.contains("apply_theme_chooser_hex_text_if_valid"));
     assert!(chooser.contains("parse_theme_chooser_hex_input(text)"));
     assert!(chooser.contains("apply_theme_chooser_color_hex_change("));
+    assert_eq!(
+        new_controls.matches("ColorPickerState::new(window, cx)").count(),
+        1,
+        "each Theme Designer color control bundle should allocate exactly one gpui-component ColorPickerState"
+    );
+    assert_eq!(
+        new_controls
+            .matches("gpui_component::input::InputState::new(window, cx)")
+            .count(),
+        1,
+        "each Theme Designer color control bundle should allocate exactly one always-visible typed hex InputState"
+    );
     assert!(
-        chooser.contains("gpui_component::input::Input::new(&controls.hex_input)")
-            && chooser.contains("ColorPicker::new(&controls.picker)"),
+        new_controls.contains("ColorPickerEvent::Change(Some(color))")
+            && new_controls.contains(
+                "this.apply_theme_chooser_color_change(binding, *color, cx);"
+            )
+            && new_controls.contains("ColorPickerEvent::Change(None) => {}"),
+        "Theme Designer must route gpui-component ColorPickerEvent::Change through Theme Designer state"
+    );
+    assert!(
+        new_controls.contains("gpui_component::input::InputEvent::Change")
+            && new_controls.contains(
+                "this.apply_theme_chooser_hex_text_if_valid(binding, &value, cx);"
+            )
+            && new_controls.contains("gpui_component::input::InputEvent::PressEnter { .. }")
+            && new_controls.contains("gpui_component::input::InputEvent::Blur")
+            && new_controls.contains("this.sync_theme_chooser_control_values(window, cx);"),
+        "typed hex changes should preview valid colors while Enter/Blur reconcile the visible input"
+    );
+    assert!(
+        render_row.contains("gpui_component::input::Input::new(&controls.hex_input)")
+            && render_row.contains("ColorPicker::new(&controls.picker)"),
         "Theme Designer color row must expose typed hex editing beside the single picker swatch"
+    );
+    assert_eq!(
+        render_row
+            .matches("gpui_component::input::Input::new(&controls.hex_input)")
+            .count(),
+        1,
+        "Theme Designer color row should render one visible typed hex input"
+    );
+    assert_eq!(
+        render_row
+            .matches("ColorPicker::new(&controls.picker)")
+            .count(),
+        1,
+        "Theme Designer color row should render one gpui-component ColorPicker"
+    );
+    assert!(
+        render_row.contains(".featured_colors(Self::theme_chooser_featured_colors())")
+            && render_row.contains(".with_size(Size::Small)"),
+        "Theme Designer should keep the adopted ColorPicker configured as the row swatch"
     );
     assert!(
         !chooser.contains(".w(px(18.0))\n                            .h(px(18.0))"),
         "Theme Designer color rows should not render a duplicate manual color square"
+    );
+    assert!(
+        !render_row.contains(".bg(rgb(_hex))")
+            && !render_row.contains(".bg(rgb(hex))")
+            && !render_row.contains(".bg(hsla("),
+        "Theme Designer color row should not add a second hand-drawn color swatch"
+    );
+    assert!(
+        sync_color.contains("Self::sync_color_picker_entity_value(&controls.picker, hex, window, cx);")
+            && sync_color.contains("if input.focus_handle(cx).is_focused(window) {\n                return;\n            }")
+            && sync_color.contains("input.set_value(next, window, cx);"),
+        "focused typed hex input must not be overwritten during Theme Designer sync"
     );
 }
 
