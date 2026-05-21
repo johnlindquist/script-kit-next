@@ -236,6 +236,10 @@ fn candidate_matches(candidate: &ObjectSelectorCandidate, query: &str) -> bool {
     haystack.to_ascii_lowercase().contains(&query)
 }
 
+pub fn object_selector_candidate_matches(candidate: &ObjectSelectorCandidate, query: &str) -> bool {
+    candidate_matches(candidate, query)
+}
+
 fn preserve_or_pick_first_enabled(
     snapshot: &ObjectSelectorSnapshot,
     previous_id: Option<&str>,

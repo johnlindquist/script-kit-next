@@ -79,9 +79,10 @@ pub use filter::{
 };
 #[allow(unused_imports)]
 pub use form::{
-    apply_capture_form_field_edit, build_capture_form_snapshot, empty_capture_invocation,
-    MenuSyntaxFormFieldKind, MenuSyntaxFormFieldSnapshot, MenuSyntaxFormSnapshot,
-    MenuSyntaxFormSuggestion, MenuSyntaxFormSuggestionPools,
+    apply_capture_form_field_edit, apply_menu_syntax_form_suggestion, build_capture_form_snapshot,
+    empty_capture_invocation, MenuSyntaxFormFieldKind, MenuSyntaxFormFieldSnapshot,
+    MenuSyntaxFormSnapshot, MenuSyntaxFormSuggestion, MenuSyntaxFormSuggestionApplication,
+    MenuSyntaxFormSuggestionPools,
 };
 #[allow(unused_imports)]
 pub use fragments::{MenuSyntaxFragment, MenuSyntaxFragmentRole, MenuSyntaxFragmentStatus};
@@ -118,9 +119,9 @@ pub use mode::{
 #[allow(unused_imports)]
 pub use object_selector::{
     apply_object_selector_intent, build_object_selector_snapshot,
-    object_selector_visible_start_for_selection, plan_object_selector_transition,
-    MenuSyntaxObjectSelectorState, ObjectSelectorCandidate, ObjectSelectorContext,
-    ObjectSelectorIntentOutcome, ObjectSelectorRow, ObjectSelectorSnapshot,
+    object_selector_candidate_matches, object_selector_visible_start_for_selection,
+    plan_object_selector_transition, MenuSyntaxObjectSelectorState, ObjectSelectorCandidate,
+    ObjectSelectorContext, ObjectSelectorIntentOutcome, ObjectSelectorRow, ObjectSelectorSnapshot,
     ObjectSelectorTransition,
 };
 #[allow(unused_imports)]

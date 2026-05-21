@@ -361,15 +361,26 @@ fn render_menu_syntax_form_field(
                     .flex()
                     .flex_wrap()
                     .gap(px(5.0))
-                    .children(field.suggestions.iter().take(4).map(|suggestion| {
+                    .children(field.suggestions.iter().take(6).enumerate().map(|(index, suggestion)| {
+                        let selected = field.selected_suggestion_index == Some(index);
                         div()
                             .px(px(7.0))
                             .py(px(2.0))
                             .rounded(px(5.0))
-                            .bg(rgba((theme.colors.text.muted << 8) | 0x14))
+                            .border_1()
+                            .border_color(if selected {
+                                rgba((theme.colors.ui.border << 8) | 0xE6)
+                            } else {
+                                rgba((theme.colors.ui.border << 8) | 0x66)
+                            })
+                            .bg(if selected {
+                                rgba((theme.colors.background.search_box << 8) | 0x66)
+                            } else {
+                                rgba((theme.colors.text.muted << 8) | 0x14)
+                            })
                             .text_size(px(10.0))
                             .line_height(px(13.0))
-                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xCC))
+                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
                             .child(suggestion.label.clone())
                     })),
             )
@@ -1306,6 +1317,17 @@ impl ScriptListApp {
 
                 let key_str = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
+                if matches!(this.current_view, AppView::ScriptList)
+                    && this.handle_menu_syntax_form_control_key_input(
+                        key_str,
+                        &event.keystroke.modifiers,
+                        window,
+                        cx,
+                    )
+                {
+                    cx.stop_propagation();
+                    return;
+                }
                 if sk_is_key_tab(key_str)
                     && !has_cmd
                     && !event.keystroke.modifiers.alt
