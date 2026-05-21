@@ -1172,10 +1172,30 @@ impl ScriptListApp {
         ((rgb_hex & 0x00ff_ffff) << 8) | (alpha_source_rgba & 0xff)
     }
 
+    const THEME_CHOOSER_MANAGEMENT_HOVER_ALPHA_FLOOR: u32 = 0x5c;
+
+    fn theme_chooser_rgba_alpha_floor(rgba_token: u32) -> u32 {
+        let alpha = (rgba_token & 0xff).max(Self::THEME_CHOOSER_MANAGEMENT_HOVER_ALPHA_FLOOR);
+        (rgba_token & 0xffff_ff00) | alpha
+    }
+
+    fn theme_chooser_management_hover_token(
+        kind: ThemeChooserManagementButtonKind,
+        hover_rgba: u32,
+    ) -> u32 {
+        match kind {
+            ThemeChooserManagementButtonKind::Primary => hover_rgba,
+            ThemeChooserManagementButtonKind::Neutral
+            | ThemeChooserManagementButtonKind::Destructive => {
+                Self::theme_chooser_rgba_alpha_floor(hover_rgba)
+            }
+        }
+    }
+
     fn render_theme_chooser_management_button<F>(
         id: &'static str,
         label: &'static str,
-        _kind: ThemeChooserManagementButtonKind,
+        kind: ThemeChooserManagementButtonKind,
         disabled: bool,
         text_hex: u32,
         bg_rgba: u32,
@@ -1186,6 +1206,7 @@ impl ScriptListApp {
     where
         F: Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
     {
+        let hover_rgba = Self::theme_chooser_management_hover_token(kind, hover_rgba);
         div()
             .id(id)
             .px(px(8.0))

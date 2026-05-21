@@ -185,6 +185,32 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
         chooser.contains("fn render_theme_chooser_management_button"),
         "Theme Designer management buttons should share one local helper"
     );
+    assert!(
+        chooser.contains("const THEME_CHOOSER_MANAGEMENT_HOVER_ALPHA_FLOOR"),
+        "Theme Designer management hover should have a local visibility floor"
+    );
+    assert!(
+        chooser.contains("fn theme_chooser_rgba_alpha_floor(")
+            && chooser.contains("fn theme_chooser_management_hover_token("),
+        "Theme Designer management hover should normalize neutral/destructive hover tokens locally"
+    );
+
+    let hover_token_helper = chooser
+        .split("fn theme_chooser_management_hover_token")
+        .nth(1)
+        .and_then(|section| {
+            section
+                .split("fn render_theme_chooser_management_button")
+                .next()
+        })
+        .expect("missing management hover token helper body");
+    assert!(
+        hover_token_helper.contains("ThemeChooserManagementButtonKind::Primary")
+            && hover_token_helper.contains("ThemeChooserManagementButtonKind::Neutral")
+            && hover_token_helper.contains("ThemeChooserManagementButtonKind::Destructive")
+            && hover_token_helper.contains("theme_chooser_rgba_alpha_floor"),
+        "primary should preserve shared hover, while neutral/destructive should receive a visible local floor"
+    );
 
     let helper = chooser
         .split("fn render_theme_chooser_management_button")
@@ -196,6 +222,12 @@ fn theme_chooser_management_buttons_use_theme_aware_hover_states() {
             && helper.contains(".hover(")
             && helper.contains("if disabled"),
         "management button hover must be enabled-only and disabled clicks must remain guarded"
+    );
+    assert!(
+        helper.contains("kind: ThemeChooserManagementButtonKind")
+            && helper.contains("theme_chooser_management_hover_token(kind, hover_rgba)")
+            && !helper.contains("_kind: ThemeChooserManagementButtonKind"),
+        "management button kind must drive hover behavior instead of being ignored"
     );
 
     let render_section = chooser
