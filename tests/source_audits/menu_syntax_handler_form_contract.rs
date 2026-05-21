@@ -33,9 +33,12 @@ fn menu_syntax_handler_form_snapshot_is_state_first_and_autocomplete_ready() {
     let app = read("src/app_impl/menu_syntax_main_hint.rs");
     assert!(
         app.contains("menu_syntax_capture_form_invocation")
+            && app.contains("menu_syntax_capture_form_target_for")
+            && app.contains("menu_syntax_capture_form_owns_input_for")
+            && app.contains("builtin_schema")
             && app.contains("IncompleteKind::MissingCaptureBody")
             && app.contains("empty_capture_invocation"),
-        "app form snapshots and form-field edits must share the same incomplete-handler invocation path"
+        "app form ownership, snapshots, and form-field edits must share the same incomplete-handler invocation path and only claim handlers with schemas"
     );
     let state = read("src/main_sections/app_state.rs");
     assert!(
@@ -164,9 +167,10 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
     assert!(
         form_owner.contains("gpui_component::input::InputState::new(window, cx)")
             && form_owner.contains(".tab_navigation(true)")
+            && form_owner.contains("state.set_selection(len, len, window, cx)")
             && form_owner.contains("state.focus(window, cx)")
             && form_owner.contains("actual_menu_syntax_form_focused_index"),
-        "Tab routing must create real focusable handler field inputs and move actual focus handles"
+        "Tab routing must create real focusable handler field inputs, place the cursor at the end, and move actual focus handles"
     );
     assert!(
         form_owner.contains("focus_menu_syntax_main_input")
@@ -176,6 +180,12 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
     );
 
     let preflight = read("src/main_window_preflight/build.rs");
+    assert!(
+        preflight.contains("AppView::ScriptList if app.menu_syntax_capture_form_owns_input() => None")
+            && preflight.contains("return \"handler-form\".to_string();")
+            && preflight.contains("return Vec::new();"),
+        "handler forms must not expose stale launcher selected/visible rows or Enter targets through preflight"
+    );
     let form_disabled = preflight
         .find("menu_syntax_capture_form_owns_input()")
         .expect("main-window preflight must disable Tab AI while handler form owns Tab");
@@ -225,6 +235,129 @@ fn tab_routes_to_handler_form_before_tab_ai_paths() {
             "{path}: simulateKey Tab must move handler form focus before Tab AI can claim the key"
         );
     }
+}
+
+#[test]
+fn committed_handler_form_ownership_suppresses_global_popups_on_all_filter_paths() {
+    let immediate = read("src/app_impl/filter_input_updates.rs");
+    assert!(
+        immediate.contains("let mut handler_form_owns_input = false;")
+            && immediate
+                .contains("handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);")
+            && immediate.contains("if handler_form_owns_input")
+            && immediate.contains("self.menu_syntax_object_selector_state = Default::default();")
+            && immediate.contains("self.menu_syntax_trigger_popup_state = Default::default();")
+            && immediate.contains("close_menu_syntax_object_selector_popup_window(cx)")
+            && immediate.contains("close_menu_syntax_trigger_popup_window(cx)")
+            && immediate.contains("!handler_form_owns_input && self.menu_syntax_object_selector_state.snapshot.is_none()")
+            && immediate.contains("&& !handler_form_owns_input"),
+        "programmatic setFilter/setInput must build handler form state and suppress trigger/object popups before they can own the main list"
+    );
+
+    let input_change = read("src/app_impl/filter_input_change.rs");
+    let owner = input_change
+        .find("let capture_composer_owns_input =")
+        .expect("typed input path must compute committed handler-form ownership");
+    let object = input_change
+        .find("run_menu_syntax_object_selector_state_machine")
+        .expect("typed input path should still run object selector outside handler forms");
+    let trigger = input_change
+        .find("plan_trigger_popup_transition")
+        .expect("typed input path should still plan trigger popup outside handler forms");
+    assert!(
+        owner < object && owner < trigger,
+        "typed input must decide handler-form ownership before object/trigger popup machines can claim the surface"
+    );
+    assert!(
+        input_change.contains("} else if capture_composer_owns_input {\n                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange")
+            && input_change.contains("!capture_composer_owns_input\n                && self.menu_syntax_object_selector_state.snapshot.is_some()"),
+        "committed handler forms must prevent stale popup transitions from reopening while form mode owns the list"
+    );
+
+    let render = read("src/render_script_list/mod.rs");
+    assert!(
+        render.contains("self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render)")
+            && render.contains("let popup_owns_main_list = !handler_form_owns_input_for_render")
+            && render.contains("let menu_syntax_owns_main_list = handler_form_owns_input_for_render"),
+        "render ownership must use the app-level form owner and give handler forms precedence over stale popups"
+    );
+}
+
+#[test]
+fn batch_set_input_uses_window_aware_immediate_filter_writer() {
+    let prompt = read("src/prompt_handler/mod.rs");
+    assert!(
+        prompt.contains("fn set_main_window_input_text_for_batch(")
+            && prompt.contains("app.set_input_text_in_window(&text, window, cx);")
+            && prompt.contains("fn set_input_text_in_window(")
+            && prompt.contains("self.set_filter_text_immediate(text.to_string(), window, cx);"),
+        "batch input updates need the main window so ScriptList setInput can run the same immediate filter/form sync path as user typing"
+    );
+
+    let main_batch = prompt
+        .find("// ── Main-window batch path")
+        .expect("main-window batch path must be named");
+    let set_input = prompt[main_batch..]
+        .find("protocol::BatchCommand::SetInput { text }")
+        .map(|idx| main_batch + idx)
+        .expect("main-window batch setInput arm must exist");
+    let select_by_value = prompt[set_input..]
+        .find("protocol::BatchCommand::SelectByValue")
+        .map(|idx| set_input + idx)
+        .expect("setInput arm should be followed by selectByValue");
+    let set_input_arm = &prompt[set_input..select_by_value];
+    assert!(
+        set_input_arm.contains("set_main_window_input_text_for_batch(")
+            && !set_input_arm.contains("set_input_text(text, cx)"),
+        "batch setInput must not bypass set_filter_text_immediate on ScriptList"
+    );
+
+    for (arm, next) in [
+        (
+            "protocol::BatchCommand::FilterAndSelect",
+            "protocol::BatchCommand::SelectIndex",
+        ),
+        (
+            "protocol::BatchCommand::TypeAndSubmit",
+            "protocol::BatchCommand::WaitFor",
+        ),
+    ] {
+        let start = prompt[main_batch..]
+            .find(arm)
+            .map(|idx| main_batch + idx)
+            .unwrap_or_else(|| panic!("{arm} must exist"));
+        let end = prompt[start..]
+            .find(next)
+            .map(|idx| start + idx)
+            .unwrap_or(prompt.len());
+        let body = &prompt[start..end];
+        assert!(
+            body.contains("set_main_window_input_text_for_batch("),
+            "{arm} must share the same window-aware input path before selecting/submitting"
+        );
+    }
+}
+
+#[test]
+fn script_list_printable_simulate_key_can_update_filter_text() {
+    let updates = read("src/app_impl/filter_input_updates.rs");
+    let helper_start = updates
+        .find("pub(crate) fn handle_script_list_printable_simulate_key(")
+        .expect("ScriptList printable simulateKey helper must exist");
+    let helper_end = updates[helper_start..]
+        .find("/// Write the given filter text")
+        .map(|idx| helper_start + idx)
+        .expect("helper should stay before builtin subview input writer");
+    let helper = &updates[helper_start..helper_end];
+    assert!(
+        helper.contains("key_char: Option<&str>")
+            && helper.contains("!matches!(self.current_view, AppView::ScriptList)")
+            && helper.contains("modifiers.platform || modifiers.alt || modifiers.control")
+            && helper.contains("menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input()")
+            && helper.contains("next.push_str(ch);")
+            && helper.contains("self.set_filter_text_immediate(next, window, cx);"),
+        "printable simulateKey support must append plain characters through the immediate filter writer and stay out of active handler fields"
+    );
 }
 
 #[test]

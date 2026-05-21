@@ -148,11 +148,21 @@ impl ScriptListApp {
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
 
+        let mut handler_form_owns_input = false;
         if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
             self.set_menu_syntax_mode_from_filter(&text);
+            handler_form_owns_input = self.menu_syntax_capture_form_owns_input_for(&text);
             self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-            self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
-            if self.menu_syntax_object_selector_state.snapshot.is_none() {
+            if handler_form_owns_input {
+                self.menu_syntax_object_selector_state = Default::default();
+                self.menu_syntax_trigger_popup_state = Default::default();
+                crate::menu_syntax_object_selector_popup_window::close_menu_syntax_object_selector_popup_window(cx);
+                crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+            } else {
+                self.run_menu_syntax_object_selector_state_machine(&text, window, cx);
+            }
+            if !handler_form_owns_input && self.menu_syntax_object_selector_state.snapshot.is_none()
+            {
                 self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
             }
             self.invalidate_grouped_cache();
@@ -164,6 +174,7 @@ impl ScriptListApp {
         if self.menu_syntax_mode.is_menu_syntax_for(&text)
             || self.menu_syntax_trigger_popup_state.snapshot.is_some()
             || self.menu_syntax_object_selector_state.snapshot.is_some()
+            || self.menu_syntax_capture_form_owns_input_for(&text)
         {
             // Menu syntax owns the result list entirely — clear any stale
             // fallback items so pressing Enter routes to execute_selected,
@@ -176,6 +187,7 @@ impl ScriptListApp {
 
         if !handled_by_subview
             && matches!(self.current_view, AppView::ScriptList)
+            && !handler_form_owns_input
             && matches!(
                 Self::special_entry_from_script_list_filter(&text),
                 Some(crate::filter_input_core::ScriptListSpecialEntry::AcpMentionPicker)
@@ -208,6 +220,7 @@ impl ScriptListApp {
         // and `collect_fallbacks` are ScriptList-only and would incorrectly
         // flip a builtin subview into the script-list fallback mode.
         if !handled_by_subview
+            && !handler_form_owns_input
             && !text.is_empty()
             && !self.menu_syntax_mode.is_menu_syntax_for(&text)
             && self.menu_syntax_trigger_popup_state.snapshot.is_none()
@@ -227,6 +240,35 @@ impl ScriptListApp {
         self.rebuild_main_window_preflight_if_needed();
         self.update_window_size_deferred(window, cx);
         cx.notify();
+    }
+
+    pub(crate) fn handle_script_list_printable_simulate_key(
+        &mut self,
+        key_char: Option<&str>,
+        modifiers: &gpui::Modifiers,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return false;
+        }
+        if modifiers.platform || modifiers.alt || modifiers.control {
+            return false;
+        }
+        if self.menu_syntax_form_input_active && self.menu_syntax_capture_form_owns_input() {
+            return false;
+        }
+        let Some(ch) = key_char else {
+            return false;
+        };
+        if ch.is_empty() || ch.chars().count() != 1 {
+            return false;
+        }
+
+        let mut next = self.filter_text.clone();
+        next.push_str(ch);
+        self.set_filter_text_immediate(next, window, cx);
+        true
     }
 
     /// Write the given filter text into the current view's `filter` field

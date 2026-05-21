@@ -265,7 +265,8 @@ fn render_menu_syntax_form_field(
     } else {
         rgba((theme.colors.ui.border << 8) | 0x80)
     };
-    let placeholder_color = rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
+    let placeholder_color =
+        rgba(crate::theme::AppChromeColors::from_theme(theme).placeholder_text_rgba);
     let input_height = crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0);
     let mut field_node = div()
         .id(format!("menu-syntax-form-field-{}", field.id))
@@ -318,7 +319,7 @@ fn render_menu_syntax_form_field(
                 .px(px(0.0))
                 .py(px(0.0))
                 .with_size(gpui_component::Size::Size(px(
-                    theme.get_fonts().ui_size + 2.0,
+                    theme.get_fonts().ui_size + 2.0
                 )))
                 .appearance(false)
                 .bordered(false)
@@ -357,32 +358,35 @@ fn render_menu_syntax_form_field(
     field_node
         .when(!field.suggestions.is_empty(), |d| {
             d.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(5.0))
-                    .children(field.suggestions.iter().take(6).enumerate().map(|(index, suggestion)| {
-                        let selected = field.selected_suggestion_index == Some(index);
-                        div()
-                            .px(px(7.0))
-                            .py(px(2.0))
-                            .rounded(px(5.0))
-                            .border_1()
-                            .border_color(if selected {
-                                rgba((theme.colors.ui.border << 8) | 0xE6)
-                            } else {
-                                rgba((theme.colors.ui.border << 8) | 0x66)
-                            })
-                            .bg(if selected {
-                                rgba((theme.colors.background.search_box << 8) | 0x66)
-                            } else {
-                                rgba((theme.colors.text.muted << 8) | 0x14)
-                            })
-                            .text_size(px(10.0))
-                            .line_height(px(13.0))
-                            .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
-                            .child(suggestion.label.clone())
-                    })),
+                div().flex().flex_wrap().gap(px(5.0)).children(
+                    field
+                        .suggestions
+                        .iter()
+                        .take(6)
+                        .enumerate()
+                        .map(|(index, suggestion)| {
+                            let selected = field.selected_suggestion_index == Some(index);
+                            div()
+                                .px(px(7.0))
+                                .py(px(2.0))
+                                .rounded(px(5.0))
+                                .border_1()
+                                .border_color(if selected {
+                                    rgba((theme.colors.ui.border << 8) | 0xE6)
+                                } else {
+                                    rgba((theme.colors.ui.border << 8) | 0x66)
+                                })
+                                .bg(if selected {
+                                    rgba((theme.colors.background.search_box << 8) | 0x66)
+                                } else {
+                                    rgba((theme.colors.text.muted << 8) | 0x14)
+                                })
+                                .text_size(px(10.0))
+                                .line_height(px(13.0))
+                                .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
+                                .child(suggestion.label.clone())
+                        }),
+                ),
             )
         })
         .into_any_element()
@@ -399,16 +403,12 @@ fn render_menu_syntax_form(
         .flex()
         .flex_col()
         .gap(px(6.0))
-        .children(
-            form.fields
+        .children(form.fields.iter().map(|field| {
+            let input = inputs
                 .iter()
-                .map(|field| {
-                    let input = inputs
-                        .iter()
-                        .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
-                    render_menu_syntax_form_field(theme, field, input)
-                }),
-        )
+                .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
+            render_menu_syntax_form_field(theme, field, input)
+        }))
         .into_any_element()
 }
 
@@ -869,14 +869,14 @@ impl ScriptListApp {
         // Use unified color resolver for consistent empty state styling
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
-        let handler_form_owns_input_for_render = matches!(self.current_view, AppView::ScriptList)
-            && self
-                .menu_syntax_mode
-                .capture_composer_owns_input_for(&filter_text_for_render);
+        let handler_form_owns_input_for_render =
+            self.menu_syntax_capture_form_owns_input_for(&filter_text_for_render);
         let show_launcher_ask_ai_hint = !handler_form_owns_input_for_render;
-        let menu_syntax_owns_main_list = self.menu_syntax_object_selector_state.owns_main_list()
-            || self.menu_syntax_trigger_popup_state.owns_main_list()
-            || handler_form_owns_input_for_render
+        let popup_owns_main_list = !handler_form_owns_input_for_render
+            && (self.menu_syntax_object_selector_state.owns_main_list()
+                || self.menu_syntax_trigger_popup_state.owns_main_list());
+        let menu_syntax_owns_main_list = handler_form_owns_input_for_render
+            || popup_owns_main_list
             || self
                 .menu_syntax_mode
                 .command_owns_input_for(&filter_text_for_render);

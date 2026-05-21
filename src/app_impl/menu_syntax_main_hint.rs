@@ -49,6 +49,10 @@ impl ScriptListApp {
         self.menu_syntax_form_inputs.clear();
         self.menu_syntax_form_input_subscriptions.clear();
         self.menu_syntax_form_syncing_from_input = false;
+        self.menu_syntax_form_input_active = false;
+        self.menu_syntax_form_focused_index = 0;
+        self.menu_syntax_form_draft_field_id = None;
+        self.menu_syntax_form_draft_value.clear();
         self.menu_syntax_form_suggestion_field_id = None;
         self.menu_syntax_form_suggestion_selected_index = None;
     }
@@ -97,11 +101,7 @@ impl ScriptListApp {
                 let field_id = field.id.clone();
                 let subscription = cx.subscribe_in(&input, window, {
                     let field_id = field_id.clone();
-                    move |this,
-                          input,
-                          event: &gpui_component::input::InputEvent,
-                          window,
-                          cx| {
+                    move |this, input, event: &gpui_component::input::InputEvent, window, cx| {
                         match event {
                             gpui_component::input::InputEvent::Change => {
                                 if this.menu_syntax_form_syncing_from_input {
@@ -154,11 +154,7 @@ impl ScriptListApp {
         }
     }
 
-    fn actual_menu_syntax_form_focused_index(
-        &self,
-        window: &Window,
-        cx: &App,
-    ) -> Option<usize> {
+    fn actual_menu_syntax_form_focused_index(&self, window: &Window, cx: &App) -> Option<usize> {
         self.menu_syntax_form_inputs
             .iter()
             .enumerate()
@@ -192,7 +188,11 @@ impl ScriptListApp {
             self.menu_syntax_form_draft_field_id = Some(field_id);
             self.menu_syntax_form_draft_value.clear();
         }
-        input.update(cx, |state, cx| state.focus(window, cx));
+        input.update(cx, |state, cx| {
+            let len = state.value().len();
+            state.set_selection(len, len, window, cx);
+            state.focus(window, cx);
+        });
         cx.notify();
     }
 
@@ -208,10 +208,14 @@ impl ScriptListApp {
     }
 
     pub(crate) fn menu_syntax_capture_form_owns_input(&self) -> bool {
+        self.menu_syntax_capture_form_owns_input_for(&self.filter_text)
+    }
+
+    pub(crate) fn menu_syntax_capture_form_owns_input_for(&self, raw_filter_text: &str) -> bool {
         matches!(self.current_view, AppView::ScriptList)
             && self
-                .menu_syntax_mode
-                .capture_composer_owns_input_for(&self.filter_text)
+                .menu_syntax_capture_form_target_for(raw_filter_text)
+                .is_some()
     }
 
     pub(crate) fn focus_next_menu_syntax_form_field(
@@ -421,11 +425,12 @@ impl ScriptListApp {
             self.menu_syntax_form_suggestion_selected_index = None;
             return;
         }
-        let current = self
-            .actual_menu_syntax_form_focused_index(window, cx)
-            .or_else(|| self.menu_syntax_form_input_active.then_some(
-                self.menu_syntax_form_focused_index.min(field_count - 1),
-            ));
+        let current = if self.menu_syntax_form_input_active {
+            self.actual_menu_syntax_form_focused_index(window, cx)
+                .or_else(|| Some(self.menu_syntax_form_focused_index.min(field_count - 1)))
+        } else {
+            None
+        };
         let next = match (current, delta < 0) {
             (None, false) => Some(0),
             (None, true) => Some(field_count - 1),
@@ -490,13 +495,12 @@ impl ScriptListApp {
             return;
         };
         let len = field.suggestions.len();
-        let current = if self.menu_syntax_form_suggestion_field_id.as_deref()
-            == Some(field.id.as_str())
-        {
-            self.menu_syntax_form_suggestion_selected_index.unwrap_or(0)
-        } else {
-            0
-        };
+        let current =
+            if self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str()) {
+                self.menu_syntax_form_suggestion_selected_index.unwrap_or(0)
+            } else {
+                0
+            };
         let next = if delta < 0 {
             if current == 0 {
                 len.saturating_sub(1)
@@ -553,11 +557,14 @@ impl ScriptListApp {
         updated
     }
 
-    fn sync_menu_syntax_form_draft_from_form(&mut self, form: &crate::menu_syntax::MenuSyntaxFormSnapshot) {
-        let Some(field) = form
-            .fields
-            .get(self.menu_syntax_form_focused_index.min(form.fields.len().saturating_sub(1)))
-        else {
+    fn sync_menu_syntax_form_draft_from_form(
+        &mut self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+    ) {
+        let Some(field) = form.fields.get(
+            self.menu_syntax_form_focused_index
+                .min(form.fields.len().saturating_sub(1)),
+        ) else {
             self.menu_syntax_form_draft_field_id = None;
             self.menu_syntax_form_draft_value.clear();
             return;
@@ -604,8 +611,11 @@ impl ScriptListApp {
         if matches!(
             snapshot.kind,
             crate::menu_syntax::MenuSyntaxMainHintKind::CaptureComposer
-        ) {
-            if let Some(target) = self.capture_target_for(raw_filter_text) {
+        ) || self
+            .menu_syntax_capture_form_target_for(raw_filter_text)
+            .is_some()
+        {
+            if let Some(target) = self.menu_syntax_capture_form_target_for(raw_filter_text) {
                 let store = crate::menu_syntax::history::HistoryStore::from_env();
                 let tag_pool = store.try_read_tag_pool(&target).unwrap_or_default();
                 if let Ok(pool) = store.try_read_tag_pool(&target) {
@@ -632,8 +642,7 @@ impl ScriptListApp {
                     }
                 }
 
-                let invocation_for_form =
-                    self.menu_syntax_capture_form_invocation(raw_filter_text);
+                let invocation_for_form = self.menu_syntax_capture_form_invocation(raw_filter_text);
 
                 if let Some(invocation) = invocation_for_form.as_ref() {
                     let mut seen: std::collections::HashSet<&str> =
@@ -657,10 +666,8 @@ impl ScriptListApp {
                         }
                     }
                     if let Some(schema) = crate::menu_syntax::builtin_schema(&target) {
-                        let validation = crate::menu_syntax::capture_schema::validate(
-                            invocation,
-                            &schema,
-                        );
+                        let validation =
+                            crate::menu_syntax::capture_schema::validate(invocation, &schema);
                         let priority_values = schema
                             .optional
                             .iter()
@@ -729,15 +736,16 @@ impl ScriptListApp {
         Some(snapshot)
     }
 
-    fn capture_target_for(&self, raw_filter_text: &str) -> Option<String> {
+    fn menu_syntax_capture_form_target_for(&self, raw_filter_text: &str) -> Option<String> {
         if let Some(invocation) = self.menu_syntax_mode.capture_for(raw_filter_text) {
-            return Some(invocation.target.clone());
+            return crate::menu_syntax::builtin_schema(&invocation.target)
+                .map(|_| invocation.target.clone());
         }
         if let Some(incomplete) = self.menu_syntax_mode.incomplete_for(raw_filter_text) {
             if let crate::menu_syntax::payload::IncompleteKind::MissingCaptureBody(target) =
                 &incomplete.kind
             {
-                return Some(target.clone());
+                return crate::menu_syntax::builtin_schema(target).map(|_| target.clone());
             }
         }
         None
