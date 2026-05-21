@@ -796,23 +796,6 @@ impl ScriptListApp {
             }
         }
 
-        if new_text.ends_with(' ') {
-            let previous_text = new_text.trim_end_matches(' ').to_string();
-            let mode = crate::menu_syntax::MenuSyntaxMode::from_input(&previous_text);
-            if !previous_text.is_empty() && mode.capture_composer_owns_input_for(&previous_text) {
-                self.filter_text = previous_text.clone();
-                self.menu_syntax_mode = mode;
-                self.gpui_input_state.update(cx, |state, cx| {
-                    state.set_value(previous_text.clone(), window, cx);
-                    let len = previous_text.len();
-                    state.set_selection(len, len, window, cx);
-                });
-                self.sync_menu_syntax_form_inputs_from_filter(window, cx);
-                self.focus_next_menu_syntax_form_field(window, cx);
-                return;
-            }
-        }
-
         if new_text == self.filter_text {
             return;
         }

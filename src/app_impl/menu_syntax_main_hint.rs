@@ -9,7 +9,7 @@ impl ScriptListApp {
         let handler_form_owns_input = self.menu_syntax_capture_form_owns_input();
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_tab_navigation(handler_form_owns_input, window, cx);
-            state.set_tab_navigation_space_as_tab(handler_form_owns_input, window, cx);
+            state.set_tab_navigation_space_as_tab(false, window, cx);
         });
     }
 
@@ -42,6 +42,9 @@ impl ScriptListApp {
             return;
         };
         self.ensure_menu_syntax_form_inputs(&form, window, cx);
+        if !self.menu_syntax_form_input_active {
+            self.sync_menu_syntax_form_suggestions_from_main_input(&form);
+        }
     }
 
     fn clear_menu_syntax_form_inputs(&mut self) {
@@ -184,8 +187,38 @@ impl ScriptListApp {
         matches!(
             field.kind,
             crate::menu_syntax::MenuSyntaxFormFieldKind::Tags
+                | crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
                 | crate::menu_syntax::MenuSyntaxFormFieldKind::Object
         ) && !field.suggestions.is_empty()
+    }
+
+    fn main_input_form_completion_field(raw: &str) -> Option<&'static str> {
+        let token = raw.split_whitespace().last()?.trim();
+        if token.starts_with('#')
+            && (token.len() == 1 || !token[1..].chars().all(|ch| ch.is_ascii_digit()))
+        {
+            return Some("tags");
+        }
+        let lower = token.to_ascii_lowercase();
+        if lower == "p" || matches!(lower.as_str(), "p1" | "p2" | "p3" | "p4") {
+            return Some("priority");
+        }
+        None
+    }
+
+    fn sync_menu_syntax_form_suggestions_from_main_input(
+        &mut self,
+        form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
+    ) {
+        let Some(field_id) = Self::main_input_form_completion_field(&self.filter_text) else {
+            self.close_menu_syntax_form_suggestions();
+            return;
+        };
+        let Some(field) = form.fields.iter().find(|field| field.id == field_id) else {
+            self.close_menu_syntax_form_suggestions();
+            return;
+        };
+        self.open_menu_syntax_form_suggestions_for(field);
     }
 
     fn close_menu_syntax_form_suggestions(&mut self) {
@@ -308,7 +341,8 @@ impl ScriptListApp {
         let Some(form) = snapshot.form else {
             return false;
         };
-        let Some(invocation) = self.menu_syntax_capture_form_invocation(&self.filter_text) else {
+        let Some(invocation) = self.menu_syntax_capture_form_invocation_for_form(&self.filter_text)
+        else {
             return false;
         };
         let resolved_field_id = field_id
@@ -374,7 +408,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if !self.menu_syntax_form_input_active || !self.menu_syntax_capture_form_owns_input() {
+        if !self.menu_syntax_capture_form_owns_input() {
             return false;
         }
         if modifiers.platform || modifiers.alt || modifiers.control {
@@ -396,6 +430,10 @@ impl ScriptListApp {
         let Some(form) = snapshot.form else {
             return false;
         };
+        let popup_active = self.active_menu_syntax_form_popup_field(&form).is_some();
+        if !self.menu_syntax_form_input_active && !popup_active {
+            return false;
+        }
 
         match key.to_ascii_lowercase().as_str() {
             "up" | "arrowup" => {
@@ -543,9 +581,11 @@ impl ScriptListApp {
         let Some(owner_field_id) = self.menu_syntax_form_suggestion_field_id.as_deref() else {
             return;
         };
-        let Some(field) = form.fields.iter_mut().find(|field| {
-            field.focused && field.id == owner_field_id && !field.suggestions.is_empty()
-        }) else {
+        let Some(field) = form
+            .fields
+            .iter_mut()
+            .find(|field| field.id == owner_field_id && !field.suggestions.is_empty())
+        else {
             return;
         };
 
@@ -557,17 +597,23 @@ impl ScriptListApp {
         field.selected_suggestion_index = Some(selected);
     }
 
+    fn active_menu_syntax_form_popup_field<'a>(
+        &self,
+        form: &'a crate::menu_syntax::MenuSyntaxFormSnapshot,
+    ) -> Option<&'a crate::menu_syntax::MenuSyntaxFormFieldSnapshot> {
+        let owner_field_id = self.menu_syntax_form_suggestion_field_id.as_deref()?;
+        form.fields.iter().find(|field| {
+            field.id == owner_field_id && Self::menu_syntax_form_field_uses_popup(field)
+        })
+    }
+
     fn move_menu_syntax_form_suggestion_selection(
         &mut self,
         delta: isize,
         form: &crate::menu_syntax::MenuSyntaxFormSnapshot,
         cx: &mut Context<Self>,
     ) {
-        let Some(field) = form
-            .fields
-            .iter()
-            .find(|field| field.focused && Self::menu_syntax_form_field_uses_popup(field))
-        else {
+        let Some(field) = self.active_menu_syntax_form_popup_field(form) else {
             self.close_menu_syntax_form_suggestions();
             cx.notify();
             return;
@@ -601,7 +647,10 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(field) = form.fields.iter().find(|field| field.focused) else {
+        let Some(field) = self
+            .active_menu_syntax_form_popup_field(form)
+            .or_else(|| form.fields.iter().find(|field| field.focused))
+        else {
             return false;
         };
         let Some(index) = field
@@ -719,7 +768,8 @@ impl ScriptListApp {
                     }
                 }
 
-                let invocation_for_form = self.menu_syntax_capture_form_invocation(raw_filter_text);
+                let invocation_for_form =
+                    self.menu_syntax_capture_form_invocation_for_form(raw_filter_text);
 
                 if let Some(invocation) = invocation_for_form.as_ref() {
                     let mut seen: std::collections::HashSet<&str> =
@@ -845,5 +895,89 @@ impl ScriptListApp {
             ));
         }
         None
+    }
+
+    fn menu_syntax_capture_form_invocation_for_form(
+        &self,
+        raw_filter_text: &str,
+    ) -> Option<crate::menu_syntax::payload::CaptureInvocation> {
+        let invocation = self.menu_syntax_capture_form_invocation(raw_filter_text)?;
+        let invocation =
+            self.project_menu_syntax_main_input_completion(invocation, raw_filter_text);
+        Some(self.resolve_menu_syntax_form_invocation_dates(invocation))
+    }
+
+    fn project_menu_syntax_main_input_completion(
+        &self,
+        mut invocation: crate::menu_syntax::payload::CaptureInvocation,
+        raw_filter_text: &str,
+    ) -> crate::menu_syntax::payload::CaptureInvocation {
+        let Some(field_id) = Self::main_input_form_completion_field(raw_filter_text) else {
+            return invocation;
+        };
+
+        let Some(token) = raw_filter_text.split_whitespace().last() else {
+            return invocation;
+        };
+        if !matches!(
+            (field_id, token.to_ascii_lowercase().as_str()),
+            ("tags", "#") | ("priority", "p")
+        ) {
+            return invocation;
+        }
+        if !invocation.body.ends_with(token) {
+            return invocation;
+        }
+        let next_body = invocation
+            .body
+            .trim_end_matches(token)
+            .trim_end()
+            .to_string();
+        invocation.body = next_body;
+        invocation
+    }
+
+    fn resolve_menu_syntax_form_invocation_dates(
+        &self,
+        mut invocation: crate::menu_syntax::payload::CaptureInvocation,
+    ) -> crate::menu_syntax::payload::CaptureInvocation {
+        let Some(schema) = crate::menu_syntax::builtin_schema(&invocation.target) else {
+            return invocation;
+        };
+        let accepts_dates =
+            schema
+                .required
+                .iter()
+                .chain(schema.optional.iter())
+                .any(|requirement| {
+                    matches!(
+                        requirement,
+                        crate::menu_syntax::capture_schema::FieldRequirement::AnyDate
+                            | crate::menu_syntax::capture_schema::FieldRequirement::DateRole(_)
+                    )
+                });
+        if !accepts_dates {
+            return invocation;
+        }
+        let clock = crate::menu_syntax::date::MenuSyntaxClock::local_now();
+        let accepts =
+            crate::menu_syntax::date::builtin_capture_accepts_for_target(&invocation.target);
+        let resolved = crate::menu_syntax::date::resolve_capture_dates_with_accepts(
+            &invocation,
+            &clock,
+            &accepts,
+        );
+        invocation.body = resolved.body;
+        invocation.duration = resolved.duration;
+        invocation.date_phrases = resolved
+            .dates
+            .into_iter()
+            .map(|date| crate::menu_syntax::payload::DatePhrase {
+                role: date.role,
+                source: date.source,
+                source_span: date.source_span,
+            })
+            .collect();
+        invocation
     }
 }

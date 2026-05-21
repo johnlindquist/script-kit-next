@@ -304,13 +304,20 @@ fn serialize_capture_invocation(invocation: &CaptureInvocation) -> String {
 }
 
 fn parse_tag_field(value: &str) -> Vec<String> {
-    value
-        .split(|ch: char| ch.is_ascii_whitespace() || ch == ',')
-        .filter_map(|raw| {
-            let tag = raw.trim().trim_start_matches('#');
-            (!tag.is_empty()).then(|| tag.to_string())
-        })
-        .collect()
+    let mut tags = Vec::new();
+    for raw in value.split(|ch: char| ch.is_ascii_whitespace() || ch == ',') {
+        let tag = raw.trim().trim_start_matches('#');
+        if tag.is_empty() {
+            continue;
+        }
+        if !tags
+            .iter()
+            .any(|existing: &String| existing.eq_ignore_ascii_case(tag))
+        {
+            tags.push(tag.to_string());
+        }
+    }
+    tags
 }
 
 fn parse_priority_field(value: &str) -> Option<u8> {
@@ -409,8 +416,22 @@ fn filter_tag_suggestions(
 ) -> (String, Vec<MenuSyntaxFormSuggestion>) {
     let raw_query = active_completion_query(current_value, true);
     let query = raw_query.trim_start_matches('#').to_ascii_lowercase();
+    let active_range = active_completion_range(current_value, true);
+    let stable_value = active_range
+        .map(|range| {
+            let mut value = current_value.to_string();
+            value.replace_range(range, "");
+            value
+        })
+        .unwrap_or_else(|| current_value.to_string());
+    let existing = parse_tag_field(&stable_value);
     let suggestions = tags
         .iter()
+        .filter(|tag| {
+            !existing
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(&tag.tag))
+        })
         .filter(|tag| query.is_empty() || tag.tag.to_ascii_lowercase().contains(&query))
         .take(8)
         .map(|tag| MenuSyntaxFormSuggestion {
@@ -831,6 +852,46 @@ mod tests {
 
         assert_eq!(application.next_field_value, "#errands");
         assert_eq!(rewritten, ";todo Renew passport #errands");
+    }
+
+    #[test]
+    fn editing_tags_dedupes_values() {
+        let invocation = todo_invocation(";todo Eat lunch #food");
+        let rewritten = apply_capture_form_field_edit(&invocation, "tags", "#food #food")
+            .expect("tags edit should serialize");
+
+        assert_eq!(rewritten, ";todo Eat lunch #food");
+    }
+
+    #[test]
+    fn accepting_same_tag_suggestion_is_idempotent() {
+        let invocation = todo_invocation(";todo Eat lunch #food");
+        let field = MenuSyntaxFormFieldSnapshot {
+            id: "tags".to_string(),
+            label: "Tags".to_string(),
+            kind: MenuSyntaxFormFieldKind::Tags,
+            value: "#food #".to_string(),
+            placeholder: String::new(),
+            required: false,
+            satisfied: true,
+            focused: true,
+            suggestion_query: "#".to_string(),
+            selected_suggestion_index: Some(0),
+            suggestions: vec![],
+        };
+        let suggestion = MenuSyntaxFormSuggestion {
+            value: "#food".to_string(),
+            label: "#food (3)".to_string(),
+            source: "tagHistory".to_string(),
+            detail: Some("Recent tag".to_string()),
+        };
+        let application =
+            apply_menu_syntax_form_suggestion(&field, &suggestion).expect("apply suggestion");
+        let rewritten =
+            apply_capture_form_field_edit(&invocation, "tags", &application.next_field_value)
+                .expect("tags edit should serialize");
+
+        assert_eq!(rewritten, ";todo Eat lunch #food");
     }
 
     #[test]

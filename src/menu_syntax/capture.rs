@@ -65,7 +65,7 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
 
         if let Some(tag) = tok.text.strip_prefix('#') {
             if !tag.is_empty() && !tag.chars().all(|ch| ch.is_ascii_digit()) {
-                tags.push(tag.to_string());
+                push_unique_tag(&mut tags, tag);
                 continue;
             }
         }
@@ -130,6 +130,15 @@ pub fn parse_capture_with_targets(input: &str, registered_targets: &[String]) ->
         date_phrases,
         raw,
     })
+}
+
+fn push_unique_tag(tags: &mut Vec<String>, tag: &str) {
+    if !tags
+        .iter()
+        .any(|existing| existing.eq_ignore_ascii_case(tag))
+    {
+        tags.push(tag.to_string());
+    }
 }
 
 fn is_object_ref_token(token: &str) -> bool {
@@ -369,6 +378,13 @@ mod tests {
         assert_eq!(inv.body, "Renew passport");
         assert_eq!(inv.tags, vec!["errands".to_string()]);
         assert_eq!(inv.priority, Some(1));
+    }
+
+    #[test]
+    fn duplicate_tags_are_deduped_stably() {
+        let inv = ok(";todo Eat lunch #food #Food #work");
+
+        assert_eq!(inv.tags, vec!["food".to_string(), "work".to_string()]);
     }
 
     #[test]

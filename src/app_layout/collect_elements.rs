@@ -2022,16 +2022,6 @@ impl ScriptListApp {
             .and_then(|snapshot| snapshot.form);
         let handler_form_field_count = handler_form.as_ref().map_or(0usize, |form| {
             let field_count = form.fields.len();
-            let priority_options = form
-                .fields
-                .iter()
-                .find(|field| {
-                    matches!(
-                        field.kind,
-                        crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
-                    )
-                })
-                .map_or(0, |field| field.suggestions.len().max(4));
             let autocomplete_options = form
                 .fields
                 .iter()
@@ -2039,7 +2029,7 @@ impl ScriptListApp {
                     self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str())
                 })
                 .map_or(0, |field| field.suggestions.len().min(6));
-            field_count + priority_options + autocomplete_options
+            field_count + autocomplete_options
         });
         let total_count = total_rows + source_statuses.len() + handler_form_field_count + 2;
         let mut elements = Vec::with_capacity(limit.min(total_count));
@@ -2065,13 +2055,8 @@ impl ScriptListApp {
                     break;
                 }
                 let (element_type, role, kind, selectable) = match field.kind {
-                    crate::menu_syntax::MenuSyntaxFormFieldKind::Priority => (
-                        protocol::ElementType::Choice,
-                        "radiogroup",
-                        "handlerFormChoiceField",
-                        true,
-                    ),
-                    crate::menu_syntax::MenuSyntaxFormFieldKind::Tags
+                    crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
+                    | crate::menu_syntax::MenuSyntaxFormFieldKind::Tags
                     | crate::menu_syntax::MenuSyntaxFormFieldKind::Object => (
                         protocol::ElementType::Input,
                         "combobox",
@@ -2101,41 +2086,6 @@ impl ScriptListApp {
                     status_kind: None,
                     action_disabled: None,
                 });
-
-                if matches!(
-                    field.kind,
-                    crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
-                ) {
-                    for (option_index, suggestion) in field.suggestions.iter().enumerate() {
-                        if elements.len() >= limit {
-                            break;
-                        }
-                        elements.push(protocol::ElementInfo {
-                            semantic_id: format!(
-                                "handler-form:{}:{}:option:{}",
-                                form.target, field.id, suggestion.value
-                            ),
-                            element_type: protocol::ElementType::Choice,
-                            text: Some(suggestion.label.clone()),
-                            value: Some(suggestion.value.clone()),
-                            selected: Some(
-                                field
-                                    .value
-                                    .trim()
-                                    .eq_ignore_ascii_case(suggestion.value.as_str()),
-                            ),
-                            focused: None,
-                            index: Some(option_index),
-                            role: Some("option".to_string()),
-                            kind: Some("handlerFormChoiceOption".to_string()),
-                            source: Some("menuSyntaxMainHint.form".to_string()),
-                            source_name: Some(field.id.clone()),
-                            selectable: Some(true),
-                            status_kind: None,
-                            action_disabled: None,
-                        });
-                    }
-                }
 
                 if self.menu_syntax_form_suggestion_field_id.as_deref() == Some(field.id.as_str()) {
                     for (suggestion_index, suggestion) in

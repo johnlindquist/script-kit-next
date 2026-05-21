@@ -259,10 +259,9 @@ fn render_menu_syntax_form_field(
     theme: &crate::theme::Theme,
     field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
     input: Option<Entity<gpui_component::input::InputState>>,
-    cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
     let border_color = if field.focused {
-        rgba((theme.colors.ui.border << 8) | 0xE6)
+        rgba((theme.colors.accent.selected << 8) | 0xF2)
     } else {
         rgba((theme.colors.ui.border << 8) | 0x80)
     };
@@ -324,22 +323,7 @@ fn render_menu_syntax_form_field(
             .appearance(false)
             .bordered(false)
             .focus_bordered(false);
-        if matches!(
-            field.kind,
-            crate::menu_syntax::MenuSyntaxFormFieldKind::Priority
-        ) {
-            field_node
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(1.0))
-                        .overflow_hidden()
-                        .child(input_element),
-                )
-                .child(render_menu_syntax_form_choice_field(theme, field, cx))
-        } else {
-            field_node.child(input_element)
-        }
+        field_node.child(input_element)
     } else {
         let has_value = !field.value.trim().is_empty();
         let display_value = if has_value {
@@ -370,73 +354,7 @@ fn render_menu_syntax_form_field(
         )
     };
 
-    field_node
-        .when(field.selected_suggestion_index.is_some(), |d| {
-            d.child(render_menu_syntax_form_suggestion_popup(theme, field, cx))
-        })
-        .into_any_element()
-}
-
-fn render_menu_syntax_form_choice_field(
-    theme: &crate::theme::Theme,
-    field: &crate::menu_syntax::MenuSyntaxFormFieldSnapshot,
-    cx: &mut Context<ScriptListApp>,
-) -> AnyElement {
-    let options = if field.suggestions.is_empty() {
-        vec![
-            "p1".to_string(),
-            "p2".to_string(),
-            "p3".to_string(),
-            "p4".to_string(),
-        ]
-    } else {
-        field
-            .suggestions
-            .iter()
-            .map(|suggestion| suggestion.value.clone())
-            .collect()
-    };
-
-    div()
-        .id(format!("handler-form-choice-field-{}", field.id))
-        .w_full()
-        .flex()
-        .gap(px(5.0))
-        .children(options.into_iter().map(|value| {
-            let selected = field.value.trim().eq_ignore_ascii_case(&value);
-            let field_id = field.id.clone();
-            let option_value = value.clone();
-            div()
-                .id(format!("handler-form-choice-option-{}-{}", field.id, value))
-                .px(px(8.0))
-                .py(px(4.0))
-                .rounded(px(5.0))
-                .border_1()
-                .border_color(if selected {
-                    rgba((theme.colors.ui.border << 8) | 0xE6)
-                } else {
-                    rgba((theme.colors.ui.border << 8) | 0x66)
-                })
-                .bg(if selected {
-                    rgba((theme.colors.background.search_box << 8) | 0x73)
-                } else {
-                    rgba((theme.colors.text.muted << 8) | 0x14)
-                })
-                .text_size(px(11.0))
-                .line_height(px(14.0))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
-                .child(value)
-                .on_click(cx.listener(move |this, _event, window, cx| {
-                    this.update_menu_syntax_form_field(
-                        Some(&field_id),
-                        option_value.clone(),
-                        window,
-                        cx,
-                    );
-                }))
-        }))
-        .into_any_element()
+    field_node.into_any_element()
 }
 
 fn render_menu_syntax_form_suggestion_popup(
@@ -446,7 +364,10 @@ fn render_menu_syntax_form_suggestion_popup(
 ) -> AnyElement {
     div()
         .id(format!("handler-form-autocomplete-popup-{}", field.id))
-        .w_full()
+        .w(px(180.0))
+        .max_w(px(180.0))
+        .flex_shrink_0()
+        .self_start()
         .flex()
         .flex_col()
         .gap(px(2.0))
@@ -525,18 +446,34 @@ fn render_menu_syntax_form(
     inputs: &[(String, Entity<gpui_component::input::InputState>)],
     cx: &mut Context<ScriptListApp>,
 ) -> AnyElement {
+    let popup_field = form
+        .fields
+        .iter()
+        .find(|field| field.selected_suggestion_index.is_some());
     div()
         .id("menu-syntax-handler-form")
         .w_full()
         .flex()
-        .flex_col()
-        .gap(px(6.0))
-        .children(form.fields.iter().map(|field| {
-            let input = inputs
-                .iter()
-                .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
-            render_menu_syntax_form_field(theme, field, input, cx)
-        }))
+        .items_start()
+        .gap(px(8.0))
+        .child(
+            div()
+                .id("menu-syntax-handler-form-fields")
+                .min_w(px(0.0))
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap(px(6.0))
+                .children(form.fields.iter().map(|field| {
+                    let input = inputs
+                        .iter()
+                        .find_map(|(id, input)| (id == &field.id).then(|| input.clone()));
+                    render_menu_syntax_form_field(theme, field, input)
+                })),
+        )
+        .when_some(popup_field, |d, field| {
+            d.child(render_menu_syntax_form_suggestion_popup(theme, field, cx))
+        })
         .into_any_element()
 }
 
