@@ -453,6 +453,13 @@ pub struct LayoutInfo {
     pub prompt_type: String,
     /// All components in the layout tree
     pub components: Vec<LayoutComponentInfo>,
+    /// Handler-form-specific layout details for DevTools focus/scroll receipts.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "handlerForm"
+    )]
+    pub handler_form: Option<serde_json::Value>,
     /// Timestamp when layout was captured (ISO 8601)
     pub timestamp: String,
 }

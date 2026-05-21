@@ -148,6 +148,9 @@ pub fn apply_capture_form_field_edit(
             next.tags = parse_tag_field(normalized);
         }
         "priority" => {
+            if !normalized.is_empty() && parse_priority_field(normalized).is_none() {
+                return None;
+            }
             next.priority = parse_priority_field(normalized);
         }
         "date" => {
@@ -452,7 +455,6 @@ fn priority_suggestions(
     let raw_query = active_completion_query(current_value, false);
     let suggestions = values
         .iter()
-        .filter(|value| text_matches_query(value, &raw_query))
         .map(|value| MenuSyntaxFormSuggestion {
             value: value.clone(),
             label: value.clone(),
@@ -829,6 +831,81 @@ mod tests {
 
         assert_eq!(application.next_field_value, "#errands");
         assert_eq!(rewritten, ";todo Renew passport #errands");
+    }
+
+    #[test]
+    fn priority_suggestions_expose_full_schema_choice_set() {
+        let schema = builtin_schema("todo").expect("todo schema");
+        let invocation = todo_invocation(";todo Renew passport p2");
+        let validation = validate(&invocation, &schema);
+        let snapshot = build_capture_form_snapshot(
+            &schema,
+            &invocation,
+            2,
+            &validation,
+            MenuSyntaxFormSuggestionPools {
+                priority_values: vec![
+                    "p1".to_string(),
+                    "p2".to_string(),
+                    "p3".to_string(),
+                    "p4".to_string(),
+                ],
+                ..Default::default()
+            },
+        );
+        let priority = snapshot
+            .fields
+            .iter()
+            .find(|field| field.id == "priority")
+            .expect("priority field");
+
+        assert_eq!(
+            priority
+                .suggestions
+                .iter()
+                .map(|suggestion| suggestion.value.as_str())
+                .collect::<Vec<_>>(),
+            vec!["p1", "p2", "p3", "p4"]
+        );
+    }
+
+    #[test]
+    fn accepting_priority_suggestion_rewrites_canonical_capture_text() {
+        let invocation = todo_invocation(";todo Renew passport p1 #errands");
+        let field = MenuSyntaxFormFieldSnapshot {
+            id: "priority".to_string(),
+            label: "Priority".to_string(),
+            kind: MenuSyntaxFormFieldKind::Priority,
+            value: "p1".to_string(),
+            placeholder: String::new(),
+            required: false,
+            satisfied: true,
+            focused: true,
+            suggestion_query: "p1".to_string(),
+            selected_suggestion_index: Some(1),
+            suggestions: vec![],
+        };
+        let suggestion = MenuSyntaxFormSuggestion {
+            value: "p2".to_string(),
+            label: "p2".to_string(),
+            source: "schema".to_string(),
+            detail: None,
+        };
+        let application =
+            apply_menu_syntax_form_suggestion(&field, &suggestion).expect("apply suggestion");
+        let rewritten =
+            apply_capture_form_field_edit(&invocation, "priority", &application.next_field_value)
+                .expect("priority edit should serialize");
+
+        assert_eq!(application.next_field_value, "p2");
+        assert_eq!(rewritten, ";todo Renew passport #errands p2");
+    }
+
+    #[test]
+    fn invalid_priority_field_value_is_rejected() {
+        let invocation = todo_invocation(";todo Renew passport p1");
+
+        assert!(apply_capture_form_field_edit(&invocation, "priority", "urgent").is_none());
     }
 
     #[test]
