@@ -246,6 +246,36 @@ fn load_file_search_thumbnail_preview(
     })
 }
 
+fn file_search_row_trailing_metadata(
+    size: u64,
+    modified: u64,
+    list_colors: &crate::list_item::ListItemColors,
+    selected: bool,
+) -> AnyElement {
+    let metadata_color = rgba(crate::list_item::row_description_text_rgba(
+        list_colors,
+        selected,
+    ));
+    div()
+        .flex()
+        .flex_col()
+        .items_end()
+        .gap(px(2.0))
+        .child(
+            div()
+                .text_xs()
+                .text_color(metadata_color)
+                .child(file_search::format_file_size(size)),
+        )
+        .child(
+            div()
+                .text_xs()
+                .text_color(metadata_color)
+                .child(file_search::format_relative_time(modified)),
+        )
+        .into_any_element()
+}
+
 fn render_file_search_loading_skeleton(
     list_colors: &crate::list_item::ListItemColors,
     ui_border: u32,
@@ -260,7 +290,8 @@ fn render_file_search_loading_skeleton(
         ui_border,
         crate::theme::opacity::OPACITY_SUBTLE,
     ));
-    let row_height = if compact { 46.0 } else { 52.0 };
+    let row_height = LIST_ITEM_HEIGHT;
+    let icon_size = 20.0;
     let row_specs = [
         (156.0, 246.0, 52.0, 70.0),
         (214.0, 302.0, 44.0, 62.0),
@@ -286,7 +317,7 @@ fn render_file_search_loading_skeleton(
                     .flex_row()
                     .items_center()
                     .px(px(12.0))
-                    .gap(px(12.0))
+                    .gap(px(8.0))
                     .when(ix == 0, |row| {
                         row.bg(rgba(crate::list_item::row_selected_background_rgba(
                             list_colors,
@@ -294,8 +325,8 @@ fn render_file_search_loading_skeleton(
                     })
                     .child(
                         div()
-                            .w(px(32.0))
-                            .h(px(32.0))
+                            .w(px(icon_size))
+                            .h(px(icon_size))
                             .rounded(px(6.0))
                             .border_1()
                             .border_color(skeleton_strong)
@@ -823,7 +854,6 @@ impl ScriptListApp {
             .collect();
         let current_selected = clamped_selected_index.unwrap_or(usize::MAX);
         let file_hovered = self.hovered_index;
-        let input_mode = self.input_mode;
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
         let hover_entity_handle = cx.entity().downgrade();
@@ -859,40 +889,7 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_result_idx, file)) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
-                                let is_hovered = !is_selected
-                                    && input_mode == InputMode::Mouse
-                                    && file_hovered == Some(ix);
-                                let show_thumbnail =
-                                    file_search::is_thumbnail_preview_supported(&file.path);
-                                let bg = if is_selected {
-                                    rgba(crate::list_item::row_selected_background_rgba(
-                                        &list_colors,
-                                    ))
-                                } else if is_hovered {
-                                    rgba(crate::list_item::row_hover_background_rgba(&list_colors))
-                                } else {
-                                    gpui::transparent_black().into()
-                                };
-                                let icon_color = if show_thumbnail {
-                                    rgb(list_colors.text_muted)
-                                } else {
-                                    rgba(crate::list_item::row_icon_text_rgba(
-                                        &list_colors,
-                                        is_selected,
-                                    ))
-                                };
-                                let name_color = rgba(crate::list_item::row_name_text_rgba(
-                                    &list_colors,
-                                    is_selected,
-                                ));
-                                let metadata_color =
-                                    rgba(crate::list_item::row_description_text_rgba(
-                                        &list_colors,
-                                        is_selected,
-                                    ));
-                                let thumbnail_path = file.path.clone();
-                                let fallback_icon =
-                                    file_search::file_type_icon(file.file_type).to_string();
+                                let is_hovered = file_hovered == Some(ix);
 
                                 // Click handler: select on click, open/browse on double-click
                                 let click_entity = click_entity_handle.clone();
@@ -985,16 +982,21 @@ impl ScriptListApp {
                                 let drag_payload = file_search::FileDragPayload::from_result(file);
                                 let drag_path_for_native = file.path.clone();
 
+                                let item = ListItem::new(file.name.clone(), list_colors)
+                                    .description(file_search::shorten_path(&file.path))
+                                    .icon(file_search::file_type_icon(file.file_type))
+                                    .selected(is_selected)
+                                    .hovered(is_hovered)
+                                    .with_accent_bar(true)
+                                    .trailing_accessory(file_search_row_trailing_metadata(
+                                        file.size,
+                                        file.modified,
+                                        &list_colors,
+                                        is_selected,
+                                    ));
+
                                 div()
                                     .id(ix)
-                                    .w_full()
-                                    .h(px(52.))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .px(px(12.))
-                                    .gap(px(12.))
-                                    .bg(bg)
                                     .cursor_pointer()
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
@@ -1008,90 +1010,9 @@ impl ScriptListApp {
                                             )
                                         },
                                     )
-                                    .child(if show_thumbnail {
-                                        let fallback_icon = fallback_icon.clone();
-                                        div()
-                                            .w(px(32.))
-                                            .h(px(32.))
-                                            .rounded(px(6.))
-                                            .overflow_hidden()
-                                            .bg(rgba(
-                                                crate::ui_foundation::hex_to_rgba_with_opacity(
-                                                    ui_border,
-                                                    crate::theme::opacity::OPACITY_SUBTLE,
-                                                ),
-                                            ))
-                                            .flex_shrink_0()
-                                            .child(
-                                                gpui::img(std::path::PathBuf::from(thumbnail_path))
-                                                    .w_full()
-                                                    .h_full()
-                                                    .object_fit(gpui::ObjectFit::Cover)
-                                                    .with_fallback(move || {
-                                                        div()
-                                                            .w_full()
-                                                            .h_full()
-                                                            .flex()
-                                                            .items_center()
-                                                            .justify_center()
-                                                            .text_sm()
-                                                            .text_color(icon_color)
-                                                            .child(fallback_icon.clone())
-                                                            .into_any_element()
-                                                    }),
-                                            )
-                                    } else {
-                                        div()
-                                            .w(px(32.))
-                                            .h(px(32.))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .text_lg()
-                                            .text_color(icon_color)
-                                            .flex_shrink_0()
-                                            .child(file_search::file_type_icon(file.file_type))
-                                    })
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .flex()
-                                            .flex_col()
-                                            .gap(px(2.))
-                                            .child(
-                                                div()
-                                                    .text_sm()
-                                                    .text_color(name_color)
-                                                    .child(file.name.clone()),
-                                            )
-                                            .child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(metadata_color)
-                                                    .child(file_search::shorten_path(&file.path)),
-                                            ),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_col()
-                                            .items_end()
-                                            .gap(px(2.))
-                                            .child(
-                                                div().text_xs().text_color(metadata_color).child(
-                                                    file_search::format_file_size(file.size),
-                                                ),
-                                            )
-                                            .child(
-                                                div().text_xs().text_color(metadata_color).child(
-                                                    file_search::format_relative_time(
-                                                        file.modified,
-                                                    ),
-                                                ),
-                                            ),
-                                    )
+                                    .child(item)
                             } else {
-                                div().id(ix).h(px(52.))
+                                div().id(ix).h(px(LIST_ITEM_HEIGHT))
                             }
                         })
                         .collect()
@@ -1749,23 +1670,27 @@ mod file_search_chrome_audit {
     }
 
     #[test]
-    fn file_search_uses_shared_row_state_helpers() {
+    fn file_search_uses_shared_list_item_rows() {
         let source = production_source();
         assert!(
-            source.contains("crate::list_item::row_selected_background_rgba"),
-            "file_search must derive selected row chrome from shared list_item helpers"
+            source.contains("ListItem::new(file.name.clone(), list_colors)"),
+            "file_search must render rows through the shared ListItem component"
         );
         assert!(
-            source.contains("crate::list_item::row_hover_background_rgba"),
-            "file_search must derive hover row chrome from shared list_item helpers"
+            source.contains(".with_accent_bar(true)"),
+            "file_search rows should use the shared accent bar like other built-in lists"
         );
         assert!(
-            source.contains("crate::list_item::row_name_text_rgba"),
-            "file_search must derive primary row text from shared list_item helpers"
+            source.contains("LIST_ITEM_HEIGHT"),
+            "file_search uniform_list fallback rows must use the shared list item height"
         );
         assert!(
-            source.contains("crate::list_item::row_description_text_rgba"),
-            "file_search must derive metadata text from shared list_item helpers"
+            source.contains("row_description_text_rgba"),
+            "file_search trailing metadata should derive text color from shared list_item helpers"
+        );
+        assert!(
+            !source.contains("h(px(52.)"),
+            "file_search must not hardcode taller 52px rows"
         );
     }
 }
