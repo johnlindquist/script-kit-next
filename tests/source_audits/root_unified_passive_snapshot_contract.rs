@@ -99,6 +99,36 @@ fn browser_snapshot_sources_expose_status_for_state_first_proof() {
 }
 
 #[test]
+fn browser_tabs_implicit_warmup_lives_in_app_layer_not_cached_lookup() {
+    let filtering = include_str!("../../src/app_impl/filtering_cache.rs");
+    let tabs = include_str!("../../src/browser_tabs.rs");
+    let cached_section = tabs
+        .split("pub(crate) fn search_root_browser_tabs_meta_cached")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split("pub(crate) fn search_root_browser_tabs_meta_direct")
+                .next()
+        })
+        .expect("cached browser tabs helper should exist");
+
+    assert!(
+        filtering.contains("implicit_tabs_query"),
+        "ordinary browser-tabs warmup should be app-managed"
+    );
+    assert!(
+        filtering.contains("background_executor()")
+            && filtering.contains("refresh_root_browser_tabs_snapshot(providers)"),
+        "implicit warmup should run browser enumeration off the UI path"
+    );
+    assert!(
+        !cached_section.contains("ensure_root_browser_tabs_refresh")
+            && !cached_section.contains("refresh_root_browser_tabs_snapshot")
+            && !cached_section.contains("std::thread::spawn"),
+        "cached lookup must stay foreground cache-only"
+    );
+}
+
+#[test]
 fn filtering_cache_freezes_passive_snapshot_hits_per_query_frame() {
     let app_state = include_str!("../../src/main_sections/app_state.rs");
     let filtering_cache = include_str!("../../src/app_impl/filtering_cache.rs");
