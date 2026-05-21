@@ -414,7 +414,15 @@ pub(crate) fn search_root_browser_tabs_meta(
     query: &str,
     options: RootBrowserTabsSectionOptions,
 ) -> Vec<RootBrowserTabSearchHit> {
-    search_root_browser_tabs_internal(query, options, false)
+    search_root_browser_tabs_meta_cached(query, options)
+}
+
+#[allow(dead_code)]
+pub(crate) fn search_root_browser_tabs_meta_cached(
+    query: &str,
+    options: RootBrowserTabsSectionOptions,
+) -> Vec<RootBrowserTabSearchHit> {
+    search_root_browser_tabs_internal(query, options, RootBrowserTabsLookupMode::CachedOnly)
 }
 
 #[allow(dead_code)]
@@ -425,7 +433,7 @@ pub(crate) fn search_root_browser_tabs_meta_direct(
     // When explicitly typing "tabs:", we want it to be fresh, but not blocking.
     // We use a short TTL (5s) for direct mode to avoid re-fetching on every keystroke
     // while still ensuring it's relatively recent.
-    search_root_browser_tabs_internal(query, options, true)
+    search_root_browser_tabs_internal(query, options, RootBrowserTabsLookupMode::RefreshThenCached)
 }
 
 #[allow(dead_code)]
@@ -433,15 +441,21 @@ pub(crate) fn focus_root_browser_tab(hit: &RootBrowserTabSearchHit) -> Result<()
     activate_tab(&hit.tab)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RootBrowserTabsLookupMode {
+    CachedOnly,
+    RefreshThenCached,
+}
+
 fn search_root_browser_tabs_internal(
     query: &str,
     options: RootBrowserTabsSectionOptions,
-    direct_mode: bool,
+    mode: RootBrowserTabsLookupMode,
 ) -> Vec<RootBrowserTabSearchHit> {
     let _span = tracing::info_span!(
         "search_root_browser_tabs_internal",
         query,
-        direct_mode,
+        mode = ?mode,
         cache_ttl_ms = options.cache_ttl_ms
     )
     .entered();
@@ -450,22 +464,15 @@ fn search_root_browser_tabs_internal(
         return Vec::new();
     }
 
-    let ttl = if direct_mode {
-        // 5 second TTL for direct mode to avoid thrashing during typing
-        5000
-    } else {
-        options.cache_ttl_ms
-    };
-
-    ensure_root_browser_tabs_refresh(
-        ttl,
-        if direct_mode {
-            "root_search_query_direct"
-        } else {
-            "root_search_query"
-        },
-        options.providers.clone(),
-    );
+    if matches!(mode, RootBrowserTabsLookupMode::RefreshThenCached) {
+        // Keep explicit `tabs:` refreshes relatively fresh without putting the
+        // implicit root typing path on any provider or refresh setup work.
+        ensure_root_browser_tabs_refresh(
+            5000,
+            "root_search_query_direct",
+            options.providers.clone(),
+        );
+    }
 
     let tabs = cached_root_browser_tabs_snapshot(options.cache_ttl_ms);
     let tabs = tabs
@@ -687,83 +694,76 @@ fn root_fuzzy_search_browser_tabs(
     let query_is_ascii = query_lower.is_ascii();
     let use_nucleo = query_lower.len() >= crate::scripts::search::MIN_FUZZY_QUERY_LEN;
 
+    let mut nucleo = if use_nucleo {
+        Some(crate::scripts::NucleoCtx::new(&query_lower))
+    } else {
+        None
+    };
     let mut matches: Vec<BrowserTabMatch> = tabs
-        .par_chunks(128)
-        .flat_map(|chunk| {
-            let mut nucleo = if use_nucleo {
-                Some(crate::scripts::NucleoCtx::new(&query_lower))
+        .iter()
+        .filter_map(|tab| {
+            let mut score = 0i32;
+            let host = host_from_url(&tab.url);
+
+            if query_is_ascii && tab.title.is_ascii() {
+                if let Some(pos) =
+                    crate::scripts::search::find_ignore_ascii_case(&tab.title, &query_lower)
+                {
+                    score += if pos == 0 { 240 } else { 190 };
+                }
+            }
+
+            if query_is_ascii && host.is_ascii() {
+                if let Some(pos) =
+                    crate::scripts::search::find_ignore_ascii_case(host, &query_lower)
+                {
+                    score += if pos == 0 { 180 } else { 135 };
+                }
+            }
+
+            if search_urls && query_is_ascii && tab.url.is_ascii() {
+                if let Some(pos) =
+                    crate::scripts::search::find_ignore_ascii_case(&tab.url, &query_lower)
+                {
+                    score += if pos == 0 { 120 } else { 90 };
+                }
+            }
+
+            if query_is_ascii && tab.browser_name.is_ascii() {
+                if let Some(pos) =
+                    crate::scripts::search::find_ignore_ascii_case(&tab.browser_name, &query_lower)
+                {
+                    score += if pos == 0 { 80 } else { 55 };
+                }
+            }
+
+            if let Some(ref mut n) = nucleo {
+                if let Some(nucleo_score) = n.score(&tab.title) {
+                    score += 110 + (nucleo_score / 20) as i32;
+                }
+                if !host.is_empty() {
+                    if let Some(nucleo_score) = n.score(host) {
+                        score += 70 + (nucleo_score / 28) as i32;
+                    }
+                }
+                if search_urls {
+                    if let Some(nucleo_score) = n.score(&tab.url) {
+                        score += 55 + (nucleo_score / 35) as i32;
+                    }
+                }
+                if let Some(nucleo_score) = n.score(&tab.browser_name) {
+                    score += 35 + (nucleo_score / 40) as i32;
+                }
+            }
+
+            if score > 0 {
+                Some(BrowserTabMatch {
+                    tab: tab.clone(),
+                    score,
+                })
             } else {
                 None
-            };
-
-            chunk
-                .iter()
-                .filter_map(|tab| {
-                    let mut score = 0i32;
-                    let host = host_from_url(&tab.url);
-
-                    if query_is_ascii && tab.title.is_ascii() {
-                        if let Some(pos) =
-                            crate::scripts::search::find_ignore_ascii_case(&tab.title, &query_lower)
-                        {
-                            score += if pos == 0 { 240 } else { 190 };
-                        }
-                    }
-
-                    if query_is_ascii && host.is_ascii() {
-                        if let Some(pos) =
-                            crate::scripts::search::find_ignore_ascii_case(host, &query_lower)
-                        {
-                            score += if pos == 0 { 180 } else { 135 };
-                        }
-                    }
-
-                    if search_urls && query_is_ascii && tab.url.is_ascii() {
-                        if let Some(pos) =
-                            crate::scripts::search::find_ignore_ascii_case(&tab.url, &query_lower)
-                        {
-                            score += if pos == 0 { 120 } else { 90 };
-                        }
-                    }
-
-                    if query_is_ascii && tab.browser_name.is_ascii() {
-                        if let Some(pos) = crate::scripts::search::find_ignore_ascii_case(
-                            &tab.browser_name,
-                            &query_lower,
-                        ) {
-                            score += if pos == 0 { 80 } else { 55 };
-                        }
-                    }
-
-                    if let Some(ref mut n) = nucleo {
-                        if let Some(nucleo_score) = n.score(&tab.title) {
-                            score += 110 + (nucleo_score / 20) as i32;
-                        }
-                        if !host.is_empty() {
-                            if let Some(nucleo_score) = n.score(host) {
-                                score += 70 + (nucleo_score / 28) as i32;
-                            }
-                        }
-                        if search_urls {
-                            if let Some(nucleo_score) = n.score(&tab.url) {
-                                score += 55 + (nucleo_score / 35) as i32;
-                            }
-                        }
-                        if let Some(nucleo_score) = n.score(&tab.browser_name) {
-                            score += 35 + (nucleo_score / 40) as i32;
-                        }
-                    }
-
-                    if score > 0 {
-                        Some(BrowserTabMatch {
-                            tab: tab.clone(),
-                            score,
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>()
+            }
         })
         .collect();
 

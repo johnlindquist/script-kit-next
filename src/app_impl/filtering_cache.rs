@@ -3,6 +3,31 @@ use super::*;
 const INLINE_CALCULATOR_SECTION_LABEL: &str = "Calculator";
 const INLINE_CALCULATOR_RESULT_INDEX: usize = usize::MAX;
 
+fn timed_root_passive_source<T>(
+    source: &'static str,
+    query: &str,
+    explicit: bool,
+    f: impl FnOnce() -> Vec<T>,
+) -> Vec<T> {
+    let start = std::time::Instant::now();
+    let rows = f();
+    let elapsed = start.elapsed();
+    if logging::filter_perf_trace_enabled() || elapsed >= std::time::Duration::from_millis(8) {
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[PASSIVE_SOURCE_DONE] source={} query_len={} explicit={} in {:.2}ms -> {} hits",
+                source,
+                query.chars().count(),
+                explicit,
+                elapsed.as_secs_f64() * 1000.0,
+                rows.len()
+            ),
+        );
+    }
+    rows
+}
+
 fn prepend_inline_calculator_group(
     grouped_items: Vec<GroupedListItem>,
     flat_results: Vec<scripts::SearchResult>,
@@ -247,6 +272,8 @@ impl ScriptListApp {
         browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
     ) -> crate::RootPassiveFrame {
         let ai_vault_status = crate::ai_vault::root_ai_vault_snapshot_status();
+        let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
+        let browser_history_status = crate::browser_history::root_browser_history_snapshot_status();
         let key = crate::RootPassiveFrameKey {
             query: search_text.to_string(),
             advanced_query: advanced_query_active,
@@ -259,7 +286,9 @@ impl ScriptListApp {
             ai_vault_options: ai_vault_options.clone(),
             ai_vault_snapshot_generation: ai_vault_status.generation,
             browser_tabs_options: browser_tabs_options.clone(),
+            browser_tabs_snapshot_generation: browser_tabs_status.generation,
             browser_history_options: browser_history_options.clone(),
+            browser_history_snapshot_generation: browser_history_status.generation,
         };
 
         if let Some(frame) = self.root_passive_frame.as_ref() {
@@ -278,9 +307,11 @@ impl ScriptListApp {
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Dictation);
         let explicit_conversations =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::Conversations);
+        let explicit_ai_vault =
+            source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::AiVault);
         let explicit_browser_tabs =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserTabs);
-        let _explicit_browser_history =
+        let explicit_browser_history =
             source_filters.includes(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
         let allow_notes = source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::Notes);
@@ -298,140 +329,179 @@ impl ScriptListApp {
         let allow_browser_history =
             source_filters.allows(crate::menu_syntax::RootUnifiedSourceFilter::BrowserHistory);
 
-        let note_hits = if !advanced_query_active
-            && allow_notes
-            && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
-        {
-            if explicit_notes {
-                crate::notes::search_root_notes_meta_direct(search_text, notes_options)
-            } else {
-                crate::notes::search_root_notes_meta_cached(search_text, notes_options)
-            }
-        } else {
-            Vec::new()
-        };
-
-        let todo_hits = if (!advanced_query_active || explicit_todos)
-            && allow_todos
-            && crate::menu_syntax::root_todo_query_is_eligible(search_text, todo_options)
-        {
-            if explicit_todos {
-                crate::menu_syntax::search_root_todos_direct(search_text, todo_options)
+        let note_hits = timed_root_passive_source("notes", search_text, explicit_notes, || {
+            if !advanced_query_active
+                && allow_notes
+                && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
+            {
+                if explicit_notes {
+                    crate::notes::search_root_notes_meta_direct(search_text, notes_options)
+                } else {
+                    crate::notes::search_root_notes_meta_cached(search_text, notes_options)
+                }
             } else {
                 Vec::new()
             }
-        } else {
-            Vec::new()
-        };
+        });
 
-        let clipboard_history_hits = if !advanced_query_active
-            && allow_clipboard
-            && crate::clipboard_history::root_clipboard_history_query_is_eligible(
-                search_text,
-                clipboard_history_options,
-            ) {
-            if explicit_clipboard {
-                crate::clipboard_history::search_root_clipboard_history_meta_direct(
-                    search_text,
-                    clipboard_history_options,
-                )
+        let todo_hits = timed_root_passive_source("todo", search_text, explicit_todos, || {
+            if (!advanced_query_active || explicit_todos)
+                && allow_todos
+                && crate::menu_syntax::root_todo_query_is_eligible(search_text, todo_options)
+            {
+                if explicit_todos {
+                    crate::menu_syntax::search_root_todos_direct(search_text, todo_options)
+                } else {
+                    Vec::new()
+                }
             } else {
-                crate::clipboard_history::search_root_clipboard_history_meta_cached(
-                    search_text,
-                    clipboard_history_options,
-                )
+                Vec::new()
             }
-        } else {
-            Vec::new()
-        };
+        });
 
-        let dictation_history_hits = if !advanced_query_active
-            && allow_dictation
-            && crate::dictation::root_dictation_history_query_is_eligible(
-                search_text,
-                dictation_history_options,
-            ) {
-            if explicit_dictation {
-                crate::dictation::search_root_dictation_history_direct(
-                    search_text,
-                    dictation_history_options,
-                )
-            } else {
-                crate::dictation::search_root_dictation_history_cached(
-                    search_text,
-                    dictation_history_options,
-                )
-            }
-        } else {
-            Vec::new()
-        };
+        let clipboard_history_hits =
+            timed_root_passive_source("clipboard_history", search_text, explicit_clipboard, || {
+                if !advanced_query_active
+                    && allow_clipboard
+                    && crate::clipboard_history::root_clipboard_history_query_is_eligible(
+                        search_text,
+                        clipboard_history_options,
+                    )
+                {
+                    if explicit_clipboard {
+                        crate::clipboard_history::search_root_clipboard_history_meta_direct(
+                            search_text,
+                            clipboard_history_options,
+                        )
+                    } else {
+                        crate::clipboard_history::search_root_clipboard_history_meta_cached(
+                            search_text,
+                            clipboard_history_options,
+                        )
+                    }
+                } else {
+                    Vec::new()
+                }
+            });
 
-        let acp_history_hits = if !advanced_query_active
-            && allow_conversations
-            && crate::ai::acp::history::root_acp_history_query_is_eligible(
-                search_text,
-                acp_history_options,
-            ) {
-            if explicit_conversations {
-                crate::ai::acp::history::search_history_direct(
-                    search_text,
-                    acp_history_options.max_results,
-                )
-            } else {
-                crate::ai::acp::history::search_history_cached(
-                    search_text,
-                    acp_history_options.max_results,
-                )
-            }
-        } else {
-            Vec::new()
-        };
+        let dictation_history_hits =
+            timed_root_passive_source("dictation_history", search_text, explicit_dictation, || {
+                if !advanced_query_active
+                    && allow_dictation
+                    && crate::dictation::root_dictation_history_query_is_eligible(
+                        search_text,
+                        dictation_history_options,
+                    )
+                {
+                    if explicit_dictation {
+                        crate::dictation::search_root_dictation_history_direct(
+                            search_text,
+                            dictation_history_options,
+                        )
+                    } else {
+                        crate::dictation::search_root_dictation_history_cached(
+                            search_text,
+                            dictation_history_options,
+                        )
+                    }
+                } else {
+                    Vec::new()
+                }
+            });
 
-        let ai_vault_hits = if !advanced_query_active
-            && allow_ai_vault
-            && crate::ai_vault::root_ai_vault_query_is_eligible(search_text, &ai_vault_options)
-        {
-            crate::ai_vault::search_root_ai_vault_direct(search_text, ai_vault_options)
-        } else {
-            Vec::new()
-        };
+        let acp_history_hits =
+            timed_root_passive_source("acp_history", search_text, explicit_conversations, || {
+                if !advanced_query_active
+                    && allow_conversations
+                    && crate::ai::acp::history::root_acp_history_query_is_eligible(
+                        search_text,
+                        acp_history_options,
+                    )
+                {
+                    if explicit_conversations {
+                        crate::ai::acp::history::search_history_direct(
+                            search_text,
+                            acp_history_options.max_results,
+                        )
+                    } else {
+                        crate::ai::acp::history::search_history_cached(
+                            search_text,
+                            acp_history_options.max_results,
+                        )
+                    }
+                } else {
+                    Vec::new()
+                }
+            });
 
-        let browser_tab_hits = if !advanced_query_active
-            && allow_browser_tabs
-            && crate::browser_tabs::root_browser_tabs_query_is_eligible(
-                search_text,
-                browser_tabs_options.clone(),
-            ) {
-            if explicit_browser_tabs {
-                crate::browser_tabs::search_root_browser_tabs_meta_direct(
-                    search_text,
-                    browser_tabs_options.clone(),
-                )
-            } else {
-                crate::browser_tabs::search_root_browser_tabs_meta(
-                    search_text,
-                    browser_tabs_options.clone(),
-                )
-            }
-        } else {
-            Vec::new()
-        };
-        let browser_tabs_status = crate::browser_tabs::root_browser_tabs_snapshot_status();
+        let ai_vault_hits =
+            timed_root_passive_source("ai_vault", search_text, explicit_ai_vault, || {
+                if !advanced_query_active
+                    && allow_ai_vault
+                    && crate::ai_vault::root_ai_vault_query_is_eligible(
+                        search_text,
+                        &ai_vault_options,
+                    )
+                {
+                    crate::ai_vault::search_root_ai_vault_direct(search_text, ai_vault_options)
+                } else {
+                    Vec::new()
+                }
+            });
 
-        let browser_history_hits = if !advanced_query_active
-            && allow_browser_history
-            && crate::browser_history::root_browser_history_query_is_eligible(
-                search_text,
-                browser_history_options.clone(),
-            ) {
-            crate::browser_history::search_root_browser_history_meta_direct(
-                search_text,
-                browser_history_options.clone(),
-            )
-        } else {
-            Vec::new()
-        };
-        let browser_history_status = crate::browser_history::root_browser_history_snapshot_status();
+        let browser_tab_hits =
+            timed_root_passive_source("browser_tabs", search_text, explicit_browser_tabs, || {
+                if !advanced_query_active
+                    && allow_browser_tabs
+                    && crate::browser_tabs::root_browser_tabs_query_is_eligible(
+                        search_text,
+                        browser_tabs_options.clone(),
+                    )
+                {
+                    if explicit_browser_tabs {
+                        crate::browser_tabs::search_root_browser_tabs_meta_direct(
+                            search_text,
+                            browser_tabs_options.clone(),
+                        )
+                    } else {
+                        crate::browser_tabs::search_root_browser_tabs_meta_cached(
+                            search_text,
+                            browser_tabs_options.clone(),
+                        )
+                    }
+                } else {
+                    Vec::new()
+                }
+            });
+
+        let browser_history_hits = timed_root_passive_source(
+            "browser_history",
+            search_text,
+            explicit_browser_history,
+            || {
+                if !advanced_query_active
+                    && allow_browser_history
+                    && crate::browser_history::root_browser_history_query_is_eligible(
+                        search_text,
+                        browser_history_options.clone(),
+                    )
+                {
+                    if explicit_browser_history {
+                        crate::browser_history::search_root_browser_history_meta_direct(
+                            search_text,
+                            browser_history_options.clone(),
+                        )
+                    } else {
+                        crate::browser_history::search_root_browser_history_meta_cached(
+                            search_text,
+                            browser_history_options.clone(),
+                        )
+                    }
+                } else {
+                    Vec::new()
+                }
+            },
+        );
 
         let frame = crate::RootPassiveFrame {
             key,
@@ -758,14 +828,18 @@ impl ScriptListApp {
             .map(|query| query.source_filters.clone())
             .unwrap_or_default();
         let ai_vault_generation = crate::ai_vault::root_ai_vault_snapshot_status().generation;
+        let browser_tabs_generation =
+            crate::browser_tabs::root_browser_tabs_snapshot_status().generation;
+        let browser_history_generation =
+            crate::browser_history::root_browser_history_snapshot_status().generation;
         let root_windows_generation = self.root_windows_refresh_generation;
         let grouped_cache_key = match current_app_commands_app_name.as_deref() {
             Some(app_name) => format!(
-                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}",
+                "{}\x1Fcurrent-app={app_name}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
                 self.computed_filter_text
             ),
             None => format!(
-                "{}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}",
+                "{}\x1Fai-vault-gen={ai_vault_generation}\x1Fwindows-gen={root_windows_generation}\x1Fbrowser-tabs-gen={browser_tabs_generation}\x1Fbrowser-history-gen={browser_history_generation}",
                 self.computed_filter_text
             ),
         };

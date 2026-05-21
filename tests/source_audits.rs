@@ -170,6 +170,9 @@ mod root_unified_ai_vault_contract;
 #[path = "source_audits/root_unified_passive_budget_contract.rs"]
 mod root_unified_passive_budget_contract;
 
+#[path = "source_audits/root_unified_passive_source_perf_contract.rs"]
+mod root_unified_passive_source_perf_contract;
+
 #[path = "source_audits/sdk_computer_use_contract.rs"]
 mod sdk_computer_use_contract;
 

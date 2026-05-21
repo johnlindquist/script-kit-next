@@ -324,6 +324,14 @@ pub(crate) fn search_root_browser_history_meta_direct(
         .collect()
 }
 
+#[allow(dead_code)]
+pub(crate) fn search_root_browser_history_meta_cached(
+    query: &str,
+    options: RootBrowserHistorySectionOptions,
+) -> Vec<RootBrowserHistorySearchHit> {
+    search_root_browser_history_meta_direct(query, options)
+}
+
 #[allow(dead_code)] // Root unified search calls this through the binary app layer.
 fn search_root_browser_history_meta_from_home(
     home: &Path,
