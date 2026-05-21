@@ -3611,6 +3611,9 @@ impl ScriptListApp {
             .as_ref()
             .map(|vibrancy| vibrancy.enabled)
             .unwrap_or(false);
+        let system_accessibility = crate::platform::system_appearance_accessibility();
+        let native_material_selection =
+            crate::platform::native_material_selection(vibrancy_enabled, system_accessibility);
         let vibrancy_click_entity = entity_handle_for_customize.clone();
         let vibrancy_row = div()
             .w_full()
@@ -3674,6 +3677,99 @@ impl ScriptListApp {
                 text_opacity_slider_row,
                 focused_opacity_slider_row,
                 vibrancy_row,
+            ],
+        );
+
+        let tahoe_metrics = crate::ui::chrome::TAHOE_CHROME_METRICS;
+        let tahoe_section = Self::render_theme_chooser_customize_section(
+            "TAHOE MATERIAL",
+            Some("Resolved native material, radius, and accessibility fallback preview"),
+            &chrome,
+            vec![
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Native Material"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(if native_material_selection.glass_available {
+                                accent_color
+                            } else {
+                                text_muted
+                            }))
+                            .child(native_material_selection.label()),
+                    )
+                    .into_any_element(),
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Shell / Popup / Prompt Radius"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!(
+                                "{:.0} / {:.0} / {:.0}px",
+                                tahoe_metrics.panel_radius,
+                                tahoe_metrics.popup_shell_radius,
+                                tahoe_metrics.prompt_surface_radius,
+                            )),
+                    )
+                    .into_any_element(),
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_secondary))
+                            .child("Accessibility Fallbacks"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!(
+                                "transparency {} · contrast {} · motion {}",
+                                if system_accessibility.reduce_transparency {
+                                    "reduced"
+                                } else {
+                                    "normal"
+                                },
+                                if system_accessibility.increase_contrast {
+                                    "increased"
+                                } else {
+                                    "normal"
+                                },
+                                if system_accessibility.reduce_motion {
+                                    "reduced"
+                                } else {
+                                    "normal"
+                                },
+                            )),
+                    )
+                    .into_any_element(),
             ],
         );
 
@@ -3862,6 +3958,7 @@ impl ScriptListApp {
             .child(management_section)
             .child(colors_section)
             .child(opacity_section)
+            .child(tahoe_section)
             .child(backgrounds_section)
             .child(typography_section);
 

@@ -592,10 +592,24 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         }
     }
 
-    let _: () = msg_send![footer_view, setMaterial: material];
-    let _: () = msg_send![footer_view, setState: 1isize];
-    let _: () = msg_send![footer_view, setBlendingMode: 1isize];
-    let _: () = msg_send![footer_view, setEmphasized: is_dark];
+    let native_selection = crate::platform::native_material_selection(
+        theme.is_vibrancy_enabled(),
+        crate::platform::system_appearance_accessibility(),
+    );
+    let used_tahoe_glass = crate::platform::configure_native_material_view(
+        footer_view,
+        native_selection,
+        is_dark,
+        theme.get_vibrancy().material,
+        "FOOTER",
+        "main native footer",
+    );
+    if !used_tahoe_glass {
+        let _: () = msg_send![footer_view, setMaterial: material];
+        let _: () = msg_send![footer_view, setState: 1isize];
+        let _: () = msg_send![footer_view, setBlendingMode: 1isize];
+        let _: () = msg_send![footer_view, setEmphasized: is_dark];
+    }
     let _: () = msg_send![footer_view, setNeedsDisplay: YES];
 
     let footer_frame = footer_effect_frame(content_bounds.size.width);
@@ -656,6 +670,8 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         width = content_bounds.size.width,
         height = footer_height(),
         dark = is_dark,
+        material = native_selection.label(),
+        used_tahoe_glass,
         "Refreshed native footer host"
     );
 

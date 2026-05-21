@@ -82,8 +82,16 @@ pub fn configure_window_vibrancy_material_for_appearance(
 
         // Recursively find and configure ALL NSVisualEffectViews
         // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree
+        let accessibility = system_appearance_accessibility();
+        let selection = native_material_selection(true, accessibility);
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
+        configure_visual_effect_views_recursive(
+            content_view,
+            &mut count,
+            is_dark,
+            material,
+            selection,
+        );
 
         let material_name = vibrancy_material_name(material);
         if count == 0 {
@@ -95,14 +103,15 @@ pub fn configure_window_vibrancy_material_for_appearance(
             logging::log(
                 "PANEL",
                 &format!(
-                    "Configured {} NSVisualEffectView(s): {} + {} + emphasized",
+                    "Configured {} native material view(s): {} + {} + emphasized + {}",
                     count,
                     if is_dark {
                         "VibrantDark"
                     } else {
                         "VibrantLight"
                     },
-                    material_name
+                    material_name,
+                    selection.label()
                 ),
             );
         }
@@ -158,15 +167,35 @@ unsafe fn configure_visual_effect_views_recursive(
     count: &mut usize,
     is_dark: bool,
     material: crate::theme::VibrancyMaterial,
+    selection: NativeMaterialSelection,
 ) {
     // Check if this view is an NSVisualEffectView
     let is_vev: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
-    if is_vev {
+    let is_glass = objc::runtime::Class::get("NSGlassEffectView")
+        .map(|cls| {
+            let cls_ptr = cls as *const objc::runtime::Class;
+            let matches: bool = msg_send![view, isKindOfClass: cls_ptr];
+            matches
+        })
+        .unwrap_or(false);
+    if is_vev || is_glass {
+        let _used_tahoe_glass = configure_native_material_view(
+            view,
+            selection,
+            is_dark,
+            material,
+            "VIBRANCY",
+            "main window material view",
+        );
         // Log current state BEFORE configuration
-        let old_material: isize = msg_send![view, material];
-        let old_state: isize = msg_send![view, state];
-        let old_blending: isize = msg_send![view, blendingMode];
-        let old_emphasized: bool = msg_send![view, isEmphasized];
+        let old_material: isize = if is_vev { msg_send![view, material] } else { -1 };
+        let old_state: isize = if is_vev { msg_send![view, state] } else { -1 };
+        let old_blending: isize = if is_vev { msg_send![view, blendingMode] } else { -1 };
+        let old_emphasized: bool = if is_vev {
+            msg_send![view, isEmphasized]
+        } else {
+            false
+        };
 
         // Set appearance on the NSVisualEffectView (NOT on the window) so that
         // GPUI can still detect system appearance changes via the window.
@@ -193,24 +222,36 @@ unsafe fn configure_visual_effect_views_recursive(
         // ║ gpui_integration.rs. See: /Users/johnlindquist/dev/mac-panel-window/      ║
         // ╚════════════════════════════════════════════════════════════════════════════╝
         let material_value = vibrancy_material_value(material);
-        let _: () = msg_send![view, setMaterial: material_value];
+        if is_vev {
+            let _: () = msg_send![view, setMaterial: material_value];
+        }
         // State: 1=active for dark (prevents dimming), 0=followsWindow for light (cleaner look)
         // NSVisualEffectState: 0=followsWindowActiveState, 1=active, 2=inactive
         // Dark mode: active state prevents dimming when Actions popup opens
         // Light mode: followsWindow gives cleaner appearance like the POC
         let state = if is_dark { 1isize } else { 0isize };
-        let _: () = msg_send![view, setState: state];
+        if is_vev {
+            let _: () = msg_send![view, setState: state];
+        }
         // BehindWindow blending (0) - blur content behind the window
-        let _: () = msg_send![view, setBlendingMode: 0isize];
+        if is_vev {
+            let _: () = msg_send![view, setBlendingMode: 0isize];
+        }
         // Emphasized adds more contrast/tint - use only in dark mode
         // Light mode without emphasis matches POC's cleaner look
-        let _: () = msg_send![view, setEmphasized: is_dark];
+        if is_vev {
+            let _: () = msg_send![view, setEmphasized: is_dark];
+        }
 
         // Log state AFTER configuration
-        let new_material: isize = msg_send![view, material];
-        let new_state: isize = msg_send![view, state];
-        let new_blending: isize = msg_send![view, blendingMode];
-        let new_emphasized: bool = msg_send![view, isEmphasized];
+        let new_material: isize = if is_vev { msg_send![view, material] } else { -1 };
+        let new_state: isize = if is_vev { msg_send![view, state] } else { -1 };
+        let new_blending: isize = if is_vev { msg_send![view, blendingMode] } else { -1 };
+        let new_emphasized: bool = if is_vev {
+            msg_send![view, isEmphasized]
+        } else {
+            false
+        };
 
         // Get effective appearance
         let effective_appearance: id = msg_send![view, effectiveAppearance];
@@ -234,7 +275,8 @@ unsafe fn configure_visual_effect_views_recursive(
         logging::log(
             "VIBRANCY",
             &format!(
-                "NSVisualEffectView config: mat {} -> {} ({}), state {} -> {}, blend {} -> {}, emph {} -> {}, mode={}, appearance={}",
+                "native material config: kind={}, mat {} -> {} ({}), state {} -> {}, blend {} -> {}, emph {} -> {}, mode={}, appearance={}",
+                selection.label(),
                 old_material, new_material, material_name,
                 old_state, new_state,
                 old_blending, new_blending,
@@ -253,7 +295,7 @@ unsafe fn configure_visual_effect_views_recursive(
         let subview_count: usize = msg_send![subviews, count];
         for i in 0..subview_count {
             let child: id = msg_send![subviews, objectAtIndex: i];
-            configure_visual_effect_views_recursive(child, count, is_dark, material);
+            configure_visual_effect_views_recursive(child, count, is_dark, material, selection);
         }
     }
 }
