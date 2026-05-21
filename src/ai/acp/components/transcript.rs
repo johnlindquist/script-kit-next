@@ -1,7 +1,8 @@
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, App, Context, Entity, FontWeight, ListAlignment,
-    ListOffset, ListState, Render, SharedString, Window,
+    ListOffset, ListSizingBehavior, ListState, Render, SharedString, Window,
 };
+use gpui_component::scroll::ScrollableElement;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -26,14 +27,16 @@ pub struct AcpTranscript {
 
 impl AcpTranscript {
     pub fn new(messages: Vec<AcpThreadMessage>, _cx: &mut Context<Self>) -> Self {
-        let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
+        let show_activity_row = false;
+        let total = messages.len() + usize::from(show_activity_row);
+        let list_state = ListState::new(total, ListAlignment::Bottom, px(200.0));
         list_state.set_follow_tail(true);
 
         Self {
             list_state,
             messages,
             collapsed_ids: HashSet::new(),
-            show_activity_row: false,
+            show_activity_row,
         }
     }
 
@@ -342,49 +345,53 @@ impl Render for AcpTranscript {
         let theme = theme::get_cached_theme();
         let colors = PromptColors::from_theme(&theme);
 
-        let total = self.messages.len() + usize::from(self.show_activity_row);
-        self.list_state.reset(total);
-
         let messages_snapshot = self.messages.clone();
         let collapsed_ids = self.collapsed_ids.clone();
         let show_activity_row = self.show_activity_row;
 
-        div().flex_1().min_h(px(0.)).child(list(
-            self.list_state.clone(),
-            move |ix, _window, _cx| {
-                if show_activity_row && ix == messages_snapshot.len() {
-                    return Self::render_assistant_activity_row_static();
-                }
+        div()
+            .relative()
+            .flex_1()
+            .min_h(px(0.))
+            .overflow_hidden()
+            .child(
+                list(self.list_state.clone(), move |ix, _window, _cx| {
+                    if show_activity_row && ix == messages_snapshot.len() {
+                        return Self::render_assistant_activity_row_static();
+                    }
 
-                let msg = &messages_snapshot[ix];
-                let is_collapsible = matches!(
-                    msg.role,
-                    AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
-                );
-                let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
+                    let msg = &messages_snapshot[ix];
+                    let is_collapsible = matches!(
+                        msg.role,
+                        AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
+                    );
+                    let is_collapsed = is_collapsible && !collapsed_ids.contains(&msg.id);
 
-                let prev_was_user =
-                    ix > 0 && matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
-                let is_response_start =
-                    prev_was_user && !matches!(msg.role, AcpThreadMessageRole::User);
-                let is_new_turn = ix > 0
-                    && matches!(msg.role, AcpThreadMessageRole::User)
-                    && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
+                    let prev_was_user = ix > 0
+                        && matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
+                    let is_response_start =
+                        prev_was_user && !matches!(msg.role, AcpThreadMessageRole::User);
+                    let is_new_turn = ix > 0
+                        && matches!(msg.role, AcpThreadMessageRole::User)
+                        && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
 
-                div()
-                    .w_full()
-                    .px(px(8.0))
-                    .pb(px(4.0))
-                    .when(is_response_start, |d| d.mt(px(4.0)))
-                    .when(is_new_turn, |d| {
-                        d.mt(px(8.0))
-                            .pt(px(8.0))
-                            .border_t_1()
-                            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
-                    })
-                    .child(Self::render_message_static(msg, &colors, is_collapsed))
-                    .into_any()
-            },
-        ))
+                    div()
+                        .w_full()
+                        .px(px(8.0))
+                        .pb(px(4.0))
+                        .when(is_response_start, |d| d.mt(px(4.0)))
+                        .when(is_new_turn, |d| {
+                            d.mt(px(8.0))
+                                .pt(px(8.0))
+                                .border_t_1()
+                                .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+                        })
+                        .child(Self::render_message_static(msg, &colors, is_collapsed))
+                        .into_any()
+                })
+                .size_full()
+                .with_sizing_behavior(ListSizingBehavior::Auto),
+            )
+            .vertical_scrollbar(&self.list_state)
     }
 }
