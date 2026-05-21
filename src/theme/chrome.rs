@@ -68,8 +68,6 @@ pub(crate) struct AppChromeColors {
     pub drop_target_border_rgba: u32,
     pub drop_target_active_bg_rgba: u32,
     pub drop_target_active_border_rgba: u32,
-
-    pub material_policy: crate::platform::NativeMaterialPolicy,
 }
 
 /// Contrast-safe colors for semantic status chips (OK, Err, Warn, Info).
@@ -103,37 +101,7 @@ impl AppChromeColors {
     }
 
     pub(crate) fn from_theme(theme: &Theme) -> Self {
-        let accessibility = crate::platform::system_appearance_accessibility();
-        let material_policy =
-            crate::platform::native_material_policy(theme.is_vibrancy_enabled(), accessibility);
-        let mut opacity = theme.get_opacity();
-        if matches!(
-            material_policy,
-            crate::platform::NativeMaterialPolicy::OpaqueFallback
-        ) {
-            opacity.main = opacity.main.max(0.95);
-            opacity.title_bar = opacity.title_bar.max(0.95);
-            opacity.search_box = opacity.search_box.max(0.95);
-            opacity.dialog = opacity.dialog.max(0.95);
-            opacity.panel = opacity.panel.max(0.95);
-            opacity.input = opacity.input.max(0.95);
-            opacity.input_inactive = opacity.input_inactive.max(0.95);
-            opacity.input_active = opacity.input_active.max(0.95);
-            opacity.vibrancy_background =
-                Some(opacity.vibrancy_background.unwrap_or(0.95).max(0.95));
-        }
-        if accessibility.increase_contrast {
-            opacity.border_inactive = opacity.border_inactive.max(0.35);
-            opacity.border_active = opacity.border_active.max(0.55);
-            opacity.selected = opacity
-                .selected
-                .max(if theme.is_dark_mode() { 0.24 } else { 0.10 });
-            opacity.hover = opacity
-                .hover
-                .max(if theme.is_dark_mode() { 0.08 } else { 0.06 });
-            opacity.text_hint = opacity.text_hint.max(0.58);
-            opacity.text_placeholder = opacity.text_placeholder.max(0.55);
-        }
+        let opacity = theme.get_opacity();
         let colors = &theme.colors;
         let accent_badge_bg_rgba = hex_to_rgba_with_opacity(colors.accent.selected, opacity.hover);
         let accent_badge_surface = composite_over(
@@ -236,8 +204,6 @@ impl AppChromeColors {
                 colors.accent.selected_subtle,
                 OPACITY_GHOST,
             ),
-
-            material_policy,
         }
     }
 }

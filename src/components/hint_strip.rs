@@ -24,7 +24,7 @@ const HINT_BUTTON_PADDING_X: f32 = 4.0;
 const HINT_BUTTON_PADDING_Y: f32 = 2.0;
 
 /// Corner radius for hint button hover highlight.
-const HINT_BUTTON_RADIUS: f32 = crate::ui::chrome::TAHOE_CHROME_METRICS.control_sm_radius;
+const HINT_BUTTON_RADIUS: f32 = 4.0;
 
 /// Size for keyboard glyph icons in the hint strip.
 /// Slightly larger than text_xs (12px) for visual clarity at hint opacity.
@@ -43,7 +43,7 @@ const ESCAPE_ICON_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/icon
 
 const KEYCAP_PADDING_X: f32 = 6.0;
 const KEYCAP_PADDING_Y: f32 = 1.0;
-const KEYCAP_RADIUS: f32 = crate::ui::chrome::TAHOE_CHROME_METRICS.keycap_radius;
+const KEYCAP_RADIUS: f32 = 5.0;
 const KEYCAP_BG_OPACITY: f32 = 0.12;
 const FOOTER_HINT_TEXT_SIZE: f32 = 12.5;
 
@@ -160,7 +160,7 @@ const INLINE_SHORTCUT_ICON_SIZE: f32 = 12.0;
 const INLINE_SHORTCUT_TEXT_SIZE: f32 = 11.0;
 const INLINE_SHORTCUT_KEYCAP_PADDING_X: f32 = 4.0;
 const INLINE_SHORTCUT_KEYCAP_PADDING_Y: f32 = 1.0;
-const INLINE_SHORTCUT_KEYCAP_RADIUS: f32 = crate::ui::chrome::TAHOE_CHROME_METRICS.keycap_radius;
+const INLINE_SHORTCUT_KEYCAP_RADIUS: f32 = 4.0;
 const INLINE_SHORTCUT_TEXT_CHAR_WIDTH: f32 = 6.5;
 
 #[derive(Clone, Copy, Debug)]
