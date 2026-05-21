@@ -93,7 +93,6 @@ pub(crate) const CODEX_ACP_NPX_PACKAGE: &str = "@zed-industries/codex-acp";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CodexAcpAdapterSource {
     EnvOverride,
-    BundledApp,
     RepoLocal,
     SiblingRepo,
     Path,
@@ -103,7 +102,6 @@ impl CodexAcpAdapterSource {
     fn as_str(self) -> &'static str {
         match self {
             Self::EnvOverride => "env_override",
-            Self::BundledApp => "bundled_app",
             Self::RepoLocal => "repo_local",
             Self::SiblingRepo => "sibling_repo",
             Self::Path => "path",
@@ -150,19 +148,6 @@ fn env_codex_acp_path() -> Option<PathBuf> {
     std::env::var_os("SCRIPT_KIT_CODEX_ACP_PATH")
         .map(PathBuf::from)
         .and_then(existing_executable_file)
-}
-
-fn bundled_codex_acp_path() -> Option<PathBuf> {
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(parent) = exe_path.parent() {
-            let path = parent.join("codex-acp");
-            if let Some(path) = existing_executable_file(path) {
-                return Some(path);
-            }
-        }
-    }
-
-    None
 }
 
 fn sibling_repo_codex_acp_candidates(root: &Path) -> Vec<PathBuf> {
@@ -233,12 +218,6 @@ fn resolved_codex_acp_adapter() -> CodexAcpAdapterResolution {
         return CodexAcpAdapterResolution {
             path: Some(path),
             source: Some(CodexAcpAdapterSource::EnvOverride),
-        };
-    }
-    if let Some(path) = bundled_codex_acp_path() {
-        return CodexAcpAdapterResolution {
-            path: Some(path),
-            source: Some(CodexAcpAdapterSource::BundledApp),
         };
     }
     if let Some(path) = sibling_repo_codex_acp_path() {
@@ -1738,7 +1717,7 @@ mod tests {
             true,
             true,
             true,
-            Some(CodexAcpAdapterSource::BundledApp),
+            Some(CodexAcpAdapterSource::Path),
         );
         assert!(adapter_ready.codex_cli_ready);
         assert!(adapter_ready.npx_ready);
@@ -1752,7 +1731,7 @@ mod tests {
             false,
             true,
             true,
-            Some(CodexAcpAdapterSource::BundledApp),
+            Some(CodexAcpAdapterSource::Path),
         );
         assert!(missing_cli.adapter_ready);
         assert!(!missing_cli.launch_ready);
